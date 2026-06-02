@@ -88,7 +88,7 @@ impl Tab {
     }
 }
 
-pub fn handle_focus_pane_command(
+pub fn handle_focus_pane_cmd(
     direction: PaneFocusDirection,
     config: &ServerConfig,
     layout: &Mutex<SessionLayout>,

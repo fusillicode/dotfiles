@@ -56,7 +56,7 @@ use crate::pty::PtyExitStatus;
 use crate::pty::PtyHandle;
 use crate::pty::PtySession;
 use crate::pty::PtySinkGuard;
-use crate::pty::ShellCommand;
+use crate::pty::ShellCmd;
 use crate::sessions_delete::DeleteSessions;
 use crate::state::SessionLayout;
 use crate::state::SessionMetadata;
@@ -88,22 +88,22 @@ pub struct ServerConfig {
     pub session: SessionName,
     pub paths: SessionPaths,
     max_accepted_connections: Option<usize>,
-    pub shell_command: ShellCommand,
+    pub shell_cmd: ShellCmd,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum ClientCommand {
+enum ClientCmd {
     ClosePane,
     EnterResizeMode,
     ExitMode,
     FocusPane(PaneFocusDirection),
     ResizePane(PaneResizeDirection),
     SplitPane(PaneSplitAxis),
-    Tab(TabCommand),
+    Tab(TabCmd),
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum TabCommand {
+enum TabCmd {
     Create,
     FocusNext,
     FocusPrevious,
@@ -126,7 +126,7 @@ impl PaneRuntimes {
         for pane in layout.panes() {
             panes.push(PaneRuntime {
                 session: PtySession::spawn(
-                    &config.shell_command,
+                    &config.shell_cmd,
                     &pane.cwd,
                     size,
                     &self::pane_output_path(&config.paths.panes, &pane.id),
@@ -147,7 +147,7 @@ impl PaneRuntimes {
         let history_path = self::pane_output_path(&config.paths.panes, &pane_id);
         self.panes.push(PaneRuntime {
             id: pane_id,
-            session: PtySession::spawn(&config.shell_command, cwd, size, &history_path)?,
+            session: PtySession::spawn(&config.shell_cmd, cwd, size, &history_path)?,
         });
         Ok(())
     }
@@ -416,7 +416,7 @@ const fn border_render_mode(input_mode: ServerInputMode) -> BorderRenderMode {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 enum KeyResolution {
-    Command(ClientCommand),
+    Cmd(ClientCmd),
     Raw,
 }
 
@@ -431,7 +431,7 @@ pub fn serve_session(session: &SessionName) -> rootcause::Result<()> {
         session: session.clone(),
         paths,
         max_accepted_connections: None,
-        shell_command: ShellCommand::default_from_env()?,
+        shell_cmd: ShellCmd::default_from_env()?,
     })
 }
 
@@ -604,7 +604,7 @@ pub fn unix_timestamp_millis() -> rootcause::Result<u64> {
 
 pub fn session_metadata(config: &ServerConfig) -> rootcause::Result<SessionMetadata> {
     Ok(SessionMetadata {
-        command_label: config.shell_command.label(),
+        cmd_label: config.shell_cmd.label(),
         cwd: std::env::current_dir()
             .context("failed to read muxr server cwd")?
             .to_string_lossy()
@@ -615,7 +615,7 @@ pub fn session_metadata(config: &ServerConfig) -> rootcause::Result<SessionMetad
 
 /// Build metadata for panes spawned from the currently active pane.
 ///
-/// New panes inherit the active pane cwd because the server process cwd does not follow interactive `cd` commands.
+/// New panes inherit the active pane cwd because the server process cwd does not follow interactive `cd` cmds.
 pub fn active_pane_session_metadata(
     config: &ServerConfig,
     layout: &SessionLayout,
@@ -629,7 +629,7 @@ pub fn active_pane_session_metadata(
         })?;
 
     Ok(SessionMetadata {
-        command_label: config.shell_command.label(),
+        cmd_label: config.shell_cmd.label(),
         cwd,
         started_at: self::unix_timestamp_millis()?,
     })
@@ -1190,9 +1190,7 @@ async fn handle_pty_event(
         Some(PtyEvent::OutputReady) => {
             *render_dirty = true;
             let title_changes = self::take_title_changes(state.runtimes)?;
-            if !title_changes.is_empty()
-                && !self::flush_command_label_layout(event_writer, state, title_changes).await?
-            {
+            if !title_changes.is_empty() && !self::flush_cmd_label_layout(event_writer, state, title_changes).await? {
                 return Ok(false);
             }
             Ok(true)
@@ -1244,7 +1242,7 @@ async fn flush_render_diff(
     Ok(true)
 }
 
-async fn flush_command_label_layout(
+async fn flush_cmd_label_layout(
     event_writer: &mut ServerEventWriter,
     state: &mut AttachedSessionState<'_>,
     title_changes: Vec<(PaneId, Option<String>)>,
@@ -1533,7 +1531,7 @@ async fn handle_key_request(
     render_dirty: &mut bool,
 ) -> rootcause::Result<bool> {
     match self::resolve_key(&mut state.input_mode, &key) {
-        KeyResolution::Command(command) => self::handle_command_request(command, event_writer, state).await,
+        KeyResolution::Cmd(cmd) => self::handle_cmd_request(cmd, event_writer, state).await,
         KeyResolution::Raw => {
             if self::active_pane_handle(state.layout, state.runtimes)?.write_input(&key.raw_bytes)? {
                 *render_dirty = true;
@@ -1543,15 +1541,15 @@ async fn handle_key_request(
     }
 }
 
-async fn handle_command_request(
-    command: ClientCommand,
+async fn handle_cmd_request(
+    cmd: ClientCmd,
     event_writer: &mut ServerEventWriter,
     state: &mut AttachedSessionState<'_>,
 ) -> rootcause::Result<bool> {
-    match command {
-        ClientCommand::Tab(command) => self::handle_tab_command_request(command, event_writer, state).await,
-        ClientCommand::SplitPane(split_axis) => {
-            let pane_id = crate::pane_split::handle_split_pane_command(
+    match cmd {
+        ClientCmd::Tab(cmd) => self::handle_tab_cmd_request(cmd, event_writer, state).await,
+        ClientCmd::SplitPane(split_axis) => {
+            let pane_id = crate::pane_split::handle_split_pane_cmd(
                 split_axis,
                 state.config,
                 state.layout,
@@ -1565,8 +1563,8 @@ async fn handle_command_request(
             )?);
             self::resize_panes_and_render(event_writer, state).await
         }
-        ClientCommand::ClosePane => {
-            let outcome = crate::pane_close::handle_close_pane_command(state.config, state.layout, state.runtimes)?;
+        ClientCmd::ClosePane => {
+            let outcome = crate::pane_close::handle_close_pane_cmd(state.config, state.layout, state.runtimes)?;
             match &outcome {
                 ClosePaneOutcome::Final { pane_id } | ClosePaneOutcome::Removed { pane_id } => {
                     state.sink_guards.retain(|sink| &sink.pane_id != pane_id);
@@ -1580,36 +1578,29 @@ async fn handle_command_request(
                 ClosePaneOutcome::Removed { .. } => self::resize_panes_and_render(event_writer, state).await,
             }
         }
-        ClientCommand::ResizePane(direction) => {
-            if !crate::pane_resize::handle_resize_pane_command(direction, state.config, state.layout)? {
+        ClientCmd::ResizePane(direction) => {
+            if !crate::pane_resize::handle_resize_pane_cmd(direction, state.config, state.layout)? {
                 return Ok(true);
             }
             self::resize_panes_and_render(event_writer, state).await
         }
-        ClientCommand::FocusPane(direction) => {
-            if !crate::pane_focus::handle_focus_pane_command(
-                direction,
-                state.config,
-                state.layout,
-                &state.terminal_size,
-            )? {
+        ClientCmd::FocusPane(direction) => {
+            if !crate::pane_focus::handle_focus_pane_cmd(direction, state.config, state.layout, &state.terminal_size)? {
                 return Ok(true);
             }
             self::send_layout_and_baseline(event_writer, state).await
         }
-        ClientCommand::EnterResizeMode | ClientCommand::ExitMode => {
-            self::send_layout_and_baseline(event_writer, state).await
-        }
+        ClientCmd::EnterResizeMode | ClientCmd::ExitMode => self::send_layout_and_baseline(event_writer, state).await,
     }
 }
 
-async fn handle_tab_command_request(
-    command: TabCommand,
+async fn handle_tab_cmd_request(
+    cmd: TabCmd,
     event_writer: &mut ServerEventWriter,
     state: &mut AttachedSessionState<'_>,
 ) -> rootcause::Result<bool> {
-    match command {
-        TabCommand::Create => {
+    match cmd {
+        TabCmd::Create => {
             let pane_id = {
                 let mut layout = self::lock_mutex(state.layout, "layout")?;
                 let pane_id = crate::tab_create::handle_create_tab(
@@ -1628,25 +1619,25 @@ async fn handle_tab_command_request(
                 &pane_id,
             )?);
         }
-        TabCommand::FocusPrevious => {
+        TabCmd::FocusPrevious => {
             let mut layout = self::lock_mutex(state.layout, "layout")?;
             crate::tab_focus::handle_focus_previous_tab(&mut layout)?;
             crate::state::persisted::write_metadata(&state.config.paths, &layout)?;
             drop(layout);
         }
-        TabCommand::FocusNext => {
+        TabCmd::FocusNext => {
             let mut layout = self::lock_mutex(state.layout, "layout")?;
             crate::tab_focus::handle_focus_next_tab(&mut layout)?;
             crate::state::persisted::write_metadata(&state.config.paths, &layout)?;
             drop(layout);
         }
-        TabCommand::MovePrevious => {
+        TabCmd::MovePrevious => {
             let mut layout = self::lock_mutex(state.layout, "layout")?;
             crate::tab_move::handle_move_active_tab_previous(&mut layout)?;
             crate::state::persisted::write_metadata(&state.config.paths, &layout)?;
             drop(layout);
         }
-        TabCommand::MoveNext => {
+        TabCmd::MoveNext => {
             let mut layout = self::lock_mutex(state.layout, "layout")?;
             crate::tab_move::handle_move_active_tab_next(&mut layout)?;
             crate::state::persisted::write_metadata(&state.config.paths, &layout)?;
@@ -1736,43 +1727,41 @@ const fn resolve_key(input_mode: &mut ServerInputMode, key: &ClientKey) -> KeyRe
 
 const fn resolve_normal_key(input_mode: &mut ServerInputMode, key: &ClientKey) -> KeyResolution {
     match (&key.code, key.modifiers) {
-        (ClientKeyCode::Char('E'), ClientKeyModifiers::SHIFT_ALT) => {
-            KeyResolution::Command(ClientCommand::Tab(TabCommand::Create))
-        }
+        (ClientKeyCode::Char('E'), ClientKeyModifiers::SHIFT_ALT) => KeyResolution::Cmd(ClientCmd::Tab(TabCmd::Create)),
         (ClientKeyCode::Char('P'), ClientKeyModifiers::SHIFT_ALT) => {
-            KeyResolution::Command(ClientCommand::Tab(TabCommand::FocusPrevious))
+            KeyResolution::Cmd(ClientCmd::Tab(TabCmd::FocusPrevious))
         }
         (ClientKeyCode::Char('N'), ClientKeyModifiers::SHIFT_ALT) => {
-            KeyResolution::Command(ClientCommand::Tab(TabCommand::FocusNext))
+            KeyResolution::Cmd(ClientCmd::Tab(TabCmd::FocusNext))
         }
         (ClientKeyCode::Char('p'), ClientKeyModifiers::CTRL_ALT) => {
-            KeyResolution::Command(ClientCommand::Tab(TabCommand::MovePrevious))
+            KeyResolution::Cmd(ClientCmd::Tab(TabCmd::MovePrevious))
         }
         (ClientKeyCode::Char('n'), ClientKeyModifiers::CTRL_ALT) => {
-            KeyResolution::Command(ClientCommand::Tab(TabCommand::MoveNext))
+            KeyResolution::Cmd(ClientCmd::Tab(TabCmd::MoveNext))
         }
         (ClientKeyCode::Char('H'), ClientKeyModifiers::SHIFT_ALT) => {
-            KeyResolution::Command(ClientCommand::FocusPane(PaneFocusDirection::Left))
+            KeyResolution::Cmd(ClientCmd::FocusPane(PaneFocusDirection::Left))
         }
         (ClientKeyCode::Char('J'), ClientKeyModifiers::SHIFT_ALT) => {
-            KeyResolution::Command(ClientCommand::FocusPane(PaneFocusDirection::Down))
+            KeyResolution::Cmd(ClientCmd::FocusPane(PaneFocusDirection::Down))
         }
         (ClientKeyCode::Char('K'), ClientKeyModifiers::SHIFT_ALT) => {
-            KeyResolution::Command(ClientCommand::FocusPane(PaneFocusDirection::Up))
+            KeyResolution::Cmd(ClientCmd::FocusPane(PaneFocusDirection::Up))
         }
         (ClientKeyCode::Char('L'), ClientKeyModifiers::SHIFT_ALT) => {
-            KeyResolution::Command(ClientCommand::FocusPane(PaneFocusDirection::Right))
+            KeyResolution::Cmd(ClientCmd::FocusPane(PaneFocusDirection::Right))
         }
         (ClientKeyCode::Char('V'), ClientKeyModifiers::SHIFT_ALT) => {
-            KeyResolution::Command(ClientCommand::SplitPane(PaneSplitAxis::Vertical))
+            KeyResolution::Cmd(ClientCmd::SplitPane(PaneSplitAxis::Vertical))
         }
         (ClientKeyCode::Char('D'), ClientKeyModifiers::SHIFT_ALT) => {
-            KeyResolution::Command(ClientCommand::SplitPane(PaneSplitAxis::Horizontal))
+            KeyResolution::Cmd(ClientCmd::SplitPane(PaneSplitAxis::Horizontal))
         }
-        (ClientKeyCode::Char('W'), ClientKeyModifiers::SHIFT_ALT) => KeyResolution::Command(ClientCommand::ClosePane),
+        (ClientKeyCode::Char('W'), ClientKeyModifiers::SHIFT_ALT) => KeyResolution::Cmd(ClientCmd::ClosePane),
         (ClientKeyCode::Char('R'), ClientKeyModifiers::SHIFT_ALT) => {
             *input_mode = ServerInputMode::Resize;
-            KeyResolution::Command(ClientCommand::EnterResizeMode)
+            KeyResolution::Cmd(ClientCmd::EnterResizeMode)
         }
         _ => KeyResolution::Raw,
     }
@@ -1782,19 +1771,19 @@ const fn resolve_resize_key(input_mode: &mut ServerInputMode, key: &ClientKey) -
     match (&key.code, key.modifiers) {
         (ClientKeyCode::Esc, ClientKeyModifiers::NONE) => {
             *input_mode = ServerInputMode::Normal;
-            KeyResolution::Command(ClientCommand::ExitMode)
+            KeyResolution::Cmd(ClientCmd::ExitMode)
         }
         (ClientKeyCode::Char('h') | ClientKeyCode::Left, ClientKeyModifiers::NONE) => {
-            KeyResolution::Command(ClientCommand::ResizePane(PaneResizeDirection::Left))
+            KeyResolution::Cmd(ClientCmd::ResizePane(PaneResizeDirection::Left))
         }
         (ClientKeyCode::Char('j') | ClientKeyCode::Down, ClientKeyModifiers::NONE) => {
-            KeyResolution::Command(ClientCommand::ResizePane(PaneResizeDirection::Down))
+            KeyResolution::Cmd(ClientCmd::ResizePane(PaneResizeDirection::Down))
         }
         (ClientKeyCode::Char('k') | ClientKeyCode::Up, ClientKeyModifiers::NONE) => {
-            KeyResolution::Command(ClientCommand::ResizePane(PaneResizeDirection::Up))
+            KeyResolution::Cmd(ClientCmd::ResizePane(PaneResizeDirection::Up))
         }
         (ClientKeyCode::Char('l') | ClientKeyCode::Right, ClientKeyModifiers::NONE) => {
-            KeyResolution::Command(ClientCommand::ResizePane(PaneResizeDirection::Right))
+            KeyResolution::Cmd(ClientCmd::ResizePane(PaneResizeDirection::Right))
         }
         _ => KeyResolution::Raw,
     }
@@ -2089,7 +2078,7 @@ mod tests {
         self::runtime()?.block_on(async {
             let tempdir = tempfile::tempdir()?;
             let (session, paths) = self::session_paths(tempdir.path(), "work")?;
-            let handle = self::spawn_test_server_with_shell(&session, &paths, None, self::shell_command("/bin/cat"));
+            let handle = self::spawn_test_server_with_shell(&session, &paths, None, self::shell_cmd("/bin/cat"));
 
             self::wait_for_socket(&paths.socket)?;
             let _attached_client = self::open_attached_client(&session, &paths).await?;
@@ -2107,7 +2096,7 @@ mod tests {
     }
 
     #[test]
-    fn test_layout_tab_commands_when_tabs_exist_mutates_active_tab_and_order() -> rootcause::Result<()> {
+    fn test_layout_tab_cmds_when_tabs_exist_mutates_active_tab_and_order() -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
         let config = self::server_config(tempdir.path(), "work")?;
         let mut layout = SessionLayout::initial(&config.session, self::metadata("sh", 1))?;
@@ -2209,10 +2198,10 @@ mod tests {
     }
 
     #[test]
-    fn test_handle_close_pane_command_when_title_cwd_is_pending_persists_synced_cwd() -> rootcause::Result<()> {
+    fn test_handle_close_pane_cmd_when_title_cwd_is_pending_persists_synced_cwd() -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
         let mut config = self::server_config(tempdir.path(), "work")?;
-        config.shell_command = self::shell_command("/bin/cat");
+        config.shell_cmd = self::shell_cmd("/bin/cat");
         fs::create_dir_all(&config.paths.root).context("failed to create muxr test session root")?;
         let layout = Mutex::new(SessionLayout::initial(&config.session, self::metadata("sh", 1))?);
         let terminal_size = TerminalSize::new(80, 24)?;
@@ -2244,7 +2233,7 @@ mod tests {
             thread::sleep(Duration::from_millis(10));
         }
 
-        let outcome = crate::pane_close::handle_close_pane_command(&config, &layout, &runtimes)?;
+        let outcome = crate::pane_close::handle_close_pane_cmd(&config, &layout, &runtimes)?;
 
         pretty_assertions::assert_eq!(
             outcome,
@@ -2265,7 +2254,7 @@ mod tests {
     fn test_handle_create_tab_when_pane_spawn_fails_restores_layout() -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
         let mut config = self::server_config(tempdir.path(), "work")?;
-        config.shell_command = self::shell_command("/bin/muxr-missing-shell");
+        config.shell_cmd = self::shell_cmd("/bin/muxr-missing-shell");
         let initial_layout = SessionLayout::initial(&config.session, self::metadata("sh", 1))?;
         let layout = Mutex::new(initial_layout.clone());
         let runtimes = Mutex::new(PaneRuntimes { panes: Vec::new() });
@@ -2284,16 +2273,16 @@ mod tests {
     }
 
     #[test]
-    fn test_handle_split_pane_command_when_pane_spawn_fails_restores_layout() -> rootcause::Result<()> {
+    fn test_handle_split_pane_cmd_when_pane_spawn_fails_restores_layout() -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
         let mut config = self::server_config(tempdir.path(), "work")?;
-        config.shell_command = self::shell_command("/bin/muxr-missing-shell");
+        config.shell_cmd = self::shell_cmd("/bin/muxr-missing-shell");
         let initial_layout = SessionLayout::initial(&config.session, self::metadata("sh", 1))?;
         let layout = Mutex::new(initial_layout.clone());
         let runtimes = Mutex::new(PaneRuntimes { panes: Vec::new() });
 
         assert2::assert!(
-            crate::pane_split::handle_split_pane_command(
+            crate::pane_split::handle_split_pane_cmd(
                 PaneSplitAxis::Vertical,
                 &config,
                 &layout,
@@ -2584,7 +2573,7 @@ mod tests {
             ("pane-2", 0, 14, 80, 10),
         ],
     )]
-    fn test_layout_resize_active_pane_when_resize_command_arrives_updates_geometry(
+    fn test_layout_resize_active_pane_when_resize_cmd_arrives_updates_geometry(
         #[case] split_axis: PaneSplitAxis,
         #[case] direction: PaneResizeDirection,
         #[case] expected_regions: Vec<(&str, u16, u16, u16, u16)>,
@@ -2693,79 +2682,79 @@ mod tests {
         ClientKeyCode::Char('E'),
         ClientKeyModifiers::SHIFT_ALT,
         b"\x1bE",
-        ClientCommand::Tab(TabCommand::Create)
+        ClientCmd::Tab(TabCmd::Create)
     )]
     #[case::focus_previous_tab(
         ClientKeyCode::Char('P'),
         ClientKeyModifiers::SHIFT_ALT,
         b"\x1bP",
-        ClientCommand::Tab(TabCommand::FocusPrevious)
+        ClientCmd::Tab(TabCmd::FocusPrevious)
     )]
     #[case::focus_next_tab(
         ClientKeyCode::Char('N'),
         ClientKeyModifiers::SHIFT_ALT,
         b"\x1bN",
-        ClientCommand::Tab(TabCommand::FocusNext)
+        ClientCmd::Tab(TabCmd::FocusNext)
     )]
     #[case::move_tab_previous(
         ClientKeyCode::Char('p'),
         ClientKeyModifiers::CTRL_ALT,
         b"\x1b\x10",
-        ClientCommand::Tab(TabCommand::MovePrevious)
+        ClientCmd::Tab(TabCmd::MovePrevious)
     )]
     #[case::move_tab_next(
         ClientKeyCode::Char('n'),
         ClientKeyModifiers::CTRL_ALT,
         b"\x1b\x0e",
-        ClientCommand::Tab(TabCommand::MoveNext)
+        ClientCmd::Tab(TabCmd::MoveNext)
     )]
     #[case::focus_pane_left(
         ClientKeyCode::Char('H'),
         ClientKeyModifiers::SHIFT_ALT,
         b"\x1bH",
-        ClientCommand::FocusPane(PaneFocusDirection::Left)
+        ClientCmd::FocusPane(PaneFocusDirection::Left)
     )]
     #[case::focus_pane_down(
         ClientKeyCode::Char('J'),
         ClientKeyModifiers::SHIFT_ALT,
         b"\x1bJ",
-        ClientCommand::FocusPane(PaneFocusDirection::Down)
+        ClientCmd::FocusPane(PaneFocusDirection::Down)
     )]
     #[case::focus_pane_up(
         ClientKeyCode::Char('K'),
         ClientKeyModifiers::SHIFT_ALT,
         b"\x1bK",
-        ClientCommand::FocusPane(PaneFocusDirection::Up)
+        ClientCmd::FocusPane(PaneFocusDirection::Up)
     )]
     #[case::focus_pane_right(
         ClientKeyCode::Char('L'),
         ClientKeyModifiers::SHIFT_ALT,
         b"\x1bL",
-        ClientCommand::FocusPane(PaneFocusDirection::Right)
+        ClientCmd::FocusPane(PaneFocusDirection::Right)
     )]
     #[case::split_pane_vertical(
         ClientKeyCode::Char('V'),
         ClientKeyModifiers::SHIFT_ALT,
         b"\x1bV",
-        ClientCommand::SplitPane(PaneSplitAxis::Vertical)
+        ClientCmd::SplitPane(PaneSplitAxis::Vertical)
     )]
     #[case::split_pane_horizontal(
         ClientKeyCode::Char('D'),
         ClientKeyModifiers::SHIFT_ALT,
         b"\x1bD",
-        ClientCommand::SplitPane(PaneSplitAxis::Horizontal)
+        ClientCmd::SplitPane(PaneSplitAxis::Horizontal)
     )]
     #[case::close_pane(
         ClientKeyCode::Char('W'),
         ClientKeyModifiers::SHIFT_ALT,
         b"\x1bW",
-        ClientCommand::ClosePane
+        ClientCmd::ClosePane
     )]
-    fn test_resolve_key_when_normal_bound_key_arrives_returns_command(
+    fn test_resolve_key_when_normal_bound_key_arrives_returns_cmd(
         #[case] code: ClientKeyCode,
         #[case] modifiers: ClientKeyModifiers,
         #[case] raw_bytes: &[u8],
-        #[case] command: ClientCommand,
+        #[case] cmd: ClientCmd,
     ) {
         let mut input_mode = ServerInputMode::Normal;
         let key = ClientKey {
@@ -2774,7 +2763,7 @@ mod tests {
             raw_bytes: raw_bytes.to_vec(),
         };
 
-        pretty_assertions::assert_eq!(resolve_key(&mut input_mode, &key), KeyResolution::Command(command),);
+        pretty_assertions::assert_eq!(resolve_key(&mut input_mode, &key), KeyResolution::Cmd(cmd),);
         pretty_assertions::assert_eq!(input_mode, ServerInputMode::Normal);
     }
 
@@ -2792,17 +2781,17 @@ mod tests {
     }
 
     #[rstest::rstest]
-    #[case::left(ClientKeyCode::Char('h'), ClientCommand::ResizePane(PaneResizeDirection::Left))]
-    #[case::down(ClientKeyCode::Char('j'), ClientCommand::ResizePane(PaneResizeDirection::Down))]
-    #[case::up(ClientKeyCode::Char('k'), ClientCommand::ResizePane(PaneResizeDirection::Up))]
-    #[case::right(ClientKeyCode::Char('l'), ClientCommand::ResizePane(PaneResizeDirection::Right))]
-    #[case::arrow_left(ClientKeyCode::Left, ClientCommand::ResizePane(PaneResizeDirection::Left))]
-    #[case::arrow_down(ClientKeyCode::Down, ClientCommand::ResizePane(PaneResizeDirection::Down))]
-    #[case::arrow_up(ClientKeyCode::Up, ClientCommand::ResizePane(PaneResizeDirection::Up))]
-    #[case::arrow_right(ClientKeyCode::Right, ClientCommand::ResizePane(PaneResizeDirection::Right))]
-    fn test_resolve_key_when_resize_mode_key_arrives_returns_resize_command(
+    #[case::left(ClientKeyCode::Char('h'), ClientCmd::ResizePane(PaneResizeDirection::Left))]
+    #[case::down(ClientKeyCode::Char('j'), ClientCmd::ResizePane(PaneResizeDirection::Down))]
+    #[case::up(ClientKeyCode::Char('k'), ClientCmd::ResizePane(PaneResizeDirection::Up))]
+    #[case::right(ClientKeyCode::Char('l'), ClientCmd::ResizePane(PaneResizeDirection::Right))]
+    #[case::arrow_left(ClientKeyCode::Left, ClientCmd::ResizePane(PaneResizeDirection::Left))]
+    #[case::arrow_down(ClientKeyCode::Down, ClientCmd::ResizePane(PaneResizeDirection::Down))]
+    #[case::arrow_up(ClientKeyCode::Up, ClientCmd::ResizePane(PaneResizeDirection::Up))]
+    #[case::arrow_right(ClientKeyCode::Right, ClientCmd::ResizePane(PaneResizeDirection::Right))]
+    fn test_resolve_key_when_resize_mode_key_arrives_returns_resize_cmd(
         #[case] code: ClientKeyCode,
-        #[case] command: ClientCommand,
+        #[case] cmd: ClientCmd,
     ) {
         let mut input_mode = ServerInputMode::Resize;
         let key = ClientKey {
@@ -2811,7 +2800,7 @@ mod tests {
             raw_bytes: b"x".to_vec(),
         };
 
-        pretty_assertions::assert_eq!(resolve_key(&mut input_mode, &key), KeyResolution::Command(command),);
+        pretty_assertions::assert_eq!(resolve_key(&mut input_mode, &key), KeyResolution::Cmd(cmd),);
         pretty_assertions::assert_eq!(input_mode, ServerInputMode::Resize);
     }
 
@@ -2831,12 +2820,12 @@ mod tests {
 
         pretty_assertions::assert_eq!(
             resolve_key(&mut input_mode, &enter),
-            KeyResolution::Command(ClientCommand::EnterResizeMode),
+            KeyResolution::Cmd(ClientCmd::EnterResizeMode),
         );
         pretty_assertions::assert_eq!(input_mode, ServerInputMode::Resize);
         pretty_assertions::assert_eq!(
             resolve_key(&mut input_mode, &exit),
-            KeyResolution::Command(ClientCommand::ExitMode),
+            KeyResolution::Cmd(ClientCmd::ExitMode),
         );
         pretty_assertions::assert_eq!(input_mode, ServerInputMode::Normal);
     }
@@ -2846,7 +2835,7 @@ mod tests {
         self::runtime()?.block_on(async {
             let tempdir = tempfile::tempdir()?;
             let (session, paths) = self::session_paths(tempdir.path(), "work")?;
-            let handle = self::spawn_test_server_with_shell(&session, &paths, Some(1), self::shell_command("/bin/cat"));
+            let handle = self::spawn_test_server_with_shell(&session, &paths, Some(1), self::shell_cmd("/bin/cat"));
 
             self::wait_for_socket(&paths.socket)?;
             let mut client = self::open_attached_client(&session, &paths).await?;
@@ -2870,7 +2859,7 @@ mod tests {
         self::runtime()?.block_on(async {
             let tempdir = tempfile::tempdir()?;
             let (session, paths) = self::session_paths(tempdir.path(), "work")?;
-            let handle = self::spawn_test_server_with_shell(&session, &paths, Some(1), self::shell_command("/bin/cat"));
+            let handle = self::spawn_test_server_with_shell(&session, &paths, Some(1), self::shell_cmd("/bin/cat"));
 
             self::wait_for_socket(&paths.socket)?;
             let mut client = self::open_attached_client(&session, &paths).await?;
@@ -2887,7 +2876,7 @@ mod tests {
                 return Err(report!("expected muxr test layout pane"));
             };
             pretty_assertions::assert_eq!(pane.cwd, "~");
-            pretty_assertions::assert_eq!(pane.command_label, None);
+            pretty_assertions::assert_eq!(pane.cmd_label, None);
 
             let persisted = crate::state::persisted::load_metadata(&paths, &session)?
                 .ok_or_else(|| report!("expected muxr layout metadata"))?;
@@ -2906,7 +2895,7 @@ mod tests {
         self::runtime()?.block_on(async {
             let tempdir = tempfile::tempdir()?;
             let (session, paths) = self::session_paths(tempdir.path(), "work")?;
-            let handle = self::spawn_test_server_with_shell(&session, &paths, Some(1), self::shell_command("/bin/cat"));
+            let handle = self::spawn_test_server_with_shell(&session, &paths, Some(1), self::shell_cmd("/bin/cat"));
 
             self::wait_for_socket(&paths.socket)?;
             let mut client = self::open_attached_client(&session, &paths).await?;
@@ -2943,7 +2932,7 @@ mod tests {
             crate::state::persisted::write_metadata(&config.paths, &layout)?;
             let paths = config.paths.clone();
             let session = config.session.clone();
-            let handle = self::spawn_test_server_with_shell(&session, &paths, Some(1), self::shell_command("/bin/cat"));
+            let handle = self::spawn_test_server_with_shell(&session, &paths, Some(1), self::shell_cmd("/bin/cat"));
 
             self::wait_for_socket(&paths.socket)?;
             let client = self::open_attached_client(&session, &paths).await?;
@@ -2967,7 +2956,7 @@ mod tests {
         self::runtime()?.block_on(async {
             let tempdir = tempfile::tempdir()?;
             let (session, paths) = self::session_paths(tempdir.path(), "work")?;
-            let handle = self::spawn_test_server_with_shell(&session, &paths, Some(1), self::shell_command("/bin/cat"));
+            let handle = self::spawn_test_server_with_shell(&session, &paths, Some(1), self::shell_cmd("/bin/cat"));
 
             self::wait_for_socket(&paths.socket)?;
             let mut client = self::open_attached_client(&session, &paths).await?;
@@ -3008,7 +2997,7 @@ mod tests {
         self::runtime()?.block_on(async {
             let tempdir = tempfile::tempdir()?;
             let (session, paths) = self::session_paths(tempdir.path(), "work")?;
-            let handle = self::spawn_test_server_with_shell(&session, &paths, Some(1), self::shell_command("/bin/cat"));
+            let handle = self::spawn_test_server_with_shell(&session, &paths, Some(1), self::shell_cmd("/bin/cat"));
 
             self::wait_for_socket(&paths.socket)?;
             let mut client = self::open_attached_client(&session, &paths).await?;
@@ -3047,7 +3036,7 @@ mod tests {
         self::runtime()?.block_on(async {
             let tempdir = tempfile::tempdir()?;
             let (session, paths) = self::session_paths(tempdir.path(), "work")?;
-            let handle = self::spawn_test_server_with_shell(&session, &paths, Some(1), self::shell_command("/bin/cat"));
+            let handle = self::spawn_test_server_with_shell(&session, &paths, Some(1), self::shell_cmd("/bin/cat"));
 
             self::wait_for_socket(&paths.socket)?;
             let mut client = self::open_attached_client(&session, &paths).await?;
@@ -3097,7 +3086,7 @@ mod tests {
     fn test_serve_when_final_pane_is_closed_persists_and_exits() -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
         let (session, paths) = self::session_paths(tempdir.path(), "work")?;
-        let handle = self::spawn_test_server_with_shell(&session, &paths, Some(1), self::shell_command("/bin/cat"));
+        let handle = self::spawn_test_server_with_shell(&session, &paths, Some(1), self::shell_cmd("/bin/cat"));
 
         self::runtime()?.block_on(async {
             self::wait_for_socket(&paths.socket)?;
@@ -3127,7 +3116,7 @@ mod tests {
         self::runtime()?.block_on(async {
             let tempdir = tempfile::tempdir()?;
             let (session, paths) = self::session_paths(tempdir.path(), "work")?;
-            let handle = self::spawn_test_server_with_shell(&session, &paths, Some(1), self::shell_command("/bin/cat"));
+            let handle = self::spawn_test_server_with_shell(&session, &paths, Some(1), self::shell_cmd("/bin/cat"));
 
             self::wait_for_socket(&paths.socket)?;
             let mut client = self::open_attached_client(&session, &paths).await?;
@@ -3209,7 +3198,7 @@ mod tests {
                 &session,
                 &paths,
                 Some(2),
-                self::shell_command("/bin/sh")
+                self::shell_cmd("/bin/sh")
                     .arg("-c")
                     .arg("printf first; sleep 1; printf second; sleep 30"),
             );
@@ -3238,7 +3227,7 @@ mod tests {
                 &session,
                 &paths,
                 Some(1),
-                self::shell_command("/bin/sh")
+                self::shell_cmd("/bin/sh")
                     .arg("-c")
                     .arg("sleep 0.1; printf ready; sleep 30"),
             );
@@ -3278,9 +3267,7 @@ mod tests {
                 &session,
                 &paths,
                 Some(1),
-                self::shell_command("/bin/sh")
-                    .arg("-c")
-                    .arg("while :; do printf x; done"),
+                self::shell_cmd("/bin/sh").arg("-c").arg("while :; do printf x; done"),
             );
 
             self::wait_for_socket(&paths.socket)?;
@@ -3305,7 +3292,7 @@ mod tests {
             &session,
             &paths,
             None,
-            self::shell_command("/bin/sh").arg("-c").arg("printf done"),
+            self::shell_cmd("/bin/sh").arg("-c").arg("printf done"),
         );
 
         self::wait_for_socket(&paths.socket)?;
@@ -3325,7 +3312,7 @@ mod tests {
             &session,
             &paths,
             None,
-            self::shell_command("/bin/sh").arg("-c").arg("exit 7"),
+            self::shell_cmd("/bin/sh").arg("-c").arg("exit 7"),
         );
 
         self::wait_for_socket(&paths.socket)?;
@@ -3344,7 +3331,7 @@ mod tests {
             session,
             paths: paths.clone(),
             max_accepted_connections: None,
-            shell_command: self::shell_command("/bin/muxr-missing-shell"),
+            shell_cmd: self::shell_cmd("/bin/muxr-missing-shell"),
         });
 
         assert2::assert!(result.is_err());
@@ -3362,7 +3349,7 @@ mod tests {
             session,
             paths,
             Some(max_accepted_connections),
-            self::shell_command("/bin/sh").arg("-c").arg("sleep 30"),
+            self::shell_cmd("/bin/sh").arg("-c").arg("sleep 30"),
         )
     }
 
@@ -3370,7 +3357,7 @@ mod tests {
         session: &SessionName,
         paths: &SessionPaths,
         max_accepted_connections: Option<usize>,
-        shell_command: ShellCommand,
+        shell_cmd: ShellCmd,
     ) -> thread::JoinHandle<rootcause::Result<()>> {
         thread::spawn({
             let session = session.clone();
@@ -3380,7 +3367,7 @@ mod tests {
                     session,
                     paths,
                     max_accepted_connections,
-                    shell_command,
+                    shell_cmd,
                 })
             }
         })
@@ -3487,8 +3474,8 @@ mod tests {
         ))
     }
 
-    fn shell_command(program: &str) -> ShellCommand {
-        ShellCommand::new(program).expect("test shell command must have a nonempty program path")
+    fn shell_cmd(program: &str) -> ShellCmd {
+        ShellCmd::new(program).expect("test shell cmd must have a nonempty program path")
     }
 
     fn server_config(base: &Path, raw: &str) -> rootcause::Result<ServerConfig> {
@@ -3497,13 +3484,13 @@ mod tests {
             session,
             paths,
             max_accepted_connections: None,
-            shell_command: self::shell_command("/bin/sh"),
+            shell_cmd: self::shell_cmd("/bin/sh"),
         })
     }
 
-    fn metadata(command_label: &str, started_at: u64) -> SessionMetadata {
+    fn metadata(cmd_label: &str, started_at: u64) -> SessionMetadata {
         SessionMetadata {
-            command_label: command_label.to_owned(),
+            cmd_label: cmd_label.to_owned(),
             cwd: "/tmp".to_owned(),
             started_at,
         }
@@ -3845,7 +3832,7 @@ mod tests {
         pretty_assertions::assert_eq!(layout["active_tab"].as_str(), Some("tab-1"));
         pretty_assertions::assert_eq!(layout["tabs"][0]["active_pane"].as_str(), Some("pane-1"));
         pretty_assertions::assert_eq!(pane["id"].as_str(), Some("pane-1"));
-        pretty_assertions::assert_eq!(pane["command_label"].as_str(), Some("sh"));
+        pretty_assertions::assert_eq!(pane["cmd_label"].as_str(), Some("sh"));
         assert2::assert!(pane["started_at"].as_u64().is_some());
         pretty_assertions::assert_eq!(pane["state"]["kind"].as_str(), Some("process_exited"));
         assert2::assert!(pane["state"]["at"].as_u64().is_some());

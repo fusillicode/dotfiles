@@ -41,20 +41,20 @@ const BRACKETED_PASTE_END: &[u8] = b"\x1b[201~";
 const BRACKETED_PASTE_START: &[u8] = b"\x1b[200~";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ShellCommand {
+pub struct ShellCmd {
     program: PathBuf,
     args: Vec<String>,
 }
 
-impl ShellCommand {
-    /// Build a shell command for a muxr pane.
+impl ShellCmd {
+    /// Build a shell cmd for a muxr pane.
     ///
     /// # Errors
     /// - The program path is empty.
     pub fn new(program: impl Into<PathBuf>) -> rootcause::Result<Self> {
         let program = program.into();
         if program.as_os_str().is_empty() {
-            return Err(report!("invalid muxr shell command").attach("reason=program path must not be empty"));
+            return Err(report!("invalid muxr shell cmd").attach("reason=program path must not be empty"));
         }
 
         Ok(Self {
@@ -70,7 +70,7 @@ impl ShellCommand {
         self
     }
 
-    /// Build the default shell command from `$SHELL`, falling back to `/bin/sh`.
+    /// Build the default shell cmd from `$SHELL`, falling back to `/bin/sh`.
     ///
     /// # Errors
     /// - The selected program path is empty.
@@ -90,13 +90,13 @@ impl ShellCommand {
             .map_or_else(|| self.program.to_string_lossy().into_owned(), ToOwned::to_owned)
     }
 
-    fn command_builder(&self, cwd: &str) -> rootcause::Result<CommandBuilder> {
-        let mut command = CommandBuilder::new(self.program.as_os_str());
-        command.cwd(self::resolved_cwd(cwd)?);
+    fn cmd_builder(&self, cwd: &str) -> rootcause::Result<CommandBuilder> {
+        let mut cmd = CommandBuilder::new(self.program.as_os_str());
+        cmd.cwd(self::resolved_cwd(cwd)?);
         for arg in &self.args {
-            command.arg(arg);
+            cmd.arg(arg);
         }
-        Ok(command)
+        Ok(cmd)
     }
 }
 
@@ -119,19 +119,14 @@ pub struct PtySession {
 }
 
 impl PtySession {
-    pub fn spawn(
-        command: &ShellCommand,
-        cwd: &str,
-        size: &TerminalSize,
-        history_path: &Path,
-    ) -> rootcause::Result<Self> {
+    pub fn spawn(cmd: &ShellCmd, cwd: &str, size: &TerminalSize, history_path: &Path) -> rootcause::Result<Self> {
         let state = Arc::new(PtyState::with_history(size, history_path)?);
         let pty_pair = native_pty_system()
             .openpty(pty_size(size))
             .map_err(|error| report!("failed to open muxr shell pty").attach(format!("error={error:#}")))?;
         let child = pty_pair
             .slave
-            .spawn_command(command.command_builder(cwd)?)
+            .spawn_command(cmd.cmd_builder(cwd)?)
             .map_err(|error| report!("failed to spawn muxr shell process").attach(format!("error={error:#}")))?;
         let reader = pty_pair
             .master
@@ -421,7 +416,7 @@ impl PtyState {
             let terminal_replies = terminal.process(bytes);
             let title_changes = terminal.take_title_changes();
             drop(terminal);
-            // Title changes are queued separately from coalesced output events so command->cwd title transitions are
+            // Title changes are queued separately from coalesced output events so cmd->cwd title transitions are
             // not collapsed before the server can emit matching tab bar updates.
             let active_sink = lock_mutex(&self.active_sink, "pty active sink")?;
             if !title_changes.is_empty() && active_sink.is_some() {
@@ -719,27 +714,27 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_shell_command_new_when_program_is_empty_returns_error() {
-        assert2::assert!(ShellCommand::new("").is_err());
+    fn test_shell_cmd_new_when_program_is_empty_returns_error() {
+        assert2::assert!(ShellCmd::new("").is_err());
     }
 
     #[test]
-    fn test_shell_command_command_builder_when_cwd_exists_sets_cwd() -> rootcause::Result<()> {
+    fn test_shell_cmd_cmd_builder_when_cwd_exists_sets_cwd() -> rootcause::Result<()> {
         let cwd = tempfile::tempdir()?;
-        let command = ShellCommand::new("/bin/sh")?.command_builder(cwd.path().to_string_lossy().as_ref())?;
+        let cmd = ShellCmd::new("/bin/sh")?.cmd_builder(cwd.path().to_string_lossy().as_ref())?;
 
-        pretty_assertions::assert_eq!(command.get_cwd().map(PathBuf::from), Some(cwd.path().to_path_buf()),);
+        pretty_assertions::assert_eq!(cmd.get_cwd().map(PathBuf::from), Some(cwd.path().to_path_buf()),);
         Ok(())
     }
 
     #[test]
-    fn test_shell_command_command_builder_when_cwd_is_missing_returns_error() -> rootcause::Result<()> {
+    fn test_shell_cmd_cmd_builder_when_cwd_is_missing_returns_error() -> rootcause::Result<()> {
         let cwd = tempfile::tempdir()?;
         let missing = cwd.path().join("missing");
 
         assert2::assert!(
-            ShellCommand::new("/bin/sh")?
-                .command_builder(missing.to_string_lossy().as_ref())
+            ShellCmd::new("/bin/sh")?
+                .cmd_builder(missing.to_string_lossy().as_ref())
                 .is_err()
         );
         Ok(())

@@ -110,13 +110,13 @@ impl SessionLayout {
         let tab = self.active_tab_mut()?;
         let focus_seq = tab.next_focus_seq()?;
         let new_pane = Pane {
-            command_label: metadata.command_label.clone(),
+            cmd_label: metadata.cmd_label.clone(),
             cwd: metadata.cwd,
             focus_seq,
             id: pane_id.clone(),
             started_at: metadata.started_at,
             state: PaneState::Running,
-            title: metadata.command_label,
+            title: metadata.cmd_label,
         };
         tab.split_active_pane(&new_pane, split_axis)?;
         tab.active_pane = pane_id.clone();
@@ -163,7 +163,7 @@ impl PaneTree {
     }
 }
 
-pub fn handle_split_pane_command(
+pub fn handle_split_pane_cmd(
     split_axis: PaneSplitAxis,
     config: &ServerConfig,
     layout: &Mutex<SessionLayout>,

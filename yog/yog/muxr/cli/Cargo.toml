@@ -6,7 +6,7 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 readme.workspace = true
-description = "muxr command-line interface."
+description = "muxr CLI."
 keywords = ["muxr", "terminal", "multiplexer", "client", "cli"]
 categories = ["command-line-utilities", "development-tools"]
 

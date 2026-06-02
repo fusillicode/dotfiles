@@ -189,7 +189,7 @@ impl PaneTree {
     }
 }
 
-pub fn handle_close_pane_command(
+pub fn handle_close_pane_cmd(
     config: &ServerConfig,
     layout: &Mutex<SessionLayout>,
     runtimes: &Mutex<PaneRuntimes>,

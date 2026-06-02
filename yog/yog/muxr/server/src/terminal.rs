@@ -103,9 +103,9 @@ impl vt100::Callbacks for TerminalCallbacks {
         first_intermediate: Option<u8>,
         second_intermediate: Option<u8>,
         params: &[&[u16]],
-        command: char,
+        cmd: char,
     ) {
-        if command != 'n' || first_intermediate.is_some() || second_intermediate.is_some() {
+        if cmd != 'n' || first_intermediate.is_some() || second_intermediate.is_some() {
             return;
         }
 

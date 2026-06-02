@@ -3,13 +3,13 @@ use std::path::Path;
 /// A terminal title classified for the tab bar.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TerminalTitle {
-    /// Shell command-label text to show below the cwd row.
-    pub command_label: Option<String>,
+    /// Shell cmd-label text to show below the cwd row.
+    pub cmd_label: Option<String>,
     /// Cwd text to show in the path row and persist in pane metadata.
     pub cwd: Option<String>,
 }
 
-/// Classify an OSC terminal title as either cwd metadata or command-label text.
+/// Classify an OSC terminal title as either cwd metadata or cmd-label text.
 pub fn classify_terminal_title(title: Option<&str>, cwd: &str) -> TerminalTitle {
     let home = std::env::var("HOME").ok();
     self::classify_terminal_title_with_home(title, cwd, home.as_deref())
@@ -18,20 +18,20 @@ pub fn classify_terminal_title(title: Option<&str>, cwd: &str) -> TerminalTitle 
 fn classify_terminal_title_with_home(title: Option<&str>, cwd: &str, home: Option<&str>) -> TerminalTitle {
     let Some(title) = title.map(str::trim).filter(|title| !title.is_empty()) else {
         return TerminalTitle {
-            command_label: None,
+            cmd_label: None,
             cwd: None,
         };
     };
     let title_cwd = self::cwd_from_title(title, cwd, home);
     if self::is_shell_title(title) || title_cwd.is_some() || self::is_ignored_title(title) {
         return TerminalTitle {
-            command_label: None,
+            cmd_label: None,
             cwd: title_cwd,
         };
     }
 
     TerminalTitle {
-        command_label: Some(title.to_owned()),
+        cmd_label: Some(title.to_owned()),
         cwd: None,
     }
 }
@@ -40,8 +40,8 @@ fn is_shell_title(title: &str) -> bool {
     let Some(first_word) = title.split_whitespace().next() else {
         return true;
     };
-    let command = first_word.rsplit('/').next().unwrap_or(first_word);
-    matches!(command, "bash" | "fish" | "sh" | "zsh")
+    let cmd = first_word.rsplit('/').next().unwrap_or(first_word);
+    matches!(cmd, "bash" | "fish" | "sh" | "zsh")
 }
 
 fn cwd_from_title(title: &str, cwd: &str, home: Option<&str>) -> Option<String> {
@@ -84,26 +84,26 @@ mod tests {
     use super::*;
 
     #[rstest]
-    #[case::alias("gst", "/work/project", Some("gst"))]
-    #[case::command_with_args("cargo test", "/work/project", Some("cargo test"))]
-    #[case::custom_command_with_args("gkg server", "/work/project", Some("gkg server"))]
-    #[case::relative_command("./script.sh", "/work/project", Some("./script.sh"))]
-    #[case::relative_command_with_args("../bin/gkg server", "/work/project", Some("../bin/gkg server"))]
-    #[case::absolute_command_with_args("/usr/bin/cargo test", "/work/project", Some("/usr/bin/cargo test"))]
-    #[case::home_command_with_args("~/bin/tool run", "/work/project", Some("~/bin/tool run"))]
-    #[case::absolute_shell("/bin/zsh", "/work/project", None)]
-    #[case::shell_with_args("zsh -l", "/work/project", None)]
-    #[case::matching_cwd("/work/project", "/work/project", None)]
+    #[case::alias("gst", "/foo/bar", Some("gst"))]
+    #[case::cmd_with_args("cargo test", "/foo/bar", Some("cargo test"))]
+    #[case::custom_cmd_with_args("gkg server", "/foo/bar", Some("gkg server"))]
+    #[case::relative_cmd("./script.sh", "/foo/bar", Some("./script.sh"))]
+    #[case::relative_cmd_with_args("../bin/gkg server", "/foo/bar", Some("../bin/gkg server"))]
+    #[case::absolute_cmd_with_args("/usr/bin/cargo test", "/foo/bar", Some("/usr/bin/cargo test"))]
+    #[case::home_cmd_with_args("~/bin/tool run", "/foo/bar", Some("~/bin/tool run"))]
+    #[case::absolute_shell("/bin/zsh", "/foo/bar", None)]
+    #[case::shell_with_args("zsh -l", "/foo/bar", None)]
+    #[case::matching_cwd("/foo/bar", "/foo/bar", None)]
     #[case::home_cwd("~", "/old/project", None)]
-    #[case::empty("", "/work/project", None)]
-    #[case::default_pane_title("Pane 1", "/work/project", None)]
-    fn test_classify_terminal_title_when_title_is_seen_returns_command_label(
+    #[case::empty("", "/foo/bar", None)]
+    #[case::default_pane_title("Pane 1", "/foo/bar", None)]
+    fn test_classify_terminal_title_when_title_is_seen_returns_cmd_label(
         #[case] title: &str,
         #[case] cwd: &str,
         #[case] expected: Option<&str>,
     ) {
         pretty_assertions::assert_eq!(
-            classify_terminal_title_with_home(Some(title), cwd, Some("/Users/gianlu")).command_label,
+            classify_terminal_title_with_home(Some(title), cwd, Some("/foo/bar")).cmd_label,
             expected.map(ToOwned::to_owned)
         );
     }
@@ -115,7 +115,7 @@ mod tests {
         pretty_assertions::assert_eq!(
             classify_terminal_title_with_home(Some("~"), "/old/project", Some(home.path().to_string_lossy().as_ref())),
             TerminalTitle {
-                command_label: None,
+                cmd_label: None,
                 cwd: Some("~".to_owned()),
             },
         );
@@ -134,7 +134,7 @@ mod tests {
                 Some(home.path().to_string_lossy().as_ref())
             ),
             TerminalTitle {
-                command_label: None,
+                cmd_label: None,
                 cwd: Some("~/My Project".to_owned()),
             },
         );
@@ -142,7 +142,7 @@ mod tests {
     }
 
     #[test]
-    fn test_classify_terminal_title_when_home_path_is_file_returns_command_label() -> rootcause::Result<()> {
+    fn test_classify_terminal_title_when_home_path_is_file_returns_cmd_label() -> rootcause::Result<()> {
         let home = tempfile::Builder::new().prefix("muxr-home.").tempdir()?;
         std::fs::create_dir(home.path().join("bin"))?;
         std::fs::write(home.path().join("bin").join("tool"), b"")?;
@@ -154,7 +154,7 @@ mod tests {
                 Some(home.path().to_string_lossy().as_ref())
             ),
             TerminalTitle {
-                command_label: Some("~/bin/tool".to_owned()),
+                cmd_label: Some("~/bin/tool".to_owned()),
                 cwd: None,
             },
         );
