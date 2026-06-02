@@ -66,7 +66,7 @@ impl PaneTree {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct Pane {
-    pub command_label: String,
+    pub cmd_label: String,
     pub cwd: String,
     pub focus_seq: u64,
     pub id: PaneId,
@@ -90,7 +90,7 @@ impl Pane {
 
     /// Refresh pane cwd metadata from path-like shell title updates.
     pub fn sync_terminal_title(&mut self, terminal_title: Option<&str>) -> bool {
-        if let Some(cwd) = crate::command_label::classify_terminal_title(terminal_title, &self.cwd).cwd {
+        if let Some(cwd) = crate::cmd_label::classify_terminal_title(terminal_title, &self.cwd).cwd {
             if self.cwd == cwd {
                 return false;
             }
@@ -100,11 +100,11 @@ impl Pane {
         false
     }
 
-    /// Build a client snapshot with tab bar cwd/command metadata derived from the latest terminal title.
+    /// Build a client snapshot with tab bar cwd/cmd metadata derived from the latest terminal title.
     pub fn snapshot_with_terminal_title(&self, terminal_title: Option<&str>) -> PaneSnapshot {
-        let terminal_title = crate::command_label::classify_terminal_title(terminal_title, &self.cwd);
+        let terminal_title = crate::cmd_label::classify_terminal_title(terminal_title, &self.cwd);
         PaneSnapshot {
-            command_label: terminal_title.command_label,
+            cmd_label: terminal_title.cmd_label,
             cwd: terminal_title.cwd.unwrap_or_else(|| self.cwd.clone()),
             id: self.id.clone(),
             title: self.title.clone(),
@@ -129,16 +129,16 @@ mod tests {
         let snapshot = self::pane()?.snapshot_with_terminal_title(Some("~"));
 
         pretty_assertions::assert_eq!(snapshot.cwd, "~");
-        pretty_assertions::assert_eq!(snapshot.command_label, None);
+        pretty_assertions::assert_eq!(snapshot.cmd_label, None);
         Ok(())
     }
 
     #[test]
-    fn test_snapshot_with_terminal_title_when_title_is_command_keeps_pane_cwd() -> rootcause::Result<()> {
+    fn test_snapshot_with_terminal_title_when_title_is_cmd_keeps_pane_cwd() -> rootcause::Result<()> {
         let snapshot = self::pane()?.snapshot_with_terminal_title(Some("cargo test"));
 
         pretty_assertions::assert_eq!(snapshot.cwd, "/old/project");
-        pretty_assertions::assert_eq!(snapshot.command_label, Some("cargo test".to_owned()));
+        pretty_assertions::assert_eq!(snapshot.cmd_label, Some("cargo test".to_owned()));
         Ok(())
     }
 
@@ -163,7 +163,7 @@ mod tests {
     }
 
     #[test]
-    fn test_sync_terminal_title_when_title_is_command_returns_false() -> rootcause::Result<()> {
+    fn test_sync_terminal_title_when_title_is_cmd_returns_false() -> rootcause::Result<()> {
         let mut pane = self::pane()?;
 
         assert2::assert!(!pane.sync_terminal_title(Some("cargo test")));
@@ -174,7 +174,7 @@ mod tests {
 
     fn pane() -> rootcause::Result<Pane> {
         Ok(Pane {
-            command_label: "zsh".to_owned(),
+            cmd_label: "zsh".to_owned(),
             cwd: "/old/project".to_owned(),
             focus_seq: 1,
             id: PaneId::new("pane-1")?,

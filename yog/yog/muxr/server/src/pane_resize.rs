@@ -80,7 +80,7 @@ impl PaneSplitResize {
     }
 }
 
-pub fn handle_resize_pane_command(
+pub fn handle_resize_pane_cmd(
     direction: PaneResizeDirection,
     config: &ServerConfig,
     layout: &Mutex<SessionLayout>,

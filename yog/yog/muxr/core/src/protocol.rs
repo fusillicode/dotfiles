@@ -333,8 +333,8 @@ where
 pub struct PaneSnapshot {
     /// Current pane working directory, used by the client tab bar.
     pub cwd: String,
-    /// Shell-provided command label from the pane terminal title, used by the client tab bar.
-    pub command_label: Option<String>,
+    /// Shell-provided cmd label from the pane terminal title, used by the client tab bar.
+    pub cmd_label: Option<String>,
     /// Stable pane id.
     pub id: PaneId,
     /// Pane title displayed in tab and pane UI.
@@ -348,12 +348,12 @@ where
 {
     fn deserialize(&self, deserializer: &mut D) -> Result<PaneSnapshot, D::Error> {
         let cwd = rkyv::Deserialize::<String, D>::deserialize(&self.cwd, deserializer)?;
-        let command_label = rkyv::Deserialize::<Option<String>, D>::deserialize(&self.command_label, deserializer)?;
+        let cmd_label = rkyv::Deserialize::<Option<String>, D>::deserialize(&self.cmd_label, deserializer)?;
         let id = rkyv::Deserialize::<PaneId, D>::deserialize(&self.id, deserializer)?;
         let title = rkyv::Deserialize::<String, D>::deserialize(&self.title, deserializer)?;
         Ok(PaneSnapshot {
             cwd,
-            command_label,
+            cmd_label,
             id,
             title,
         })
@@ -1829,7 +1829,7 @@ mod tests {
         let active_pane = PaneId::new("pane-1")?;
         let pane = PaneSnapshot {
             cwd: "/tmp".to_owned(),
-            command_label: None,
+            cmd_label: None,
             id: active_pane.clone(),
             title: "shell".to_owned(),
         };
@@ -1861,7 +1861,7 @@ mod tests {
     fn pane_snapshot(id: &str, title: &str) -> rootcause::Result<PaneSnapshot> {
         Ok(PaneSnapshot {
             cwd: "/tmp".to_owned(),
-            command_label: None,
+            cmd_label: None,
             id: PaneId::new(id)?,
             title: title.to_owned(),
         })
@@ -1879,7 +1879,7 @@ mod tests {
     fn raw_pane_snapshot(id: &str, title: &str) -> PaneSnapshot {
         PaneSnapshot {
             cwd: "/tmp".to_owned(),
-            command_label: None,
+            cmd_label: None,
             id: pane_id(id),
             title: title.to_owned(),
         }
