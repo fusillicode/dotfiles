@@ -90,12 +90,13 @@ impl ShellCommand {
             .map_or_else(|| self.program.to_string_lossy().into_owned(), ToOwned::to_owned)
     }
 
-    fn command_builder(&self) -> CommandBuilder {
+    fn command_builder(&self, cwd: &str) -> rootcause::Result<CommandBuilder> {
         let mut command = CommandBuilder::new(self.program.as_os_str());
+        command.cwd(self::resolved_cwd(cwd)?);
         for arg in &self.args {
             command.arg(arg);
         }
-        command
+        Ok(command)
     }
 }
 
@@ -118,14 +119,19 @@ pub struct PtySession {
 }
 
 impl PtySession {
-    pub fn spawn(command: &ShellCommand, size: &TerminalSize, history_path: &Path) -> rootcause::Result<Self> {
+    pub fn spawn(
+        command: &ShellCommand,
+        cwd: &str,
+        size: &TerminalSize,
+        history_path: &Path,
+    ) -> rootcause::Result<Self> {
         let state = Arc::new(PtyState::with_history(size, history_path)?);
         let pty_pair = native_pty_system()
             .openpty(pty_size(size))
             .map_err(|error| report!("failed to open muxr shell pty").attach(format!("error={error:#}")))?;
         let child = pty_pair
             .slave
-            .spawn_command(command.command_builder())
+            .spawn_command(command.command_builder(cwd)?)
             .map_err(|error| report!("failed to spawn muxr shell process").attach(format!("error={error:#}")))?;
         let reader = pty_pair
             .master
@@ -315,6 +321,14 @@ impl PtyHandle {
         Ok(Some(exit_status))
     }
 
+    pub fn terminal_title(&self) -> rootcause::Result<Option<String>> {
+        Ok(lock_mutex(&self.state.terminal, "pty terminal")?.title())
+    }
+
+    pub fn take_title_changes(&self) -> rootcause::Result<Vec<Option<String>>> {
+        self.state.take_title_changes()
+    }
+
     pub fn render_snapshot(&self) -> rootcause::Result<TerminalSnapshot> {
         lock_mutex(&self.state.terminal, "pty terminal")?.snapshot()
     }
@@ -351,6 +365,7 @@ struct PtyState {
     exit_status: Mutex<Option<PtyExitStatus>>,
     history: Mutex<Option<PaneHistory>>,
     terminal: Mutex<TerminalState>,
+    title_changes: Mutex<Vec<Option<String>>>,
 }
 
 impl PtyState {
@@ -362,6 +377,7 @@ impl PtyState {
             exit_status: Mutex::new(None),
             history: Mutex::new(None),
             terminal: Mutex::new(TerminalState::new(size)),
+            title_changes: Mutex::new(Vec::new()),
         }
     }
 
@@ -369,6 +385,8 @@ impl PtyState {
         let (history, replay) = PaneHistory::open(history_path)?;
         let mut terminal = TerminalState::new(size);
         drop(terminal.process(&replay));
+        // History replay rebuilds visible cells only; tab bar metadata must come from live PTY output after spawn.
+        terminal.clear_title_metadata();
 
         Ok(Self {
             active_sink: Mutex::new(None),
@@ -376,11 +394,13 @@ impl PtyState {
             exit_status: Mutex::new(None),
             history: Mutex::new(Some(history)),
             terminal: Mutex::new(terminal),
+            title_changes: Mutex::new(Vec::new()),
         })
     }
 
     fn attach_sink(self: &Arc<Self>, sender: mpsc::SyncSender<PtyEvent>) -> rootcause::Result<PtySinkGuard> {
         let output_current = Arc::new(AtomicBool::new(true));
+        lock_mutex(&self.title_changes, "pty title changes")?.clear();
         *lock_mutex(&self.active_sink, "pty active sink")? = Some(ActivePtySink {
             output_current: Arc::clone(&output_current),
             sender,
@@ -396,7 +416,20 @@ impl PtyState {
         if let Some(history) = lock_mutex(&self.history, "pty history")?.as_mut() {
             history.append(bytes)?;
         }
-        let terminal_replies = lock_mutex(&self.terminal, "pty terminal")?.process(bytes);
+        let terminal_replies = {
+            let mut terminal = lock_mutex(&self.terminal, "pty terminal")?;
+            let terminal_replies = terminal.process(bytes);
+            let title_changes = terminal.take_title_changes();
+            drop(terminal);
+            // Title changes are queued separately from coalesced output events so command->cwd title transitions are
+            // not collapsed before the server can emit matching tab bar updates.
+            let active_sink = lock_mutex(&self.active_sink, "pty active sink")?;
+            if !title_changes.is_empty() && active_sink.is_some() {
+                lock_mutex(&self.title_changes, "pty title changes")?.extend(title_changes);
+            }
+            drop(active_sink);
+            terminal_replies
+        };
 
         let mut active_sink = lock_mutex(&self.active_sink, "pty active sink")?;
         if let Some(sink) = active_sink.as_ref() {
@@ -414,6 +447,11 @@ impl PtyState {
         drop(active_sink);
 
         Ok(terminal_replies)
+    }
+
+    fn take_title_changes(&self) -> rootcause::Result<Vec<Option<String>>> {
+        let mut title_changes = lock_mutex(&self.title_changes, "pty title changes")?;
+        Ok(std::mem::take(&mut *title_changes))
     }
 
     fn mark_exited(&self, exit_status: PtyExitStatus) -> rootcause::Result<()> {
@@ -454,6 +492,37 @@ fn default_shell_path() -> PathBuf {
     } else {
         PathBuf::from("/bin/sh")
     }
+}
+
+fn resolved_cwd(cwd: &str) -> rootcause::Result<PathBuf> {
+    // Pane cwd comes from restored layout or shell-title metadata; falling back to the server cwd opens panes
+    // elsewhere.
+    let cwd = cwd.trim();
+    if cwd.is_empty() {
+        return Err(report!("invalid muxr pane cwd").attach("reason=cwd must not be empty"));
+    }
+
+    let path = if cwd == "~" {
+        env::var_os("HOME")
+            .map(PathBuf::from)
+            .ok_or_else(|| report!("invalid muxr pane cwd").attach("reason=HOME is not set"))?
+    } else if let Some(rest) = cwd.strip_prefix("~/").filter(|rest| !rest.is_empty()) {
+        env::var_os("HOME")
+            .map(PathBuf::from)
+            .ok_or_else(|| report!("invalid muxr pane cwd").attach("reason=HOME is not set"))?
+            .join(rest)
+    } else {
+        PathBuf::from(cwd)
+    };
+
+    if !path.is_dir() {
+        return Err(report!("invalid muxr pane cwd")
+            .attach("reason=path is not a directory")
+            .attach(format!("cwd={cwd}"))
+            .attach(format!("path={}", path.display())));
+    }
+
+    Ok(path)
 }
 
 fn lock_mutex<'a, T>(mutex: &'a Mutex<T>, name: &str) -> rootcause::Result<MutexGuard<'a, T>> {
@@ -655,6 +724,28 @@ mod tests {
     }
 
     #[test]
+    fn test_shell_command_command_builder_when_cwd_exists_sets_cwd() -> rootcause::Result<()> {
+        let cwd = tempfile::tempdir()?;
+        let command = ShellCommand::new("/bin/sh")?.command_builder(cwd.path().to_string_lossy().as_ref())?;
+
+        pretty_assertions::assert_eq!(command.get_cwd().map(PathBuf::from), Some(cwd.path().to_path_buf()),);
+        Ok(())
+    }
+
+    #[test]
+    fn test_shell_command_command_builder_when_cwd_is_missing_returns_error() -> rootcause::Result<()> {
+        let cwd = tempfile::tempdir()?;
+        let missing = cwd.path().join("missing");
+
+        assert2::assert!(
+            ShellCommand::new("/bin/sh")?
+                .command_builder(missing.to_string_lossy().as_ref())
+                .is_err()
+        );
+        Ok(())
+    }
+
+    #[test]
     fn test_spawn_reader_thread_when_pty_reaches_eof_does_not_mark_child_exited() -> rootcause::Result<()> {
         let state = Arc::new(PtyState::new(&terminal_size()?));
         let reader_handle = spawn_reader_thread(
@@ -686,6 +777,24 @@ mod tests {
     }
 
     #[test]
+    fn test_with_history_when_history_contains_title_does_not_restore_live_title() -> rootcause::Result<()> {
+        let tempdir = tempfile::tempdir()?;
+        let history_path = tempdir.path().join("pane-1").join("output.raw");
+        std::fs::create_dir_all(
+            history_path
+                .parent()
+                .ok_or_else(|| report!("expected history parent"))?,
+        )?;
+        std::fs::write(&history_path, b"\x1b]2;~\x07history")?;
+
+        let state = PtyState::with_history(&terminal_size()?, &history_path)?;
+
+        pretty_assertions::assert_eq!(lock_mutex(&state.terminal, "pty terminal")?.title(), None);
+        pretty_assertions::assert_eq!(state.take_title_changes()?, Vec::<Option<String>>::new());
+        Ok(())
+    }
+
+    #[test]
     fn test_append_output_when_sink_is_full_coalesces_without_blocking() -> rootcause::Result<()> {
         let state = PtyState::new(&terminal_size()?);
         let (sender, receiver) = mpsc::sync_channel(1);
@@ -700,6 +809,30 @@ mod tests {
 
         assert2::assert!(lock_mutex(&state.active_sink, "pty active sink")?.is_some());
         assert2::assert!(output_current.load(Ordering::Acquire));
+        assert2::assert!(matches!(receiver.recv(), Ok(PtyEvent::OutputReady)));
+        Ok(())
+    }
+
+    #[test]
+    fn test_append_output_when_sink_is_full_and_title_changes_preserves_title_changes() -> rootcause::Result<()> {
+        let state = PtyState::new(&terminal_size()?);
+        let (sender, receiver) = mpsc::sync_channel(1);
+        let output_current = Arc::new(AtomicBool::new(true));
+        *lock_mutex(&state.active_sink, "pty active sink")? = Some(ActivePtySink {
+            output_current: Arc::clone(&output_current),
+            sender,
+        });
+
+        pretty_assertions::assert_eq!(state.append_output(b"first")?, Vec::<Vec<u8>>::new());
+        pretty_assertions::assert_eq!(
+            state.append_output(b"\x1b]2;cargo test\x07\x1b]2;~\x07")?,
+            Vec::<Vec<u8>>::new()
+        );
+
+        pretty_assertions::assert_eq!(
+            state.take_title_changes()?,
+            vec![Some("cargo test".to_owned()), Some("~".to_owned())],
+        );
         assert2::assert!(matches!(receiver.recv(), Ok(PtyEvent::OutputReady)));
         Ok(())
     }

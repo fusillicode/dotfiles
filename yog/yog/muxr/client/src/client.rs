@@ -349,20 +349,20 @@ async fn handle_mouse_input_action(
             }
             return Ok(true);
         }
-        // Captured app drags can finish over muxr chrome; forward them clamped to the captured pane before dropping
-        // ordinary chrome mouse packets.
+        // Captured app drags can finish over the tab bar; forward them clamped to the captured pane before dropping
+        // ordinary tab bar mouse packets.
         if renderer.has_mouse_capture()
             && let Some(position) = self::pane_position_for_sidebar_drag(event.position)
             && let Some(event) = renderer.mouse_request_for_event(ClientMouseEvent { position, ..event })
         {
             return self::send_mouse_request(input_sender, event).await;
         }
-        // Local selections can also finish over muxr chrome; keep update/end routed so the retained pane drag is
+        // Local selections can also finish over the tab bar; keep update/end routed so the retained pane drag is
         // clamped and finalized instead of leaving stale drag state behind.
-        let chrome_position = event.position;
+        let tab_bar_position = event.position;
         match self::pane_focus::local_mouse_action(event) {
             Some(LocalMouseAction::SelectionUpdate(_)) => {
-                if let Some(position) = self::pane_position_for_sidebar_drag(chrome_position) {
+                if let Some(position) = self::pane_position_for_sidebar_drag(tab_bar_position) {
                     let scroll_request = renderer.set_selection_edge_drag(position, None);
                     renderer.apply_selection_input(stdout, SelectionInput::Update(position))?;
                     if let Some(request) = scroll_request {
@@ -371,7 +371,7 @@ async fn handle_mouse_input_action(
                 }
             }
             Some(LocalMouseAction::SelectionEnd(_)) => {
-                if let Some(position) = self::pane_position_for_sidebar_drag(chrome_position) {
+                if let Some(position) = self::pane_position_for_sidebar_drag(tab_bar_position) {
                     renderer.apply_selection_input(stdout, SelectionInput::End(position))?;
                 }
             }
@@ -1582,6 +1582,7 @@ mod tests {
         let active_pane = PaneId::new("pane-1")?;
         let pane = PaneSnapshot {
             cwd: "/tmp".to_owned(),
+            command_label: None,
             id: active_pane.clone(),
             title: "shell".to_owned(),
         };
@@ -1615,6 +1616,7 @@ mod tests {
                     PaneId::new("pane-1")?,
                     vec![PaneSnapshot {
                         cwd: "/tmp/tab-1".to_owned(),
+                        command_label: None,
                         id: PaneId::new("pane-1")?,
                         title: "shell".to_owned(),
                     }],
@@ -1625,6 +1627,7 @@ mod tests {
                     PaneId::new("pane-2")?,
                     vec![PaneSnapshot {
                         cwd: "/tmp/tab-2".to_owned(),
+                        command_label: None,
                         id: PaneId::new("pane-2")?,
                         title: "shell".to_owned(),
                     }],
