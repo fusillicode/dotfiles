@@ -110,7 +110,7 @@ mod tests {
             active_pane: pane_id.clone(),
             id,
             pane_tree: PaneTree::Pane(Pane {
-                command_label: "sh".to_owned(),
+                cmd_label: "sh".to_owned(),
                 cwd: "/tmp".to_owned(),
                 focus_seq: 1,
                 id: pane_id,

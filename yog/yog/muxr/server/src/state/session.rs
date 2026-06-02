@@ -20,7 +20,7 @@ const INITIAL_TAB_TITLE: &str = "default";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SessionMetadata {
-    pub command_label: String,
+    pub cmd_label: String,
     pub cwd: String,
     pub started_at: u64,
 }
@@ -43,13 +43,13 @@ impl SessionLayout {
                 active_pane: pane_id.clone(),
                 id: tab_id,
                 pane_tree: PaneTree::Pane(Pane {
-                    command_label: metadata.command_label.clone(),
+                    cmd_label: metadata.cmd_label.clone(),
                     cwd: metadata.cwd,
                     focus_seq: 1,
                     id: pane_id,
                     started_at: metadata.started_at,
                     state: PaneState::Running,
-                    title: metadata.command_label,
+                    title: metadata.cmd_label,
                 }),
                 title: INITIAL_TAB_TITLE.to_owned(),
             }],

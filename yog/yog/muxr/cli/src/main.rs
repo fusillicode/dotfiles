@@ -10,7 +10,7 @@ use strum::EnumIter;
 use strum::IntoEnumIterator;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-enum Command {
+enum Cmd {
     Help,
     Sessions,
     Start { session: SessionName },
@@ -22,8 +22,8 @@ enum SessionAction {
     Delete,
 }
 
-impl Command {
-    /// Execute the muxr CLI command.
+impl Cmd {
+    /// Execute the muxr CLI cmd.
     ///
     /// # Errors
     /// - The home state path cannot be resolved.
@@ -59,10 +59,10 @@ fn main() -> rootcause::Result<()> {
         return Ok(());
     }
 
-    let command = parse(&args);
+    let cmd = parse(&args);
 
-    match command {
-        Ok(command) => command.execute(),
+    match cmd {
+        Ok(cmd) => cmd.execute(),
         Err(err) => {
             print!("{}", include_str!("../help.txt"));
             Err(err)
@@ -87,24 +87,24 @@ fn parse_internal_server(args: &[String]) -> rootcause::Result<Option<SessionNam
 /// Parse muxr CLI arguments.
 ///
 /// # Errors
-/// - The command is unknown, has unexpected extra arguments, or uses an invalid session name.
-fn parse(args: &[String]) -> rootcause::Result<Command> {
+/// - The cmd is unknown, has unexpected extra arguments, or uses an invalid session name.
+fn parse(args: &[String]) -> rootcause::Result<Cmd> {
     if args.iter().any(|arg| arg == "--help") {
-        return Ok(Command::Help);
+        return Ok(Cmd::Help);
     }
 
     match args {
-        [] => Ok(Command::Sessions),
-        [command] if command == "start" => Ok(Command::Start {
+        [] => Ok(Cmd::Sessions),
+        [cmd] if cmd == "start" => Ok(Cmd::Start {
             session: SessionName::default(),
         }),
-        [command, session] if command == "start" => Ok(Command::Start {
+        [cmd, session] if cmd == "start" => Ok(Cmd::Start {
             session: session.parse()?,
         }),
-        [command, session, rest @ ..] if command == "start" => {
+        [cmd, session, rest @ ..] if cmd == "start" => {
             Err(report!("unexpected muxr start args").attach(format!("session={session:?} extra={rest:?}")))
         }
-        [command, ..] => Err(report!("unknown muxr command {command:?}")),
+        [cmd, ..] => Err(report!("unknown muxr cmd {cmd:?}")),
     }
 }
 
@@ -208,11 +208,11 @@ mod tests {
     #[rstest]
     #[case::start_without_session(&["start"], "default")]
     #[case::start_with_session(&["start", "work"], "work")]
-    fn test_parse_when_start_args_vary_returns_start_command(
+    fn test_parse_when_start_args_vary_returns_start_cmd(
         #[case] raw: &[&str],
         #[case] expected_session: &str,
     ) -> rootcause::Result<()> {
-        assert2::assert!(let Command::Start { session } = parse(&args(raw))?);
+        assert2::assert!(let Cmd::Start { session } = parse(&args(raw))?);
         pretty_assertions::assert_eq!(session.as_ref(), expected_session);
         Ok(())
     }
@@ -221,22 +221,22 @@ mod tests {
     #[case::help_arg(&["--help"])]
     #[case::help_among_args(&["start", "--help"])]
     fn test_parse_when_help_requested_returns_help(#[case] raw: &[&str]) -> rootcause::Result<()> {
-        pretty_assertions::assert_eq!(parse(&args(raw))?, Command::Help);
+        pretty_assertions::assert_eq!(parse(&args(raw))?, Cmd::Help);
         Ok(())
     }
 
     #[test]
     fn test_parse_when_no_args_returns_session_picker() -> rootcause::Result<()> {
-        pretty_assertions::assert_eq!(parse(&args(&[]))?, Command::Sessions);
+        pretty_assertions::assert_eq!(parse(&args(&[]))?, Cmd::Sessions);
         Ok(())
     }
 
     #[rstest]
     #[case::start_extra_args(&["start", "work", "extra"])]
-    #[case::old_attach_command(&["attach"])]
-    #[case::old_detach_command(&["detach"])]
-    #[case::old_server_command(&["server", "work"])]
-    #[case::unknown_command(&["bogus"])]
+    #[case::old_attach_cmd(&["attach"])]
+    #[case::old_detach_cmd(&["detach"])]
+    #[case::old_server_cmd(&["server", "work"])]
+    #[case::unknown_cmd(&["bogus"])]
     fn test_parse_when_args_are_invalid_returns_error(#[case] raw: &[&str]) {
         assert2::assert!(parse(&args(raw)).is_err());
     }

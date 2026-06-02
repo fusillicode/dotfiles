@@ -902,7 +902,7 @@ mod tests {
         let active_pane = PaneId::new("pane-1")?;
         let pane = PaneSnapshot {
             cwd: "/tmp/default".to_owned(),
-            command_label: None,
+            cmd_label: None,
             id: active_pane.clone(),
             title: "shell".to_owned(),
         };
@@ -972,7 +972,7 @@ mod tests {
                     muxr_core::PaneId::new("pane-1")?,
                     vec![muxr_core::PaneSnapshot {
                         cwd: "/tmp/tab-1".to_owned(),
-                        command_label: None,
+                        cmd_label: None,
                         id: muxr_core::PaneId::new("pane-1")?,
                         title: "shell".to_owned(),
                     }],
@@ -983,7 +983,7 @@ mod tests {
                     muxr_core::PaneId::new("pane-2")?,
                     vec![muxr_core::PaneSnapshot {
                         cwd: "/tmp/tab-2".to_owned(),
-                        command_label: None,
+                        cmd_label: None,
                         id: muxr_core::PaneId::new("pane-2")?,
                         title: "shell".to_owned(),
                     }],

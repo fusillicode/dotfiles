@@ -841,9 +841,9 @@ mod tests {
             .collect()
     }
 
-    fn metadata(command_label: &str, started_at: u64) -> SessionMetadata {
+    fn metadata(cmd_label: &str, started_at: u64) -> SessionMetadata {
         SessionMetadata {
-            command_label: command_label.to_owned(),
+            cmd_label: cmd_label.to_owned(),
             cwd: "/tmp".to_owned(),
             started_at,
         }

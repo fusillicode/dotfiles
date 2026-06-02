@@ -548,24 +548,23 @@ fn cleanup_stale_session_files(paths: &SessionPaths) -> rootcause::Result<()> {
 }
 
 fn spawn_server_process(session: &SessionName, server_executable: &Path) -> rootcause::Result<()> {
-    let mut command = self::server_command(session, server_executable);
+    let mut cmd = self::server_cmd(session, server_executable);
 
-    let child = command.spawn().context("failed to spawn muxr internal server")?;
+    let child = cmd.spawn().context("failed to spawn muxr internal server")?;
     drop(child);
     Ok(())
 }
 
-fn server_command(session: &SessionName, server_executable: &Path) -> Command {
-    let mut command = Command::new(server_executable);
-    command
-        .arg(INTERNAL_SERVER_ARG)
+fn server_cmd(session: &SessionName, server_executable: &Path) -> Command {
+    let mut cmd = Command::new(server_executable);
+    cmd.arg(INTERNAL_SERVER_ARG)
         .arg(session.as_ref())
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .process_group(0);
 
-    command
+    cmd
 }
 
 fn remove_file_if_exists(path: &Path) -> rootcause::Result<()> {
@@ -620,7 +619,7 @@ fn spawn_stdin_forwarder(input_sender: tokio::sync::mpsc::Sender<ClientInputActi
                     if !self::send_decoded_input(&input_sender, decoder.finalize()) {
                         break;
                     }
-                    // EOF detach follows any queued stdin bytes so piped commands like `exit\n` reach the shell first.
+                    // EOF detach follows any queued stdin bytes so piped cmds like `exit\n` reach the shell first.
                     drop(input_sender.blocking_send(ClientInputAction::ServerRequest(ClientRequest::Detach)));
                     break;
                 }
@@ -839,12 +838,12 @@ mod tests {
     }
 
     #[test]
-    fn test_server_command_uses_supplied_executable_for_internal_server() -> rootcause::Result<()> {
+    fn test_server_cmd_uses_supplied_executable_for_internal_server() -> rootcause::Result<()> {
         let session: SessionName = "work".parse()?;
-        let command = server_command(&session, Path::new("/tmp/custom-muxr"));
-        let args: Vec<_> = command.get_args().collect();
+        let cmd = server_cmd(&session, Path::new("/tmp/custom-muxr"));
+        let args: Vec<_> = cmd.get_args().collect();
 
-        pretty_assertions::assert_eq!(command.get_program(), OsStr::new("/tmp/custom-muxr"));
+        pretty_assertions::assert_eq!(cmd.get_program(), OsStr::new("/tmp/custom-muxr"));
         pretty_assertions::assert_eq!(args.as_slice(), [OsStr::new(INTERNAL_SERVER_ARG), OsStr::new("work")]);
         Ok(())
     }
@@ -1582,7 +1581,7 @@ mod tests {
         let active_pane = PaneId::new("pane-1")?;
         let pane = PaneSnapshot {
             cwd: "/tmp".to_owned(),
-            command_label: None,
+            cmd_label: None,
             id: active_pane.clone(),
             title: "shell".to_owned(),
         };
@@ -1616,7 +1615,7 @@ mod tests {
                     PaneId::new("pane-1")?,
                     vec![PaneSnapshot {
                         cwd: "/tmp/tab-1".to_owned(),
-                        command_label: None,
+                        cmd_label: None,
                         id: PaneId::new("pane-1")?,
                         title: "shell".to_owned(),
                     }],
@@ -1627,7 +1626,7 @@ mod tests {
                     PaneId::new("pane-2")?,
                     vec![PaneSnapshot {
                         cwd: "/tmp/tab-2".to_owned(),
-                        command_label: None,
+                        cmd_label: None,
                         id: PaneId::new("pane-2")?,
                         title: "shell".to_owned(),
                     }],

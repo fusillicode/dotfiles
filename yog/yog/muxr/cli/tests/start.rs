@@ -73,7 +73,7 @@ fn run_muxr<const N: usize>(home: &Path, args: [&str; N]) -> rootcause::Result<O
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
-        .context("failed to spawn muxr cli test command")?;
+        .context("failed to spawn muxr cli test cmd")?;
 
     wait_for_muxr_output(child)
 }
@@ -86,7 +86,7 @@ fn run_muxr_with_stdin<const N: usize>(home: &Path, args: [&str; N], input: &[u8
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
-        .context("failed to spawn muxr cli test command")?;
+        .context("failed to spawn muxr cli test cmd")?;
 
     let Some(mut stdin) = child.stdin.take() else {
         return Err(report!("failed to open muxr cli test stdin"));
@@ -101,14 +101,10 @@ fn wait_for_muxr_output(mut child: Child) -> rootcause::Result<Output> {
     let started_at = Instant::now();
 
     loop {
-        if child
-            .try_wait()
-            .context("failed to poll muxr cli test command")?
-            .is_some()
-        {
+        if child.try_wait().context("failed to poll muxr cli test cmd")?.is_some() {
             return Ok(child
                 .wait_with_output()
-                .context("failed to collect muxr cli test command output")?);
+                .context("failed to collect muxr cli test cmd output")?);
         }
 
         if started_at.elapsed() > PROCESS_TIMEOUT {
@@ -116,8 +112,8 @@ fn wait_for_muxr_output(mut child: Child) -> rootcause::Result<Output> {
             drop(child.kill());
             let output = child
                 .wait_with_output()
-                .context("failed to collect timed-out muxr cli test command output")?;
-            return Err(report!("timed out waiting for muxr cli test command")
+                .context("failed to collect timed-out muxr cli test cmd output")?;
+            return Err(report!("timed out waiting for muxr cli test cmd")
                 .attach(format!("stdout={}", String::from_utf8_lossy(&output.stdout)))
                 .attach(format!("stderr={}", String::from_utf8_lossy(&output.stderr))));
         }

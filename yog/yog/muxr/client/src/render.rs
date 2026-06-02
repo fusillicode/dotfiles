@@ -189,8 +189,8 @@ impl FrameBuffer {
 }
 
 pub fn queue_full_redraw_start(stdout: &mut impl Write) -> rootcause::Result<()> {
-    queue_command(stdout, Hide)?;
-    queue_command(stdout, Clear(ClearType::All))
+    queue_cmd(stdout, Hide)?;
+    queue_cmd(stdout, Clear(ClearType::All))
 }
 
 pub fn queue_synchronized_update_start(stdout: &mut impl Write, mode: SynchronizedOutput) -> rootcause::Result<()> {
@@ -301,7 +301,7 @@ fn render_row_span(
         .col()
         .checked_add(col_offset)
         .ok_or_else(|| report!("muxr render column offset overflowed"))?;
-    queue_command(stdout, MoveTo(rendered_col, rendered_row))?;
+    queue_cmd(stdout, MoveTo(rendered_col, rendered_row))?;
     let mut run_style = None;
     let mut run_text = String::new();
     for (index, cell) in row.cells().iter().enumerate() {
@@ -350,7 +350,7 @@ fn flush_text_run(
     };
 
     apply_style_transition(stdout, active_style, style)?;
-    queue_command(stdout, Print(run_text.as_str()))?;
+    queue_cmd(stdout, Print(run_text.as_str()))?;
     run_text.clear();
     Ok(())
 }
@@ -370,10 +370,10 @@ fn apply_style_transition(
         *active_style = RenderStyle::default();
     }
     if active_style.fg != next_style.fg {
-        queue_command(stdout, SetForegroundColor(crossterm_color(next_style.fg)))?;
+        queue_cmd(stdout, SetForegroundColor(crossterm_color(next_style.fg)))?;
     }
     if active_style.bg != next_style.bg {
-        queue_command(stdout, SetBackgroundColor(crossterm_color(next_style.bg)))?;
+        queue_cmd(stdout, SetBackgroundColor(crossterm_color(next_style.bg)))?;
     }
     if attrs_changed {
         apply_enabled_attrs(stdout, next_style.attrs)?;
@@ -383,25 +383,25 @@ fn apply_style_transition(
 }
 
 fn reset_style(stdout: &mut impl Write) -> rootcause::Result<()> {
-    queue_command(stdout, ResetColor)?;
-    queue_command(stdout, SetAttribute(Attribute::Reset))
+    queue_cmd(stdout, ResetColor)?;
+    queue_cmd(stdout, SetAttribute(Attribute::Reset))
 }
 
 fn apply_enabled_attrs(stdout: &mut impl Write, attrs: RenderTextStyle) -> rootcause::Result<()> {
     if attrs.bold() {
-        queue_command(stdout, SetAttribute(Attribute::Bold))?;
+        queue_cmd(stdout, SetAttribute(Attribute::Bold))?;
     }
     if attrs.dim() {
-        queue_command(stdout, SetAttribute(Attribute::Dim))?;
+        queue_cmd(stdout, SetAttribute(Attribute::Dim))?;
     }
     if attrs.italic() {
-        queue_command(stdout, SetAttribute(Attribute::Italic))?;
+        queue_cmd(stdout, SetAttribute(Attribute::Italic))?;
     }
     if attrs.underline() {
-        queue_command(stdout, SetAttribute(Attribute::Underlined))?;
+        queue_cmd(stdout, SetAttribute(Attribute::Underlined))?;
     }
     if attrs.inverse() {
-        queue_command(stdout, SetAttribute(Attribute::Reverse))?;
+        queue_cmd(stdout, SetAttribute(Attribute::Reverse))?;
     }
     Ok(())
 }
@@ -412,17 +412,17 @@ fn apply_enabled_attrs(stdout: &mut impl Write, attrs: RenderTextStyle) -> rootc
 /// screen in the user's outer shell.
 ///
 /// # Errors
-/// - The terminal enter commands cannot be written or flushed.
+/// - The terminal enter cmds cannot be written or flushed.
 pub fn enter_terminal(stdout: &mut impl Write) -> rootcause::Result<()> {
-    queue_command(stdout, EnterAlternateScreen)?;
+    queue_cmd(stdout, EnterAlternateScreen)?;
     queue_bytes(stdout, BRACKETED_PASTE_ENABLE)?;
     // Clear stale any-motion capture; the renderer re-enables it only when a pane requests that mode.
     queue_bytes(stdout, MOUSE_ANY_EVENT_CAPTURE_DISABLE)?;
     queue_bytes(stdout, MOUSE_BUTTON_CAPTURE_ENABLE)?;
     queue_bytes(stdout, MOUSE_BUTTON_EVENT_CAPTURE_ENABLE)?;
     queue_bytes(stdout, MOUSE_SGR_ENABLE)?;
-    queue_command(stdout, Clear(ClearType::All))?;
-    queue_command(stdout, Hide)?;
+    queue_cmd(stdout, Clear(ClearType::All))?;
+    queue_cmd(stdout, Hide)?;
     stdout.flush().context("failed to flush muxr terminal enter")?;
     Ok(())
 }
@@ -433,16 +433,16 @@ pub fn enter_terminal(stdout: &mut impl Write) -> rootcause::Result<()> {
 /// best-effort cleanup so detach or errors do not leak those modes into the user's shell.
 ///
 /// # Errors
-/// - The terminal restore commands cannot be written or flushed.
+/// - The terminal restore cmds cannot be written or flushed.
 pub fn restore_terminal(stdout: &mut impl Write) -> rootcause::Result<()> {
     queue_bytes(stdout, MOUSE_SGR_DISABLE)?;
     queue_bytes(stdout, MOUSE_ANY_EVENT_CAPTURE_DISABLE)?;
     queue_bytes(stdout, MOUSE_BUTTON_EVENT_CAPTURE_DISABLE)?;
     queue_bytes(stdout, MOUSE_BUTTON_CAPTURE_DISABLE)?;
     queue_bytes(stdout, BRACKETED_PASTE_DISABLE)?;
-    queue_command(stdout, LeaveAlternateScreen)?;
+    queue_cmd(stdout, LeaveAlternateScreen)?;
     reset_style(stdout)?;
-    queue_command(stdout, Show)?;
+    queue_cmd(stdout, Show)?;
     stdout.flush().context("failed to flush muxr terminal restore")?;
     Ok(())
 }
@@ -462,10 +462,10 @@ fn render_cursor(
             .col
             .checked_add(col_offset)
             .ok_or_else(|| report!("muxr render cursor column offset overflowed"))?;
-        queue_command(stdout, MoveTo(col, row))?;
-        queue_command(stdout, Show)
+        queue_cmd(stdout, MoveTo(col, row))?;
+        queue_cmd(stdout, Show)
     } else {
-        queue_command(stdout, Hide)
+        queue_cmd(stdout, Hide)
     }
 }
 
@@ -477,13 +477,13 @@ const fn crossterm_color(color: RenderColor) -> Color {
     }
 }
 
-fn queue_command<W, C>(stdout: &mut W, command: C) -> rootcause::Result<()>
+fn queue_cmd<W, C>(stdout: &mut W, cmd: C) -> rootcause::Result<()>
 where
     W: Write,
     C: Command,
 {
     Ok(stdout
-        .queue(command)
+        .queue(cmd)
         .map(|_| ())
         .context("failed to write muxr render frame")?)
 }
@@ -568,8 +568,7 @@ mod tests {
     }
 
     #[test]
-    fn test_frame_buffer_queue_when_changes_arrive_writes_terminal_commands_without_flushing() -> rootcause::Result<()>
-    {
+    fn test_frame_buffer_queue_when_changes_arrive_writes_terminal_cmds_without_flushing() -> rootcause::Result<()> {
         let mut frame_buffer = FrameBuffer::default();
         let ApplyOutcome::Applied(changes) = frame_buffer.apply(RenderUpdate::Baseline(render_baseline()?))? else {
             return Err(report!("expected applied baseline"));
@@ -859,12 +858,12 @@ mod tests {
     fn expected_escape(expected: ExpectedEscape) -> rootcause::Result<String> {
         let mut output = Vec::new();
         match expected {
-            ExpectedEscape::Attribute(attribute) => queue_command(&mut output, SetAttribute(attribute))?,
+            ExpectedEscape::Attribute(attribute) => queue_cmd(&mut output, SetAttribute(attribute))?,
             ExpectedEscape::Background(color) => {
-                queue_command(&mut output, SetBackgroundColor(crossterm_color(color)))?;
+                queue_cmd(&mut output, SetBackgroundColor(crossterm_color(color)))?;
             }
             ExpectedEscape::Foreground(color) => {
-                queue_command(&mut output, SetForegroundColor(crossterm_color(color)))?;
+                queue_cmd(&mut output, SetForegroundColor(crossterm_color(color)))?;
             }
         }
 

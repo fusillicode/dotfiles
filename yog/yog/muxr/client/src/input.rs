@@ -356,7 +356,7 @@ mod tests {
     #[rstest]
     #[case::unknown_escape(b"\x1bX")]
     #[case::unknown_csi(b"\x1b[1~")]
-    fn test_input_decoder_decode_when_escape_is_not_muxr_command_preserves_bytes(#[case] bytes: &[u8]) {
+    fn test_input_decoder_decode_when_escape_is_not_muxr_cmd_preserves_bytes(#[case] bytes: &[u8]) {
         let mut decoder = InputDecoder::default();
 
         pretty_assertions::assert_eq!(decoder.decode(bytes), vec![DecodedInput::Input(bytes.to_vec())]);
