@@ -12,10 +12,10 @@ use muxr_core::PaneRegionSnapshot;
 use muxr_core::PaneRegionsSnapshot;
 use muxr_core::PaneScrollDirection;
 use muxr_core::RenderUpdate;
+use muxr_core::TabId;
 use rootcause::prelude::ResultExt;
 
 use super::DOUBLE_CLICK_THRESHOLD;
-use super::TAB_BAR_ROWS;
 use crate::client::copy_selection::SelectionInput;
 use crate::client::copy_selection::SelectionRange;
 use crate::client::copy_selection::SelectionState;
@@ -203,6 +203,10 @@ impl ClientRenderer {
         self.chrome_dirty = true;
     }
 
+    pub fn tab_id_at_sidebar_row(&self, row: u16) -> Option<TabId> {
+        crate::client::tab_bar::tab_id_at_row(&self.layout, row)
+    }
+
     pub fn apply_pane_regions(
         &mut self,
         stdout: &mut impl Write,
@@ -272,10 +276,16 @@ impl ClientRenderer {
             crate::render::queue_full_redraw_start(&mut frame)?;
         }
         if render_chrome {
-            crate::client::tab_bar::queue(&mut frame, &self.layout)?;
+            let rows = self.frame_buffer.size().map_or(0, muxr_core::TerminalSize::rows);
+            crate::client::tab_bar::queue(&mut frame, &self.layout, rows)?;
         }
-        self.frame_buffer
-            .queue_at_with_selection(&mut frame, changes, TAB_BAR_ROWS, self.selection.range())?;
+        self.frame_buffer.queue_at_with_selection(
+            &mut frame,
+            changes,
+            0,
+            crate::client::tab_bar::WIDTH,
+            self.selection.range(),
+        )?;
         crate::render::queue_synchronized_update_end(&mut frame, self.synchronized_output)?;
         stdout
             .write_all(&frame)
@@ -624,7 +634,7 @@ mod tests {
         assert2::assert!(terminal_output.starts_with("\x1b[?2026h"));
         assert2::assert!(terminal_output.ends_with("\x1b[?2026l"));
         let clear_index = terminal_output.find("\x1b[2J").unwrap_or(usize::MAX);
-        let tab_bar_index = terminal_output.find("[2:tab 2]").unwrap_or(usize::MAX);
+        let tab_bar_index = terminal_output.find("tab-1").unwrap_or(usize::MAX);
         let pane_index = terminal_output.find("ab").unwrap_or(usize::MAX);
         assert2::assert!(clear_index < tab_bar_index);
         assert2::assert!(tab_bar_index < pane_index);
@@ -891,6 +901,7 @@ mod tests {
         let active_tab = TabId::new("tab-1")?;
         let active_pane = PaneId::new("pane-1")?;
         let pane = PaneSnapshot {
+            cwd: "/tmp/default".to_owned(),
             id: active_pane.clone(),
             title: "shell".to_owned(),
         };
@@ -959,6 +970,7 @@ mod tests {
                     "default",
                     muxr_core::PaneId::new("pane-1")?,
                     vec![muxr_core::PaneSnapshot {
+                        cwd: "/tmp/tab-1".to_owned(),
                         id: muxr_core::PaneId::new("pane-1")?,
                         title: "shell".to_owned(),
                     }],
@@ -968,6 +980,7 @@ mod tests {
                     "tab 2",
                     muxr_core::PaneId::new("pane-2")?,
                     vec![muxr_core::PaneSnapshot {
+                        cwd: "/tmp/tab-2".to_owned(),
                         id: muxr_core::PaneId::new("pane-2")?,
                         title: "shell".to_owned(),
                     }],
