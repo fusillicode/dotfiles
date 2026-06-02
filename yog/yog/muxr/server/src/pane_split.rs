@@ -171,8 +171,10 @@ pub fn handle_split_pane_command(
     terminal_size: &TerminalSize,
 ) -> rootcause::Result<PaneId> {
     let mut layout = crate::server::lock_mutex(layout, "layout")?;
+    crate::server::sync_layout_terminal_titles(&mut layout, runtimes)?;
+    let metadata = crate::server::active_pane_session_metadata(config, &layout)?;
     let previous_layout = layout.clone();
-    let pane_id = layout.split_active_pane(crate::server::session_metadata(config)?, split_axis)?;
+    let pane_id = layout.split_active_pane(metadata, split_axis)?;
     let pane_id = crate::server::spawn_pane_or_restore_layout(
         &mut layout,
         previous_layout,

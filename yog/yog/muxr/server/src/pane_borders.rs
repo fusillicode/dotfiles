@@ -491,7 +491,7 @@ struct BorderCell {
     style: RenderStyle,
 }
 
-// Border chrome can use exact RGB for pane state contrast; indexed colors remain useful for palette-sized accents.
+// Pane borders can use exact RGB for pane state contrast; indexed colors remain useful for palette-sized accents.
 const fn border_style() -> RenderStyle {
     RenderStyle {
         attrs: RenderTextStyle::empty().set_dim(true),

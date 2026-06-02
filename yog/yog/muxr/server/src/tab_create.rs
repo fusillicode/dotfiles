@@ -53,7 +53,9 @@ pub fn handle_create_tab(
     runtimes: &Mutex<PaneRuntimes>,
     terminal_size: &TerminalSize,
 ) -> rootcause::Result<PaneId> {
+    crate::server::sync_layout_terminal_titles(layout, runtimes)?;
+    let metadata = crate::server::active_pane_session_metadata(config, layout)?;
     let previous_layout = layout.clone();
-    let pane_id = layout.create_tab(crate::server::session_metadata(config)?)?;
+    let pane_id = layout.create_tab(metadata)?;
     crate::server::spawn_pane_or_restore_layout(layout, previous_layout, pane_id, config, runtimes, terminal_size)
 }

@@ -153,7 +153,7 @@ impl SelectionEdgeScrollRequest {
 
 pub struct ClientRenderer {
     any_motion_capture_enabled: bool,
-    chrome_dirty: bool,
+    tab_bar_dirty: bool,
     clicks: ClickTracker,
     frame_buffer: FrameBuffer,
     layout: LayoutSnapshot,
@@ -182,7 +182,7 @@ impl ClientRenderer {
     ) -> Self {
         Self {
             any_motion_capture_enabled: false,
-            chrome_dirty: true,
+            tab_bar_dirty: true,
             clicks: ClickTracker::default(),
             frame_buffer: FrameBuffer::default(),
             layout,
@@ -197,10 +197,10 @@ impl ClientRenderer {
     }
 
     pub fn apply_layout(&mut self, layout: LayoutSnapshot) {
-        // Layout events precede their matching render baseline; defer chrome writes so the user never sees new tab
+        // Layout events precede their matching render baseline; defer tab bar writes so the user never sees new tab
         // state over an old pane frame.
         self.layout = layout;
-        self.chrome_dirty = true;
+        self.tab_bar_dirty = true;
     }
 
     pub fn tab_id_at_sidebar_row(&self, row: u16) -> Option<TabId> {
@@ -269,13 +269,13 @@ impl ClientRenderer {
     }
 
     fn draw(&mut self, stdout: &mut impl Write, changes: &crate::render::RenderFrameChanges) -> rootcause::Result<()> {
-        let render_chrome = self.chrome_dirty || changes.is_full_redraw();
+        let render_tab_bar = self.tab_bar_dirty || changes.is_full_redraw();
         let mut frame = Vec::new();
         crate::render::queue_synchronized_update_start(&mut frame, self.synchronized_output)?;
         if changes.is_full_redraw() {
             crate::render::queue_full_redraw_start(&mut frame)?;
         }
-        if render_chrome {
+        if render_tab_bar {
             let rows = self.frame_buffer.size().map_or(0, muxr_core::TerminalSize::rows);
             crate::client::tab_bar::queue(&mut frame, &self.layout, rows)?;
         }
@@ -293,7 +293,7 @@ impl ClientRenderer {
         stdout
             .flush()
             .context("failed to flush muxr client render transaction")?;
-        self.chrome_dirty = false;
+        self.tab_bar_dirty = false;
         Ok(())
     }
 
@@ -902,6 +902,7 @@ mod tests {
         let active_pane = PaneId::new("pane-1")?;
         let pane = PaneSnapshot {
             cwd: "/tmp/default".to_owned(),
+            command_label: None,
             id: active_pane.clone(),
             title: "shell".to_owned(),
         };
@@ -971,6 +972,7 @@ mod tests {
                     muxr_core::PaneId::new("pane-1")?,
                     vec![muxr_core::PaneSnapshot {
                         cwd: "/tmp/tab-1".to_owned(),
+                        command_label: None,
                         id: muxr_core::PaneId::new("pane-1")?,
                         title: "shell".to_owned(),
                     }],
@@ -981,6 +983,7 @@ mod tests {
                     muxr_core::PaneId::new("pane-2")?,
                     vec![muxr_core::PaneSnapshot {
                         cwd: "/tmp/tab-2".to_owned(),
+                        command_label: None,
                         id: muxr_core::PaneId::new("pane-2")?,
                         title: "shell".to_owned(),
                     }],
