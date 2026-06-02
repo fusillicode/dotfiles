@@ -135,6 +135,7 @@ impl FrameBuffer {
         stdout: &mut impl Write,
         changes: &RenderFrameChanges,
         row_offset: u16,
+        col_offset: u16,
         selection: Option<&SelectionRange>,
     ) -> rootcause::Result<()> {
         if self.cursor.as_ref() != Some(&changes.cursor) {
@@ -143,10 +144,10 @@ impl FrameBuffer {
         reset_style(stdout)?;
         let mut active_style = RenderStyle::default();
         for row in &changes.rows {
-            render_row_span(stdout, row, &mut active_style, row_offset, selection)?;
+            render_row_span(stdout, row, &mut active_style, row_offset, col_offset, selection)?;
         }
         reset_style(stdout)?;
-        render_cursor(stdout, &changes.cursor, row_offset)?;
+        render_cursor(stdout, &changes.cursor, row_offset, col_offset)?;
         Ok(())
     }
 
@@ -179,6 +180,11 @@ impl FrameBuffer {
     #[must_use]
     pub fn cell(&self, row: u16, col: u16) -> Option<&RenderCell> {
         self.rows.get(usize::from(row))?.get(usize::from(col))
+    }
+
+    #[must_use]
+    pub const fn size(&self) -> Option<&TerminalSize> {
+        self.size.as_ref()
     }
 }
 
@@ -284,13 +290,18 @@ fn render_row_span(
     row: &RenderRowSpan,
     active_style: &mut RenderStyle,
     row_offset: u16,
+    col_offset: u16,
     selection: Option<&SelectionRange>,
 ) -> rootcause::Result<()> {
     let rendered_row = row
         .row()
         .checked_add(row_offset)
         .ok_or_else(|| report!("muxr render row offset overflowed"))?;
-    queue_command(stdout, MoveTo(row.col(), rendered_row))?;
+    let rendered_col = row
+        .col()
+        .checked_add(col_offset)
+        .ok_or_else(|| report!("muxr render column offset overflowed"))?;
+    queue_command(stdout, MoveTo(rendered_col, rendered_row))?;
     let mut run_style = None;
     let mut run_text = String::new();
     for (index, cell) in row.cells().iter().enumerate() {
@@ -436,13 +447,22 @@ pub fn restore_terminal(stdout: &mut impl Write) -> rootcause::Result<()> {
     Ok(())
 }
 
-fn render_cursor(stdout: &mut impl Write, cursor: &RenderCursor, row_offset: u16) -> rootcause::Result<()> {
+fn render_cursor(
+    stdout: &mut impl Write,
+    cursor: &RenderCursor,
+    row_offset: u16,
+    col_offset: u16,
+) -> rootcause::Result<()> {
     if cursor.visible {
         let row = cursor
             .row
             .checked_add(row_offset)
             .ok_or_else(|| report!("muxr render cursor row offset overflowed"))?;
-        queue_command(stdout, MoveTo(cursor.col, row))?;
+        let col = cursor
+            .col
+            .checked_add(col_offset)
+            .ok_or_else(|| report!("muxr render cursor column offset overflowed"))?;
+        queue_command(stdout, MoveTo(col, row))?;
         queue_command(stdout, Show)
     } else {
         queue_command(stdout, Hide)
@@ -556,7 +576,7 @@ mod tests {
         };
         let mut output = CountingWriter::default();
 
-        frame_buffer.queue_at_with_selection(&mut output, &changes, 0, None)?;
+        frame_buffer.queue_at_with_selection(&mut output, &changes, 0, 0, None)?;
 
         let rendered = output.rendered_string()?;
         assert2::assert!(rendered.contains('a'));
@@ -566,19 +586,19 @@ mod tests {
     }
 
     #[test]
-    fn test_frame_buffer_queue_at_when_row_offset_is_set_offsets_rows_and_cursor() -> rootcause::Result<()> {
+    fn test_frame_buffer_queue_at_when_offsets_are_set_offsets_rows_columns_and_cursor() -> rootcause::Result<()> {
         let mut frame_buffer = FrameBuffer::default();
         let ApplyOutcome::Applied(changes) = frame_buffer.apply(RenderUpdate::Baseline(render_baseline()?))? else {
             return Err(report!("expected applied baseline"));
         };
         let mut output = Vec::new();
 
-        frame_buffer.queue_at_with_selection(&mut output, &changes, 1, None)?;
+        frame_buffer.queue_at_with_selection(&mut output, &changes, 1, 2, None)?;
 
         let rendered = String::from_utf8(output).context("muxr render test output was not utf8")?;
-        assert2::assert!(rendered.contains("\x1b[2;1H"));
-        assert2::assert!(rendered.contains("\x1b[3;1H"));
-        pretty_assertions::assert_eq!(occurrence_count(&rendered, "\x1b[2;1H"), 2);
+        assert2::assert!(rendered.contains("\x1b[2;3H"));
+        assert2::assert!(rendered.contains("\x1b[3;3H"));
+        pretty_assertions::assert_eq!(occurrence_count(&rendered, "\x1b[2;3H"), 2);
         Ok(())
     }
 
@@ -593,7 +613,7 @@ mod tests {
         };
         let mut output = Vec::new();
 
-        frame_buffer.queue_at_with_selection(&mut output, &changes, 0, None)?;
+        frame_buffer.queue_at_with_selection(&mut output, &changes, 0, 0, None)?;
 
         let rendered = String::from_utf8(output).context("muxr render test output was not utf8")?;
         let foreground_escape = expected_escape(ExpectedEscape::Foreground(RenderColor::Indexed(1)))?;
@@ -627,7 +647,7 @@ mod tests {
         };
         let mut output = Vec::new();
 
-        frame_buffer.queue_at_with_selection(&mut output, &changes, 0, None)?;
+        frame_buffer.queue_at_with_selection(&mut output, &changes, 0, 0, None)?;
 
         let rendered = String::from_utf8(output).context("muxr render test output was not utf8")?;
         let expected_escape = expected_escape(expected)?;

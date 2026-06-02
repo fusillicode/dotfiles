@@ -331,6 +331,8 @@ where
 
 #[derive(rkyv::Archive, Clone, Debug, Eq, PartialEq, Serialize, rkyv::Serialize)]
 pub struct PaneSnapshot {
+    /// Current pane working directory, used by client chrome.
+    pub cwd: String,
     /// Stable pane id.
     pub id: PaneId,
     /// Pane title displayed in tab and pane UI.
@@ -343,9 +345,10 @@ where
     D::Error: rkyv::rancor::Source,
 {
     fn deserialize(&self, deserializer: &mut D) -> Result<PaneSnapshot, D::Error> {
+        let cwd = rkyv::Deserialize::<String, D>::deserialize(&self.cwd, deserializer)?;
         let id = rkyv::Deserialize::<PaneId, D>::deserialize(&self.id, deserializer)?;
         let title = rkyv::Deserialize::<String, D>::deserialize(&self.title, deserializer)?;
-        Ok(PaneSnapshot { id, title })
+        Ok(PaneSnapshot { cwd, id, title })
     }
 }
 
@@ -1283,6 +1286,7 @@ pub enum ClientRequest {
         direction: PaneScrollDirection,
     },
     FocusPaneAt(ClientMousePosition),
+    FocusTab(TabId),
 }
 
 #[derive(rkyv::Archive, Clone, Debug, rkyv::Deserialize, Eq, PartialEq, Serialize, rkyv::Serialize)]
@@ -1399,6 +1403,7 @@ mod tests {
         direction: PaneScrollDirection::Down,
     })]
     #[case::focus_pane_at(ClientRequest::FocusPaneAt(ClientMousePosition { row: 2, col: 3 }))]
+    #[case::focus_tab(ClientRequest::FocusTab(TabId::new("tab-2")?))]
     fn test_client_request_codec_when_frame_round_trips_returns_original(
         #[case] request: ClientRequest,
     ) -> rootcause::Result<()> {
@@ -1815,6 +1820,7 @@ mod tests {
         let active_tab = TabId::new("tab-1")?;
         let active_pane = PaneId::new("pane-1")?;
         let pane = PaneSnapshot {
+            cwd: "/tmp".to_owned(),
             id: active_pane.clone(),
             title: "shell".to_owned(),
         };
@@ -1845,6 +1851,7 @@ mod tests {
 
     fn pane_snapshot(id: &str, title: &str) -> rootcause::Result<PaneSnapshot> {
         Ok(PaneSnapshot {
+            cwd: "/tmp".to_owned(),
             id: PaneId::new(id)?,
             title: title.to_owned(),
         })
@@ -1861,6 +1868,7 @@ mod tests {
 
     fn raw_pane_snapshot(id: &str, title: &str) -> PaneSnapshot {
         PaneSnapshot {
+            cwd: "/tmp".to_owned(),
             id: pane_id(id),
             title: title.to_owned(),
         }
