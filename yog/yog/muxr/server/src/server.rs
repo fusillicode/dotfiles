@@ -33,6 +33,7 @@ use muxr_core::ServerError;
 use muxr_core::ServerEvent;
 use muxr_core::SessionName;
 use muxr_core::SessionPaths;
+use muxr_core::TabId;
 use muxr_core::TerminalSize;
 use muxr_transport::ServerConnection;
 use muxr_transport::ServerEventWriter;
@@ -882,7 +883,8 @@ async fn handle_client_handshake(
         | ClientRequest::Mouse(_)
         | ClientRequest::ScrollPaneAt { .. }
         | ClientRequest::ScrollPaneLineAt { .. }
-        | ClientRequest::FocusPaneAt(_)) => {
+        | ClientRequest::FocusPaneAt(_)
+        | ClientRequest::FocusTab(_)) => {
             let _sent = self::send_connection_event_with_timeout(
                 connection,
                 &ServerEvent::Error(ServerError::unexpected_request(request)),
@@ -1258,6 +1260,7 @@ async fn handle_attached_request(
             }
             Ok(true)
         }
+        Some(ClientRequest::FocusTab(tab_id)) => self::handle_focus_tab_request(tab_id, event_writer, state).await,
         Some(ClientRequest::Resize(size)) => {
             state.terminal_size = size;
             if !self::resize_panes_and_render(event_writer, state).await? {
@@ -1286,6 +1289,26 @@ async fn handle_attached_request(
         }
         None => Ok(false),
     }
+}
+
+async fn handle_focus_tab_request(
+    tab_id: TabId,
+    event_writer: &mut ServerEventWriter,
+    state: &mut AttachedSessionState<'_>,
+) -> rootcause::Result<bool> {
+    let changed = {
+        let mut layout = self::lock_mutex(state.layout, "layout")?;
+        let changed = crate::tab_focus::handle_focus_tab(&mut layout, &tab_id);
+        if changed {
+            crate::state::persisted::write_metadata(&state.config.paths, &layout)?;
+        }
+        drop(layout);
+        changed
+    };
+    if changed && !self::send_layout_and_baseline(event_writer, state).await? {
+        return Ok(false);
+    }
+    Ok(true)
 }
 
 async fn handle_key_request(

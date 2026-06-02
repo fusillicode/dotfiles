@@ -438,6 +438,7 @@ mod tests {
         let active_tab = TabId::new("tab-1")?;
         let active_pane = PaneId::new("pane-1")?;
         let pane = PaneSnapshot {
+            cwd: "/tmp".to_owned(),
             id: active_pane.clone(),
             title: "shell".to_owned(),
         };

@@ -17,7 +17,6 @@ use muxr_core::ClientRequest;
 use muxr_core::INTERNAL_SERVER_ARG;
 use muxr_core::LayoutSnapshot;
 use muxr_core::PaneRegionsSnapshot;
-use muxr_core::PaneScrollDirection;
 use muxr_core::ServerEvent;
 use muxr_core::SessionName;
 use muxr_core::SessionPaths;
@@ -49,7 +48,7 @@ const AMBIGUOUS_INPUT_TIMEOUT: Duration = Duration::from_millis(50);
 const DOUBLE_CLICK_THRESHOLD: Duration = Duration::from_millis(400);
 const SELECTION_EDGE_SCROLL_INTERVAL: Duration = Duration::from_millis(50);
 const STDIN_BUFFER_SIZE: usize = 8192;
-const TAB_BAR_ROWS: u16 = 1;
+const TAB_BAR_COLS: u16 = self::tab_bar::WIDTH;
 const CONTROL_REQUEST_CHANNEL_LIMIT: usize = 128;
 const INPUT_REQUEST_CHANNEL_LIMIT: usize = 1024;
 
@@ -344,25 +343,37 @@ async fn handle_mouse_input_action(
     stdout: &mut impl Write,
 ) -> rootcause::Result<bool> {
     let Some(position) = self::pane_position(event.position) else {
+        if let Some(request) = self::tab_focus_request_for_sidebar_click(event, renderer) {
+            if input_sender.send(request).await.is_err() {
+                return Ok(false);
+            }
+            return Ok(true);
+        }
         // Captured app drags can finish over muxr chrome; forward them clamped to the captured pane before dropping
-        // ordinary chrome-row mouse packets.
+        // ordinary chrome mouse packets.
         if renderer.has_mouse_capture()
-            && let Some(event) = renderer.mouse_request_for_event(event)
+            && let Some(position) = self::pane_position_for_sidebar_drag(event.position)
+            && let Some(event) = renderer.mouse_request_for_event(ClientMouseEvent { position, ..event })
         {
             return self::send_mouse_request(input_sender, event).await;
         }
         // Local selections can also finish over muxr chrome; keep update/end routed so the retained pane drag is
         // clamped and finalized instead of leaving stale drag state behind.
+        let chrome_position = event.position;
         match self::pane_focus::local_mouse_action(event) {
-            Some(LocalMouseAction::SelectionUpdate(position)) => {
-                let scroll_request = renderer.set_selection_edge_drag(position, Some(PaneScrollDirection::Up));
-                renderer.apply_selection_input(stdout, SelectionInput::Update(position))?;
-                if let Some(request) = scroll_request {
-                    return Ok(self::send_edge_scroll_request(input_sender, renderer, request));
+            Some(LocalMouseAction::SelectionUpdate(_)) => {
+                if let Some(position) = self::pane_position_for_sidebar_drag(chrome_position) {
+                    let scroll_request = renderer.set_selection_edge_drag(position, None);
+                    renderer.apply_selection_input(stdout, SelectionInput::Update(position))?;
+                    if let Some(request) = scroll_request {
+                        return Ok(self::send_edge_scroll_request(input_sender, renderer, request));
+                    }
                 }
             }
-            Some(LocalMouseAction::SelectionEnd(position)) => {
-                renderer.apply_selection_input(stdout, SelectionInput::End(position))?;
+            Some(LocalMouseAction::SelectionEnd(_)) => {
+                if let Some(position) = self::pane_position_for_sidebar_drag(chrome_position) {
+                    renderer.apply_selection_input(stdout, SelectionInput::End(position))?;
+                }
             }
             Some(LocalMouseAction::FocusAndSelectionStart(_)) | None => {}
         }
@@ -571,8 +582,8 @@ fn current_terminal_size() -> rootcause::Result<TerminalSize> {
 }
 
 fn pane_size_for_terminal(size: &TerminalSize) -> rootcause::Result<TerminalSize> {
-    let rows = size.rows().saturating_sub(TAB_BAR_ROWS).max(1);
-    TerminalSize::new(size.cols(), rows)
+    let cols = size.cols().saturating_sub(TAB_BAR_COLS).max(1);
+    TerminalSize::new(cols, size.rows())
 }
 
 fn spawn_stdin_forwarder(input_sender: tokio::sync::mpsc::Sender<ClientInputAction>) -> thread::JoinHandle<()> {
@@ -691,10 +702,31 @@ const fn mouse_event_can_be_dropped(event: ClientMouseEvent) -> bool {
     event.button & (32 | 64) != 0
 }
 
+fn tab_focus_request_for_sidebar_click(event: ClientMouseEvent, renderer: &ClientRenderer) -> Option<ClientRequest> {
+    if event.phase != muxr_core::ClientMouseEventPhase::Press || event.button != 0 {
+        return None;
+    }
+    renderer
+        .tab_id_at_sidebar_row(event.position.row)
+        .map(ClientRequest::FocusTab)
+}
+
 fn pane_position(position: muxr_core::ClientMousePosition) -> Option<muxr_core::ClientMousePosition> {
     Some(muxr_core::ClientMousePosition {
-        row: position.row.checked_sub(TAB_BAR_ROWS)?,
-        col: position.col,
+        row: position.row,
+        col: position.col.checked_sub(TAB_BAR_COLS)?,
+    })
+}
+
+const fn pane_position_for_sidebar_drag(
+    position: muxr_core::ClientMousePosition,
+) -> Option<muxr_core::ClientMousePosition> {
+    if position.col >= TAB_BAR_COLS {
+        return None;
+    }
+    Some(muxr_core::ClientMousePosition {
+        row: position.row,
+        col: 0,
     })
 }
 
@@ -714,7 +746,7 @@ fn spawn_resize_forwarder(
             let Ok(next_terminal_size) = self::current_terminal_size() else {
                 break;
             };
-            // Resize requests use the pane viewport, because the first host-terminal row is reserved for the tab bar.
+            // Resize requests use the pane viewport, because left-side host-terminal columns are reserved for tab UI.
             let Ok(next_size) = self::pane_size_for_terminal(&next_terminal_size) else {
                 break;
             };
@@ -749,6 +781,7 @@ mod tests {
     use muxr_core::ClientMousePosition;
     use muxr_core::LayoutSnapshot;
     use muxr_core::PaneId;
+    use muxr_core::PaneScrollDirection;
     use muxr_core::PaneSnapshot;
     use muxr_core::ServerError;
     use muxr_core::TabId;
@@ -1110,7 +1143,10 @@ mod tests {
                     ClientInputAction::Mouse(ClientMouseEvent {
                         button: 0,
                         phase: ClientMouseEventPhase::Press,
-                        position: muxr_core::ClientMousePosition { row: 1, col: 1 }
+                        position: muxr_core::ClientMousePosition {
+                            row: 0,
+                            col: TAB_BAR_COLS.saturating_add(1)
+                        }
                     }),
                     &input_sender,
                     &mut renderer,
@@ -1131,7 +1167,41 @@ mod tests {
     }
 
     #[test]
-    fn test_handle_client_input_action_when_selection_release_is_on_tab_bar_finalizes_selection()
+    fn test_handle_client_input_action_when_tab_sidebar_is_clicked_focuses_tab() -> rootcause::Result<()> {
+        self::runtime()?.block_on(async {
+            let (input_sender, mut input_receiver) = tokio::sync::mpsc::channel(1);
+            let mut renderer = ClientRenderer::with_synchronized_output(
+                two_tab_layout()?,
+                pane_regions_snapshot()?,
+                SynchronizedOutput::Csi,
+            );
+            let mut output = CountingWriter::default();
+
+            assert2::assert!(
+                handle_client_input_action(
+                    ClientInputAction::Mouse(ClientMouseEvent {
+                        button: 0,
+                        phase: ClientMouseEventPhase::Press,
+                        position: muxr_core::ClientMousePosition { row: 2, col: 1 }
+                    }),
+                    &input_sender,
+                    &mut renderer,
+                    &mut output,
+                )
+                .await?
+            );
+
+            pretty_assertions::assert_eq!(
+                input_receiver.recv().await,
+                Some(ClientRequest::FocusTab(TabId::new("tab-2")?)),
+            );
+            pretty_assertions::assert_eq!(output.flushes, 0);
+            Ok(())
+        })
+    }
+
+    #[test]
+    fn test_handle_client_input_action_when_selection_release_is_on_tab_sidebar_finalizes_selection()
     -> rootcause::Result<()> {
         self::runtime()?.block_on(async {
             let (input_sender, mut input_receiver) = tokio::sync::mpsc::channel(1);
@@ -1152,7 +1222,10 @@ mod tests {
                     ClientInputAction::Mouse(ClientMouseEvent {
                         button: 0,
                         phase: ClientMouseEventPhase::Press,
-                        position: muxr_core::ClientMousePosition { row: 1, col: 0 }
+                        position: muxr_core::ClientMousePosition {
+                            row: 0,
+                            col: TAB_BAR_COLS.saturating_add(1)
+                        }
                     }),
                     &input_sender,
                     &mut renderer,
@@ -1178,7 +1251,7 @@ mod tests {
                 input_receiver.recv().await,
                 Some(ClientRequest::FocusPaneAt(muxr_core::ClientMousePosition {
                     row: 0,
-                    col: 0
+                    col: 1
                 })),
             );
             pretty_assertions::assert_eq!(renderer.selected_text(), Some("ab".to_owned()),);
@@ -1187,7 +1260,8 @@ mod tests {
     }
 
     #[test]
-    fn test_handle_client_input_action_when_selection_drag_moves_above_pane_scrolls_up() -> rootcause::Result<()> {
+    fn test_handle_client_input_action_when_selection_drag_moves_into_tab_sidebar_clamps_to_left_edge()
+    -> rootcause::Result<()> {
         self::runtime()?.block_on(async {
             let (input_sender, mut input_receiver) = tokio::sync::mpsc::channel(2);
             let mut renderer = ClientRenderer::with_synchronized_output(
@@ -1195,6 +1269,11 @@ mod tests {
                 pane_regions_snapshot()?,
                 SynchronizedOutput::Csi,
             );
+            let mut initial_output = CountingWriter::default();
+            renderer.apply_render(
+                &mut initial_output,
+                muxr_core::RenderUpdate::Baseline(render_baseline()?),
+            )?;
             let mut output = CountingWriter::default();
 
             assert2::assert!(
@@ -1202,7 +1281,10 @@ mod tests {
                     ClientInputAction::Mouse(ClientMouseEvent {
                         button: 0,
                         phase: ClientMouseEventPhase::Press,
-                        position: muxr_core::ClientMousePosition { row: 1, col: 0 }
+                        position: muxr_core::ClientMousePosition {
+                            row: 0,
+                            col: TAB_BAR_COLS.saturating_add(1)
+                        }
                     }),
                     &input_sender,
                     &mut renderer,
@@ -1228,16 +1310,14 @@ mod tests {
                 self::recv_client_request(&mut input_receiver).await?,
                 Some(ClientRequest::FocusPaneAt(muxr_core::ClientMousePosition {
                     row: 0,
-                    col: 0
+                    col: 1
                 })),
             );
-            pretty_assertions::assert_eq!(
-                self::recv_client_request(&mut input_receiver).await?,
-                Some(ClientRequest::ScrollPaneLineAt {
-                    direction: PaneScrollDirection::Up,
-                    position: muxr_core::ClientMousePosition { row: 0, col: 0 },
-                }),
-            );
+            assert2::assert!(matches!(
+                input_receiver.try_recv(),
+                Err(tokio::sync::mpsc::error::TryRecvError::Empty)
+            ));
+            pretty_assertions::assert_eq!(renderer.selected_text(), Some("ab".to_owned()),);
             Ok(())
         })
     }
@@ -1329,7 +1409,10 @@ mod tests {
                     ClientInputAction::Mouse(ClientMouseEvent {
                         button: 0,
                         phase: ClientMouseEventPhase::Press,
-                        position: muxr_core::ClientMousePosition { row: 1, col: 1 }
+                        position: muxr_core::ClientMousePosition {
+                            row: 0,
+                            col: TAB_BAR_COLS.saturating_add(1)
+                        }
                     }),
                     &input_sender,
                     &mut renderer,
@@ -1368,7 +1451,10 @@ mod tests {
                     ClientInputAction::Mouse(ClientMouseEvent {
                         button: 0,
                         phase: ClientMouseEventPhase::Press,
-                        position: muxr_core::ClientMousePosition { row: 1, col: 1 }
+                        position: muxr_core::ClientMousePosition {
+                            row: 0,
+                            col: TAB_BAR_COLS.saturating_add(1)
+                        }
                     }),
                     &input_sender,
                     &mut renderer,
@@ -1381,7 +1467,10 @@ mod tests {
                     ClientInputAction::Mouse(ClientMouseEvent {
                         button: 32,
                         phase: ClientMouseEventPhase::Press,
-                        position: muxr_core::ClientMousePosition { row: 1, col: 3 }
+                        position: muxr_core::ClientMousePosition {
+                            row: 0,
+                            col: TAB_BAR_COLS.saturating_add(3)
+                        }
                     }),
                     &input_sender,
                     &mut renderer,
@@ -1394,7 +1483,7 @@ mod tests {
                     ClientInputAction::Mouse(ClientMouseEvent {
                         button: 0,
                         phase: ClientMouseEventPhase::Release,
-                        position: muxr_core::ClientMousePosition { row: 0, col: 3 }
+                        position: muxr_core::ClientMousePosition { row: 0, col: 1 }
                     }),
                     &input_sender,
                     &mut renderer,
@@ -1407,7 +1496,10 @@ mod tests {
                     ClientInputAction::Mouse(ClientMouseEvent {
                         button: 32,
                         phase: ClientMouseEventPhase::Press,
-                        position: muxr_core::ClientMousePosition { row: 1, col: 3 }
+                        position: muxr_core::ClientMousePosition {
+                            row: 0,
+                            col: TAB_BAR_COLS.saturating_add(3)
+                        }
                     }),
                     &input_sender,
                     &mut renderer,
@@ -1437,7 +1529,7 @@ mod tests {
                 Some(ClientRequest::Mouse(ClientMouseEvent {
                     button: 0,
                     phase: ClientMouseEventPhase::Release,
-                    position: muxr_core::ClientMousePosition { row: 0, col: 1 }
+                    position: muxr_core::ClientMousePosition { row: 0, col: 0 }
                 })),
             );
             assert2::assert!(matches!(
@@ -1449,14 +1541,14 @@ mod tests {
     }
 
     #[test]
-    fn test_pane_size_for_terminal_when_tab_bar_has_room_reserves_one_row() -> rootcause::Result<()> {
+    fn test_pane_size_for_terminal_when_tab_bar_has_room_reserves_sidebar_columns() -> rootcause::Result<()> {
         pretty_assertions::assert_eq!(
             pane_size_for_terminal(&TerminalSize::new(80, 24)?)?,
-            TerminalSize::new(80, 23)?,
+            TerminalSize::new(80_u16.saturating_sub(TAB_BAR_COLS), 24)?,
         );
         pretty_assertions::assert_eq!(
             pane_size_for_terminal(&TerminalSize::new(80, 1)?)?,
-            TerminalSize::new(80, 1)?,
+            TerminalSize::new(80_u16.saturating_sub(TAB_BAR_COLS), 1)?,
         );
         Ok(())
     }
@@ -1489,6 +1581,7 @@ mod tests {
         let active_tab = TabId::new("tab-1")?;
         let active_pane = PaneId::new("pane-1")?;
         let pane = PaneSnapshot {
+            cwd: "/tmp".to_owned(),
             id: active_pane.clone(),
             title: "shell".to_owned(),
         };
@@ -1510,6 +1603,34 @@ mod tests {
             muxr_core::PaneMouseMode::None,
             visible_top_row,
         )?])
+    }
+
+    fn two_tab_layout() -> rootcause::Result<LayoutSnapshot> {
+        LayoutSnapshot::new(
+            TabId::new("tab-1")?,
+            vec![
+                TabSnapshot::new(
+                    TabId::new("tab-1")?,
+                    "default",
+                    PaneId::new("pane-1")?,
+                    vec![PaneSnapshot {
+                        cwd: "/tmp/tab-1".to_owned(),
+                        id: PaneId::new("pane-1")?,
+                        title: "shell".to_owned(),
+                    }],
+                )?,
+                TabSnapshot::new(
+                    TabId::new("tab-2")?,
+                    "tab 2",
+                    PaneId::new("pane-2")?,
+                    vec![PaneSnapshot {
+                        cwd: "/tmp/tab-2".to_owned(),
+                        id: PaneId::new("pane-2")?,
+                        title: "shell".to_owned(),
+                    }],
+                )?,
+            ],
+        )
     }
 
     fn mouse_tracking_pane_regions_snapshot() -> rootcause::Result<PaneRegionsSnapshot> {

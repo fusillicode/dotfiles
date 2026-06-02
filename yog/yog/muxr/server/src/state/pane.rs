@@ -90,6 +90,7 @@ impl Pane {
 
     pub fn snapshot(&self) -> PaneSnapshot {
         PaneSnapshot {
+            cwd: self.cwd.clone(),
             id: self.id.clone(),
             title: self.title.clone(),
         }
