@@ -155,9 +155,10 @@ pub fn paste_borders(
     rows: &mut [Vec<RenderCell>],
     borders: &[PaneBorder],
     active_pane: Option<&PaneId>,
+    attention_panes: &[PaneId],
     border_mode: BorderRenderMode,
 ) -> rootcause::Result<()> {
-    let border_cells = self::compose_border_cells(borders, active_pane, border_mode)?;
+    let border_cells = self::compose_border_cells(borders, active_pane, attention_panes, border_mode)?;
     for ((row, col), cell) in border_cells {
         let target_row = rows
             .get_mut(usize::from(row))
@@ -173,6 +174,7 @@ pub fn paste_borders(
 fn compose_border_cells(
     borders: &[PaneBorder],
     active_pane: Option<&PaneId>,
+    attention_panes: &[PaneId],
     border_mode: BorderRenderMode,
 ) -> rootcause::Result<BTreeMap<(u16, u16), BorderCell>> {
     let mut cells = BTreeMap::new();
@@ -184,7 +186,14 @@ fn compose_border_cells(
                         .col()
                         .checked_add(offset)
                         .ok_or_else(|| report!("muxr horizontal pane border col overflowed"))?;
-                    let style = self::border_style_for_cell(border, border.row(), col, active_pane, border_mode);
+                    let style = self::border_style_for_cell(
+                        border,
+                        border.row(),
+                        col,
+                        active_pane,
+                        attention_panes,
+                        border_mode,
+                    );
                     self::add_border_cell(&mut cells, border.row(), col, border.axis(), style);
                 }
             }
@@ -194,7 +203,14 @@ fn compose_border_cells(
                     .checked_add(border.len())
                     .ok_or_else(|| report!("muxr vertical pane border end overflowed"))?;
                 for row in border.row()..end_row {
-                    let style = self::border_style_for_cell(border, row, border.col(), active_pane, border_mode);
+                    let style = self::border_style_for_cell(
+                        border,
+                        row,
+                        border.col(),
+                        active_pane,
+                        attention_panes,
+                        border_mode,
+                    );
                     self::add_border_cell(&mut cells, row, border.col(), border.axis(), style);
                 }
             }
@@ -280,13 +296,25 @@ fn border_style_for_cell(
     row: u16,
     col: u16,
     active_pane: Option<&PaneId>,
+    attention_panes: &[PaneId],
     border_mode: BorderRenderMode,
 ) -> RenderStyle {
-    if active_pane.is_some_and(|pane_id| border.is_owned_by(PanePosition { row, col }, pane_id)) {
+    let position = PanePosition { row, col };
+    let owned_by_active_pane = active_pane.is_some_and(|pane_id| border.is_owned_by(position, pane_id));
+    let owned_by_attention_pane = attention_panes
+        .iter()
+        .any(|pane_id| active_pane != Some(pane_id) && border.is_owned_by(position, pane_id));
+
+    if owned_by_active_pane {
         return match border_mode {
+            BorderRenderMode::Focus if owned_by_attention_pane => self::attention_border_style(),
             BorderRenderMode::Focus => self::focused_border_style(),
             BorderRenderMode::Resize => self::resize_border_style(),
         };
+    }
+
+    if owned_by_attention_pane {
+        return self::attention_border_style();
     }
 
     self::border_style()
@@ -295,6 +323,8 @@ fn border_style_for_cell(
 fn stronger_border_style(current: RenderStyle, incoming: RenderStyle) -> RenderStyle {
     if current == self::resize_border_style() || incoming == self::resize_border_style() {
         self::resize_border_style()
+    } else if current == self::attention_border_style() || incoming == self::attention_border_style() {
+        self::attention_border_style()
     } else if current == self::focused_border_style() || incoming == self::focused_border_style() {
         self::focused_border_style()
     } else {
@@ -494,7 +524,7 @@ struct BorderCell {
 // Pane borders can use exact RGB for pane state contrast; indexed colors remain useful for palette-sized accents.
 const fn border_style() -> RenderStyle {
     RenderStyle {
-        attrs: RenderTextStyle::empty().set_dim(true),
+        attrs: RenderTextStyle::empty(),
         bg: RenderColor::Default,
         fg: RenderColor::Rgb { r: 50, g: 50, b: 50 },
     }
@@ -513,6 +543,14 @@ const fn resize_border_style() -> RenderStyle {
         attrs: RenderTextStyle::empty().set_bold(true),
         bg: RenderColor::Default,
         fg: RenderColor::Indexed(166),
+    }
+}
+
+const fn attention_border_style() -> RenderStyle {
+    RenderStyle {
+        attrs: RenderTextStyle::empty().set_bold(true),
+        bg: RenderColor::Default,
+        fg: RenderColor::Indexed(160),
     }
 }
 
@@ -660,6 +698,7 @@ mod tests {
             &mut rows,
             pane_layout.borders(),
             Some(&active_pane),
+            &[],
             BorderRenderMode::Focus,
         )?;
 
@@ -697,6 +736,7 @@ mod tests {
                 )?,
             ],
             None,
+            &[],
             BorderRenderMode::Focus,
         )?;
 
@@ -716,7 +756,14 @@ mod tests {
         pretty_assertions::assert_eq!(vertical_cell.text(), "│");
         pretty_assertions::assert_eq!(horizontal_cell.text(), "─");
         pretty_assertions::assert_eq!(junction_cell.text(), "┼");
-        pretty_assertions::assert_eq!(vertical_cell.style(), self::border_style());
+        pretty_assertions::assert_eq!(
+            vertical_cell.style(),
+            RenderStyle {
+                attrs: RenderTextStyle::empty(),
+                bg: RenderColor::Default,
+                fg: RenderColor::Rgb { r: 50, g: 50, b: 50 },
+            }
+        );
         Ok(())
     }
 
@@ -738,12 +785,115 @@ mod tests {
             &[],
         )?;
 
-        self::paste_borders(&mut rows, &[border], Some(&active_pane), mode)?;
+        self::paste_borders(&mut rows, &[border], Some(&active_pane), &[], mode)?;
 
         let border_cell = rows
             .first()
             .and_then(|row| row.get(1))
             .ok_or_else(|| report!("expected active border cell"))?;
+
+        pretty_assertions::assert_eq!(border_cell.style(), expected_style);
+        Ok(())
+    }
+
+    #[test]
+    fn test_paste_borders_when_border_cell_is_owned_by_attention_pane_uses_attention_style() -> rootcause::Result<()> {
+        let mut rows = self::empty_render_rows(&TerminalSize::new(3, 3)?);
+        let active_pane = PaneId::new("pane-active")?;
+        let attention_pane = PaneId::new("pane-attention")?;
+        let attention_region = self::pane_region(attention_pane.clone(), 0, 0, 3, 1, 1);
+        let border = PaneBorder::with_adjacent_regions(
+            PaneBorderAxis::Vertical,
+            PanePosition { row: 0, col: 1 },
+            3,
+            std::slice::from_ref(&attention_region),
+            &[],
+        )?;
+
+        self::paste_borders(
+            &mut rows,
+            &[border],
+            Some(&active_pane),
+            std::slice::from_ref(&attention_pane),
+            BorderRenderMode::Focus,
+        )?;
+
+        let border_cell = rows
+            .first()
+            .and_then(|row| row.get(1))
+            .ok_or_else(|| report!("expected attention border cell"))?;
+
+        pretty_assertions::assert_eq!(border_cell.style(), self::attention_border_style());
+        Ok(())
+    }
+
+    #[rstest::rstest]
+    #[case::focus(BorderRenderMode::Focus, self::attention_border_style())]
+    #[case::resize(BorderRenderMode::Resize, self::resize_border_style())]
+    fn test_paste_borders_when_shared_border_touches_active_and_attention_panes_uses_mode_style(
+        #[case] mode: BorderRenderMode,
+        #[case] expected_style: RenderStyle,
+    ) -> rootcause::Result<()> {
+        let mut rows = self::empty_render_rows(&TerminalSize::new(3, 3)?);
+        let active_pane = PaneId::new("pane-active")?;
+        let attention_pane = PaneId::new("pane-attention")?;
+        let active_region = self::pane_region(active_pane.clone(), 0, 0, 3, 1, 1);
+        let attention_region = self::pane_region(attention_pane.clone(), 0, 2, 3, 1, 1);
+        let border = PaneBorder::with_adjacent_regions(
+            PaneBorderAxis::Vertical,
+            PanePosition { row: 0, col: 1 },
+            3,
+            std::slice::from_ref(&active_region),
+            std::slice::from_ref(&attention_region),
+        )?;
+
+        self::paste_borders(
+            &mut rows,
+            &[border],
+            Some(&active_pane),
+            std::slice::from_ref(&attention_pane),
+            mode,
+        )?;
+
+        let border_cell = rows
+            .first()
+            .and_then(|row| row.get(1))
+            .ok_or_else(|| report!("expected shared active attention border cell"))?;
+
+        pretty_assertions::assert_eq!(border_cell.style(), expected_style);
+        Ok(())
+    }
+
+    #[rstest::rstest]
+    #[case::focus(BorderRenderMode::Focus, self::focused_border_style())]
+    #[case::resize(BorderRenderMode::Resize, self::resize_border_style())]
+    fn test_paste_borders_when_attention_pane_is_active_uses_active_mode_style(
+        #[case] mode: BorderRenderMode,
+        #[case] expected_style: RenderStyle,
+    ) -> rootcause::Result<()> {
+        let mut rows = self::empty_render_rows(&TerminalSize::new(3, 3)?);
+        let active_pane = PaneId::new("pane-active")?;
+        let active_region = self::pane_region(active_pane.clone(), 0, 0, 3, 1, 1);
+        let border = PaneBorder::with_adjacent_regions(
+            PaneBorderAxis::Vertical,
+            PanePosition { row: 0, col: 1 },
+            3,
+            std::slice::from_ref(&active_region),
+            &[],
+        )?;
+
+        self::paste_borders(
+            &mut rows,
+            &[border],
+            Some(&active_pane),
+            std::slice::from_ref(&active_pane),
+            mode,
+        )?;
+
+        let border_cell = rows
+            .first()
+            .and_then(|row| row.get(1))
+            .ok_or_else(|| report!("expected active attention border cell"))?;
 
         pretty_assertions::assert_eq!(border_cell.style(), expected_style);
         Ok(())
@@ -780,6 +930,7 @@ mod tests {
                 horizontal_border,
             ],
             Some(&active_pane),
+            &[],
             mode,
         )?;
 
@@ -813,7 +964,7 @@ mod tests {
             &[top_right_region, active_region],
         )?;
 
-        self::paste_borders(&mut rows, &[border], Some(&active_pane), mode)?;
+        self::paste_borders(&mut rows, &[border], Some(&active_pane), &[], mode)?;
 
         let top_segment = rows
             .first()

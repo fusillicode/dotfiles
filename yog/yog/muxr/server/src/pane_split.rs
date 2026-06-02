@@ -114,6 +114,7 @@ impl SessionLayout {
             cwd: metadata.cwd,
             focus_seq,
             id: pane_id.clone(),
+            needs_attention: false,
             started_at: metadata.started_at,
             state: PaneState::Running,
             title: metadata.cmd_label,

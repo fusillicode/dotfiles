@@ -2,6 +2,7 @@ pub use server::serve_session;
 
 mod cmd_label;
 mod history;
+mod pane_attention;
 mod pane_borders;
 mod pane_close;
 mod pane_focus;
