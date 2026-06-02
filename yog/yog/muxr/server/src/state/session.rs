@@ -58,10 +58,17 @@ impl SessionLayout {
     }
 
     pub fn snapshot(&self) -> rootcause::Result<LayoutSnapshot> {
+        self.snapshot_with_terminal_titles(&[])
+    }
+
+    pub fn snapshot_with_terminal_titles(
+        &self,
+        terminal_titles: &[(PaneId, Option<String>)],
+    ) -> rootcause::Result<LayoutSnapshot> {
         let tabs = self
             .entries
             .iter()
-            .map(Tab::snapshot)
+            .map(|tab| tab.snapshot_with_terminal_titles(terminal_titles))
             .collect::<rootcause::Result<Vec<_>>>()?;
         LayoutSnapshot::new(self.active_tab.clone(), tabs)
     }
@@ -106,12 +113,33 @@ impl SessionLayout {
         &self.active_tab
     }
 
-    pub fn pane_ids(&self) -> Vec<PaneId> {
+    /// Return panes in layout order.
+    pub fn panes(&self) -> Vec<&Pane> {
+        self.entries.iter().flat_map(Tab::panes).collect()
+    }
+
+    /// Find one pane by id.
+    pub fn pane(&self, pane_id: &PaneId) -> Option<&Pane> {
         self.entries
             .iter()
             .flat_map(Tab::panes)
-            .map(|pane| pane.id.clone())
-            .collect()
+            .find(|pane| pane.id == *pane_id)
+    }
+
+    /// Find one mutable pane by id.
+    pub fn pane_mut(&mut self, pane_id: &PaneId) -> Option<&mut Pane> {
+        self.entries.iter_mut().find_map(|tab| tab.pane_tree.pane_mut(pane_id))
+    }
+
+    /// Apply path-like terminal titles to pane cwd metadata.
+    pub fn sync_terminal_titles(&mut self, terminal_titles: &[(PaneId, Option<String>)]) -> bool {
+        let mut changed = false;
+        for (pane_id, title) in terminal_titles {
+            if let Some(pane) = self.pane_mut(pane_id) {
+                changed |= pane.sync_terminal_title(title.as_deref());
+            }
+        }
+        changed
     }
 
     pub fn pane_regions(&self, size: &TerminalSize) -> rootcause::Result<Vec<PaneRegion>> {

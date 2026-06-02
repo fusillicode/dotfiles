@@ -196,6 +196,8 @@ pub fn handle_close_pane_command(
 ) -> rootcause::Result<ClosePaneOutcome> {
     let exited_at = crate::server::unix_timestamp_millis()?;
     let mut layout = crate::server::lock_mutex(layout, "layout")?;
+    // Closing removes the runtime, so any title-derived cwd must be synced before queued PTY events disappear.
+    crate::server::sync_layout_terminal_titles(&mut layout, runtimes)?;
     let outcome = layout.close_active_pane(exited_at)?;
     let pane_id = match &outcome {
         ClosePaneOutcome::Final { pane_id } | ClosePaneOutcome::Removed { pane_id } => pane_id.clone(),

@@ -20,8 +20,21 @@ pub struct Tab {
 }
 
 impl Tab {
-    pub fn snapshot(&self) -> rootcause::Result<TabSnapshot> {
-        let panes = self.panes().into_iter().map(Pane::snapshot).collect();
+    pub fn snapshot_with_terminal_titles(
+        &self,
+        terminal_titles: &[(PaneId, Option<String>)],
+    ) -> rootcause::Result<TabSnapshot> {
+        let panes = self
+            .panes()
+            .into_iter()
+            .map(|pane| {
+                let terminal_title = terminal_titles
+                    .iter()
+                    .find(|(pane_id, _title)| pane_id == &pane.id)
+                    .and_then(|(_pane_id, title)| title.as_deref());
+                pane.snapshot_with_terminal_title(terminal_title)
+            })
+            .collect();
         TabSnapshot::new(self.id.clone(), self.title.clone(), self.active_pane.clone(), panes)
     }
 

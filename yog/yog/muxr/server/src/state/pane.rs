@@ -88,9 +88,24 @@ impl Pane {
         self.state = PaneState::ProcessExited { at, status };
     }
 
-    pub fn snapshot(&self) -> PaneSnapshot {
+    /// Refresh pane cwd metadata from path-like shell title updates.
+    pub fn sync_terminal_title(&mut self, terminal_title: Option<&str>) -> bool {
+        if let Some(cwd) = crate::command_label::classify_terminal_title(terminal_title, &self.cwd).cwd {
+            if self.cwd == cwd {
+                return false;
+            }
+            self.cwd = cwd;
+            return true;
+        }
+        false
+    }
+
+    /// Build a client snapshot with tab bar cwd/command metadata derived from the latest terminal title.
+    pub fn snapshot_with_terminal_title(&self, terminal_title: Option<&str>) -> PaneSnapshot {
+        let terminal_title = crate::command_label::classify_terminal_title(terminal_title, &self.cwd);
         PaneSnapshot {
-            cwd: self.cwd.clone(),
+            command_label: terminal_title.command_label,
+            cwd: terminal_title.cwd.unwrap_or_else(|| self.cwd.clone()),
             id: self.id.clone(),
             title: self.title.clone(),
         }
@@ -103,4 +118,69 @@ pub enum PaneState {
     Running,
     Closed { at: u64 },
     ProcessExited { at: u64, status: PtyExitStatus },
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_snapshot_with_terminal_title_when_title_is_cwd_updates_snapshot_cwd() -> rootcause::Result<()> {
+        let snapshot = self::pane()?.snapshot_with_terminal_title(Some("~"));
+
+        pretty_assertions::assert_eq!(snapshot.cwd, "~");
+        pretty_assertions::assert_eq!(snapshot.command_label, None);
+        Ok(())
+    }
+
+    #[test]
+    fn test_snapshot_with_terminal_title_when_title_is_command_keeps_pane_cwd() -> rootcause::Result<()> {
+        let snapshot = self::pane()?.snapshot_with_terminal_title(Some("cargo test"));
+
+        pretty_assertions::assert_eq!(snapshot.cwd, "/old/project");
+        pretty_assertions::assert_eq!(snapshot.command_label, Some("cargo test".to_owned()));
+        Ok(())
+    }
+
+    #[test]
+    fn test_sync_terminal_title_when_title_is_cwd_updates_pane_cwd() -> rootcause::Result<()> {
+        let mut pane = self::pane()?;
+
+        assert2::assert!(pane.sync_terminal_title(Some("~")));
+
+        pretty_assertions::assert_eq!(pane.cwd, "~");
+        Ok(())
+    }
+
+    #[test]
+    fn test_sync_terminal_title_when_title_is_same_cwd_returns_false() -> rootcause::Result<()> {
+        let mut pane = self::pane()?;
+
+        assert2::assert!(!pane.sync_terminal_title(Some("/old/project")));
+
+        pretty_assertions::assert_eq!(pane.cwd, "/old/project");
+        Ok(())
+    }
+
+    #[test]
+    fn test_sync_terminal_title_when_title_is_command_returns_false() -> rootcause::Result<()> {
+        let mut pane = self::pane()?;
+
+        assert2::assert!(!pane.sync_terminal_title(Some("cargo test")));
+
+        pretty_assertions::assert_eq!(pane.cwd, "/old/project");
+        Ok(())
+    }
+
+    fn pane() -> rootcause::Result<Pane> {
+        Ok(Pane {
+            command_label: "zsh".to_owned(),
+            cwd: "/old/project".to_owned(),
+            focus_seq: 1,
+            id: PaneId::new("pane-1")?,
+            started_at: 1,
+            state: PaneState::Running,
+            title: "zsh".to_owned(),
+        })
+    }
 }

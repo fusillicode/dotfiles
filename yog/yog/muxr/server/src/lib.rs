@@ -1,5 +1,6 @@
 pub use server::serve_session;
 
+mod command_label;
 mod history;
 mod pane_borders;
 mod pane_close;

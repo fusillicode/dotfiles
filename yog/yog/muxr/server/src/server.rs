@@ -123,24 +123,31 @@ pub struct PaneRuntimes {
 impl PaneRuntimes {
     fn spawn_for_layout(config: &ServerConfig, layout: &SessionLayout, size: &TerminalSize) -> rootcause::Result<Self> {
         let mut panes = Vec::new();
-        for pane_id in layout.pane_ids() {
+        for pane in layout.panes() {
             panes.push(PaneRuntime {
                 session: PtySession::spawn(
                     &config.shell_command,
+                    &pane.cwd,
                     size,
-                    &self::pane_output_path(&config.paths.panes, &pane_id),
+                    &self::pane_output_path(&config.paths.panes, &pane.id),
                 )?,
-                id: pane_id,
+                id: pane.id.clone(),
             });
         }
         Ok(Self { panes })
     }
 
-    pub fn spawn_pane(&mut self, pane_id: PaneId, config: &ServerConfig, size: &TerminalSize) -> rootcause::Result<()> {
+    pub fn spawn_pane(
+        &mut self,
+        pane_id: PaneId,
+        cwd: &str,
+        config: &ServerConfig,
+        size: &TerminalSize,
+    ) -> rootcause::Result<()> {
         let history_path = self::pane_output_path(&config.paths.panes, &pane_id);
         self.panes.push(PaneRuntime {
             id: pane_id,
-            session: PtySession::spawn(&config.shell_command, size, &history_path)?,
+            session: PtySession::spawn(&config.shell_command, cwd, size, &history_path)?,
         });
         Ok(())
     }
@@ -188,6 +195,27 @@ impl PaneRuntimes {
     fn snapshot(&self, pane_id: &PaneId) -> rootcause::Result<TerminalSnapshot> {
         self.handle(pane_id)?.render_snapshot()
     }
+
+    fn terminal_titles(&self) -> rootcause::Result<Vec<(PaneId, Option<String>)>> {
+        self.panes
+            .iter()
+            .filter_map(|pane| match pane.session.handle().terminal_title() {
+                Ok(Some(title)) => Some(Ok((pane.id.clone(), Some(title)))),
+                Ok(None) => None,
+                Err(error) => Some(Err(error)),
+            })
+            .collect()
+    }
+
+    fn take_title_changes(&self) -> rootcause::Result<Vec<(PaneId, Option<String>)>> {
+        let mut title_changes = Vec::new();
+        for pane in &self.panes {
+            for title in pane.session.handle().take_title_changes()? {
+                title_changes.push((pane.id.clone(), title));
+            }
+        }
+        Ok(title_changes)
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -205,6 +233,7 @@ struct RenderComposer {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum RenderDiffReason {
+    TabBarChanged,
     DirtyFrame,
     RegionChanged,
 }
@@ -584,6 +613,38 @@ pub fn session_metadata(config: &ServerConfig) -> rootcause::Result<SessionMetad
     })
 }
 
+/// Build metadata for panes spawned from the currently active pane.
+///
+/// New panes inherit the active pane cwd because the server process cwd does not follow interactive `cd` commands.
+pub fn active_pane_session_metadata(
+    config: &ServerConfig,
+    layout: &SessionLayout,
+) -> rootcause::Result<SessionMetadata> {
+    let active_pane_id = layout.active_pane_id()?;
+    let cwd = layout
+        .pane(&active_pane_id)
+        .map(|pane| pane.cwd.clone())
+        .ok_or_else(|| {
+            report!("muxr active pane is missing from server layout").attach(format!("pane_id={active_pane_id}"))
+        })?;
+
+    Ok(SessionMetadata {
+        command_label: config.shell_command.label(),
+        cwd,
+        started_at: self::unix_timestamp_millis()?,
+    })
+}
+
+/// Apply runtime terminal titles to layout cwd metadata before a layout mutation.
+pub fn sync_layout_terminal_titles(
+    layout: &mut SessionLayout,
+    runtimes: &Mutex<PaneRuntimes>,
+) -> rootcause::Result<()> {
+    let runtimes = self::lock_mutex(runtimes, "pane runtimes")?;
+    let _ = self::sync_layout_terminal_titles_from_runtimes(layout, &runtimes)?;
+    Ok(())
+}
+
 pub fn lock_mutex<'a, T>(mutex: &'a Mutex<T>, name: &str) -> rootcause::Result<MutexGuard<'a, T>> {
     mutex.lock().map_err(|_| report!("poisoned muxr {name} mutex"))
 }
@@ -655,6 +716,7 @@ struct AttachedSessionState<'a> {
     config: &'a ServerConfig,
     delete_sessions: &'a DeleteSessions,
     input_mode: ServerInputMode,
+    last_layout_snapshot: LayoutSnapshot,
     layout: &'a Mutex<SessionLayout>,
     pane_regions: PaneRegionsSnapshot,
     pty_event_sender: &'a mpsc::SyncSender<PtyEvent>,
@@ -662,6 +724,29 @@ struct AttachedSessionState<'a> {
     runtimes: &'a Mutex<PaneRuntimes>,
     sink_guards: &'a mut Vec<AttachedPtySink>,
     terminal_size: TerminalSize,
+}
+
+struct AttachedClientTimers {
+    heartbeat: tokio::time::Interval,
+    render_tick: tokio::time::Interval,
+    shell_poll: tokio::time::Interval,
+}
+
+impl AttachedClientTimers {
+    fn new() -> rootcause::Result<Self> {
+        let heartbeat_start = tokio::time::Instant::now()
+            .checked_add(CLIENT_HEARTBEAT_INTERVAL)
+            .ok_or_else(|| report!("muxr heartbeat interval overflowed"))?;
+        let render_start = tokio::time::Instant::now()
+            .checked_add(RENDER_FRAME_INTERVAL)
+            .ok_or_else(|| report!("muxr render frame interval overflowed"))?;
+
+        Ok(Self {
+            heartbeat: tokio::time::interval_at(heartbeat_start, CLIENT_HEARTBEAT_INTERVAL),
+            render_tick: tokio::time::interval_at(render_start, RENDER_FRAME_INTERVAL),
+            shell_poll: tokio::time::interval(CLIENT_EVENT_POLL_INTERVAL),
+        })
+    }
 }
 
 fn attach_pane_sinks(
@@ -723,6 +808,10 @@ fn reap_exited_panes(
     let mut result = ReapResult::Removed;
     {
         let mut layout = self::lock_mutex(layout, "layout")?;
+        {
+            let runtimes = self::lock_mutex(runtimes, "pane runtimes")?;
+            let _ = self::sync_layout_terminal_titles_from_runtimes(&mut layout, &runtimes)?;
+        }
         let mut removed_panes = Vec::new();
         for (pane_id, exit_status) in &exited_panes {
             match layout.remove_exited_pane(pane_id, exited_at, exit_status.clone())? {
@@ -810,7 +899,8 @@ async fn handle_client(
     let mut sink_guards = self::attach_pane_sinks(runtimes, &pty_event_sender)?;
     let (mut request_reader, mut event_writer) = connection.split();
     let (layout_snapshot, pane_regions, mut render_composer, render_baseline) =
-        self::initial_attached_render(layout, runtimes, &attach_request.terminal_size)?;
+        self::initial_attached_render(&config.paths, layout, runtimes, &attach_request.terminal_size)?;
+    let last_layout_snapshot = layout_snapshot.clone();
     let attached_pane_regions = pane_regions.clone();
     if !self::send_attached_response_and_baseline(&mut event_writer, layout_snapshot, pane_regions, render_baseline)
         .await?
@@ -830,6 +920,7 @@ async fn handle_client(
         config,
         delete_sessions,
         input_mode: ServerInputMode::Normal,
+        last_layout_snapshot,
         layout,
         pane_regions: attached_pane_regions,
         pty_event_sender: &pty_event_sender,
@@ -896,20 +987,52 @@ async fn handle_client_handshake(
 }
 
 fn initial_attached_render(
+    paths: &SessionPaths,
     layout: &Mutex<SessionLayout>,
     runtimes: &Mutex<PaneRuntimes>,
     terminal_size: &TerminalSize,
 ) -> rootcause::Result<(LayoutSnapshot, PaneRegionsSnapshot, RenderComposer, RenderUpdate)> {
     let mut render_composer = RenderComposer::default();
-    let layout = self::lock_mutex(layout, "layout")?;
+    let mut layout = self::lock_mutex(layout, "layout")?;
     let runtimes = self::lock_mutex(runtimes, "pane runtimes")?;
-    let layout_snapshot = layout.snapshot()?;
+    let layout_snapshot = self::layout_snapshot_and_persist(paths, &mut layout, &runtimes)?;
     let pane_regions = self::pane_regions_snapshot(&layout, &runtimes, terminal_size)?;
     let render_baseline =
         render_composer.render_baseline(&layout, &runtimes, terminal_size, BorderRenderMode::Focus)?;
     drop(runtimes);
     drop(layout);
     Ok((layout_snapshot, pane_regions, render_composer, render_baseline))
+}
+
+struct SyncedTerminalTitles {
+    layout_changed: bool,
+    titles: Vec<(PaneId, Option<String>)>,
+}
+
+fn layout_snapshot_and_persist(
+    paths: &SessionPaths,
+    layout: &mut SessionLayout,
+    runtimes: &PaneRuntimes,
+) -> rootcause::Result<LayoutSnapshot> {
+    let synced = self::sync_layout_terminal_titles_from_runtimes(layout, runtimes)?;
+    if synced.layout_changed {
+        crate::state::persisted::write_metadata(paths, layout)?;
+    }
+    layout.snapshot_with_terminal_titles(&synced.titles)
+}
+
+fn sync_layout_terminal_titles_from_runtimes(
+    layout: &mut SessionLayout,
+    runtimes: &PaneRuntimes,
+) -> rootcause::Result<SyncedTerminalTitles> {
+    let terminal_titles = runtimes.terminal_titles()?;
+    // Shell prompts often report cwd through OSC title updates; keep layout metadata in sync so the tab bar and
+    // subsequently spawned/restored panes use the live cwd instead of the session startup directory.
+    let layout_changed = layout.sync_terminal_titles(&terminal_titles);
+    Ok(SyncedTerminalTitles {
+        layout_changed,
+        titles: terminal_titles,
+    })
 }
 
 fn pane_regions_snapshot(
@@ -961,16 +1084,8 @@ async fn run_attached_client(
     state: &mut AttachedSessionState<'_>,
     pty_event_receiver: &mut tokio::sync::mpsc::Receiver<PtyEvent>,
 ) -> rootcause::Result<()> {
-    let mut shell_poll = tokio::time::interval(CLIENT_EVENT_POLL_INTERVAL);
-    let heartbeat_start = tokio::time::Instant::now()
-        .checked_add(CLIENT_HEARTBEAT_INTERVAL)
-        .ok_or_else(|| report!("muxr heartbeat interval overflowed"))?;
-    let mut heartbeat = tokio::time::interval_at(heartbeat_start, CLIENT_HEARTBEAT_INTERVAL);
+    let mut timers = AttachedClientTimers::new()?;
     let mut heartbeat_started_at: Option<tokio::time::Instant> = None;
-    let render_start = tokio::time::Instant::now()
-        .checked_add(RENDER_FRAME_INTERVAL)
-        .ok_or_else(|| report!("muxr render frame interval overflowed"))?;
-    let mut render_tick = tokio::time::interval_at(render_start, RENDER_FRAME_INTERVAL);
     let mut render_dirty = false;
     let mut request_turn = false;
 
@@ -994,7 +1109,7 @@ async fn run_attached_client(
         if request_turn {
             tokio::select! {
                 biased;
-                _ = heartbeat.tick() => {
+                _ = timers.heartbeat.tick() => {
                     if heartbeat_started_at.is_none() {
                         if !self::send_writer_event_with_timeout(event_writer, &ServerEvent::Ping).await? {
                             return Ok(());
@@ -1002,12 +1117,12 @@ async fn run_attached_client(
                         heartbeat_started_at = Some(tokio::time::Instant::now());
                     }
                 },
-                _ = shell_poll.tick() => {
+                _ = timers.shell_poll.tick() => {
                     if self::handle_reaped_panes(state, event_writer).await? {
                         return Ok(());
                     }
                 },
-                _ = render_tick.tick() => {
+                _ = timers.render_tick.tick() => {
                     if !self::flush_render_diff(event_writer, state, &mut render_dirty).await? {
                         return Ok(());
                     }
@@ -1028,7 +1143,7 @@ async fn run_attached_client(
         } else {
             tokio::select! {
                 biased;
-                _ = heartbeat.tick() => {
+                _ = timers.heartbeat.tick() => {
                     if heartbeat_started_at.is_none() {
                         if !self::send_writer_event_with_timeout(event_writer, &ServerEvent::Ping).await? {
                             return Ok(());
@@ -1036,12 +1151,12 @@ async fn run_attached_client(
                         heartbeat_started_at = Some(tokio::time::Instant::now());
                     }
                 },
-                _ = shell_poll.tick() => {
+                _ = timers.shell_poll.tick() => {
                     if self::handle_reaped_panes(state, event_writer).await? {
                         return Ok(());
                     }
                 },
-                _ = render_tick.tick() => {
+                _ = timers.render_tick.tick() => {
                     if !self::flush_render_diff(event_writer, state, &mut render_dirty).await? {
                         return Ok(());
                     }
@@ -1074,10 +1189,21 @@ async fn handle_pty_event(
         Some(PtyEvent::Exited) => Ok(!self::handle_reaped_panes(state, event_writer).await?),
         Some(PtyEvent::OutputReady) => {
             *render_dirty = true;
+            let title_changes = self::take_title_changes(state.runtimes)?;
+            if !title_changes.is_empty()
+                && !self::flush_command_label_layout(event_writer, state, title_changes).await?
+            {
+                return Ok(false);
+            }
             Ok(true)
         }
         None => Ok(false),
     }
+}
+
+fn take_title_changes(runtimes: &Mutex<PaneRuntimes>) -> rootcause::Result<Vec<(PaneId, Option<String>)>> {
+    let runtimes = self::lock_mutex(runtimes, "pane runtimes")?;
+    runtimes.take_title_changes()
 }
 
 async fn flush_render_diff(
@@ -1089,7 +1215,7 @@ async fn flush_render_diff(
         return Ok(true);
     }
 
-    let (pane_regions, update) = {
+    let (pane_regions, render_update) = {
         let layout = self::lock_mutex(state.layout, "layout")?;
         let runtimes = self::lock_mutex(state.runtimes, "pane runtimes")?;
         let pane_regions = self::pane_regions_snapshot(&layout, &runtimes, &state.terminal_size)?;
@@ -1111,18 +1237,103 @@ async fn flush_render_diff(
         drop(layout);
         (pane_regions, update)
     };
+    if !self::send_pane_regions_and_render(event_writer, state, pane_regions, render_update).await? {
+        return Ok(false);
+    }
+    *render_dirty = false;
+    Ok(true)
+}
+
+async fn flush_command_label_layout(
+    event_writer: &mut ServerEventWriter,
+    state: &mut AttachedSessionState<'_>,
+    title_changes: Vec<(PaneId, Option<String>)>,
+) -> rootcause::Result<bool> {
+    let changes = {
+        let mut layout = self::lock_mutex(state.layout, "layout")?;
+        let runtimes = self::lock_mutex(state.runtimes, "pane runtimes")?;
+        let current_terminal_titles = runtimes.terminal_titles()?;
+        let mut last_layout_snapshot = state.last_layout_snapshot.clone();
+        let mut layout_changed = false;
+        let mut changes = Vec::new();
+        for (pane_id, title) in title_changes {
+            layout_changed |= layout.sync_terminal_titles(&[(pane_id.clone(), title.clone())]);
+            let terminal_titles = self::terminal_titles_with_override(&current_terminal_titles, &pane_id, title);
+            let layout_snapshot = layout.snapshot_with_terminal_titles(&terminal_titles)?;
+            if layout_snapshot == last_layout_snapshot {
+                continue;
+            }
+            let pane_regions = self::pane_regions_snapshot(&layout, &runtimes, &state.terminal_size)?;
+            let render_update = state.render_composer.render_diff(
+                &layout,
+                &runtimes,
+                &state.terminal_size,
+                RenderDiffReason::TabBarChanged,
+                self::border_render_mode(state.input_mode),
+            )?;
+            last_layout_snapshot = layout_snapshot.clone();
+            changes.push((layout_snapshot, pane_regions, render_update));
+        }
+        if layout_changed {
+            crate::state::persisted::write_metadata(&state.config.paths, &layout)?;
+        }
+        drop(runtimes);
+        drop(layout);
+        changes
+    };
+
+    for (layout_snapshot, pane_regions, render_update) in changes {
+        if !self::send_writer_event_with_timeout(event_writer, &ServerEvent::Layout(layout_snapshot.clone())).await? {
+            return Ok(false);
+        }
+        state.last_layout_snapshot = layout_snapshot;
+        if !self::send_pane_regions_and_render(event_writer, state, pane_regions, render_update).await? {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
+fn terminal_titles_with_override(
+    terminal_titles: &[(PaneId, Option<String>)],
+    pane_id: &PaneId,
+    title: Option<String>,
+) -> Vec<(PaneId, Option<String>)> {
+    let mut out = Vec::with_capacity(terminal_titles.len().saturating_add(1));
+    let mut replaced = false;
+    for (existing_pane_id, existing_title) in terminal_titles {
+        if existing_pane_id == pane_id {
+            out.push((existing_pane_id.clone(), title.clone()));
+            replaced = true;
+        } else {
+            out.push((existing_pane_id.clone(), existing_title.clone()));
+        }
+    }
+    if !replaced {
+        out.push((pane_id.clone(), title));
+    }
+    out
+}
+
+async fn send_pane_regions_and_render(
+    event_writer: &mut ServerEventWriter,
+    state: &mut AttachedSessionState<'_>,
+    pane_regions: PaneRegionsSnapshot,
+    render_update: Option<RenderUpdate>,
+) -> rootcause::Result<bool> {
+    // Region metadata must precede the render using it: selection/copy translate visible cells through
+    // `visible_top_row`, so tab-bar-only renders still need the same ordering as normal pane renders.
     if pane_regions != state.pane_regions {
         if !self::send_writer_event_with_timeout(event_writer, &ServerEvent::PaneRegions(pane_regions.clone())).await? {
             return Ok(false);
         }
         state.pane_regions = pane_regions;
     }
-    if let Some(update) = update
-        && !self::send_writer_event_with_timeout(event_writer, &ServerEvent::Render(update)).await?
+    if let Some(render_update) = render_update
+        && !self::send_writer_event_with_timeout(event_writer, &ServerEvent::Render(render_update)).await?
     {
         return Ok(false);
     }
-    *render_dirty = false;
     Ok(true)
 }
 
@@ -1131,10 +1342,10 @@ async fn send_layout_and_baseline(
     state: &mut AttachedSessionState<'_>,
 ) -> rootcause::Result<bool> {
     let (layout_snapshot, pane_regions, render_update) = {
-        let layout = self::lock_mutex(state.layout, "layout")?;
+        let mut layout = self::lock_mutex(state.layout, "layout")?;
         let runtimes = self::lock_mutex(state.runtimes, "pane runtimes")?;
         (
-            layout.snapshot()?,
+            self::layout_snapshot_and_persist(&state.config.paths, &mut layout, &runtimes)?,
             self::pane_regions_snapshot(&layout, &runtimes, &state.terminal_size)?,
             state.render_composer.render_baseline(
                 &layout,
@@ -1144,14 +1355,18 @@ async fn send_layout_and_baseline(
             )?,
         )
     };
-    if !self::send_writer_event_with_timeout(event_writer, &ServerEvent::Layout(layout_snapshot)).await? {
+    if !self::send_writer_event_with_timeout(event_writer, &ServerEvent::Layout(layout_snapshot.clone())).await? {
         return Ok(false);
     }
     if !self::send_writer_event_with_timeout(event_writer, &ServerEvent::PaneRegions(pane_regions.clone())).await? {
         return Ok(false);
     }
     state.pane_regions = pane_regions;
-    self::send_writer_event_with_timeout(event_writer, &ServerEvent::Render(render_update)).await
+    if !self::send_writer_event_with_timeout(event_writer, &ServerEvent::Render(render_update)).await? {
+        return Ok(false);
+    }
+    state.last_layout_snapshot = layout_snapshot;
+    Ok(true)
 }
 
 async fn handle_reaped_panes(
@@ -1460,8 +1675,12 @@ pub fn spawn_pane_or_restore_layout(
 ) -> rootcause::Result<PaneId> {
     // New panes update layout and runtimes together; rollback the layout if PTY spawn fails so render cannot see
     // pane metadata without a runtime.
+    let cwd = layout
+        .pane(&pane_id)
+        .map(|pane| pane.cwd.clone())
+        .ok_or_else(|| report!("muxr new pane is missing from server layout").attach(format!("pane_id={pane_id}")))?;
     let spawn_result = match self::lock_mutex(runtimes, "pane runtimes") {
-        Ok(mut runtimes) => runtimes.spawn_pane(pane_id.clone(), config, terminal_size),
+        Ok(mut runtimes) => runtimes.spawn_pane(pane_id.clone(), &cwd, config, terminal_size),
         Err(error) => Err(error),
     };
     if let Err(error) = spawn_result {
@@ -1932,6 +2151,113 @@ mod tests {
         );
         pretty_assertions::assert_eq!(layout.active_pane_id()?.as_ref(), "pane-1");
         pretty_assertions::assert_eq!(self::layout_active_tab_pane_ids(&layout)?, vec!["pane-1"]);
+        Ok(())
+    }
+
+    #[test]
+    fn test_active_pane_session_metadata_when_cwd_was_synced_uses_active_pane_cwd() -> rootcause::Result<()> {
+        let tempdir = tempfile::tempdir()?;
+        let active_cwd = tempfile::tempdir()?;
+        let active_cwd = active_cwd.path().to_string_lossy().into_owned();
+        let config = self::server_config(tempdir.path(), "work")?;
+        let mut layout = SessionLayout::initial(&config.session, self::metadata("sh", 1))?;
+        layout.sync_terminal_titles(&[(PaneId::new("pane-1")?, Some(active_cwd.clone()))]);
+
+        let metadata = self::active_pane_session_metadata(&config, &layout)?;
+
+        pretty_assertions::assert_eq!(metadata.cwd, active_cwd);
+        Ok(())
+    }
+
+    #[test]
+    fn test_layout_split_active_pane_when_cwd_was_synced_new_pane_inherits_active_pane_cwd() -> rootcause::Result<()> {
+        let tempdir = tempfile::tempdir()?;
+        let active_cwd = tempfile::tempdir()?;
+        let active_cwd = active_cwd.path().to_string_lossy().into_owned();
+        let config = self::server_config(tempdir.path(), "work")?;
+        let mut layout = SessionLayout::initial(&config.session, self::metadata("sh", 1))?;
+        layout.sync_terminal_titles(&[(PaneId::new("pane-1")?, Some(active_cwd.clone()))]);
+
+        let pane_id = layout.split_active_pane(
+            self::active_pane_session_metadata(&config, &layout)?,
+            PaneSplitAxis::Vertical,
+        )?;
+
+        let pane = layout
+            .pane(&pane_id)
+            .ok_or_else(|| report!("expected split pane to exist").attach(format!("pane_id={pane_id}")))?;
+        pretty_assertions::assert_eq!(pane.cwd, active_cwd);
+        Ok(())
+    }
+
+    #[test]
+    fn test_layout_create_tab_when_cwd_was_synced_new_pane_inherits_active_pane_cwd() -> rootcause::Result<()> {
+        let tempdir = tempfile::tempdir()?;
+        let active_cwd = tempfile::tempdir()?;
+        let active_cwd = active_cwd.path().to_string_lossy().into_owned();
+        let config = self::server_config(tempdir.path(), "work")?;
+        let mut layout = SessionLayout::initial(&config.session, self::metadata("sh", 1))?;
+        layout.sync_terminal_titles(&[(PaneId::new("pane-1")?, Some(active_cwd.clone()))]);
+
+        let pane_id = layout.create_tab(self::active_pane_session_metadata(&config, &layout)?)?;
+
+        let pane = layout
+            .pane(&pane_id)
+            .ok_or_else(|| report!("expected tab pane to exist").attach(format!("pane_id={pane_id}")))?;
+        pretty_assertions::assert_eq!(pane.cwd, active_cwd);
+        Ok(())
+    }
+
+    #[test]
+    fn test_handle_close_pane_command_when_title_cwd_is_pending_persists_synced_cwd() -> rootcause::Result<()> {
+        let tempdir = tempfile::tempdir()?;
+        let mut config = self::server_config(tempdir.path(), "work")?;
+        config.shell_command = self::shell_command("/bin/cat");
+        fs::create_dir_all(&config.paths.root).context("failed to create muxr test session root")?;
+        let layout = Mutex::new(SessionLayout::initial(&config.session, self::metadata("sh", 1))?);
+        let terminal_size = TerminalSize::new(80, 24)?;
+        let runtimes = {
+            let layout = self::lock_mutex(&layout, "layout")?;
+            PaneRuntimes::spawn_for_layout(&config, &layout, &terminal_size)?
+        };
+        let runtimes = Mutex::new(runtimes);
+        let pane_id = PaneId::new("pane-1")?;
+        {
+            let runtimes = self::lock_mutex(&runtimes, "pane runtimes")?;
+            let handle = runtimes.handle(&pane_id)?;
+            drop(runtimes);
+            let _scrolled_to_bottom = handle.write_input(b"\x1b]2;~\x07\n")?;
+        }
+
+        let started_at = Instant::now();
+        loop {
+            let title = {
+                let runtimes = self::lock_mutex(&runtimes, "pane runtimes")?;
+                runtimes.handle(&pane_id)?.terminal_title()?
+            };
+            if title.as_deref() == Some("~") {
+                break;
+            }
+            if started_at.elapsed() > SERVER_READY_TIMEOUT {
+                return Err(report!("timed out waiting for muxr test terminal title"));
+            }
+            thread::sleep(Duration::from_millis(10));
+        }
+
+        let outcome = crate::pane_close::handle_close_pane_command(&config, &layout, &runtimes)?;
+
+        pretty_assertions::assert_eq!(
+            outcome,
+            ClosePaneOutcome::Final {
+                pane_id: pane_id.clone()
+            }
+        );
+        let persisted = crate::state::persisted::load_metadata(&config.paths, &config.session)?
+            .ok_or_else(|| report!("expected muxr layout metadata"))?;
+        let pane = persisted
+            .pane(&pane_id)
+            .ok_or_else(|| report!("expected persisted muxr pane").attach(format!("pane_id={pane_id}")))?;
+        pretty_assertions::assert_eq!(pane.cwd, "~");
         Ok(())
     }
 
@@ -2534,6 +2860,42 @@ mod tests {
                 .await?;
 
             self::read_until_render_contains(&mut client, b"x").await?;
+            self::detach_client(client).await?;
+            self::join_server(handle)
+        })
+    }
+
+    #[test]
+    fn test_serve_when_terminal_title_reports_cwd_persists_metadata() -> rootcause::Result<()> {
+        self::runtime()?.block_on(async {
+            let tempdir = tempfile::tempdir()?;
+            let (session, paths) = self::session_paths(tempdir.path(), "work")?;
+            let handle = self::spawn_test_server_with_shell(&session, &paths, Some(1), self::shell_command("/bin/cat"));
+
+            self::wait_for_socket(&paths.socket)?;
+            let mut client = self::open_attached_client(&session, &paths).await?;
+            client
+                .writer
+                .send_request(&ClientRequest::Input(b"\x1b]2;~\x07\n".to_vec()))
+                .await?;
+
+            let layout = self::read_until_layout(&mut client).await?;
+            let Some(tab) = layout.tabs().first() else {
+                return Err(report!("expected muxr test layout tab"));
+            };
+            let Some(pane) = tab.panes().first() else {
+                return Err(report!("expected muxr test layout pane"));
+            };
+            pretty_assertions::assert_eq!(pane.cwd, "~");
+            pretty_assertions::assert_eq!(pane.command_label, None);
+
+            let persisted = crate::state::persisted::load_metadata(&paths, &session)?
+                .ok_or_else(|| report!("expected muxr layout metadata"))?;
+            let pane = persisted
+                .pane(&PaneId::new("pane-1")?)
+                .ok_or_else(|| report!("expected persisted muxr pane"))?;
+            pretty_assertions::assert_eq!(pane.cwd, "~");
+
             self::detach_client(client).await?;
             self::join_server(handle)
         })

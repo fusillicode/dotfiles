@@ -32,6 +32,7 @@ const SEPARATOR_FG: Color = Color::Rgb { r: 50, g: 50, b: 50 };
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct SidebarTab {
     active: bool,
+    command_label: Option<String>,
     path_label: String,
 }
 
@@ -54,7 +55,7 @@ pub fn queue(stdout: &mut impl Write, layout: &LayoutSnapshot, rows: u16) -> roo
         if row >= rows {
             break;
         }
-        self::queue_sidebar_row(stdout, row, tab.active, "")?;
+        self::queue_sidebar_row(stdout, row, tab.active, tab.command_label.as_deref().unwrap_or(""))?;
         row = row.saturating_add(1);
     }
 
@@ -109,9 +110,18 @@ fn sidebar_tabs_with_home(layout: &LayoutSnapshot, home: Option<&str>) -> Vec<Si
         .iter()
         .map(|tab| SidebarTab {
             active: tab.id() == layout.active_tab(),
+            command_label: self::command_label(tab),
             path_label: self::path_label(tab, home),
         })
         .collect()
+}
+
+fn command_label(tab: &TabSnapshot) -> Option<String> {
+    self::active_pane(tab)
+        .and_then(|pane| pane.command_label.as_deref())
+        .map(str::trim)
+        .filter(|command| !command.is_empty())
+        .map(ToOwned::to_owned)
 }
 
 fn path_label(tab: &TabSnapshot, home: Option<&str>) -> String {
@@ -215,6 +225,7 @@ mod tests {
                     muxr_core::PaneId::new("pane-1")?,
                     vec![muxr_core::PaneSnapshot {
                         cwd: "/Users/me/work/default".to_owned(),
+                        command_label: None,
                         id: muxr_core::PaneId::new("pane-1")?,
                         title: "shell".to_owned(),
                     }],
@@ -225,6 +236,7 @@ mod tests {
                     muxr_core::PaneId::new("pane-2")?,
                     vec![muxr_core::PaneSnapshot {
                         cwd: "/Users/me/src/muxr".to_owned(),
+                        command_label: Some("nvim".to_owned()),
                         id: muxr_core::PaneId::new("pane-2")?,
                         title: "shell".to_owned(),
                     }],
@@ -237,10 +249,12 @@ mod tests {
             vec![
                 SidebarTab {
                     active: false,
+                    command_label: None,
                     path_label: "~/w/default".to_owned(),
                 },
                 SidebarTab {
                     active: true,
+                    command_label: Some("nvim".to_owned()),
                     path_label: "~/s/muxr".to_owned(),
                 },
             ],
@@ -267,6 +281,7 @@ mod tests {
         let active_pane = muxr_core::PaneId::new("pane-1")?;
         let pane = muxr_core::PaneSnapshot {
             cwd: "project".to_owned(),
+            command_label: Some("cargo".to_owned()),
             id: active_pane.clone(),
             title: "shell".to_owned(),
         };
@@ -278,6 +293,7 @@ mod tests {
 
         let rendered = output.rendered_string()?;
         assert2::assert!(rendered.contains("project"));
+        assert2::assert!(rendered.contains("cargo"));
         assert2::assert!(rendered.contains(SEPARATOR));
         pretty_assertions::assert_eq!(output.flushes, 0);
         Ok(())
@@ -301,6 +317,7 @@ mod tests {
                     muxr_core::PaneId::new("pane-1")?,
                     vec![muxr_core::PaneSnapshot {
                         cwd: "default".to_owned(),
+                        command_label: None,
                         id: muxr_core::PaneId::new("pane-1")?,
                         title: "shell".to_owned(),
                     }],
@@ -311,6 +328,7 @@ mod tests {
                     muxr_core::PaneId::new("pane-2")?,
                     vec![muxr_core::PaneSnapshot {
                         cwd: "tab-2".to_owned(),
+                        command_label: None,
                         id: muxr_core::PaneId::new("pane-2")?,
                         title: "shell".to_owned(),
                     }],

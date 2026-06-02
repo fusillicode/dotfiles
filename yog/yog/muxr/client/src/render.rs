@@ -408,8 +408,8 @@ fn apply_enabled_attrs(stdout: &mut impl Write, attrs: RenderTextStyle) -> rootc
 
 /// Enter muxr's attached terminal surface.
 ///
-/// The client renders muxr frames on the alternate screen so detach, errors, and final-pane exits cannot leave muxr
-/// chrome in the user's outer shell.
+/// The client renders muxr frames on the alternate screen so detach, errors, and final-pane exits cannot leave the muxr
+/// screen in the user's outer shell.
 ///
 /// # Errors
 /// - The terminal enter commands cannot be written or flushed.

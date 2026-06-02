@@ -77,11 +77,22 @@ pub enum TerminalMouseProtocolMode {
 #[derive(Default)]
 struct TerminalCallbacks {
     replies: Vec<Vec<u8>>,
+    title: Option<String>,
+    title_changes: Vec<Option<String>>,
 }
 
 impl TerminalCallbacks {
     fn take_replies(&mut self) -> Vec<Vec<u8>> {
         std::mem::take(&mut self.replies)
+    }
+
+    fn take_title_changes(&mut self) -> Vec<Option<String>> {
+        std::mem::take(&mut self.title_changes)
+    }
+
+    fn clear_title_metadata(&mut self) {
+        self.title = None;
+        self.title_changes.clear();
     }
 }
 
@@ -113,6 +124,15 @@ impl vt100::Callbacks for TerminalCallbacks {
             Some(_) | None => {}
         }
     }
+
+    fn set_window_title(&mut self, _screen: &mut vt100::Screen, title: &[u8]) {
+        let title = String::from_utf8_lossy(title).trim().to_owned();
+        let title = (!title.is_empty()).then_some(title);
+        if self.title != title {
+            self.title.clone_from(&title);
+            self.title_changes.push(title);
+        }
+    }
 }
 
 impl TerminalState {
@@ -140,6 +160,19 @@ impl TerminalState {
 
     pub fn resize(&mut self, size: &TerminalSize) {
         self.parser.screen_mut().set_size(size.rows(), size.cols());
+    }
+
+    pub fn title(&self) -> Option<String> {
+        self.parser.callbacks().title.clone()
+    }
+
+    pub fn take_title_changes(&mut self) -> Vec<Option<String>> {
+        self.parser.callbacks_mut().take_title_changes()
+    }
+
+    /// Clear OSC title metadata without touching screen contents or scrollback.
+    pub fn clear_title_metadata(&mut self) {
+        self.parser.callbacks_mut().clear_title_metadata();
     }
 
     pub fn scroll(&mut self, direction: PaneScrollDirection) -> bool {
@@ -339,6 +372,77 @@ mod tests {
         pretty_assertions::assert_eq!(terminal.process(b"\x1b["), Vec::<Vec<u8>>::new());
 
         pretty_assertions::assert_eq!(terminal.process(b"6n"), vec![b"\x1b[1;1R".to_vec()]);
+        Ok(())
+    }
+
+    #[rstest]
+    #[case::osc_zero(b"\x1b]0;cargo test\x07")]
+    #[case::osc_two(b"\x1b]2;cargo test\x07")]
+    fn test_terminal_state_title_when_window_title_is_set_returns_title(#[case] bytes: &[u8]) -> rootcause::Result<()> {
+        let mut terminal = TerminalState::new(&terminal_size()?);
+
+        pretty_assertions::assert_eq!(terminal.process(bytes), Vec::<Vec<u8>>::new());
+
+        pretty_assertions::assert_eq!(terminal.title(), Some("cargo test".to_owned()));
+        Ok(())
+    }
+
+    #[test]
+    fn test_terminal_state_take_title_changes_when_window_title_changes_returns_once() -> rootcause::Result<()> {
+        let mut terminal = TerminalState::new(&terminal_size()?);
+
+        pretty_assertions::assert_eq!(terminal.process(b"\x1b]2;cargo test\x07"), Vec::<Vec<u8>>::new());
+
+        pretty_assertions::assert_eq!(terminal.take_title_changes(), vec![Some("cargo test".to_owned())]);
+        pretty_assertions::assert_eq!(terminal.take_title_changes(), Vec::<Option<String>>::new());
+        Ok(())
+    }
+
+    #[test]
+    fn test_terminal_state_take_title_changes_when_window_title_repeats_returns_empty() -> rootcause::Result<()> {
+        let mut terminal = TerminalState::new(&terminal_size()?);
+
+        pretty_assertions::assert_eq!(terminal.process(b"\x1b]2;cargo test\x07"), Vec::<Vec<u8>>::new());
+        pretty_assertions::assert_eq!(terminal.take_title_changes(), vec![Some("cargo test".to_owned())]);
+        pretty_assertions::assert_eq!(terminal.process(b"\x1b]2;cargo test\x07"), Vec::<Vec<u8>>::new());
+
+        pretty_assertions::assert_eq!(terminal.take_title_changes(), Vec::<Option<String>>::new());
+        Ok(())
+    }
+
+    #[test]
+    fn test_terminal_state_take_title_changes_when_titles_change_in_one_chunk_preserves_order() -> rootcause::Result<()>
+    {
+        let mut terminal = TerminalState::new(&terminal_size()?);
+
+        pretty_assertions::assert_eq!(terminal.process(b"\x1b]2;gst\x07\x1b]2;~\x07"), Vec::<Vec<u8>>::new());
+
+        pretty_assertions::assert_eq!(
+            terminal.take_title_changes(),
+            vec![Some("gst".to_owned()), Some("~".to_owned())],
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_terminal_state_title_when_window_title_sequence_is_split_returns_title() -> rootcause::Result<()> {
+        let mut terminal = TerminalState::new(&terminal_size()?);
+
+        pretty_assertions::assert_eq!(terminal.process(b"\x1b]2;"), Vec::<Vec<u8>>::new());
+        pretty_assertions::assert_eq!(terminal.process(b"gst\x07"), Vec::<Vec<u8>>::new());
+
+        pretty_assertions::assert_eq!(terminal.title(), Some("gst".to_owned()));
+        Ok(())
+    }
+
+    #[test]
+    fn test_terminal_state_title_when_window_title_is_empty_returns_none() -> rootcause::Result<()> {
+        let mut terminal = TerminalState::new(&terminal_size()?);
+
+        terminal.process(b"\x1b]2;cargo test\x07");
+        terminal.process(b"\x1b]2;  \x07");
+
+        pretty_assertions::assert_eq!(terminal.title(), None);
         Ok(())
     }
 
