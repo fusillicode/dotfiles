@@ -70,6 +70,8 @@ pub struct Pane {
     pub cwd: String,
     pub focus_seq: u64,
     pub id: PaneId,
+    #[serde(default, skip_serializing)]
+    pub needs_attention: bool,
     pub started_at: u64,
     pub state: PaneState,
     pub title: String,
@@ -178,6 +180,7 @@ mod tests {
             cwd: "/old/project".to_owned(),
             focus_seq: 1,
             id: PaneId::new("pane-1")?,
+            needs_attention: false,
             started_at: 1,
             state: PaneState::Running,
             title: "zsh".to_owned(),

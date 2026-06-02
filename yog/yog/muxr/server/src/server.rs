@@ -350,7 +350,14 @@ impl RenderComposer {
                 };
             }
         }
-        crate::pane_borders::paste_borders(&mut rows, pane_layout.borders(), Some(&active_pane), border_mode)?;
+        let attention_panes = layout.attention_pane_ids();
+        crate::pane_borders::paste_borders(
+            &mut rows,
+            pane_layout.borders(),
+            Some(&active_pane),
+            &attention_panes,
+            border_mode,
+        )?;
 
         let rows = rows
             .into_iter()
@@ -1511,7 +1518,7 @@ async fn handle_focus_tab_request(
 ) -> rootcause::Result<bool> {
     let changed = {
         let mut layout = self::lock_mutex(state.layout, "layout")?;
-        let changed = crate::tab_focus::handle_focus_tab(&mut layout, &tab_id);
+        let changed = crate::tab_focus::handle_focus_tab(&mut layout, &tab_id)?;
         if changed {
             crate::state::persisted::write_metadata(&state.config.paths, &layout)?;
         }
@@ -2247,6 +2254,40 @@ mod tests {
             .pane(&pane_id)
             .ok_or_else(|| report!("expected persisted muxr pane").attach(format!("pane_id={pane_id}")))?;
         pretty_assertions::assert_eq!(pane.cwd, "~");
+        Ok(())
+    }
+
+    #[test]
+    fn test_initial_attached_render_when_detached_output_arrived_does_not_mark_attention() -> rootcause::Result<()> {
+        let tempdir = tempfile::tempdir()?;
+        let mut config = self::server_config(tempdir.path(), "work")?;
+        config.shell_cmd = self::shell_cmd("/bin/sh").arg("-c").arg("printf dirty; sleep 30");
+        let terminal_size = TerminalSize::new(80, 24)?;
+        let layout = Mutex::new(SessionLayout::initial(&config.session, self::metadata("sh", 1))?);
+        {
+            let mut layout = self::lock_mutex(&layout, "layout")?;
+            layout.split_active_pane(self::metadata("sh", 2), PaneSplitAxis::Vertical)?;
+        }
+        let runtimes = {
+            let layout = self::lock_mutex(&layout, "layout")?;
+            PaneRuntimes::spawn_for_layout(&config, &layout, &terminal_size)?
+        };
+        let runtimes = Mutex::new(runtimes);
+        let inactive_pane = PaneId::new("pane-1")?;
+        let active_pane = PaneId::new("pane-2")?;
+        self::wait_for_runtime_snapshot_contains(&runtimes, &inactive_pane, "dirty")?;
+        self::wait_for_runtime_snapshot_contains(&runtimes, &active_pane, "dirty")?;
+
+        self::resize_panes_to_layout(&layout, &runtimes, &terminal_size)?;
+        drop(self::initial_attached_render(
+            &config.paths,
+            &layout,
+            &runtimes,
+            &terminal_size,
+        )?);
+
+        let layout = self::lock_mutex(&layout, "layout")?;
+        pretty_assertions::assert_eq!(layout.attention_pane_ids(), Vec::<PaneId>::new());
         Ok(())
     }
 
@@ -3549,6 +3590,33 @@ mod tests {
             .iter()
             .map(|border| (border.axis(), border.col(), border.row(), border.len()))
             .collect())
+    }
+
+    fn wait_for_runtime_snapshot_contains(
+        runtimes: &Mutex<PaneRuntimes>,
+        pane_id: &PaneId,
+        needle: &str,
+    ) -> rootcause::Result<()> {
+        let started_at = Instant::now();
+        loop {
+            let rendered = {
+                let runtimes = self::lock_mutex(runtimes, "pane runtimes")?;
+                runtimes
+                    .handle(pane_id)?
+                    .render_snapshot()?
+                    .rows()
+                    .iter()
+                    .flat_map(|row| row.cells().iter().map(RenderCell::text))
+                    .collect::<String>()
+            };
+            if rendered.contains(needle) {
+                return Ok(());
+            }
+            if started_at.elapsed() > SERVER_READY_TIMEOUT {
+                return Err(report!("timed out waiting for muxr runtime snapshot").attach(rendered));
+            }
+            thread::sleep(Duration::from_millis(10));
+        }
     }
 
     fn make_public_session_dirs(paths: &SessionPaths) -> rootcause::Result<()> {
