@@ -383,21 +383,11 @@ async fn handle_mouse_input_action(
         return Ok(true);
     };
     let event = ClientMouseEvent { position, ..event };
-    if let Some(event) = renderer.mouse_request_for_event(event) {
+    if self::pane_scroll::is_wheel_event(event) {
         return self::send_mouse_request(input_sender, event).await;
     }
-
-    if let Some(scroll) = self::pane_scroll::scroll_action(event) {
-        return Ok(!matches!(
-            self::send_droppable_request(
-                input_sender,
-                ClientRequest::ScrollPaneAt {
-                    position: scroll.position,
-                    direction: scroll.direction,
-                },
-            ),
-            DroppableSendOutcome::Closed
-        ));
+    if let Some(event) = renderer.mouse_request_for_event(event) {
+        return self::send_mouse_request(input_sender, event).await;
     }
 
     match self::pane_focus::local_mouse_action(event) {
@@ -428,7 +418,7 @@ async fn send_mouse_request(
     input_sender: &tokio::sync::mpsc::Sender<ClientRequest>,
     event: ClientMouseEvent,
 ) -> rootcause::Result<bool> {
-    if event.button & (32 | 64) != 0 {
+    if self::mouse_event_can_be_dropped(event) {
         return Ok(!matches!(
             self::send_droppable_request(input_sender, ClientRequest::Mouse(event)),
             DroppableSendOutcome::Closed
@@ -701,7 +691,7 @@ fn send_droppable_input_action(
 }
 
 const fn mouse_event_can_be_dropped(event: ClientMouseEvent) -> bool {
-    event.button & (32 | 64) != 0
+    event.button & 32 != 0 && !crate::client::pane_scroll::is_wheel_event(event)
 }
 
 fn tab_focus_request_for_sidebar_click(event: ClientMouseEvent, renderer: &ClientRenderer) -> Option<ClientRequest> {
@@ -1121,6 +1111,30 @@ mod tests {
     }
 
     #[test]
+    fn test_send_decoded_input_when_mouse_wheel_action_queue_is_full_waits_for_queue_space() -> rootcause::Result<()> {
+        let (input_sender, mut input_receiver) = tokio::sync::mpsc::channel(1);
+        assert2::assert!(input_sender.try_send(ClientInputAction::CopySelection).is_ok());
+        let event = ClientMouseEvent {
+            button: 64,
+            phase: ClientMouseEventPhase::Press,
+            position: muxr_core::ClientMousePosition { row: 4, col: 9 },
+        };
+        let (result_sender, result_receiver) = std::sync::mpsc::channel();
+        let handle = thread::spawn(move || {
+            let _ = result_sender.send(send_decoded_input(&input_sender, vec![DecodedInput::Mouse(event)]));
+        });
+
+        assert2::assert!(result_receiver.recv_timeout(Duration::from_millis(50)).is_err());
+        pretty_assertions::assert_eq!(input_receiver.blocking_recv(), Some(ClientInputAction::CopySelection));
+        pretty_assertions::assert_eq!(result_receiver.recv_timeout(Duration::from_secs(1)), Ok(true));
+        pretty_assertions::assert_eq!(input_receiver.blocking_recv(), Some(ClientInputAction::Mouse(event)));
+        handle
+            .join()
+            .map_err(|error| report!("muxr mouse input test thread panicked").attach(format!("{error:?}")))?;
+        Ok(())
+    }
+
+    #[test]
     fn test_send_decoded_input_when_copy_selection_arrives_emits_local_action() {
         let (input_sender, mut input_receiver) = tokio::sync::mpsc::channel(1);
 
@@ -1432,6 +1446,95 @@ mod tests {
                 })),
             );
             pretty_assertions::assert_eq!(output.flushes, 0);
+            Ok(())
+        })
+    }
+
+    #[test]
+    fn test_handle_client_input_action_when_pane_receives_wheel_forwards_mouse_to_server() -> rootcause::Result<()> {
+        self::runtime()?.block_on(async {
+            let (input_sender, mut input_receiver) = tokio::sync::mpsc::channel(1);
+            let mut renderer = ClientRenderer::with_synchronized_output(
+                layout_snapshot()?,
+                pane_regions_snapshot()?,
+                SynchronizedOutput::Csi,
+            );
+            let mut output = CountingWriter::default();
+            let event = ClientMouseEvent {
+                button: 64,
+                phase: ClientMouseEventPhase::Press,
+                position: muxr_core::ClientMousePosition {
+                    row: 0,
+                    col: TAB_BAR_COLS.saturating_add(1),
+                },
+            };
+
+            assert2::assert!(
+                handle_client_input_action(
+                    ClientInputAction::Mouse(event),
+                    &input_sender,
+                    &mut renderer,
+                    &mut output,
+                )
+                .await?
+            );
+
+            pretty_assertions::assert_eq!(
+                input_receiver.recv().await,
+                Some(ClientRequest::Mouse(ClientMouseEvent {
+                    position: muxr_core::ClientMousePosition { row: 0, col: 1 },
+                    ..event
+                })),
+            );
+            pretty_assertions::assert_eq!(output.flushes, 0);
+            Ok(())
+        })
+    }
+
+    #[test]
+    fn test_handle_client_input_action_when_pane_wheel_request_queue_is_full_waits_for_queue_space()
+    -> rootcause::Result<()> {
+        self::runtime()?.block_on(async {
+            let (input_sender, mut input_receiver) = tokio::sync::mpsc::channel(1);
+            assert2::assert!(input_sender.try_send(ClientRequest::Pong).is_ok());
+            let mut renderer = ClientRenderer::with_synchronized_output(
+                layout_snapshot()?,
+                pane_regions_snapshot()?,
+                SynchronizedOutput::Csi,
+            );
+            let mut output = CountingWriter::default();
+            let event = ClientMouseEvent {
+                button: 64,
+                phase: ClientMouseEventPhase::Press,
+                position: muxr_core::ClientMousePosition {
+                    row: 0,
+                    col: TAB_BAR_COLS.saturating_add(1),
+                },
+            };
+            let handle = handle_client_input_action(
+                ClientInputAction::Mouse(event),
+                &input_sender,
+                &mut renderer,
+                &mut output,
+            );
+            tokio::pin!(handle);
+
+            tokio::select! {
+                result = &mut handle => {
+                    return Err(report!("muxr wheel request did not wait for queue space").attach(format!("{result:?}")));
+                }
+                () = tokio::time::sleep(Duration::from_millis(50)) => {}
+            }
+
+            pretty_assertions::assert_eq!(input_receiver.recv().await, Some(ClientRequest::Pong));
+            assert2::assert!(handle.await?);
+            pretty_assertions::assert_eq!(
+                input_receiver.recv().await,
+                Some(ClientRequest::Mouse(ClientMouseEvent {
+                    position: muxr_core::ClientMousePosition { row: 0, col: 1 },
+                    ..event
+                })),
+            );
             Ok(())
         })
     }

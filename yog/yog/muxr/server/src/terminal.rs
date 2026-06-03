@@ -1,3 +1,5 @@
+use muxr_core::ClientMouseEvent;
+use muxr_core::ClientMouseEventPhase;
 use muxr_core::PaneMouseMode;
 use muxr_core::PaneScrollDirection;
 use muxr_core::RenderCell;
@@ -10,7 +12,8 @@ use muxr_core::TerminalSize;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
 
-const SCROLLBACK_ROWS: usize = 10_000;
+// Match the local Zellij scroll buffer so long agent sessions are not truncated sooner in muxr.
+const SCROLLBACK_ROWS: usize = 50_000;
 const SCROLL_LINES_PER_WHEEL_EVENT: usize = 5;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -154,6 +157,53 @@ pub struct TerminalMouseProtocol {
     pub encoding: TerminalMouseProtocolEncoding,
     /// Mouse events requested by the pane application.
     pub mode: TerminalMouseProtocolMode,
+}
+
+impl TerminalMouseProtocol {
+    pub const fn reports_event(self, event: ClientMouseEvent) -> bool {
+        let is_motion = event.button & 32 != 0;
+        let is_release = matches!(event.phase, ClientMouseEventPhase::Release);
+        match self.mode {
+            TerminalMouseProtocolMode::Press => !is_release && !is_motion,
+            TerminalMouseProtocolMode::PressRelease => !is_motion,
+            // `?1002` button-motion panes must not receive `?1003` hover packets from the outer terminal.
+            TerminalMouseProtocolMode::ButtonMotion => !Self::mouse_event_is_no_button_motion(event),
+            TerminalMouseProtocolMode::AnyMotion => true,
+        }
+    }
+
+    pub const fn pane_mouse_mode(self) -> PaneMouseMode {
+        match self.mode {
+            TerminalMouseProtocolMode::AnyMotion => PaneMouseMode::AnyMotion,
+            TerminalMouseProtocolMode::ButtonMotion => PaneMouseMode::ButtonMotion,
+            TerminalMouseProtocolMode::Press => PaneMouseMode::Press,
+            TerminalMouseProtocolMode::PressRelease => PaneMouseMode::PressRelease,
+        }
+    }
+
+    const fn mouse_event_is_no_button_motion(event: ClientMouseEvent) -> bool {
+        event.button & 32 != 0 && event.button & 0b11 == 0b11
+    }
+}
+
+/// Terminal modes requested by the application running in a pane.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct TerminalApplicationMode {
+    /// Alternate screen is active for a full-screen terminal application.
+    pub alternate_screen: bool,
+    /// Application cursor mode changes arrow-key escape sequences.
+    pub application_cursor: bool,
+    /// Mouse reporting protocol requested by the pane application.
+    pub mouse_protocol: Option<TerminalMouseProtocol>,
+}
+
+impl TerminalApplicationMode {
+    pub const fn pane_mouse_mode(self) -> PaneMouseMode {
+        match self.mouse_protocol {
+            Some(protocol) => protocol.pane_mouse_mode(),
+            None => PaneMouseMode::None,
+        }
+    }
 }
 
 /// Mouse event encoding requested by the pane application.
@@ -327,6 +377,15 @@ impl TerminalState {
         self.parser.screen().bracketed_paste()
     }
 
+    pub fn application_mode(&self) -> TerminalApplicationMode {
+        let screen = self.parser.screen();
+        TerminalApplicationMode {
+            alternate_screen: screen.alternate_screen(),
+            application_cursor: screen.application_cursor(),
+            mouse_protocol: self.mouse_protocol(),
+        }
+    }
+
     pub fn mouse_protocol(&self) -> Option<TerminalMouseProtocol> {
         let mode = match self.parser.screen().mouse_protocol_mode() {
             vt100::MouseProtocolMode::None => return None,
@@ -341,18 +400,6 @@ impl TerminalState {
             vt100::MouseProtocolEncoding::Utf8 => TerminalMouseProtocolEncoding::Utf8,
         };
         Some(TerminalMouseProtocol { encoding, mode })
-    }
-
-    pub fn mouse_mode(&self) -> PaneMouseMode {
-        let Some(protocol) = self.mouse_protocol() else {
-            return PaneMouseMode::None;
-        };
-        match protocol.mode {
-            TerminalMouseProtocolMode::AnyMotion => PaneMouseMode::AnyMotion,
-            TerminalMouseProtocolMode::ButtonMotion => PaneMouseMode::ButtonMotion,
-            TerminalMouseProtocolMode::Press => PaneMouseMode::Press,
-            TerminalMouseProtocolMode::PressRelease => PaneMouseMode::PressRelease,
-        }
     }
 
     pub fn snapshot(&self) -> rootcause::Result<TerminalSnapshot> {
@@ -679,8 +726,77 @@ mod tests {
                 encoding: TerminalMouseProtocolEncoding::Sgr
             }),
         );
-        pretty_assertions::assert_eq!(terminal.mouse_mode(), PaneMouseMode::ButtonMotion);
-        assert2::assert!(terminal.mouse_mode().tracking_enabled());
+        pretty_assertions::assert_eq!(
+            terminal.application_mode().pane_mouse_mode(),
+            PaneMouseMode::ButtonMotion
+        );
+        assert2::assert!(terminal.application_mode().pane_mouse_mode().tracking_enabled());
+        Ok(())
+    }
+
+    #[rstest]
+    #[case::alternate_47_enabled(b"\x1b[?47h", true)]
+    #[case::alternate_1049_enabled(b"\x1b[?1049h", true)]
+    #[case::alternate_47_disabled(b"\x1b[?47h\x1b[?47l", false)]
+    #[case::alternate_1049_disabled(b"\x1b[?1049h\x1b[?1049l", false)]
+    fn test_terminal_state_application_mode_when_alternate_screen_changes_returns_state(
+        #[case] bytes: &[u8],
+        #[case] expected: bool,
+    ) -> rootcause::Result<()> {
+        let mut terminal = TerminalState::new(&terminal_size()?);
+
+        let _ = terminal.process(bytes);
+
+        pretty_assertions::assert_eq!(
+            terminal.application_mode(),
+            TerminalApplicationMode {
+                alternate_screen: expected,
+                application_cursor: false,
+                mouse_protocol: None,
+            },
+        );
+        Ok(())
+    }
+
+    #[rstest]
+    #[case::application_cursor_enabled(b"\x1b[?1h", true)]
+    #[case::application_cursor_disabled(b"\x1b[?1h\x1b[?1l", false)]
+    fn test_terminal_state_application_mode_when_application_cursor_changes_returns_state(
+        #[case] bytes: &[u8],
+        #[case] expected: bool,
+    ) -> rootcause::Result<()> {
+        let mut terminal = TerminalState::new(&terminal_size()?);
+
+        let _ = terminal.process(bytes);
+
+        pretty_assertions::assert_eq!(
+            terminal.application_mode(),
+            TerminalApplicationMode {
+                alternate_screen: false,
+                application_cursor: expected,
+                mouse_protocol: None,
+            },
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_terminal_state_application_mode_when_mouse_protocol_is_enabled_returns_protocol() -> rootcause::Result<()> {
+        let mut terminal = TerminalState::new(&terminal_size()?);
+
+        let _ = terminal.process(b"\x1b[?1002h\x1b[?1006h");
+
+        pretty_assertions::assert_eq!(
+            terminal.application_mode(),
+            TerminalApplicationMode {
+                alternate_screen: false,
+                application_cursor: false,
+                mouse_protocol: Some(TerminalMouseProtocol {
+                    mode: TerminalMouseProtocolMode::ButtonMotion,
+                    encoding: TerminalMouseProtocolEncoding::Sgr,
+                }),
+            },
+        );
         Ok(())
     }
 

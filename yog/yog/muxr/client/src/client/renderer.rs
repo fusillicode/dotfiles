@@ -388,6 +388,10 @@ impl ClientRenderer {
     }
 
     pub fn mouse_request_for_event(&mut self, event: ClientMouseEvent) -> Option<ClientMouseEvent> {
+        if crate::client::pane_scroll::is_wheel_event(event) {
+            return None;
+        }
+
         if let Some(capture) = self.mouse_capture.as_ref() {
             let event = ClientMouseEvent {
                 position: self::clamp_mouse_position_to_region(event.position, &capture.region),
@@ -738,8 +742,31 @@ mod tests {
         renderer.sync_mouse_capture(&mut output)?;
         renderer.apply_pane_regions(&mut output, pane_regions_snapshot()?)?;
 
-        pretty_assertions::assert_eq!(output.rendered_string()?, "\x1b[?1003h\x1b[?1003l");
+        pretty_assertions::assert_eq!(
+            output.rendered_string()?,
+            "\x1b[?1003h\x1b[?1003l\x1b[?1000h\x1b[?1002h\x1b[?1006h",
+        );
         pretty_assertions::assert_eq!(output.flushes, 2);
+        Ok(())
+    }
+
+    #[test]
+    fn test_client_renderer_mouse_request_for_event_when_wheel_in_tracking_pane_returns_none() -> rootcause::Result<()>
+    {
+        let mut renderer = ClientRenderer::with_synchronized_output(
+            layout_snapshot()?,
+            any_motion_pane_regions_snapshot()?,
+            SynchronizedOutput::Csi,
+        );
+
+        pretty_assertions::assert_eq!(
+            renderer.mouse_request_for_event(ClientMouseEvent {
+                button: 64,
+                phase: ClientMouseEventPhase::Press,
+                position: ClientMousePosition { row: 0, col: 0 },
+            }),
+            None,
+        );
         Ok(())
     }
 

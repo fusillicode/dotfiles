@@ -8,6 +8,7 @@ mod pane_borders;
 mod pane_close;
 mod pane_focus;
 mod pane_layout;
+mod pane_mouse;
 mod pane_resize;
 mod pane_scroll;
 mod pane_split;

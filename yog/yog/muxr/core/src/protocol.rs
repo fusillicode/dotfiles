@@ -1315,10 +1315,6 @@ pub enum ClientRequest {
     Paste(Vec<u8>),
     Key(ClientKey),
     Mouse(ClientMouseEvent),
-    ScrollPaneAt {
-        position: ClientMousePosition,
-        direction: PaneScrollDirection,
-    },
     ScrollPaneLineAt {
         position: ClientMousePosition,
         direction: PaneScrollDirection,
@@ -1433,10 +1429,6 @@ mod tests {
         phase: ClientMouseEventPhase::Press,
         position: ClientMousePosition { row: 2, col: 3 },
     }))]
-    #[case::scroll(ClientRequest::ScrollPaneAt {
-        position: ClientMousePosition { row: 2, col: 3 },
-        direction: PaneScrollDirection::Up,
-    })]
     #[case::scroll_line(ClientRequest::ScrollPaneLineAt {
         position: ClientMousePosition { row: 2, col: 3 },
         direction: PaneScrollDirection::Down,
