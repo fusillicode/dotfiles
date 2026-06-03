@@ -1334,6 +1334,7 @@ pub enum ServerEvent {
     Ping,
     Pong,
     Layout(LayoutSnapshot),
+    SidebarLayout(LayoutSnapshot),
     PaneRegions(PaneRegionsSnapshot),
     Render(RenderUpdate),
     Error(ServerError),
@@ -1455,6 +1456,7 @@ mod tests {
     #[case::ping(ServerEvent::Ping)]
     #[case::pong(ServerEvent::Pong)]
     #[case::layout(ServerEvent::Layout(layout_snapshot()?))]
+    #[case::sidebar_layout(ServerEvent::SidebarLayout(layout_snapshot()?))]
     #[case::pane_regions(ServerEvent::PaneRegions(pane_regions_snapshot()?))]
     #[case::render_baseline(ServerEvent::Render(RenderUpdate::Baseline(render_baseline()?)))]
     #[case::render_diff(ServerEvent::Render(RenderUpdate::Diff(render_diff()?)))]
