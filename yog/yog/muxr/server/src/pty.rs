@@ -30,15 +30,16 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use crate::history::PaneHistory;
+use crate::terminal::TerminalApplicationMode;
 use crate::terminal::TerminalMouseProtocol;
 use crate::terminal::TerminalMouseProtocolEncoding;
-use crate::terminal::TerminalMouseProtocolMode;
 use crate::terminal::TerminalSnapshot;
 use crate::terminal::TerminalState;
 
 const READ_BUFFER_SIZE: usize = 8192;
 const BRACKETED_PASTE_END: &[u8] = b"\x1b[201~";
 const BRACKETED_PASTE_START: &[u8] = b"\x1b[200~";
+const FAUX_SCROLL_LINES_PER_WHEEL_EVENT: usize = 3;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ShellCmd {
@@ -261,11 +262,8 @@ impl PtyHandle {
         &self,
         event: ClientMouseEvent,
         region: &PaneRegionSnapshot,
+        protocol: TerminalMouseProtocol,
     ) -> rootcause::Result<Option<bool>> {
-        let protocol = lock_mutex(&self.state.terminal, "pty terminal")?.mouse_protocol();
-        let Some(protocol) = protocol else {
-            return Ok(None);
-        };
         let Some(bytes) = self::pty_mouse_event_bytes(event, region, protocol)? else {
             return Ok(None);
         };
@@ -280,8 +278,20 @@ impl PtyHandle {
         Ok(Some(scrolled_to_bottom))
     }
 
+    pub fn write_faux_scroll_input(
+        &self,
+        direction: PaneScrollDirection,
+        application_cursor: bool,
+    ) -> rootcause::Result<bool> {
+        self.write_input(&self::faux_scroll_input_bytes(direction, application_cursor))
+    }
+
     pub fn mouse_mode(&self) -> rootcause::Result<PaneMouseMode> {
-        Ok(lock_mutex(&self.state.terminal, "pty terminal")?.mouse_mode())
+        Ok(self.application_mode()?.pane_mouse_mode())
+    }
+
+    pub fn application_mode(&self) -> rootcause::Result<TerminalApplicationMode> {
+        Ok(lock_mutex(&self.state.terminal, "pty terminal")?.application_mode())
     }
 
     pub fn scroll(&self, direction: PaneScrollDirection) -> rootcause::Result<bool> {
@@ -582,7 +592,7 @@ fn pty_mouse_event_bytes(
     region: &PaneRegionSnapshot,
     protocol: TerminalMouseProtocol,
 ) -> rootcause::Result<Option<Vec<u8>>> {
-    if !self::mouse_protocol_reports_event(event, protocol.mode) {
+    if !protocol.reports_event(event) {
         return Ok(None);
     }
 
@@ -599,22 +609,6 @@ fn pty_mouse_event_bytes(
         TerminalMouseProtocolEncoding::Default => Ok(self::default_mouse_event_bytes(event, row, col)),
         TerminalMouseProtocolEncoding::Utf8 => Ok(self::utf8_mouse_event_bytes(event, row, col)),
     }
-}
-
-fn mouse_protocol_reports_event(event: ClientMouseEvent, mode: TerminalMouseProtocolMode) -> bool {
-    let is_motion = event.button & 32 != 0;
-    let is_release = event.phase == ClientMouseEventPhase::Release;
-    match mode {
-        TerminalMouseProtocolMode::Press => !is_release && !is_motion,
-        TerminalMouseProtocolMode::PressRelease => !is_motion,
-        // `?1002` button-motion panes must not receive `?1003` hover packets from the outer terminal.
-        TerminalMouseProtocolMode::ButtonMotion => !self::mouse_event_is_no_button_motion(event),
-        TerminalMouseProtocolMode::AnyMotion => true,
-    }
-}
-
-const fn mouse_event_is_no_button_motion(event: ClientMouseEvent) -> bool {
-    event.button & 32 != 0 && event.button & 0b11 == 0b11
 }
 
 fn pane_local_mouse_position(
@@ -669,6 +663,24 @@ fn push_utf8_mouse_value(bytes: &mut Vec<u8>, value: u16) -> Option<()> {
     let mut encoded = [0; 4];
     bytes.extend_from_slice(ch.encode_utf8(&mut encoded).as_bytes());
     Some(())
+}
+
+fn faux_scroll_input_bytes(direction: PaneScrollDirection, application_cursor: bool) -> Vec<u8> {
+    let sequence = self::faux_scroll_sequence(direction, application_cursor);
+    let mut bytes = Vec::with_capacity(sequence.len().saturating_mul(FAUX_SCROLL_LINES_PER_WHEEL_EVENT));
+    for _ in 0..FAUX_SCROLL_LINES_PER_WHEEL_EVENT {
+        bytes.extend_from_slice(sequence);
+    }
+    bytes
+}
+
+const fn faux_scroll_sequence(direction: PaneScrollDirection, application_cursor: bool) -> &'static [u8] {
+    match (direction, application_cursor) {
+        (PaneScrollDirection::Up, false) => b"\x1b[A",
+        (PaneScrollDirection::Down, false) => b"\x1b[B",
+        (PaneScrollDirection::Up, true) => b"\x1bOA",
+        (PaneScrollDirection::Down, true) => b"\x1bOB",
+    }
 }
 
 fn write_terminal_replies(writer: &Mutex<Box<dyn Write + Send>>, replies: &[Vec<u8>]) -> rootcause::Result<()> {
@@ -731,6 +743,7 @@ fn spawn_reader_thread(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::terminal::TerminalMouseProtocolMode;
 
     #[test]
     fn test_shell_cmd_new_when_program_is_empty_returns_error() {
@@ -1091,6 +1104,30 @@ mod tests {
             Some(b"\x1b[M #\"".to_vec()),
         );
         Ok(())
+    }
+
+    #[test]
+    fn test_faux_scroll_input_bytes_when_application_cursor_mode_is_disabled_uses_csi_arrows() {
+        pretty_assertions::assert_eq!(
+            faux_scroll_input_bytes(PaneScrollDirection::Up, false),
+            b"\x1b[A\x1b[A\x1b[A".to_vec(),
+        );
+        pretty_assertions::assert_eq!(
+            faux_scroll_input_bytes(PaneScrollDirection::Down, false),
+            b"\x1b[B\x1b[B\x1b[B".to_vec(),
+        );
+    }
+
+    #[test]
+    fn test_faux_scroll_input_bytes_when_application_cursor_mode_is_enabled_uses_ss3_arrows() {
+        pretty_assertions::assert_eq!(
+            faux_scroll_input_bytes(PaneScrollDirection::Up, true),
+            b"\x1bOA\x1bOA\x1bOA".to_vec(),
+        );
+        pretty_assertions::assert_eq!(
+            faux_scroll_input_bytes(PaneScrollDirection::Down, true),
+            b"\x1bOB\x1bOB\x1bOB".to_vec(),
+        );
     }
 
     fn terminal_size() -> rootcause::Result<TerminalSize> {

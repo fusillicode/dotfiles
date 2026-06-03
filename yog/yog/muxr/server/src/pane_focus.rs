@@ -1,7 +1,5 @@
 use std::sync::Mutex;
 
-use muxr_core::ClientMouseEvent;
-use muxr_core::ClientMouseEventPhase;
 use muxr_core::ClientMousePosition;
 use muxr_core::PaneId;
 use muxr_core::PaneRegionSnapshot;
@@ -120,10 +118,6 @@ pub fn handle_focus_pane_at_request(
     }
     drop(layout);
     Ok(focused)
-}
-
-pub fn mouse_event_focuses_pane(event: ClientMouseEvent) -> bool {
-    event.phase == ClientMouseEventPhase::Press && event.button & (32 | 64) == 0 && event.button & 0b11 != 0b11
 }
 
 fn pane_regions_are_adjacent(region: &PaneRegion, other: &PaneRegion, direction: PaneFocusDirection) -> bool {
