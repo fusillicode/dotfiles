@@ -438,6 +438,7 @@ mod tests {
         let active_tab = TabId::new("tab-1")?;
         let active_pane = PaneId::new("pane-1")?;
         let pane = PaneSnapshot {
+            agent_state: muxr_core::PaneAgentState::NoAgent,
             cwd: "/tmp".to_owned(),
             cmd_label: None,
             id: active_pane.clone(),

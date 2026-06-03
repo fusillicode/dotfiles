@@ -3112,6 +3112,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "vt100",
+ "ytil_agents",
 ]
 
 [[package]]

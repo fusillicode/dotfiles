@@ -1,5 +1,6 @@
 use muxr_core::ClientMousePosition;
 use muxr_core::LayoutSnapshot;
+use muxr_core::PaneAgentState;
 use muxr_core::PaneId;
 use muxr_core::SessionName;
 use muxr_core::TabId;
@@ -10,6 +11,7 @@ use serde::Deserialize;
 use crate::pane_layout::PaneLayout;
 use crate::pane_layout::PaneRegion;
 use crate::state::Pane;
+use crate::state::PaneAttentionState;
 use crate::state::PaneState;
 use crate::state::PaneTree;
 use crate::state::Tab;
@@ -43,11 +45,12 @@ impl SessionLayout {
                 active_pane: pane_id.clone(),
                 id: tab_id,
                 pane_tree: PaneTree::Pane(Pane {
+                    agent_state: PaneAgentState::NoAgent,
+                    attention_state: PaneAttentionState::Idle,
                     cmd_label: metadata.cmd_label.clone(),
                     cwd: metadata.cwd,
                     focus_seq: 1,
                     id: pane_id,
-                    needs_attention: false,
                     started_at: metadata.started_at,
                     state: PaneState::Running,
                     title: metadata.cmd_label,
