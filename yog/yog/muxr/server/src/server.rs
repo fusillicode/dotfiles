@@ -986,7 +986,6 @@ async fn handle_client_handshake(
         | ClientRequest::Paste(_)
         | ClientRequest::Key(_)
         | ClientRequest::Mouse(_)
-        | ClientRequest::ScrollPaneAt { .. }
         | ClientRequest::ScrollPaneLineAt { .. }
         | ClientRequest::FocusPaneAt(_)
         | ClientRequest::FocusTab(_)) => {
@@ -1429,24 +1428,6 @@ async fn handle_attached_request(
         Some(ClientRequest::Mouse(event)) => {
             self::handle_mouse_event_request(event, event_writer, state, render_dirty).await
         }
-        Some(ClientRequest::ScrollPaneAt { position, direction }) => {
-            // Wheel packets include their own coordinates, so route scrollback by pointer position without stealing
-            // keyboard focus from the active pane.
-            if !crate::pane_scroll::handle_scroll_pane_at_request(
-                position,
-                direction,
-                PaneScrollAmount::Wheel,
-                state.layout,
-                state.runtimes,
-                &state.terminal_size,
-            )? {
-                return Ok(true);
-            }
-            // Wheel input can arrive much faster than render IO; mark the pane dirty and let the normal render tick
-            // coalesce many scroll offsets into one diff.
-            *render_dirty = true;
-            Ok(true)
-        }
         Some(ClientRequest::ScrollPaneLineAt { position, direction }) => {
             if !crate::pane_scroll::handle_scroll_pane_at_request(
                 position,
@@ -1702,15 +1683,49 @@ async fn handle_mouse_event_request(
         drop(runtimes);
         handle
     };
-    let write_result = handle.write_mouse_event(event, &region)?;
-    if let Some(scrolled_to_bottom) = write_result {
-        *render_dirty |= scrolled_to_bottom;
+    let action = crate::pane_mouse::resolve_pane_mouse_action(event, handle.application_mode()?);
+    match action {
+        crate::pane_mouse::PaneMouseAction::ForwardToPty { focus, protocol } => {
+            if let Some(scrolled_to_bottom) = handle.write_mouse_event(event, &region, protocol)? {
+                *render_dirty |= scrolled_to_bottom;
+            }
+            if !focus.focuses_pane() {
+                return Ok(true);
+            }
+            self::handle_mouse_focus(event, event_writer, state).await
+        }
+        crate::pane_mouse::PaneMouseAction::FauxScrollPty {
+            application_cursor,
+            direction,
+        } => {
+            *render_dirty |= handle.write_faux_scroll_input(direction, application_cursor)?;
+            Ok(true)
+        }
+        crate::pane_mouse::PaneMouseAction::ScrollHistory { direction } => {
+            if !crate::pane_scroll::handle_scroll_pane_at_request(
+                event.position,
+                direction,
+                PaneScrollAmount::Wheel,
+                state.layout,
+                state.runtimes,
+                &state.terminal_size,
+            )? {
+                return Ok(true);
+            }
+            // Wheel input can arrive much faster than render IO; mark dirty and let the normal render tick coalesce.
+            *render_dirty = true;
+            Ok(true)
+        }
+        crate::pane_mouse::PaneMouseAction::FocusPane => self::handle_mouse_focus(event, event_writer, state).await,
+        crate::pane_mouse::PaneMouseAction::NoAction => Ok(true),
     }
-    // Forwarded hover, wheel, and drag events belong to the pointed pane, but only an intentional button press changes
-    // muxr focus.
-    if !crate::pane_focus::mouse_event_focuses_pane(event) {
-        return Ok(true);
-    }
+}
+
+async fn handle_mouse_focus(
+    event: ClientMouseEvent,
+    event_writer: &mut ServerEventWriter,
+    state: &mut AttachedSessionState<'_>,
+) -> rootcause::Result<bool> {
     if !crate::pane_focus::handle_focus_pane_at_request(
         event.position,
         state.config,
@@ -1882,6 +1897,7 @@ mod tests {
 
     struct AttachedTestClient {
         layout: LayoutSnapshot,
+        pane_regions: PaneRegionsSnapshot,
         reader: ClientEventReader,
         writer: ClientRequestWriter,
     }
@@ -3070,6 +3086,159 @@ mod tests {
     }
 
     #[test]
+    fn test_serve_when_wheel_over_inactive_plain_pane_scrolls_pointed_history_without_focus_change()
+    -> rootcause::Result<()> {
+        self::runtime()?.block_on(async {
+            let tempdir = tempfile::tempdir()?;
+            let (session, paths) = self::session_paths(tempdir.path(), "work")?;
+            let handle = self::spawn_test_server_with_shell(
+                &session,
+                &paths,
+                Some(1),
+                self::shell_cmd("/bin/sh")
+                    .arg("-c")
+                    .arg("i=0; while [ $i -lt 80 ]; do printf 'line-%02d\\n' \"$i\"; i=$((i + 1)); done; sleep 30"),
+            );
+
+            self::wait_for_socket(&paths.socket)?;
+            let mut client = self::open_attached_client(&session, &paths).await?;
+            self::read_until_render_contains(&mut client, b"line-79").await?;
+            client
+                .writer
+                .send_request(&ClientRequest::Key(ClientKey {
+                    code: ClientKeyCode::Char('V'),
+                    modifiers: ClientKeyModifiers::SHIFT_ALT,
+                    raw_bytes: b"\x1bV".to_vec(),
+                }))
+                .await?;
+            let layout = self::read_until_layout(&mut client).await?;
+            let tab = layout
+                .tabs()
+                .first()
+                .ok_or_else(|| report!("expected tab after split"))?;
+            pretty_assertions::assert_eq!(tab.active_pane().as_ref(), "pane-2");
+            self::read_until_render_contains(&mut client, b"line-79").await?;
+            let ready_regions =
+                self::read_until_pane_regions_matching(&mut client, "both panes have scrollback", |regions| {
+                    Ok(self::pane_region(regions, "pane-1")?.visible_top_row() > 0
+                        && self::pane_region(regions, "pane-2")?.visible_top_row() > 0)
+                })
+                .await?;
+            let pane_1_before = self::pane_region(&ready_regions, "pane-1")?.visible_top_row();
+            let pane_2_before = self::pane_region(&ready_regions, "pane-2")?.visible_top_row();
+
+            client
+                .writer
+                .send_request(&ClientRequest::Mouse(ClientMouseEvent {
+                    button: 64,
+                    phase: muxr_core::ClientMouseEventPhase::Press,
+                    position: self::pane_position(&ready_regions, "pane-1")?,
+                }))
+                .await?;
+
+            let scrolled_regions =
+                self::read_until_pane_regions_matching(&mut client, "pointed pane scrollback moved", |regions| {
+                    Ok(self::pane_region(regions, "pane-1")?.visible_top_row() < pane_1_before
+                        && self::pane_region(regions, "pane-2")?.visible_top_row() == pane_2_before)
+                })
+                .await?;
+            pretty_assertions::assert_eq!(
+                self::pane_region(&scrolled_regions, "pane-2")?.visible_top_row(),
+                pane_2_before,
+            );
+            self::assert_layout_metadata_panes(&paths, &["pane-1", "pane-2"], "pane-2")?;
+
+            self::detach_client(client).await?;
+            self::join_server(handle)
+        })
+    }
+
+    #[test]
+    fn test_serve_when_wheel_over_app_mouse_pane_forwards_mouse_bytes_to_pty() -> rootcause::Result<()> {
+        self::runtime()?.block_on(async {
+            let tempdir = tempfile::tempdir()?;
+            let (session, paths) = self::session_paths(tempdir.path(), "work")?;
+            let handle = self::spawn_test_server_with_shell(
+                &session,
+                &paths,
+                Some(1),
+                self::shell_cmd("/bin/sh").arg("-c").arg(
+                    "printf '\\033[?1002h\\033[?1006hready\\n'; \
+                     stty raw -echo; \
+                     dd bs=1 count=10 2>/dev/null | od -An -tx1 -v; \
+                     sleep 30",
+                ),
+            );
+
+            self::wait_for_socket(&paths.socket)?;
+            let mut client = self::open_attached_client(&session, &paths).await?;
+            self::read_until_render_contains(&mut client, b"ready").await?;
+            let regions = self::read_until_pane_regions_matching(&mut client, "app mouse mode enabled", |regions| {
+                Ok(self::pane_region(regions, "pane-1")?.mouse_mode() == muxr_core::PaneMouseMode::ButtonMotion)
+            })
+            .await?;
+
+            client
+                .writer
+                .send_request(&ClientRequest::Mouse(ClientMouseEvent {
+                    button: 64,
+                    phase: muxr_core::ClientMouseEventPhase::Press,
+                    position: self::pane_position(&regions, "pane-1")?,
+                }))
+                .await?;
+
+            self::read_until_render_contains_hex_bytes(
+                &mut client,
+                &["1b", "5b", "3c", "36", "34", "3b", "31", "3b", "31", "4d"],
+            )
+            .await?;
+            self::detach_client(client).await?;
+            self::join_server(handle)
+        })
+    }
+
+    #[test]
+    fn test_serve_when_wheel_over_alternate_screen_without_mouse_protocol_sends_faux_scroll_input()
+    -> rootcause::Result<()> {
+        self::runtime()?.block_on(async {
+            let tempdir = tempfile::tempdir()?;
+            let (session, paths) = self::session_paths(tempdir.path(), "work")?;
+            let handle = self::spawn_test_server_with_shell(
+                &session,
+                &paths,
+                Some(1),
+                self::shell_cmd("/bin/sh").arg("-c").arg(
+                    "printf '\\033[?1049hready\\n'; \
+                     stty raw -echo; \
+                     dd bs=1 count=9 2>/dev/null | od -An -tx1 -v; \
+                     sleep 30",
+                ),
+            );
+
+            self::wait_for_socket(&paths.socket)?;
+            let mut client = self::open_attached_client(&session, &paths).await?;
+            self::read_until_render_contains(&mut client, b"ready").await?;
+
+            client
+                .writer
+                .send_request(&ClientRequest::Mouse(ClientMouseEvent {
+                    button: 64,
+                    phase: muxr_core::ClientMouseEventPhase::Press,
+                    position: self::pane_position(&client.pane_regions, "pane-1")?,
+                }))
+                .await?;
+
+            self::read_until_render_contains_hex_bytes(
+                &mut client,
+                &["1b", "5b", "41", "1b", "5b", "41", "1b", "5b", "41"],
+            )
+            .await?;
+            self::detach_client(client).await?;
+            self::join_server(handle)
+        })
+    }
+
+    #[test]
     fn test_serve_when_close_pane_key_arrives_removes_active_pane_and_keeps_remaining_pty() -> rootcause::Result<()> {
         self::runtime()?.block_on(async {
             let tempdir = tempfile::tempdir()?;
@@ -3440,9 +3609,15 @@ mod tests {
             return Err(report!("expected server attached response").attach(format!("{event:?}")));
         };
         let layout = attached.layout;
+        let pane_regions = attached.pane_regions;
         let (reader, writer) = connection.split();
 
-        Ok(AttachedTestClient { layout, reader, writer })
+        Ok(AttachedTestClient {
+            layout,
+            pane_regions,
+            reader,
+            writer,
+        })
     }
 
     async fn attach_and_detach(session: &SessionName, paths: &SessionPaths) -> rootcause::Result<()> {
@@ -3709,7 +3884,54 @@ mod tests {
             };
 
             match event {
-                ServerEvent::Layout(layout) => return Ok(layout),
+                ServerEvent::Layout(layout) => {
+                    client.layout = layout.clone();
+                    return Ok(layout);
+                }
+                ServerEvent::Error(error) => {
+                    return Err(report!("muxr test server returned error").attach(format!("{error:?}")));
+                }
+                ServerEvent::Ping => client.writer.send_request(&ClientRequest::Pong).await?,
+                ServerEvent::PaneRegions(regions) => client.pane_regions = regions,
+                ServerEvent::Attached(_)
+                | ServerEvent::Deleted
+                | ServerEvent::Pong
+                | ServerEvent::SidebarLayout(_)
+                | ServerEvent::Render(_)
+                | ServerEvent::Detached => {}
+            }
+        }
+    }
+
+    async fn read_until_pane_regions_matching(
+        client: &mut AttachedTestClient,
+        description: &str,
+        condition: impl Fn(&PaneRegionsSnapshot) -> rootcause::Result<bool>,
+    ) -> rootcause::Result<PaneRegionsSnapshot> {
+        if condition(&client.pane_regions)? {
+            return Ok(client.pane_regions.clone());
+        }
+        let started_at = Instant::now();
+
+        loop {
+            if started_at.elapsed() > SERVER_READY_TIMEOUT {
+                return Err(report!("timed out waiting for muxr pane regions update").attach(description.to_owned()));
+            }
+
+            let event = match tokio::time::timeout(Duration::from_millis(50), client.reader.recv_event()).await {
+                Ok(Ok(Some(event))) => event,
+                Ok(Err(error)) => return Err(error),
+                Ok(Ok(None)) | Err(_) => continue,
+            };
+
+            match event {
+                ServerEvent::PaneRegions(regions) => {
+                    client.pane_regions = regions.clone();
+                    if condition(&regions)? {
+                        return Ok(regions);
+                    }
+                }
+                ServerEvent::Layout(layout) => client.layout = layout,
                 ServerEvent::Error(error) => {
                     return Err(report!("muxr test server returned error").attach(format!("{error:?}")));
                 }
@@ -3718,7 +3940,6 @@ mod tests {
                 | ServerEvent::Deleted
                 | ServerEvent::Pong
                 | ServerEvent::SidebarLayout(_)
-                | ServerEvent::PaneRegions(_)
                 | ServerEvent::Render(_)
                 | ServerEvent::Detached => {}
             }
@@ -3740,16 +3961,19 @@ mod tests {
             };
 
             match event {
-                ServerEvent::SidebarLayout(layout) => return Ok(layout),
+                ServerEvent::SidebarLayout(layout) => {
+                    client.layout = layout.clone();
+                    return Ok(layout);
+                }
                 ServerEvent::Error(error) => {
                     return Err(report!("muxr test server returned error").attach(format!("{error:?}")));
                 }
                 ServerEvent::Ping => client.writer.send_request(&ClientRequest::Pong).await?,
+                ServerEvent::Layout(layout) => client.layout = layout,
+                ServerEvent::PaneRegions(regions) => client.pane_regions = regions,
                 ServerEvent::Attached(_)
                 | ServerEvent::Deleted
                 | ServerEvent::Pong
-                | ServerEvent::Layout(_)
-                | ServerEvent::PaneRegions(_)
                 | ServerEvent::Render(_)
                 | ServerEvent::Detached => {}
             }
@@ -3773,6 +3997,8 @@ mod tests {
             };
 
             match event {
+                ServerEvent::Layout(layout) => client.layout = layout,
+                ServerEvent::PaneRegions(regions) => client.pane_regions = regions,
                 ServerEvent::Render(update) => {
                     rendered.push_str(&self::render_update_text(&update));
                     if rendered.contains(needle.as_ref()) {
@@ -3786,9 +4012,48 @@ mod tests {
                 ServerEvent::Attached(_)
                 | ServerEvent::Deleted
                 | ServerEvent::Pong
-                | ServerEvent::Layout(_)
                 | ServerEvent::SidebarLayout(_)
-                | ServerEvent::PaneRegions(_)
+                | ServerEvent::Detached => {}
+            }
+        }
+    }
+
+    async fn read_until_render_contains_hex_bytes(
+        client: &mut AttachedTestClient,
+        expected: &[&str],
+    ) -> rootcause::Result<()> {
+        let started_at = Instant::now();
+        let mut rendered = String::new();
+
+        loop {
+            if started_at.elapsed() > SERVER_READY_TIMEOUT {
+                return Err(report!("timed out waiting for muxr rendered hex bytes").attach(rendered));
+            }
+
+            let event = match tokio::time::timeout(Duration::from_millis(50), client.reader.recv_event()).await {
+                Ok(Ok(Some(event))) => event,
+                Ok(Err(error)) => return Err(error),
+                Ok(Ok(None)) | Err(_) => continue,
+            };
+
+            match event {
+                ServerEvent::Layout(layout) => client.layout = layout,
+                ServerEvent::PaneRegions(regions) => client.pane_regions = regions,
+                ServerEvent::Render(update) => {
+                    rendered.push_str(&self::render_update_text(&update));
+                    let tokens = rendered.split_whitespace().collect::<Vec<_>>();
+                    if tokens.windows(expected.len()).any(|window| window == expected) {
+                        return Ok(());
+                    }
+                }
+                ServerEvent::Ping => client.writer.send_request(&ClientRequest::Pong).await?,
+                ServerEvent::Error(error) => {
+                    return Err(report!("muxr test server returned error").attach(format!("{error:?}")));
+                }
+                ServerEvent::Attached(_)
+                | ServerEvent::Deleted
+                | ServerEvent::Pong
+                | ServerEvent::SidebarLayout(_)
                 | ServerEvent::Detached => {}
             }
         }
@@ -3917,6 +4182,22 @@ mod tests {
         rows.iter()
             .map(|row| row.cells().iter().map(RenderCell::text).collect::<String>())
             .collect()
+    }
+
+    fn pane_region<'a>(regions: &'a PaneRegionsSnapshot, pane_id: &str) -> rootcause::Result<&'a PaneRegionSnapshot> {
+        regions
+            .regions()
+            .iter()
+            .find(|region| region.id().as_ref() == pane_id)
+            .ok_or_else(|| report!("expected muxr test pane region").attach(format!("pane_id={pane_id}")))
+    }
+
+    fn pane_position(regions: &PaneRegionsSnapshot, pane_id: &str) -> rootcause::Result<ClientMousePosition> {
+        let region = self::pane_region(regions, pane_id)?;
+        Ok(ClientMousePosition {
+            row: region.row(),
+            col: region.col(),
+        })
     }
 
     fn assert_final_layout_metadata(

@@ -217,7 +217,12 @@ pub fn set_mouse_any_motion_capture(stdout: &mut impl Write, enabled: bool) -> r
     if enabled {
         queue_bytes(stdout, MOUSE_ANY_EVENT_CAPTURE_ENABLE)?;
     } else {
+        // Some terminals treat mode churn around any-motion capture as a broader mouse-reporting reset. Reassert the
+        // button modes muxr owns so pane selection and wheel routing keep working after an app leaves any-motion mode.
         queue_bytes(stdout, MOUSE_ANY_EVENT_CAPTURE_DISABLE)?;
+        queue_bytes(stdout, MOUSE_BUTTON_CAPTURE_ENABLE)?;
+        queue_bytes(stdout, MOUSE_BUTTON_EVENT_CAPTURE_ENABLE)?;
+        queue_bytes(stdout, MOUSE_SGR_ENABLE)?;
     }
     stdout
         .flush()
@@ -665,18 +670,27 @@ mod tests {
         Ok(())
     }
 
-    #[rstest]
-    #[case::enabled(true, "\x1b[?1003h")]
-    #[case::disabled(false, "\x1b[?1003l")]
-    fn test_set_mouse_any_motion_capture_writes_expected_sequence(
-        #[case] enabled: bool,
-        #[case] expected: &str,
-    ) -> rootcause::Result<()> {
+    #[test]
+    fn test_set_mouse_any_motion_capture_when_enabled_writes_any_motion_sequence() -> rootcause::Result<()> {
         let mut output = CountingWriter::default();
 
-        set_mouse_any_motion_capture(&mut output, enabled)?;
+        set_mouse_any_motion_capture(&mut output, true)?;
 
-        pretty_assertions::assert_eq!(output.rendered_string()?, expected);
+        pretty_assertions::assert_eq!(output.rendered_string()?, "\x1b[?1003h");
+        pretty_assertions::assert_eq!(output.flushes, 1);
+        Ok(())
+    }
+
+    #[test]
+    fn test_set_mouse_any_motion_capture_when_disabled_reasserts_button_capture() -> rootcause::Result<()> {
+        let mut output = CountingWriter::default();
+
+        set_mouse_any_motion_capture(&mut output, false)?;
+
+        pretty_assertions::assert_eq!(
+            output.rendered_string()?,
+            "\x1b[?1003l\x1b[?1000h\x1b[?1002h\x1b[?1006h",
+        );
         pretty_assertions::assert_eq!(output.flushes, 1);
         Ok(())
     }
