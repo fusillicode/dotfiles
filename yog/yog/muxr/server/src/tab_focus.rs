@@ -12,7 +12,7 @@ impl SessionLayout {
             return Ok(false);
         }
         self.active_tab = tab_id.clone();
-        let _cleared = self.clear_active_pane_attention()?;
+        let _acknowledged = self.acknowledge_active_pane_attention()?;
         Ok(true)
     }
 
@@ -29,7 +29,7 @@ impl SessionLayout {
             .ok_or_else(|| report!("muxr previous tab is missing from server layout"))?
             .id
             .clone();
-        let _cleared = self.clear_active_pane_attention()?;
+        let _acknowledged = self.acknowledge_active_pane_attention()?;
         Ok(())
     }
 
@@ -45,7 +45,7 @@ impl SessionLayout {
             .ok_or_else(|| report!("muxr next tab is missing from server layout"))?
             .id
             .clone();
-        let _cleared = self.clear_active_pane_attention()?;
+        let _acknowledged = self.acknowledge_active_pane_attention()?;
         Ok(())
     }
 }
@@ -64,12 +64,14 @@ pub fn handle_focus_next_tab(layout: &mut SessionLayout) -> rootcause::Result<()
 
 #[cfg(test)]
 mod tests {
+    use muxr_core::PaneAgentState;
     use muxr_core::PaneId;
     use muxr_core::SessionName;
     use muxr_core::TabId;
 
     use super::*;
     use crate::state::Pane;
+    use crate::state::PaneAttentionState;
     use crate::state::PaneState;
     use crate::state::PaneTree;
     use crate::state::Tab;
@@ -113,11 +115,12 @@ mod tests {
             active_pane: pane_id.clone(),
             id,
             pane_tree: PaneTree::Pane(Pane {
+                agent_state: PaneAgentState::NoAgent,
+                attention_state: PaneAttentionState::Idle,
                 cmd_label: "sh".to_owned(),
                 cwd: "/tmp".to_owned(),
                 focus_seq: 1,
                 id: pane_id,
-                needs_attention: false,
                 started_at: 1,
                 state: PaneState::Running,
                 title: "sh".to_owned(),

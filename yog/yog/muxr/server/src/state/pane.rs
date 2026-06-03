@@ -1,3 +1,4 @@
+use muxr_core::PaneAgentState;
 use muxr_core::PaneId;
 use muxr_core::PaneSnapshot;
 use serde::Deserialize;
@@ -64,14 +65,29 @@ impl PaneTree {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub enum PaneAttentionState {
+    #[default]
+    Idle,
+    NeedsAttention,
+}
+
+impl PaneAttentionState {
+    pub const fn needs_attention(self) -> bool {
+        matches!(self, Self::NeedsAttention)
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct Pane {
+    #[serde(default, skip_serializing)]
+    pub agent_state: PaneAgentState,
+    #[serde(default, skip_serializing)]
+    pub attention_state: PaneAttentionState,
     pub cmd_label: String,
     pub cwd: String,
     pub focus_seq: u64,
     pub id: PaneId,
-    #[serde(default, skip_serializing)]
-    pub needs_attention: bool,
     pub started_at: u64,
     pub state: PaneState,
     pub title: String,
@@ -106,6 +122,7 @@ impl Pane {
     pub fn snapshot_with_terminal_title(&self, terminal_title: Option<&str>) -> PaneSnapshot {
         let terminal_title = crate::cmd_label::classify_terminal_title(terminal_title, &self.cwd);
         PaneSnapshot {
+            agent_state: self.agent_state_with_cmd_label(terminal_title.cmd_label.as_deref()),
             cmd_label: terminal_title.cmd_label,
             cwd: terminal_title.cwd.unwrap_or_else(|| self.cwd.clone()),
             id: self.id.clone(),
@@ -176,11 +193,12 @@ mod tests {
 
     fn pane() -> rootcause::Result<Pane> {
         Ok(Pane {
+            agent_state: PaneAgentState::NoAgent,
+            attention_state: PaneAttentionState::Idle,
             cmd_label: "zsh".to_owned(),
             cwd: "/old/project".to_owned(),
             focus_seq: 1,
             id: PaneId::new("pane-1")?,
-            needs_attention: false,
             started_at: 1,
             state: PaneState::Running,
             title: "zsh".to_owned(),

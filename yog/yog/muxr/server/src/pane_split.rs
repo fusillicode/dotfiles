@@ -1,5 +1,6 @@
 use std::sync::Mutex;
 
+use muxr_core::PaneAgentState;
 use muxr_core::PaneId;
 use muxr_core::TerminalSize;
 use rootcause::prelude::ResultExt;
@@ -11,6 +12,7 @@ use serde::Serialize;
 use crate::server::PaneRuntimes;
 use crate::server::ServerConfig;
 use crate::state::Pane;
+use crate::state::PaneAttentionState;
 use crate::state::PaneState;
 use crate::state::PaneTree;
 use crate::state::SessionLayout;
@@ -110,11 +112,12 @@ impl SessionLayout {
         let tab = self.active_tab_mut()?;
         let focus_seq = tab.next_focus_seq()?;
         let new_pane = Pane {
+            agent_state: PaneAgentState::NoAgent,
+            attention_state: PaneAttentionState::Idle,
             cmd_label: metadata.cmd_label.clone(),
             cwd: metadata.cwd,
             focus_seq,
             id: pane_id.clone(),
-            needs_attention: false,
             started_at: metadata.started_at,
             state: PaneState::Running,
             title: metadata.cmd_label,

@@ -901,6 +901,7 @@ mod tests {
         let active_tab = TabId::new("tab-1")?;
         let active_pane = PaneId::new("pane-1")?;
         let pane = PaneSnapshot {
+            agent_state: muxr_core::PaneAgentState::NoAgent,
             cwd: "/tmp/default".to_owned(),
             cmd_label: None,
             id: active_pane.clone(),
@@ -971,6 +972,7 @@ mod tests {
                     "default",
                     muxr_core::PaneId::new("pane-1")?,
                     vec![muxr_core::PaneSnapshot {
+                        agent_state: muxr_core::PaneAgentState::NoAgent,
                         cwd: "/tmp/tab-1".to_owned(),
                         cmd_label: None,
                         id: muxr_core::PaneId::new("pane-1")?,
@@ -982,6 +984,7 @@ mod tests {
                     "tab 2",
                     muxr_core::PaneId::new("pane-2")?,
                     vec![muxr_core::PaneSnapshot {
+                        agent_state: muxr_core::PaneAgentState::NoAgent,
                         cwd: "/tmp/tab-2".to_owned(),
                         cmd_label: None,
                         id: muxr_core::PaneId::new("pane-2")?,

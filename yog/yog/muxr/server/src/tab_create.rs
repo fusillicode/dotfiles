@@ -1,5 +1,6 @@
 use std::sync::Mutex;
 
+use muxr_core::PaneAgentState;
 use muxr_core::PaneId;
 use muxr_core::TabId;
 use muxr_core::TerminalSize;
@@ -8,6 +9,7 @@ use rootcause::report;
 use crate::server::PaneRuntimes;
 use crate::server::ServerConfig;
 use crate::state::Pane;
+use crate::state::PaneAttentionState;
 use crate::state::PaneState;
 use crate::state::PaneTree;
 use crate::state::SessionLayout;
@@ -31,11 +33,12 @@ impl SessionLayout {
                 active_pane: pane_id.clone(),
                 id: tab_id.clone(),
                 pane_tree: PaneTree::Pane(Pane {
+                    agent_state: PaneAgentState::NoAgent,
+                    attention_state: PaneAttentionState::Idle,
                     cmd_label: metadata.cmd_label.clone(),
                     cwd: metadata.cwd,
                     focus_seq: 1,
                     id: pane_id.clone(),
-                    needs_attention: false,
                     started_at: metadata.started_at,
                     state: PaneState::Running,
                     title: metadata.cmd_label,
