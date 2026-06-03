@@ -78,7 +78,7 @@ impl Tab {
             let Some(pane) = self.pane_tree.pane_mut(&pane_id) else {
                 return Err(report!("muxr pane is missing from active tab").attach(format!("pane_id={pane_id}")));
             };
-            return Ok(pane.clear_attention());
+            return Ok(pane.acknowledge_attention());
         }
 
         let focus_seq = self.next_focus_seq()?;
@@ -86,7 +86,7 @@ impl Tab {
             return Err(report!("muxr pane is missing from active tab").attach(format!("pane_id={pane_id}")));
         };
         pane.set_focus_seq(focus_seq);
-        let _cleared = pane.clear_attention();
+        let _acknowledged = pane.acknowledge_attention();
         self.active_pane = pane_id;
         Ok(true)
     }

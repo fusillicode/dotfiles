@@ -329,8 +329,48 @@ where
     }
 }
 
+#[derive(
+    rkyv::Archive,
+    Clone,
+    Copy,
+    Debug,
+    Default,
+    Deserialize,
+    rkyv::Deserialize,
+    Eq,
+    PartialEq,
+    Serialize,
+    rkyv::Serialize,
+)]
+pub enum PaneAgentState {
+    #[default]
+    NoAgent,
+    Seen,
+    Busy,
+    Unseen,
+}
+
+impl PaneAgentState {
+    #[must_use]
+    pub const fn needs_attention(self) -> bool {
+        matches!(self, Self::Unseen)
+    }
+
+    #[must_use]
+    pub const fn priority(self) -> u8 {
+        match self {
+            Self::NoAgent => 0,
+            Self::Seen => 1,
+            Self::Busy => 2,
+            Self::Unseen => 3,
+        }
+    }
+}
+
 #[derive(rkyv::Archive, Clone, Debug, Eq, PartialEq, Serialize, rkyv::Serialize)]
 pub struct PaneSnapshot {
+    /// Agent status used by the client tab bar.
+    pub agent_state: PaneAgentState,
     /// Current pane working directory, used by the client tab bar.
     pub cwd: String,
     /// Shell-provided cmd label from the pane terminal title, used by the client tab bar.
@@ -347,11 +387,13 @@ where
     D::Error: rkyv::rancor::Source,
 {
     fn deserialize(&self, deserializer: &mut D) -> Result<PaneSnapshot, D::Error> {
+        let agent_state = rkyv::Deserialize::<PaneAgentState, D>::deserialize(&self.agent_state, deserializer)?;
         let cwd = rkyv::Deserialize::<String, D>::deserialize(&self.cwd, deserializer)?;
         let cmd_label = rkyv::Deserialize::<Option<String>, D>::deserialize(&self.cmd_label, deserializer)?;
         let id = rkyv::Deserialize::<PaneId, D>::deserialize(&self.id, deserializer)?;
         let title = rkyv::Deserialize::<String, D>::deserialize(&self.title, deserializer)?;
         Ok(PaneSnapshot {
+            agent_state,
             cwd,
             cmd_label,
             id,
@@ -1828,6 +1870,7 @@ mod tests {
         let active_tab = TabId::new("tab-1")?;
         let active_pane = PaneId::new("pane-1")?;
         let pane = PaneSnapshot {
+            agent_state: PaneAgentState::NoAgent,
             cwd: "/tmp".to_owned(),
             cmd_label: None,
             id: active_pane.clone(),
@@ -1860,6 +1903,7 @@ mod tests {
 
     fn pane_snapshot(id: &str, title: &str) -> rootcause::Result<PaneSnapshot> {
         Ok(PaneSnapshot {
+            agent_state: PaneAgentState::NoAgent,
             cwd: "/tmp".to_owned(),
             cmd_label: None,
             id: PaneId::new(id)?,
@@ -1878,6 +1922,7 @@ mod tests {
 
     fn raw_pane_snapshot(id: &str, title: &str) -> PaneSnapshot {
         PaneSnapshot {
+            agent_state: PaneAgentState::NoAgent,
             cwd: "/tmp".to_owned(),
             cmd_label: None,
             id: pane_id(id),

@@ -1,4 +1,5 @@
 pub use self::pane::Pane;
+pub use self::pane::PaneAttentionState;
 pub use self::pane::PaneState;
 pub use self::pane::PaneTree;
 pub use self::session::SessionLayout;

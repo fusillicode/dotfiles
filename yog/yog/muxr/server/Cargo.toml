@@ -19,6 +19,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
 vt100 = { version = "0.16" }
+ytil_agents = { workspace = true }
 
 [dev-dependencies]
 assert2 = { workspace = true }
