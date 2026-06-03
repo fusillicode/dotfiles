@@ -216,6 +216,14 @@ impl PaneRuntimes {
         }
         Ok(title_changes)
     }
+
+    fn take_screen_dirty(&self) -> bool {
+        let mut screen_dirty = false;
+        for pane in &self.panes {
+            screen_dirty |= pane.session.handle().take_screen_dirty();
+        }
+        screen_dirty
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -233,7 +241,6 @@ struct RenderComposer {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum RenderDiffReason {
-    TabBarChanged,
     DirtyFrame,
     RegionChanged,
 }
@@ -1195,8 +1202,11 @@ async fn handle_pty_event(
     match event {
         Some(PtyEvent::Exited) => Ok(!self::handle_reaped_panes(state, event_writer).await?),
         Some(PtyEvent::OutputReady) => {
-            *render_dirty = true;
-            let title_changes = self::take_title_changes(state.runtimes)?;
+            let (screen_dirty, title_changes) = {
+                let runtimes = self::lock_mutex(state.runtimes, "pane runtimes")?;
+                (runtimes.take_screen_dirty(), runtimes.take_title_changes()?)
+            };
+            *render_dirty |= screen_dirty;
             if !title_changes.is_empty() && !self::flush_cmd_label_layout(event_writer, state, title_changes).await? {
                 return Ok(false);
             }
@@ -1204,11 +1214,6 @@ async fn handle_pty_event(
         }
         None => Ok(false),
     }
-}
-
-fn take_title_changes(runtimes: &Mutex<PaneRuntimes>) -> rootcause::Result<Vec<(PaneId, Option<String>)>> {
-    let runtimes = self::lock_mutex(runtimes, "pane runtimes")?;
-    runtimes.take_title_changes()
 }
 
 async fn flush_render_diff(
@@ -1268,16 +1273,8 @@ async fn flush_cmd_label_layout(
             if layout_snapshot == last_layout_snapshot {
                 continue;
             }
-            let pane_regions = self::pane_regions_snapshot(&layout, &runtimes, &state.terminal_size)?;
-            let render_update = state.render_composer.render_diff(
-                &layout,
-                &runtimes,
-                &state.terminal_size,
-                RenderDiffReason::TabBarChanged,
-                self::border_render_mode(state.input_mode),
-            )?;
             last_layout_snapshot = layout_snapshot.clone();
-            changes.push((layout_snapshot, pane_regions, render_update));
+            changes.push(layout_snapshot);
         }
         if layout_changed {
             crate::state::persisted::write_metadata(&state.config.paths, &layout)?;
@@ -1287,14 +1284,14 @@ async fn flush_cmd_label_layout(
         changes
     };
 
-    for (layout_snapshot, pane_regions, render_update) in changes {
-        if !self::send_writer_event_with_timeout(event_writer, &ServerEvent::Layout(layout_snapshot.clone())).await? {
+    for layout_snapshot in changes {
+        // Terminal-title changes affect only sidebar metadata; avoid rebuilding the pane frame for command/cwd churn.
+        if !self::send_writer_event_with_timeout(event_writer, &ServerEvent::SidebarLayout(layout_snapshot.clone()))
+            .await?
+        {
             return Ok(false);
         }
         state.last_layout_snapshot = layout_snapshot;
-        if !self::send_pane_regions_and_render(event_writer, state, pane_regions, render_update).await? {
-            return Ok(false);
-        }
     }
     Ok(true)
 }
@@ -2909,7 +2906,7 @@ mod tests {
                 .send_request(&ClientRequest::Input(b"\x1b]2;~\x07\n".to_vec()))
                 .await?;
 
-            let layout = self::read_until_layout(&mut client).await?;
+            let layout = self::read_until_sidebar_layout(&mut client).await?;
             let Some(tab) = layout.tabs().first() else {
                 return Err(report!("expected muxr test layout tab"));
             };
@@ -3469,6 +3466,7 @@ mod tests {
                     ServerEvent::Attached(_)
                     | ServerEvent::Pong
                     | ServerEvent::Layout(_)
+                    | ServerEvent::SidebarLayout(_)
                     | ServerEvent::PaneRegions(_)
                     | ServerEvent::Render(_),
                 ) => {}
@@ -3719,6 +3717,38 @@ mod tests {
                 ServerEvent::Attached(_)
                 | ServerEvent::Deleted
                 | ServerEvent::Pong
+                | ServerEvent::SidebarLayout(_)
+                | ServerEvent::PaneRegions(_)
+                | ServerEvent::Render(_)
+                | ServerEvent::Detached => {}
+            }
+        }
+    }
+
+    async fn read_until_sidebar_layout(client: &mut AttachedTestClient) -> rootcause::Result<LayoutSnapshot> {
+        let started_at = Instant::now();
+
+        loop {
+            if started_at.elapsed() > SERVER_READY_TIMEOUT {
+                return Err(report!("timed out waiting for muxr sidebar layout update"));
+            }
+
+            let event = match tokio::time::timeout(Duration::from_millis(50), client.reader.recv_event()).await {
+                Ok(Ok(Some(event))) => event,
+                Ok(Err(error)) => return Err(error),
+                Ok(Ok(None)) | Err(_) => continue,
+            };
+
+            match event {
+                ServerEvent::SidebarLayout(layout) => return Ok(layout),
+                ServerEvent::Error(error) => {
+                    return Err(report!("muxr test server returned error").attach(format!("{error:?}")));
+                }
+                ServerEvent::Ping => client.writer.send_request(&ClientRequest::Pong).await?,
+                ServerEvent::Attached(_)
+                | ServerEvent::Deleted
+                | ServerEvent::Pong
+                | ServerEvent::Layout(_)
                 | ServerEvent::PaneRegions(_)
                 | ServerEvent::Render(_)
                 | ServerEvent::Detached => {}
@@ -3757,6 +3787,7 @@ mod tests {
                 | ServerEvent::Deleted
                 | ServerEvent::Pong
                 | ServerEvent::Layout(_)
+                | ServerEvent::SidebarLayout(_)
                 | ServerEvent::PaneRegions(_)
                 | ServerEvent::Detached => {}
             }
@@ -3794,6 +3825,7 @@ mod tests {
                 | ServerEvent::Ping
                 | ServerEvent::Pong
                 | ServerEvent::Layout(_)
+                | ServerEvent::SidebarLayout(_)
                 | ServerEvent::PaneRegions(_)
                 | ServerEvent::Detached => {}
             }
@@ -3830,6 +3862,7 @@ mod tests {
                         | ServerEvent::Deleted
                         | ServerEvent::Pong
                         | ServerEvent::Layout(_)
+                        | ServerEvent::SidebarLayout(_)
                         | ServerEvent::PaneRegions(_)
                         | ServerEvent::Detached,
                     )
@@ -3861,6 +3894,7 @@ mod tests {
                         | ServerEvent::Deleted
                         | ServerEvent::Pong
                         | ServerEvent::Layout(_)
+                        | ServerEvent::SidebarLayout(_)
                         | ServerEvent::PaneRegions(_)
                         | ServerEvent::Render(_),
                     )

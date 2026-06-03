@@ -272,6 +272,9 @@ async fn run_interactive(mut attached_session: AttachedSession, initial_size: Te
                     ServerEvent::Layout(next_layout) => {
                         renderer.apply_layout(next_layout);
                     }
+                    ServerEvent::SidebarLayout(next_layout) => {
+                        renderer.apply_sidebar_layout(&mut stdout, next_layout)?;
+                    }
                     ServerEvent::PaneRegions(next_regions) => {
                         renderer.apply_pane_regions(&mut stdout, next_regions)?;
                     }

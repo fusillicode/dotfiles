@@ -203,6 +203,11 @@ impl ClientRenderer {
         self.tab_bar_dirty = true;
     }
 
+    pub fn apply_sidebar_layout(&mut self, stdout: &mut impl Write, layout: LayoutSnapshot) -> rootcause::Result<()> {
+        self.layout = layout;
+        self.draw_sidebar(stdout)
+    }
+
     pub fn tab_id_at_sidebar_row(&self, row: u16) -> Option<TabId> {
         crate::client::tab_bar::tab_id_at_row(&self.layout, row)
     }
@@ -293,6 +298,25 @@ impl ClientRenderer {
         stdout
             .flush()
             .context("failed to flush muxr client render transaction")?;
+        self.tab_bar_dirty = false;
+        Ok(())
+    }
+
+    fn draw_sidebar(&mut self, stdout: &mut impl Write) -> rootcause::Result<()> {
+        let Some(size) = self.frame_buffer.size() else {
+            self.tab_bar_dirty = true;
+            return Ok(());
+        };
+        let mut frame = Vec::new();
+        crate::render::queue_synchronized_update_start(&mut frame, self.synchronized_output)?;
+        crate::client::tab_bar::queue(&mut frame, &self.layout, size.rows())?;
+        crate::render::queue_synchronized_update_end(&mut frame, self.synchronized_output)?;
+        stdout
+            .write_all(&frame)
+            .context("failed to write muxr client sidebar render transaction")?;
+        stdout
+            .flush()
+            .context("failed to flush muxr client sidebar render transaction")?;
         self.tab_bar_dirty = false;
         Ok(())
     }
@@ -613,6 +637,32 @@ mod tests {
 
         pretty_assertions::assert_eq!(output.bytes, Vec::<u8>::new());
         pretty_assertions::assert_eq!(output.flushes, 0);
+        Ok(())
+    }
+
+    #[test]
+    fn test_client_renderer_apply_sidebar_layout_when_frame_exists_flushes_only_sidebar() -> rootcause::Result<()> {
+        let mut renderer = ClientRenderer::with_synchronized_output(
+            layout_snapshot()?,
+            pane_regions_snapshot()?,
+            SynchronizedOutput::Csi,
+        );
+        let mut initial_output = CountingWriter::default();
+        renderer.apply_render(
+            &mut initial_output,
+            muxr_core::RenderUpdate::Baseline(render_baseline()?),
+        )?;
+        let mut output = CountingWriter::default();
+
+        renderer.apply_sidebar_layout(&mut output, two_tab_layout()?)?;
+
+        let terminal_output = output.rendered_string()?;
+        assert2::assert!(terminal_output.starts_with("\x1b[?2026h"));
+        assert2::assert!(terminal_output.ends_with("\x1b[?2026l"));
+        assert2::assert!(terminal_output.contains("tab-1"));
+        assert2::assert!(!terminal_output.contains("\x1b[2J"));
+        assert2::assert!(!terminal_output.contains("\x1b[1;25H"));
+        pretty_assertions::assert_eq!(output.flushes, 1);
         Ok(())
     }
 

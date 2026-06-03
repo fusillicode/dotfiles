@@ -20,11 +20,11 @@ pub enum SelectionInput {
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct SelectionState {
     // Copy text is cached by stable content row so viewport scrolling moves the highlight without dropping rows that
-    // have already passed off-screen during a drag selection.
+    // have already passed off-screen during a drag selection. The final joined string is built lazily on copy so drag
+    // updates do not rebuild the full selected text every mouse packet.
     cached_rows: BTreeMap<u64, Vec<CachedSelectionCell>>,
     drag: Option<SelectionDrag>,
     selected: Option<SelectionRange>,
-    selected_text: Option<String>,
 }
 
 impl SelectionState {
@@ -57,20 +57,17 @@ impl SelectionState {
         });
         if self.selected.is_none() {
             self.cached_rows.clear();
-            self.selected_text = None;
         } else {
             self.retain_cached_rows();
-            self.selected_text = self
-                .selected
-                .as_ref()
-                .and_then(|selection| self::selected_text(&self.cached_rows, selection));
         }
         self.selected != previous
     }
 
     pub fn selected_text(&self) -> Option<String> {
-        self.selected.as_ref()?;
-        self.selected_text.clone().filter(|text| !text.is_empty())
+        self.selected
+            .as_ref()
+            .and_then(|selection| self::selected_text(&self.cached_rows, selection))
+            .filter(|text| !text.is_empty())
     }
 
     pub fn select_word(
@@ -118,7 +115,6 @@ impl SelectionState {
             region,
         });
         self.selected = None;
-        self.selected_text = None;
         self.cached_rows.clear();
     }
 
@@ -173,14 +169,12 @@ impl SelectionState {
     fn rebuild_selected_text(&mut self, frame_buffer: &FrameBuffer) -> rootcause::Result<()> {
         if self.selected.is_none() {
             self.cached_rows.clear();
-            self.selected_text = None;
             return Ok(());
         }
 
         self.retain_cached_rows();
         if let Some(selection) = self.selected.as_ref() {
             self::cache_visible_selected_rows(&mut self.cached_rows, frame_buffer, selection)?;
-            self.selected_text = self::selected_text(&self.cached_rows, selection);
         }
         Ok(())
     }
@@ -198,7 +192,6 @@ impl SelectionState {
         self.cached_rows.clear();
         self.drag = None;
         self.selected = None;
-        self.selected_text = None;
     }
 }
 

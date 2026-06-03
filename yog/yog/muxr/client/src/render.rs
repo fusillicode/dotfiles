@@ -87,10 +87,9 @@ impl FrameBuffer {
         match update {
             RenderUpdate::Baseline(baseline) => {
                 let (seq, size, cursor, spans) = baseline.into_parts();
-                let mut rows = empty_rows(&size);
-                for row in &spans {
-                    apply_span_to_rows(&mut rows, row)?;
-                }
+                // RenderBaseline construction validates ordered full-width rows; clone them directly instead of
+                // allocating a blank frame and overwriting every cell.
+                let rows = spans.iter().map(|span| span.cells().to_vec()).collect();
 
                 self.cursor = Some(cursor.clone());
                 self.rows = rows;
@@ -244,13 +243,6 @@ impl RenderFrameChanges {
     pub const fn is_full_redraw(&self) -> bool {
         self.full_redraw
     }
-}
-
-fn empty_rows(size: &TerminalSize) -> Vec<Vec<RenderCell>> {
-    let blank = RenderCell::narrow(" ", RenderStyle::default());
-    (0..size.rows())
-        .map(|_| vec![blank.clone(); usize::from(size.cols())])
-        .collect()
 }
 
 fn apply_span_to_rows(rows: &mut [Vec<RenderCell>], span: &RenderRowSpan) -> rootcause::Result<()> {
