@@ -329,6 +329,7 @@ where
     }
 }
 
+/// Agent status rendered by the client tab bar.
 #[derive(
     rkyv::Archive,
     Clone,
@@ -343,28 +344,15 @@ where
     rkyv::Serialize,
 )]
 pub enum PaneAgentState {
+    /// No known agent command is running in the pane.
     #[default]
     NoAgent,
+    /// An agent previously needed attention and that attention was acknowledged by focusing the pane.
     Seen,
+    /// An agent command is running, with no pending attention signal.
     Busy,
+    /// An agent needs attention and has not yet been acknowledged by focusing the pane.
     Unseen,
-}
-
-impl PaneAgentState {
-    #[must_use]
-    pub const fn needs_attention(self) -> bool {
-        matches!(self, Self::Unseen)
-    }
-
-    #[must_use]
-    pub const fn priority(self) -> u8 {
-        match self {
-            Self::NoAgent => 0,
-            Self::Seen => 1,
-            Self::Busy => 2,
-            Self::Unseen => 3,
-        }
-    }
 }
 
 #[derive(rkyv::Archive, Clone, Debug, Eq, PartialEq, Serialize, rkyv::Serialize)]

@@ -17,11 +17,15 @@ impl Pane {
     }
 
     pub const fn acknowledge_agent_attention(&mut self) -> bool {
-        if !self.agent_state.needs_attention() {
+        if !self.agent_needs_attention() {
             return false;
         }
         self.agent_state = PaneAgentState::Seen;
         true
+    }
+
+    pub const fn agent_needs_attention(&self) -> bool {
+        matches!(self.agent_state, PaneAgentState::Unseen)
     }
 }
 
@@ -44,7 +48,7 @@ mod tests {
     }
 
     #[test]
-    fn test_agent_state_with_cmd_label_when_pane_needs_attention_returns_unseen() -> rootcause::Result<()> {
+    fn test_agent_state_with_cmd_label_when_agent_is_unseen_returns_unseen() -> rootcause::Result<()> {
         let mut pane = self::pane()?;
         pane.agent_state = PaneAgentState::Unseen;
 
