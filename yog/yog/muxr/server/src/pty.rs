@@ -324,6 +324,10 @@ impl PtyHandle {
         self.state.take_title_changes()
     }
 
+    pub fn take_screen_dirty(&self) -> bool {
+        self.state.take_screen_dirty()
+    }
+
     pub fn render_snapshot(&self) -> rootcause::Result<TerminalSnapshot> {
         lock_mutex(&self.state.terminal, "pty terminal")?.snapshot()
     }
@@ -359,6 +363,7 @@ struct PtyState {
     exited: AtomicBool,
     exit_status: Mutex<Option<PtyExitStatus>>,
     history: Mutex<Option<PaneHistory>>,
+    screen_dirty: AtomicBool,
     terminal: Mutex<TerminalState>,
     title_changes: Mutex<Vec<Option<String>>>,
 }
@@ -371,6 +376,7 @@ impl PtyState {
             exited: AtomicBool::new(false),
             exit_status: Mutex::new(None),
             history: Mutex::new(None),
+            screen_dirty: AtomicBool::new(false),
             terminal: Mutex::new(TerminalState::new(size)),
             title_changes: Mutex::new(Vec::new()),
         }
@@ -379,7 +385,7 @@ impl PtyState {
     fn with_history(size: &TerminalSize, history_path: &Path) -> rootcause::Result<Self> {
         let (history, replay) = PaneHistory::open(history_path)?;
         let mut terminal = TerminalState::new(size);
-        drop(terminal.process(&replay));
+        let _ = terminal.process(&replay);
         // History replay rebuilds visible cells only; tab bar metadata must come from live PTY output after spawn.
         terminal.clear_title_metadata();
 
@@ -388,6 +394,7 @@ impl PtyState {
             exited: AtomicBool::new(false),
             exit_status: Mutex::new(None),
             history: Mutex::new(Some(history)),
+            screen_dirty: AtomicBool::new(false),
             terminal: Mutex::new(terminal),
             title_changes: Mutex::new(Vec::new()),
         })
@@ -396,6 +403,8 @@ impl PtyState {
     fn attach_sink(self: &Arc<Self>, sender: mpsc::SyncSender<PtyEvent>) -> rootcause::Result<PtySinkGuard> {
         let output_current = Arc::new(AtomicBool::new(true));
         lock_mutex(&self.title_changes, "pty title changes")?.clear();
+        // Attach sends a fresh baseline; discard dirty state accumulated before the client could observe output events.
+        self.screen_dirty.store(false, Ordering::Release);
         *lock_mutex(&self.active_sink, "pty active sink")? = Some(ActivePtySink {
             output_current: Arc::clone(&output_current),
             sender,
@@ -413,7 +422,13 @@ impl PtyState {
         }
         let terminal_replies = {
             let mut terminal = lock_mutex(&self.terminal, "pty terminal")?;
-            let terminal_replies = terminal.process(bytes);
+            let process_outcome = terminal.process(bytes);
+            if process_outcome.screen_dirty() {
+                // Output events are coalesced, so the visible-screen dirty bit must be sticky until the server consumes
+                // it.
+                self.screen_dirty.store(true, Ordering::Release);
+            }
+            let terminal_replies = process_outcome.into_replies();
             let title_changes = terminal.take_title_changes();
             drop(terminal);
             // Title changes are queued separately from coalesced output events so cmd->cwd title transitions are
@@ -447,6 +462,10 @@ impl PtyState {
     fn take_title_changes(&self) -> rootcause::Result<Vec<Option<String>>> {
         let mut title_changes = lock_mutex(&self.title_changes, "pty title changes")?;
         Ok(std::mem::take(&mut *title_changes))
+    }
+
+    fn take_screen_dirty(&self) -> bool {
+        self.screen_dirty.swap(false, Ordering::AcqRel)
     }
 
     fn mark_exited(&self, exit_status: PtyExitStatus) -> rootcause::Result<()> {
@@ -772,6 +791,45 @@ mod tests {
     }
 
     #[test]
+    fn test_attach_sink_when_output_arrived_before_attach_clears_screen_dirty() -> rootcause::Result<()> {
+        let state = Arc::new(PtyState::new(&terminal_size()?));
+        pretty_assertions::assert_eq!(state.append_output(b"before")?, Vec::<Vec<u8>>::new());
+        assert2::assert!(state.take_screen_dirty());
+        pretty_assertions::assert_eq!(state.append_output(b"before again")?, Vec::<Vec<u8>>::new());
+        let (sender, _receiver) = mpsc::sync_channel(1);
+
+        let _guard = state.attach_sink(sender)?;
+
+        assert2::assert!(!state.take_screen_dirty());
+        Ok(())
+    }
+
+    #[test]
+    fn test_append_output_when_title_only_changes_does_not_mark_screen_dirty() -> rootcause::Result<()> {
+        let state = Arc::new(PtyState::new(&terminal_size()?));
+        let (sender, receiver) = mpsc::sync_channel(1);
+        let _guard = state.attach_sink(sender)?;
+
+        pretty_assertions::assert_eq!(state.append_output(b"\x1b]2;~\x07")?, Vec::<Vec<u8>>::new());
+
+        assert2::assert!(!state.take_screen_dirty());
+        pretty_assertions::assert_eq!(state.take_title_changes()?, vec![Some("~".to_owned())]);
+        assert2::assert!(matches!(receiver.recv(), Ok(PtyEvent::OutputReady)));
+        Ok(())
+    }
+
+    #[test]
+    fn test_append_output_when_visible_output_arrives_marks_screen_dirty_until_taken() -> rootcause::Result<()> {
+        let state = PtyState::new(&terminal_size()?);
+
+        pretty_assertions::assert_eq!(state.append_output(b"visible")?, Vec::<Vec<u8>>::new());
+
+        assert2::assert!(state.take_screen_dirty());
+        assert2::assert!(!state.take_screen_dirty());
+        Ok(())
+    }
+
+    #[test]
     fn test_with_history_when_history_contains_title_does_not_restore_live_title() -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
         let history_path = tempdir.path().join("pane-1").join("output.raw");
@@ -804,6 +862,8 @@ mod tests {
 
         assert2::assert!(lock_mutex(&state.active_sink, "pty active sink")?.is_some());
         assert2::assert!(output_current.load(Ordering::Acquire));
+        assert2::assert!(state.take_screen_dirty());
+        assert2::assert!(!state.take_screen_dirty());
         assert2::assert!(matches!(receiver.recv(), Ok(PtyEvent::OutputReady)));
         Ok(())
     }

@@ -39,6 +39,112 @@ impl TerminalSnapshot {
 
 pub struct TerminalState {
     parser: vt100::Parser<TerminalCallbacks>,
+    screen_dirty_detector: TerminalScreenDirtyDetector,
+}
+
+/// Result of feeding PTY bytes into the terminal parser.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TerminalProcessOutcome {
+    replies: Vec<Vec<u8>>,
+    screen_dirty: bool,
+}
+
+impl TerminalProcessOutcome {
+    const fn new(replies: Vec<Vec<u8>>, screen_dirty: bool) -> Self {
+        Self { replies, screen_dirty }
+    }
+
+    #[must_use]
+    pub fn into_replies(self) -> Vec<Vec<u8>> {
+        self.replies
+    }
+
+    #[must_use]
+    pub const fn screen_dirty(&self) -> bool {
+        self.screen_dirty
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+enum TerminalScreenDirtyState {
+    #[default]
+    Ground,
+    Escape,
+    OscTitleCommand,
+    OscTitleSeparator,
+    TitleBody,
+    TitleBodyEscape,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct TerminalScreenDirtyDetector {
+    state: TerminalScreenDirtyState,
+}
+
+impl TerminalScreenDirtyDetector {
+    fn process(&mut self, bytes: &[u8]) -> bool {
+        let mut screen_dirty = false;
+        for byte in bytes {
+            screen_dirty |= self.process_byte(*byte);
+        }
+        screen_dirty
+    }
+
+    const fn process_byte(&mut self, byte: u8) -> bool {
+        match self.state {
+            TerminalScreenDirtyState::Ground => match byte {
+                b'\x1b' => {
+                    self.state = TerminalScreenDirtyState::Escape;
+                    false
+                }
+                _ => true,
+            },
+            TerminalScreenDirtyState::Escape => {
+                if byte == b']' {
+                    self.state = TerminalScreenDirtyState::OscTitleCommand;
+                    false
+                } else {
+                    self.state = TerminalScreenDirtyState::Ground;
+                    true
+                }
+            }
+            TerminalScreenDirtyState::OscTitleCommand => match byte {
+                b'0' | b'1' | b'2' => {
+                    self.state = TerminalScreenDirtyState::OscTitleSeparator;
+                    false
+                }
+                _ => {
+                    self.state = TerminalScreenDirtyState::Ground;
+                    true
+                }
+            },
+            TerminalScreenDirtyState::OscTitleSeparator => {
+                if byte == b';' {
+                    self.state = TerminalScreenDirtyState::TitleBody;
+                    false
+                } else {
+                    self.state = TerminalScreenDirtyState::Ground;
+                    true
+                }
+            }
+            TerminalScreenDirtyState::TitleBody => match byte {
+                // BEL terminates OSC; `vte` cancels OSC on CAN/SUB so following bytes classify from ground.
+                b'\x07' | b'\x18' | b'\x1a' => {
+                    self.state = TerminalScreenDirtyState::Ground;
+                    false
+                }
+                b'\x1b' => {
+                    self.state = TerminalScreenDirtyState::TitleBodyEscape;
+                    false
+                }
+                _ => false,
+            },
+            TerminalScreenDirtyState::TitleBodyEscape => {
+                self.state = TerminalScreenDirtyState::Ground;
+                byte != b'\\'
+            }
+        }
+    }
 }
 
 /// Mouse reporting protocol requested by the application running in a pane.
@@ -144,18 +250,20 @@ impl TerminalState {
                 SCROLLBACK_ROWS,
                 TerminalCallbacks::default(),
             ),
+            screen_dirty_detector: TerminalScreenDirtyDetector::default(),
         }
     }
 
-    pub fn process(&mut self, bytes: &[u8]) -> Vec<Vec<u8>> {
+    pub fn process(&mut self, bytes: &[u8]) -> TerminalProcessOutcome {
         if bytes.is_empty() {
-            return Vec::new();
+            return TerminalProcessOutcome::new(Vec::new(), false);
         }
 
+        let screen_dirty = self.screen_dirty_detector.process(bytes);
         // Applications running inside the PTY expect terminal DSR/CPR replies on stdin.
         // `vt100` owns escape parsing, so callbacks preserve split-sequence behavior.
         self.parser.process(bytes);
-        self.parser.callbacks_mut().take_replies()
+        TerminalProcessOutcome::new(self.parser.callbacks_mut().take_replies(), screen_dirty)
     }
 
     pub fn resize(&mut self, size: &TerminalSize) {
@@ -331,7 +439,8 @@ mod tests {
     fn test_terminal_state_snapshot_when_output_processed_contains_screen() -> rootcause::Result<()> {
         let mut terminal = TerminalState::new(&terminal_size()?);
 
-        pretty_assertions::assert_eq!(terminal.process(b"hi"), Vec::<Vec<u8>>::new());
+        let outcome = terminal.process(b"hi");
+        pretty_assertions::assert_eq!(outcome.into_replies(), Vec::<Vec<u8>>::new());
         let snapshot = terminal.snapshot()?;
         let Some(row) = snapshot.rows().first() else {
             return Err(report!("expected first render row"));
@@ -351,7 +460,7 @@ mod tests {
     ) -> rootcause::Result<()> {
         let mut terminal = TerminalState::new(&terminal_size()?);
 
-        pretty_assertions::assert_eq!(terminal.process(bytes), vec![expected.to_vec()]);
+        pretty_assertions::assert_eq!(terminal.process(bytes).into_replies(), vec![expected.to_vec()]);
         Ok(())
     }
 
@@ -359,9 +468,9 @@ mod tests {
     fn test_terminal_state_process_when_cursor_report_requested_returns_current_cursor() -> rootcause::Result<()> {
         let mut terminal = TerminalState::new(&terminal_size()?);
 
-        pretty_assertions::assert_eq!(terminal.process(b"\x1b[2;3H"), Vec::<Vec<u8>>::new());
+        pretty_assertions::assert_eq!(terminal.process(b"\x1b[2;3H").into_replies(), Vec::<Vec<u8>>::new());
 
-        pretty_assertions::assert_eq!(terminal.process(b"\x1b[6n"), vec![b"\x1b[2;3R".to_vec()]);
+        pretty_assertions::assert_eq!(terminal.process(b"\x1b[6n").into_replies(), vec![b"\x1b[2;3R".to_vec()]);
         Ok(())
     }
 
@@ -369,9 +478,9 @@ mod tests {
     fn test_terminal_state_process_when_report_sequence_is_split_returns_one_reply() -> rootcause::Result<()> {
         let mut terminal = TerminalState::new(&terminal_size()?);
 
-        pretty_assertions::assert_eq!(terminal.process(b"\x1b["), Vec::<Vec<u8>>::new());
+        pretty_assertions::assert_eq!(terminal.process(b"\x1b[").into_replies(), Vec::<Vec<u8>>::new());
 
-        pretty_assertions::assert_eq!(terminal.process(b"6n"), vec![b"\x1b[1;1R".to_vec()]);
+        pretty_assertions::assert_eq!(terminal.process(b"6n").into_replies(), vec![b"\x1b[1;1R".to_vec()]);
         Ok(())
     }
 
@@ -381,7 +490,7 @@ mod tests {
     fn test_terminal_state_title_when_window_title_is_set_returns_title(#[case] bytes: &[u8]) -> rootcause::Result<()> {
         let mut terminal = TerminalState::new(&terminal_size()?);
 
-        pretty_assertions::assert_eq!(terminal.process(bytes), Vec::<Vec<u8>>::new());
+        pretty_assertions::assert_eq!(terminal.process(bytes).into_replies(), Vec::<Vec<u8>>::new());
 
         pretty_assertions::assert_eq!(terminal.title(), Some("cargo test".to_owned()));
         Ok(())
@@ -391,7 +500,10 @@ mod tests {
     fn test_terminal_state_take_title_changes_when_window_title_changes_returns_once() -> rootcause::Result<()> {
         let mut terminal = TerminalState::new(&terminal_size()?);
 
-        pretty_assertions::assert_eq!(terminal.process(b"\x1b]2;cargo test\x07"), Vec::<Vec<u8>>::new());
+        pretty_assertions::assert_eq!(
+            terminal.process(b"\x1b]2;cargo test\x07").into_replies(),
+            Vec::<Vec<u8>>::new()
+        );
 
         pretty_assertions::assert_eq!(terminal.take_title_changes(), vec![Some("cargo test".to_owned())]);
         pretty_assertions::assert_eq!(terminal.take_title_changes(), Vec::<Option<String>>::new());
@@ -402,9 +514,15 @@ mod tests {
     fn test_terminal_state_take_title_changes_when_window_title_repeats_returns_empty() -> rootcause::Result<()> {
         let mut terminal = TerminalState::new(&terminal_size()?);
 
-        pretty_assertions::assert_eq!(terminal.process(b"\x1b]2;cargo test\x07"), Vec::<Vec<u8>>::new());
+        pretty_assertions::assert_eq!(
+            terminal.process(b"\x1b]2;cargo test\x07").into_replies(),
+            Vec::<Vec<u8>>::new()
+        );
         pretty_assertions::assert_eq!(terminal.take_title_changes(), vec![Some("cargo test".to_owned())]);
-        pretty_assertions::assert_eq!(terminal.process(b"\x1b]2;cargo test\x07"), Vec::<Vec<u8>>::new());
+        pretty_assertions::assert_eq!(
+            terminal.process(b"\x1b]2;cargo test\x07").into_replies(),
+            Vec::<Vec<u8>>::new()
+        );
 
         pretty_assertions::assert_eq!(terminal.take_title_changes(), Vec::<Option<String>>::new());
         Ok(())
@@ -415,7 +533,10 @@ mod tests {
     {
         let mut terminal = TerminalState::new(&terminal_size()?);
 
-        pretty_assertions::assert_eq!(terminal.process(b"\x1b]2;gst\x07\x1b]2;~\x07"), Vec::<Vec<u8>>::new());
+        pretty_assertions::assert_eq!(
+            terminal.process(b"\x1b]2;gst\x07\x1b]2;~\x07").into_replies(),
+            Vec::<Vec<u8>>::new()
+        );
 
         pretty_assertions::assert_eq!(
             terminal.take_title_changes(),
@@ -428,8 +549,8 @@ mod tests {
     fn test_terminal_state_title_when_window_title_sequence_is_split_returns_title() -> rootcause::Result<()> {
         let mut terminal = TerminalState::new(&terminal_size()?);
 
-        pretty_assertions::assert_eq!(terminal.process(b"\x1b]2;"), Vec::<Vec<u8>>::new());
-        pretty_assertions::assert_eq!(terminal.process(b"gst\x07"), Vec::<Vec<u8>>::new());
+        pretty_assertions::assert_eq!(terminal.process(b"\x1b]2;").into_replies(), Vec::<Vec<u8>>::new());
+        pretty_assertions::assert_eq!(terminal.process(b"gst\x07").into_replies(), Vec::<Vec<u8>>::new());
 
         pretty_assertions::assert_eq!(terminal.title(), Some("gst".to_owned()));
         Ok(())
@@ -439,10 +560,55 @@ mod tests {
     fn test_terminal_state_title_when_window_title_is_empty_returns_none() -> rootcause::Result<()> {
         let mut terminal = TerminalState::new(&terminal_size()?);
 
-        terminal.process(b"\x1b]2;cargo test\x07");
-        terminal.process(b"\x1b]2;  \x07");
+        let _ = terminal.process(b"\x1b]2;cargo test\x07");
+        let _ = terminal.process(b"\x1b]2;  \x07");
 
         pretty_assertions::assert_eq!(terminal.title(), None);
+        Ok(())
+    }
+
+    #[rstest]
+    #[case::osc_zero_bel(b"\x1b]0;cargo test\x07")]
+    #[case::osc_two_st(b"\x1b]2;cargo test\x1b\\")]
+    #[case::multiple_titles(b"\x1b]2;gst\x07\x1b]2;~\x07")]
+    fn test_terminal_state_process_when_only_title_changes_keeps_screen_clean(
+        #[case] bytes: &[u8],
+    ) -> rootcause::Result<()> {
+        let mut terminal = TerminalState::new(&terminal_size()?);
+
+        let outcome = terminal.process(bytes);
+
+        assert2::assert!(!outcome.screen_dirty());
+        pretty_assertions::assert_eq!(outcome.into_replies(), Vec::<Vec<u8>>::new());
+        Ok(())
+    }
+
+    #[test]
+    fn test_terminal_state_process_when_title_sequence_is_split_keeps_screen_clean() -> rootcause::Result<()> {
+        let mut terminal = TerminalState::new(&terminal_size()?);
+
+        let first = terminal.process(b"\x1b]2;");
+        let second = terminal.process(b"gst\x07");
+
+        assert2::assert!(!first.screen_dirty());
+        pretty_assertions::assert_eq!(first.into_replies(), Vec::<Vec<u8>>::new());
+        assert2::assert!(!second.screen_dirty());
+        pretty_assertions::assert_eq!(second.into_replies(), Vec::<Vec<u8>>::new());
+        pretty_assertions::assert_eq!(terminal.title(), Some("gst".to_owned()));
+        Ok(())
+    }
+
+    #[rstest]
+    #[case::text(b"hi")]
+    #[case::title_then_text(b"\x1b]2;gst\x07hi")]
+    #[case::canceled_title_then_text(b"\x1b]2;gst\x18hi")]
+    #[case::unsupported_escape(b"\x1b[6n")]
+    fn test_terminal_state_process_when_output_is_not_title_only_marks_screen_dirty(
+        #[case] bytes: &[u8],
+    ) -> rootcause::Result<()> {
+        let mut terminal = TerminalState::new(&terminal_size()?);
+
+        assert2::assert!(terminal.process(bytes).screen_dirty());
         Ok(())
     }
 
@@ -450,7 +616,7 @@ mod tests {
     fn test_terminal_state_scroll_when_output_exceeds_viewport_shows_history() -> rootcause::Result<()> {
         let mut terminal = TerminalState::new(&TerminalSize::new(8, 2)?);
 
-        terminal.process(b"one\ntwo\nthree");
+        let _ = terminal.process(b"one\ntwo\nthree");
 
         assert2::assert!(terminal.scroll(PaneScrollDirection::Up));
         let rendered = self::snapshot_text(&terminal.snapshot()?);
@@ -462,7 +628,7 @@ mod tests {
     fn test_terminal_state_scroll_to_bottom_when_scrolled_shows_live_viewport() -> rootcause::Result<()> {
         let mut terminal = TerminalState::new(&TerminalSize::new(8, 2)?);
 
-        terminal.process(b"one\ntwo\nthree");
+        let _ = terminal.process(b"one\ntwo\nthree");
         assert2::assert!(terminal.scroll(PaneScrollDirection::Up));
 
         assert2::assert!(terminal.scroll_to_bottom());
@@ -477,7 +643,7 @@ mod tests {
     fn test_terminal_state_visible_top_row_when_scrolled_tracks_current_viewport() -> rootcause::Result<()> {
         let mut terminal = TerminalState::new(&TerminalSize::new(8, 2)?);
 
-        terminal.process(b"one\ntwo\nthree");
+        let _ = terminal.process(b"one\ntwo\nthree");
         let bottom_top_row = terminal.visible_top_row()?;
         assert2::assert!(terminal.scroll(PaneScrollDirection::Up));
         let scrolled_snapshot = self::snapshot_text(&terminal.snapshot()?);
@@ -493,7 +659,7 @@ mod tests {
     fn test_terminal_state_bracketed_paste_when_mode_is_enabled_returns_true() -> rootcause::Result<()> {
         let mut terminal = TerminalState::new(&terminal_size()?);
 
-        terminal.process(b"\x1b[?2004h");
+        let _ = terminal.process(b"\x1b[?2004h");
 
         assert2::assert!(terminal.bracketed_paste_enabled());
         Ok(())
@@ -504,7 +670,7 @@ mod tests {
     {
         let mut terminal = TerminalState::new(&terminal_size()?);
 
-        terminal.process(b"\x1b[?1002h\x1b[?1006h");
+        let _ = terminal.process(b"\x1b[?1002h\x1b[?1006h");
 
         pretty_assertions::assert_eq!(
             terminal.mouse_protocol(),
@@ -527,7 +693,7 @@ mod tests {
     ) -> rootcause::Result<()> {
         let mut terminal = TerminalState::new(&terminal_size()?);
 
-        pretty_assertions::assert_eq!(terminal.process(bytes), Vec::<Vec<u8>>::new());
+        pretty_assertions::assert_eq!(terminal.process(bytes).into_replies(), Vec::<Vec<u8>>::new());
         Ok(())
     }
 

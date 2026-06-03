@@ -350,6 +350,7 @@ mod tests {
         pane_regions: pane_regions_snapshot()?,
     }))]
     #[case::layout(ServerEvent::Layout(layout_snapshot()?))]
+    #[case::sidebar_layout(ServerEvent::SidebarLayout(layout_snapshot()?))]
     #[case::pane_regions(ServerEvent::PaneRegions(pane_regions_snapshot()?))]
     fn test_transport_when_server_event_round_trips_returns_original(
         #[case] event: ServerEvent,
