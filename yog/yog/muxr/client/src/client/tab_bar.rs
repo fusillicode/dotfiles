@@ -101,22 +101,28 @@ fn queue_sidebar_row(
         SetForegroundColor(if active { RAIL_ACTIVE_FG } else { RAIL_INACTIVE_FG }),
     )?;
     queue_cmd(stdout, Print("\u{258e}"))?;
-    queue_cmd(stdout, SetForegroundColor(if active { ACTIVE_FG } else { INACTIVE_FG }))?;
-    if active {
-        queue_cmd(stdout, SetAttribute(Attribute::Bold))?;
-    }
-    self::queue_agent_state_cell(stdout, active, agent_state)?;
+    self::queue_sidebar_text_style(stdout, active)?;
+    self::queue_agent_state_cell(stdout, agent_state)?;
+    self::queue_sidebar_text_style(stdout, active)?;
     queue_cmd(stdout, Print(pad(text, label_width)))?;
-    if active {
-        queue_cmd(stdout, SetAttribute(Attribute::Reset))?;
-        queue_cmd(stdout, SetBackgroundColor(BACKGROUND))?;
-    }
+    queue_cmd(stdout, SetAttribute(Attribute::Reset))?;
+    queue_cmd(stdout, SetBackgroundColor(BACKGROUND))?;
     queue_cmd(stdout, SetForegroundColor(SEPARATOR_FG))?;
     queue_cmd(stdout, Print(SEPARATOR))?;
     Ok(())
 }
 
-fn queue_agent_state_cell(stdout: &mut impl Write, active: bool, agent_state: PaneAgentState) -> rootcause::Result<()> {
+fn queue_sidebar_text_style(stdout: &mut impl Write, active: bool) -> rootcause::Result<()> {
+    queue_cmd(stdout, SetAttribute(Attribute::Reset))?;
+    queue_cmd(stdout, SetBackgroundColor(BACKGROUND))?;
+    queue_cmd(stdout, SetForegroundColor(if active { ACTIVE_FG } else { INACTIVE_FG }))?;
+    if active {
+        queue_cmd(stdout, SetAttribute(Attribute::Bold))?;
+    }
+    Ok(())
+}
+
+fn queue_agent_state_cell(stdout: &mut impl Write, agent_state: PaneAgentState) -> rootcause::Result<()> {
     let Some(color) = self::agent_state_dot_color(agent_state) else {
         queue_cmd(stdout, Print(" "))?;
         return Ok(());
@@ -125,12 +131,6 @@ fn queue_agent_state_cell(stdout: &mut impl Write, active: bool, agent_state: Pa
     queue_cmd(stdout, SetAttribute(Attribute::Bold))?;
     queue_cmd(stdout, SetForegroundColor(color))?;
     queue_cmd(stdout, Print("\u{2022}"))?;
-    queue_cmd(stdout, SetAttribute(Attribute::Reset))?;
-    queue_cmd(stdout, SetBackgroundColor(BACKGROUND))?;
-    queue_cmd(stdout, SetForegroundColor(if active { ACTIVE_FG } else { INACTIVE_FG }))?;
-    if active {
-        queue_cmd(stdout, SetAttribute(Attribute::Bold))?;
-    }
     Ok(())
 }
 
@@ -182,7 +182,16 @@ fn highest_priority_agent_pane(tab: &TabSnapshot) -> Option<&PaneSnapshot> {
     tab.panes()
         .iter()
         .filter(|pane| pane.agent_state != PaneAgentState::NoAgent)
-        .max_by_key(|pane| pane.agent_state.priority())
+        .max_by_key(|pane| self::agent_sidebar_priority(pane.agent_state))
+}
+
+const fn agent_sidebar_priority(agent_state: PaneAgentState) -> u8 {
+    match agent_state {
+        PaneAgentState::NoAgent => 0,
+        PaneAgentState::Seen => 1,
+        PaneAgentState::Busy => 2,
+        PaneAgentState::Unseen => 3,
+    }
 }
 
 fn cmd_label(pane: Option<&PaneSnapshot>) -> Option<String> {
@@ -274,38 +283,37 @@ where
 
 #[cfg(test)]
 mod tests {
+    use muxr_core::PaneId;
     use rstest::rstest;
 
     use super::*;
 
     #[test]
     fn test_sidebar_tabs_when_second_tab_is_active_uses_active_pane_cwd() -> rootcause::Result<()> {
-        let layout = muxr_core::LayoutSnapshot::new(
-            muxr_core::TabId::new("tab-2")?,
+        let layout = self::layout_snapshot(
+            "tab-2",
             vec![
-                muxr_core::TabSnapshot::new(
-                    muxr_core::TabId::new("tab-1")?,
+                self::tab_snapshot(
+                    "tab-1",
                     "default",
-                    muxr_core::PaneId::new("pane-1")?,
-                    vec![muxr_core::PaneSnapshot {
-                        agent_state: PaneAgentState::NoAgent,
-                        cwd: "/Users/me/work/default".to_owned(),
-                        cmd_label: None,
-                        id: muxr_core::PaneId::new("pane-1")?,
-                        title: "shell".to_owned(),
-                    }],
+                    "pane-1",
+                    vec![self::pane_snapshot(
+                        "pane-1",
+                        "/Users/me/work/default",
+                        None,
+                        PaneAgentState::NoAgent,
+                    )?],
                 )?,
-                muxr_core::TabSnapshot::new(
-                    muxr_core::TabId::new("tab-2")?,
+                self::tab_snapshot(
+                    "tab-2",
                     "tab 2",
-                    muxr_core::PaneId::new("pane-2")?,
-                    vec![muxr_core::PaneSnapshot {
-                        agent_state: PaneAgentState::NoAgent,
-                        cwd: "/Users/me/src/muxr".to_owned(),
-                        cmd_label: Some("nvim".to_owned()),
-                        id: muxr_core::PaneId::new("pane-2")?,
-                        title: "shell".to_owned(),
-                    }],
+                    "pane-2",
+                    vec![self::pane_snapshot(
+                        "pane-2",
+                        "/Users/me/src/muxr",
+                        Some("nvim"),
+                        PaneAgentState::NoAgent,
+                    )?],
                 )?,
             ],
         )?;
@@ -332,42 +340,28 @@ mod tests {
 
     #[test]
     fn test_sidebar_tabs_when_inactive_tab_has_agent_pane_uses_highest_priority_pane() -> rootcause::Result<()> {
-        let tab_1 = muxr_core::TabId::new("tab-1")?;
-        let tab_2 = muxr_core::TabId::new("tab-2")?;
-        let layout = muxr_core::LayoutSnapshot::new(
-            tab_1.clone(),
+        let layout = self::layout_snapshot(
+            "tab-1",
             vec![
-                muxr_core::TabSnapshot::new(
-                    tab_1,
+                self::tab_snapshot(
+                    "tab-1",
                     "active",
-                    muxr_core::PaneId::new("pane-1")?,
-                    vec![muxr_core::PaneSnapshot {
-                        agent_state: PaneAgentState::NoAgent,
-                        cwd: "/tmp/active".to_owned(),
-                        cmd_label: None,
-                        id: muxr_core::PaneId::new("pane-1")?,
-                        title: "shell".to_owned(),
-                    }],
+                    "pane-1",
+                    vec![self::pane_snapshot(
+                        "pane-1",
+                        "/tmp/active",
+                        None,
+                        PaneAgentState::NoAgent,
+                    )?],
                 )?,
-                muxr_core::TabSnapshot::new(
-                    tab_2,
+                self::tab_snapshot(
+                    "tab-2",
                     "inactive",
-                    muxr_core::PaneId::new("pane-2")?,
+                    "pane-2",
                     vec![
-                        muxr_core::PaneSnapshot {
-                            agent_state: PaneAgentState::NoAgent,
-                            cwd: "/tmp/shell".to_owned(),
-                            cmd_label: Some("zsh".to_owned()),
-                            id: muxr_core::PaneId::new("pane-2")?,
-                            title: "shell".to_owned(),
-                        },
-                        muxr_core::PaneSnapshot {
-                            agent_state: PaneAgentState::Unseen,
-                            cwd: "/tmp/codex".to_owned(),
-                            cmd_label: Some("codex".to_owned()),
-                            id: muxr_core::PaneId::new("pane-3")?,
-                            title: "shell".to_owned(),
-                        },
+                        self::pane_snapshot("pane-2", "/tmp/shell", Some("zsh"), PaneAgentState::NoAgent)?,
+                        self::pane_snapshot("pane-4", "/tmp/cargo", Some("cargo test"), PaneAgentState::Busy)?,
+                        self::pane_snapshot("pane-3", "/tmp/codex", Some("codex"), PaneAgentState::Unseen)?,
                     ],
                 )?,
             ],
@@ -395,29 +389,15 @@ mod tests {
 
     #[test]
     fn test_sidebar_tabs_when_active_tab_has_unfocused_unseen_agent_uses_agent_pane() -> rootcause::Result<()> {
-        let active_tab = muxr_core::TabId::new("tab-1")?;
-        let active_pane = muxr_core::PaneId::new("pane-1")?;
-        let layout = muxr_core::LayoutSnapshot::new(
-            active_tab.clone(),
-            vec![muxr_core::TabSnapshot::new(
-                active_tab,
+        let layout = self::layout_snapshot(
+            "tab-1",
+            vec![self::tab_snapshot(
+                "tab-1",
                 "default",
-                active_pane,
+                "pane-1",
                 vec![
-                    muxr_core::PaneSnapshot {
-                        agent_state: PaneAgentState::NoAgent,
-                        cwd: "/tmp/shell".to_owned(),
-                        cmd_label: Some("zsh".to_owned()),
-                        id: muxr_core::PaneId::new("pane-1")?,
-                        title: "shell".to_owned(),
-                    },
-                    muxr_core::PaneSnapshot {
-                        agent_state: PaneAgentState::Unseen,
-                        cwd: "/tmp/codex".to_owned(),
-                        cmd_label: Some("codex".to_owned()),
-                        id: muxr_core::PaneId::new("pane-2")?,
-                        title: "shell".to_owned(),
-                    },
+                    self::pane_snapshot("pane-1", "/tmp/shell", Some("zsh"), PaneAgentState::NoAgent)?,
+                    self::pane_snapshot("pane-2", "/tmp/codex", Some("codex"), PaneAgentState::Unseen)?,
                 ],
             )?],
         )?;
@@ -449,17 +429,20 @@ mod tests {
 
     #[test]
     fn test_queue_when_layout_is_rendered_writes_sidebar_without_flushing() -> rootcause::Result<()> {
-        let active_tab = muxr_core::TabId::new("tab-1")?;
-        let active_pane = muxr_core::PaneId::new("pane-1")?;
-        let pane = muxr_core::PaneSnapshot {
-            agent_state: PaneAgentState::Busy,
-            cwd: "project".to_owned(),
-            cmd_label: Some("codex".to_owned()),
-            id: active_pane.clone(),
-            title: "shell".to_owned(),
-        };
-        let tab = muxr_core::TabSnapshot::new(active_tab.clone(), "default", active_pane, vec![pane])?;
-        let layout = muxr_core::LayoutSnapshot::new(active_tab, vec![tab])?;
+        let layout = self::layout_snapshot(
+            "tab-1",
+            vec![self::tab_snapshot(
+                "tab-1",
+                "default",
+                "pane-1",
+                vec![self::pane_snapshot(
+                    "pane-1",
+                    "project",
+                    Some("codex"),
+                    PaneAgentState::Busy,
+                )?],
+            )?],
+        )?;
         let mut output = CountingWriter::default();
 
         queue(&mut output, &layout, 3)?;
@@ -482,38 +465,54 @@ mod tests {
         #[case] row: u16,
         #[case] expected: Option<&str>,
     ) -> rootcause::Result<()> {
-        let layout = muxr_core::LayoutSnapshot::new(
-            muxr_core::TabId::new("tab-1")?,
+        let layout = self::layout_snapshot(
+            "tab-1",
             vec![
-                muxr_core::TabSnapshot::new(
-                    muxr_core::TabId::new("tab-1")?,
+                self::tab_snapshot(
+                    "tab-1",
                     "default",
-                    muxr_core::PaneId::new("pane-1")?,
-                    vec![muxr_core::PaneSnapshot {
-                        agent_state: PaneAgentState::NoAgent,
-                        cwd: "default".to_owned(),
-                        cmd_label: None,
-                        id: muxr_core::PaneId::new("pane-1")?,
-                        title: "shell".to_owned(),
-                    }],
+                    "pane-1",
+                    vec![self::pane_snapshot("pane-1", "default", None, PaneAgentState::NoAgent)?],
                 )?,
-                muxr_core::TabSnapshot::new(
-                    muxr_core::TabId::new("tab-2")?,
+                self::tab_snapshot(
+                    "tab-2",
                     "tab 2",
-                    muxr_core::PaneId::new("pane-2")?,
-                    vec![muxr_core::PaneSnapshot {
-                        agent_state: PaneAgentState::NoAgent,
-                        cwd: "tab-2".to_owned(),
-                        cmd_label: None,
-                        id: muxr_core::PaneId::new("pane-2")?,
-                        title: "shell".to_owned(),
-                    }],
+                    "pane-2",
+                    vec![self::pane_snapshot("pane-2", "tab-2", None, PaneAgentState::NoAgent)?],
                 )?,
             ],
         )?;
 
         pretty_assertions::assert_eq!(tab_id_at_row(&layout, row).as_ref().map(TabId::as_ref), expected,);
         Ok(())
+    }
+
+    fn layout_snapshot(active_tab: &str, tabs: Vec<TabSnapshot>) -> rootcause::Result<LayoutSnapshot> {
+        LayoutSnapshot::new(TabId::new(active_tab)?, tabs)
+    }
+
+    fn tab_snapshot(
+        id: &str,
+        title: &str,
+        active_pane: &str,
+        panes: Vec<PaneSnapshot>,
+    ) -> rootcause::Result<TabSnapshot> {
+        TabSnapshot::new(TabId::new(id)?, title, PaneId::new(active_pane)?, panes)
+    }
+
+    fn pane_snapshot(
+        id: &str,
+        cwd: &str,
+        cmd_label: Option<&str>,
+        agent_state: PaneAgentState,
+    ) -> rootcause::Result<PaneSnapshot> {
+        Ok(PaneSnapshot {
+            agent_state,
+            cwd: cwd.to_owned(),
+            cmd_label: cmd_label.map(str::to_owned),
+            id: PaneId::new(id)?,
+            title: "shell".to_owned(),
+        })
     }
 
     #[derive(Default)]

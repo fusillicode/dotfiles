@@ -21,7 +21,7 @@ impl Pane {
     }
 
     pub const fn needs_attention(&self) -> bool {
-        self.attention_state.needs_attention() || self.agent_state.needs_attention()
+        self.attention_state.needs_attention() || self.agent_needs_attention()
     }
 }
 
