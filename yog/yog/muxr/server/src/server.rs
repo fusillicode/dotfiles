@@ -19,11 +19,13 @@ use muxr_core::ClientKey;
 use muxr_core::ClientKeyCode;
 use muxr_core::ClientKeyModifiers;
 use muxr_core::ClientMouseEvent;
+use muxr_core::ClientMousePosition;
 use muxr_core::ClientRequest;
 use muxr_core::LayoutSnapshot;
 use muxr_core::PaneId;
 use muxr_core::PaneRegionSnapshot;
 use muxr_core::PaneRegionsSnapshot;
+use muxr_core::PaneScrollDirection;
 use muxr_core::RenderBaseline;
 use muxr_core::RenderCell;
 use muxr_core::RenderCursor;
@@ -1586,6 +1588,33 @@ async fn resize_panes_and_render(
     self::send_layout_and_baseline(event_writer, state).await
 }
 
+fn scroll_pane_line_at_result(
+    position: ClientMousePosition,
+    direction: PaneScrollDirection,
+    state: &AttachedSessionState<'_>,
+    render_dirty: &mut bool,
+) -> rootcause::Result<ServerEvent> {
+    let scrolled = crate::pane_scroll::handle_scroll_pane_at_request(
+        position,
+        direction,
+        PaneScrollAmount::Line,
+        state.layout,
+        state.runtimes,
+        &state.terminal_size,
+    )?;
+    if scrolled {
+        // Edge-drag autoscroll uses one-line steps but can still outpace render IO; keep it coalesced on the normal
+        // render tick.
+        *render_dirty = true;
+    }
+    // Clients keep one edge-scroll request pending until either a moved viewport renders or this no-op result arrives.
+    Ok(ServerEvent::ScrollPaneLineResult {
+        position,
+        direction,
+        scrolled,
+    })
+}
+
 async fn handle_attached_request(
     request: Option<ClientRequest>,
     event_writer: &mut ServerEventWriter,
@@ -1625,20 +1654,8 @@ async fn handle_attached_request(
             self::handle_mouse_event_request(event, event_writer, state, render_dirty).await
         }
         Some(ClientRequest::ScrollPaneLineAt { position, direction }) => {
-            if !crate::pane_scroll::handle_scroll_pane_at_request(
-                position,
-                direction,
-                PaneScrollAmount::Line,
-                state.layout,
-                state.runtimes,
-                &state.terminal_size,
-            )? {
-                return Ok(true);
-            }
-            // Edge-drag autoscroll uses one-line steps but can still outpace render IO; keep it coalesced on the
-            // normal render tick.
-            *render_dirty = true;
-            Ok(true)
+            let event = self::scroll_pane_line_at_result(position, direction, state, render_dirty)?;
+            self::send_writer_event_with_timeout(event_writer, &event).await
         }
         Some(ClientRequest::FocusPaneAt(position)) => {
             if !crate::pane_focus::handle_focus_pane_at_request(
@@ -3470,6 +3487,33 @@ mod tests {
     }
 
     #[test]
+    fn test_serve_when_selection_line_scroll_cannot_move_sends_noop_scroll_result() -> rootcause::Result<()> {
+        self::runtime()?.block_on(async {
+            let tempdir = tempfile::tempdir()?;
+            let (session, paths) = self::session_paths(tempdir.path(), "work")?;
+            let handle = self::spawn_test_server_with_shell(&session, &paths, Some(1), self::shell_cmd("/bin/cat"));
+
+            self::wait_for_socket(&paths.socket)?;
+            let mut client = self::open_attached_client(&session, &paths).await?;
+            let position = ClientMousePosition { row: 0, col: 0 };
+            client
+                .writer
+                .send_request(&ClientRequest::ScrollPaneLineAt {
+                    position,
+                    direction: PaneScrollDirection::Down,
+                })
+                .await?;
+
+            pretty_assertions::assert_eq!(
+                self::read_until_scroll_pane_line_result(&mut client).await?,
+                (position, PaneScrollDirection::Down, false),
+            );
+            self::detach_client(client).await?;
+            self::join_server(handle)
+        })
+    }
+
+    #[test]
     fn test_serve_when_wheel_over_app_mouse_pane_forwards_mouse_bytes_to_pty() -> rootcause::Result<()> {
         self::runtime()?.block_on(async {
             let tempdir = tempfile::tempdir()?;
@@ -4251,6 +4295,7 @@ mod tests {
                 | ServerEvent::Pong
                 | ServerEvent::SidebarLayout(_)
                 | ServerEvent::Render(_)
+                | ServerEvent::ScrollPaneLineResult { .. }
                 | ServerEvent::Detached => {}
             }
         }
@@ -4294,6 +4339,45 @@ mod tests {
                 | ServerEvent::Pong
                 | ServerEvent::SidebarLayout(_)
                 | ServerEvent::Render(_)
+                | ServerEvent::ScrollPaneLineResult { .. }
+                | ServerEvent::Detached => {}
+            }
+        }
+    }
+
+    async fn read_until_scroll_pane_line_result(
+        client: &mut AttachedTestClient,
+    ) -> rootcause::Result<(ClientMousePosition, PaneScrollDirection, bool)> {
+        let started_at = Instant::now();
+
+        loop {
+            if started_at.elapsed() > SERVER_READY_TIMEOUT {
+                return Err(report!("timed out waiting for muxr scroll line result"));
+            }
+
+            let event = match tokio::time::timeout(Duration::from_millis(50), client.reader.recv_event()).await {
+                Ok(Ok(Some(event))) => event,
+                Ok(Err(error)) => return Err(error),
+                Ok(Ok(None)) | Err(_) => continue,
+            };
+
+            match event {
+                ServerEvent::ScrollPaneLineResult {
+                    position,
+                    direction,
+                    scrolled,
+                } => return Ok((position, direction, scrolled)),
+                ServerEvent::Layout(layout) => client.layout = layout,
+                ServerEvent::PaneRegions(regions) => client.pane_regions = regions,
+                ServerEvent::Error(error) => {
+                    return Err(report!("muxr test server returned error").attach(format!("{error:?}")));
+                }
+                ServerEvent::Ping => client.writer.send_request(&ClientRequest::Pong).await?,
+                ServerEvent::Attached(_)
+                | ServerEvent::Deleted
+                | ServerEvent::Pong
+                | ServerEvent::SidebarLayout(_)
+                | ServerEvent::Render(_)
                 | ServerEvent::Detached => {}
             }
         }
@@ -4328,6 +4412,7 @@ mod tests {
                 | ServerEvent::Deleted
                 | ServerEvent::Pong
                 | ServerEvent::Render(_)
+                | ServerEvent::ScrollPaneLineResult { .. }
                 | ServerEvent::Detached => {}
             }
         }
@@ -4366,6 +4451,7 @@ mod tests {
                 | ServerEvent::Deleted
                 | ServerEvent::Pong
                 | ServerEvent::SidebarLayout(_)
+                | ServerEvent::ScrollPaneLineResult { .. }
                 | ServerEvent::Detached => {}
             }
         }
@@ -4407,6 +4493,7 @@ mod tests {
                 | ServerEvent::Deleted
                 | ServerEvent::Pong
                 | ServerEvent::SidebarLayout(_)
+                | ServerEvent::ScrollPaneLineResult { .. }
                 | ServerEvent::Detached => {}
             }
         }
@@ -4445,6 +4532,7 @@ mod tests {
                 | ServerEvent::Layout(_)
                 | ServerEvent::SidebarLayout(_)
                 | ServerEvent::PaneRegions(_)
+                | ServerEvent::ScrollPaneLineResult { .. }
                 | ServerEvent::Detached => {}
             }
         }
@@ -4482,6 +4570,7 @@ mod tests {
                         | ServerEvent::Layout(_)
                         | ServerEvent::SidebarLayout(_)
                         | ServerEvent::PaneRegions(_)
+                        | ServerEvent::ScrollPaneLineResult { .. }
                         | ServerEvent::Detached,
                     )
                     | None,
@@ -4514,7 +4603,8 @@ mod tests {
                         | ServerEvent::Layout(_)
                         | ServerEvent::SidebarLayout(_)
                         | ServerEvent::PaneRegions(_)
-                        | ServerEvent::Render(_),
+                        | ServerEvent::Render(_)
+                        | ServerEvent::ScrollPaneLineResult { .. },
                     )
                     | None,
                 ))
