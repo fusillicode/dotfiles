@@ -196,7 +196,7 @@ fn display_pane(tab: &TabSnapshot, active: bool) -> Option<&PaneSnapshot> {
         return self::unfocused_unseen_agent_pane(tab).or_else(|| self::active_pane(tab));
     }
 
-    self::highest_priority_agent_pane(tab).or_else(|| self::active_pane(tab))
+    self::inactive_tab_display_pane(tab)
 }
 
 fn unfocused_unseen_agent_pane(tab: &TabSnapshot) -> Option<&PaneSnapshot> {
@@ -205,20 +205,16 @@ fn unfocused_unseen_agent_pane(tab: &TabSnapshot) -> Option<&PaneSnapshot> {
         .find(|pane| &pane.id != tab.active_pane() && pane.agent_state == PaneAgentState::Unseen)
 }
 
-fn highest_priority_agent_pane(tab: &TabSnapshot) -> Option<&PaneSnapshot> {
-    tab.panes()
-        .iter()
-        .filter(|pane| pane.agent_state != PaneAgentState::NoAgent)
-        .max_by_key(|pane| self::agent_sidebar_priority(pane.agent_state))
+fn inactive_tab_display_pane(tab: &TabSnapshot) -> Option<&PaneSnapshot> {
+    // An inactive tab row must be owned by one pane: attention wins, then running agent,
+    // then the tab's active pane. `Seen` is treated as idle for this selection.
+    self::first_pane_with_agent_state(tab, PaneAgentState::Unseen)
+        .or_else(|| self::first_pane_with_agent_state(tab, PaneAgentState::Busy))
+        .or_else(|| self::active_pane(tab))
 }
 
-const fn agent_sidebar_priority(agent_state: PaneAgentState) -> u8 {
-    match agent_state {
-        PaneAgentState::NoAgent => 0,
-        PaneAgentState::Seen => 1,
-        PaneAgentState::Busy => 2,
-        PaneAgentState::Unseen => 3,
-    }
+fn first_pane_with_agent_state(tab: &TabSnapshot, agent_state: PaneAgentState) -> Option<&PaneSnapshot> {
+    tab.panes().iter().find(|pane| pane.agent_state == agent_state)
 }
 
 fn cmd_label(pane: Option<&PaneSnapshot>) -> Option<String> {
@@ -364,7 +360,7 @@ mod tests {
     }
 
     #[test]
-    fn test_sidebar_tabs_when_inactive_tab_has_agent_pane_uses_highest_priority_pane() -> rootcause::Result<()> {
+    fn test_sidebar_tabs_when_inactive_tab_has_unseen_agent_pane_uses_unseen_pane() -> rootcause::Result<()> {
         let layout = self::layout_snapshot(
             1,
             vec![
@@ -403,6 +399,107 @@ mod tests {
                     path_label: "/t/codex".to_owned(),
                 },
             ],
+        );
+        Ok(())
+    }
+
+    #[rstest]
+    #[case::unseen(
+        PaneAgentState::Unseen,
+        "/tmp/old-unseen",
+        "codex-old",
+        "/tmp/ignored-unseen",
+        "codex-ignored",
+        "/t/old-unseen",
+        "codex-old"
+    )]
+    #[case::busy(
+        PaneAgentState::Busy,
+        "/tmp/old-busy",
+        "claude-old",
+        "/tmp/ignored-busy",
+        "claude-ignored",
+        "/t/old-busy",
+        "claude-old"
+    )]
+    fn test_sidebar_tabs_when_inactive_tab_has_multiple_actionable_agents_uses_first_in_layout_order(
+        #[case] agent_state: PaneAgentState,
+        #[case] first_cwd: &str,
+        #[case] first_cmd_label: &str,
+        #[case] second_cwd: &str,
+        #[case] second_cmd_label: &str,
+        #[case] expected_path_label: &str,
+        #[case] expected_cmd_label: &str,
+    ) -> rootcause::Result<()> {
+        let layout = self::layout_snapshot(
+            1,
+            vec![
+                self::tab_snapshot(
+                    1,
+                    "active",
+                    1,
+                    vec![self::pane_snapshot(1, "/tmp/active", None, PaneAgentState::NoAgent)?],
+                )?,
+                self::tab_snapshot(
+                    2,
+                    "inactive",
+                    2,
+                    vec![
+                        self::pane_snapshot(2, "/tmp/shell", Some("zsh"), PaneAgentState::NoAgent)?,
+                        self::pane_snapshot(3, first_cwd, Some(first_cmd_label), agent_state)?,
+                        self::pane_snapshot(4, second_cwd, Some(second_cmd_label), agent_state)?,
+                    ],
+                )?,
+            ],
+        )?;
+
+        let tabs = sidebar_tabs_with_home(&layout, None);
+
+        pretty_assertions::assert_eq!(
+            tabs[1],
+            SidebarTab {
+                active: false,
+                agent_state,
+                cmd_label: Some(expected_cmd_label.to_owned()),
+                path_label: expected_path_label.to_owned(),
+            },
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_sidebar_tabs_when_inactive_tab_has_seen_agent_uses_active_pane() -> rootcause::Result<()> {
+        let layout = self::layout_snapshot(
+            1,
+            vec![
+                self::tab_snapshot(
+                    1,
+                    "active",
+                    1,
+                    vec![self::pane_snapshot(1, "/tmp/active", None, PaneAgentState::NoAgent)?],
+                )?,
+                self::tab_snapshot(
+                    2,
+                    "inactive",
+                    2,
+                    vec![
+                        self::pane_snapshot(2, "/tmp/shell", Some("zsh"), PaneAgentState::NoAgent)?,
+                        self::pane_snapshot(3, "/tmp/codex", Some("codex"), PaneAgentState::Seen)?,
+                    ],
+                )?,
+            ],
+        )?;
+
+        let tabs = sidebar_tabs_with_home(&layout, None);
+
+        pretty_assertions::assert_eq!(
+            tabs[1],
+            SidebarTab {
+                active: false,
+                agent_state: PaneAgentState::NoAgent,
+                cmd_label: Some("zsh".to_owned()),
+                path_label: "/t/shell".to_owned(),
+            },
         );
         Ok(())
     }
