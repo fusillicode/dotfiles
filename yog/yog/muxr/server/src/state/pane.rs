@@ -29,24 +29,24 @@ impl PaneTree {
         }
     }
 
-    pub fn contains_pane(&self, pane_id: &PaneId) -> bool {
+    pub fn contains_pane(&self, pane_id: PaneId) -> bool {
         match self {
-            Self::Pane(pane) => pane.id == *pane_id,
+            Self::Pane(pane) => pane.id == pane_id,
             Self::Split { first, second, .. } => first.contains_pane(pane_id) || second.contains_pane(pane_id),
         }
     }
 
-    pub fn pane_mut(&mut self, pane_id: &PaneId) -> Option<&mut Pane> {
+    pub fn pane_mut(&mut self, pane_id: PaneId) -> Option<&mut Pane> {
         match self {
-            Self::Pane(pane) if pane.id == *pane_id => Some(pane),
+            Self::Pane(pane) if pane.id == pane_id => Some(pane),
             Self::Pane(_) => None,
             Self::Split { first, second, .. } => first.pane_mut(pane_id).or_else(|| second.pane_mut(pane_id)),
         }
     }
 
-    pub fn append_pane_ids<'a>(&'a self, ids: &mut Vec<&'a str>) {
+    pub fn append_pane_ids(&self, ids: &mut Vec<PaneId>) {
         match self {
-            Self::Pane(pane) => ids.push(pane.id.as_ref()),
+            Self::Pane(pane) => ids.push(pane.id),
             Self::Split { first, second, .. } => {
                 first.append_pane_ids(ids);
                 second.append_pane_ids(ids);
@@ -132,7 +132,7 @@ impl Pane {
                 .map(ToOwned::to_owned)
                 .or(terminal_title.cmd_label),
             cwd: terminal_title.cwd.unwrap_or_else(|| self.cwd.clone()),
-            id: self.id.clone(),
+            id: self.id,
             title: self.title.clone(),
         }
     }
@@ -229,7 +229,7 @@ mod tests {
             cmd_label: "zsh".to_owned(),
             cwd: "/old/project".to_owned(),
             focus_seq: 1,
-            id: PaneId::new("pane-1")?,
+            id: PaneId::new(1)?,
             started_at: 1,
             state: PaneState::Running,
             title: "zsh".to_owned(),

@@ -46,14 +46,14 @@ impl SelectionState {
     pub fn clear_if_regions_changed(&mut self, regions: &PaneRegionsSnapshot) -> bool {
         let previous = self.selected.clone();
         self.drag = self.drag.take().and_then(|drag| {
-            self::matching_region(regions, drag.region.id()).map(|region| SelectionDrag {
+            self::matching_region(regions, *drag.region.id()).map(|region| SelectionDrag {
                 anchor: drag.anchor,
                 raw_anchor: self::clamp_to_region(drag.raw_anchor, &region),
                 region,
             })
         });
         self.selected = self.selected.take().and_then(|selected| {
-            self::matching_region(regions, selected.region.id()).map(|region| selected.with_region(region))
+            self::matching_region(regions, *selected.region.id()).map(|region| selected.with_region(region))
         });
         if self.selected.is_none() {
             self.cached_rows.clear();
@@ -256,8 +256,8 @@ impl SelectionRange {
     }
 
     #[must_use]
-    pub const fn pane_id(&self) -> &PaneId {
-        self.region.id()
+    pub const fn pane_id(&self) -> PaneId {
+        *self.region.id()
     }
 
     fn bounds(&self) -> SelectionBounds {
@@ -279,7 +279,7 @@ impl SelectionRange {
         row >= bounds.start.row && row <= bounds.end.row
     }
 
-    fn with_region(self, region: PaneRegionSnapshot) -> Self {
+    const fn with_region(self, region: PaneRegionSnapshot) -> Self {
         let last_col = region.cols().saturating_sub(1);
         Self {
             anchor: self.anchor.clamp_col(last_col),
@@ -509,8 +509,8 @@ fn cell_text_is_whitespace(text: &str) -> bool {
     text.is_empty() || text.chars().all(char::is_whitespace)
 }
 
-fn matching_region(regions: &PaneRegionsSnapshot, pane_id: &PaneId) -> Option<PaneRegionSnapshot> {
-    regions.regions().iter().find(|region| region.id() == pane_id).cloned()
+fn matching_region(regions: &PaneRegionsSnapshot, pane_id: PaneId) -> Option<PaneRegionSnapshot> {
+    regions.regions().iter().find(|region| *region.id() == pane_id).cloned()
 }
 
 fn content_position(position: ClientMousePosition, region: &PaneRegionSnapshot) -> Option<SelectionContentPosition> {
@@ -821,14 +821,14 @@ mod tests {
 
     fn pane_regions() -> rootcause::Result<PaneRegionsSnapshot> {
         PaneRegionsSnapshot::new(vec![
-            PaneRegionSnapshot::new(PaneId::new("pane-1")?, 0, 0, 5, 1, muxr_core::PaneMouseMode::None, 0)?,
-            PaneRegionSnapshot::new(PaneId::new("pane-2")?, 6, 0, 5, 1, muxr_core::PaneMouseMode::None, 0)?,
+            PaneRegionSnapshot::new(PaneId::new(1)?, 0, 0, 5, 1, muxr_core::PaneMouseMode::None, 0)?,
+            PaneRegionSnapshot::new(PaneId::new(2)?, 6, 0, 5, 1, muxr_core::PaneMouseMode::None, 0)?,
         ])
     }
 
     fn wide_pane_regions() -> rootcause::Result<PaneRegionsSnapshot> {
         PaneRegionsSnapshot::new(vec![PaneRegionSnapshot::new(
-            PaneId::new("pane-1")?,
+            PaneId::new(1)?,
             0,
             0,
             3,
@@ -840,7 +840,7 @@ mod tests {
 
     fn three_row_pane_regions(visible_top_row: u64) -> rootcause::Result<PaneRegionsSnapshot> {
         PaneRegionsSnapshot::new(vec![PaneRegionSnapshot::new(
-            PaneId::new("pane-1")?,
+            PaneId::new(1)?,
             0,
             0,
             2,

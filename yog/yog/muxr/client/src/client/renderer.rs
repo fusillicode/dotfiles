@@ -72,7 +72,7 @@ impl ClickTracker {
         }
     }
 
-    fn reset(&mut self) {
+    const fn reset(&mut self) {
         self.count = 0;
         self.previous = None;
     }
@@ -95,7 +95,7 @@ impl ClickTarget {
     fn remains_in_regions(&self, regions: &PaneRegionsSnapshot) -> bool {
         match self {
             Self::Cell { pane_id, position } => regions.pane_at(*position).is_some_and(|region| region.id() == pane_id),
-            Self::Word { end, pane_id, start } => self::region_for_pane_id(regions, pane_id)
+            Self::Word { end, pane_id, start } => self::region_for_pane_id(regions, *pane_id)
                 .is_some_and(|region| region.contains(start.row, start.col) && region.contains(end.row, end.col)),
         }
     }
@@ -108,7 +108,7 @@ struct MouseCapture {
 
 impl MouseCapture {
     fn retain_for_regions(self, regions: &PaneRegionsSnapshot) -> Option<Self> {
-        self::region_for_pane_id(regions, self.region.id())
+        self::region_for_pane_id(regions, *self.region.id())
             .cloned()
             .map(|region| Self { region })
     }
@@ -227,7 +227,7 @@ impl ClientRenderer {
         self.selection_edge_drag = self
             .selection_edge_drag
             .take()
-            .and_then(|drag| self::region_for_pane_id(&self.pane_regions, &drag.pane_id).map(|_| drag));
+            .and_then(|drag| self::region_for_pane_id(&self.pane_regions, drag.pane_id).map(|_| drag));
         self.update_selection_edge_scroll_pending();
         let selection_changed = self.selection.clear_if_regions_changed(&self.pane_regions);
         self.sync_mouse_capture(stdout)?;
@@ -376,13 +376,13 @@ impl ClientRenderer {
         {
             return ClickTarget::Word {
                 end,
-                pane_id: selection.pane_id().clone(),
+                pane_id: selection.pane_id(),
                 start,
             };
         }
 
         ClickTarget::Cell {
-            pane_id: region.id().clone(),
+            pane_id: *region.id(),
             position,
         }
     }
@@ -453,12 +453,12 @@ impl ClientRenderer {
         let col = position
             .col
             .clamp(region.col(), self::last_region_col_saturating(region));
-        let pane_id = region.id().clone();
+        let pane_id = *region.id();
         let previous_visible_top_row = region.visible_top_row();
         self.selection_edge_drag = Some(SelectionEdgeDrag {
             col,
             direction,
-            pane_id: pane_id.clone(),
+            pane_id,
         });
         self.selection_edge_scroll_request_for(
             direction,
@@ -480,7 +480,7 @@ impl ClientRenderer {
 
     fn selection_edge_drag_position(&self) -> Option<ClientMousePosition> {
         let drag = self.selection_edge_drag.as_ref()?;
-        let region = self::region_for_pane_id(&self.pane_regions, &drag.pane_id)?;
+        let region = self::region_for_pane_id(&self.pane_regions, drag.pane_id)?;
         Some(ClientMousePosition {
             row: self::selection_edge_row(region, drag.direction),
             col: drag.col.clamp(region.col(), self::last_region_col_saturating(region)),
@@ -489,12 +489,12 @@ impl ClientRenderer {
 
     pub fn selection_edge_scroll_request(&self) -> Option<SelectionEdgeScrollRequest> {
         let drag = self.selection_edge_drag.clone()?;
-        let previous_visible_top_row = self::region_for_pane_id(&self.pane_regions, &drag.pane_id)?.visible_top_row();
+        let previous_visible_top_row = self::region_for_pane_id(&self.pane_regions, drag.pane_id)?.visible_top_row();
         let position = self.selection_edge_drag_position()?;
         self.selection_edge_scroll_request_for(drag.direction, drag.pane_id, previous_visible_top_row, position)
     }
 
-    fn selection_edge_scroll_request_for(
+    const fn selection_edge_scroll_request_for(
         &self,
         direction: PaneScrollDirection,
         pane_id: PaneId,
@@ -519,7 +519,7 @@ impl ClientRenderer {
             self.selection_edge_scroll_acknowledged = false;
             return;
         };
-        let Some(region) = self::region_for_pane_id(&self.pane_regions, &pending.pane_id) else {
+        let Some(region) = self::region_for_pane_id(&self.pane_regions, pending.pane_id) else {
             self.selection_edge_scroll_acknowledged = false;
             self.selection_edge_scroll_pending = None;
             return;
@@ -551,7 +551,7 @@ impl ClientRenderer {
         self.selection_edge_drag.is_some()
     }
 
-    pub fn mark_selection_edge_scroll_sent(&mut self, pending: SelectionEdgeScrollPending) {
+    pub const fn mark_selection_edge_scroll_sent(&mut self, pending: SelectionEdgeScrollPending) {
         self.selection_edge_scroll_acknowledged = false;
         self.selection_edge_scroll_pending = Some(pending);
     }
@@ -581,8 +581,8 @@ fn selection_rows(previous: Option<&SelectionRange>, next: Option<&SelectionRang
     rows.into_iter().collect()
 }
 
-fn region_for_pane_id<'a>(regions: &'a PaneRegionsSnapshot, pane_id: &PaneId) -> Option<&'a PaneRegionSnapshot> {
-    regions.regions().iter().find(|region| region.id() == pane_id)
+fn region_for_pane_id(regions: &PaneRegionsSnapshot, pane_id: PaneId) -> Option<&PaneRegionSnapshot> {
+    regions.regions().iter().find(|region| *region.id() == pane_id)
 }
 
 fn clamp_mouse_position_to_region(position: ClientMousePosition, region: &PaneRegionSnapshot) -> ClientMousePosition {
@@ -970,21 +970,21 @@ mod tests {
 
     fn click_target(row: u16, col: u16) -> rootcause::Result<ClickTarget> {
         Ok(ClickTarget::Cell {
-            pane_id: muxr_core::PaneId::new("pane-1")?,
+            pane_id: muxr_core::PaneId::new(1)?,
             position: muxr_core::ClientMousePosition { row, col },
         })
     }
     fn layout_snapshot() -> rootcause::Result<LayoutSnapshot> {
-        let active_tab = TabId::new("tab-1")?;
-        let active_pane = PaneId::new("pane-1")?;
+        let active_tab = TabId::new(1)?;
+        let active_pane = PaneId::new(1)?;
         let pane = PaneSnapshot {
             agent_state: muxr_core::PaneAgentState::NoAgent,
             cwd: "/tmp/default".to_owned(),
             cmd_label: None,
-            id: active_pane.clone(),
+            id: active_pane,
             title: "shell".to_owned(),
         };
-        let tab = TabSnapshot::new(active_tab.clone(), "default", active_pane, vec![pane])?;
+        let tab = TabSnapshot::new(active_tab, "default", active_pane, vec![pane])?;
         LayoutSnapshot::new(active_tab, vec![tab])
     }
 
@@ -994,7 +994,7 @@ mod tests {
 
     fn pane_regions_snapshot_with_visible_top_row(visible_top_row: u64) -> rootcause::Result<PaneRegionsSnapshot> {
         PaneRegionsSnapshot::new(vec![muxr_core::PaneRegionSnapshot::new(
-            muxr_core::PaneId::new("pane-1")?,
+            muxr_core::PaneId::new(1)?,
             0,
             0,
             2,
@@ -1006,7 +1006,7 @@ mod tests {
 
     fn any_motion_pane_regions_snapshot() -> rootcause::Result<PaneRegionsSnapshot> {
         PaneRegionsSnapshot::new(vec![muxr_core::PaneRegionSnapshot::new(
-            muxr_core::PaneId::new("pane-1")?,
+            muxr_core::PaneId::new(1)?,
             0,
             0,
             2,
@@ -1018,7 +1018,7 @@ mod tests {
 
     fn word_pane_regions_snapshot() -> rootcause::Result<PaneRegionsSnapshot> {
         PaneRegionsSnapshot::new(vec![muxr_core::PaneRegionSnapshot::new(
-            muxr_core::PaneId::new("pane-1")?,
+            muxr_core::PaneId::new(1)?,
             0,
             0,
             7,
@@ -1030,7 +1030,7 @@ mod tests {
 
     fn three_row_pane_regions_snapshot(visible_top_row: u64) -> rootcause::Result<PaneRegionsSnapshot> {
         PaneRegionsSnapshot::new(vec![muxr_core::PaneRegionSnapshot::new(
-            muxr_core::PaneId::new("pane-1")?,
+            muxr_core::PaneId::new(1)?,
             0,
             0,
             2,
@@ -1042,29 +1042,29 @@ mod tests {
 
     fn two_tab_layout() -> rootcause::Result<LayoutSnapshot> {
         LayoutSnapshot::new(
-            muxr_core::TabId::new("tab-2")?,
+            muxr_core::TabId::new(2)?,
             vec![
                 muxr_core::TabSnapshot::new(
-                    muxr_core::TabId::new("tab-1")?,
+                    muxr_core::TabId::new(1)?,
                     "default",
-                    muxr_core::PaneId::new("pane-1")?,
+                    muxr_core::PaneId::new(1)?,
                     vec![muxr_core::PaneSnapshot {
                         agent_state: muxr_core::PaneAgentState::NoAgent,
                         cwd: "/tmp/tab-1".to_owned(),
                         cmd_label: None,
-                        id: muxr_core::PaneId::new("pane-1")?,
+                        id: muxr_core::PaneId::new(1)?,
                         title: "shell".to_owned(),
                     }],
                 )?,
                 muxr_core::TabSnapshot::new(
-                    muxr_core::TabId::new("tab-2")?,
+                    muxr_core::TabId::new(2)?,
                     "tab 2",
-                    muxr_core::PaneId::new("pane-2")?,
+                    muxr_core::PaneId::new(2)?,
                     vec![muxr_core::PaneSnapshot {
                         agent_state: muxr_core::PaneAgentState::NoAgent,
                         cwd: "/tmp/tab-2".to_owned(),
                         cmd_label: None,
-                        id: muxr_core::PaneId::new("pane-2")?,
+                        id: muxr_core::PaneId::new(2)?,
                         title: "shell".to_owned(),
                     }],
                 )?,

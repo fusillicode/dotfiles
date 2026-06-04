@@ -135,9 +135,9 @@ impl PaneRuntimes {
                     &config.shell_cmd,
                     &pane.cwd,
                     size,
-                    &self::pane_output_path(&config.paths.panes, &pane.id),
+                    &self::pane_output_path(&config.paths.panes, pane.id),
                 )?,
-                id: pane.id.clone(),
+                id: pane.id,
             });
         }
         Ok(Self { panes })
@@ -150,7 +150,7 @@ impl PaneRuntimes {
         config: &ServerConfig,
         size: &TerminalSize,
     ) -> rootcause::Result<()> {
-        let history_path = self::pane_output_path(&config.paths.panes, &pane_id);
+        let history_path = self::pane_output_path(&config.paths.panes, pane_id);
         self.panes.push(PaneRuntime {
             id: pane_id,
             session: PtySession::spawn(&config.shell_cmd, cwd, size, &history_path)?,
@@ -158,16 +158,16 @@ impl PaneRuntimes {
         Ok(())
     }
 
-    pub fn handle(&self, pane_id: &PaneId) -> rootcause::Result<PtyHandle> {
+    pub fn handle(&self, pane_id: PaneId) -> rootcause::Result<PtyHandle> {
         self.panes
             .iter()
-            .find(|pane| pane.id == *pane_id)
+            .find(|pane| pane.id == pane_id)
             .map(|pane| pane.session.handle())
             .ok_or_else(|| report!("muxr pane runtime is missing").attach(format!("pane_id={pane_id}")))
     }
 
-    pub fn remove(&mut self, pane_id: &PaneId) {
-        self.panes.retain(|pane| pane.id != *pane_id);
+    pub fn remove(&mut self, pane_id: PaneId) {
+        self.panes.retain(|pane| pane.id != pane_id);
     }
 
     const fn is_empty(&self) -> bool {
@@ -184,7 +184,7 @@ impl PaneRuntimes {
                         report!("muxr exited pane is missing exit status").attach(format!("pane_id={}", pane.id))
                     );
                 };
-                exited_panes.push((pane.id.clone(), exit_status));
+                exited_panes.push((pane.id, exit_status));
             }
         }
         Ok(exited_panes)
@@ -192,13 +192,13 @@ impl PaneRuntimes {
 
     fn resize_panes(&self, regions: &[PaneRegion]) -> rootcause::Result<()> {
         for region in regions {
-            self.handle(&region.id)?
+            self.handle(region.id)?
                 .resize(&TerminalSize::new(region.area.size.cols, region.area.size.rows)?)?;
         }
         Ok(())
     }
 
-    fn snapshot(&self, pane_id: &PaneId) -> rootcause::Result<TerminalSnapshot> {
+    fn snapshot(&self, pane_id: PaneId) -> rootcause::Result<TerminalSnapshot> {
         self.handle(pane_id)?.render_snapshot()
     }
 
@@ -206,7 +206,7 @@ impl PaneRuntimes {
         self.panes
             .iter()
             .filter_map(|pane| match pane.session.handle().terminal_title() {
-                Ok(Some(title)) => Some(Ok((pane.id.clone(), Some(title)))),
+                Ok(Some(title)) => Some(Ok((pane.id, Some(title)))),
                 Ok(None) => None,
                 Err(error) => Some(Err(error)),
             })
@@ -216,7 +216,7 @@ impl PaneRuntimes {
     fn shell_processes(&self) -> rootcause::Result<Vec<(PaneId, Option<u32>)>> {
         self.panes
             .iter()
-            .map(|pane| Ok((pane.id.clone(), pane.session.handle().process_id()?)))
+            .map(|pane| Ok((pane.id, pane.session.handle().process_id()?)))
             .collect()
     }
 
@@ -224,7 +224,7 @@ impl PaneRuntimes {
         let mut title_changes = Vec::new();
         for pane in &self.panes {
             for title in pane.session.handle().take_title_changes()? {
-                title_changes.push((pane.id.clone(), title));
+                title_changes.push((pane.id, title));
             }
         }
         Ok(title_changes)
@@ -234,7 +234,7 @@ impl PaneRuntimes {
         let mut screen_dirty_panes = Vec::new();
         for pane in &self.panes {
             if pane.session.handle().take_screen_dirty() {
-                screen_dirty_panes.push(pane.id.clone());
+                screen_dirty_panes.push(pane.id);
             }
         }
         screen_dirty_panes
@@ -365,7 +365,7 @@ impl RenderComposer {
         };
 
         for region in pane_layout.regions() {
-            let snapshot = runtimes.snapshot(&region.id)?;
+            let snapshot = runtimes.snapshot(region.id)?;
             self::paste_snapshot(&mut rows, region, &snapshot)?;
             if region.id == active_pane && snapshot.cursor().visible {
                 let row = region
@@ -665,7 +665,7 @@ pub fn active_pane_session_metadata(
 ) -> rootcause::Result<SessionMetadata> {
     let active_pane_id = layout.active_pane_id()?;
     let cwd = layout
-        .pane(&active_pane_id)
+        .pane(active_pane_id)
         .map(|pane| pane.cwd.clone())
         .ok_or_else(|| {
             report!("muxr active pane is missing from server layout").attach(format!("pane_id={active_pane_id}"))
@@ -892,7 +892,7 @@ fn attach_pane_sinks(
         .map(|pane| {
             Ok(AttachedPtySink {
                 guard: pane.session.handle().attach_sink(sender.clone())?,
-                pane_id: pane.id.clone(),
+                pane_id: pane.id,
             })
         })
         .collect()
@@ -901,12 +901,12 @@ fn attach_pane_sinks(
 fn attach_pane_sink(
     runtimes: &Mutex<PaneRuntimes>,
     sender: &mpsc::SyncSender<PtyEvent>,
-    pane_id: &PaneId,
+    pane_id: PaneId,
 ) -> rootcause::Result<AttachedPtySink> {
     let runtimes = self::lock_mutex(runtimes, "pane runtimes")?;
     Ok(AttachedPtySink {
         guard: runtimes.handle(pane_id)?.attach_sink(sender.clone())?,
-        pane_id: pane_id.clone(),
+        pane_id,
     })
 }
 
@@ -946,18 +946,18 @@ fn reap_exited_panes(
         }
         let mut removed_panes = Vec::new();
         for (pane_id, exit_status) in &exited_panes {
-            match layout.remove_exited_pane(pane_id, exited_at, exit_status.clone())? {
+            match layout.remove_exited_pane(*pane_id, exited_at, exit_status.clone())? {
                 PaneExitOutcome::Final => result = ReapResult::Final,
                 PaneExitOutcome::Removed => {}
             }
-            removed_panes.push(pane_id.clone());
+            removed_panes.push(pane_id);
         }
         crate::state::persisted::write_metadata(paths, &layout)?;
         drop(layout);
 
         let mut runtimes = self::lock_mutex(runtimes, "pane runtimes")?;
         for pane_id in removed_panes {
-            runtimes.remove(&pane_id);
+            runtimes.remove(*pane_id);
         }
         drop(runtimes);
     }
@@ -1156,7 +1156,7 @@ fn layout_snapshot_and_persist(
     layout: &mut SessionLayout,
     runtimes: &PaneRuntimes,
     runtime_cmd_labels: &[(PaneId, Option<String>)],
-    runtime_agent_states: &[(String, muxr_core::PaneAgentState)],
+    runtime_agent_states: &[(PaneId, muxr_core::PaneAgentState)],
 ) -> rootcause::Result<LayoutSnapshot> {
     let synced = self::sync_layout_terminal_titles_from_runtimes(layout, runtimes)?;
     if synced.layout_changed {
@@ -1188,7 +1188,7 @@ fn pane_regions_snapshot(
         .pane_regions(terminal_size)?
         .into_iter()
         .map(|region| {
-            let handle = runtimes.handle(&region.id)?;
+            let handle = runtimes.handle(region.id)?;
             let mouse_mode = handle.mouse_mode()?;
             let visible_top_row = handle.visible_top_row()?;
             PaneRegionSnapshot::new(
@@ -1453,7 +1453,7 @@ fn runtime_cmd_labels(agent_processes: &[PaneAgentProcess]) -> Vec<(PaneId, Opti
         .filter_map(|process| {
             process
                 .agent()
-                .map(|agent| (process.pane_id().clone(), Some(agent.short_name().to_owned())))
+                .map(|agent| (*process.pane_id(), Some(agent.short_name().to_owned())))
         })
         .collect()
 }
@@ -1475,9 +1475,9 @@ async fn flush_cmd_label_layout(
         let runtime_agent_states = state.attention_tracker.agent_states();
         let mut changes = Vec::new();
         for (pane_id, title) in title_changes {
-            layout_changed |= layout.sync_terminal_titles(&[(pane_id.clone(), title.clone())]);
+            layout_changed |= layout.sync_terminal_titles(&[(pane_id, title.clone())]);
             let terminal_titles =
-                self::terminal_titles_with_override(&runtime_metadata.terminal_titles, &pane_id, title);
+                self::terminal_titles_with_override(&runtime_metadata.terminal_titles, pane_id, title);
             let layout_snapshot = layout.snapshot_with_runtime_metadata(
                 &terminal_titles,
                 &runtime_metadata.runtime_cmd_labels,
@@ -1555,21 +1555,21 @@ async fn send_sidebar_layout_if_changed(
 
 fn terminal_titles_with_override(
     terminal_titles: &[(PaneId, Option<String>)],
-    pane_id: &PaneId,
+    pane_id: PaneId,
     title: Option<String>,
 ) -> Vec<(PaneId, Option<String>)> {
     let mut out = Vec::with_capacity(terminal_titles.len().saturating_add(1));
     let mut replaced = false;
     for (existing_pane_id, existing_title) in terminal_titles {
-        if existing_pane_id == pane_id {
-            out.push((existing_pane_id.clone(), title.clone()));
+        if *existing_pane_id == pane_id {
+            out.push((*existing_pane_id, title.clone()));
             replaced = true;
         } else {
-            out.push((existing_pane_id.clone(), existing_title.clone()));
+            out.push((*existing_pane_id, existing_title.clone()));
         }
     }
     if !replaced {
-        out.push((pane_id.clone(), title));
+        out.push((pane_id, title));
     }
     out
 }
@@ -1653,7 +1653,7 @@ async fn handle_reaped_panes(
         ReapResult::Removed => {
             let live_panes = {
                 let runtimes = self::lock_mutex(state.runtimes, "pane runtimes")?;
-                runtimes.panes.iter().map(|pane| pane.id.clone()).collect::<Vec<_>>()
+                runtimes.panes.iter().map(|pane| pane.id).collect::<Vec<_>>()
             };
             state.sink_guards.retain(|sink| live_panes.contains(&sink.pane_id));
             Ok(!self::resize_panes_and_render(event_writer, state).await?)
@@ -1776,7 +1776,7 @@ async fn handle_focus_tab_request(
 ) -> rootcause::Result<bool> {
     let changed = {
         let mut layout = self::lock_mutex(state.layout, "layout")?;
-        let changed = crate::tab_focus::handle_focus_tab(&mut layout, &tab_id)?;
+        let changed = crate::tab_focus::handle_focus_tab(&mut layout, tab_id)?;
         if changed {
             crate::state::persisted::write_metadata(&state.config.paths, &layout)?;
         }
@@ -1827,11 +1827,9 @@ async fn handle_cmd_request(
                 state.runtimes,
                 &state.terminal_size,
             )?;
-            state.sink_guards.push(self::attach_pane_sink(
-                state.runtimes,
-                state.pty_event_sender,
-                &pane_id,
-            )?);
+            state
+                .sink_guards
+                .push(self::attach_pane_sink(state.runtimes, state.pty_event_sender, pane_id)?);
             self::resize_panes_and_render(event_writer, state).await
         }
         ClientCmd::ClosePane => {
@@ -1885,11 +1883,9 @@ async fn handle_tab_cmd_request(
                 drop(layout);
                 pane_id
             };
-            state.sink_guards.push(self::attach_pane_sink(
-                state.runtimes,
-                state.pty_event_sender,
-                &pane_id,
-            )?);
+            state
+                .sink_guards
+                .push(self::attach_pane_sink(state.runtimes, state.pty_event_sender, pane_id)?);
         }
         TabCmd::FocusPrevious => {
             let mut layout = self::lock_mutex(state.layout, "layout")?;
@@ -1930,7 +1926,7 @@ fn active_pane_handle_with_id(
         layout.active_pane_id()?
     };
     let runtimes = self::lock_mutex(runtimes, "pane runtimes")?;
-    let handle = runtimes.handle(&active_pane)?;
+    let handle = runtimes.handle(active_pane)?;
     drop(runtimes);
     Ok((active_pane, handle))
 }
@@ -1944,7 +1940,7 @@ fn write_active_pane_user_input(
     let render_dirty = write(&handle)?;
     state
         .attention_tracker
-        .record_user_interaction(&pane_id, interaction, Instant::now());
+        .record_user_interaction(pane_id, interaction, Instant::now());
     Ok(render_dirty)
 }
 
@@ -1953,7 +1949,7 @@ fn acknowledge_active_agent_attention(state: &mut AttachedSessionState<'_>) -> r
         let layout = self::lock_mutex(state.layout, "layout")?;
         layout.active_pane_id()?
     };
-    Ok(state.attention_tracker.acknowledge_agent_attention(&active_pane))
+    Ok(state.attention_tracker.acknowledge_agent_attention(active_pane))
 }
 
 fn input_interaction(bytes: &[u8]) -> PaneUserInteraction {
@@ -1975,11 +1971,11 @@ pub fn spawn_pane_or_restore_layout(
     // New panes update layout and runtimes together; rollback the layout if PTY spawn fails so render cannot see
     // pane metadata without a runtime.
     let cwd = layout
-        .pane(&pane_id)
+        .pane(pane_id)
         .map(|pane| pane.cwd.clone())
         .ok_or_else(|| report!("muxr new pane is missing from server layout").attach(format!("pane_id={pane_id}")))?;
     let spawn_result = match self::lock_mutex(runtimes, "pane runtimes") {
-        Ok(mut runtimes) => runtimes.spawn_pane(pane_id.clone(), &cwd, config, terminal_size),
+        Ok(mut runtimes) => runtimes.spawn_pane(pane_id, &cwd, config, terminal_size),
         Err(error) => Err(error),
     };
     if let Err(error) = spawn_result {
@@ -2002,7 +1998,7 @@ async fn handle_mouse_event_request(
     };
     let handle = {
         let runtimes = self::lock_mutex(state.runtimes, "pane runtimes")?;
-        let handle = runtimes.handle(region.id())?;
+        let handle = runtimes.handle(*region.id())?;
         drop(runtimes);
         handle
     };
@@ -2012,7 +2008,7 @@ async fn handle_mouse_event_request(
             if let Some(scrolled_to_bottom) = handle.write_mouse_event(event, &region, protocol)? {
                 *render_dirty |= scrolled_to_bottom;
                 state.attention_tracker.record_user_interaction(
-                    region.id(),
+                    *region.id(),
                     PaneUserInteraction::MayEcho,
                     Instant::now(),
                 );
@@ -2029,7 +2025,7 @@ async fn handle_mouse_event_request(
             *render_dirty |= handle.write_faux_scroll_input(direction, application_cursor)?;
             state
                 .attention_tracker
-                .record_user_interaction(region.id(), PaneUserInteraction::MayEcho, Instant::now());
+                .record_user_interaction(*region.id(), PaneUserInteraction::MayEcho, Instant::now());
             Ok(true)
         }
         crate::pane_mouse::PaneMouseAction::ScrollHistory { direction } => {
@@ -2241,13 +2237,10 @@ mod tests {
         #[case] agent: ytil_agents::agent::Agent,
         #[case] expected_label: &str,
     ) -> rootcause::Result<()> {
-        let pane_id = PaneId::new("pane-1")?;
+        let pane_id = PaneId::new(1)?;
 
         pretty_assertions::assert_eq!(
-            self::runtime_cmd_labels(&[PaneAgentProcess::Agent {
-                pane_id: pane_id.clone(),
-                agent,
-            }]),
+            self::runtime_cmd_labels(&[PaneAgentProcess::Agent { pane_id, agent }]),
             vec![(pane_id, Some(expected_label.to_owned()))],
         );
         Ok(())
@@ -2259,7 +2252,7 @@ mod tests {
         let (session, paths) = self::session_paths(tempdir.path(), "work")?;
         let mut layout = SessionLayout::initial(&session, self::metadata("zsh", 1))?;
         let runtimes = PaneRuntimes { panes: Vec::new() };
-        let pane_id = PaneId::new("pane-1")?;
+        let pane_id = PaneId::new(1)?;
 
         let snapshot = self::layout_snapshot_and_persist(
             &paths,
@@ -2373,16 +2366,16 @@ mod tests {
                 return Err(report!("expected server attached response"));
             };
 
-            pretty_assertions::assert_eq!(attached.layout.active_tab().as_ref(), "tab-1");
+            pretty_assertions::assert_eq!(attached.layout.active_tab().to_string(), "tab-1");
             let Some(tab) = attached.layout.tabs().first() else {
                 return Err(report!("expected one tab in layout snapshot"));
             };
-            pretty_assertions::assert_eq!(tab.id().as_ref(), "tab-1");
-            pretty_assertions::assert_eq!(tab.active_pane().as_ref(), "pane-1");
+            pretty_assertions::assert_eq!(tab.id().to_string(), "tab-1");
+            pretty_assertions::assert_eq!(tab.active_pane().to_string(), "pane-1");
             let Some(pane) = tab.panes().first() else {
                 return Err(report!("expected one pane in layout snapshot"));
             };
-            pretty_assertions::assert_eq!(pane.id.as_ref(), "pane-1");
+            pretty_assertions::assert_eq!(pane.id.to_string(), "pane-1");
 
             connection.send_request(&ClientRequest::Detach).await?;
             self::read_connection_until_detached(&mut connection).await?;
@@ -2525,17 +2518,17 @@ mod tests {
         layout.create_tab(self::metadata("sh", 2))?;
         layout.create_tab(self::metadata("sh", 3))?;
         pretty_assertions::assert_eq!(self::layout_tab_ids(&layout)?, vec!["tab-1", "tab-2", "tab-3"]);
-        pretty_assertions::assert_eq!(layout.active_tab_id().as_ref(), "tab-3");
+        pretty_assertions::assert_eq!(layout.active_tab_id().to_string(), "tab-3");
 
         layout.focus_previous_tab()?;
-        pretty_assertions::assert_eq!(layout.active_tab_id().as_ref(), "tab-2");
+        pretty_assertions::assert_eq!(layout.active_tab_id().to_string(), "tab-2");
         layout.move_active_tab_previous()?;
         pretty_assertions::assert_eq!(self::layout_tab_ids(&layout)?, vec!["tab-2", "tab-1", "tab-3"]);
-        pretty_assertions::assert_eq!(layout.active_tab_id().as_ref(), "tab-2");
+        pretty_assertions::assert_eq!(layout.active_tab_id().to_string(), "tab-2");
         layout.move_active_tab_next()?;
         pretty_assertions::assert_eq!(self::layout_tab_ids(&layout)?, vec!["tab-1", "tab-2", "tab-3"]);
         layout.focus_next_tab()?;
-        pretty_assertions::assert_eq!(layout.active_tab_id().as_ref(), "tab-3");
+        pretty_assertions::assert_eq!(layout.active_tab_id().to_string(), "tab-3");
         Ok(())
     }
 
@@ -2547,8 +2540,8 @@ mod tests {
 
         let pane_id = layout.split_active_pane(self::metadata("sh", 2), PaneSplitAxis::Vertical)?;
 
-        pretty_assertions::assert_eq!(pane_id.as_ref(), "pane-2");
-        pretty_assertions::assert_eq!(layout.active_pane_id()?.as_ref(), "pane-2");
+        pretty_assertions::assert_eq!(pane_id.to_string(), "pane-2");
+        pretty_assertions::assert_eq!(layout.active_pane_id()?.to_string(), "pane-2");
         pretty_assertions::assert_eq!(self::layout_active_tab_pane_ids(&layout)?, vec!["pane-1", "pane-2"]);
 
         let close = layout.close_active_pane(3)?;
@@ -2556,10 +2549,10 @@ mod tests {
         pretty_assertions::assert_eq!(
             close,
             ClosePaneOutcome::Removed {
-                pane_id: PaneId::new("pane-2")?,
+                pane_id: PaneId::new(2)?,
             },
         );
-        pretty_assertions::assert_eq!(layout.active_pane_id()?.as_ref(), "pane-1");
+        pretty_assertions::assert_eq!(layout.active_pane_id()?.to_string(), "pane-1");
         pretty_assertions::assert_eq!(self::layout_active_tab_pane_ids(&layout)?, vec!["pane-1"]);
         Ok(())
     }
@@ -2571,7 +2564,7 @@ mod tests {
         let active_cwd = active_cwd.path().to_string_lossy().into_owned();
         let config = self::server_config(tempdir.path(), "work")?;
         let mut layout = SessionLayout::initial(&config.session, self::metadata("sh", 1))?;
-        layout.sync_terminal_titles(&[(PaneId::new("pane-1")?, Some(active_cwd.clone()))]);
+        layout.sync_terminal_titles(&[(PaneId::new(1)?, Some(active_cwd.clone()))]);
 
         let metadata = self::active_pane_session_metadata(&config, &layout)?;
 
@@ -2586,7 +2579,7 @@ mod tests {
         let active_cwd = active_cwd.path().to_string_lossy().into_owned();
         let config = self::server_config(tempdir.path(), "work")?;
         let mut layout = SessionLayout::initial(&config.session, self::metadata("sh", 1))?;
-        layout.sync_terminal_titles(&[(PaneId::new("pane-1")?, Some(active_cwd.clone()))]);
+        layout.sync_terminal_titles(&[(PaneId::new(1)?, Some(active_cwd.clone()))]);
 
         let pane_id = layout.split_active_pane(
             self::active_pane_session_metadata(&config, &layout)?,
@@ -2594,7 +2587,7 @@ mod tests {
         )?;
 
         let pane = layout
-            .pane(&pane_id)
+            .pane(pane_id)
             .ok_or_else(|| report!("expected split pane to exist").attach(format!("pane_id={pane_id}")))?;
         pretty_assertions::assert_eq!(pane.cwd, active_cwd);
         Ok(())
@@ -2607,12 +2600,12 @@ mod tests {
         let active_cwd = active_cwd.path().to_string_lossy().into_owned();
         let config = self::server_config(tempdir.path(), "work")?;
         let mut layout = SessionLayout::initial(&config.session, self::metadata("sh", 1))?;
-        layout.sync_terminal_titles(&[(PaneId::new("pane-1")?, Some(active_cwd.clone()))]);
+        layout.sync_terminal_titles(&[(PaneId::new(1)?, Some(active_cwd.clone()))]);
 
         let pane_id = layout.create_tab(self::active_pane_session_metadata(&config, &layout)?)?;
 
         let pane = layout
-            .pane(&pane_id)
+            .pane(pane_id)
             .ok_or_else(|| report!("expected tab pane to exist").attach(format!("pane_id={pane_id}")))?;
         pretty_assertions::assert_eq!(pane.cwd, active_cwd);
         Ok(())
@@ -2631,10 +2624,10 @@ mod tests {
             PaneRuntimes::spawn_for_layout(&config, &layout, &terminal_size)?
         };
         let runtimes = Mutex::new(runtimes);
-        let pane_id = PaneId::new("pane-1")?;
+        let pane_id = PaneId::new(1)?;
         {
             let runtimes = self::lock_mutex(&runtimes, "pane runtimes")?;
-            let handle = runtimes.handle(&pane_id)?;
+            let handle = runtimes.handle(pane_id)?;
             drop(runtimes);
             let _scrolled_to_bottom = handle.write_input(b"\x1b]2;~\x07\n")?;
         }
@@ -2643,7 +2636,7 @@ mod tests {
         loop {
             let title = {
                 let runtimes = self::lock_mutex(&runtimes, "pane runtimes")?;
-                runtimes.handle(&pane_id)?.terminal_title()?
+                runtimes.handle(pane_id)?.terminal_title()?
             };
             if title.as_deref() == Some("~") {
                 break;
@@ -2656,16 +2649,11 @@ mod tests {
 
         let outcome = crate::pane_close::handle_close_pane_cmd(&config, &layout, &runtimes)?;
 
-        pretty_assertions::assert_eq!(
-            outcome,
-            ClosePaneOutcome::Final {
-                pane_id: pane_id.clone()
-            }
-        );
+        pretty_assertions::assert_eq!(outcome, ClosePaneOutcome::Final { pane_id });
         let persisted = crate::state::persisted::load_metadata(&config.paths, &config.session)?
             .ok_or_else(|| report!("expected muxr layout metadata"))?;
         let pane = persisted
-            .pane(&pane_id)
+            .pane(pane_id)
             .ok_or_else(|| report!("expected persisted muxr pane").attach(format!("pane_id={pane_id}")))?;
         pretty_assertions::assert_eq!(pane.cwd, "~");
         Ok(())
@@ -2687,10 +2675,10 @@ mod tests {
             PaneRuntimes::spawn_for_layout(&config, &layout, &terminal_size)?
         };
         let runtimes = Mutex::new(runtimes);
-        let inactive_pane = PaneId::new("pane-1")?;
-        let active_pane = PaneId::new("pane-2")?;
-        self::wait_for_runtime_snapshot_contains(&runtimes, &inactive_pane, "dirty")?;
-        self::wait_for_runtime_snapshot_contains(&runtimes, &active_pane, "dirty")?;
+        let inactive_pane = PaneId::new(1)?;
+        let active_pane = PaneId::new(2)?;
+        self::wait_for_runtime_snapshot_contains(&runtimes, inactive_pane, "dirty")?;
+        self::wait_for_runtime_snapshot_contains(&runtimes, active_pane, "dirty")?;
 
         self::resize_panes_to_layout(&layout, &runtimes, &terminal_size)?;
         drop(self::initial_attached_render(
@@ -2772,7 +2760,7 @@ mod tests {
             layout.focus_pane_at(&TerminalSize::new(80, 24)?, position)?,
             expected_changed,
         );
-        pretty_assertions::assert_eq!(layout.active_pane_id()?.as_ref(), expected_active_pane);
+        pretty_assertions::assert_eq!(layout.active_pane_id()?.to_string(), expected_active_pane);
         Ok(())
     }
 
@@ -2791,8 +2779,8 @@ mod tests {
 
         let pane_id = layout.pane_at(&TerminalSize::new(80, 24)?, position)?;
 
-        pretty_assertions::assert_eq!(pane_id.as_ref().map(std::convert::AsRef::as_ref), expected_pane);
-        pretty_assertions::assert_eq!(layout.active_pane_id()?.as_ref(), "pane-2");
+        pretty_assertions::assert_eq!(pane_id.map(|id| id.to_string()), expected_pane.map(str::to_owned));
+        pretty_assertions::assert_eq!(layout.active_pane_id()?.to_string(), "pane-2");
         Ok(())
     }
 
@@ -2815,7 +2803,7 @@ mod tests {
             layout.focus_pane_direction(&TerminalSize::new(80, 24)?, direction)?,
             expected_changed,
         );
-        pretty_assertions::assert_eq!(layout.active_pane_id()?.as_ref(), expected_active_pane);
+        pretty_assertions::assert_eq!(layout.active_pane_id()?.to_string(), expected_active_pane);
         Ok(())
     }
 
@@ -2829,13 +2817,13 @@ mod tests {
         layout.split_active_pane(self::metadata("sh", 3), PaneSplitAxis::Horizontal)?;
 
         assert2::assert!(layout.focus_pane_direction(&TerminalSize::new(80, 24)?, PaneFocusDirection::Up)?);
-        pretty_assertions::assert_eq!(layout.active_pane_id()?.as_ref(), "pane-2");
+        pretty_assertions::assert_eq!(layout.active_pane_id()?.to_string(), "pane-2");
         assert2::assert!(layout.focus_pane_direction(&TerminalSize::new(80, 24)?, PaneFocusDirection::Left)?);
-        pretty_assertions::assert_eq!(layout.active_pane_id()?.as_ref(), "pane-1");
+        pretty_assertions::assert_eq!(layout.active_pane_id()?.to_string(), "pane-1");
 
         assert2::assert!(layout.focus_pane_direction(&TerminalSize::new(80, 24)?, PaneFocusDirection::Right)?);
 
-        pretty_assertions::assert_eq!(layout.active_pane_id()?.as_ref(), "pane-2");
+        pretty_assertions::assert_eq!(layout.active_pane_id()?.to_string(), "pane-2");
         Ok(())
     }
 
@@ -2870,7 +2858,7 @@ mod tests {
         layout.split_active_pane(self::metadata("sh", 2), first_axis)?;
         layout.split_active_pane(self::metadata("sh", 3), second_axis)?;
 
-        pretty_assertions::assert_eq!(layout.active_pane_id()?.as_ref(), "pane-3");
+        pretty_assertions::assert_eq!(layout.active_pane_id()?.to_string(), "pane-3");
         pretty_assertions::assert_eq!(
             self::layout_active_tab_pane_ids(&layout)?,
             vec!["pane-1", "pane-2", "pane-3"]
@@ -2980,10 +2968,10 @@ mod tests {
         pretty_assertions::assert_eq!(
             close,
             ClosePaneOutcome::Removed {
-                pane_id: PaneId::new("pane-3")?,
+                pane_id: PaneId::new(3)?,
             },
         );
-        pretty_assertions::assert_eq!(layout.active_pane_id()?.as_ref(), "pane-2");
+        pretty_assertions::assert_eq!(layout.active_pane_id()?.to_string(), "pane-2");
         pretty_assertions::assert_eq!(self::layout_active_tab_pane_ids(&layout)?, vec!["pane-1", "pane-2"]);
         pretty_assertions::assert_eq!(
             self::layout_active_tab_pane_regions(&layout, &TerminalSize::new(80, 24)?)?,
@@ -3096,7 +3084,7 @@ mod tests {
         let loaded = crate::state::persisted::load_metadata(&config.paths, &config.session)?
             .ok_or_else(|| report!("expected muxr layout metadata to load"))?;
 
-        pretty_assertions::assert_eq!(loaded.active_pane_id()?.as_ref(), "pane-3");
+        pretty_assertions::assert_eq!(loaded.active_pane_id()?.to_string(), "pane-3");
         pretty_assertions::assert_eq!(
             self::layout_active_tab_pane_regions(&loaded, &TerminalSize::new(80, 24)?)?,
             vec![
@@ -3336,7 +3324,7 @@ mod tests {
             let persisted = crate::state::persisted::load_metadata(&paths, &session)?
                 .ok_or_else(|| report!("expected muxr layout metadata"))?;
             let pane = persisted
-                .pane(&PaneId::new("pane-1")?)
+                .pane(PaneId::new(1)?)
                 .ok_or_else(|| report!("expected persisted muxr pane"))?;
             pretty_assertions::assert_eq!(pane.cwd, "~");
 
@@ -3364,12 +3352,12 @@ mod tests {
                 .await?;
 
             let layout = self::read_until_layout(&mut client).await?;
-            pretty_assertions::assert_eq!(layout.active_tab().as_ref(), "tab-2");
+            pretty_assertions::assert_eq!(layout.active_tab().to_string(), "tab-2");
             pretty_assertions::assert_eq!(
-                layout.tabs().iter().map(|tab| tab.id().as_ref()).collect::<Vec<_>>(),
+                layout.tabs().iter().map(|tab| tab.id().to_string()).collect::<Vec<_>>(),
                 vec!["tab-1", "tab-2"],
             );
-            self::assert_layout_metadata_tabs(&paths, &["tab-1", "tab-2"], "tab-2")?;
+            self::assert_layout_metadata_tabs(&paths, &[1, 2], 2)?;
 
             self::detach_client(client).await?;
             self::join_server(handle)
@@ -3391,13 +3379,13 @@ mod tests {
 
             self::wait_for_socket(&paths.socket)?;
             let client = self::open_attached_client(&session, &paths).await?;
-            pretty_assertions::assert_eq!(client.layout.active_tab().as_ref(), "tab-2");
+            pretty_assertions::assert_eq!(client.layout.active_tab().to_string(), "tab-2");
             pretty_assertions::assert_eq!(
                 client
                     .layout
                     .tabs()
                     .iter()
-                    .map(|tab| tab.id().as_ref())
+                    .map(|tab| tab.id().to_string())
                     .collect::<Vec<_>>(),
                 vec!["tab-1", "tab-2"],
             );
@@ -3429,9 +3417,9 @@ mod tests {
                 .tabs()
                 .first()
                 .ok_or_else(|| report!("expected tab after split"))?;
-            pretty_assertions::assert_eq!(tab.active_pane().as_ref(), "pane-2");
+            pretty_assertions::assert_eq!(tab.active_pane().to_string(), "pane-2");
             pretty_assertions::assert_eq!(
-                tab.panes().iter().map(|pane| pane.id.as_ref()).collect::<Vec<_>>(),
+                tab.panes().iter().map(|pane| pane.id.to_string()).collect::<Vec<_>>(),
                 vec!["pane-1", "pane-2"],
             );
 
@@ -3440,7 +3428,7 @@ mod tests {
                 .send_request(&ClientRequest::Input(b"new-pane\n".to_vec()))
                 .await?;
             self::read_until_render_contains(&mut client, b"new-pane").await?;
-            self::assert_layout_metadata_panes(&paths, &["pane-1", "pane-2"], "pane-2")?;
+            self::assert_layout_metadata_panes(&paths, &[1, 2], 2)?;
 
             self::detach_client(client).await?;
             self::join_server(handle)
@@ -3480,7 +3468,7 @@ mod tests {
                 .await?;
 
             self::read_until_render_contains(&mut client, b"still-pane-2").await?;
-            self::assert_layout_metadata_panes(&paths, &["pane-1", "pane-2"], "pane-2")?;
+            self::assert_layout_metadata_panes(&paths, &[1, 2], 2)?;
             self::detach_client(client).await?;
             self::join_server(handle)
         })
@@ -3517,7 +3505,7 @@ mod tests {
                 .tabs()
                 .first()
                 .ok_or_else(|| report!("expected tab after split"))?;
-            pretty_assertions::assert_eq!(tab.active_pane().as_ref(), "pane-2");
+            pretty_assertions::assert_eq!(tab.active_pane().to_string(), "pane-2");
             self::read_until_render_contains(&mut client, b"line-79").await?;
             let ready_regions =
                 self::read_until_pane_regions_matching(&mut client, "both panes have scrollback", |regions| {
@@ -3547,7 +3535,7 @@ mod tests {
                 self::pane_region(&scrolled_regions, "pane-2")?.visible_top_row(),
                 pane_2_before,
             );
-            self::assert_layout_metadata_panes(&paths, &["pane-1", "pane-2"], "pane-2")?;
+            self::assert_layout_metadata_panes(&paths, &[1, 2], 2)?;
 
             self::detach_client(client).await?;
             self::join_server(handle)
@@ -3672,9 +3660,9 @@ mod tests {
                 .tabs()
                 .first()
                 .ok_or_else(|| report!("expected tab after close"))?;
-            pretty_assertions::assert_eq!(tab.active_pane().as_ref(), "pane-1");
+            pretty_assertions::assert_eq!(tab.active_pane().to_string(), "pane-1");
             pretty_assertions::assert_eq!(
-                tab.panes().iter().map(|pane| pane.id.as_ref()).collect::<Vec<_>>(),
+                tab.panes().iter().map(|pane| pane.id.to_string()).collect::<Vec<_>>(),
                 vec!["pane-1"],
             );
 
@@ -3683,7 +3671,7 @@ mod tests {
                 .send_request(&ClientRequest::Input(b"remaining\n".to_vec()))
                 .await?;
             self::read_until_render_contains(&mut client, b"remaining").await?;
-            self::assert_layout_metadata_panes(&paths, &["pane-1"], "pane-1")?;
+            self::assert_layout_metadata_panes(&paths, &[1], 1)?;
 
             self::detach_client(client).await?;
             self::join_server(handle)
@@ -3760,9 +3748,9 @@ mod tests {
                 .tabs()
                 .first()
                 .ok_or_else(|| report!("expected tab after resize"))?;
-            pretty_assertions::assert_eq!(tab.active_pane().as_ref(), "pane-2");
+            pretty_assertions::assert_eq!(tab.active_pane().to_string(), "pane-2");
             pretty_assertions::assert_eq!(
-                tab.panes().iter().map(|pane| pane.id.as_ref()).collect::<Vec<_>>(),
+                tab.panes().iter().map(|pane| pane.id.to_string()).collect::<Vec<_>>(),
                 vec!["pane-1", "pane-2"],
             );
             let config = self::server_config(tempdir.path(), "work")?;
@@ -4116,7 +4104,7 @@ mod tests {
             .snapshot()?
             .tabs()
             .iter()
-            .map(|tab| tab.id().as_ref().to_owned())
+            .map(|tab| tab.id().to_string())
             .collect::<Vec<_>>())
     }
 
@@ -4128,11 +4116,7 @@ mod tests {
             .find(|tab| tab.id() == snapshot.active_tab())
             .ok_or_else(|| report!("expected active tab in muxr test layout snapshot"))?;
 
-        Ok(active_tab
-            .panes()
-            .iter()
-            .map(|pane| pane.id.as_ref().to_owned())
-            .collect())
+        Ok(active_tab.panes().iter().map(|pane| pane.id.to_string()).collect())
     }
 
     fn layout_active_tab_pane_regions(
@@ -4144,7 +4128,7 @@ mod tests {
             .iter()
             .map(|region| {
                 (
-                    region.id.as_ref().to_owned(),
+                    region.id.to_string(),
                     region.area.origin.col,
                     region.area.origin.row,
                     region.area.size.cols,
@@ -4168,7 +4152,7 @@ mod tests {
 
     fn wait_for_runtime_snapshot_contains(
         runtimes: &Mutex<PaneRuntimes>,
-        pane_id: &PaneId,
+        pane_id: PaneId,
         needle: &str,
     ) -> rootcause::Result<()> {
         let started_at = Instant::now();
@@ -4589,7 +4573,7 @@ mod tests {
         regions
             .regions()
             .iter()
-            .find(|region| region.id().as_ref() == pane_id)
+            .find(|region| region.id().to_string() == pane_id)
             .ok_or_else(|| report!("expected muxr test pane region").attach(format!("pane_id={pane_id}")))
     }
 
@@ -4613,9 +4597,9 @@ mod tests {
 
         pretty_assertions::assert_eq!(layout["version"].as_u64(), Some(u64::from(crate::state::VERSION)));
         pretty_assertions::assert_eq!(layout["session"].as_str(), Some("work"));
-        pretty_assertions::assert_eq!(layout["active_tab"].as_str(), Some("tab-1"));
-        pretty_assertions::assert_eq!(layout["tabs"][0]["active_pane"].as_str(), Some("pane-1"));
-        pretty_assertions::assert_eq!(pane["id"].as_str(), Some("pane-1"));
+        pretty_assertions::assert_eq!(layout["active_tab"].as_u64(), Some(1));
+        pretty_assertions::assert_eq!(layout["tabs"][0]["active_pane"].as_u64(), Some(1));
+        pretty_assertions::assert_eq!(pane["id"].as_u64(), Some(1));
         pretty_assertions::assert_eq!(pane["cmd_label"].as_str(), Some("sh"));
         assert2::assert!(pane["started_at"].as_u64().is_some());
         pretty_assertions::assert_eq!(pane["state"]["kind"].as_str(), Some("process_exited"));
@@ -4627,8 +4611,8 @@ mod tests {
 
     fn assert_layout_metadata_tabs(
         paths: &SessionPaths,
-        expected_tabs: &[&str],
-        expected_active: &str,
+        expected_tabs: &[u64],
+        expected_active: u64,
     ) -> rootcause::Result<()> {
         let layout: serde_json::Value =
             serde_json::from_slice(&fs::read(&paths.layout).context("failed to read muxr test layout metadata")?)
@@ -4640,27 +4624,27 @@ mod tests {
             .iter()
             .map(|tab| {
                 tab["id"]
-                    .as_str()
+                    .as_u64()
                     .ok_or_else(|| report!("muxr test layout metadata tab id is missing"))
             })
             .collect::<rootcause::Result<Vec<_>>>()?;
 
-        pretty_assertions::assert_eq!(layout["active_tab"].as_str(), Some(expected_active));
+        pretty_assertions::assert_eq!(layout["active_tab"].as_u64(), Some(expected_active));
         pretty_assertions::assert_eq!(actual_tabs, expected_tabs.to_vec());
         Ok(())
     }
 
     fn assert_layout_metadata_panes(
         paths: &SessionPaths,
-        expected_panes: &[&str],
-        expected_active: &str,
+        expected_panes: &[u64],
+        expected_active: u64,
     ) -> rootcause::Result<()> {
         let layout: serde_json::Value =
             serde_json::from_slice(&fs::read(&paths.layout).context("failed to read muxr test layout metadata")?)
                 .context("failed to parse muxr test layout metadata")?;
         let actual_panes = self::json_pane_tree_pane_ids(&layout["tabs"][0]["pane_tree"])?;
 
-        pretty_assertions::assert_eq!(layout["tabs"][0]["active_pane"].as_str(), Some(expected_active));
+        pretty_assertions::assert_eq!(layout["tabs"][0]["active_pane"].as_u64(), Some(expected_active));
         pretty_assertions::assert_eq!(actual_panes, expected_panes.to_vec());
         Ok(())
     }
@@ -4671,28 +4655,25 @@ mod tests {
                 .context("failed to parse muxr test layout metadata")?;
         let pane = &layout["tabs"][0]["pane_tree"];
 
-        pretty_assertions::assert_eq!(layout["active_tab"].as_str(), Some("tab-1"));
-        pretty_assertions::assert_eq!(layout["tabs"][0]["active_pane"].as_str(), Some("pane-1"));
-        pretty_assertions::assert_eq!(pane["id"].as_str(), Some("pane-1"));
+        pretty_assertions::assert_eq!(layout["active_tab"].as_u64(), Some(1));
+        pretty_assertions::assert_eq!(layout["tabs"][0]["active_pane"].as_u64(), Some(1));
+        pretty_assertions::assert_eq!(pane["id"].as_u64(), Some(1));
         pretty_assertions::assert_eq!(pane["state"]["kind"].as_str(), Some("closed"));
         assert2::assert!(pane["state"]["at"].as_u64().is_some());
         assert2::assert!(pane["state"].get("status").is_none());
         Ok(())
     }
 
-    fn json_pane_tree_pane_ids(node: &serde_json::Value) -> rootcause::Result<Vec<&str>> {
+    fn json_pane_tree_pane_ids(node: &serde_json::Value) -> rootcause::Result<Vec<u64>> {
         let mut ids = Vec::new();
         self::collect_json_pane_tree_pane_ids(node, &mut ids)?;
         Ok(ids)
     }
 
-    fn collect_json_pane_tree_pane_ids<'a>(
-        node: &'a serde_json::Value,
-        ids: &mut Vec<&'a str>,
-    ) -> rootcause::Result<()> {
+    fn collect_json_pane_tree_pane_ids(node: &serde_json::Value, ids: &mut Vec<u64>) -> rootcause::Result<()> {
         match node["kind"].as_str() {
             Some("pane") => {
-                let Some(id) = node["id"].as_str() else {
+                let Some(id) = node["id"].as_u64() else {
                     return Err(report!("muxr test layout metadata pane id is missing"));
                 };
                 ids.push(id);
