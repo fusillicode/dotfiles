@@ -131,6 +131,7 @@ struct SelectionEdgeDrag {
 pub struct SelectionEdgeScrollPending {
     direction: PaneScrollDirection,
     pane_id: PaneId,
+    position: ClientMousePosition,
     previous_visible_top_row: u64,
 }
 
@@ -138,6 +139,12 @@ pub struct SelectionEdgeScrollPending {
 pub struct SelectionEdgeScrollRequest {
     pending: SelectionEdgeScrollPending,
     request: ClientRequest,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum SelectionEdgeScrollTrigger {
+    EdgeRow,
+    OutsideOnly,
 }
 
 impl SelectionEdgeScrollRequest {
@@ -425,6 +432,22 @@ impl ClientRenderer {
         position: ClientMousePosition,
         forced_direction: Option<PaneScrollDirection>,
     ) -> Option<SelectionEdgeScrollRequest> {
+        self.set_selection_edge_drag_with_trigger(position, forced_direction, SelectionEdgeScrollTrigger::EdgeRow)
+    }
+
+    pub fn set_selection_outside_edge_drag(
+        &mut self,
+        position: ClientMousePosition,
+    ) -> Option<SelectionEdgeScrollRequest> {
+        self.set_selection_edge_drag_with_trigger(position, None, SelectionEdgeScrollTrigger::OutsideOnly)
+    }
+
+    fn set_selection_edge_drag_with_trigger(
+        &mut self,
+        position: ClientMousePosition,
+        forced_direction: Option<PaneScrollDirection>,
+        trigger: SelectionEdgeScrollTrigger,
+    ) -> Option<SelectionEdgeScrollRequest> {
         let Some(region) = self.selection.drag_region() else {
             self.selection_edge_scroll_acknowledged = false;
             self.selection_edge_scroll_pending = None;
@@ -432,10 +455,8 @@ impl ClientRenderer {
         };
         let (direction, row) = if let Some(direction) = forced_direction {
             (direction, self::selection_edge_row(region, direction))
-        } else if position.row < region.row() {
-            (PaneScrollDirection::Up, region.row())
-        } else if position.row > self::last_region_row_saturating(region) {
-            (PaneScrollDirection::Down, self::last_region_row_saturating(region))
+        } else if let Some(direction) = self::selection_edge_direction(position, region, trigger) {
+            (direction, self::selection_edge_row(region, direction))
         } else {
             self.selection_edge_drag = None;
             self.selection_edge_scroll_acknowledged = false;
@@ -508,10 +529,29 @@ impl ClientRenderer {
             pending: SelectionEdgeScrollPending {
                 direction,
                 pane_id,
+                position,
                 previous_visible_top_row,
             },
             request: ClientRequest::ScrollPaneLineAt { direction, position },
         })
+    }
+
+    pub fn apply_scroll_pane_line_result(
+        &mut self,
+        position: ClientMousePosition,
+        direction: PaneScrollDirection,
+        scrolled: bool,
+    ) {
+        let matches_pending = self
+            .selection_edge_scroll_pending
+            .as_ref()
+            .is_some_and(|pending| pending.position == position && pending.direction == direction);
+        if matches_pending && !scrolled {
+            // No-op scrolls, usually hard top/bottom scrollback bounds, do not produce a render ack. Clear only the
+            // matching pending request so the held edge drag can retry without unrelated events breaking coalescing.
+            self.selection_edge_scroll_acknowledged = false;
+            self.selection_edge_scroll_pending = None;
+        }
     }
 
     fn update_selection_edge_scroll_pending(&mut self) {
@@ -600,6 +640,24 @@ const fn selection_edge_row(region: &PaneRegionSnapshot, direction: PaneScrollDi
     match direction {
         PaneScrollDirection::Up => region.row(),
         PaneScrollDirection::Down => self::last_region_row_saturating(region),
+    }
+}
+
+const fn selection_edge_direction(
+    position: ClientMousePosition,
+    region: &PaneRegionSnapshot,
+    trigger: SelectionEdgeScrollTrigger,
+) -> Option<PaneScrollDirection> {
+    match trigger {
+        SelectionEdgeScrollTrigger::EdgeRow if position.row <= region.row() => Some(PaneScrollDirection::Up),
+        SelectionEdgeScrollTrigger::EdgeRow if position.row >= self::last_region_row_saturating(region) => {
+            Some(PaneScrollDirection::Down)
+        }
+        SelectionEdgeScrollTrigger::OutsideOnly if position.row < region.row() => Some(PaneScrollDirection::Up),
+        SelectionEdgeScrollTrigger::OutsideOnly if position.row > self::last_region_row_saturating(region) => {
+            Some(PaneScrollDirection::Down)
+        }
+        SelectionEdgeScrollTrigger::EdgeRow | SelectionEdgeScrollTrigger::OutsideOnly => None,
     }
 }
 
@@ -875,6 +933,111 @@ mod tests {
 
         pretty_assertions::assert_eq!(renderer.selected_text(), Some("aa\nbb\ncc\ndd".to_owned()),);
         assert2::assert!(renderer.selection_contains(2, 0));
+        Ok(())
+    }
+
+    #[rstest::rstest]
+    #[case::top_edge(ClientMousePosition { row: 0, col: 1 }, PaneScrollDirection::Up)]
+    #[case::bottom_edge(ClientMousePosition { row: 2, col: 1 }, PaneScrollDirection::Down)]
+    fn test_client_renderer_set_selection_edge_drag_when_pointer_is_on_edge_row_requests_scroll(
+        #[case] position: ClientMousePosition,
+        #[case] direction: PaneScrollDirection,
+    ) -> rootcause::Result<()> {
+        let mut renderer = ClientRenderer::with_synchronized_output(
+            layout_snapshot()?,
+            three_row_pane_regions_snapshot(9)?,
+            SynchronizedOutput::Csi,
+        );
+        let mut output = CountingWriter::default();
+        renderer.apply_render(
+            &mut output,
+            muxr_core::RenderUpdate::Baseline(three_row_render_baseline("aa", "bb", "cc")?),
+        )?;
+        renderer.apply_selection_input(
+            &mut output,
+            SelectionInput::Start(ClientMousePosition { row: 1, col: 0 }),
+        )?;
+
+        let request = renderer
+            .set_selection_edge_drag(position, None)
+            .map(|request| request.into_parts().1);
+
+        pretty_assertions::assert_eq!(request, Some(ClientRequest::ScrollPaneLineAt { position, direction }),);
+        Ok(())
+    }
+
+    #[test]
+    fn test_client_renderer_apply_scroll_pane_line_result_when_scroll_is_noop_clears_pending_request()
+    -> rootcause::Result<()> {
+        let mut renderer = ClientRenderer::with_synchronized_output(
+            layout_snapshot()?,
+            three_row_pane_regions_snapshot(9)?,
+            SynchronizedOutput::Csi,
+        );
+        let mut output = CountingWriter::default();
+        renderer.apply_render(
+            &mut output,
+            muxr_core::RenderUpdate::Baseline(three_row_render_baseline("aa", "bb", "cc")?),
+        )?;
+        renderer.apply_selection_input(
+            &mut output,
+            SelectionInput::Start(ClientMousePosition { row: 1, col: 0 }),
+        )?;
+        let position = ClientMousePosition { row: 2, col: 1 };
+        let direction = PaneScrollDirection::Down;
+        let request = renderer
+            .set_selection_edge_drag(position, None)
+            .ok_or_else(|| report!("expected muxr edge scroll request"))?;
+        let (pending, _) = request.into_parts();
+
+        renderer.mark_selection_edge_scroll_sent(pending);
+        pretty_assertions::assert_eq!(renderer.selection_edge_scroll_request(), None);
+        renderer.apply_scroll_pane_line_result(position, direction, false);
+
+        let retry = renderer
+            .selection_edge_scroll_request()
+            .map(|request| request.into_parts().1);
+        pretty_assertions::assert_eq!(retry, Some(ClientRequest::ScrollPaneLineAt { position, direction }),);
+        Ok(())
+    }
+
+    #[test]
+    fn test_client_renderer_apply_scroll_pane_line_result_when_scroll_moves_waits_for_render_ack()
+    -> rootcause::Result<()> {
+        let mut renderer = ClientRenderer::with_synchronized_output(
+            layout_snapshot()?,
+            three_row_pane_regions_snapshot(9)?,
+            SynchronizedOutput::Csi,
+        );
+        let mut output = CountingWriter::default();
+        renderer.apply_render(
+            &mut output,
+            muxr_core::RenderUpdate::Baseline(three_row_render_baseline("aa", "bb", "cc")?),
+        )?;
+        renderer.apply_selection_input(
+            &mut output,
+            SelectionInput::Start(ClientMousePosition { row: 1, col: 0 }),
+        )?;
+        let position = ClientMousePosition { row: 2, col: 1 };
+        let direction = PaneScrollDirection::Down;
+        let request = renderer
+            .set_selection_edge_drag(position, None)
+            .ok_or_else(|| report!("expected muxr edge scroll request"))?;
+        let (pending, _) = request.into_parts();
+
+        renderer.mark_selection_edge_scroll_sent(pending);
+        renderer.apply_scroll_pane_line_result(position, direction, true);
+
+        pretty_assertions::assert_eq!(renderer.selection_edge_scroll_request(), None);
+        renderer.apply_pane_regions(&mut output, three_row_pane_regions_snapshot(10)?)?;
+        renderer.apply_render(
+            &mut output,
+            muxr_core::RenderUpdate::Baseline(three_row_render_baseline("bb", "cc", "dd")?),
+        )?;
+        let retry = renderer
+            .selection_edge_scroll_request()
+            .map(|request| request.into_parts().1);
+        pretty_assertions::assert_eq!(retry, Some(ClientRequest::ScrollPaneLineAt { position, direction }),);
         Ok(())
     }
 

@@ -1288,6 +1288,11 @@ pub enum ServerEvent {
     SidebarLayout(LayoutSnapshot),
     PaneRegions(PaneRegionsSnapshot),
     Render(RenderUpdate),
+    ScrollPaneLineResult {
+        position: ClientMousePosition,
+        direction: PaneScrollDirection,
+        scrolled: bool,
+    },
     Error(ServerError),
     Detached,
 }
@@ -1407,6 +1412,11 @@ mod tests {
     #[case::pane_regions(ServerEvent::PaneRegions(pane_regions_snapshot()?))]
     #[case::render_baseline(ServerEvent::Render(RenderUpdate::Baseline(render_baseline()?)))]
     #[case::render_diff(ServerEvent::Render(RenderUpdate::Diff(render_diff()?)))]
+    #[case::scroll_line_result(ServerEvent::ScrollPaneLineResult {
+        position: ClientMousePosition { row: 2, col: 3 },
+        direction: PaneScrollDirection::Down,
+        scrolled: false,
+    })]
     #[case::error(ServerEvent::Error(ServerError::unexpected_request(ClientRequest::Detach)))]
     #[case::detached(ServerEvent::Detached)]
     fn test_server_event_codec_when_frame_round_trips_returns_original(
