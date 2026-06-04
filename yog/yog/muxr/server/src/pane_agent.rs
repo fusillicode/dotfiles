@@ -25,11 +25,11 @@ pub struct PaneAgentProcessScanner {
 
 #[derive(Debug, Default)]
 pub struct PaneAgentRuntime {
-    agents: HashMap<String, Agent>,
-    last_visible_activity: HashMap<String, Instant>,
-    pending_visible_activity: HashMap<String, Instant>,
-    recent_user_interaction: HashMap<String, Instant>,
-    states: HashMap<String, PaneAgentState>,
+    agents: HashMap<PaneId, Agent>,
+    last_visible_activity: HashMap<PaneId, Instant>,
+    pending_visible_activity: HashMap<PaneId, Instant>,
+    recent_user_interaction: HashMap<PaneId, Instant>,
+    states: HashMap<PaneId, PaneAgentState>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -80,17 +80,13 @@ impl PaneAgentProcessScanner {
             .iter()
             .map(|(pane_id, shell_pid)| {
                 let Some(shell_pid) = shell_pid else {
-                    return PaneAgentProcess::NoAgent {
-                        pane_id: pane_id.clone(),
-                    };
+                    return PaneAgentProcess::NoAgent { pane_id: *pane_id };
                 };
                 let Some(agent) = self::detect_descendant_agent(&processes, &parent_by_pid, *shell_pid) else {
-                    return PaneAgentProcess::NoAgent {
-                        pane_id: pane_id.clone(),
-                    };
+                    return PaneAgentProcess::NoAgent { pane_id: *pane_id };
                 };
                 PaneAgentProcess::Agent {
-                    pane_id: pane_id.clone(),
+                    pane_id: *pane_id,
                     agent,
                 }
             })
@@ -114,7 +110,7 @@ impl PaneAgentProcess {
 }
 
 impl PaneAgentRuntime {
-    pub fn sync_process(&mut self, pane_id: &PaneId, agent: Option<Agent>) -> bool {
+    pub fn sync_process(&mut self, pane_id: PaneId, agent: Option<Agent>) -> bool {
         let identity_sync = self.sync_identity(pane_id, agent);
         if identity_sync == AgentIdentitySync::Replaced {
             self.set_seen(pane_id);
@@ -122,27 +118,27 @@ impl PaneAgentRuntime {
         let mut changed = self.sync_process_state(pane_id, agent);
         changed |= identity_sync != AgentIdentitySync::Same;
         if agent.is_none() {
-            self.last_visible_activity.remove(pane_id.as_ref());
-            self.pending_visible_activity.remove(pane_id.as_ref());
+            self.last_visible_activity.remove(&pane_id);
+            self.pending_visible_activity.remove(&pane_id);
         }
         changed
     }
 
-    pub fn record_user_interaction(&mut self, pane_id: &PaneId, interaction: PaneUserInteraction, now: Instant) {
+    pub fn record_user_interaction(&mut self, pane_id: PaneId, interaction: PaneUserInteraction, now: Instant) {
         match interaction {
             PaneUserInteraction::MayEcho => {
-                self.recent_user_interaction.insert(pane_id.as_ref().to_owned(), now);
+                self.recent_user_interaction.insert(pane_id, now);
             }
             PaneUserInteraction::StartsAgentWork => {
                 // Submitting a prompt is user input, but the following redraw is the agent starting work. Clear prior
                 // typing suppression so a fast response is not lost as if it were only local echo.
-                self.recent_user_interaction.remove(pane_id.as_ref());
+                self.recent_user_interaction.remove(&pane_id);
             }
         }
     }
 
-    pub fn record_visible_activity(&mut self, pane_id: &PaneId, agent: Option<Agent>, now: Instant) -> bool {
-        if self.recent_user_interaction.contains_key(pane_id.as_ref()) {
+    pub fn record_visible_activity(&mut self, pane_id: PaneId, agent: Option<Agent>, now: Instant) -> bool {
+        if self.recent_user_interaction.contains_key(&pane_id) {
             // User typing and mouse gestures can redraw through the PTY. Those bytes still render, but they are not
             // agent work and must not flip agent attention back to Busy.
             return false;
@@ -150,29 +146,28 @@ impl PaneAgentRuntime {
         if agent.is_none() {
             // PTY output can arrive before the throttled process scan observes a just-started agent.
             // Keep only a short-lived timestamp so shell output cannot become stale agent activity later.
-            self.pending_visible_activity.insert(pane_id.as_ref().to_owned(), now);
+            self.pending_visible_activity.insert(pane_id, now);
             return false;
         }
 
-        self.pending_visible_activity.remove(pane_id.as_ref());
-        self.last_visible_activity.insert(pane_id.as_ref().to_owned(), now);
+        self.pending_visible_activity.remove(&pane_id);
+        self.last_visible_activity.insert(pane_id, now);
         self.mark_visible_activity(pane_id)
     }
 
-    pub fn consume_pending_visible_activity(&mut self, pane_id: &PaneId, agent: Option<Agent>) -> bool {
+    pub fn consume_pending_visible_activity(&mut self, pane_id: PaneId, agent: Option<Agent>) -> bool {
         if agent.is_none() {
             return false;
         }
-        let Some(last_visible_activity) = self.pending_visible_activity.remove(pane_id.as_ref()) else {
+        let Some(last_visible_activity) = self.pending_visible_activity.remove(&pane_id) else {
             return false;
         };
-        self.last_visible_activity
-            .insert(pane_id.as_ref().to_owned(), last_visible_activity);
+        self.last_visible_activity.insert(pane_id, last_visible_activity);
         self.mark_visible_activity(pane_id)
     }
 
-    pub fn mark_quiet_if_due(&mut self, pane_id: &PaneId, agent: Agent, now: Instant, focused: bool) -> bool {
-        let Some(last_visible_activity) = self.last_visible_activity.get(pane_id.as_ref()) else {
+    pub fn mark_quiet_if_due(&mut self, pane_id: PaneId, agent: Agent, now: Instant, focused: bool) -> bool {
+        let Some(last_visible_activity) = self.last_visible_activity.get(&pane_id) else {
             return false;
         };
         self.mark_quiet(
@@ -183,24 +178,23 @@ impl PaneAgentRuntime {
         )
     }
 
-    fn sync_identity(&mut self, pane_id: &PaneId, agent: Option<Agent>) -> AgentIdentitySync {
-        let pane_id = pane_id.as_ref();
+    fn sync_identity(&mut self, pane_id: PaneId, agent: Option<Agent>) -> AgentIdentitySync {
         match agent {
             Some(agent) => {
-                let previous = self.agents.insert(pane_id.to_owned(), agent);
+                let previous = self.agents.insert(pane_id, agent);
                 if previous == Some(agent) {
                     return AgentIdentitySync::Same;
                 }
                 if previous.is_some() {
                     // A new agent process in the same pane must not inherit activity or attention from the old one.
-                    self.last_visible_activity.remove(pane_id);
-                    self.pending_visible_activity.remove(pane_id);
+                    self.last_visible_activity.remove(&pane_id);
+                    self.pending_visible_activity.remove(&pane_id);
                     return AgentIdentitySync::Replaced;
                 }
                 AgentIdentitySync::FirstObservation
             }
             None => {
-                if self.agents.remove(pane_id).is_some() {
+                if self.agents.remove(&pane_id).is_some() {
                     AgentIdentitySync::Cleared
                 } else {
                     AgentIdentitySync::Same
@@ -209,19 +203,19 @@ impl PaneAgentRuntime {
         }
     }
 
-    fn sync_process_state(&mut self, pane_id: &PaneId, agent: Option<Agent>) -> bool {
+    fn sync_process_state(&mut self, pane_id: PaneId, agent: Option<Agent>) -> bool {
         match (self.state(pane_id), agent) {
             (PaneAgentState::NoAgent, Some(_agent)) => {
                 self.set_state(pane_id, PaneAgentState::Seen);
                 true
             }
             (PaneAgentState::NoAgent, None) => false,
-            (_, None) => self.states.remove(pane_id.as_ref()).is_some(),
+            (_, None) => self.states.remove(&pane_id).is_some(),
             (PaneAgentState::Seen | PaneAgentState::Busy | PaneAgentState::Unseen, Some(_agent)) => false,
         }
     }
 
-    pub fn mark_visible_activity(&mut self, pane_id: &PaneId) -> bool {
+    pub fn mark_visible_activity(&mut self, pane_id: PaneId) -> bool {
         match self.state(pane_id) {
             PaneAgentState::Busy => false,
             PaneAgentState::NoAgent | PaneAgentState::Seen | PaneAgentState::Unseen => {
@@ -231,7 +225,7 @@ impl PaneAgentRuntime {
         }
     }
 
-    pub fn mark_quiet(&mut self, pane_id: &PaneId, agent: Agent, quiet_for: Duration, focused: bool) -> bool {
+    pub fn mark_quiet(&mut self, pane_id: PaneId, agent: Agent, quiet_for: Duration, focused: bool) -> bool {
         if self.state(pane_id) != PaneAgentState::Busy {
             return false;
         }
@@ -250,7 +244,7 @@ impl PaneAgentRuntime {
         true
     }
 
-    pub fn acknowledge_attention(&mut self, pane_id: &PaneId) -> bool {
+    pub fn acknowledge_attention(&mut self, pane_id: PaneId) -> bool {
         if !self.needs_attention(pane_id) {
             return false;
         }
@@ -258,29 +252,23 @@ impl PaneAgentRuntime {
         true
     }
 
-    pub fn needs_attention(&self, pane_id: &PaneId) -> bool {
+    pub fn needs_attention(&self, pane_id: PaneId) -> bool {
         matches!(self.state(pane_id), PaneAgentState::Unseen)
     }
 
-    pub fn state(&self, pane_id: &PaneId) -> PaneAgentState {
-        self.states
-            .get(pane_id.as_ref())
-            .copied()
-            .unwrap_or(PaneAgentState::NoAgent)
+    pub fn state(&self, pane_id: PaneId) -> PaneAgentState {
+        self.states.get(&pane_id).copied().unwrap_or(PaneAgentState::NoAgent)
     }
 
-    pub fn states(&self) -> Vec<(String, PaneAgentState)> {
-        self.states
-            .iter()
-            .map(|(pane_id, state)| (pane_id.clone(), *state))
-            .collect()
+    pub fn states(&self) -> Vec<(PaneId, PaneAgentState)> {
+        self.states.iter().map(|(pane_id, state)| (*pane_id, *state)).collect()
     }
 
-    pub fn set_seen(&mut self, pane_id: &PaneId) {
+    pub fn set_seen(&mut self, pane_id: PaneId) {
         self.set_state(pane_id, PaneAgentState::Seen);
     }
 
-    pub fn retain_panes(&mut self, pane_ids: &BTreeSet<String>) {
+    pub fn retain_panes(&mut self, pane_ids: &BTreeSet<PaneId>) {
         self.agents.retain(|pane_id, _agent| pane_ids.contains(pane_id));
         self.last_visible_activity
             .retain(|pane_id, _last_activity| pane_ids.contains(pane_id));
@@ -300,11 +288,11 @@ impl PaneAgentRuntime {
         });
     }
 
-    fn set_state(&mut self, pane_id: &PaneId, state: PaneAgentState) {
+    fn set_state(&mut self, pane_id: PaneId, state: PaneAgentState) {
         if state == PaneAgentState::NoAgent {
-            self.states.remove(pane_id.as_ref());
+            self.states.remove(&pane_id);
         } else {
-            self.states.insert(pane_id.as_ref().to_owned(), state);
+            self.states.insert(pane_id, state);
         }
     }
 }
@@ -404,9 +392,9 @@ mod tests {
         let mut runtime = PaneAgentRuntime::default();
         let pane_id = self::pane_id()?;
 
-        assert2::assert!(runtime.sync_process(&pane_id, Some(Agent::Codex)));
+        assert2::assert!(runtime.sync_process(pane_id, Some(Agent::Codex)));
 
-        pretty_assertions::assert_eq!(runtime.state(&pane_id), PaneAgentState::Seen);
+        pretty_assertions::assert_eq!(runtime.state(pane_id), PaneAgentState::Seen);
         Ok(())
     }
 
@@ -414,11 +402,11 @@ mod tests {
     fn test_sync_agent_process_when_agent_exits_clears_state() -> rootcause::Result<()> {
         let mut runtime = PaneAgentRuntime::default();
         let pane_id = self::pane_id()?;
-        runtime.set_state(&pane_id, PaneAgentState::Unseen);
+        runtime.set_state(pane_id, PaneAgentState::Unseen);
 
-        assert2::assert!(runtime.sync_process(&pane_id, None));
+        assert2::assert!(runtime.sync_process(pane_id, None));
 
-        pretty_assertions::assert_eq!(runtime.state(&pane_id), PaneAgentState::NoAgent);
+        pretty_assertions::assert_eq!(runtime.state(pane_id), PaneAgentState::NoAgent);
         Ok(())
     }
 
@@ -427,10 +415,10 @@ mod tests {
         let mut runtime = PaneAgentRuntime::default();
         let pane_id = self::pane_id()?;
 
-        assert2::assert!(runtime.sync_process(&pane_id, Some(Agent::Codex)));
-        assert2::assert!(!runtime.sync_process(&pane_id, Some(Agent::Codex)));
+        assert2::assert!(runtime.sync_process(pane_id, Some(Agent::Codex)));
+        assert2::assert!(!runtime.sync_process(pane_id, Some(Agent::Codex)));
 
-        pretty_assertions::assert_eq!(runtime.state(&pane_id), PaneAgentState::Seen);
+        pretty_assertions::assert_eq!(runtime.state(pane_id), PaneAgentState::Seen);
         Ok(())
     }
 
@@ -448,11 +436,11 @@ mod tests {
     fn test_mark_agent_visible_activity_when_unseen_agent_has_output_marks_busy() -> rootcause::Result<()> {
         let mut runtime = PaneAgentRuntime::default();
         let pane_id = self::pane_id()?;
-        runtime.set_state(&pane_id, PaneAgentState::Unseen);
+        runtime.set_state(pane_id, PaneAgentState::Unseen);
 
-        assert2::assert!(runtime.mark_visible_activity(&pane_id));
+        assert2::assert!(runtime.mark_visible_activity(pane_id));
 
-        pretty_assertions::assert_eq!(runtime.state(&pane_id), PaneAgentState::Busy);
+        pretty_assertions::assert_eq!(runtime.state(pane_id), PaneAgentState::Busy);
         Ok(())
     }
 
@@ -460,11 +448,11 @@ mod tests {
     fn test_mark_agent_quiet_when_unfocused_busy_agent_is_quiet_marks_unseen() -> rootcause::Result<()> {
         let mut runtime = PaneAgentRuntime::default();
         let pane_id = self::pane_id()?;
-        runtime.set_state(&pane_id, PaneAgentState::Busy);
+        runtime.set_state(pane_id, PaneAgentState::Busy);
 
-        assert2::assert!(runtime.mark_quiet(&pane_id, Agent::Codex, Duration::from_secs(3), false));
+        assert2::assert!(runtime.mark_quiet(pane_id, Agent::Codex, Duration::from_secs(3), false));
 
-        pretty_assertions::assert_eq!(runtime.state(&pane_id), PaneAgentState::Unseen);
+        pretty_assertions::assert_eq!(runtime.state(pane_id), PaneAgentState::Unseen);
         Ok(())
     }
 
@@ -472,11 +460,11 @@ mod tests {
     fn test_mark_agent_quiet_when_focused_busy_agent_is_quiet_marks_seen() -> rootcause::Result<()> {
         let mut runtime = PaneAgentRuntime::default();
         let pane_id = self::pane_id()?;
-        runtime.set_state(&pane_id, PaneAgentState::Busy);
+        runtime.set_state(pane_id, PaneAgentState::Busy);
 
-        assert2::assert!(runtime.mark_quiet(&pane_id, Agent::Codex, Duration::from_secs(3), true));
+        assert2::assert!(runtime.mark_quiet(pane_id, Agent::Codex, Duration::from_secs(3), true));
 
-        pretty_assertions::assert_eq!(runtime.state(&pane_id), PaneAgentState::Seen);
+        pretty_assertions::assert_eq!(runtime.state(pane_id), PaneAgentState::Seen);
         Ok(())
     }
 
@@ -484,11 +472,11 @@ mod tests {
     fn test_acknowledge_agent_attention_when_agent_is_unseen_marks_agent_seen() -> rootcause::Result<()> {
         let mut runtime = PaneAgentRuntime::default();
         let pane_id = self::pane_id()?;
-        runtime.set_state(&pane_id, PaneAgentState::Unseen);
+        runtime.set_state(pane_id, PaneAgentState::Unseen);
 
-        assert2::assert!(runtime.acknowledge_attention(&pane_id));
+        assert2::assert!(runtime.acknowledge_attention(pane_id));
 
-        pretty_assertions::assert_eq!(runtime.state(&pane_id), PaneAgentState::Seen);
+        pretty_assertions::assert_eq!(runtime.state(pane_id), PaneAgentState::Seen);
         Ok(())
     }
 
@@ -542,7 +530,7 @@ mod tests {
     }
 
     fn pane_id() -> rootcause::Result<PaneId> {
-        PaneId::new("pane-1")
+        PaneId::new(1)
     }
 
     fn process(pid: u32, parent: Option<u32>, agent: Option<Agent>) -> ProcessSnapshot {

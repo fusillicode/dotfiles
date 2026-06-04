@@ -25,7 +25,7 @@ impl Tab {
         &self,
         terminal_titles: &[(PaneId, Option<String>)],
         runtime_cmd_labels: &[(PaneId, Option<String>)],
-        runtime_agent_states: &[(String, PaneAgentState)],
+        runtime_agent_states: &[(PaneId, PaneAgentState)],
     ) -> rootcause::Result<TabSnapshot> {
         let panes = self
             .panes()
@@ -41,12 +41,12 @@ impl Tab {
                     .and_then(|(_pane_id, cmd_label)| cmd_label.as_deref());
                 let runtime_agent_state = runtime_agent_states
                     .iter()
-                    .find(|(pane_id, _agent_state)| pane_id == pane.id.as_ref())
+                    .find(|(pane_id, _agent_state)| pane_id == &pane.id)
                     .map_or(PaneAgentState::NoAgent, |(_pane_id, agent_state)| *agent_state);
                 pane.snapshot_with_runtime_metadata(terminal_title, runtime_cmd_label, runtime_agent_state)
             })
             .collect();
-        TabSnapshot::new(self.id.clone(), self.title.clone(), self.active_pane.clone(), panes)
+        TabSnapshot::new(self.id, self.title.clone(), self.active_pane, panes)
     }
 
     pub fn pane_at(&self, size: &TerminalSize, position: ClientMousePosition) -> rootcause::Result<Option<PaneId>> {
@@ -55,18 +55,18 @@ impl Tab {
             .regions()
             .iter()
             .find(|region| region.contains(position.into()))
-            .map(|region| region.id.clone()))
+            .map(|region| region.id))
     }
 
     pub fn pane_count(&self) -> usize {
         self.pane_tree.pane_count()
     }
 
-    pub fn contains_pane(&self, pane_id: &PaneId) -> bool {
+    pub fn contains_pane(&self, pane_id: PaneId) -> bool {
         self.pane_tree.contains_pane(pane_id)
     }
 
-    pub fn pane_ids(&self) -> Vec<&str> {
+    pub fn pane_ids(&self) -> Vec<PaneId> {
         let mut ids = Vec::new();
         self.pane_tree.append_pane_ids(&mut ids);
         ids

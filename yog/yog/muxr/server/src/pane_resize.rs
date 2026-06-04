@@ -23,14 +23,14 @@ impl SessionLayout {
 
 impl Tab {
     pub fn resize_active_pane(&mut self, direction: PaneResizeDirection) -> rootcause::Result<bool> {
-        self.pane_tree.resize_pane(&self.active_pane, direction)
+        self.pane_tree.resize_pane(self.active_pane, direction)
     }
 }
 
 impl PaneTree {
     pub fn resize_pane(
         &mut self,
-        pane_id: &muxr_core::PaneId,
+        pane_id: muxr_core::PaneId,
         direction: PaneResizeDirection,
     ) -> rootcause::Result<bool> {
         match self {

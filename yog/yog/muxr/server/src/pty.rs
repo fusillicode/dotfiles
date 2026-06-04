@@ -849,7 +849,7 @@ mod tests {
     #[test]
     fn test_with_history_when_history_contains_title_does_not_restore_live_title() -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
-        let history_path = tempdir.path().join("pane-1").join("output.raw");
+        let history_path = tempdir.path().join("1").join("output.raw");
         std::fs::create_dir_all(
             history_path
                 .parent()
@@ -925,7 +925,7 @@ mod tests {
     #[test]
     fn test_pty_state_with_history_when_output_exists_replays_terminal_state() -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
-        let path = tempdir.path().join("pane-1").join("output.raw");
+        let path = tempdir.path().join("1").join("output.raw");
         std::fs::create_dir_all(path.parent().ok_or_else(|| report!("expected history parent"))?)?;
         std::fs::write(&path, b"history").context("failed to write muxr test history")?;
 
@@ -962,15 +962,7 @@ mod tests {
             phase: ClientMouseEventPhase::Press,
             position: muxr_core::ClientMousePosition { row: 4, col: 7 },
         };
-        let region = PaneRegionSnapshot::new(
-            muxr_core::PaneId::new("pane-1")?,
-            5,
-            3,
-            10,
-            4,
-            PaneMouseMode::ButtonMotion,
-            0,
-        )?;
+        let region = PaneRegionSnapshot::new(muxr_core::PaneId::new(1)?, 5, 3, 10, 4, PaneMouseMode::ButtonMotion, 0)?;
 
         pretty_assertions::assert_eq!(
             pty_mouse_event_bytes(
@@ -993,15 +985,7 @@ mod tests {
             phase: ClientMouseEventPhase::Press,
             position: muxr_core::ClientMousePosition { row: 4, col: 7 },
         };
-        let region = PaneRegionSnapshot::new(
-            muxr_core::PaneId::new("pane-1")?,
-            5,
-            3,
-            10,
-            4,
-            PaneMouseMode::ButtonMotion,
-            0,
-        )?;
+        let region = PaneRegionSnapshot::new(muxr_core::PaneId::new(1)?, 5, 3, 10, 4, PaneMouseMode::ButtonMotion, 0)?;
 
         pretty_assertions::assert_eq!(
             pty_mouse_event_bytes(
@@ -1024,15 +1008,7 @@ mod tests {
             phase: ClientMouseEventPhase::Press,
             position: muxr_core::ClientMousePosition { row: 4, col: 7 },
         };
-        let region = PaneRegionSnapshot::new(
-            muxr_core::PaneId::new("pane-1")?,
-            5,
-            3,
-            10,
-            4,
-            PaneMouseMode::ButtonMotion,
-            0,
-        )?;
+        let region = PaneRegionSnapshot::new(muxr_core::PaneId::new(1)?, 5, 3, 10, 4, PaneMouseMode::ButtonMotion, 0)?;
 
         pretty_assertions::assert_eq!(
             pty_mouse_event_bytes(
@@ -1055,15 +1031,7 @@ mod tests {
             phase: ClientMouseEventPhase::Press,
             position: muxr_core::ClientMousePosition { row: 4, col: 7 },
         };
-        let region = PaneRegionSnapshot::new(
-            muxr_core::PaneId::new("pane-1")?,
-            5,
-            3,
-            10,
-            4,
-            PaneMouseMode::AnyMotion,
-            0,
-        )?;
+        let region = PaneRegionSnapshot::new(muxr_core::PaneId::new(1)?, 5, 3, 10, 4, PaneMouseMode::AnyMotion, 0)?;
 
         pretty_assertions::assert_eq!(
             pty_mouse_event_bytes(
@@ -1086,15 +1054,7 @@ mod tests {
             phase: ClientMouseEventPhase::Press,
             position: muxr_core::ClientMousePosition { row: 4, col: 7 },
         };
-        let region = PaneRegionSnapshot::new(
-            muxr_core::PaneId::new("pane-1")?,
-            5,
-            3,
-            10,
-            4,
-            PaneMouseMode::ButtonMotion,
-            0,
-        )?;
+        let region = PaneRegionSnapshot::new(muxr_core::PaneId::new(1)?, 5, 3, 10, 4, PaneMouseMode::ButtonMotion, 0)?;
 
         pretty_assertions::assert_eq!(
             pty_mouse_event_bytes(

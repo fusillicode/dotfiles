@@ -2,12 +2,12 @@ use std::collections::BTreeSet;
 use std::fmt;
 use std::io;
 use std::num::NonZeroU16;
+use std::num::NonZeroU32;
 
 use rkyv::util::AlignedVec;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
 use serde::Deserialize;
-use serde::Deserializer;
 use serde::Serialize;
 
 use crate::SessionName;
@@ -50,99 +50,89 @@ impl TerminalSize {
     }
 }
 
-#[derive(rkyv::Archive, Clone, Debug, Eq, PartialEq, Serialize, rkyv::Serialize)]
+#[derive(
+    rkyv::Archive,
+    Clone,
+    Copy,
+    Debug,
+    Deserialize,
+    rkyv::Deserialize,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    Serialize,
+    rkyv::Serialize,
+)]
 #[serde(transparent)]
-pub struct TabId(String);
+pub struct TabId(NonZeroU32);
 
 impl TabId {
     /// Build a tab id for layout snapshots and persisted session state.
     ///
     /// # Errors
-    /// - The id is empty, reserved, too long, or contains unsupported characters.
-    pub fn new(id: impl Into<String>) -> rootcause::Result<Self> {
-        let id = id.into();
-        self::validate_layout_id("tab", &id)?;
+    /// - The id is zero.
+    pub fn new(id: u32) -> rootcause::Result<Self> {
+        let Some(id) = NonZeroU32::new(id) else {
+            return Err(report!("invalid muxr tab id").attach("id=0"));
+        };
         Ok(Self(id))
     }
-}
 
-impl<'de> Deserialize<'de> for TabId {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        Self::new(String::deserialize(deserializer)?).map_err(serde::de::Error::custom)
-    }
-}
-
-impl AsRef<str> for TabId {
-    fn as_ref(&self) -> &str {
-        &self.0
+    /// Return the numeric tab id.
+    #[must_use]
+    pub const fn get(self) -> u32 {
+        self.0.get()
     }
 }
 
 impl fmt::Display for TabId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.as_ref())
+        write!(f, "tab-{}", self.get())
     }
 }
 
-impl<D> rkyv::Deserialize<TabId, D> for ArchivedTabId
-where
-    D: rkyv::rancor::Fallible + ?Sized,
-    D::Error: rkyv::rancor::Source,
-{
-    fn deserialize(&self, deserializer: &mut D) -> Result<TabId, D::Error> {
-        let raw = rkyv::Deserialize::<String, D>::deserialize(&self.0, deserializer)?;
-        TabId::new(raw).map_err(self::rkyv_deserialize_error::<D::Error>)
-    }
-}
-
-#[derive(rkyv::Archive, Clone, Debug, Eq, PartialEq, Serialize, rkyv::Serialize)]
+#[derive(
+    rkyv::Archive,
+    Clone,
+    Copy,
+    Debug,
+    Deserialize,
+    rkyv::Deserialize,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    Serialize,
+    rkyv::Serialize,
+)]
 #[serde(transparent)]
-pub struct PaneId(String);
+pub struct PaneId(NonZeroU32);
 
 impl PaneId {
     /// Build a pane id for layout snapshots and persisted session state.
     ///
     /// # Errors
-    /// - The id is empty, reserved, too long, or contains unsupported characters.
-    pub fn new(id: impl Into<String>) -> rootcause::Result<Self> {
-        let id = id.into();
-        self::validate_layout_id("pane", &id)?;
+    /// - The id is zero.
+    pub fn new(id: u32) -> rootcause::Result<Self> {
+        let Some(id) = NonZeroU32::new(id) else {
+            return Err(report!("invalid muxr pane id").attach("id=0"));
+        };
         Ok(Self(id))
     }
-}
 
-impl<'de> Deserialize<'de> for PaneId {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        Self::new(String::deserialize(deserializer)?).map_err(serde::de::Error::custom)
-    }
-}
-
-impl AsRef<str> for PaneId {
-    fn as_ref(&self) -> &str {
-        &self.0
+    /// Return the numeric pane id.
+    #[must_use]
+    pub const fn get(self) -> u32 {
+        self.0.get()
     }
 }
 
 impl fmt::Display for PaneId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.as_ref())
-    }
-}
-
-impl<D> rkyv::Deserialize<PaneId, D> for ArchivedPaneId
-where
-    D: rkyv::rancor::Fallible + ?Sized,
-    D::Error: rkyv::rancor::Source,
-{
-    fn deserialize(&self, deserializer: &mut D) -> Result<PaneId, D::Error> {
-        let raw = rkyv::Deserialize::<String, D>::deserialize(&self.0, deserializer)?;
-        PaneId::new(raw).map_err(self::rkyv_deserialize_error::<D::Error>)
+        write!(f, "pane-{}", self.get())
     }
 }
 
@@ -168,7 +158,7 @@ impl LayoutSnapshot {
     /// Build a layout snapshot with active tab and pane invariants checked.
     ///
     /// # Errors
-    /// - Any tab or pane id is invalid or duplicated.
+    /// - Any tab or pane id is duplicated.
     /// - The layout has no tabs.
     /// - The active tab does not exist.
     /// - Any tab has no panes or an active pane that does not exist.
@@ -189,7 +179,6 @@ impl LayoutSnapshot {
     }
 
     fn validate(&self) -> rootcause::Result<()> {
-        self::validate_layout_id("tab", self.active_tab.as_ref())?;
         if self.tabs.is_empty() {
             return Err(report!("invalid muxr layout snapshot").attach("reason=tabs must not be empty"));
         }
@@ -203,14 +192,14 @@ impl LayoutSnapshot {
         let mut seen_pane_ids = BTreeSet::new();
         for tab in &self.tabs {
             tab.validate()?;
-            if !seen_tab_ids.insert(tab.id.as_ref()) {
+            if !seen_tab_ids.insert(tab.id) {
                 return Err(report!("invalid muxr layout snapshot")
                     .attach("reason=duplicate tab id")
                     .attach(format!("tab_id={}", tab.id)));
             }
 
             for pane in &tab.panes {
-                if !seen_pane_ids.insert(pane.id.as_ref()) {
+                if !seen_pane_ids.insert(pane.id) {
                     return Err(report!("invalid muxr layout snapshot")
                         .attach("reason=duplicate pane id")
                         .attach(format!("tab_id={}", tab.id))
@@ -247,7 +236,7 @@ impl TabSnapshot {
     /// Build a tab snapshot with active pane invariants checked.
     ///
     /// # Errors
-    /// - The tab or pane id is invalid or duplicated.
+    /// - Any pane id is duplicated.
     /// - The tab has no panes.
     /// - The active pane does not exist.
     pub fn new(
@@ -287,8 +276,6 @@ impl TabSnapshot {
     }
 
     fn validate(&self) -> rootcause::Result<()> {
-        self::validate_layout_id("tab", self.id.as_ref())?;
-        self::validate_layout_id("pane", self.active_pane.as_ref())?;
         if self.panes.is_empty() {
             return Err(report!("invalid muxr tab snapshot")
                 .attach("reason=panes must not be empty")
@@ -303,7 +290,7 @@ impl TabSnapshot {
 
         let mut seen_pane_ids = BTreeSet::new();
         for pane in &self.panes {
-            if !seen_pane_ids.insert(pane.id.as_ref()) {
+            if !seen_pane_ids.insert(pane.id) {
                 return Err(report!("invalid muxr tab snapshot")
                     .attach("reason=duplicate pane id")
                     .attach(format!("tab_id={}", self.id))
@@ -429,7 +416,6 @@ impl PaneRegionSnapshot {
     /// Build a visible pane region for the current rendered frame.
     ///
     /// # Errors
-    /// - The pane id is invalid.
     /// - The region has zero columns or rows.
     /// - The region row or column range overflows.
     pub fn new(
@@ -510,7 +496,6 @@ impl PaneRegionSnapshot {
     }
 
     fn validate(&self) -> rootcause::Result<()> {
-        self::validate_layout_id("pane", self.id.as_ref())?;
         if self.cols == 0 {
             return Err(report!("invalid muxr pane region").attach("reason=cols must be nonzero"));
         }
@@ -583,7 +568,7 @@ impl PaneRegionsSnapshot {
         let mut seen_pane_ids = BTreeSet::new();
         for region in &self.regions {
             region.validate()?;
-            if !seen_pane_ids.insert(region.id.as_ref()) {
+            if !seen_pane_ids.insert(region.id) {
                 return Err(report!("invalid muxr pane regions snapshot")
                     .attach("reason=duplicate pane id")
                     .attach(format!("pane_id={}", region.id)));
@@ -603,36 +588,6 @@ where
         let regions = rkyv::Deserialize::<Vec<PaneRegionSnapshot>, D>::deserialize(&self.regions, deserializer)?;
         PaneRegionsSnapshot::new(regions).map_err(self::rkyv_deserialize_error::<D::Error>)
     }
-}
-
-fn validate_layout_id(kind: &'static str, id: &str) -> rootcause::Result<()> {
-    if id.is_empty() {
-        return Err(report!("invalid muxr layout id")
-            .attach(format!("kind={kind}"))
-            .attach("reason=ids must not be empty"));
-    }
-    if matches!(id, "." | "..") {
-        return Err(report!("invalid muxr layout id")
-            .attach(format!("kind={kind}"))
-            .attach("reason=reserved ids are not allowed")
-            .attach(format!("id={id:?}")));
-    }
-    if id.len() > 64 {
-        return Err(report!("invalid muxr layout id")
-            .attach(format!("kind={kind}"))
-            .attach("reason=ids longer than 64 bytes are not allowed"));
-    }
-    if !id
-        .chars()
-        .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-' | '.'))
-    {
-        return Err(report!("invalid muxr layout id")
-            .attach(format!("kind={kind}"))
-            .attach("reason=only ASCII alphanumeric, _, -, and . are allowed")
-            .attach(format!("id={id:?}")));
-    }
-
-    Ok(())
 }
 
 fn rkyv_deserialize_error<E>(error: impl fmt::Display) -> E
@@ -1434,7 +1389,7 @@ mod tests {
         direction: PaneScrollDirection::Down,
     })]
     #[case::focus_pane_at(ClientRequest::FocusPaneAt(ClientMousePosition { row: 2, col: 3 }))]
-    #[case::focus_tab(ClientRequest::FocusTab(TabId::new("tab-2")?))]
+    #[case::focus_tab(ClientRequest::FocusTab(TabId::new(2)?))]
     fn test_client_request_codec_when_frame_round_trips_returns_original(
         #[case] request: ClientRequest,
     ) -> rootcause::Result<()> {
@@ -1474,13 +1429,8 @@ mod tests {
     fn test_server_event_codec_when_attached_layout_is_invalid_returns_error() -> rootcause::Result<()> {
         let event = ServerEvent::Attached(AttachAccepted {
             layout: LayoutSnapshot {
-                active_tab: TabId::new("missing")?,
-                tabs: vec![tab_snapshot(
-                    "tab-1",
-                    "default",
-                    "pane-1",
-                    vec![pane_snapshot("pane-1", "shell")?],
-                )?],
+                active_tab: TabId::new(99)?,
+                tabs: vec![tab_snapshot(1, "default", 1, vec![pane_snapshot(1, "shell")?])?],
             },
             pane_regions: pane_regions_snapshot()?,
         });
@@ -1493,13 +1443,8 @@ mod tests {
     #[test]
     fn test_server_event_codec_when_layout_event_is_invalid_returns_error() -> rootcause::Result<()> {
         let event = ServerEvent::Layout(LayoutSnapshot {
-            active_tab: TabId::new("missing")?,
-            tabs: vec![tab_snapshot(
-                "tab-1",
-                "default",
-                "pane-1",
-                vec![pane_snapshot("pane-1", "shell")?],
-            )?],
+            active_tab: TabId::new(99)?,
+            tabs: vec![tab_snapshot(1, "default", 1, vec![pane_snapshot(1, "shell")?])?],
         });
         let encoded = encode_server_event(&event)?;
 
@@ -1541,97 +1486,87 @@ mod tests {
     fn test_layout_snapshot_single_pane_when_built_returns_stable_layout() -> rootcause::Result<()> {
         let layout = layout_snapshot()?;
 
-        pretty_assertions::assert_eq!(layout.active_tab.as_ref(), "tab-1");
+        pretty_assertions::assert_eq!(layout.active_tab.get(), 1);
         pretty_assertions::assert_eq!(layout.tabs.len(), 1);
         let Some(tab) = layout.tabs.first() else {
             return Err(report!("expected one tab"));
         };
-        pretty_assertions::assert_eq!(tab.active_pane.as_ref(), "pane-1");
+        pretty_assertions::assert_eq!(tab.active_pane.get(), 1);
         pretty_assertions::assert_eq!(tab.panes.len(), 1);
         Ok(())
     }
 
-    #[rstest]
-    #[case::empty("")]
-    #[case::dot(".")]
-    #[case::dot_dot("..")]
-    #[case::forward_slash("a/b")]
-    #[case::backslash("a\\b")]
-    #[case::space("a b")]
-    #[case::tab("a\tb")]
-    #[case::shell_metacharacters("$(x)")]
-    #[case::punctuation("name!")]
-    fn test_layout_id_new_when_id_is_invalid_returns_error(#[case] raw: &str) {
-        assert2::assert!(TabId::new(raw).is_err());
-        assert2::assert!(PaneId::new(raw).is_err());
+    #[test]
+    fn test_layout_id_new_when_id_is_zero_returns_error() {
+        assert2::assert!(TabId::new(0).is_err());
+        assert2::assert!(PaneId::new(0).is_err());
     }
 
     #[test]
-    fn test_layout_id_new_when_id_is_too_long_returns_error() {
-        let raw = "a".repeat(65);
+    fn test_layout_id_deserialize_when_id_is_zero_returns_error() {
+        let raw = "0";
 
-        assert2::assert!(TabId::new(raw.clone()).is_err());
-        assert2::assert!(PaneId::new(raw).is_err());
-    }
-
-    #[rstest]
-    #[case::slash(r#""a/b""#)]
-    #[case::reserved(r#"".""#)]
-    fn test_layout_id_deserialize_when_id_is_invalid_returns_error(#[case] raw: &str) {
         assert2::assert!(serde_json::from_str::<TabId>(raw).is_err());
         assert2::assert!(serde_json::from_str::<PaneId>(raw).is_err());
     }
 
+    #[test]
+    fn test_layout_id_display_when_formatted_returns_human_label() -> rootcause::Result<()> {
+        pretty_assertions::assert_eq!(TabId::new(1)?.to_string(), "tab-1");
+        pretty_assertions::assert_eq!(PaneId::new(1)?.to_string(), "pane-1");
+        Ok(())
+    }
+
     #[rstest]
     #[case::empty_tabs(LayoutSnapshot {
-        active_tab: tab_id("tab-1"),
+        active_tab: tab_id(1),
         tabs: Vec::new(),
     })]
     #[case::missing_active_tab(LayoutSnapshot {
-        active_tab: tab_id("missing"),
-        tabs: vec![raw_tab_snapshot("tab-1", "default", "pane-1", vec![raw_pane_snapshot("pane-1", "shell")])],
+        active_tab: tab_id(99),
+        tabs: vec![raw_tab_snapshot(1, "default", 1, vec![raw_pane_snapshot(1, "shell")])],
     })]
     #[case::empty_panes(LayoutSnapshot {
-        active_tab: tab_id("tab-1"),
+        active_tab: tab_id(1),
         tabs: vec![TabSnapshot {
-            active_pane: pane_id("pane-1"),
-            id: tab_id("tab-1"),
+            active_pane: pane_id(1),
+            id: tab_id(1),
             panes: Vec::new(),
             title: "default".to_owned(),
         }],
     })]
     #[case::missing_active_pane(LayoutSnapshot {
-        active_tab: tab_id("tab-1"),
+        active_tab: tab_id(1),
         tabs: vec![TabSnapshot {
-            active_pane: pane_id("missing"),
-            id: tab_id("tab-1"),
-            panes: vec![raw_pane_snapshot("pane-1", "shell")],
+            active_pane: pane_id(99),
+            id: tab_id(1),
+            panes: vec![raw_pane_snapshot(1, "shell")],
             title: "default".to_owned(),
         }],
     })]
     #[case::duplicate_tab(LayoutSnapshot {
-        active_tab: tab_id("tab-1"),
+        active_tab: tab_id(1),
         tabs: vec![
-            raw_tab_snapshot("tab-1", "default", "pane-1", vec![raw_pane_snapshot("pane-1", "shell")]),
-            raw_tab_snapshot("tab-1", "other", "pane-2", vec![raw_pane_snapshot("pane-2", "shell")]),
+            raw_tab_snapshot(1, "default", 1, vec![raw_pane_snapshot(1, "shell")]),
+            raw_tab_snapshot(1, "other", 2, vec![raw_pane_snapshot(2, "shell")]),
         ],
     })]
     #[case::duplicate_pane(LayoutSnapshot {
-        active_tab: tab_id("tab-1"),
+        active_tab: tab_id(1),
         tabs: vec![TabSnapshot {
-            active_pane: pane_id("pane-1"),
-            id: tab_id("tab-1"),
-            panes: vec![raw_pane_snapshot("pane-1", "shell"), raw_pane_snapshot("pane-1", "other")],
+            active_pane: pane_id(1),
+            id: tab_id(1),
+            panes: vec![raw_pane_snapshot(1, "shell"), raw_pane_snapshot(1, "other")],
             title: "default".to_owned(),
         }],
     })]
     #[case::duplicate_pane_across_tabs(LayoutSnapshot {
-        active_tab: tab_id("tab-1"),
+        active_tab: tab_id(1),
         tabs: vec![
-            raw_tab_snapshot("tab-1", "default", "pane-1", vec![raw_pane_snapshot("pane-1", "shell")]),
-            raw_tab_snapshot("tab-2", "other", "pane-2", vec![
-                raw_pane_snapshot("pane-1", "other"),
-                raw_pane_snapshot("pane-2", "shell"),
+            raw_tab_snapshot(1, "default", 1, vec![raw_pane_snapshot(1, "shell")]),
+            raw_tab_snapshot(2, "other", 2, vec![
+                raw_pane_snapshot(1, "other"),
+                raw_pane_snapshot(2, "shell"),
             ]),
         ],
     })]
@@ -1849,22 +1784,22 @@ mod tests {
     }
 
     fn layout_snapshot() -> rootcause::Result<LayoutSnapshot> {
-        let active_tab = TabId::new("tab-1")?;
-        let active_pane = PaneId::new("pane-1")?;
+        let active_tab = TabId::new(1)?;
+        let active_pane = PaneId::new(1)?;
         let pane = PaneSnapshot {
             agent_state: PaneAgentState::NoAgent,
             cwd: "/tmp".to_owned(),
             cmd_label: None,
-            id: active_pane.clone(),
+            id: active_pane,
             title: "shell".to_owned(),
         };
-        let tab = TabSnapshot::new(active_tab.clone(), "default", active_pane, vec![pane])?;
+        let tab = TabSnapshot::new(active_tab, "default", active_pane, vec![pane])?;
         LayoutSnapshot::new(active_tab, vec![tab])
     }
 
     fn pane_regions_snapshot() -> rootcause::Result<PaneRegionsSnapshot> {
         PaneRegionsSnapshot::new(vec![PaneRegionSnapshot::new(
-            PaneId::new("pane-1")?,
+            PaneId::new(1)?,
             0,
             0,
             80,
@@ -1875,15 +1810,15 @@ mod tests {
     }
 
     fn tab_snapshot(
-        id: &str,
+        id: u32,
         title: &str,
-        active_pane: &str,
+        active_pane: u32,
         panes: Vec<PaneSnapshot>,
     ) -> rootcause::Result<TabSnapshot> {
         TabSnapshot::new(TabId::new(id)?, title, PaneId::new(active_pane)?, panes)
     }
 
-    fn pane_snapshot(id: &str, title: &str) -> rootcause::Result<PaneSnapshot> {
+    fn pane_snapshot(id: u32, title: &str) -> rootcause::Result<PaneSnapshot> {
         Ok(PaneSnapshot {
             agent_state: PaneAgentState::NoAgent,
             cwd: "/tmp".to_owned(),
@@ -1893,7 +1828,7 @@ mod tests {
         })
     }
 
-    fn raw_tab_snapshot(id: &str, title: &str, active_pane: &str, panes: Vec<PaneSnapshot>) -> TabSnapshot {
+    fn raw_tab_snapshot(id: u32, title: &str, active_pane: u32, panes: Vec<PaneSnapshot>) -> TabSnapshot {
         TabSnapshot {
             active_pane: pane_id(active_pane),
             id: tab_id(id),
@@ -1902,7 +1837,7 @@ mod tests {
         }
     }
 
-    fn raw_pane_snapshot(id: &str, title: &str) -> PaneSnapshot {
+    fn raw_pane_snapshot(id: u32, title: &str) -> PaneSnapshot {
         PaneSnapshot {
             agent_state: PaneAgentState::NoAgent,
             cwd: "/tmp".to_owned(),
@@ -1912,12 +1847,12 @@ mod tests {
         }
     }
 
-    fn tab_id(id: &str) -> TabId {
-        TabId(id.to_owned())
+    fn tab_id(id: u32) -> TabId {
+        TabId::new(id).expect("test tab id should be valid")
     }
 
-    fn pane_id(id: &str) -> PaneId {
-        PaneId(id.to_owned())
+    fn pane_id(id: u32) -> PaneId {
+        PaneId::new(id).expect("test pane id should be valid")
     }
 
     fn terminal_size(cols: u16, rows: u16) -> rootcause::Result<TerminalSize> {

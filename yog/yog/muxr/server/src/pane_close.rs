@@ -36,14 +36,13 @@ impl SessionLayout {
             .entries
             .get(active_tab_index)
             .ok_or_else(|| report!("muxr active tab index is outside server layout"))?
-            .active_pane
-            .clone();
+            .active_pane;
 
         if final_pane {
             self.entries
                 .get_mut(active_tab_index)
                 .ok_or_else(|| report!("muxr active tab index is outside server layout"))?
-                .mark_pane_closed(&active_pane, exited_at)?;
+                .mark_pane_closed(active_pane, exited_at)?;
             return Ok(ClosePaneOutcome::Final { pane_id: active_pane });
         }
 
@@ -60,7 +59,7 @@ impl SessionLayout {
                 .entries
                 .get_mut(active_tab_index)
                 .ok_or_else(|| report!("muxr active tab index is outside server layout"))?;
-            let fallback_pane = tab.remove_pane(&active_pane)?;
+            let fallback_pane = tab.remove_pane(active_pane)?;
             let _focused = tab.focus_pane(fallback_pane)?;
         }
 
@@ -69,7 +68,7 @@ impl SessionLayout {
 
     pub fn remove_exited_pane(
         &mut self,
-        pane_id: &PaneId,
+        pane_id: PaneId,
         exited_at: u64,
         exit_status: PtyExitStatus,
     ) -> rootcause::Result<PaneExitOutcome> {
@@ -106,7 +105,7 @@ impl SessionLayout {
             .entries
             .get_mut(tab_index)
             .ok_or_else(|| report!("muxr exited pane tab is missing"))?;
-        let removed_active_pane = tab.active_pane == *pane_id;
+        let removed_active_pane = tab.active_pane == pane_id;
         let fallback_pane = tab.remove_pane(pane_id)?;
         if removed_active_pane {
             let _focused = tab.focus_pane(fallback_pane)?;
@@ -116,11 +115,11 @@ impl SessionLayout {
 }
 
 impl Tab {
-    pub fn remove_pane(&mut self, pane_id: &PaneId) -> rootcause::Result<PaneId> {
+    pub fn remove_pane(&mut self, pane_id: PaneId) -> rootcause::Result<PaneId> {
         self.pane_tree.remove_pane(pane_id)
     }
 
-    fn mark_pane_closed(&mut self, pane_id: &PaneId, exited_at: u64) -> rootcause::Result<()> {
+    fn mark_pane_closed(&mut self, pane_id: PaneId, exited_at: u64) -> rootcause::Result<()> {
         let Some(pane) = self.pane_tree.pane_mut(pane_id) else {
             return Err(report!("muxr pane is missing from server layout").attach(format!("pane_id={pane_id}")));
         };
@@ -131,7 +130,7 @@ impl Tab {
 
     fn mark_pane_process_exited(
         &mut self,
-        pane_id: &PaneId,
+        pane_id: PaneId,
         exited_at: u64,
         exit_status: PtyExitStatus,
     ) -> rootcause::Result<()> {
@@ -145,16 +144,16 @@ impl Tab {
 }
 
 impl PaneTree {
-    pub fn remove_pane(&mut self, pane_id: &PaneId) -> rootcause::Result<PaneId> {
+    pub fn remove_pane(&mut self, pane_id: PaneId) -> rootcause::Result<PaneId> {
         let Some(fallback_pane) = self.remove_pane_from_split(pane_id)? else {
             return Err(report!("muxr pane is missing from server layout").attach(format!("pane_id={pane_id}")));
         };
         Ok(fallback_pane)
     }
 
-    fn remove_pane_from_split(&mut self, pane_id: &PaneId) -> rootcause::Result<Option<PaneId>> {
+    fn remove_pane_from_split(&mut self, pane_id: PaneId) -> rootcause::Result<Option<PaneId>> {
         match self {
-            Self::Pane(pane) if pane.id == *pane_id => {
+            Self::Pane(pane) if pane.id == pane_id => {
                 Err(report!("muxr cannot remove a pane without a sibling").attach(format!("pane_id={pane_id}")))
             }
             Self::Split { first, second, .. } if first.contains_pane(pane_id) => {
@@ -183,7 +182,7 @@ impl PaneTree {
 
     fn first_pane_id(&self) -> PaneId {
         match self {
-            Self::Pane(pane) => pane.id.clone(),
+            Self::Pane(pane) => pane.id,
             Self::Split { first, .. } => first.first_pane_id(),
         }
     }
@@ -200,11 +199,11 @@ pub fn handle_close_pane_cmd(
     crate::server::sync_layout_terminal_titles(&mut layout, runtimes)?;
     let outcome = layout.close_active_pane(exited_at)?;
     let pane_id = match &outcome {
-        ClosePaneOutcome::Final { pane_id } | ClosePaneOutcome::Removed { pane_id } => pane_id.clone(),
+        ClosePaneOutcome::Final { pane_id } | ClosePaneOutcome::Removed { pane_id } => *pane_id,
     };
     {
         let mut runtimes = crate::server::lock_mutex(runtimes, "pane runtimes")?;
-        runtimes.remove(&pane_id);
+        runtimes.remove(pane_id);
         drop(runtimes);
     }
     crate::state::persisted::write_metadata(&config.paths, &layout)?;

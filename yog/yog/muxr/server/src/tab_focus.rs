@@ -4,14 +4,14 @@ use rootcause::report;
 use crate::state::SessionLayout;
 
 impl SessionLayout {
-    pub fn focus_tab(&mut self, tab_id: &TabId) -> rootcause::Result<bool> {
-        if self.active_tab == *tab_id {
+    pub fn focus_tab(&mut self, tab_id: TabId) -> rootcause::Result<bool> {
+        if self.active_tab == tab_id {
             return Ok(false);
         }
-        if !self.entries.iter().any(|tab| tab.id == *tab_id) {
+        if !self.entries.iter().any(|tab| tab.id == tab_id) {
             return Ok(false);
         }
-        self.active_tab = tab_id.clone();
+        self.active_tab = tab_id;
         let _acknowledged = self.acknowledge_active_pane_attention()?;
         Ok(true)
     }
@@ -27,8 +27,7 @@ impl SessionLayout {
             .entries
             .get(previous_index)
             .ok_or_else(|| report!("muxr previous tab is missing from server layout"))?
-            .id
-            .clone();
+            .id;
         let _acknowledged = self.acknowledge_active_pane_attention()?;
         Ok(())
     }
@@ -43,14 +42,13 @@ impl SessionLayout {
             .entries
             .get(next_index)
             .ok_or_else(|| report!("muxr next tab is missing from server layout"))?
-            .id
-            .clone();
+            .id;
         let _acknowledged = self.acknowledge_active_pane_attention()?;
         Ok(())
     }
 }
 
-pub fn handle_focus_tab(layout: &mut SessionLayout, tab_id: &TabId) -> rootcause::Result<bool> {
+pub fn handle_focus_tab(layout: &mut SessionLayout, tab_id: TabId) -> rootcause::Result<bool> {
     layout.focus_tab(tab_id)
 }
 
@@ -79,9 +77,9 @@ mod tests {
     fn test_focus_tab_when_tab_exists_updates_active_tab() -> rootcause::Result<()> {
         let mut layout = self::layout()?;
 
-        assert2::assert!(handle_focus_tab(&mut layout, &TabId::new("tab-2")?)?);
+        assert2::assert!(handle_focus_tab(&mut layout, TabId::new(2)?)?);
 
-        pretty_assertions::assert_eq!(layout.active_tab_id().as_ref(), "tab-2");
+        pretty_assertions::assert_eq!(layout.active_tab_id().get(), 2);
         Ok(())
     }
 
@@ -89,29 +87,26 @@ mod tests {
     fn test_focus_tab_when_tab_is_missing_keeps_active_tab() -> rootcause::Result<()> {
         let mut layout = self::layout()?;
 
-        assert2::assert!(!handle_focus_tab(&mut layout, &TabId::new("tab-3")?)?);
+        assert2::assert!(!handle_focus_tab(&mut layout, TabId::new(3)?)?);
 
-        pretty_assertions::assert_eq!(layout.active_tab_id().as_ref(), "tab-1");
+        pretty_assertions::assert_eq!(layout.active_tab_id().get(), 1);
         Ok(())
     }
 
     fn layout() -> rootcause::Result<SessionLayout> {
         let session: SessionName = "work".parse()?;
-        let tab_1 = TabId::new("tab-1")?;
-        let tab_2 = TabId::new("tab-2")?;
+        let tab_1 = TabId::new(1)?;
+        let tab_2 = TabId::new(2)?;
         Ok(SessionLayout {
-            active_tab: tab_1.clone(),
-            entries: vec![
-                self::tab(tab_1, PaneId::new("pane-1")?),
-                self::tab(tab_2, PaneId::new("pane-2")?),
-            ],
+            active_tab: tab_1,
+            entries: vec![self::tab(tab_1, PaneId::new(1)?), self::tab(tab_2, PaneId::new(2)?)],
             session,
         })
     }
 
     fn tab(id: TabId, pane_id: PaneId) -> Tab {
         Tab {
-            active_pane: pane_id.clone(),
+            active_pane: pane_id,
             id,
             pane_tree: PaneTree::Pane(Pane {
                 attention_state: PaneAttentionState::Idle,
