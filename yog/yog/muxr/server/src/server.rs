@@ -2133,8 +2133,11 @@ mod tests {
 
     use super::*;
     use crate::pane_borders::PaneBorderAxis;
+    use crate::pane_split::PaneSplitRatio;
+    use crate::state::PaneTree;
 
     const SERVER_READY_TIMEOUT: Duration = Duration::from_secs(2);
+    const BALANCED_TEST_SPLIT_RATIO: u16 = 500;
 
     type PaneRegionTuple = (String, u16, u16, u16, u16);
 
@@ -2670,6 +2673,7 @@ mod tests {
         let config = self::server_config(tempdir.path(), "work")?;
         let mut layout = SessionLayout::initial(&config.session, self::metadata("sh", 1))?;
         layout.split_active_pane(self::metadata("sh", 2), PaneSplitAxis::Vertical)?;
+        self::force_balanced_test_split_ratio(&mut layout)?;
 
         pretty_assertions::assert_eq!(
             layout.focus_pane_at(&TerminalSize::new(80, 24)?, position)?,
@@ -2691,6 +2695,7 @@ mod tests {
         let config = self::server_config(tempdir.path(), "work")?;
         let mut layout = SessionLayout::initial(&config.session, self::metadata("sh", 1))?;
         layout.split_active_pane(self::metadata("sh", 2), PaneSplitAxis::Vertical)?;
+        self::force_balanced_test_split_ratio(&mut layout)?;
 
         let pane_id = layout.pane_at(&TerminalSize::new(80, 24)?, position)?;
 
@@ -2772,6 +2777,7 @@ mod tests {
 
         layout.split_active_pane(self::metadata("sh", 2), first_axis)?;
         layout.split_active_pane(self::metadata("sh", 3), second_axis)?;
+        self::force_balanced_test_split_ratio(&mut layout)?;
 
         pretty_assertions::assert_eq!(layout.active_pane_id()?.to_string(), "pane-3");
         pretty_assertions::assert_eq!(
@@ -2807,6 +2813,7 @@ mod tests {
         let mut layout = SessionLayout::initial(&config.session, self::metadata("sh", 1))?;
 
         layout.split_active_pane(self::metadata("sh", 2), split_axis)?;
+        self::force_balanced_test_split_ratio(&mut layout)?;
 
         pretty_assertions::assert_eq!(
             self::layout_active_tab_pane_borders(&layout, &TerminalSize::new(80, 24)?)?,
@@ -2878,6 +2885,7 @@ mod tests {
 
         layout.split_active_pane(self::metadata("sh", 2), PaneSplitAxis::Vertical)?;
         layout.split_active_pane(self::metadata("sh", 3), PaneSplitAxis::Horizontal)?;
+        self::force_balanced_test_split_ratio(&mut layout)?;
         let close = layout.close_active_pane(3)?;
 
         pretty_assertions::assert_eq!(
@@ -2941,6 +2949,7 @@ mod tests {
         let mut layout = SessionLayout::initial(&config.session, self::metadata("sh", 1))?;
 
         layout.split_active_pane(self::metadata("sh", 2), split_axis)?;
+        self::force_balanced_test_split_ratio(&mut layout)?;
 
         assert2::assert!(layout.resize_active_pane(direction)?);
         let expected_regions = expected_regions
@@ -2962,6 +2971,7 @@ mod tests {
 
         layout.split_active_pane(self::metadata("sh", 2), PaneSplitAxis::Vertical)?;
         layout.split_active_pane(self::metadata("sh", 3), PaneSplitAxis::Horizontal)?;
+        self::force_balanced_test_split_ratio(&mut layout)?;
 
         assert2::assert!(layout.resize_active_pane(PaneResizeDirection::Up)?);
         pretty_assertions::assert_eq!(
@@ -2994,6 +3004,7 @@ mod tests {
 
         layout.split_active_pane(self::metadata("sh", 2), PaneSplitAxis::Vertical)?;
         layout.split_active_pane(self::metadata("sh", 3), PaneSplitAxis::Horizontal)?;
+        self::force_balanced_test_split_ratio(&mut layout)?;
         crate::state::persisted::write_metadata(&config.paths, &layout)?;
 
         let loaded = crate::state::persisted::load_metadata(&config.paths, &config.session)?
@@ -3019,6 +3030,7 @@ mod tests {
         let mut layout = SessionLayout::initial(&config.session, self::metadata("sh", 1))?;
 
         layout.split_active_pane(self::metadata("sh", 2), PaneSplitAxis::Vertical)?;
+        self::force_balanced_test_split_ratio(&mut layout)?;
         assert2::assert!(layout.resize_active_pane(PaneResizeDirection::Left)?);
         crate::state::persisted::write_metadata(&config.paths, &layout)?;
 
@@ -3628,6 +3640,7 @@ mod tests {
             let tempdir = tempfile::tempdir()?;
             let (session, paths) = self::session_paths(tempdir.path(), "work")?;
             let handle = self::spawn_test_server_with_shell(&session, &paths, Some(1), self::shell_cmd("/bin/cat"));
+            let size = TerminalSize::new(80, 24)?;
 
             self::wait_for_socket(&paths.socket)?;
             let mut client = self::open_attached_client(&session, &paths).await?;
@@ -3640,6 +3653,13 @@ mod tests {
                 }))
                 .await?;
             drop(self::read_until_layout(&mut client).await?);
+            let before_resize = crate::state::persisted::load_metadata(&paths, &session)?
+                .ok_or_else(|| report!("expected muxr layout metadata to load before resize"))?;
+            let before_regions = self::layout_active_tab_pane_regions(&before_resize, &size)?;
+            pretty_assertions::assert_eq!(
+                before_regions.iter().map(|(id, ..)| id.as_str()).collect::<Vec<_>>(),
+                vec!["pane-1", "pane-2"],
+            );
             client
                 .writer
                 .send_request(&ClientRequest::Key(ClientKey {
@@ -3668,16 +3688,25 @@ mod tests {
                 tab.panes().iter().map(|pane| pane.id.to_string()).collect::<Vec<_>>(),
                 vec!["pane-1", "pane-2"],
             );
-            let config = self::server_config(tempdir.path(), "work")?;
-            let persisted = crate::state::persisted::load_metadata(&paths, &config.session)?
+            let persisted = crate::state::persisted::load_metadata(&paths, &session)?
                 .ok_or_else(|| report!("expected muxr layout metadata to load"))?;
+            let after_regions = self::layout_active_tab_pane_regions(&persisted, &size)?;
             pretty_assertions::assert_eq!(
-                self::layout_active_tab_pane_regions(&persisted, &TerminalSize::new(80, 24)?)?,
-                vec![
-                    ("pane-1".to_owned(), 0, 0, 36, 24),
-                    ("pane-2".to_owned(), 37, 0, 43, 24),
-                ],
+                after_regions.iter().map(|(id, ..)| id.as_str()).collect::<Vec<_>>(),
+                vec!["pane-1", "pane-2"],
             );
+            let before_first = &before_regions[0];
+            let before_second = &before_regions[1];
+            let after_first = &after_regions[0];
+            let after_second = &after_regions[1];
+            pretty_assertions::assert_eq!(
+                (after_first.1, after_first.2, after_first.4),
+                (before_first.1, before_first.2, before_first.4),
+            );
+            pretty_assertions::assert_eq!((after_second.2, after_second.4), (before_second.2, before_second.4));
+            assert2::assert!(after_first.3 < before_first.3);
+            assert2::assert!(after_second.3 > before_second.3);
+            pretty_assertions::assert_eq!(after_second.1, after_first.1 + after_first.3 + 1);
             client
                 .writer
                 .send_request(&ClientRequest::Key(ClientKey {
@@ -4011,6 +4040,30 @@ mod tests {
             cmd_label: cmd_label.to_owned(),
             cwd: "/tmp".to_owned(),
             started_at,
+        }
+    }
+
+    fn force_balanced_test_split_ratio(layout: &mut SessionLayout) -> rootcause::Result<()> {
+        let ratio = PaneSplitRatio::new(BALANCED_TEST_SPLIT_RATIO)?;
+        for tab in &mut layout.entries {
+            self::force_balanced_pane_tree_split_ratio(&mut tab.pane_tree, ratio);
+        }
+        Ok(())
+    }
+
+    fn force_balanced_pane_tree_split_ratio(pane_tree: &mut PaneTree, ratio: PaneSplitRatio) {
+        match pane_tree {
+            PaneTree::Pane(_) => {}
+            PaneTree::Split {
+                first_ratio,
+                first,
+                second,
+                ..
+            } => {
+                *first_ratio = ratio;
+                self::force_balanced_pane_tree_split_ratio(first, ratio);
+                self::force_balanced_pane_tree_split_ratio(second, ratio);
+            }
         }
     }
 

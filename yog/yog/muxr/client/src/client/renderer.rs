@@ -794,8 +794,10 @@ mod tests {
             SelectionInput::Update(muxr_core::ClientMousePosition { row: 0, col: 1 }),
         )?;
 
+        assert2::assert!(renderer.selection_contains(0, 0));
+        assert2::assert!(renderer.selection_contains(0, 1));
         let selection_output = output.rendered_string()?;
-        assert2::assert!(selection_output.contains("\x1b[7m"));
+        assert2::assert!(!selection_output.contains("\x1b[7m"));
         pretty_assertions::assert_eq!(output.flushes, 1);
         Ok(())
     }
@@ -909,7 +911,8 @@ mod tests {
         renderer.apply_selection_input_at(&mut output, SelectionInput::Start(second_position), second_click_at)?;
 
         pretty_assertions::assert_eq!(renderer.selected_text(), Some("two".to_owned()),);
-        assert2::assert!(output.rendered_string()?.contains("\x1b[7m"));
+        let selection_output = output.rendered_string()?;
+        assert2::assert!(!selection_output.contains("\x1b[7m"));
         pretty_assertions::assert_eq!(output.flushes, 1);
         Ok(())
     }
