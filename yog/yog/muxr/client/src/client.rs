@@ -286,6 +286,11 @@ async fn run_interactive(mut attached_session: AttachedSession, initial_size: Te
                             }
                         }
                     },
+                    ServerEvent::ScrollPaneLineResult {
+                        position,
+                        direction,
+                        scrolled,
+                    } => renderer.apply_scroll_pane_line_result(position, direction, scrolled),
                     ServerEvent::Attached(_) | ServerEvent::Pong => {}
                 }
             },
@@ -366,7 +371,7 @@ async fn handle_mouse_input_action(
         match self::pane_focus::local_mouse_action(event) {
             Some(LocalMouseAction::SelectionUpdate(_)) => {
                 if let Some(position) = self::pane_position_for_sidebar_drag(tab_bar_position) {
-                    let scroll_request = renderer.set_selection_edge_drag(position, None);
+                    let scroll_request = renderer.set_selection_outside_edge_drag(position);
                     renderer.apply_selection_input(stdout, SelectionInput::Update(position))?;
                     if let Some(request) = scroll_request {
                         return Ok(self::send_edge_scroll_request(input_sender, renderer, request));
