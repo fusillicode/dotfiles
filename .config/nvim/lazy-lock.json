@@ -22,5 +22,5 @@
   "nvim-treesitter": { "branch": "main", "commit": "4916d6592ede8c07973490d9322f187e07dfefac" },
   "nvim-treesitter-context": { "branch": "master", "commit": "b311b30818951d01f7b4bf650521b868b3fece16" },
   "nvim-treesitter-textobjects": { "branch": "main", "commit": "851e865342e5a4cb1ae23d31caf6e991e1c99f1e" },
-  "schemastore.nvim": { "branch": "main", "commit": "19936230448bfb3dfd4314070e8bc499ceb55928" }
+  "schemastore.nvim": { "branch": "main", "commit": "fce1d90e76c59337b6d3778c272c1b972a658269" }
 }
