@@ -1,6 +1,5 @@
 use std::sync::Mutex;
 
-use muxr_core::PaneAgentState;
 use muxr_core::PaneId;
 use muxr_core::TabId;
 use muxr_core::TerminalSize;
@@ -33,7 +32,6 @@ impl SessionLayout {
                 active_pane: pane_id.clone(),
                 id: tab_id.clone(),
                 pane_tree: PaneTree::Pane(Pane {
-                    agent_state: PaneAgentState::NoAgent,
                     attention_state: PaneAttentionState::Idle,
                     cmd_label: metadata.cmd_label.clone(),
                     cwd: metadata.cwd,

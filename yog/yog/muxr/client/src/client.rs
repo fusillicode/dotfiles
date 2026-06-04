@@ -1198,7 +1198,7 @@ mod tests {
                     ClientInputAction::Mouse(ClientMouseEvent {
                         button: 0,
                         phase: ClientMouseEventPhase::Press,
-                        position: muxr_core::ClientMousePosition { row: 2, col: 1 }
+                        position: muxr_core::ClientMousePosition { row: 3, col: 1 }
                     }),
                     &input_sender,
                     &mut renderer,

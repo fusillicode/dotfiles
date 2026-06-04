@@ -81,8 +81,6 @@ impl PaneAttentionState {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct Pane {
     #[serde(default, skip_serializing)]
-    pub agent_state: PaneAgentState,
-    #[serde(default, skip_serializing)]
     pub attention_state: PaneAttentionState,
     pub cmd_label: String,
     pub cwd: String,
@@ -118,12 +116,21 @@ impl Pane {
         false
     }
 
-    /// Build a client snapshot with tab bar cwd/cmd metadata derived from the latest terminal title.
-    pub fn snapshot_with_terminal_title(&self, terminal_title: Option<&str>) -> PaneSnapshot {
+    /// Build a client snapshot with live runtime cmd metadata overriding decorative terminal titles.
+    pub fn snapshot_with_runtime_metadata(
+        &self,
+        terminal_title: Option<&str>,
+        runtime_cmd_label: Option<&str>,
+        runtime_agent_state: PaneAgentState,
+    ) -> PaneSnapshot {
         let terminal_title = crate::cmd_label::classify_terminal_title(terminal_title, &self.cwd);
         PaneSnapshot {
-            agent_state: self.agent_state_with_cmd_label(terminal_title.cmd_label.as_deref()),
-            cmd_label: terminal_title.cmd_label,
+            agent_state: runtime_agent_state,
+            cmd_label: runtime_cmd_label
+                .map(str::trim)
+                .filter(|cmd| !cmd.is_empty())
+                .map(ToOwned::to_owned)
+                .or(terminal_title.cmd_label),
             cwd: terminal_title.cwd.unwrap_or_else(|| self.cwd.clone()),
             id: self.id.clone(),
             title: self.title.clone(),
@@ -144,8 +151,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_snapshot_with_terminal_title_when_title_is_cwd_updates_snapshot_cwd() -> rootcause::Result<()> {
-        let snapshot = self::pane()?.snapshot_with_terminal_title(Some("~"));
+    fn test_snapshot_with_runtime_metadata_when_title_is_cwd_updates_snapshot_cwd() -> rootcause::Result<()> {
+        let snapshot = self::pane()?.snapshot_with_runtime_metadata(Some("~"), None, PaneAgentState::NoAgent);
 
         pretty_assertions::assert_eq!(snapshot.cwd, "~");
         pretty_assertions::assert_eq!(snapshot.cmd_label, None);
@@ -153,11 +160,36 @@ mod tests {
     }
 
     #[test]
-    fn test_snapshot_with_terminal_title_when_title_is_cmd_keeps_pane_cwd() -> rootcause::Result<()> {
-        let snapshot = self::pane()?.snapshot_with_terminal_title(Some("cargo test"));
+    fn test_snapshot_with_runtime_metadata_when_title_is_cmd_keeps_pane_cwd() -> rootcause::Result<()> {
+        let snapshot = self::pane()?.snapshot_with_runtime_metadata(Some("cargo test"), None, PaneAgentState::NoAgent);
 
         pretty_assertions::assert_eq!(snapshot.cwd, "/old/project");
         pretty_assertions::assert_eq!(snapshot.cmd_label, Some("cargo test".to_owned()));
+        Ok(())
+    }
+
+    #[rstest::rstest]
+    #[case::no_agent(PaneAgentState::NoAgent)]
+    #[case::seen(PaneAgentState::Seen)]
+    #[case::busy(PaneAgentState::Busy)]
+    #[case::unseen(PaneAgentState::Unseen)]
+    fn test_snapshot_with_runtime_metadata_when_runtime_agent_state_varies_projects_state(
+        #[case] agent_state: PaneAgentState,
+    ) -> rootcause::Result<()> {
+        let snapshot = self::pane()?.snapshot_with_runtime_metadata(Some("dotfiles"), None, agent_state);
+
+        pretty_assertions::assert_eq!(snapshot.agent_state, agent_state);
+        pretty_assertions::assert_eq!(snapshot.cmd_label, Some("dotfiles".to_owned()));
+        Ok(())
+    }
+
+    #[test]
+    fn test_snapshot_with_runtime_metadata_when_runtime_cmd_is_present_overrides_terminal_title()
+    -> rootcause::Result<()> {
+        let snapshot =
+            self::pane()?.snapshot_with_runtime_metadata(Some("dotfiles"), Some("codex"), PaneAgentState::NoAgent);
+
+        pretty_assertions::assert_eq!(snapshot.cmd_label, Some("codex".to_owned()));
         Ok(())
     }
 
@@ -193,7 +225,6 @@ mod tests {
 
     fn pane() -> rootcause::Result<Pane> {
         Ok(Pane {
-            agent_state: PaneAgentState::NoAgent,
             attention_state: PaneAttentionState::Idle,
             cmd_label: "zsh".to_owned(),
             cwd: "/old/project".to_owned(),
