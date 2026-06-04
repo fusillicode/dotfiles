@@ -1,3 +1,4 @@
+use std::collections::BTreeSet;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
@@ -7,7 +8,6 @@ use std::sync::MutexGuard;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::mpsc;
-use std::thread;
 use std::time::Duration;
 use std::time::Instant;
 use std::time::SystemTime;
@@ -45,8 +45,9 @@ use rootcause::prelude::ResultExt;
 use rootcause::report;
 
 use crate::history::pane_output_path;
-use crate::pane_agent::PaneAgentProcess;
-use crate::pane_agent::PaneAgentProcessScanner;
+use crate::pane_agent::PaneAgentDetection;
+use crate::pane_agent::PaneAgentDetectionWorker;
+use crate::pane_agent::PaneAgents;
 use crate::pane_agent::PaneUserInteraction;
 use crate::pane_borders::BorderRenderMode;
 use crate::pane_close::ClosePaneOutcome;
@@ -756,101 +757,22 @@ struct AttachedPtySink {
 }
 
 struct AttachedSessionState<'a> {
-    agent_processes: Vec<PaneAgentProcess>,
-    agent_processes_refreshed_at: Option<Instant>,
-    agent_process_scanner: AgentProcessScanWorker,
-    attention_tracker: crate::pane_attention::PaneAttentionTracker,
+    detected_agents: Vec<PaneAgentDetection>,
+    detected_agents_refreshed_at: Option<Instant>,
+    agent_detection_worker: PaneAgentDetectionWorker,
+    pane_agents: PaneAgents,
     config: &'a ServerConfig,
     delete_sessions: &'a DeleteSessions,
     input_mode: ServerInputMode,
     last_layout_snapshot: LayoutSnapshot,
     layout: &'a Mutex<SessionLayout>,
     pane_regions: PaneRegionsSnapshot,
+    pending_visible_activity_panes: BTreeSet<PaneId>,
     pty_event_sender: &'a mpsc::SyncSender<PtyEvent>,
     render_composer: &'a mut RenderComposer,
     runtimes: &'a Mutex<PaneRuntimes>,
     sink_guards: &'a mut Vec<AttachedPtySink>,
     terminal_size: TerminalSize,
-}
-
-struct AgentProcessScanWorker {
-    next_request_id: u64,
-    pending_request_id: Option<u64>,
-    request_sender: mpsc::Sender<AgentProcessScanRequest>,
-    response_receiver: mpsc::Receiver<AgentProcessScanResponse>,
-}
-
-struct AgentProcessScanRequest {
-    id: u64,
-    shell_processes: Vec<(PaneId, Option<u32>)>,
-}
-
-struct AgentProcessScanResponse {
-    agent_processes: Vec<PaneAgentProcess>,
-    id: u64,
-}
-
-impl AgentProcessScanWorker {
-    fn request(&mut self, shell_processes: Vec<(PaneId, Option<u32>)>) -> rootcause::Result<()> {
-        if self.pending_request_id.is_some() {
-            return Ok(());
-        }
-
-        let id = self.next_request_id;
-        self.next_request_id = self
-            .next_request_id
-            .checked_add(1)
-            .ok_or_else(|| report!("muxr agent process scanner request id overflowed"))?;
-        self.request_sender
-            .send(AgentProcessScanRequest { id, shell_processes })
-            .map_err(|error| report!("muxr agent process scanner stopped").attach(format!("{error}")))?;
-        self.pending_request_id = Some(id);
-        Ok(())
-    }
-
-    fn take_finished(&mut self) -> Option<Vec<PaneAgentProcess>> {
-        let mut latest = None;
-        while let Ok(response) = self.response_receiver.try_recv() {
-            if self.pending_request_id == Some(response.id) {
-                self.pending_request_id = None;
-            }
-            latest = Some(response.agent_processes);
-        }
-        latest
-    }
-
-    const fn has_pending(&self) -> bool {
-        self.pending_request_id.is_some()
-    }
-}
-
-impl Default for AgentProcessScanWorker {
-    fn default() -> Self {
-        let (request_sender, request_receiver) = mpsc::channel::<AgentProcessScanRequest>();
-        let (response_sender, response_receiver) = mpsc::channel::<AgentProcessScanResponse>();
-        let _scanner_thread = thread::spawn(move || {
-            let mut scanner = PaneAgentProcessScanner::default();
-            while let Ok(request) = request_receiver.recv() {
-                let agent_processes = scanner.detect_pane_agents(&request.shell_processes);
-                if response_sender
-                    .send(AgentProcessScanResponse {
-                        agent_processes,
-                        id: request.id,
-                    })
-                    .is_err()
-                {
-                    break;
-                }
-            }
-        });
-
-        Self {
-            next_request_id: 0,
-            pending_request_id: None,
-            request_sender,
-            response_receiver,
-        }
-    }
 }
 
 struct AttachedClientTimers {
@@ -1049,23 +971,23 @@ async fn handle_client(
         }
     });
     let mut attached_state = AttachedSessionState {
-        agent_processes: Vec::new(),
-        agent_processes_refreshed_at: None,
-        agent_process_scanner: AgentProcessScanWorker::default(),
-        attention_tracker: crate::pane_attention::PaneAttentionTracker::default(),
+        detected_agents: Vec::new(),
+        detected_agents_refreshed_at: None,
+        agent_detection_worker: PaneAgentDetectionWorker::default(),
+        pane_agents: PaneAgents::default(),
         config,
         delete_sessions,
         input_mode: ServerInputMode::Normal,
         last_layout_snapshot,
         layout,
         pane_regions: attached_pane_regions,
+        pending_visible_activity_panes: BTreeSet::new(),
         pty_event_sender: &pty_event_sender,
         render_composer: &mut render_composer,
         runtimes,
         sink_guards: &mut sink_guards,
         terminal_size: attach_request.terminal_size,
     };
-    self::refresh_agent_processes_if_due(&mut attached_state, Instant::now())?;
     let result = self::run_attached_client(
         &mut request_reader,
         &mut event_writer,
@@ -1205,6 +1127,16 @@ fn pane_regions_snapshot(
     PaneRegionsSnapshot::new(regions)
 }
 
+fn attention_pane_ids(layout: &SessionLayout, pane_agents: &PaneAgents) -> Vec<PaneId> {
+    let mut pane_ids = layout.attention_pane_ids();
+    for pane_id in pane_agents.attention_pane_ids(layout) {
+        if !pane_ids.contains(&pane_id) {
+            pane_ids.push(pane_id);
+        }
+    }
+    pane_ids
+}
+
 async fn send_attached_response_and_baseline(
     event_writer: &mut ServerEventWriter,
     layout: LayoutSnapshot,
@@ -1272,7 +1204,7 @@ async fn run_attached_client(
                     }
                 },
                 _ = timers.attention_tick.tick() => {
-                    if !self::flush_pane_attention(event_writer, state, &[], &mut render_dirty).await? {
+                    if !self::flush_pane_attention(event_writer, state, &mut render_dirty).await? {
                         return Ok(());
                     }
                 },
@@ -1311,7 +1243,7 @@ async fn run_attached_client(
                     }
                 },
                 _ = timers.attention_tick.tick() => {
-                    if !self::flush_pane_attention(event_writer, state, &[], &mut render_dirty).await? {
+                    if !self::flush_pane_attention(event_writer, state, &mut render_dirty).await? {
                         return Ok(());
                     }
                 },
@@ -1348,15 +1280,11 @@ async fn handle_pty_event(
             };
             let screen_dirty = !screen_dirty_panes.is_empty();
             *render_dirty |= screen_dirty;
-            if !title_changes.is_empty()
-                && !self::flush_cmd_label_layout(event_writer, state, title_changes, render_dirty).await?
-            {
+            if !title_changes.is_empty() && !self::flush_cmd_label_layout(event_writer, state, title_changes).await? {
                 return Ok(false);
             }
-            if screen_dirty
-                && !self::flush_pane_attention(event_writer, state, &screen_dirty_panes, render_dirty).await?
-            {
-                return Ok(false);
+            if screen_dirty {
+                state.pending_visible_activity_panes.extend(screen_dirty_panes);
             }
             Ok(true)
         }
@@ -1377,7 +1305,7 @@ async fn flush_render_diff(
         let layout = self::lock_mutex(state.layout, "layout")?;
         let runtimes = self::lock_mutex(state.runtimes, "pane runtimes")?;
         let pane_regions = self::pane_regions_snapshot(&layout, &runtimes, &state.terminal_size)?;
-        let attention_panes = state.attention_tracker.attention_pane_ids(&layout);
+        let attention_panes = self::attention_pane_ids(&layout, &state.pane_agents);
         let reason = if pane_regions == state.pane_regions {
             RenderDiffReason::DirtyFrame
         } else {
@@ -1409,29 +1337,28 @@ struct RuntimePaneMetadata {
     terminal_titles: Vec<(PaneId, Option<String>)>,
 }
 
-fn refresh_agent_processes_if_due(state: &mut AttachedSessionState<'_>, now: Instant) -> rootcause::Result<()> {
-    if let Some(agent_processes) = state.agent_process_scanner.take_finished() {
-        state.agent_processes = agent_processes;
-        state.agent_processes_refreshed_at = Some(now);
+fn refresh_detected_agents_if_due(state: &mut AttachedSessionState<'_>, now: Instant) -> rootcause::Result<()> {
+    if let Some(detected_agents) = state.agent_detection_worker.take_finished() {
+        state.detected_agents = detected_agents;
+        state.detected_agents_refreshed_at = Some(now);
     }
 
-    if state.agent_process_scanner.has_pending()
-        || !self::agent_process_refresh_due(state.agent_processes_refreshed_at, now)
+    if state.agent_detection_worker.has_pending()
+        || !self::detected_agents_refresh_due(state.detected_agents_refreshed_at, now)
     {
         return Ok(());
     }
 
-    // sysinfo refreshes the full process list and can block; the attached loop only submits work and consumes completed
-    // scans. Dirty output shares this due-check with the timer so it can pull a scheduled scan earlier without raising
-    // the maximum scan rate above ATTENTION_POLL_INTERVAL.
+    // sysinfo refreshes the full process list and can block; the attention tick only submits work and consumes
+    // completed scans so agent attention has one timing model.
     let shell_processes = {
         let runtimes = self::lock_mutex(state.runtimes, "pane runtimes")?;
         runtimes.shell_processes()?
     };
-    state.agent_process_scanner.request(shell_processes)
+    state.agent_detection_worker.request(shell_processes)
 }
 
-fn agent_process_refresh_due(refreshed_at: Option<Instant>, now: Instant) -> bool {
+fn detected_agents_refresh_due(refreshed_at: Option<Instant>, now: Instant) -> bool {
     refreshed_at.is_none_or(|refreshed_at| now.saturating_duration_since(refreshed_at) >= ATTENTION_POLL_INTERVAL)
 }
 
@@ -1440,20 +1367,20 @@ fn runtime_pane_metadata(state: &AttachedSessionState<'_>) -> rootcause::Result<
         let runtimes = self::lock_mutex(state.runtimes, "pane runtimes")?;
         runtimes.terminal_titles()?
     };
-    let runtime_cmd_labels = self::runtime_cmd_labels(&state.agent_processes);
+    let runtime_cmd_labels = self::runtime_cmd_labels(&state.detected_agents);
     Ok(RuntimePaneMetadata {
         runtime_cmd_labels,
         terminal_titles,
     })
 }
 
-fn runtime_cmd_labels(agent_processes: &[PaneAgentProcess]) -> Vec<(PaneId, Option<String>)> {
-    agent_processes
+fn runtime_cmd_labels(detected_agents: &[PaneAgentDetection]) -> Vec<(PaneId, Option<String>)> {
+    detected_agents
         .iter()
-        .filter_map(|process| {
-            process
+        .filter_map(|detection| {
+            detection
                 .agent()
-                .map(|agent| (*process.pane_id(), Some(agent.short_name().to_owned())))
+                .map(|agent| (*detection.pane_id(), Some(agent.short_name().to_owned())))
         })
         .collect()
 }
@@ -1462,17 +1389,13 @@ async fn flush_cmd_label_layout(
     event_writer: &mut ServerEventWriter,
     state: &mut AttachedSessionState<'_>,
     title_changes: Vec<(PaneId, Option<String>)>,
-    render_dirty: &mut bool,
 ) -> rootcause::Result<bool> {
     let runtime_metadata = self::runtime_pane_metadata(state)?;
-    let (changes, attention_changed) = {
+    let changes = {
         let mut layout = self::lock_mutex(state.layout, "layout")?;
         let mut last_layout_snapshot = state.last_layout_snapshot.clone();
         let mut layout_changed = false;
-        let attention_changed = state
-            .attention_tracker
-            .sync_agent_processes(&layout, &state.agent_processes);
-        let runtime_agent_states = state.attention_tracker.agent_states();
+        let runtime_agent_states = state.pane_agents.snapshot_states();
         let mut changes = Vec::new();
         for (pane_id, title) in title_changes {
             layout_changed |= layout.sync_terminal_titles(&[(pane_id, title.clone())]);
@@ -1493,9 +1416,8 @@ async fn flush_cmd_label_layout(
             crate::state::persisted::write_metadata(&state.config.paths, &layout)?;
         }
         drop(layout);
-        (changes, attention_changed)
+        changes
     };
-    *render_dirty |= attention_changed;
 
     for layout_snapshot in changes {
         // Terminal-title changes affect only sidebar metadata; avoid rebuilding the pane frame for command/cwd churn.
@@ -1509,24 +1431,23 @@ async fn flush_cmd_label_layout(
 async fn flush_pane_attention(
     event_writer: &mut ServerEventWriter,
     state: &mut AttachedSessionState<'_>,
-    visible_activity_panes: &[PaneId],
     render_dirty: &mut bool,
 ) -> rootcause::Result<bool> {
     let now = Instant::now();
-    self::refresh_agent_processes_if_due(state, now)?;
+    self::refresh_detected_agents_if_due(state, now)?;
     let runtime_metadata = self::runtime_pane_metadata(state)?;
+    let visible_activity_panes = state.pending_visible_activity_panes.iter().copied().collect::<Vec<_>>();
+    state.pending_visible_activity_panes.clear();
     let layout_snapshot = {
         let layout = self::lock_mutex(state.layout, "layout")?;
-        if !state.attention_tracker.sync_agent_attention(
-            &layout,
-            &state.agent_processes,
-            visible_activity_panes,
-            now,
-        )? {
+        if !state
+            .pane_agents
+            .sync_attention(&layout, &state.detected_agents, &visible_activity_panes, now)?
+        {
             return Ok(true);
         }
         *render_dirty = true;
-        let runtime_agent_states = state.attention_tracker.agent_states();
+        let runtime_agent_states = state.pane_agents.snapshot_states();
         layout.snapshot_with_runtime_metadata(
             &runtime_metadata.terminal_titles,
             &runtime_metadata.runtime_cmd_labels,
@@ -1600,15 +1521,11 @@ async fn send_layout_and_baseline(
     event_writer: &mut ServerEventWriter,
     state: &mut AttachedSessionState<'_>,
 ) -> rootcause::Result<bool> {
-    self::refresh_agent_processes_if_due(state, Instant::now())?;
-    let runtime_cmd_labels = self::runtime_cmd_labels(&state.agent_processes);
+    let runtime_cmd_labels = self::runtime_cmd_labels(&state.detected_agents);
     let (layout_snapshot, pane_regions, render_update) = {
         let mut layout = self::lock_mutex(state.layout, "layout")?;
         let runtimes = self::lock_mutex(state.runtimes, "pane runtimes")?;
-        let _agent_state_changed = state
-            .attention_tracker
-            .sync_agent_processes(&layout, &state.agent_processes);
-        let runtime_agent_states = state.attention_tracker.agent_states();
+        let runtime_agent_states = state.pane_agents.snapshot_states();
         let layout_snapshot = self::layout_snapshot_and_persist(
             &state.config.paths,
             &mut layout,
@@ -1617,7 +1534,7 @@ async fn send_layout_and_baseline(
             &runtime_agent_states,
         )?;
         let pane_regions = self::pane_regions_snapshot(&layout, &runtimes, &state.terminal_size)?;
-        let attention_panes = state.attention_tracker.attention_pane_ids(&layout);
+        let attention_panes = self::attention_pane_ids(&layout, &state.pane_agents);
         let render_update = state.render_composer.render_baseline(
             &layout,
             &runtimes,
@@ -1939,7 +1856,7 @@ fn write_active_pane_user_input(
     let (pane_id, handle) = self::active_pane_handle_with_id(state.layout, state.runtimes)?;
     let render_dirty = write(&handle)?;
     state
-        .attention_tracker
+        .pane_agents
         .record_user_interaction(pane_id, interaction, Instant::now());
     Ok(render_dirty)
 }
@@ -1949,7 +1866,7 @@ fn acknowledge_active_agent_attention(state: &mut AttachedSessionState<'_>) -> r
         let layout = self::lock_mutex(state.layout, "layout")?;
         layout.active_pane_id()?
     };
-    Ok(state.attention_tracker.acknowledge_agent_attention(active_pane))
+    Ok(state.pane_agents.acknowledge_attention(active_pane))
 }
 
 fn input_interaction(bytes: &[u8]) -> PaneUserInteraction {
@@ -2007,11 +1924,9 @@ async fn handle_mouse_event_request(
         crate::pane_mouse::PaneMouseAction::ForwardToPty { focus, protocol } => {
             if let Some(scrolled_to_bottom) = handle.write_mouse_event(event, &region, protocol)? {
                 *render_dirty |= scrolled_to_bottom;
-                state.attention_tracker.record_user_interaction(
-                    *region.id(),
-                    PaneUserInteraction::MayEcho,
-                    Instant::now(),
-                );
+                state
+                    .pane_agents
+                    .record_user_interaction(*region.id(), PaneUserInteraction::MayEcho, Instant::now());
             }
             if !focus.focuses_pane() {
                 return Ok(true);
@@ -2024,7 +1939,7 @@ async fn handle_mouse_event_request(
         } => {
             *render_dirty |= handle.write_faux_scroll_input(direction, application_cursor)?;
             state
-                .attention_tracker
+                .pane_agents
                 .record_user_interaction(*region.id(), PaneUserInteraction::MayEcho, Instant::now());
             Ok(true)
         }
@@ -2233,14 +2148,14 @@ mod tests {
     #[rstest::rstest]
     #[case::codex(ytil_agents::agent::Agent::Codex, "cx")]
     #[case::cursor(ytil_agents::agent::Agent::Cursor, "cu")]
-    fn test_runtime_cmd_labels_when_agent_process_is_detected_uses_short_name(
+    fn test_runtime_cmd_labels_when_agent_is_detected_uses_short_name(
         #[case] agent: ytil_agents::agent::Agent,
         #[case] expected_label: &str,
     ) -> rootcause::Result<()> {
         let pane_id = PaneId::new(1)?;
 
         pretty_assertions::assert_eq!(
-            self::runtime_cmd_labels(&[PaneAgentProcess::Agent { pane_id, agent }]),
+            self::runtime_cmd_labels(&[PaneAgentDetection::Agent { pane_id, agent }]),
             vec![(pane_id, Some(expected_label.to_owned()))],
         );
         Ok(())
@@ -2275,14 +2190,14 @@ mod tests {
     #[case::never(None, true)]
     #[case::recent(Some(Duration::from_millis(1)), false)]
     #[case::elapsed(Some(ATTENTION_POLL_INTERVAL), true)]
-    fn test_agent_process_refresh_due_when_last_refresh_varies(
+    fn test_detected_agents_refresh_due_when_last_refresh_varies(
         #[case] refreshed_age: Option<Duration>,
         #[case] expected: bool,
     ) {
         let now = Instant::now();
         let refreshed_at = refreshed_age.map(|age| now.checked_sub(age).expect("expected valid refresh age"));
 
-        pretty_assertions::assert_eq!(self::agent_process_refresh_due(refreshed_at, now), expected);
+        pretty_assertions::assert_eq!(self::detected_agents_refresh_due(refreshed_at, now), expected);
     }
 
     #[rstest::rstest]
