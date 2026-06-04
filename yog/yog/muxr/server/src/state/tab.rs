@@ -1,4 +1,5 @@
 use muxr_core::ClientMousePosition;
+use muxr_core::PaneAgentState;
 use muxr_core::PaneId;
 use muxr_core::TabId;
 use muxr_core::TabSnapshot;
@@ -20,9 +21,11 @@ pub struct Tab {
 }
 
 impl Tab {
-    pub fn snapshot_with_terminal_titles(
+    pub fn snapshot_with_runtime_metadata(
         &self,
         terminal_titles: &[(PaneId, Option<String>)],
+        runtime_cmd_labels: &[(PaneId, Option<String>)],
+        runtime_agent_states: &[(String, PaneAgentState)],
     ) -> rootcause::Result<TabSnapshot> {
         let panes = self
             .panes()
@@ -32,7 +35,15 @@ impl Tab {
                     .iter()
                     .find(|(pane_id, _title)| pane_id == &pane.id)
                     .and_then(|(_pane_id, title)| title.as_deref());
-                pane.snapshot_with_terminal_title(terminal_title)
+                let runtime_cmd_label = runtime_cmd_labels
+                    .iter()
+                    .find(|(pane_id, _cmd_label)| pane_id == &pane.id)
+                    .and_then(|(_pane_id, cmd_label)| cmd_label.as_deref());
+                let runtime_agent_state = runtime_agent_states
+                    .iter()
+                    .find(|(pane_id, _agent_state)| pane_id == pane.id.as_ref())
+                    .map_or(PaneAgentState::NoAgent, |(_pane_id, agent_state)| *agent_state);
+                pane.snapshot_with_runtime_metadata(terminal_title, runtime_cmd_label, runtime_agent_state)
             })
             .collect();
         TabSnapshot::new(self.id.clone(), self.title.clone(), self.active_pane.clone(), panes)
