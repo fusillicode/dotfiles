@@ -26,7 +26,7 @@ const BACKGROUND: Color = Color::Rgb { r: 0, g: 19, b: 0 };
 const INACTIVE_FG: Color = Color::Rgb { r: 119, g: 119, b: 119 };
 const RAIL_ACTIVE_FG: Color = Color::Rgb { r: 106, g: 106, b: 223 };
 const RAIL_INACTIVE_FG: Color = BACKGROUND;
-const ROWS_PER_TAB: u16 = 2;
+const ROWS_PER_TAB: u16 = 3;
 const SEPARATOR: &str = "\u{2502}";
 const SEPARATOR_FG: Color = Color::Rgb { r: 50, g: 50, b: 50 };
 const AGENT_BUSY_FG: Color = Color::Rgb { r: 140, g: 228, b: 121 };
@@ -67,6 +67,13 @@ pub fn queue(stdout: &mut impl Write, layout: &LayoutSnapshot, rows: u16) -> roo
             tab.cmd_label.as_deref().unwrap_or(""),
         )?;
         row = row.saturating_add(1);
+
+        if row >= rows {
+            break;
+        }
+        // Keep muxr tab entries aligned with the three-row agg tab-bar shape.
+        self::queue_sidebar_row(stdout, row, tab.active, PaneAgentState::NoAgent, "")?;
+        row = row.saturating_add(1);
     }
 
     while row < rows {
@@ -93,7 +100,7 @@ fn queue_sidebar_row(
     agent_state: PaneAgentState,
     text: &str,
 ) -> rootcause::Result<()> {
-    let label_width = usize::from(WIDTH.saturating_sub(3));
+    let content_width = usize::from(WIDTH.saturating_sub(2));
     queue_cmd(stdout, MoveTo(0, row))?;
     queue_cmd(stdout, SetBackgroundColor(BACKGROUND))?;
     queue_cmd(
@@ -102,9 +109,24 @@ fn queue_sidebar_row(
     )?;
     queue_cmd(stdout, Print("\u{258e}"))?;
     self::queue_sidebar_text_style(stdout, active)?;
-    self::queue_agent_state_cell(stdout, agent_state)?;
+    // Keep normal labels flush after the rail; marker rows prefix the dot and one space.
+    let marker_width = if self::agent_state_dot_color(agent_state).is_some() {
+        2
+    } else {
+        0
+    };
+    let label = text
+        .chars()
+        .take(content_width.saturating_sub(marker_width))
+        .collect::<String>();
+    let used_width = label.chars().count().saturating_add(marker_width);
+    self::queue_agent_state_marker(stdout, active, agent_state)?;
+    queue_cmd(stdout, Print(&label))?;
     self::queue_sidebar_text_style(stdout, active)?;
-    queue_cmd(stdout, Print(pad(text, label_width)))?;
+    let trailing_width = content_width.saturating_sub(used_width);
+    if trailing_width > 0 {
+        queue_cmd(stdout, Print(pad("", trailing_width)))?;
+    }
     queue_cmd(stdout, SetAttribute(Attribute::Reset))?;
     queue_cmd(stdout, SetBackgroundColor(BACKGROUND))?;
     queue_cmd(stdout, SetForegroundColor(SEPARATOR_FG))?;
@@ -122,15 +144,20 @@ fn queue_sidebar_text_style(stdout: &mut impl Write, active: bool) -> rootcause:
     Ok(())
 }
 
-fn queue_agent_state_cell(stdout: &mut impl Write, agent_state: PaneAgentState) -> rootcause::Result<()> {
+fn queue_agent_state_marker(
+    stdout: &mut impl Write,
+    active: bool,
+    agent_state: PaneAgentState,
+) -> rootcause::Result<()> {
     let Some(color) = self::agent_state_dot_color(agent_state) else {
-        queue_cmd(stdout, Print(" "))?;
         return Ok(());
     };
 
     queue_cmd(stdout, SetAttribute(Attribute::Bold))?;
     queue_cmd(stdout, SetForegroundColor(color))?;
     queue_cmd(stdout, Print("\u{2022}"))?;
+    self::queue_sidebar_text_style(stdout, active)?;
+    queue_cmd(stdout, Print(" "))?;
     Ok(())
 }
 
@@ -456,11 +483,72 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn test_queue_when_agent_marker_is_rendered_keeps_labels_flush_and_spaces_marker() -> rootcause::Result<()> {
+        let layout = self::layout_snapshot(
+            "tab-1",
+            vec![self::tab_snapshot(
+                "tab-1",
+                "default",
+                "pane-1",
+                vec![self::pane_snapshot(
+                    "pane-1",
+                    "project",
+                    Some("cx"),
+                    PaneAgentState::Busy,
+                )?],
+            )?],
+        )?;
+        let mut output = CountingWriter::default();
+
+        queue(&mut output, &layout, 2)?;
+
+        let visible = self::strip_ansi(&output.rendered_string()?);
+        assert2::assert!(visible.contains("\u{258e}project"));
+        assert2::assert!(visible.contains("\u{258e}\u{2022} cx"));
+        assert2::assert!(!visible.contains("\u{258e} project"));
+        assert2::assert!(!visible.contains("\u{258e} cx"));
+        assert2::assert!(!visible.contains("\u{258e}cx \u{2022}"));
+        Ok(())
+    }
+
+    #[test]
+    fn test_queue_when_tab_is_rendered_adds_spacer_row_after_cmd_row() -> rootcause::Result<()> {
+        let layout = self::layout_snapshot(
+            "tab-1",
+            vec![self::tab_snapshot(
+                "tab-1",
+                "default",
+                "pane-1",
+                vec![self::pane_snapshot(
+                    "pane-1",
+                    "project",
+                    Some("cx"),
+                    PaneAgentState::Busy,
+                )?],
+            )?],
+        )?;
+        let mut output = CountingWriter::default();
+
+        queue(&mut output, &layout, 3)?;
+
+        let visible = self::strip_ansi(&output.rendered_string()?);
+        let rows = visible.split(SEPARATOR).collect::<Vec<_>>();
+        pretty_assertions::assert_eq!(rows.len(), 4);
+        assert2::assert!(rows[0].starts_with("\u{258e}project"));
+        assert2::assert!(rows[1].starts_with("\u{258e}\u{2022} cx"));
+        pretty_assertions::assert_eq!(rows[2].trim(), "\u{258e}");
+        Ok(())
+    }
+
     #[rstest]
-    #[case::first_label_row(0, Some("tab-1"))]
-    #[case::first_blank_row(1, Some("tab-1"))]
-    #[case::second_label_row(2, Some("tab-2"))]
-    #[case::below_tabs(4, None)]
+    #[case::first_path_row(0, Some("tab-1"))]
+    #[case::first_cmd_row(1, Some("tab-1"))]
+    #[case::first_spacer_row(2, Some("tab-1"))]
+    #[case::second_path_row(3, Some("tab-2"))]
+    #[case::second_cmd_row(4, Some("tab-2"))]
+    #[case::second_spacer_row(5, Some("tab-2"))]
+    #[case::below_tabs(6, None)]
     fn test_tab_id_at_row_when_row_varies_returns_clicked_tab(
         #[case] row: u16,
         #[case] expected: Option<&str>,
@@ -537,5 +625,22 @@ mod tests {
             self.flushes = self.flushes.saturating_add(1);
             Ok(())
         }
+    }
+
+    fn strip_ansi(s: &str) -> String {
+        let mut out = String::new();
+        let mut chars = s.chars();
+        while let Some(ch) = chars.next() {
+            if ch != '\x1b' {
+                out.push(ch);
+                continue;
+            }
+            for escaped in chars.by_ref() {
+                if escaped.is_ascii_alphabetic() {
+                    break;
+                }
+            }
+        }
+        out
     }
 }

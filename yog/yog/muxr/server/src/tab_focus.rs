@@ -64,7 +64,6 @@ pub fn handle_focus_next_tab(layout: &mut SessionLayout) -> rootcause::Result<()
 
 #[cfg(test)]
 mod tests {
-    use muxr_core::PaneAgentState;
     use muxr_core::PaneId;
     use muxr_core::SessionName;
     use muxr_core::TabId;
@@ -115,7 +114,6 @@ mod tests {
             active_pane: pane_id.clone(),
             id,
             pane_tree: PaneTree::Pane(Pane {
-                agent_state: PaneAgentState::NoAgent,
                 attention_state: PaneAttentionState::Idle,
                 cmd_label: "sh".to_owned(),
                 cwd: "/tmp".to_owned(),

@@ -52,10 +52,20 @@ fn cwd_from_title(title: &str, cwd: &str, home: Option<&str>) -> Option<String> 
     if title == "~" {
         return Some(title.to_owned());
     }
+    if self::title_is_current_cwd_basename(title, cwd) {
+        return Some(cwd.to_owned());
+    }
     if self::home_abbreviated_title_is_dir(title, home) || self::absolute_title_is_dir(title) {
         return Some(title.to_owned());
     }
     None
+}
+
+fn title_is_current_cwd_basename(title: &str, cwd: &str) -> bool {
+    Path::new(cwd)
+        .file_name()
+        .and_then(|basename| basename.to_str())
+        .is_some_and(|basename| title == basename)
 }
 
 fn home_abbreviated_title_is_dir(title: &str, home: Option<&str>) -> bool {
@@ -97,6 +107,7 @@ mod tests {
     #[case::home_cwd("~", "/old/project", None)]
     #[case::empty("", "/foo/bar", None)]
     #[case::default_pane_title("Pane 1", "/foo/bar", None)]
+    #[case::cwd_basename("bar", "/foo/bar", None)]
     fn test_classify_terminal_title_when_title_is_seen_returns_cmd_label(
         #[case] title: &str,
         #[case] cwd: &str,
@@ -105,6 +116,17 @@ mod tests {
         pretty_assertions::assert_eq!(
             classify_terminal_title_with_home(Some(title), cwd, Some("/foo/bar")).cmd_label,
             expected.map(ToOwned::to_owned)
+        );
+    }
+
+    #[test]
+    fn test_classify_terminal_title_when_title_is_cwd_basename_keeps_known_cwd() {
+        pretty_assertions::assert_eq!(
+            classify_terminal_title_with_home(Some("project"), "/baz/project", Some("/foo/bar")),
+            TerminalTitle {
+                cmd_label: None,
+                cwd: Some("/baz/project".to_owned()),
+            },
         );
     }
 

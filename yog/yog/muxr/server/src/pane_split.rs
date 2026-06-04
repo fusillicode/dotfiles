@@ -1,6 +1,5 @@
 use std::sync::Mutex;
 
-use muxr_core::PaneAgentState;
 use muxr_core::PaneId;
 use muxr_core::TerminalSize;
 use rootcause::prelude::ResultExt;
@@ -112,7 +111,6 @@ impl SessionLayout {
         let tab = self.active_tab_mut()?;
         let focus_seq = tab.next_focus_seq()?;
         let new_pane = Pane {
-            agent_state: PaneAgentState::NoAgent,
             attention_state: PaneAttentionState::Idle,
             cmd_label: metadata.cmd_label.clone(),
             cwd: metadata.cwd,

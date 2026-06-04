@@ -326,6 +326,10 @@ impl PtyHandle {
         Ok(Some(exit_status))
     }
 
+    pub fn process_id(&self) -> rootcause::Result<Option<u32>> {
+        Ok(lock_mutex(&self.child, "pty child")?.process_id())
+    }
+
     pub fn terminal_title(&self) -> rootcause::Result<Option<String>> {
         Ok(lock_mutex(&self.state.terminal, "pty terminal")?.title())
     }

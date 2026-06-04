@@ -45,7 +45,6 @@ impl SessionLayout {
                 active_pane: pane_id.clone(),
                 id: tab_id,
                 pane_tree: PaneTree::Pane(Pane {
-                    agent_state: PaneAgentState::NoAgent,
                     attention_state: PaneAttentionState::Idle,
                     cmd_label: metadata.cmd_label.clone(),
                     cwd: metadata.cwd,
@@ -69,10 +68,19 @@ impl SessionLayout {
         &self,
         terminal_titles: &[(PaneId, Option<String>)],
     ) -> rootcause::Result<LayoutSnapshot> {
+        self.snapshot_with_runtime_metadata(terminal_titles, &[], &[])
+    }
+
+    pub fn snapshot_with_runtime_metadata(
+        &self,
+        terminal_titles: &[(PaneId, Option<String>)],
+        runtime_cmd_labels: &[(PaneId, Option<String>)],
+        runtime_agent_states: &[(String, PaneAgentState)],
+    ) -> rootcause::Result<LayoutSnapshot> {
         let tabs = self
             .entries
             .iter()
-            .map(|tab| tab.snapshot_with_terminal_titles(terminal_titles))
+            .map(|tab| tab.snapshot_with_runtime_metadata(terminal_titles, runtime_cmd_labels, runtime_agent_states))
             .collect::<rootcause::Result<Vec<_>>>()?;
         LayoutSnapshot::new(self.active_tab.clone(), tabs)
     }
