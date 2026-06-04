@@ -63,7 +63,7 @@ impl Tab {
             .filter(|region| region.id != active_region.id)
             .filter(|region| self::pane_regions_are_adjacent(region, active_region, direction))
             .max_by_key(|region| region.focus_seq)
-            .map(|region| region.id.clone())
+            .map(|region| region.id)
         else {
             return Ok(false);
         };
@@ -73,14 +73,14 @@ impl Tab {
 
     pub fn focus_pane(&mut self, pane_id: PaneId) -> rootcause::Result<bool> {
         if self.active_pane == pane_id {
-            let Some(pane) = self.pane_tree.pane_mut(&pane_id) else {
+            let Some(pane) = self.pane_tree.pane_mut(pane_id) else {
                 return Err(report!("muxr pane is missing from active tab").attach(format!("pane_id={pane_id}")));
             };
             return Ok(pane.acknowledge_attention());
         }
 
         let focus_seq = self.next_focus_seq()?;
-        let Some(pane) = self.pane_tree.pane_mut(&pane_id) else {
+        let Some(pane) = self.pane_tree.pane_mut(pane_id) else {
             return Err(report!("muxr pane is missing from active tab").attach(format!("pane_id={pane_id}")));
         };
         pane.set_focus_seq(focus_seq);
@@ -182,7 +182,7 @@ pub fn mouse_event_region(
         region
     };
     let runtimes = crate::server::lock_mutex(runtimes, "pane runtimes")?;
-    let handle = runtimes.handle(&region.id)?;
+    let handle = runtimes.handle(region.id)?;
     let mouse_mode = handle.mouse_mode()?;
     let visible_top_row = handle.visible_top_row()?;
     drop(runtimes);

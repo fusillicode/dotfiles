@@ -16,8 +16,8 @@ use crate::state::PaneState;
 use crate::state::PaneTree;
 use crate::state::Tab;
 
-const INITIAL_PANE_ID: &str = "pane-1";
-const INITIAL_TAB_ID: &str = "tab-1";
+const INITIAL_PANE_ID: u32 = 1;
+const INITIAL_TAB_ID: u32 = 1;
 const INITIAL_TAB_TITLE: &str = "default";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -40,9 +40,9 @@ impl SessionLayout {
         let tab_id = TabId::new(INITIAL_TAB_ID)?;
 
         Ok(Self {
-            active_tab: tab_id.clone(),
+            active_tab: tab_id,
             entries: vec![Tab {
-                active_pane: pane_id.clone(),
+                active_pane: pane_id,
                 id: tab_id,
                 pane_tree: PaneTree::Pane(Pane {
                     attention_state: PaneAttentionState::Idle,
@@ -75,14 +75,14 @@ impl SessionLayout {
         &self,
         terminal_titles: &[(PaneId, Option<String>)],
         runtime_cmd_labels: &[(PaneId, Option<String>)],
-        runtime_agent_states: &[(String, PaneAgentState)],
+        runtime_agent_states: &[(PaneId, PaneAgentState)],
     ) -> rootcause::Result<LayoutSnapshot> {
         let tabs = self
             .entries
             .iter()
             .map(|tab| tab.snapshot_with_runtime_metadata(terminal_titles, runtime_cmd_labels, runtime_agent_states))
             .collect::<rootcause::Result<Vec<_>>>()?;
-        LayoutSnapshot::new(self.active_tab.clone(), tabs)
+        LayoutSnapshot::new(self.active_tab, tabs)
     }
 
     pub fn pane_at(&self, size: &TerminalSize, position: ClientMousePosition) -> rootcause::Result<Option<PaneId>> {
@@ -110,14 +110,14 @@ impl SessionLayout {
     }
 
     pub fn active_tab_mut(&mut self) -> rootcause::Result<&mut Tab> {
-        let active_tab = self.active_tab.clone();
+        let active_tab = self.active_tab;
         self.entries.iter_mut().find(|tab| tab.id == active_tab).ok_or_else(|| {
             report!("muxr active tab is missing from server layout").attach(format!("active_tab={active_tab}"))
         })
     }
 
     pub fn active_pane_id(&self) -> rootcause::Result<PaneId> {
-        Ok(self.active_tab()?.active_pane.clone())
+        Ok(self.active_tab()?.active_pane)
     }
 
     #[cfg(test)]
@@ -131,15 +131,12 @@ impl SessionLayout {
     }
 
     /// Find one pane by id.
-    pub fn pane(&self, pane_id: &PaneId) -> Option<&Pane> {
-        self.entries
-            .iter()
-            .flat_map(Tab::panes)
-            .find(|pane| pane.id == *pane_id)
+    pub fn pane(&self, pane_id: PaneId) -> Option<&Pane> {
+        self.entries.iter().flat_map(Tab::panes).find(|pane| pane.id == pane_id)
     }
 
     /// Find one mutable pane by id.
-    pub fn pane_mut(&mut self, pane_id: &PaneId) -> Option<&mut Pane> {
+    pub fn pane_mut(&mut self, pane_id: PaneId) -> Option<&mut Pane> {
         self.entries.iter_mut().find_map(|tab| tab.pane_tree.pane_mut(pane_id))
     }
 
@@ -147,7 +144,7 @@ impl SessionLayout {
     pub fn sync_terminal_titles(&mut self, terminal_titles: &[(PaneId, Option<String>)]) -> bool {
         let mut changed = false;
         for (pane_id, title) in terminal_titles {
-            if let Some(pane) = self.pane_mut(pane_id) {
+            if let Some(pane) = self.pane_mut(*pane_id) {
                 changed |= pane.sync_terminal_title(title.as_deref());
             }
         }
@@ -162,7 +159,7 @@ impl SessionLayout {
         self.active_tab()?.pane_layout(size)
     }
 
-    pub fn pane_tab_index(&self, pane_id: &PaneId) -> rootcause::Result<usize> {
+    pub fn pane_tab_index(&self, pane_id: PaneId) -> rootcause::Result<usize> {
         for (tab_index, tab) in self.entries.iter().enumerate() {
             if tab.contains_pane(pane_id) {
                 return Ok(tab_index);
@@ -184,28 +181,24 @@ impl SessionLayout {
                 .entries
                 .get(next_tab_index)
                 .ok_or_else(|| report!("muxr next tab is missing after pane removal"))?;
-            self.active_tab = next_tab.id.clone();
+            self.active_tab = next_tab.id;
         }
         Ok(())
     }
 
-    pub fn next_tab_number(&self) -> rootcause::Result<u64> {
-        self::next_number(self.entries.iter().map(|tab| tab.id.as_ref()), "tab-")
+    pub fn next_tab_number(&self) -> rootcause::Result<u32> {
+        self::next_number(self.entries.iter().map(|tab| tab.id.get()), "tab")
     }
 
-    pub fn next_pane_number(&self) -> rootcause::Result<u64> {
-        self::next_number(self.entries.iter().flat_map(Tab::pane_ids), "pane-")
+    pub fn next_pane_number(&self) -> rootcause::Result<u32> {
+        self::next_number(self.entries.iter().flat_map(Tab::pane_ids).map(PaneId::get), "pane")
     }
 }
 
-fn next_number<'a>(ids: impl Iterator<Item = &'a str>, prefix: &str) -> rootcause::Result<u64> {
-    let max_number = ids
-        .filter_map(|id| id.strip_prefix(prefix))
-        .filter_map(|suffix| suffix.parse::<u64>().ok())
-        .max()
-        .unwrap_or(0);
+fn next_number(ids: impl Iterator<Item = u32>, kind: &str) -> rootcause::Result<u32> {
+    let max_number = ids.max().unwrap_or(0);
 
     max_number
         .checked_add(1)
-        .ok_or_else(|| report!("muxr layout id counter overflowed").attach(format!("prefix={prefix}")))
+        .ok_or_else(|| report!("muxr layout id counter overflowed").attach(format!("kind={kind}")))
 }

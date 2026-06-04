@@ -106,8 +106,7 @@ impl SessionLayout {
         metadata: SessionMetadata,
         split_axis: PaneSplitAxis,
     ) -> rootcause::Result<PaneId> {
-        let pane_number = self.next_pane_number()?;
-        let pane_id = PaneId::new(format!("pane-{pane_number}"))?;
+        let pane_id = PaneId::new(self.next_pane_number()?)?;
         let tab = self.active_tab_mut()?;
         let focus_seq = tab.next_focus_seq()?;
         let new_pane = Pane {
@@ -115,20 +114,20 @@ impl SessionLayout {
             cmd_label: metadata.cmd_label.clone(),
             cwd: metadata.cwd,
             focus_seq,
-            id: pane_id.clone(),
+            id: pane_id,
             started_at: metadata.started_at,
             state: PaneState::Running,
             title: metadata.cmd_label,
         };
         tab.split_active_pane(&new_pane, split_axis)?;
-        tab.active_pane = pane_id.clone();
+        tab.active_pane = pane_id;
         Ok(pane_id)
     }
 }
 
 impl Tab {
     pub fn split_active_pane(&mut self, new_pane: &Pane, split_axis: PaneSplitAxis) -> rootcause::Result<()> {
-        if !self.pane_tree.split_pane(&self.active_pane, new_pane, split_axis)? {
+        if !self.pane_tree.split_pane(self.active_pane, new_pane, split_axis)? {
             return Err(report!("muxr active pane is missing from server layout")
                 .attach(format!("active_pane={}", self.active_pane)));
         }
@@ -139,12 +138,12 @@ impl Tab {
 impl PaneTree {
     pub fn split_pane(
         &mut self,
-        pane_id: &PaneId,
+        pane_id: PaneId,
         new_pane: &Pane,
         split_axis: PaneSplitAxis,
     ) -> rootcause::Result<bool> {
         match self {
-            Self::Pane(pane) if pane.id == *pane_id => {
+            Self::Pane(pane) if pane.id == pane_id => {
                 let old_pane = pane.clone();
                 *self = Self::Split {
                     axis: split_axis,

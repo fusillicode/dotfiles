@@ -436,22 +436,22 @@ mod tests {
     }
 
     fn layout_snapshot() -> rootcause::Result<LayoutSnapshot> {
-        let active_tab = TabId::new("tab-1")?;
-        let active_pane = PaneId::new("pane-1")?;
+        let active_tab = TabId::new(1)?;
+        let active_pane = PaneId::new(1)?;
         let pane = PaneSnapshot {
             agent_state: muxr_core::PaneAgentState::NoAgent,
             cwd: "/tmp".to_owned(),
             cmd_label: None,
-            id: active_pane.clone(),
+            id: active_pane,
             title: "shell".to_owned(),
         };
-        let tab = TabSnapshot::new(active_tab.clone(), "default", active_pane, vec![pane])?;
+        let tab = TabSnapshot::new(active_tab, "default", active_pane, vec![pane])?;
         LayoutSnapshot::new(active_tab, vec![tab])
     }
 
     fn pane_regions_snapshot() -> rootcause::Result<muxr_core::PaneRegionsSnapshot> {
         muxr_core::PaneRegionsSnapshot::new(vec![muxr_core::PaneRegionSnapshot::new(
-            PaneId::new("pane-1")?,
+            PaneId::new(1)?,
             0,
             0,
             80,

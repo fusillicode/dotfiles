@@ -1209,7 +1209,7 @@ mod tests {
 
             pretty_assertions::assert_eq!(
                 input_receiver.recv().await,
-                Some(ClientRequest::FocusTab(TabId::new("tab-2")?)),
+                Some(ClientRequest::FocusTab(TabId::new(2)?)),
             );
             pretty_assertions::assert_eq!(output.flushes, 0);
             Ok(())
@@ -1683,16 +1683,16 @@ mod tests {
     }
 
     fn layout_snapshot() -> rootcause::Result<LayoutSnapshot> {
-        let active_tab = TabId::new("tab-1")?;
-        let active_pane = PaneId::new("pane-1")?;
+        let active_tab = TabId::new(1)?;
+        let active_pane = PaneId::new(1)?;
         let pane = PaneSnapshot {
             agent_state: muxr_core::PaneAgentState::NoAgent,
             cwd: "/tmp".to_owned(),
             cmd_label: None,
-            id: active_pane.clone(),
+            id: active_pane,
             title: "shell".to_owned(),
         };
-        let tab = TabSnapshot::new(active_tab.clone(), "default", active_pane, vec![pane])?;
+        let tab = TabSnapshot::new(active_tab, "default", active_pane, vec![pane])?;
         LayoutSnapshot::new(active_tab, vec![tab])
     }
 
@@ -1702,7 +1702,7 @@ mod tests {
 
     fn pane_regions_snapshot_with_visible_top_row(visible_top_row: u64) -> rootcause::Result<PaneRegionsSnapshot> {
         PaneRegionsSnapshot::new(vec![muxr_core::PaneRegionSnapshot::new(
-            muxr_core::PaneId::new("pane-1")?,
+            muxr_core::PaneId::new(1)?,
             0,
             0,
             2,
@@ -1714,29 +1714,29 @@ mod tests {
 
     fn two_tab_layout() -> rootcause::Result<LayoutSnapshot> {
         LayoutSnapshot::new(
-            TabId::new("tab-1")?,
+            TabId::new(1)?,
             vec![
                 TabSnapshot::new(
-                    TabId::new("tab-1")?,
+                    TabId::new(1)?,
                     "default",
-                    PaneId::new("pane-1")?,
+                    PaneId::new(1)?,
                     vec![PaneSnapshot {
                         agent_state: muxr_core::PaneAgentState::NoAgent,
                         cwd: "/tmp/tab-1".to_owned(),
                         cmd_label: None,
-                        id: PaneId::new("pane-1")?,
+                        id: PaneId::new(1)?,
                         title: "shell".to_owned(),
                     }],
                 )?,
                 TabSnapshot::new(
-                    TabId::new("tab-2")?,
+                    TabId::new(2)?,
                     "tab 2",
-                    PaneId::new("pane-2")?,
+                    PaneId::new(2)?,
                     vec![PaneSnapshot {
                         agent_state: muxr_core::PaneAgentState::NoAgent,
                         cwd: "/tmp/tab-2".to_owned(),
                         cmd_label: None,
-                        id: PaneId::new("pane-2")?,
+                        id: PaneId::new(2)?,
                         title: "shell".to_owned(),
                     }],
                 )?,
@@ -1746,7 +1746,7 @@ mod tests {
 
     fn mouse_tracking_pane_regions_snapshot() -> rootcause::Result<PaneRegionsSnapshot> {
         PaneRegionsSnapshot::new(vec![muxr_core::PaneRegionSnapshot::new(
-            muxr_core::PaneId::new("pane-1")?,
+            muxr_core::PaneId::new(1)?,
             0,
             0,
             2,
@@ -1759,7 +1759,7 @@ mod tests {
     fn split_mouse_tracking_pane_regions_snapshot() -> rootcause::Result<PaneRegionsSnapshot> {
         PaneRegionsSnapshot::new(vec![
             muxr_core::PaneRegionSnapshot::new(
-                muxr_core::PaneId::new("pane-1")?,
+                muxr_core::PaneId::new(1)?,
                 0,
                 0,
                 2,
@@ -1768,7 +1768,7 @@ mod tests {
                 0,
             )?,
             muxr_core::PaneRegionSnapshot::new(
-                muxr_core::PaneId::new("pane-2")?,
+                muxr_core::PaneId::new(2)?,
                 2,
                 0,
                 2,

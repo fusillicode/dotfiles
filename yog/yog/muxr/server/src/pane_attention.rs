@@ -52,16 +52,16 @@ impl PaneAttentionTracker {
         Ok(changed)
     }
 
-    pub fn acknowledge_agent_attention(&mut self, pane_id: &PaneId) -> bool {
+    pub fn acknowledge_agent_attention(&mut self, pane_id: PaneId) -> bool {
         self.agent_runtime.acknowledge_attention(pane_id)
     }
 
-    pub fn agent_states(&self) -> Vec<(String, PaneAgentState)> {
+    pub fn agent_states(&self) -> Vec<(PaneId, PaneAgentState)> {
         self.agent_runtime.states()
     }
 
     #[cfg(test)]
-    fn agent_state_for(&self, pane_id: &PaneId) -> PaneAgentState {
+    fn agent_state_for(&self, pane_id: PaneId) -> PaneAgentState {
         self.agent_runtime.state(pane_id)
     }
 
@@ -69,12 +69,12 @@ impl PaneAttentionTracker {
         layout
             .panes()
             .into_iter()
-            .filter(|pane| pane.needs_attention() || self.agent_runtime.needs_attention(&pane.id))
-            .map(|pane| pane.id.clone())
+            .filter(|pane| pane.needs_attention() || self.agent_runtime.needs_attention(pane.id))
+            .map(|pane| pane.id)
             .collect()
     }
 
-    pub fn record_user_interaction(&mut self, pane_id: &PaneId, interaction: PaneUserInteraction, now: Instant) {
+    pub fn record_user_interaction(&mut self, pane_id: PaneId, interaction: PaneUserInteraction, now: Instant) {
         self.agent_runtime.record_user_interaction(pane_id, interaction, now);
     }
 
@@ -83,8 +83,8 @@ impl PaneAttentionTracker {
         let pane_ids = self::layout_pane_ids(layout);
         let mut changed = false;
         for pane_id in pane_ids {
-            let agent = self::agent_for(agent_processes, &pane_id);
-            changed |= self.agent_runtime.sync_process(&pane_id, agent);
+            let agent = self::agent_for(agent_processes, pane_id);
+            changed |= self.agent_runtime.sync_process(pane_id, agent);
         }
         changed
     }
@@ -98,11 +98,11 @@ impl PaneAttentionTracker {
     ) -> bool {
         let mut changed = false;
         for pane_id in visible_activity_panes {
-            let agent = self::agent_for(agent_processes, pane_id);
-            if layout.pane(pane_id).is_none() {
+            let agent = self::agent_for(agent_processes, *pane_id);
+            if layout.pane(*pane_id).is_none() {
                 continue;
             }
-            changed |= self.agent_runtime.record_visible_activity(pane_id, agent, now);
+            changed |= self.agent_runtime.record_visible_activity(*pane_id, agent, now);
         }
         changed
     }
@@ -115,8 +115,8 @@ impl PaneAttentionTracker {
         let pane_ids = self::layout_pane_ids(layout);
         let mut changed = false;
         for pane_id in pane_ids {
-            let agent = self::agent_for(agent_processes, &pane_id);
-            changed |= self.agent_runtime.consume_pending_visible_activity(&pane_id, agent);
+            let agent = self::agent_for(agent_processes, pane_id);
+            changed |= self.agent_runtime.consume_pending_visible_activity(pane_id, agent);
         }
         changed
     }
@@ -131,21 +131,18 @@ impl PaneAttentionTracker {
         let pane_ids = self::layout_pane_ids(layout);
         let mut changed = false;
         for pane_id in pane_ids {
-            let Some(agent) = self::agent_for(agent_processes, &pane_id) else {
+            let Some(agent) = self::agent_for(agent_processes, pane_id) else {
                 continue;
             };
             changed |= self
                 .agent_runtime
-                .mark_quiet_if_due(&pane_id, agent, now, pane_id == focused_pane);
+                .mark_quiet_if_due(pane_id, agent, now, pane_id == focused_pane);
         }
         Ok(changed)
     }
 
     fn retain_layout_panes(&mut self, layout: &SessionLayout) {
-        let pane_ids = self::layout_pane_ids(layout)
-            .into_iter()
-            .map(|pane_id| pane_id.as_ref().to_owned())
-            .collect();
+        let pane_ids = self::layout_pane_ids(layout).into_iter().collect();
         self.agent_runtime.retain_panes(&pane_ids);
     }
 }
@@ -153,7 +150,7 @@ impl PaneAttentionTracker {
 impl SessionLayout {
     pub fn acknowledge_active_pane_attention(&mut self) -> rootcause::Result<bool> {
         let active_pane = self.active_pane_id()?;
-        let Some(pane) = self.pane_mut(&active_pane) else {
+        let Some(pane) = self.pane_mut(active_pane) else {
             return Err(
                 report!("muxr active pane is missing from server layout").attach(format!("pane_id={active_pane}"))
             );
@@ -167,19 +164,19 @@ impl SessionLayout {
         self.panes()
             .into_iter()
             .filter(|pane| pane.needs_attention())
-            .map(|pane| pane.id.clone())
+            .map(|pane| pane.id)
             .collect()
     }
 }
 
 fn layout_pane_ids(layout: &SessionLayout) -> Vec<PaneId> {
-    layout.panes().into_iter().map(|pane| pane.id.clone()).collect()
+    layout.panes().into_iter().map(|pane| pane.id).collect()
 }
 
-fn agent_for(agent_processes: &[PaneAgentProcess], pane_id: &PaneId) -> Option<Agent> {
+fn agent_for(agent_processes: &[PaneAgentProcess], pane_id: PaneId) -> Option<Agent> {
     agent_processes
         .iter()
-        .find(|process| process.pane_id() == pane_id)
+        .find(|process| *process.pane_id() == pane_id)
         .and_then(PaneAgentProcess::agent)
 }
 
@@ -200,8 +197,8 @@ mod tests {
     #[test]
     fn test_attention_pane_ids_when_pane_needs_generic_attention_returns_pane() -> rootcause::Result<()> {
         let mut layout = self::layout()?;
-        let pane_id = PaneId::new("pane-1")?;
-        let Some(pane) = layout.pane_mut(&pane_id) else {
+        let pane_id = PaneId::new(1)?;
+        let Some(pane) = layout.pane_mut(pane_id) else {
             return Err(report!("expected pane"));
         };
         pane.attention_state = PaneAttentionState::NeedsAttention;
@@ -216,8 +213,8 @@ mod tests {
     fn test_attention_pane_ids_when_agent_is_unseen_returns_pane() -> rootcause::Result<()> {
         let layout = self::layout()?;
         let mut tracker = PaneAttentionTracker::default();
-        let pane_id = PaneId::new("pane-1")?;
-        let agent_processes = self::agent_processes("pane-1", Some(Agent::Codex))?;
+        let pane_id = PaneId::new(1)?;
+        let agent_processes = self::agent_processes(1, Some(Agent::Codex))?;
         let then = Instant::now();
 
         assert2::assert!(tracker.sync_agent_attention(&layout, &agent_processes, &[], then)?);
@@ -241,8 +238,8 @@ mod tests {
     #[test]
     fn test_focus_pane_direction_when_target_needs_generic_attention_clears_attention() -> rootcause::Result<()> {
         let mut layout = self::layout()?;
-        let pane_id = PaneId::new("pane-1")?;
-        let Some(pane) = layout.pane_mut(&pane_id) else {
+        let pane_id = PaneId::new(1)?;
+        let Some(pane) = layout.pane_mut(pane_id) else {
             return Err(report!("expected pane"));
         };
         pane.attention_state = PaneAttentionState::NeedsAttention;
@@ -259,8 +256,8 @@ mod tests {
     fn test_acknowledge_agent_attention_when_agent_is_unseen_marks_agent_seen() -> rootcause::Result<()> {
         let layout = self::layout()?;
         let mut tracker = PaneAttentionTracker::default();
-        let pane_id = PaneId::new("pane-1")?;
-        let agent_processes = self::agent_processes("pane-1", Some(Agent::Codex))?;
+        let pane_id = PaneId::new(1)?;
+        let agent_processes = self::agent_processes(1, Some(Agent::Codex))?;
         let then = Instant::now();
 
         assert2::assert!(tracker.sync_agent_attention(&layout, &agent_processes, &[], then)?);
@@ -277,10 +274,10 @@ mod tests {
             self::instant_after(then, Duration::from_secs(4))?
         )?);
 
-        assert2::assert!(tracker.acknowledge_agent_attention(&pane_id));
+        assert2::assert!(tracker.acknowledge_agent_attention(pane_id));
 
         pretty_assertions::assert_eq!(tracker.attention_pane_ids(&layout), Vec::<PaneId>::new());
-        pretty_assertions::assert_eq!(tracker.agent_state_for(&pane_id), PaneAgentState::Seen);
+        pretty_assertions::assert_eq!(tracker.agent_state_for(pane_id), PaneAgentState::Seen);
         Ok(())
     }
 
@@ -289,8 +286,8 @@ mod tests {
     -> rootcause::Result<()> {
         let layout = self::layout()?;
         let mut tracker = PaneAttentionTracker::default();
-        let pane_id = PaneId::new("pane-1")?;
-        let agent_processes = self::agent_processes("pane-1", Some(Agent::Codex))?;
+        let pane_id = PaneId::new(1)?;
+        let agent_processes = self::agent_processes(1, Some(Agent::Codex))?;
         let then = Instant::now();
 
         assert2::assert!(tracker.sync_agent_attention(&layout, &agent_processes, &[], then)?);
@@ -307,7 +304,7 @@ mod tests {
             self::instant_after(then, Duration::from_secs(4))?
         )?);
 
-        pretty_assertions::assert_eq!(tracker.agent_state_for(&pane_id), PaneAgentState::Unseen);
+        pretty_assertions::assert_eq!(tracker.agent_state_for(pane_id), PaneAgentState::Unseen);
         Ok(())
     }
 
@@ -320,20 +317,20 @@ mod tests {
     ) -> rootcause::Result<()> {
         let layout = self::layout()?;
         let mut tracker = PaneAttentionTracker::default();
-        let pane_id = PaneId::new("pane-1")?;
-        let no_agent = self::agent_processes("pane-1", None)?;
-        let agent_processes = self::agent_processes("pane-1", Some(Agent::Codex))?;
+        let pane_id = PaneId::new(1)?;
+        let no_agent = self::agent_processes(1, None)?;
+        let agent_processes = self::agent_processes(1, Some(Agent::Codex))?;
         let then = Instant::now();
 
         assert2::assert!(!tracker.sync_agent_attention(&layout, &no_agent, std::slice::from_ref(&pane_id), then,)?);
         let detected_at = self::instant_after(then, detection_delay)?;
         assert2::assert!(tracker.sync_agent_attention(&layout, &agent_processes, &[], detected_at)?);
 
-        pretty_assertions::assert_eq!(tracker.agent_state_for(&pane_id), expected_agent_state);
+        pretty_assertions::assert_eq!(tracker.agent_state_for(pane_id), expected_agent_state);
         let quiet_at = self::instant_after(then, Duration::from_secs(4))?;
         if expected_agent_state == PaneAgentState::Busy {
             assert2::assert!(tracker.sync_agent_attention(&layout, &agent_processes, &[], quiet_at)?);
-            pretty_assertions::assert_eq!(tracker.agent_state_for(&pane_id), PaneAgentState::Unseen);
+            pretty_assertions::assert_eq!(tracker.agent_state_for(pane_id), PaneAgentState::Unseen);
         } else {
             assert2::assert!(!tracker.sync_agent_attention(&layout, &agent_processes, &[], quiet_at)?);
             pretty_assertions::assert_eq!(tracker.attention_pane_ids(&layout), Vec::<PaneId>::new());
@@ -346,7 +343,7 @@ mod tests {
     {
         let layout = self::layout()?;
         let mut tracker = PaneAttentionTracker::default();
-        let agent_processes = self::agent_processes("pane-1", Some(Agent::Codex))?;
+        let agent_processes = self::agent_processes(1, Some(Agent::Codex))?;
         let then = Instant::now();
 
         assert2::assert!(tracker.sync_agent_attention(&layout, &agent_processes, &[], then)?);
@@ -371,12 +368,12 @@ mod tests {
     ) -> rootcause::Result<()> {
         let layout = self::layout()?;
         let mut tracker = PaneAttentionTracker::default();
-        let pane_id = PaneId::new("pane-1")?;
-        let agent_processes = self::agent_processes("pane-1", Some(Agent::Codex))?;
+        let pane_id = PaneId::new(1)?;
+        let agent_processes = self::agent_processes(1, Some(Agent::Codex))?;
         let then = Instant::now();
 
         assert2::assert!(tracker.sync_agent_attention(&layout, &agent_processes, &[], then)?);
-        tracker.record_user_interaction(&pane_id, PaneUserInteraction::MayEcho, then);
+        tracker.record_user_interaction(pane_id, PaneUserInteraction::MayEcho, then);
 
         let changed = tracker.sync_agent_attention(
             &layout,
@@ -386,7 +383,7 @@ mod tests {
         )?;
 
         pretty_assertions::assert_eq!(changed, expected_changed);
-        pretty_assertions::assert_eq!(tracker.agent_state_for(&pane_id), expected_agent_state);
+        pretty_assertions::assert_eq!(tracker.agent_state_for(pane_id), expected_agent_state);
         Ok(())
     }
 
@@ -395,14 +392,14 @@ mod tests {
     {
         let layout = self::layout()?;
         let mut tracker = PaneAttentionTracker::default();
-        let pane_id = PaneId::new("pane-1")?;
-        let agent_processes = self::agent_processes("pane-1", Some(Agent::Codex))?;
+        let pane_id = PaneId::new(1)?;
+        let agent_processes = self::agent_processes(1, Some(Agent::Codex))?;
         let then = Instant::now();
 
         assert2::assert!(tracker.sync_agent_attention(&layout, &agent_processes, &[], then)?);
-        tracker.record_user_interaction(&pane_id, PaneUserInteraction::MayEcho, then);
+        tracker.record_user_interaction(pane_id, PaneUserInteraction::MayEcho, then);
         tracker.record_user_interaction(
-            &pane_id,
+            pane_id,
             PaneUserInteraction::StartsAgentWork,
             self::instant_after(then, Duration::from_millis(100))?,
         );
@@ -413,7 +410,7 @@ mod tests {
             self::instant_after(then, Duration::from_millis(150))?,
         )?);
 
-        pretty_assertions::assert_eq!(tracker.agent_state_for(&pane_id), PaneAgentState::Busy);
+        pretty_assertions::assert_eq!(tracker.agent_state_for(pane_id), PaneAgentState::Busy);
         Ok(())
     }
 
@@ -421,12 +418,12 @@ mod tests {
     fn test_pane_attention_tracker_when_mouse_interaction_redraws_does_not_mark_agent_busy() -> rootcause::Result<()> {
         let layout = self::layout()?;
         let mut tracker = PaneAttentionTracker::default();
-        let pane_id = PaneId::new("pane-1")?;
-        let agent_processes = self::agent_processes("pane-1", Some(Agent::Codex))?;
+        let pane_id = PaneId::new(1)?;
+        let agent_processes = self::agent_processes(1, Some(Agent::Codex))?;
         let then = Instant::now();
 
         assert2::assert!(tracker.sync_agent_attention(&layout, &agent_processes, &[], then)?);
-        tracker.record_user_interaction(&pane_id, PaneUserInteraction::MayEcho, then);
+        tracker.record_user_interaction(pane_id, PaneUserInteraction::MayEcho, then);
         assert2::assert!(!tracker.sync_agent_attention(
             &layout,
             &agent_processes,
@@ -434,7 +431,7 @@ mod tests {
             self::instant_after(then, Duration::from_millis(100))?,
         )?);
 
-        pretty_assertions::assert_eq!(tracker.agent_state_for(&pane_id), PaneAgentState::Seen);
+        pretty_assertions::assert_eq!(tracker.agent_state_for(pane_id), PaneAgentState::Seen);
         Ok(())
     }
 
@@ -442,9 +439,9 @@ mod tests {
     fn test_pane_attention_tracker_when_agent_identity_changes_resets_activity_and_state() -> rootcause::Result<()> {
         let layout = self::layout()?;
         let mut tracker = PaneAttentionTracker::default();
-        let pane_id = PaneId::new("pane-1")?;
-        let codex = self::agent_processes("pane-1", Some(Agent::Codex))?;
-        let cursor = self::agent_processes("pane-1", Some(Agent::Cursor))?;
+        let pane_id = PaneId::new(1)?;
+        let codex = self::agent_processes(1, Some(Agent::Codex))?;
+        let cursor = self::agent_processes(1, Some(Agent::Cursor))?;
         let then = Instant::now();
 
         assert2::assert!(tracker.sync_agent_attention(&layout, &codex, &[], then)?);
@@ -454,7 +451,7 @@ mod tests {
             std::slice::from_ref(&pane_id),
             self::instant_after(then, Duration::from_millis(100))?,
         )?);
-        pretty_assertions::assert_eq!(tracker.agent_state_for(&pane_id), PaneAgentState::Busy);
+        pretty_assertions::assert_eq!(tracker.agent_state_for(pane_id), PaneAgentState::Busy);
 
         assert2::assert!(tracker.sync_agent_attention(
             &layout,
@@ -462,7 +459,7 @@ mod tests {
             &[],
             self::instant_after(then, Duration::from_millis(200))?,
         )?);
-        pretty_assertions::assert_eq!(tracker.agent_state_for(&pane_id), PaneAgentState::Seen);
+        pretty_assertions::assert_eq!(tracker.agent_state_for(pane_id), PaneAgentState::Seen);
         assert2::assert!(!tracker.sync_agent_attention(
             &layout,
             &cursor,
@@ -477,8 +474,8 @@ mod tests {
     fn test_pane_attention_tracker_when_fresh_tracker_observes_running_agent_starts_seen() -> rootcause::Result<()> {
         let layout = self::layout()?;
         let mut tracker = PaneAttentionTracker::default();
-        let pane_id = PaneId::new("pane-1")?;
-        let agent_processes = self::agent_processes("pane-1", Some(Agent::Codex))?;
+        let pane_id = PaneId::new(1)?;
+        let agent_processes = self::agent_processes(1, Some(Agent::Codex))?;
         let then = Instant::now();
 
         assert2::assert!(tracker.sync_agent_attention(&layout, &agent_processes, &[], then)?);
@@ -489,7 +486,7 @@ mod tests {
             self::instant_after(then, Duration::from_secs(3))?
         )?);
 
-        pretty_assertions::assert_eq!(tracker.agent_state_for(&pane_id), PaneAgentState::Seen);
+        pretty_assertions::assert_eq!(tracker.agent_state_for(pane_id), PaneAgentState::Seen);
         pretty_assertions::assert_eq!(tracker.attention_pane_ids(&layout), Vec::<PaneId>::new());
         Ok(())
     }
@@ -498,8 +495,8 @@ mod tests {
     fn test_pane_attention_tracker_when_visible_activity_is_quiet_and_focused_marks_seen() -> rootcause::Result<()> {
         let layout = self::layout()?;
         let mut tracker = PaneAttentionTracker::default();
-        let pane_id = PaneId::new("pane-2")?;
-        let agent_processes = self::agent_processes("pane-2", Some(Agent::Codex))?;
+        let pane_id = PaneId::new(2)?;
+        let agent_processes = self::agent_processes(2, Some(Agent::Codex))?;
         let then = Instant::now();
 
         assert2::assert!(tracker.sync_agent_attention(&layout, &agent_processes, &[], then)?);
@@ -522,7 +519,7 @@ mod tests {
             self::instant_after(then, Duration::from_secs(4))?
         )?);
 
-        pretty_assertions::assert_eq!(tracker.agent_state_for(&pane_id), PaneAgentState::Seen);
+        pretty_assertions::assert_eq!(tracker.agent_state_for(pane_id), PaneAgentState::Seen);
         Ok(())
     }
 
@@ -530,8 +527,8 @@ mod tests {
     fn test_pane_attention_tracker_when_unseen_agent_has_visible_activity_marks_busy() -> rootcause::Result<()> {
         let layout = self::layout()?;
         let mut tracker = PaneAttentionTracker::default();
-        let pane_id = PaneId::new("pane-1")?;
-        let agent_processes = self::agent_processes("pane-1", Some(Agent::Codex))?;
+        let pane_id = PaneId::new(1)?;
+        let agent_processes = self::agent_processes(1, Some(Agent::Codex))?;
         let then = Instant::now();
 
         assert2::assert!(tracker.sync_agent_attention(&layout, &agent_processes, &[], then)?);
@@ -555,7 +552,7 @@ mod tests {
             self::instant_after(then, Duration::from_secs(5))?,
         )?);
 
-        pretty_assertions::assert_eq!(tracker.agent_state_for(&pane_id), PaneAgentState::Busy);
+        pretty_assertions::assert_eq!(tracker.agent_state_for(pane_id), PaneAgentState::Busy);
         Ok(())
     }
 
@@ -563,8 +560,8 @@ mod tests {
     fn test_pane_attention_tracker_when_shell_output_is_quiet_does_not_mark_attention() -> rootcause::Result<()> {
         let layout = self::layout()?;
         let mut tracker = PaneAttentionTracker::default();
-        let pane_id = PaneId::new("pane-1")?;
-        let agent_processes = self::agent_processes("pane-1", None)?;
+        let pane_id = PaneId::new(1)?;
+        let agent_processes = self::agent_processes(1, None)?;
         let then = Instant::now();
 
         assert2::assert!(!tracker.sync_agent_attention(
@@ -588,9 +585,9 @@ mod tests {
     fn test_pane_attention_tracker_when_agent_process_exits_clears_agent_state() -> rootcause::Result<()> {
         let layout = self::layout()?;
         let mut tracker = PaneAttentionTracker::default();
-        let pane_id = PaneId::new("pane-1")?;
-        let agent_processes = self::agent_processes("pane-1", Some(Agent::Codex))?;
-        let no_agent = self::agent_processes("pane-1", None)?;
+        let pane_id = PaneId::new(1)?;
+        let agent_processes = self::agent_processes(1, Some(Agent::Codex))?;
+        let no_agent = self::agent_processes(1, None)?;
         let then = Instant::now();
 
         assert2::assert!(tracker.sync_agent_attention(&layout, &agent_processes, &[], then)?);
@@ -614,7 +611,7 @@ mod tests {
             self::instant_after(then, Duration::from_secs(5))?
         )?);
 
-        pretty_assertions::assert_eq!(tracker.agent_state_for(&pane_id), PaneAgentState::NoAgent);
+        pretty_assertions::assert_eq!(tracker.agent_state_for(pane_id), PaneAgentState::NoAgent);
         pretty_assertions::assert_eq!(tracker.attention_pane_ids(&layout), Vec::<PaneId>::new());
         Ok(())
     }
@@ -634,12 +631,11 @@ mod tests {
         }
     }
 
-    fn agent_processes(pane_id: &str, agent: Option<Agent>) -> rootcause::Result<Vec<PaneAgentProcess>> {
+    fn agent_processes(pane_id: u32, agent: Option<Agent>) -> rootcause::Result<Vec<PaneAgentProcess>> {
         let pane_id = PaneId::new(pane_id)?;
-        Ok(vec![match agent {
-            Some(agent) => PaneAgentProcess::Agent { pane_id, agent },
-            None => PaneAgentProcess::NoAgent { pane_id },
-        }])
+        Ok(vec![agent.map_or(PaneAgentProcess::NoAgent { pane_id }, |agent| {
+            PaneAgentProcess::Agent { pane_id, agent }
+        })])
     }
 
     fn instant_after(instant: Instant, duration: Duration) -> rootcause::Result<Instant> {

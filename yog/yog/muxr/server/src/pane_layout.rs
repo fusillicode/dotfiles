@@ -121,7 +121,7 @@ impl PaneLayout {
                 self.push_region(PaneRegion {
                     area,
                     focus_seq: pane.focus_seq,
-                    id: pane.id.clone(),
+                    id: pane.id,
                 });
                 Ok(())
             }

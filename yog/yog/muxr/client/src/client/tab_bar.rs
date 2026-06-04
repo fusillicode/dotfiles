@@ -90,7 +90,7 @@ pub fn queue(stdout: &mut impl Write, layout: &LayoutSnapshot, rows: u16) -> roo
 #[must_use]
 pub fn tab_id_at_row(layout: &LayoutSnapshot, row: u16) -> Option<TabId> {
     let index = usize::from(row / ROWS_PER_TAB);
-    layout.tabs().get(index).map(|tab| tab.id().clone())
+    layout.tabs().get(index).map(|tab| *tab.id())
 }
 
 fn queue_sidebar_row(
@@ -202,7 +202,7 @@ fn display_pane(tab: &TabSnapshot, active: bool) -> Option<&PaneSnapshot> {
 fn unfocused_unseen_agent_pane(tab: &TabSnapshot) -> Option<&PaneSnapshot> {
     tab.panes()
         .iter()
-        .find(|pane| pane.id.as_ref() != tab.active_pane().as_ref() && pane.agent_state == PaneAgentState::Unseen)
+        .find(|pane| &pane.id != tab.active_pane() && pane.agent_state == PaneAgentState::Unseen)
 }
 
 fn highest_priority_agent_pane(tab: &TabSnapshot) -> Option<&PaneSnapshot> {
@@ -238,9 +238,7 @@ fn path_label(tab: &TabSnapshot, pane: Option<&PaneSnapshot>, home: Option<&str>
 }
 
 fn active_pane(tab: &TabSnapshot) -> Option<&PaneSnapshot> {
-    tab.panes()
-        .iter()
-        .find(|pane| pane.id.as_ref() == tab.active_pane().as_ref())
+    tab.panes().iter().find(|pane| &pane.id == tab.active_pane())
 }
 
 fn short_cwd_with_home(cwd: &str, home: Option<&str>) -> String {
@@ -318,25 +316,25 @@ mod tests {
     #[test]
     fn test_sidebar_tabs_when_second_tab_is_active_uses_active_pane_cwd() -> rootcause::Result<()> {
         let layout = self::layout_snapshot(
-            "tab-2",
+            2,
             vec![
                 self::tab_snapshot(
-                    "tab-1",
+                    1,
                     "default",
-                    "pane-1",
+                    1,
                     vec![self::pane_snapshot(
-                        "pane-1",
+                        1,
                         "/Users/me/work/default",
                         None,
                         PaneAgentState::NoAgent,
                     )?],
                 )?,
                 self::tab_snapshot(
-                    "tab-2",
+                    2,
                     "tab 2",
-                    "pane-2",
+                    2,
                     vec![self::pane_snapshot(
-                        "pane-2",
+                        2,
                         "/Users/me/src/muxr",
                         Some("nvim"),
                         PaneAgentState::NoAgent,
@@ -368,27 +366,22 @@ mod tests {
     #[test]
     fn test_sidebar_tabs_when_inactive_tab_has_agent_pane_uses_highest_priority_pane() -> rootcause::Result<()> {
         let layout = self::layout_snapshot(
-            "tab-1",
+            1,
             vec![
                 self::tab_snapshot(
-                    "tab-1",
+                    1,
                     "active",
-                    "pane-1",
-                    vec![self::pane_snapshot(
-                        "pane-1",
-                        "/tmp/active",
-                        None,
-                        PaneAgentState::NoAgent,
-                    )?],
+                    1,
+                    vec![self::pane_snapshot(1, "/tmp/active", None, PaneAgentState::NoAgent)?],
                 )?,
                 self::tab_snapshot(
-                    "tab-2",
+                    2,
                     "inactive",
-                    "pane-2",
+                    2,
                     vec![
-                        self::pane_snapshot("pane-2", "/tmp/shell", Some("zsh"), PaneAgentState::NoAgent)?,
-                        self::pane_snapshot("pane-4", "/tmp/cargo", Some("cargo test"), PaneAgentState::Busy)?,
-                        self::pane_snapshot("pane-3", "/tmp/codex", Some("codex"), PaneAgentState::Unseen)?,
+                        self::pane_snapshot(2, "/tmp/shell", Some("zsh"), PaneAgentState::NoAgent)?,
+                        self::pane_snapshot(4, "/tmp/cargo", Some("cargo test"), PaneAgentState::Busy)?,
+                        self::pane_snapshot(3, "/tmp/codex", Some("codex"), PaneAgentState::Unseen)?,
                     ],
                 )?,
             ],
@@ -417,14 +410,14 @@ mod tests {
     #[test]
     fn test_sidebar_tabs_when_active_tab_has_unfocused_unseen_agent_uses_agent_pane() -> rootcause::Result<()> {
         let layout = self::layout_snapshot(
-            "tab-1",
+            1,
             vec![self::tab_snapshot(
-                "tab-1",
+                1,
                 "default",
-                "pane-1",
+                1,
                 vec![
-                    self::pane_snapshot("pane-1", "/tmp/shell", Some("zsh"), PaneAgentState::NoAgent)?,
-                    self::pane_snapshot("pane-2", "/tmp/codex", Some("codex"), PaneAgentState::Unseen)?,
+                    self::pane_snapshot(1, "/tmp/shell", Some("zsh"), PaneAgentState::NoAgent)?,
+                    self::pane_snapshot(2, "/tmp/codex", Some("codex"), PaneAgentState::Unseen)?,
                 ],
             )?],
         )?;
@@ -457,17 +450,12 @@ mod tests {
     #[test]
     fn test_queue_when_layout_is_rendered_writes_sidebar_without_flushing() -> rootcause::Result<()> {
         let layout = self::layout_snapshot(
-            "tab-1",
+            1,
             vec![self::tab_snapshot(
-                "tab-1",
+                1,
                 "default",
-                "pane-1",
-                vec![self::pane_snapshot(
-                    "pane-1",
-                    "project",
-                    Some("codex"),
-                    PaneAgentState::Busy,
-                )?],
+                1,
+                vec![self::pane_snapshot(1, "project", Some("codex"), PaneAgentState::Busy)?],
             )?],
         )?;
         let mut output = CountingWriter::default();
@@ -486,17 +474,12 @@ mod tests {
     #[test]
     fn test_queue_when_agent_marker_is_rendered_keeps_labels_flush_and_spaces_marker() -> rootcause::Result<()> {
         let layout = self::layout_snapshot(
-            "tab-1",
+            1,
             vec![self::tab_snapshot(
-                "tab-1",
+                1,
                 "default",
-                "pane-1",
-                vec![self::pane_snapshot(
-                    "pane-1",
-                    "project",
-                    Some("cx"),
-                    PaneAgentState::Busy,
-                )?],
+                1,
+                vec![self::pane_snapshot(1, "project", Some("cx"), PaneAgentState::Busy)?],
             )?],
         )?;
         let mut output = CountingWriter::default();
@@ -515,17 +498,12 @@ mod tests {
     #[test]
     fn test_queue_when_tab_is_rendered_adds_spacer_row_after_cmd_row() -> rootcause::Result<()> {
         let layout = self::layout_snapshot(
-            "tab-1",
+            1,
             vec![self::tab_snapshot(
-                "tab-1",
+                1,
                 "default",
-                "pane-1",
-                vec![self::pane_snapshot(
-                    "pane-1",
-                    "project",
-                    Some("cx"),
-                    PaneAgentState::Busy,
-                )?],
+                1,
+                vec![self::pane_snapshot(1, "project", Some("cx"), PaneAgentState::Busy)?],
             )?],
         )?;
         let mut output = CountingWriter::default();
@@ -542,54 +520,54 @@ mod tests {
     }
 
     #[rstest]
-    #[case::first_path_row(0, Some("tab-1"))]
-    #[case::first_cmd_row(1, Some("tab-1"))]
-    #[case::first_spacer_row(2, Some("tab-1"))]
-    #[case::second_path_row(3, Some("tab-2"))]
-    #[case::second_cmd_row(4, Some("tab-2"))]
-    #[case::second_spacer_row(5, Some("tab-2"))]
+    #[case::first_path_row(0, Some(1))]
+    #[case::first_cmd_row(1, Some(1))]
+    #[case::first_spacer_row(2, Some(1))]
+    #[case::second_path_row(3, Some(2))]
+    #[case::second_cmd_row(4, Some(2))]
+    #[case::second_spacer_row(5, Some(2))]
     #[case::below_tabs(6, None)]
     fn test_tab_id_at_row_when_row_varies_returns_clicked_tab(
         #[case] row: u16,
-        #[case] expected: Option<&str>,
+        #[case] expected: Option<u32>,
     ) -> rootcause::Result<()> {
         let layout = self::layout_snapshot(
-            "tab-1",
+            1,
             vec![
                 self::tab_snapshot(
-                    "tab-1",
+                    1,
                     "default",
-                    "pane-1",
-                    vec![self::pane_snapshot("pane-1", "default", None, PaneAgentState::NoAgent)?],
+                    1,
+                    vec![self::pane_snapshot(1, "default", None, PaneAgentState::NoAgent)?],
                 )?,
                 self::tab_snapshot(
-                    "tab-2",
+                    2,
                     "tab 2",
-                    "pane-2",
-                    vec![self::pane_snapshot("pane-2", "tab-2", None, PaneAgentState::NoAgent)?],
+                    2,
+                    vec![self::pane_snapshot(2, "tab-2", None, PaneAgentState::NoAgent)?],
                 )?,
             ],
         )?;
 
-        pretty_assertions::assert_eq!(tab_id_at_row(&layout, row).as_ref().map(TabId::as_ref), expected,);
+        pretty_assertions::assert_eq!(tab_id_at_row(&layout, row).map(TabId::get), expected);
         Ok(())
     }
 
-    fn layout_snapshot(active_tab: &str, tabs: Vec<TabSnapshot>) -> rootcause::Result<LayoutSnapshot> {
+    fn layout_snapshot(active_tab: u32, tabs: Vec<TabSnapshot>) -> rootcause::Result<LayoutSnapshot> {
         LayoutSnapshot::new(TabId::new(active_tab)?, tabs)
     }
 
     fn tab_snapshot(
-        id: &str,
+        id: u32,
         title: &str,
-        active_pane: &str,
+        active_pane: u32,
         panes: Vec<PaneSnapshot>,
     ) -> rootcause::Result<TabSnapshot> {
         TabSnapshot::new(TabId::new(id)?, title, PaneId::new(active_pane)?, panes)
     }
 
     fn pane_snapshot(
-        id: &str,
+        id: u32,
         cwd: &str,
         cmd_label: Option<&str>,
         agent_state: PaneAgentState,

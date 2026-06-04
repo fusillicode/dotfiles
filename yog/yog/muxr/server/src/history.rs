@@ -53,8 +53,8 @@ impl PaneHistory {
     }
 }
 
-pub fn pane_output_path(panes_root: &Path, pane_id: &PaneId) -> PathBuf {
-    panes_root.join(pane_id.as_ref()).join("output.raw")
+pub fn pane_output_path(panes_root: &Path, pane_id: PaneId) -> PathBuf {
+    panes_root.join(pane_id.get().to_string()).join("output.raw")
 }
 
 fn read_tail(path: &Path) -> rootcause::Result<Vec<u8>> {
@@ -92,7 +92,7 @@ mod tests {
     #[test]
     fn test_pane_history_open_when_file_exists_returns_replay_tail() -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
-        let path = tempdir.path().join("pane-1").join("output.raw");
+        let path = tempdir.path().join("1").join("output.raw");
         fs::create_dir_all(path.parent().ok_or_else(|| report!("expected parent"))?)?;
         fs::write(&path, b"abc").context("failed to write muxr test history")?;
 
@@ -105,7 +105,7 @@ mod tests {
     #[test]
     fn test_pane_history_append_when_bytes_arrive_persists_output() -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
-        let path = tempdir.path().join("pane-1").join("output.raw");
+        let path = tempdir.path().join("1").join("output.raw");
         let (mut history, replay) = PaneHistory::open(&path)?;
 
         pretty_assertions::assert_eq!(replay, Vec::<u8>::new());

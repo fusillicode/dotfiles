@@ -33,7 +33,7 @@ pub fn handle_scroll_pane_at_request(
 
     let runtimes = crate::server::lock_mutex(runtimes, "pane runtimes")?;
     match amount {
-        PaneScrollAmount::Line => runtimes.handle(&pane_id)?.scroll_one_line(direction),
-        PaneScrollAmount::Wheel => runtimes.handle(&pane_id)?.scroll(direction),
+        PaneScrollAmount::Line => runtimes.handle(pane_id)?.scroll_one_line(direction),
+        PaneScrollAmount::Wheel => runtimes.handle(pane_id)?.scroll(direction),
     }
 }

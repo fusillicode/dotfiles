@@ -18,10 +18,8 @@ use crate::state::Tab;
 impl SessionLayout {
     pub fn create_tab(&mut self, metadata: SessionMetadata) -> rootcause::Result<PaneId> {
         let tab_index = self.active_tab_index()?;
-        let tab_number = self.next_tab_number()?;
-        let pane_number = self.next_pane_number()?;
-        let tab_id = TabId::new(format!("tab-{tab_number}"))?;
-        let pane_id = PaneId::new(format!("pane-{pane_number}"))?;
+        let tab_id = TabId::new(self.next_tab_number()?)?;
+        let pane_id = PaneId::new(self.next_pane_number()?)?;
         let insert_index = tab_index
             .checked_add(1)
             .ok_or_else(|| report!("muxr tab insert index overflowed"))?;
@@ -29,19 +27,19 @@ impl SessionLayout {
         self.entries.insert(
             insert_index,
             Tab {
-                active_pane: pane_id.clone(),
-                id: tab_id.clone(),
+                active_pane: pane_id,
+                id: tab_id,
                 pane_tree: PaneTree::Pane(Pane {
                     attention_state: PaneAttentionState::Idle,
                     cmd_label: metadata.cmd_label.clone(),
                     cwd: metadata.cwd,
                     focus_seq: 1,
-                    id: pane_id.clone(),
+                    id: pane_id,
                     started_at: metadata.started_at,
                     state: PaneState::Running,
                     title: metadata.cmd_label,
                 }),
-                title: format!("tab {tab_number}"),
+                title: format!("tab {}", tab_id.get()),
             },
         );
         self.active_tab = tab_id;
