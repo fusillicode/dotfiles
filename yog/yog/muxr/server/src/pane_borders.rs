@@ -162,7 +162,7 @@ pub fn paste_borders(
         let target = target_row
             .get_mut(usize::from(col))
             .ok_or_else(|| report!("muxr pane border col outside composite frame"))?;
-        *target = RenderCell::narrow(cell.shape.glyph(), cell.style);
+        *target = RenderCell::narrow(cell.shape.glyph(), cell.visual.style());
     }
     Ok(())
 }
@@ -182,7 +182,7 @@ fn compose_border_cells(
                         .col()
                         .checked_add(offset)
                         .ok_or_else(|| report!("muxr horizontal pane border col overflowed"))?;
-                    let style = self::border_style_for_cell(
+                    let visual = self::border_visual_for_cell(
                         border,
                         border.row(),
                         col,
@@ -190,7 +190,7 @@ fn compose_border_cells(
                         attention_panes,
                         border_mode,
                     );
-                    self::add_border_cell(&mut cells, border.row(), col, border.axis(), style);
+                    self::add_border_cell(&mut cells, border.row(), col, border.axis(), visual);
                 }
             }
             PaneBorderAxis::Vertical => {
@@ -199,7 +199,7 @@ fn compose_border_cells(
                     .checked_add(border.len())
                     .ok_or_else(|| report!("muxr vertical pane border end overflowed"))?;
                 for row in border.row()..end_row {
-                    let style = self::border_style_for_cell(
+                    let visual = self::border_visual_for_cell(
                         border,
                         row,
                         border.col(),
@@ -207,7 +207,7 @@ fn compose_border_cells(
                         attention_panes,
                         border_mode,
                     );
-                    self::add_border_cell(&mut cells, row, border.col(), border.axis(), style);
+                    self::add_border_cell(&mut cells, row, border.col(), border.axis(), visual);
                 }
             }
         }
@@ -221,17 +221,17 @@ fn add_border_cell(
     row: u16,
     col: u16,
     axis: PaneBorderAxis,
-    style: RenderStyle,
+    visual: BorderVisual,
 ) {
     cells
         .entry((row, col))
         .and_modify(|cell| {
             cell.shape = cell.shape.with_axis(axis);
-            cell.style = self::stronger_border_style(cell.style, style);
+            cell.visual = cell.visual.stronger(visual);
         })
         .or_insert_with(|| BorderCell {
             shape: BorderCellShape::from_axis(axis),
-            style,
+            visual,
         });
 }
 
@@ -246,14 +246,14 @@ fn add_adjacent_border_junctions(cells: &mut BTreeMap<(u16, u16), BorderCell>) {
                     .get(&(*row, left_col))
                     .is_some_and(|neighbor| neighbor.shape.has_vertical())
             {
-                self::merge_border_edge(cells, (*row, left_col), BorderCellEdge::Right, cell.style);
+                self::merge_border_edge(cells, (*row, left_col), BorderCellEdge::Right, cell.visual);
             }
             if let Some(right_col) = col.checked_add(1)
                 && base_cells
                     .get(&(*row, right_col))
                     .is_some_and(|neighbor| neighbor.shape.has_vertical())
             {
-                self::merge_border_edge(cells, (*row, right_col), BorderCellEdge::Left, cell.style);
+                self::merge_border_edge(cells, (*row, right_col), BorderCellEdge::Left, cell.visual);
             }
         }
         if cell.shape.has_vertical() {
@@ -262,14 +262,14 @@ fn add_adjacent_border_junctions(cells: &mut BTreeMap<(u16, u16), BorderCell>) {
                     .get(&(up_row, *col))
                     .is_some_and(|neighbor| neighbor.shape.has_horizontal())
             {
-                self::merge_border_edge(cells, (up_row, *col), BorderCellEdge::Down, cell.style);
+                self::merge_border_edge(cells, (up_row, *col), BorderCellEdge::Down, cell.visual);
             }
             if let Some(down_row) = row.checked_add(1)
                 && base_cells
                     .get(&(down_row, *col))
                     .is_some_and(|neighbor| neighbor.shape.has_horizontal())
             {
-                self::merge_border_edge(cells, (down_row, *col), BorderCellEdge::Up, cell.style);
+                self::merge_border_edge(cells, (down_row, *col), BorderCellEdge::Up, cell.visual);
             }
         }
     }
@@ -279,22 +279,22 @@ fn merge_border_edge(
     cells: &mut BTreeMap<(u16, u16), BorderCell>,
     position: (u16, u16),
     edge: BorderCellEdge,
-    style: RenderStyle,
+    visual: BorderVisual,
 ) {
     if let Some(cell) = cells.get_mut(&position) {
         cell.shape = cell.shape.with_edge(edge);
-        cell.style = self::stronger_border_style(cell.style, style);
+        cell.visual = cell.visual.stronger(visual);
     }
 }
 
-fn border_style_for_cell(
+fn border_visual_for_cell(
     border: &PaneBorder,
     row: u16,
     col: u16,
     active_pane: Option<&PaneId>,
     attention_panes: &[PaneId],
     border_mode: BorderRenderMode,
-) -> RenderStyle {
+) -> BorderVisual {
     let position = PanePosition { row, col };
     let owned_by_active_pane = active_pane.is_some_and(|pane_id| border.is_owned_by(position, *pane_id));
     let owned_by_attention_pane = attention_panes
@@ -303,29 +303,17 @@ fn border_style_for_cell(
 
     if owned_by_active_pane {
         return match border_mode {
-            BorderRenderMode::Focus if owned_by_attention_pane => self::attention_border_style(),
-            BorderRenderMode::Focus => self::focused_border_style(),
-            BorderRenderMode::Resize => self::resize_border_style(),
+            BorderRenderMode::Focus if owned_by_attention_pane => BorderVisual::Attention,
+            BorderRenderMode::Focus => BorderVisual::Focused,
+            BorderRenderMode::Resize => BorderVisual::Resize,
         };
     }
 
     if owned_by_attention_pane {
-        return self::attention_border_style();
+        return BorderVisual::Attention;
     }
 
-    self::border_style()
-}
-
-fn stronger_border_style(current: RenderStyle, incoming: RenderStyle) -> RenderStyle {
-    if current == self::resize_border_style() || incoming == self::resize_border_style() {
-        self::resize_border_style()
-    } else if current == self::attention_border_style() || incoming == self::attention_border_style() {
-        self::attention_border_style()
-    } else if current == self::focused_border_style() || incoming == self::focused_border_style() {
-        self::focused_border_style()
-    } else {
-        incoming
-    }
+    BorderVisual::Default
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -514,10 +502,46 @@ impl BorderCellShape {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct BorderCell {
     shape: BorderCellShape,
-    style: RenderStyle,
+    visual: BorderVisual,
 }
 
 // Pane borders can use exact RGB for pane state contrast; indexed colors remain useful for palette-sized accents.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum BorderVisual {
+    Default,
+    Focused,
+    Attention,
+    Resize,
+}
+
+impl BorderVisual {
+    const fn stronger(self, incoming: Self) -> Self {
+        if incoming.priority() > self.priority() {
+            incoming
+        } else {
+            self
+        }
+    }
+
+    const fn style(self) -> RenderStyle {
+        match self {
+            Self::Default => self::border_style(),
+            Self::Focused => self::focused_border_style(),
+            Self::Attention => self::attention_border_style(),
+            Self::Resize => self::resize_border_style(),
+        }
+    }
+
+    const fn priority(self) -> u8 {
+        match self {
+            Self::Default => 0,
+            Self::Focused => 1,
+            Self::Attention => 2,
+            Self::Resize => 3,
+        }
+    }
+}
+
 const fn border_style() -> RenderStyle {
     RenderStyle {
         attrs: RenderTextStyle::empty(),
@@ -530,7 +554,7 @@ const fn focused_border_style() -> RenderStyle {
     RenderStyle {
         attrs: RenderTextStyle::empty().set_bold(true),
         bg: RenderColor::Default,
-        fg: RenderColor::Rgb { r: 132, g: 132, b: 132 },
+        fg: RenderColor::Rgb { r: 96, g: 96, b: 96 },
     }
 }
 
@@ -538,7 +562,7 @@ const fn resize_border_style() -> RenderStyle {
     RenderStyle {
         attrs: RenderTextStyle::empty().set_bold(true),
         bg: RenderColor::Default,
-        fg: RenderColor::Indexed(166),
+        fg: RenderColor::Rgb { r: 106, g: 106, b: 223 },
     }
 }
 
@@ -546,26 +570,21 @@ const fn attention_border_style() -> RenderStyle {
     RenderStyle {
         attrs: RenderTextStyle::empty().set_bold(true),
         bg: RenderColor::Default,
-        fg: RenderColor::Indexed(160),
+        fg: RenderColor::Rgb { r: 255, g: 0, b: 0 },
     }
 }
 
 #[cfg(test)]
 mod tests {
     use muxr_core::PaneId;
-    use muxr_core::SessionName;
     use muxr_core::TerminalSize;
     use rootcause::report;
 
     use super::*;
-    use crate::pane_focus::PaneFocusDirection;
     use crate::pane_layout::PaneArea;
     use crate::pane_layout::PanePosition;
     use crate::pane_layout::PaneRegion;
     use crate::pane_layout::PaneSize;
-    use crate::pane_split::PaneSplitAxis;
-    use crate::state::SessionLayout;
-    use crate::state::SessionMetadata;
 
     fn pane_region(id: PaneId, row: u16, col: u16, rows: u16, cols: u16, focus_seq: u64) -> PaneRegion {
         PaneRegion {
@@ -575,6 +594,58 @@ mod tests {
             },
             focus_seq,
             id,
+        }
+    }
+
+    #[derive(Clone, Copy, Debug)]
+    enum NestedBorderFixture {
+        HorizontalThenVertical,
+        VerticalThenHorizontal,
+    }
+
+    impl NestedBorderFixture {
+        fn borders(self) -> rootcause::Result<Vec<PaneBorder>> {
+            let vertical_left = self::pane_region(PaneId::new(1)?, 0, 0, 24, 40, 1);
+            let vertical_top_right = self::pane_region(PaneId::new(2)?, 0, 41, 12, 39, 2);
+            let vertical_bottom_right = self::pane_region(PaneId::new(3)?, 13, 41, 11, 39, 3);
+            let horizontal_top = self::pane_region(PaneId::new(1)?, 0, 0, 12, 80, 1);
+            let horizontal_bottom_left = self::pane_region(PaneId::new(2)?, 13, 0, 11, 40, 2);
+            let horizontal_bottom_right = self::pane_region(PaneId::new(3)?, 13, 41, 11, 39, 3);
+
+            match self {
+                Self::VerticalThenHorizontal => Ok(vec![
+                    PaneBorder::with_adjacent_regions(
+                        PaneBorderAxis::Vertical,
+                        PanePosition { row: 0, col: 40 },
+                        24,
+                        std::slice::from_ref(&vertical_left),
+                        &[vertical_top_right.clone(), vertical_bottom_right.clone()],
+                    )?,
+                    PaneBorder::with_adjacent_regions(
+                        PaneBorderAxis::Horizontal,
+                        PanePosition { row: 12, col: 41 },
+                        39,
+                        std::slice::from_ref(&vertical_top_right),
+                        std::slice::from_ref(&vertical_bottom_right),
+                    )?,
+                ]),
+                Self::HorizontalThenVertical => Ok(vec![
+                    PaneBorder::with_adjacent_regions(
+                        PaneBorderAxis::Horizontal,
+                        PanePosition { row: 12, col: 0 },
+                        80,
+                        std::slice::from_ref(&horizontal_top),
+                        &[horizontal_bottom_left.clone(), horizontal_bottom_right.clone()],
+                    )?,
+                    PaneBorder::with_adjacent_regions(
+                        PaneBorderAxis::Vertical,
+                        PanePosition { row: 13, col: 40 },
+                        11,
+                        std::slice::from_ref(&horizontal_bottom_left),
+                        std::slice::from_ref(&horizontal_bottom_right),
+                    )?,
+                ]),
+            }
         }
     }
 
@@ -648,55 +719,36 @@ mod tests {
 
     #[rstest::rstest]
     #[case::vertical_then_horizontal_focus_lower_right(
-        PaneSplitAxis::Vertical,
-        PaneSplitAxis::Horizontal,
-        None,
+        NestedBorderFixture::VerticalThenHorizontal,
+        3,
         vec![(12, 40, "├"), (13, 40, "│"), (12, 41, "─")],
     )]
     #[case::vertical_then_horizontal_focus_upper_right(
-        PaneSplitAxis::Vertical,
-        PaneSplitAxis::Horizontal,
-        Some(PaneFocusDirection::Up),
+        NestedBorderFixture::VerticalThenHorizontal,
+        2,
         vec![(0, 40, "│"), (11, 40, "│"), (12, 40, "├"), (12, 41, "─")],
     )]
     #[case::horizontal_then_vertical_focus_lower_right(
-        PaneSplitAxis::Horizontal,
-        PaneSplitAxis::Vertical,
-        None,
+        NestedBorderFixture::HorizontalThenVertical,
+        3,
         vec![(12, 40, "┬"), (12, 41, "─"), (13, 40, "│")],
     )]
     #[case::horizontal_then_vertical_focus_lower_left(
-        PaneSplitAxis::Horizontal,
-        PaneSplitAxis::Vertical,
-        Some(PaneFocusDirection::Left),
+        NestedBorderFixture::HorizontalThenVertical,
+        2,
         vec![(12, 39, "─"), (12, 40, "┬"), (13, 40, "│")],
     )]
-    fn test_layout_nested_split_border_rendering_when_active_pane_touches_parent_and_child_borders_highlights_outline(
-        #[case] first_axis: PaneSplitAxis,
-        #[case] second_axis: PaneSplitAxis,
-        #[case] focus_direction: Option<PaneFocusDirection>,
+    fn test_paste_borders_when_active_pane_touches_parent_and_child_borders_highlights_outline(
+        #[case] fixture: NestedBorderFixture,
+        #[case] active_pane: u32,
         #[case] expected_focused_cells: Vec<(u16, u16, &'static str)>,
     ) -> rootcause::Result<()> {
-        let session: SessionName = "work".parse()?;
+        let active_pane = PaneId::new(active_pane)?;
         let size = TerminalSize::new(80, 24)?;
-        let mut layout = SessionLayout::initial(&session, self::metadata("sh", 1))?;
-
-        layout.split_active_pane(self::metadata("sh", 2), first_axis)?;
-        layout.split_active_pane(self::metadata("sh", 3), second_axis)?;
-        if let Some(direction) = focus_direction {
-            assert2::assert!(layout.focus_pane_direction(&size, direction)?);
-        }
-
-        let pane_layout = layout.pane_layout(&size)?;
-        let active_pane = layout.active_pane_id()?;
+        let borders = fixture.borders()?;
         let mut rows = self::empty_render_rows(&size);
-        self::paste_borders(
-            &mut rows,
-            pane_layout.borders(),
-            Some(&active_pane),
-            &[],
-            BorderRenderMode::Focus,
-        )?;
+        self::paste_borders(&mut rows, &borders, Some(&active_pane), &[], BorderRenderMode::Focus)?;
+        let border_cells = self::compose_border_cells(&borders, Some(&active_pane), &[], BorderRenderMode::Focus)?;
 
         for (row, col, glyph) in expected_focused_cells {
             let cell = rows
@@ -704,7 +756,10 @@ mod tests {
                 .and_then(|row| row.get(usize::from(col)))
                 .ok_or_else(|| report!("expected focused border cell").attach(format!("row={row} col={col}")))?;
             pretty_assertions::assert_eq!(cell.text(), glyph);
-            pretty_assertions::assert_eq!(cell.style(), self::focused_border_style());
+            pretty_assertions::assert_eq!(
+                self::border_cell_at(&border_cells, row, col)?.visual,
+                BorderVisual::Focused
+            );
         }
         Ok(())
     }
@@ -712,29 +767,19 @@ mod tests {
     #[test]
     fn test_paste_borders_when_borders_are_rendered_uses_box_drawing_style() -> rootcause::Result<()> {
         let mut rows = self::empty_render_rows(&TerminalSize::new(3, 3)?);
+        let borders = vec![
+            PaneBorder::with_adjacent_regions(PaneBorderAxis::Vertical, PanePosition { row: 0, col: 1 }, 3, &[], &[])?,
+            PaneBorder::with_adjacent_regions(
+                PaneBorderAxis::Horizontal,
+                PanePosition { row: 1, col: 0 },
+                3,
+                &[],
+                &[],
+            )?,
+        ];
 
-        self::paste_borders(
-            &mut rows,
-            &[
-                PaneBorder::with_adjacent_regions(
-                    PaneBorderAxis::Vertical,
-                    PanePosition { row: 0, col: 1 },
-                    3,
-                    &[],
-                    &[],
-                )?,
-                PaneBorder::with_adjacent_regions(
-                    PaneBorderAxis::Horizontal,
-                    PanePosition { row: 1, col: 0 },
-                    3,
-                    &[],
-                    &[],
-                )?,
-            ],
-            None,
-            &[],
-            BorderRenderMode::Focus,
-        )?;
+        self::paste_borders(&mut rows, &borders, None, &[], BorderRenderMode::Focus)?;
+        let border_cells = self::compose_border_cells(&borders, None, &[], BorderRenderMode::Focus)?;
 
         let vertical_cell = rows
             .first()
@@ -752,23 +797,16 @@ mod tests {
         pretty_assertions::assert_eq!(vertical_cell.text(), "│");
         pretty_assertions::assert_eq!(horizontal_cell.text(), "─");
         pretty_assertions::assert_eq!(junction_cell.text(), "┼");
-        pretty_assertions::assert_eq!(
-            vertical_cell.style(),
-            RenderStyle {
-                attrs: RenderTextStyle::empty(),
-                bg: RenderColor::Default,
-                fg: RenderColor::Rgb { r: 50, g: 50, b: 50 },
-            }
-        );
+        pretty_assertions::assert_eq!(self::border_cell_at(&border_cells, 0, 1)?.visual, BorderVisual::Default);
         Ok(())
     }
 
     #[rstest::rstest]
-    #[case::focus(BorderRenderMode::Focus, self::focused_border_style())]
-    #[case::resize(BorderRenderMode::Resize, self::resize_border_style())]
+    #[case::focus(BorderRenderMode::Focus, BorderVisual::Focused)]
+    #[case::resize(BorderRenderMode::Resize, BorderVisual::Resize)]
     fn test_paste_borders_when_border_cell_is_owned_by_active_pane_uses_mode_style(
         #[case] mode: BorderRenderMode,
-        #[case] expected_style: RenderStyle,
+        #[case] expected_visual: BorderVisual,
     ) -> rootcause::Result<()> {
         let mut rows = self::empty_render_rows(&TerminalSize::new(3, 3)?);
         let active_pane = PaneId::new(1)?;
@@ -781,6 +819,7 @@ mod tests {
             &[],
         )?;
 
+        let border_cells = self::compose_border_cells(std::slice::from_ref(&border), Some(&active_pane), &[], mode)?;
         self::paste_borders(&mut rows, &[border], Some(&active_pane), &[], mode)?;
 
         let border_cell = rows
@@ -788,7 +827,8 @@ mod tests {
             .and_then(|row| row.get(1))
             .ok_or_else(|| report!("expected active border cell"))?;
 
-        pretty_assertions::assert_eq!(border_cell.style(), expected_style);
+        pretty_assertions::assert_eq!(border_cell.text(), "│");
+        pretty_assertions::assert_eq!(self::border_cell_at(&border_cells, 0, 1)?.visual, expected_visual);
         Ok(())
     }
 
@@ -806,6 +846,12 @@ mod tests {
             &[],
         )?;
 
+        let border_cells = self::compose_border_cells(
+            std::slice::from_ref(&border),
+            Some(&active_pane),
+            std::slice::from_ref(&attention_pane),
+            BorderRenderMode::Focus,
+        )?;
         self::paste_borders(
             &mut rows,
             &[border],
@@ -819,16 +865,20 @@ mod tests {
             .and_then(|row| row.get(1))
             .ok_or_else(|| report!("expected attention border cell"))?;
 
-        pretty_assertions::assert_eq!(border_cell.style(), self::attention_border_style());
+        pretty_assertions::assert_eq!(border_cell.text(), "│");
+        pretty_assertions::assert_eq!(
+            self::border_cell_at(&border_cells, 0, 1)?.visual,
+            BorderVisual::Attention
+        );
         Ok(())
     }
 
     #[rstest::rstest]
-    #[case::focus(BorderRenderMode::Focus, self::attention_border_style())]
-    #[case::resize(BorderRenderMode::Resize, self::resize_border_style())]
+    #[case::focus(BorderRenderMode::Focus, BorderVisual::Attention)]
+    #[case::resize(BorderRenderMode::Resize, BorderVisual::Resize)]
     fn test_paste_borders_when_shared_border_touches_active_and_attention_panes_uses_mode_style(
         #[case] mode: BorderRenderMode,
-        #[case] expected_style: RenderStyle,
+        #[case] expected_visual: BorderVisual,
     ) -> rootcause::Result<()> {
         let mut rows = self::empty_render_rows(&TerminalSize::new(3, 3)?);
         let active_pane = PaneId::new(1)?;
@@ -843,6 +893,12 @@ mod tests {
             std::slice::from_ref(&attention_region),
         )?;
 
+        let border_cells = self::compose_border_cells(
+            std::slice::from_ref(&border),
+            Some(&active_pane),
+            std::slice::from_ref(&attention_pane),
+            mode,
+        )?;
         self::paste_borders(
             &mut rows,
             &[border],
@@ -856,16 +912,17 @@ mod tests {
             .and_then(|row| row.get(1))
             .ok_or_else(|| report!("expected shared active attention border cell"))?;
 
-        pretty_assertions::assert_eq!(border_cell.style(), expected_style);
+        pretty_assertions::assert_eq!(border_cell.text(), "│");
+        pretty_assertions::assert_eq!(self::border_cell_at(&border_cells, 0, 1)?.visual, expected_visual);
         Ok(())
     }
 
     #[rstest::rstest]
-    #[case::focus(BorderRenderMode::Focus, self::focused_border_style())]
-    #[case::resize(BorderRenderMode::Resize, self::resize_border_style())]
+    #[case::focus(BorderRenderMode::Focus, BorderVisual::Focused)]
+    #[case::resize(BorderRenderMode::Resize, BorderVisual::Resize)]
     fn test_paste_borders_when_attention_pane_is_active_uses_active_mode_style(
         #[case] mode: BorderRenderMode,
-        #[case] expected_style: RenderStyle,
+        #[case] expected_visual: BorderVisual,
     ) -> rootcause::Result<()> {
         let mut rows = self::empty_render_rows(&TerminalSize::new(3, 3)?);
         let active_pane = PaneId::new(1)?;
@@ -878,6 +935,12 @@ mod tests {
             &[],
         )?;
 
+        let border_cells = self::compose_border_cells(
+            std::slice::from_ref(&border),
+            Some(&active_pane),
+            std::slice::from_ref(&active_pane),
+            mode,
+        )?;
         self::paste_borders(
             &mut rows,
             &[border],
@@ -891,16 +954,17 @@ mod tests {
             .and_then(|row| row.get(1))
             .ok_or_else(|| report!("expected active attention border cell"))?;
 
-        pretty_assertions::assert_eq!(border_cell.style(), expected_style);
+        pretty_assertions::assert_eq!(border_cell.text(), "│");
+        pretty_assertions::assert_eq!(self::border_cell_at(&border_cells, 0, 1)?.visual, expected_visual);
         Ok(())
     }
 
     #[rstest::rstest]
-    #[case::focus(BorderRenderMode::Focus, self::focused_border_style())]
-    #[case::resize(BorderRenderMode::Resize, self::resize_border_style())]
+    #[case::focus(BorderRenderMode::Focus, BorderVisual::Focused)]
+    #[case::resize(BorderRenderMode::Resize, BorderVisual::Resize)]
     fn test_paste_borders_when_crossing_border_segment_is_owned_by_active_pane_uses_mode_style(
         #[case] mode: BorderRenderMode,
-        #[case] expected_style: RenderStyle,
+        #[case] expected_visual: BorderVisual,
     ) -> rootcause::Result<()> {
         let mut rows = self::empty_render_rows(&TerminalSize::new(3, 3)?);
         let active_pane = PaneId::new(1)?;
@@ -913,22 +977,12 @@ mod tests {
             std::slice::from_ref(&active_region),
         )?;
 
-        self::paste_borders(
-            &mut rows,
-            &[
-                PaneBorder::with_adjacent_regions(
-                    PaneBorderAxis::Vertical,
-                    PanePosition { row: 0, col: 0 },
-                    3,
-                    &[],
-                    &[],
-                )?,
-                horizontal_border,
-            ],
-            Some(&active_pane),
-            &[],
-            mode,
-        )?;
+        let borders = vec![
+            PaneBorder::with_adjacent_regions(PaneBorderAxis::Vertical, PanePosition { row: 0, col: 0 }, 3, &[], &[])?,
+            horizontal_border,
+        ];
+        let border_cells = self::compose_border_cells(&borders, Some(&active_pane), &[], mode)?;
+        self::paste_borders(&mut rows, &borders, Some(&active_pane), &[], mode)?;
 
         let border_cell = rows
             .first()
@@ -936,16 +990,16 @@ mod tests {
             .ok_or_else(|| report!("expected active junction border cell"))?;
 
         pretty_assertions::assert_eq!(border_cell.text(), "┼");
-        pretty_assertions::assert_eq!(border_cell.style(), expected_style);
+        pretty_assertions::assert_eq!(self::border_cell_at(&border_cells, 0, 0)?.visual, expected_visual);
         Ok(())
     }
 
     #[rstest::rstest]
-    #[case::focus(BorderRenderMode::Focus, self::focused_border_style())]
-    #[case::resize(BorderRenderMode::Resize, self::resize_border_style())]
+    #[case::focus(BorderRenderMode::Focus, BorderVisual::Focused)]
+    #[case::resize(BorderRenderMode::Resize, BorderVisual::Resize)]
     fn test_paste_borders_when_parent_border_spans_nested_panes_highlights_corner_and_owned_cells(
         #[case] mode: BorderRenderMode,
-        #[case] expected_style: RenderStyle,
+        #[case] expected_visual: BorderVisual,
     ) -> rootcause::Result<()> {
         let mut rows = self::empty_render_rows(&TerminalSize::new(3, 3)?);
         let top_right_pane = PaneId::new(1)?;
@@ -960,6 +1014,7 @@ mod tests {
             &[top_right_region, active_region],
         )?;
 
+        let border_cells = self::compose_border_cells(std::slice::from_ref(&border), Some(&active_pane), &[], mode)?;
         self::paste_borders(&mut rows, &[border], Some(&active_pane), &[], mode)?;
 
         let top_segment = rows
@@ -975,9 +1030,12 @@ mod tests {
             .and_then(|row| row.get(1))
             .ok_or_else(|| report!("expected active vertical border segment"))?;
 
-        pretty_assertions::assert_eq!(top_segment.style(), self::border_style());
-        pretty_assertions::assert_eq!(corner_segment.style(), expected_style);
-        pretty_assertions::assert_eq!(active_segment.style(), expected_style);
+        pretty_assertions::assert_eq!(top_segment.text(), "│");
+        pretty_assertions::assert_eq!(corner_segment.text(), "│");
+        pretty_assertions::assert_eq!(active_segment.text(), "│");
+        pretty_assertions::assert_eq!(self::border_cell_at(&border_cells, 0, 1)?.visual, BorderVisual::Default);
+        pretty_assertions::assert_eq!(self::border_cell_at(&border_cells, 1, 1)?.visual, expected_visual);
+        pretty_assertions::assert_eq!(self::border_cell_at(&border_cells, 2, 1)?.visual, expected_visual);
         Ok(())
     }
 
@@ -988,11 +1046,13 @@ mod tests {
             .collect()
     }
 
-    fn metadata(cmd_label: &str, started_at: u64) -> SessionMetadata {
-        SessionMetadata {
-            cmd_label: cmd_label.to_owned(),
-            cwd: "/tmp".to_owned(),
-            started_at,
-        }
+    fn border_cell_at(
+        cells: &std::collections::BTreeMap<(u16, u16), BorderCell>,
+        row: u16,
+        col: u16,
+    ) -> rootcause::Result<&BorderCell> {
+        cells
+            .get(&(row, col))
+            .ok_or_else(|| report!("expected border cell").attach(format!("row={row} col={col}")))
     }
 }

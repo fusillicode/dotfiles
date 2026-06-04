@@ -41,6 +41,7 @@ const MOUSE_ANY_EVENT_CAPTURE_DISABLE: &[u8] = b"\x1b[?1003l";
 const MOUSE_ANY_EVENT_CAPTURE_ENABLE: &[u8] = b"\x1b[?1003h";
 const MOUSE_SGR_DISABLE: &[u8] = b"\x1b[?1006l";
 const MOUSE_SGR_ENABLE: &[u8] = b"\x1b[?1006h";
+const SELECTION_BG: RenderColor = RenderColor::Indexed(238);
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SynchronizedOutput {
@@ -326,11 +327,35 @@ fn render_row_span(
     Ok(())
 }
 
-fn selected_style(mut style: RenderStyle, selection: Option<&SelectionRange>, row: u16, col: u16) -> RenderStyle {
+fn selected_style(style: RenderStyle, selection: Option<&SelectionRange>, row: u16, col: u16) -> RenderStyle {
+    self::selection_visual_for_cell(selection, row, col).apply(style)
+}
+
+fn selection_visual_for_cell(selection: Option<&SelectionRange>, row: u16, col: u16) -> SelectionVisual {
     if selection.is_some_and(|selection| selection.contains(row, col)) {
-        style.attrs = style.attrs.set_inverse(true);
+        SelectionVisual::Selected
+    } else {
+        SelectionVisual::Unselected
     }
-    style
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum SelectionVisual {
+    Selected,
+    Unselected,
+}
+
+impl SelectionVisual {
+    const fn apply(self, mut style: RenderStyle) -> RenderStyle {
+        match self {
+            Self::Selected => {
+                style.attrs = style.attrs.set_inverse(false);
+                style.bg = SELECTION_BG;
+                style
+            }
+            Self::Unselected => style,
+        }
+    }
 }
 
 fn flush_text_run(
@@ -494,10 +519,17 @@ fn queue_bytes(stdout: &mut impl Write, bytes: &[u8]) -> rootcause::Result<()> {
 
 #[cfg(test)]
 mod tests {
+    use muxr_core::ClientMousePosition;
+    use muxr_core::PaneId;
+    use muxr_core::PaneMouseMode;
+    use muxr_core::PaneRegionSnapshot;
+    use muxr_core::PaneRegionsSnapshot;
     use muxr_core::RenderTextStyle;
     use rstest::rstest;
 
     use super::*;
+    use crate::client::copy_selection::SelectionInput;
+    use crate::client::copy_selection::SelectionState;
 
     #[test]
     fn test_frame_buffer_apply_when_baseline_arrives_stores_frame() -> rootcause::Result<()> {
@@ -615,6 +647,31 @@ mod tests {
         let foreground_escape = expected_escape(ExpectedEscape::Foreground(RenderColor::Indexed(1)))?;
         pretty_assertions::assert_eq!(occurrence_count(&rendered, &foreground_escape), 1);
         assert2::assert!(rendered.contains("abc"));
+        Ok(())
+    }
+
+    #[test]
+    fn test_selection_visual_when_cell_is_selected_marks_only_selected_cells() -> rootcause::Result<()> {
+        let (selection, unselected_style) = self::selection_range_and_style()?;
+
+        pretty_assertions::assert_eq!(
+            self::selection_visual_for_cell(Some(&selection), 0, 0),
+            SelectionVisual::Selected
+        );
+        pretty_assertions::assert_eq!(
+            self::selection_visual_for_cell(Some(&selection), 0, 2),
+            SelectionVisual::Unselected
+        );
+        pretty_assertions::assert_eq!(self::selection_visual_for_cell(None, 0, 0), SelectionVisual::Unselected);
+        let selected_style = self::selected_style(unselected_style, Some(&selection), 0, 0);
+
+        // Selection colors are tunable; this only gates the invariant that selected cells stay visibly distinct.
+        assert2::assert!(selected_style.bg != unselected_style.bg);
+        assert2::assert!(!selected_style.attrs.inverse());
+        pretty_assertions::assert_eq!(
+            self::selected_style(unselected_style, Some(&selection), 0, 2),
+            unselected_style
+        );
         Ok(())
     }
 
@@ -848,6 +905,37 @@ mod tests {
 
     fn terminal_size() -> rootcause::Result<TerminalSize> {
         TerminalSize::new(2, 2)
+    }
+
+    fn selection_range_and_style() -> rootcause::Result<(SelectionRange, RenderStyle)> {
+        let mut frame_buffer = FrameBuffer::default();
+        frame_buffer.apply(RenderUpdate::Baseline(render_baseline()?))?;
+        let regions = PaneRegionsSnapshot::new(vec![PaneRegionSnapshot::new(
+            PaneId::new(1)?,
+            0,
+            0,
+            2,
+            1,
+            PaneMouseMode::None,
+            0,
+        )?])?;
+        let mut selection = SelectionState::default();
+        selection.apply(
+            SelectionInput::Start(ClientMousePosition { row: 0, col: 0 }),
+            &regions,
+            &frame_buffer,
+        )?;
+        selection.apply(
+            SelectionInput::Update(ClientMousePosition { row: 0, col: 1 }),
+            &regions,
+            &frame_buffer,
+        )?;
+        let range = selection
+            .range()
+            .cloned()
+            .ok_or_else(|| report!("expected muxr selection range"))?;
+
+        Ok((range, RenderStyle::default()))
     }
 
     fn occurrence_count(haystack: &str, needle: &str) -> usize {

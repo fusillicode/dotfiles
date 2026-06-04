@@ -286,3 +286,63 @@ impl PaneRegion {
         self.area.contains(position)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::state::Pane;
+    use crate::state::PaneState;
+
+    #[test]
+    fn test_pane_layout_from_pane_tree_when_nested_split_exists_preserves_nested_border_ownership()
+    -> rootcause::Result<()> {
+        let layout = PaneLayout::from_pane_tree(
+            &PaneTree::Split {
+                axis: PaneSplitAxis::Vertical,
+                first_ratio: PaneSplitRatio::new(500)?,
+                first: Box::new(PaneTree::Pane(self::pane(1, 1)?)),
+                second: Box::new(PaneTree::Split {
+                    axis: PaneSplitAxis::Horizontal,
+                    first_ratio: PaneSplitRatio::new(500)?,
+                    first: Box::new(PaneTree::Pane(self::pane(2, 2)?)),
+                    second: Box::new(PaneTree::Pane(self::pane(3, 3)?)),
+                }),
+            },
+            &TerminalSize::new(80, 24)?,
+        )?;
+
+        let borders = layout.borders();
+        pretty_assertions::assert_eq!(borders.len(), 2);
+        let horizontal_border = borders
+            .iter()
+            .find(|border| {
+                (border.axis(), border.col(), border.row(), border.len()) == (PaneBorderAxis::Horizontal, 41, 12, 39)
+            })
+            .ok_or_else(|| report!("expected nested horizontal split border"))?;
+        let vertical_border = borders
+            .iter()
+            .find(|border| {
+                (border.axis(), border.col(), border.row(), border.len()) == (PaneBorderAxis::Vertical, 40, 0, 24)
+            })
+            .ok_or_else(|| report!("expected nested vertical split border"))?;
+        assert2::assert!(horizontal_border.is_owned_by(PanePosition { row: 12, col: 41 }, PaneId::new(2)?));
+        assert2::assert!(horizontal_border.is_owned_by(PanePosition { row: 12, col: 41 }, PaneId::new(3)?));
+        assert2::assert!(vertical_border.is_owned_by(PanePosition { row: 12, col: 40 }, PaneId::new(1)?));
+        assert2::assert!(vertical_border.is_owned_by(PanePosition { row: 12, col: 40 }, PaneId::new(2)?));
+        assert2::assert!(vertical_border.is_owned_by(PanePosition { row: 13, col: 40 }, PaneId::new(3)?));
+        Ok(())
+    }
+
+    fn pane(id: u32, focus_seq: u64) -> rootcause::Result<Pane> {
+        Ok(Pane {
+            attention_state: crate::state::PaneAttentionState::Idle,
+            cmd_label: "zsh".to_owned(),
+            cwd: "/tmp".to_owned(),
+            focus_seq,
+            id: PaneId::new(id)?,
+            started_at: focus_seq,
+            state: PaneState::Running,
+            title: "zsh".to_owned(),
+        })
+    }
+}

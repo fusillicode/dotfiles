@@ -20,7 +20,8 @@ use crate::state::Tab;
 
 const SPLIT_RATIO_SCALE: u16 = 1000;
 const SPLIT_RATIO_HALF_SCALE: u16 = 500;
-const DEFAULT_SPLIT_RATIO: u16 = 500;
+const DEFAULT_HORIZONTAL_SPLIT_RATIO: u16 = 500;
+const DEFAULT_VERTICAL_SPLIT_RATIO: u16 = 400;
 const MIN_SPLIT_RATIO: u16 = 50;
 const MAX_SPLIT_RATIO: u16 = 950;
 const SPLIT_RESIZE_STEP: u16 = 50;
@@ -42,8 +43,11 @@ pub enum PaneSplitResize {
 }
 
 impl PaneSplitRatio {
-    pub const fn balanced() -> Self {
-        Self(DEFAULT_SPLIT_RATIO)
+    const fn default_for_axis(axis: PaneSplitAxis) -> Self {
+        match axis {
+            PaneSplitAxis::Horizontal => Self(DEFAULT_HORIZONTAL_SPLIT_RATIO),
+            PaneSplitAxis::Vertical => Self(DEFAULT_VERTICAL_SPLIT_RATIO),
+        }
     }
 
     pub fn new(value: u16) -> rootcause::Result<Self> {
@@ -147,7 +151,7 @@ impl PaneTree {
                 let old_pane = pane.clone();
                 *self = Self::Split {
                     axis: split_axis,
-                    first_ratio: PaneSplitRatio::balanced(),
+                    first_ratio: PaneSplitRatio::default_for_axis(split_axis),
                     first: Box::new(Self::Pane(old_pane)),
                     second: Box::new(Self::Pane(new_pane.clone())),
                 };
