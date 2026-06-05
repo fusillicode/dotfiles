@@ -575,6 +575,7 @@ mod tests {
             agent_state: muxr_core::PaneAgentState::NoAgent,
             cwd: "/tmp".to_owned(),
             cmd_label: None,
+            focus_seq: 1,
             id: active_pane,
             title: "shell".to_owned(),
         };
@@ -606,6 +607,7 @@ mod tests {
                         agent_state: muxr_core::PaneAgentState::NoAgent,
                         cwd: "/tmp/tab-1".to_owned(),
                         cmd_label: None,
+                        focus_seq: 1,
                         id: PaneId::new(1)?,
                         title: "shell".to_owned(),
                     }],
@@ -618,6 +620,7 @@ mod tests {
                         agent_state: muxr_core::PaneAgentState::NoAgent,
                         cwd: "/tmp/tab-2".to_owned(),
                         cmd_label: None,
+                        focus_seq: 1,
                         id: PaneId::new(2)?,
                         title: "shell".to_owned(),
                     }],

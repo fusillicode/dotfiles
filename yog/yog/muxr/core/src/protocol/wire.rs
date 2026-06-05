@@ -324,6 +324,7 @@ mod tests {
             agent_state: PaneAgentState::NoAgent,
             cwd: "/tmp".to_owned(),
             cmd_label: None,
+            focus_seq: 1,
             id: active_pane,
             title: "shell".to_owned(),
         };
@@ -357,6 +358,7 @@ mod tests {
             agent_state: PaneAgentState::NoAgent,
             cwd: "/tmp".to_owned(),
             cmd_label: None,
+            focus_seq: 1,
             id: PaneId::new(id)?,
             title: title.to_owned(),
         })
