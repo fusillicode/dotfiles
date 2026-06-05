@@ -206,15 +206,19 @@ fn unfocused_unseen_agent_pane(tab: &TabSnapshot) -> Option<&PaneSnapshot> {
 }
 
 fn inactive_tab_display_pane(tab: &TabSnapshot) -> Option<&PaneSnapshot> {
-    // An inactive tab row must be owned by one pane: attention wins, then running agent,
-    // then the tab's active pane. `Seen` is treated as idle for this selection.
-    self::first_pane_with_agent_state(tab, PaneAgentState::Unseen)
-        .or_else(|| self::first_pane_with_agent_state(tab, PaneAgentState::Busy))
+    // Inactive tabs need one representative pane: attention/running state wins, while
+    // idle agents still keep their label and no dot. Ties use focus recency.
+    self::focused_pane_with_agent_state(tab, PaneAgentState::Unseen)
+        .or_else(|| self::focused_pane_with_agent_state(tab, PaneAgentState::Busy))
+        .or_else(|| self::focused_pane_with_agent_state(tab, PaneAgentState::Seen))
         .or_else(|| self::active_pane(tab))
 }
 
-fn first_pane_with_agent_state(tab: &TabSnapshot, agent_state: PaneAgentState) -> Option<&PaneSnapshot> {
-    tab.panes().iter().find(|pane| pane.agent_state == agent_state)
+fn focused_pane_with_agent_state(tab: &TabSnapshot, agent_state: PaneAgentState) -> Option<&PaneSnapshot> {
+    tab.panes()
+        .iter()
+        .filter(|pane| pane.agent_state == agent_state)
+        .max_by_key(|pane| pane.focus_seq)
 }
 
 fn cmd_label(pane: Option<&PaneSnapshot>) -> Option<String> {
@@ -406,23 +410,32 @@ mod tests {
     #[rstest]
     #[case::unseen(
         PaneAgentState::Unseen,
-        "/tmp/old-unseen",
+        "/tmp/unseen-old",
         "codex-old",
-        "/tmp/ignored-unseen",
-        "codex-ignored",
-        "/t/old-unseen",
-        "codex-old"
+        "/tmp/unseen-recent",
+        "codex-recent",
+        "/t/unseen-recent",
+        "codex-recent"
     )]
     #[case::busy(
         PaneAgentState::Busy,
-        "/tmp/old-busy",
+        "/tmp/busy-old",
         "claude-old",
-        "/tmp/ignored-busy",
-        "claude-ignored",
-        "/t/old-busy",
-        "claude-old"
+        "/tmp/busy-recent",
+        "claude-recent",
+        "/t/busy-recent",
+        "claude-recent"
     )]
-    fn test_sidebar_tabs_when_inactive_tab_has_multiple_actionable_agents_uses_first_in_layout_order(
+    #[case::seen(
+        PaneAgentState::Seen,
+        "/tmp/seen-old",
+        "cursor-old",
+        "/tmp/seen-recent",
+        "cursor-recent",
+        "/t/seen-recent",
+        "cursor-recent"
+    )]
+    fn test_sidebar_tabs_when_inactive_tab_has_multiple_agents_in_same_state_uses_last_focused(
         #[case] agent_state: PaneAgentState,
         #[case] first_cwd: &str,
         #[case] first_cmd_label: &str,
@@ -431,6 +444,11 @@ mod tests {
         #[case] expected_path_label: &str,
         #[case] expected_cmd_label: &str,
     ) -> rootcause::Result<()> {
+        let mut older_agent_pane = self::pane_snapshot(4, first_cwd, Some(first_cmd_label), agent_state)?;
+        older_agent_pane.focus_seq = 10;
+        let mut recent_agent_pane = self::pane_snapshot(3, second_cwd, Some(second_cmd_label), agent_state)?;
+        recent_agent_pane.focus_seq = 20;
+
         let layout = self::layout_snapshot(
             1,
             vec![
@@ -446,8 +464,8 @@ mod tests {
                     2,
                     vec![
                         self::pane_snapshot(2, "/tmp/shell", Some("zsh"), PaneAgentState::NoAgent)?,
-                        self::pane_snapshot(3, first_cwd, Some(first_cmd_label), agent_state)?,
-                        self::pane_snapshot(4, second_cwd, Some(second_cmd_label), agent_state)?,
+                        older_agent_pane,
+                        recent_agent_pane,
                     ],
                 )?,
             ],
@@ -468,7 +486,7 @@ mod tests {
     }
 
     #[test]
-    fn test_sidebar_tabs_when_inactive_tab_has_seen_agent_uses_active_pane() -> rootcause::Result<()> {
+    fn test_sidebar_tabs_when_inactive_tab_has_seen_agent_uses_agent_pane_without_dot_state() -> rootcause::Result<()> {
         let layout = self::layout_snapshot(
             1,
             vec![
@@ -496,9 +514,9 @@ mod tests {
             tabs[1],
             SidebarTab {
                 active: false,
-                agent_state: PaneAgentState::NoAgent,
-                cmd_label: Some("zsh".to_owned()),
-                path_label: "/t/shell".to_owned(),
+                agent_state: PaneAgentState::Seen,
+                cmd_label: Some("codex".to_owned()),
+                path_label: "/t/codex".to_owned(),
             },
         );
         Ok(())
@@ -565,6 +583,27 @@ mod tests {
         assert2::assert!(rendered.contains("\u{2022}"));
         assert2::assert!(rendered.contains(SEPARATOR));
         pretty_assertions::assert_eq!(output.flushes, 0);
+        Ok(())
+    }
+
+    #[test]
+    fn test_queue_when_seen_agent_is_rendered_shows_label_without_marker() -> rootcause::Result<()> {
+        let layout = self::layout_snapshot(
+            1,
+            vec![self::tab_snapshot(
+                1,
+                "default",
+                1,
+                vec![self::pane_snapshot(1, "project", Some("cx"), PaneAgentState::Seen)?],
+            )?],
+        )?;
+        let mut output = CountingWriter::default();
+
+        queue(&mut output, &layout, 2)?;
+
+        let visible = self::strip_ansi(&output.rendered_string()?);
+        assert2::assert!(visible.contains("\u{258e}cx"));
+        assert2::assert!(!visible.contains("\u{2022} cx"));
         Ok(())
     }
 
@@ -673,6 +712,7 @@ mod tests {
             agent_state,
             cwd: cwd.to_owned(),
             cmd_label: cmd_label.map(str::to_owned),
+            focus_seq: u64::from(id),
             id: PaneId::new(id)?,
             title: "shell".to_owned(),
         })

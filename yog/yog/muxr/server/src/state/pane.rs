@@ -132,6 +132,7 @@ impl Pane {
                 .map(ToOwned::to_owned)
                 .or(terminal_title.cmd_label),
             cwd: terminal_title.cwd.unwrap_or_else(|| self.cwd.clone()),
+            focus_seq: self.focus_seq,
             id: self.id,
             title: self.title.clone(),
         }

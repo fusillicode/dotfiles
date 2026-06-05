@@ -273,6 +273,8 @@ pub struct PaneSnapshot {
     pub cwd: String,
     /// Shell-provided cmd label from the pane terminal title, used by the client tab bar.
     pub cmd_label: Option<String>,
+    /// Last focus sequence assigned by the server, used to pick a representative pane.
+    pub focus_seq: u64,
     /// Stable pane id.
     pub id: PaneId,
     /// Pane title displayed in tab and pane UI.
@@ -288,12 +290,14 @@ where
         let agent_state = rkyv::Deserialize::<PaneAgentState, D>::deserialize(&self.agent_state, deserializer)?;
         let cwd = rkyv::Deserialize::<String, D>::deserialize(&self.cwd, deserializer)?;
         let cmd_label = rkyv::Deserialize::<Option<String>, D>::deserialize(&self.cmd_label, deserializer)?;
+        let focus_seq = rkyv::Deserialize::<u64, D>::deserialize(&self.focus_seq, deserializer)?;
         let id = rkyv::Deserialize::<PaneId, D>::deserialize(&self.id, deserializer)?;
         let title = rkyv::Deserialize::<String, D>::deserialize(&self.title, deserializer)?;
         Ok(PaneSnapshot {
             agent_state,
             cwd,
             cmd_label,
+            focus_seq,
             id,
             title,
         })
@@ -634,6 +638,7 @@ mod tests {
             agent_state: PaneAgentState::NoAgent,
             cwd: "/tmp".to_owned(),
             cmd_label: None,
+            focus_seq: 1,
             id: active_pane,
             title: "shell".to_owned(),
         };
@@ -650,6 +655,7 @@ mod tests {
             agent_state: PaneAgentState::NoAgent,
             cwd: "/tmp".to_owned(),
             cmd_label: None,
+            focus_seq: 1,
             id: pane_id(id),
             title: title.to_owned(),
         }
