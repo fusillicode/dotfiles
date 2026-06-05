@@ -3112,6 +3112,7 @@ dependencies = [
  "sysinfo",
  "tempfile",
  "tokio",
+ "url",
  "vt100",
  "ytil_agents",
 ]

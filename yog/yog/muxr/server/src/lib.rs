@@ -12,6 +12,7 @@ mod pane_mouse;
 mod pane_resize;
 mod pane_scroll;
 mod pane_split;
+mod pane_url_links;
 mod pty;
 mod server;
 mod sessions_delete;
