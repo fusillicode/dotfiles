@@ -957,7 +957,59 @@ fn invalid_wide_cell_sequence(reason: &'static str, index: usize) -> rootcause::
 }
 
 #[derive(rkyv::Archive, Clone, Debug, Eq, PartialEq, Serialize, rkyv::Serialize)]
+#[serde(transparent)]
+pub struct RenderHyperlink {
+    uri: String,
+}
+
+impl RenderHyperlink {
+    /// Build render hyperlink metadata with a URI safe to emit inside an OSC 8 sequence.
+    ///
+    /// # Errors
+    /// - The URI is empty.
+    /// - The URI contains terminal control characters.
+    pub fn new(uri: impl Into<String>) -> rootcause::Result<Self> {
+        let uri = uri.into();
+        if uri.is_empty() {
+            return Err(report!("invalid muxr render hyperlink").attach("reason=uri must be nonempty"));
+        }
+        if uri.chars().any(char::is_control) {
+            return Err(report!("invalid muxr render hyperlink").attach("reason=uri must not contain control chars"));
+        }
+
+        Ok(Self { uri })
+    }
+
+    #[must_use]
+    pub fn uri(&self) -> &str {
+        &self.uri
+    }
+}
+
+impl<'de> Deserialize<'de> for RenderHyperlink {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let uri = String::deserialize(deserializer)?;
+        Self::new(uri).map_err(serde::de::Error::custom)
+    }
+}
+
+impl<D> rkyv::Deserialize<RenderHyperlink, D> for ArchivedRenderHyperlink
+where
+    D: rkyv::rancor::Fallible + ?Sized,
+    D::Error: rkyv::rancor::Source,
+{
+    fn deserialize(&self, deserializer: &mut D) -> Result<RenderHyperlink, D::Error> {
+        let uri = rkyv::Deserialize::<String, D>::deserialize(&self.uri, deserializer)?;
+        RenderHyperlink::new(uri).map_err(self::rkyv_deserialize_error::<D::Error>)
+    }
+}
+
+#[derive(rkyv::Archive, Clone, Debug, Eq, PartialEq, Serialize, rkyv::Serialize)]
 pub struct RenderCell {
+    hyperlink: Option<RenderHyperlink>,
     style: RenderStyle,
     text: String,
     width: RenderCellWidth,
@@ -967,6 +1019,7 @@ impl RenderCell {
     #[must_use]
     pub fn narrow(text: impl Into<String>, style: RenderStyle) -> Self {
         Self {
+            hyperlink: None,
             style,
             text: text.into(),
             width: RenderCellWidth::Narrow,
@@ -976,6 +1029,7 @@ impl RenderCell {
     #[must_use]
     pub fn wide(text: impl Into<String>, style: RenderStyle) -> Self {
         Self {
+            hyperlink: None,
             style,
             text: text.into(),
             width: RenderCellWidth::Wide,
@@ -985,10 +1039,30 @@ impl RenderCell {
     #[must_use]
     pub const fn wide_continuation(style: RenderStyle) -> Self {
         Self {
+            hyperlink: None,
             style,
             text: String::new(),
             width: RenderCellWidth::WideContinuation,
         }
+    }
+
+    #[must_use]
+    pub fn with_hyperlink(mut self, hyperlink: RenderHyperlink) -> Self {
+        self.hyperlink = Some(hyperlink);
+        self
+    }
+
+    /// Attach hyperlink metadata to the render cell.
+    ///
+    /// # Errors
+    /// - The URI is invalid for [`RenderHyperlink`].
+    pub fn with_hyperlink_uri(self, uri: impl Into<String>) -> rootcause::Result<Self> {
+        Ok(self.with_hyperlink(RenderHyperlink::new(uri)?))
+    }
+
+    #[must_use]
+    pub const fn hyperlink(&self) -> Option<&RenderHyperlink> {
+        self.hyperlink.as_ref()
     }
 
     #[must_use]
@@ -1005,6 +1079,11 @@ impl RenderCell {
     pub const fn width(&self) -> RenderCellWidth {
         self.width
     }
+
+    fn with_optional_hyperlink(mut self, hyperlink: Option<RenderHyperlink>) -> Self {
+        self.hyperlink = hyperlink;
+        self
+    }
 }
 
 impl<D> rkyv::Deserialize<RenderCell, D> for ArchivedRenderCell
@@ -1013,19 +1092,20 @@ where
     D::Error: rkyv::rancor::Source,
 {
     fn deserialize(&self, deserializer: &mut D) -> Result<RenderCell, D::Error> {
+        let hyperlink = rkyv::Deserialize::<Option<RenderHyperlink>, D>::deserialize(&self.hyperlink, deserializer)?;
         let style = rkyv::Deserialize::<RenderStyle, D>::deserialize(&self.style, deserializer)?;
         let text = rkyv::Deserialize::<String, D>::deserialize(&self.text, deserializer)?;
         let width = rkyv::Deserialize::<RenderCellWidth, D>::deserialize(&self.width, deserializer)?;
         match width {
-            RenderCellWidth::Narrow => Ok(RenderCell::narrow(text, style)),
-            RenderCellWidth::Wide => Ok(RenderCell::wide(text, style)),
+            RenderCellWidth::Narrow => Ok(RenderCell::narrow(text, style).with_optional_hyperlink(hyperlink)),
+            RenderCellWidth::Wide => Ok(RenderCell::wide(text, style).with_optional_hyperlink(hyperlink)),
             RenderCellWidth::WideContinuation => {
                 if !text.is_empty() {
                     return Err(self::rkyv_deserialize_error::<D::Error>(
                         "wide continuation cells must not carry text",
                     ));
                 }
-                Ok(RenderCell::wide_continuation(style))
+                Ok(RenderCell::wide_continuation(style).with_optional_hyperlink(hyperlink))
             }
         }
     }
@@ -1411,6 +1491,7 @@ mod tests {
     #[case::sidebar_layout(ServerEvent::SidebarLayout(layout_snapshot()?))]
     #[case::pane_regions(ServerEvent::PaneRegions(pane_regions_snapshot()?))]
     #[case::render_baseline(ServerEvent::Render(RenderUpdate::Baseline(render_baseline()?)))]
+    #[case::render_linked_baseline(ServerEvent::Render(RenderUpdate::Baseline(linked_render_baseline()?)))]
     #[case::render_diff(ServerEvent::Render(RenderUpdate::Diff(render_diff()?)))]
     #[case::scroll_line_result(ServerEvent::ScrollPaneLineResult {
         position: ClientMousePosition { row: 2, col: 3 },
@@ -1524,6 +1605,37 @@ mod tests {
     fn test_layout_id_display_when_formatted_returns_human_label() -> rootcause::Result<()> {
         pretty_assertions::assert_eq!(TabId::new(1)?.to_string(), "tab-1");
         pretty_assertions::assert_eq!(PaneId::new(1)?.to_string(), "pane-1");
+        Ok(())
+    }
+
+    #[rstest]
+    #[case::empty("")]
+    #[case::control_char("https://example.com/\u{1b}")]
+    fn test_render_hyperlink_new_when_uri_is_invalid_returns_error(#[case] uri: &str) {
+        assert2::assert!(RenderHyperlink::new(uri).is_err());
+    }
+
+    #[test]
+    fn test_render_cell_with_hyperlink_uri_when_uri_is_valid_sets_metadata() -> rootcause::Result<()> {
+        let cell = render_cell("x").with_hyperlink_uri("https://example.com")?;
+
+        pretty_assertions::assert_eq!(cell.hyperlink().map(RenderHyperlink::uri), Some("https://example.com"));
+        assert2::assert!(cell != render_cell("x"));
+        Ok(())
+    }
+
+    #[test]
+    fn test_render_cell_rkyv_deserialize_when_hyperlink_uri_is_invalid_returns_error() -> rootcause::Result<()> {
+        let cell = RenderCell {
+            hyperlink: Some(RenderHyperlink { uri: String::new() }),
+            style: RenderStyle::default(),
+            text: "x".to_owned(),
+            width: RenderCellWidth::Narrow,
+        };
+        let bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&cell)?;
+        let archived = rkyv::access::<rkyv::Archived<RenderCell>, rkyv::rancor::Error>(&bytes)?;
+
+        assert2::assert!(rkyv::deserialize::<RenderCell, rkyv::rancor::Error>(archived).is_err());
         Ok(())
     }
 
@@ -1883,6 +1995,35 @@ mod tests {
                     0,
                     0,
                     vec![render_cell("a"), render_cell("b"), render_cell("c"), render_cell("d")],
+                )?,
+                RenderRowSpan::new(
+                    1,
+                    0,
+                    vec![render_cell("e"), render_cell("f"), render_cell("g"), render_cell("h")],
+                )?,
+            ],
+        )
+    }
+
+    fn linked_render_baseline() -> rootcause::Result<RenderBaseline> {
+        RenderBaseline::new(
+            1,
+            terminal_size(4, 2)?,
+            RenderCursor {
+                row: 1,
+                col: 2,
+                visible: true,
+            },
+            vec![
+                RenderRowSpan::new(
+                    0,
+                    0,
+                    vec![
+                        render_cell("a").with_hyperlink_uri("https://example.com")?,
+                        render_cell("b").with_hyperlink_uri("https://example.com")?,
+                        render_cell("c"),
+                        render_cell("d"),
+                    ],
                 )?,
                 RenderRowSpan::new(
                     1,

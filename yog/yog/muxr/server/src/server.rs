@@ -716,7 +716,10 @@ fn paste_snapshot(
             .attach(format!("region_rows={}", region.area.size.rows)));
     }
 
-    for span in snapshot.rows() {
+    let mut url_links = crate::pane_url_links::detect_visible_url_links(snapshot.rows())?
+        .into_iter()
+        .peekable();
+    for (span_index, span) in snapshot.rows().iter().enumerate() {
         let row = region
             .area
             .origin
@@ -739,8 +742,18 @@ fn paste_snapshot(
         if end_col > target_row.len() {
             return Err(report!("muxr pane span outside composite frame").attach(format!("pane_id={}", region.id)));
         }
-        for (target, cell) in target_row.iter_mut().skip(col).zip(span.cells().iter()) {
-            *target = cell.clone();
+        for (cell_index, (target, cell)) in target_row.iter_mut().skip(col).zip(span.cells().iter()).enumerate() {
+            let mut cell = cell.clone();
+            if url_links
+                .peek()
+                .is_some_and(|link| link.row() == span_index && link.cell() == cell_index)
+            {
+                let link = url_links
+                    .next()
+                    .ok_or_else(|| report!("muxr pane url link disappeared while pasting snapshot"))?;
+                cell = cell.with_hyperlink(link.into_hyperlink());
+            }
+            *target = cell;
         }
     }
     Ok(())
@@ -2891,6 +2904,37 @@ mod tests {
         pretty_assertions::assert_eq!(diff.base_seq(), 1);
         pretty_assertions::assert_eq!(diff.seq(), 2);
         assert2::assert!(diff.rows().is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn test_paste_snapshot_when_visible_url_is_present_adds_hyperlink_metadata() -> rootcause::Result<()> {
+        let size = TerminalSize::new(24, 1)?;
+        let mut terminal = crate::terminal::TerminalState::new(&size);
+        let _ = terminal.process(b"https://example.com");
+        let snapshot = terminal.snapshot()?;
+        let region = PaneRegion {
+            area: crate::pane_layout::PaneArea {
+                origin: crate::pane_layout::PanePosition { row: 0, col: 0 },
+                size: crate::pane_layout::PaneSize { rows: 1, cols: 24 },
+            },
+            focus_seq: 1,
+            id: PaneId::new(1)?,
+        };
+        let mut rows = self::empty_render_rows(&size);
+
+        self::paste_snapshot(&mut rows, &region, &snapshot)?;
+
+        let row = rows.first().ok_or_else(|| report!("expected muxr composite row"))?;
+        let linked_cells = row.iter().filter(|cell| cell.hyperlink().is_some()).collect::<Vec<_>>();
+        let linked_text = linked_cells.iter().map(|cell| cell.text()).collect::<String>();
+        pretty_assertions::assert_eq!(linked_text, "https://example.com");
+        for cell in linked_cells {
+            pretty_assertions::assert_eq!(
+                cell.hyperlink().map(muxr_core::RenderHyperlink::uri),
+                Some("https://example.com")
+            );
+        }
         Ok(())
     }
 
