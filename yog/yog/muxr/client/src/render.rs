@@ -234,6 +234,48 @@ pub fn set_mouse_any_motion_capture(stdout: &mut impl Write, enabled: bool) -> r
     Ok(())
 }
 
+/// Enter muxr's attached terminal surface.
+///
+/// The client renders muxr frames on the alternate screen so detach, errors, and final-pane exits cannot leave the muxr
+/// screen in the user's outer shell.
+///
+/// # Errors
+/// - The terminal enter cmds cannot be written or flushed.
+pub fn enter_terminal(stdout: &mut impl Write) -> rootcause::Result<()> {
+    queue_cmd(stdout, EnterAlternateScreen)?;
+    queue_bytes(stdout, BRACKETED_PASTE_ENABLE)?;
+    // Clear stale any-motion capture; the renderer re-enables it only when a pane requests that mode.
+    queue_bytes(stdout, MOUSE_ANY_EVENT_CAPTURE_DISABLE)?;
+    queue_bytes(stdout, MOUSE_BUTTON_CAPTURE_ENABLE)?;
+    queue_bytes(stdout, MOUSE_BUTTON_EVENT_CAPTURE_ENABLE)?;
+    queue_bytes(stdout, MOUSE_SGR_ENABLE)?;
+    queue_cmd(stdout, Clear(ClearType::All))?;
+    queue_cmd(stdout, Hide)?;
+    stdout.flush().context("failed to flush muxr terminal enter")?;
+    Ok(())
+}
+
+/// Restore terminal render state after muxr exits a rendered session.
+///
+/// Render frames can hide the cursor and set styles while the client owns the terminal; exit paths call this
+/// best-effort cleanup so detach or errors do not leak those modes into the user's shell.
+///
+/// # Errors
+/// - The terminal restore cmds cannot be written or flushed.
+pub fn restore_terminal(stdout: &mut impl Write) -> rootcause::Result<()> {
+    queue_hyperlink_end(stdout)?;
+    queue_bytes(stdout, MOUSE_SGR_DISABLE)?;
+    queue_bytes(stdout, MOUSE_ANY_EVENT_CAPTURE_DISABLE)?;
+    queue_bytes(stdout, MOUSE_BUTTON_EVENT_CAPTURE_DISABLE)?;
+    queue_bytes(stdout, MOUSE_BUTTON_CAPTURE_DISABLE)?;
+    queue_bytes(stdout, BRACKETED_PASTE_DISABLE)?;
+    queue_cmd(stdout, LeaveAlternateScreen)?;
+    reset_style(stdout)?;
+    queue_cmd(stdout, Show)?;
+    stdout.flush().context("failed to flush muxr terminal restore")?;
+    Ok(())
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ApplyOutcome {
     Applied(RenderFrameChanges),
@@ -454,48 +496,6 @@ fn apply_enabled_attrs(stdout: &mut impl Write, attrs: RenderTextStyle) -> rootc
     if attrs.inverse() {
         queue_cmd(stdout, SetAttribute(Attribute::Reverse))?;
     }
-    Ok(())
-}
-
-/// Enter muxr's attached terminal surface.
-///
-/// The client renders muxr frames on the alternate screen so detach, errors, and final-pane exits cannot leave the muxr
-/// screen in the user's outer shell.
-///
-/// # Errors
-/// - The terminal enter cmds cannot be written or flushed.
-pub fn enter_terminal(stdout: &mut impl Write) -> rootcause::Result<()> {
-    queue_cmd(stdout, EnterAlternateScreen)?;
-    queue_bytes(stdout, BRACKETED_PASTE_ENABLE)?;
-    // Clear stale any-motion capture; the renderer re-enables it only when a pane requests that mode.
-    queue_bytes(stdout, MOUSE_ANY_EVENT_CAPTURE_DISABLE)?;
-    queue_bytes(stdout, MOUSE_BUTTON_CAPTURE_ENABLE)?;
-    queue_bytes(stdout, MOUSE_BUTTON_EVENT_CAPTURE_ENABLE)?;
-    queue_bytes(stdout, MOUSE_SGR_ENABLE)?;
-    queue_cmd(stdout, Clear(ClearType::All))?;
-    queue_cmd(stdout, Hide)?;
-    stdout.flush().context("failed to flush muxr terminal enter")?;
-    Ok(())
-}
-
-/// Restore terminal render state after muxr exits a rendered session.
-///
-/// Render frames can hide the cursor and set styles while the client owns the terminal; exit paths call this
-/// best-effort cleanup so detach or errors do not leak those modes into the user's shell.
-///
-/// # Errors
-/// - The terminal restore cmds cannot be written or flushed.
-pub fn restore_terminal(stdout: &mut impl Write) -> rootcause::Result<()> {
-    queue_hyperlink_end(stdout)?;
-    queue_bytes(stdout, MOUSE_SGR_DISABLE)?;
-    queue_bytes(stdout, MOUSE_ANY_EVENT_CAPTURE_DISABLE)?;
-    queue_bytes(stdout, MOUSE_BUTTON_EVENT_CAPTURE_DISABLE)?;
-    queue_bytes(stdout, MOUSE_BUTTON_CAPTURE_DISABLE)?;
-    queue_bytes(stdout, BRACKETED_PASTE_DISABLE)?;
-    queue_cmd(stdout, LeaveAlternateScreen)?;
-    reset_style(stdout)?;
-    queue_cmd(stdout, Show)?;
-    stdout.flush().context("failed to flush muxr terminal restore")?;
     Ok(())
 }
 

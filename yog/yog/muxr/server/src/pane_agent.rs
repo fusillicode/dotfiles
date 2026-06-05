@@ -20,6 +20,7 @@ use ytil_agents::agent::Agent;
 use crate::state::SessionLayout;
 
 const USER_INPUT_VISIBLE_ACTIVITY_SUPPRESSION: Duration = Duration::from_millis(500);
+pub const AGENT_ATTENTION_POLL_INTERVAL: Duration = Duration::from_millis(250);
 
 #[derive(Debug)]
 struct PaneAgentDetector {
@@ -206,6 +207,21 @@ impl PaneAgentDetection {
             Self::NoAgent { .. } => None,
         }
     }
+}
+
+pub fn detected_agents_refresh_due(refreshed_at: Option<Instant>, now: Instant) -> bool {
+    refreshed_at.is_none_or(|refreshed_at| now.saturating_duration_since(refreshed_at) >= AGENT_ATTENTION_POLL_INTERVAL)
+}
+
+pub fn runtime_cmd_labels(detected_agents: &[PaneAgentDetection]) -> Vec<(PaneId, Option<String>)> {
+    detected_agents
+        .iter()
+        .filter_map(|detection| {
+            detection
+                .agent()
+                .map(|agent| (*detection.pane_id(), Some(agent.short_name().to_owned())))
+        })
+        .collect()
 }
 
 impl PaneAgentDetectionWorker {
@@ -411,13 +427,6 @@ impl PaneAgents {
             .is_some_and(|pane_agent| pane_agent.status == PaneAgentStatus::Unseen)
     }
 
-    #[cfg(test)]
-    fn status(&self, pane_id: PaneId) -> PaneAgentState {
-        self.by_pane
-            .get(&pane_id)
-            .map_or(PaneAgentState::NoAgent, |pane_agent| pane_agent.status.into())
-    }
-
     pub fn snapshot_states(&self) -> Vec<(PaneId, PaneAgentState)> {
         self.by_pane
             .iter()
@@ -549,6 +558,13 @@ mod tests {
     use crate::pane_split::PaneSplitAxis;
     use crate::state::SessionMetadata;
 
+    fn pane_agent_status(pane_agents: &PaneAgents, pane_id: PaneId) -> PaneAgentState {
+        pane_agents
+            .by_pane
+            .get(&pane_id)
+            .map_or(PaneAgentState::NoAgent, |pane_agent| pane_agent.status.into())
+    }
+
     #[test]
     fn test_sync_agent_detection_when_agent_is_detected_marks_busy() -> rootcause::Result<()> {
         let mut pane_agents = PaneAgents::default();
@@ -557,7 +573,7 @@ mod tests {
 
         assert2::assert!(pane_agents.sync_agent_detection(pane_id, Some(Agent::Codex), now));
 
-        pretty_assertions::assert_eq!(pane_agents.status(pane_id), PaneAgentState::Busy);
+        pretty_assertions::assert_eq!(pane_agent_status(&pane_agents, pane_id), PaneAgentState::Busy);
         Ok(())
     }
 
@@ -570,7 +586,7 @@ mod tests {
 
         assert2::assert!(pane_agents.sync_agent_detection(pane_id, None, Instant::now()));
 
-        pretty_assertions::assert_eq!(pane_agents.status(pane_id), PaneAgentState::NoAgent);
+        pretty_assertions::assert_eq!(pane_agent_status(&pane_agents, pane_id), PaneAgentState::NoAgent);
         Ok(())
     }
 
@@ -594,7 +610,7 @@ mod tests {
             then + Duration::from_millis(150),
         ));
 
-        pretty_assertions::assert_eq!(pane_agents.status(pane_id), PaneAgentState::Busy);
+        pretty_assertions::assert_eq!(pane_agent_status(&pane_agents, pane_id), PaneAgentState::Busy);
         Ok(())
     }
 
@@ -619,7 +635,7 @@ mod tests {
             then + Duration::from_millis(200),
         ));
 
-        pretty_assertions::assert_eq!(pane_agents.status(pane_id), PaneAgentState::Busy);
+        pretty_assertions::assert_eq!(pane_agent_status(&pane_agents, pane_id), PaneAgentState::Busy);
         Ok(())
     }
 
@@ -632,7 +648,7 @@ mod tests {
         assert2::assert!(pane_agents.sync_agent_detection(pane_id, Some(Agent::Codex), now));
         assert2::assert!(!pane_agents.sync_agent_detection(pane_id, Some(Agent::Codex), now));
 
-        pretty_assertions::assert_eq!(pane_agents.status(pane_id), PaneAgentState::Busy);
+        pretty_assertions::assert_eq!(pane_agent_status(&pane_agents, pane_id), PaneAgentState::Busy);
         Ok(())
     }
 
@@ -646,6 +662,36 @@ mod tests {
         pretty_assertions::assert_eq!(agent_quiet_attention_threshold(agent), Duration::from_secs(3));
     }
 
+    #[rstest::rstest]
+    #[case::codex(Agent::Codex, "cx")]
+    #[case::cursor(Agent::Cursor, "cu")]
+    fn test_runtime_cmd_labels_when_agent_is_detected_uses_short_name(
+        #[case] agent: Agent,
+        #[case] expected_label: &str,
+    ) -> rootcause::Result<()> {
+        let pane_id = self::pane_id()?;
+
+        pretty_assertions::assert_eq!(
+            self::runtime_cmd_labels(&[PaneAgentDetection::Agent { pane_id, agent }]),
+            vec![(pane_id, Some(expected_label.to_owned()))],
+        );
+        Ok(())
+    }
+
+    #[rstest::rstest]
+    #[case::never(None, true)]
+    #[case::recent(Some(Duration::from_millis(1)), false)]
+    #[case::elapsed(Some(AGENT_ATTENTION_POLL_INTERVAL), true)]
+    fn test_detected_agents_refresh_due_when_last_refresh_varies(
+        #[case] refreshed_age: Option<Duration>,
+        #[case] expected: bool,
+    ) {
+        let now = Instant::now();
+        let refreshed_at = refreshed_age.map(|age| now.checked_sub(age).expect("expected valid refresh age"));
+
+        pretty_assertions::assert_eq!(self::detected_agents_refresh_due(refreshed_at, now), expected);
+    }
+
     #[test]
     fn test_record_visible_activity_when_unseen_agent_has_output_marks_busy() -> rootcause::Result<()> {
         let mut pane_agents = PaneAgents::default();
@@ -655,7 +701,7 @@ mod tests {
 
         assert2::assert!(pane_agents.record_visible_activity(pane_id, Some(Agent::Codex), Instant::now()));
 
-        pretty_assertions::assert_eq!(pane_agents.status(pane_id), PaneAgentState::Busy);
+        pretty_assertions::assert_eq!(pane_agent_status(&pane_agents, pane_id), PaneAgentState::Busy);
         Ok(())
     }
 
@@ -668,7 +714,7 @@ mod tests {
 
         assert2::assert!(pane_agents.mark_quiet_if_due(pane_id, then + Duration::from_secs(3), false));
 
-        pretty_assertions::assert_eq!(pane_agents.status(pane_id), PaneAgentState::Unseen);
+        pretty_assertions::assert_eq!(pane_agent_status(&pane_agents, pane_id), PaneAgentState::Unseen);
         Ok(())
     }
 
@@ -681,7 +727,7 @@ mod tests {
 
         assert2::assert!(pane_agents.mark_quiet_if_due(pane_id, then + Duration::from_secs(3), true));
 
-        pretty_assertions::assert_eq!(pane_agents.status(pane_id), PaneAgentState::Seen);
+        pretty_assertions::assert_eq!(pane_agent_status(&pane_agents, pane_id), PaneAgentState::Seen);
         Ok(())
     }
 
@@ -694,7 +740,7 @@ mod tests {
 
         assert2::assert!(pane_agents.acknowledge_attention(pane_id));
 
-        pretty_assertions::assert_eq!(pane_agents.status(pane_id), PaneAgentState::Seen);
+        pretty_assertions::assert_eq!(pane_agent_status(&pane_agents, pane_id), PaneAgentState::Seen);
         Ok(())
     }
 
@@ -747,7 +793,7 @@ mod tests {
             self::instant_after(then, Duration::from_secs(4))?
         )?);
 
-        pretty_assertions::assert_eq!(pane_agents.status(pane_id), PaneAgentState::Unseen);
+        pretty_assertions::assert_eq!(pane_agent_status(&pane_agents, pane_id), PaneAgentState::Unseen);
         Ok(())
     }
 
@@ -764,10 +810,10 @@ mod tests {
         let detected_at = self::instant_after(then, Duration::from_millis(100))?;
         assert2::assert!(pane_agents.sync_attention(&layout, &detected_agents, &[], detected_at)?);
 
-        pretty_assertions::assert_eq!(pane_agents.status(pane_id), PaneAgentState::Busy);
+        pretty_assertions::assert_eq!(pane_agent_status(&pane_agents, pane_id), PaneAgentState::Busy);
         let quiet_at = self::instant_after(then, Duration::from_secs(4))?;
         assert2::assert!(pane_agents.sync_attention(&layout, &detected_agents, &[], quiet_at)?);
-        pretty_assertions::assert_eq!(pane_agents.status(pane_id), PaneAgentState::Unseen);
+        pretty_assertions::assert_eq!(pane_agent_status(&pane_agents, pane_id), PaneAgentState::Unseen);
         Ok(())
     }
 
@@ -818,7 +864,7 @@ mod tests {
         )?;
 
         pretty_assertions::assert_eq!(changed, expected_changed);
-        pretty_assertions::assert_eq!(pane_agents.status(pane_id), expected_agent_status);
+        pretty_assertions::assert_eq!(pane_agent_status(&pane_agents, pane_id), expected_agent_status);
         Ok(())
     }
 
@@ -846,7 +892,7 @@ mod tests {
             self::instant_after(seen_at, Duration::from_millis(150))?,
         )?);
 
-        pretty_assertions::assert_eq!(pane_agents.status(pane_id), PaneAgentState::Busy);
+        pretty_assertions::assert_eq!(pane_agent_status(&pane_agents, pane_id), PaneAgentState::Busy);
         Ok(())
     }
 
@@ -869,7 +915,7 @@ mod tests {
             self::instant_after(seen_at, Duration::from_millis(100))?,
         )?);
 
-        pretty_assertions::assert_eq!(pane_agents.status(pane_id), PaneAgentState::Seen);
+        pretty_assertions::assert_eq!(pane_agent_status(&pane_agents, pane_id), PaneAgentState::Seen);
         Ok(())
     }
 
@@ -889,7 +935,7 @@ mod tests {
             std::slice::from_ref(&pane_id),
             self::instant_after(then, Duration::from_millis(100))?,
         )?);
-        pretty_assertions::assert_eq!(pane_agents.status(pane_id), PaneAgentState::Busy);
+        pretty_assertions::assert_eq!(pane_agent_status(&pane_agents, pane_id), PaneAgentState::Busy);
 
         assert2::assert!(pane_agents.sync_attention(
             &layout,
@@ -897,7 +943,7 @@ mod tests {
             &[],
             self::instant_after(then, Duration::from_millis(200))?,
         )?);
-        pretty_assertions::assert_eq!(pane_agents.status(pane_id), PaneAgentState::Busy);
+        pretty_assertions::assert_eq!(pane_agent_status(&pane_agents, pane_id), PaneAgentState::Busy);
         assert2::assert!(pane_agents.sync_attention(
             &layout,
             &cursor,
@@ -918,7 +964,7 @@ mod tests {
 
         assert2::assert!(pane_agents.sync_attention(&layout, &detected_agents, &[], then)?);
 
-        pretty_assertions::assert_eq!(pane_agents.status(pane_id), PaneAgentState::Busy);
+        pretty_assertions::assert_eq!(pane_agent_status(&pane_agents, pane_id), PaneAgentState::Busy);
         pretty_assertions::assert_eq!(pane_agents.attention_pane_ids(&layout), Vec::<PaneId>::new());
         Ok(())
     }
@@ -951,7 +997,7 @@ mod tests {
             self::instant_after(then, Duration::from_secs(4))?
         )?);
 
-        pretty_assertions::assert_eq!(pane_agents.status(pane_id), PaneAgentState::Seen);
+        pretty_assertions::assert_eq!(pane_agent_status(&pane_agents, pane_id), PaneAgentState::Seen);
         Ok(())
     }
 
@@ -984,7 +1030,7 @@ mod tests {
             self::instant_after(then, Duration::from_secs(5))?,
         )?);
 
-        pretty_assertions::assert_eq!(pane_agents.status(pane_id), PaneAgentState::Busy);
+        pretty_assertions::assert_eq!(pane_agent_status(&pane_agents, pane_id), PaneAgentState::Busy);
         Ok(())
     }
 
@@ -1043,7 +1089,7 @@ mod tests {
             self::instant_after(then, Duration::from_secs(5))?
         )?);
 
-        pretty_assertions::assert_eq!(pane_agents.status(pane_id), PaneAgentState::NoAgent);
+        pretty_assertions::assert_eq!(pane_agent_status(&pane_agents, pane_id), PaneAgentState::NoAgent);
         pretty_assertions::assert_eq!(pane_agents.attention_pane_ids(&layout), Vec::<PaneId>::new());
         Ok(())
     }

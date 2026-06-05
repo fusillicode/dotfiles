@@ -1,5 +1,8 @@
+use std::sync::Mutex;
+
 use rootcause::report;
 
+use crate::server::ServerConfig;
 use crate::state::SessionLayout;
 
 impl SessionLayout {
@@ -23,10 +26,64 @@ impl SessionLayout {
     }
 }
 
-pub fn handle_move_active_tab_previous(layout: &mut SessionLayout) -> rootcause::Result<()> {
+pub fn handle_move_active_tab_previous_cmd(
+    config: &ServerConfig,
+    layout: &Mutex<SessionLayout>,
+) -> rootcause::Result<()> {
+    let mut layout = crate::server::lock_mutex(layout, "layout")?;
+    self::handle_move_active_tab_previous(&mut layout)?;
+    crate::state::persisted::write_metadata(&config.paths, &layout)?;
+    drop(layout);
+    Ok(())
+}
+
+pub fn handle_move_active_tab_next_cmd(config: &ServerConfig, layout: &Mutex<SessionLayout>) -> rootcause::Result<()> {
+    let mut layout = crate::server::lock_mutex(layout, "layout")?;
+    self::handle_move_active_tab_next(&mut layout)?;
+    crate::state::persisted::write_metadata(&config.paths, &layout)?;
+    drop(layout);
+    Ok(())
+}
+
+fn handle_move_active_tab_previous(layout: &mut SessionLayout) -> rootcause::Result<()> {
     layout.move_active_tab_previous()
 }
 
-pub fn handle_move_active_tab_next(layout: &mut SessionLayout) -> rootcause::Result<()> {
+fn handle_move_active_tab_next(layout: &mut SessionLayout) -> rootcause::Result<()> {
     layout.move_active_tab_next()
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::state::test_helpers as state_test_helpers;
+
+    #[test]
+    fn test_layout_tab_cmds_when_tabs_exist_mutates_active_tab_and_order() -> rootcause::Result<()> {
+        let mut layout = state_test_helpers::layout("work")?;
+
+        layout.create_tab(state_test_helpers::metadata("sh", 2))?;
+        layout.create_tab(state_test_helpers::metadata("sh", 3))?;
+        pretty_assertions::assert_eq!(
+            state_test_helpers::layout_tab_ids(&layout)?,
+            vec!["tab-1", "tab-2", "tab-3"]
+        );
+        pretty_assertions::assert_eq!(layout.active_tab.to_string(), "tab-3");
+
+        layout.focus_previous_tab()?;
+        pretty_assertions::assert_eq!(layout.active_tab.to_string(), "tab-2");
+        layout.move_active_tab_previous()?;
+        pretty_assertions::assert_eq!(
+            state_test_helpers::layout_tab_ids(&layout)?,
+            vec!["tab-2", "tab-1", "tab-3"]
+        );
+        pretty_assertions::assert_eq!(layout.active_tab.to_string(), "tab-2");
+        layout.move_active_tab_next()?;
+        pretty_assertions::assert_eq!(
+            state_test_helpers::layout_tab_ids(&layout)?,
+            vec!["tab-1", "tab-2", "tab-3"]
+        );
+        layout.focus_next_tab()?;
+        pretty_assertions::assert_eq!(layout.active_tab.to_string(), "tab-3");
+        Ok(())
+    }
 }

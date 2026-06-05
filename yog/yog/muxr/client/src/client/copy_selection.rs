@@ -329,6 +329,38 @@ pub fn copy_to_clipboard(text: &str) -> rootcause::Result<()> {
     Ok(ytil_sys::file::cp_to_system_clipboard(&mut bytes).context("failed to copy muxr selection to clipboard")?)
 }
 
+pub fn word_selection_at(
+    position: ClientMousePosition,
+    regions: &PaneRegionsSnapshot,
+    frame_buffer: &FrameBuffer,
+) -> Option<SelectionRange> {
+    let region = regions.pane_at(position)?.clone();
+    let position = self::clamp_to_region(position, &region);
+    if !self::is_word_cell(frame_buffer, position.row, position.col, &region) {
+        return None;
+    }
+
+    let start_col = self::word_start_col(frame_buffer, position.row, position.col, &region);
+    let end_col = self::word_end_col(frame_buffer, position.row, position.col, &region);
+    Some(SelectionRange {
+        anchor: self::content_position(
+            ClientMousePosition {
+                row: position.row,
+                col: start_col,
+            },
+            &region,
+        )?,
+        focus: self::content_position(
+            ClientMousePosition {
+                row: position.row,
+                col: end_col,
+            },
+            &region,
+        )?,
+        region: region.clone(),
+    })
+}
+
 fn selected_text(cached_rows: &BTreeMap<u64, Vec<CachedSelectionCell>>, selection: &SelectionRange) -> Option<String> {
     let bounds = selection.bounds();
     let mut lines = Vec::new();
@@ -421,38 +453,6 @@ fn selected_row_text(cells: &[CachedSelectionCell], start_col: u16, end_col: u16
         line.pop();
     }
     line
-}
-
-pub fn word_selection_at(
-    position: ClientMousePosition,
-    regions: &PaneRegionsSnapshot,
-    frame_buffer: &FrameBuffer,
-) -> Option<SelectionRange> {
-    let region = regions.pane_at(position)?.clone();
-    let position = self::clamp_to_region(position, &region);
-    if !self::is_word_cell(frame_buffer, position.row, position.col, &region) {
-        return None;
-    }
-
-    let start_col = self::word_start_col(frame_buffer, position.row, position.col, &region);
-    let end_col = self::word_end_col(frame_buffer, position.row, position.col, &region);
-    Some(SelectionRange {
-        anchor: self::content_position(
-            ClientMousePosition {
-                row: position.row,
-                col: start_col,
-            },
-            &region,
-        )?,
-        focus: self::content_position(
-            ClientMousePosition {
-                row: position.row,
-                col: end_col,
-            },
-            &region,
-        )?,
-        region: region.clone(),
-    })
 }
 
 fn word_start_col(frame_buffer: &FrameBuffer, row: u16, col: u16, region: &PaneRegionSnapshot) -> u16 {

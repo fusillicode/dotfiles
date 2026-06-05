@@ -5,7 +5,7 @@ use muxr_core::TabId;
 use muxr_core::TerminalSize;
 use rootcause::report;
 
-use crate::server::PaneRuntimes;
+use crate::pane_runtime::PaneRuntimes;
 use crate::server::ServerConfig;
 use crate::state::Pane;
 use crate::state::PaneAttentionState;
@@ -47,15 +47,62 @@ impl SessionLayout {
     }
 }
 
-pub fn handle_create_tab(
+pub fn handle_create_tab_cmd(
+    config: &ServerConfig,
+    layout: &Mutex<SessionLayout>,
+    runtimes: &Mutex<PaneRuntimes>,
+    terminal_size: &TerminalSize,
+) -> rootcause::Result<PaneId> {
+    let mut layout = crate::server::lock_mutex(layout, "layout")?;
+    let pane_id = self::handle_create_tab(&mut layout, config, runtimes, terminal_size)?;
+    crate::state::persisted::write_metadata(&config.paths, &layout)?;
+    drop(layout);
+    Ok(pane_id)
+}
+
+fn handle_create_tab(
     layout: &mut SessionLayout,
     config: &ServerConfig,
     runtimes: &Mutex<PaneRuntimes>,
     terminal_size: &TerminalSize,
 ) -> rootcause::Result<PaneId> {
-    crate::server::sync_layout_terminal_titles(layout, runtimes)?;
+    crate::pane_runtime::sync_layout_terminal_titles(layout, runtimes)?;
     let metadata = crate::server::active_pane_session_metadata(config, layout)?;
     let previous_layout = layout.clone();
     let pane_id = layout.create_tab(metadata)?;
-    crate::server::spawn_pane_or_restore_layout(layout, previous_layout, pane_id, config, runtimes, terminal_size)
+    crate::pane_runtime::spawn_pane_or_restore_layout(layout, previous_layout, pane_id, config, runtimes, terminal_size)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Mutex;
+
+    use muxr_core::TerminalSize;
+
+    use super::*;
+    use crate::pane_runtime::test_helpers as pane_runtime_test_helpers;
+    use crate::server::test_helpers as server_test_helpers;
+    use crate::state::test_helpers as state_test_helpers;
+
+    #[test]
+    fn test_handle_create_tab_when_pane_spawn_fails_restores_layout() -> rootcause::Result<()> {
+        let tempdir = tempfile::tempdir()?;
+        let mut config = server_test_helpers::server_config(tempdir.path(), "work")?;
+        config.shell_cmd = server_test_helpers::shell_cmd("/bin/muxr-missing-shell");
+        let initial_layout = SessionLayout::initial(&config.session, state_test_helpers::metadata("sh", 1))?;
+        let layout = Mutex::new(initial_layout.clone());
+        let runtimes = Mutex::new(pane_runtime_test_helpers::empty_runtimes());
+
+        let create_result = {
+            let mut layout = crate::server::lock_mutex(&layout, "layout")?;
+            self::handle_create_tab(&mut layout, &config, &runtimes, &TerminalSize::new(80, 24)?)
+        };
+        assert2::assert!(create_result.is_err());
+
+        let layout = crate::server::lock_mutex(&layout, "layout")?;
+        pretty_assertions::assert_eq!(*layout, initial_layout);
+        assert2::assert!(crate::server::lock_mutex(&runtimes, "pane runtimes")?.is_empty());
+        assert2::assert!(!config.paths.layout.exists());
+        Ok(())
+    }
 }

@@ -8,7 +8,7 @@ use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serialize;
 
-use crate::server::PaneRuntimes;
+use crate::pane_runtime::PaneRuntimes;
 use crate::server::ServerConfig;
 use crate::state::Pane;
 use crate::state::PaneAttentionState;
@@ -176,11 +176,11 @@ pub fn handle_split_pane_cmd(
     terminal_size: &TerminalSize,
 ) -> rootcause::Result<PaneId> {
     let mut layout = crate::server::lock_mutex(layout, "layout")?;
-    crate::server::sync_layout_terminal_titles(&mut layout, runtimes)?;
+    crate::pane_runtime::sync_layout_terminal_titles(&mut layout, runtimes)?;
     let metadata = crate::server::active_pane_session_metadata(config, &layout)?;
     let previous_layout = layout.clone();
     let pane_id = layout.split_active_pane(metadata, split_axis)?;
-    let pane_id = crate::server::spawn_pane_or_restore_layout(
+    let pane_id = crate::pane_runtime::spawn_pane_or_restore_layout(
         &mut layout,
         previous_layout,
         pane_id,
@@ -191,4 +191,113 @@ pub fn handle_split_pane_cmd(
     crate::state::persisted::write_metadata(&config.paths, &layout)?;
     drop(layout);
     Ok(pane_id)
+}
+
+#[cfg(test)]
+mod tests {
+    use muxr_core::TerminalSize;
+
+    use super::*;
+    use crate::pane_borders::PaneBorderAxis;
+    use crate::pane_runtime::test_helpers as pane_runtime_test_helpers;
+    use crate::server::test_helpers as server_test_helpers;
+    use crate::state::test_helpers as state_test_helpers;
+
+    #[rstest::rstest]
+    #[case::vertical_then_horizontal(
+        PaneSplitAxis::Vertical,
+        PaneSplitAxis::Horizontal,
+        vec![
+            ("pane-1", 0, 0, 40, 24),
+            ("pane-2", 41, 0, 39, 12),
+            ("pane-3", 41, 13, 39, 11),
+        ],
+    )]
+    #[case::horizontal_then_vertical(
+        PaneSplitAxis::Horizontal,
+        PaneSplitAxis::Vertical,
+        vec![
+            ("pane-1", 0, 0, 80, 12),
+            ("pane-2", 0, 13, 40, 11),
+            ("pane-3", 41, 13, 39, 11),
+        ],
+    )]
+    fn test_layout_split_when_nested_splits_only_active_pane(
+        #[case] first_axis: PaneSplitAxis,
+        #[case] second_axis: PaneSplitAxis,
+        #[case] expected_regions: Vec<(&str, u16, u16, u16, u16)>,
+    ) -> rootcause::Result<()> {
+        let mut layout = state_test_helpers::layout("work")?;
+
+        layout.split_active_pane(state_test_helpers::metadata("sh", 2), first_axis)?;
+        layout.split_active_pane(state_test_helpers::metadata("sh", 3), second_axis)?;
+        state_test_helpers::force_balanced_test_split_ratio(&mut layout)?;
+
+        pretty_assertions::assert_eq!(layout.active_pane_id()?.to_string(), "pane-3");
+        pretty_assertions::assert_eq!(
+            state_test_helpers::layout_active_tab_pane_ids(&layout)?,
+            vec!["pane-1", "pane-2", "pane-3"]
+        );
+        let expected_regions = expected_regions
+            .into_iter()
+            .map(|(id, col, row, cols, rows)| (id.to_owned(), col, row, cols, rows))
+            .collect::<Vec<_>>();
+        pretty_assertions::assert_eq!(
+            state_test_helpers::layout_active_tab_pane_regions(&layout, &TerminalSize::new(80, 24)?)?,
+            expected_regions
+        );
+        Ok(())
+    }
+
+    #[rstest::rstest]
+    #[case::vertical(
+        PaneSplitAxis::Vertical,
+        vec![(PaneBorderAxis::Vertical, 40, 0, 24)],
+    )]
+    #[case::horizontal(
+        PaneSplitAxis::Horizontal,
+        vec![(PaneBorderAxis::Horizontal, 0, 12, 80)],
+    )]
+    fn test_layout_split_when_split_exists_reserves_border_cell(
+        #[case] split_axis: PaneSplitAxis,
+        #[case] expected_borders: Vec<(PaneBorderAxis, u16, u16, u16)>,
+    ) -> rootcause::Result<()> {
+        let mut layout = state_test_helpers::layout("work")?;
+
+        layout.split_active_pane(state_test_helpers::metadata("sh", 2), split_axis)?;
+        state_test_helpers::force_balanced_test_split_ratio(&mut layout)?;
+
+        pretty_assertions::assert_eq!(
+            state_test_helpers::layout_active_tab_pane_borders(&layout, &TerminalSize::new(80, 24)?)?,
+            expected_borders
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_handle_split_pane_cmd_when_pane_spawn_fails_restores_layout() -> rootcause::Result<()> {
+        let tempdir = tempfile::tempdir()?;
+        let mut config = server_test_helpers::server_config(tempdir.path(), "work")?;
+        config.shell_cmd = server_test_helpers::shell_cmd("/bin/muxr-missing-shell");
+        let initial_layout = SessionLayout::initial(&config.session, state_test_helpers::metadata("sh", 1))?;
+        let layout = Mutex::new(initial_layout.clone());
+        let runtimes = Mutex::new(pane_runtime_test_helpers::empty_runtimes());
+
+        assert2::assert!(
+            self::handle_split_pane_cmd(
+                PaneSplitAxis::Vertical,
+                &config,
+                &layout,
+                &runtimes,
+                &TerminalSize::new(80, 24)?,
+            )
+            .is_err()
+        );
+
+        let layout = crate::server::lock_mutex(&layout, "layout")?;
+        pretty_assertions::assert_eq!(*layout, initial_layout);
+        assert2::assert!(crate::server::lock_mutex(&runtimes, "pane runtimes")?.is_empty());
+        assert2::assert!(!config.paths.layout.exists());
+        Ok(())
+    }
 }

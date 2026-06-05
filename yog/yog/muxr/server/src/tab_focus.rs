@@ -1,6 +1,9 @@
+use std::sync::Mutex;
+
 use muxr_core::TabId;
 use rootcause::report;
 
+use crate::server::ServerConfig;
 use crate::state::SessionLayout;
 
 impl SessionLayout {
@@ -48,15 +51,45 @@ impl SessionLayout {
     }
 }
 
-pub fn handle_focus_tab(layout: &mut SessionLayout, tab_id: TabId) -> rootcause::Result<bool> {
+pub fn handle_focus_tab_request(
+    tab_id: TabId,
+    config: &ServerConfig,
+    layout: &Mutex<SessionLayout>,
+) -> rootcause::Result<bool> {
+    let mut layout = crate::server::lock_mutex(layout, "layout")?;
+    let changed = self::handle_focus_tab(&mut layout, tab_id)?;
+    if changed {
+        crate::state::persisted::write_metadata(&config.paths, &layout)?;
+    }
+    drop(layout);
+    Ok(changed)
+}
+
+pub fn handle_focus_previous_tab_cmd(config: &ServerConfig, layout: &Mutex<SessionLayout>) -> rootcause::Result<()> {
+    let mut layout = crate::server::lock_mutex(layout, "layout")?;
+    self::handle_focus_previous_tab(&mut layout)?;
+    crate::state::persisted::write_metadata(&config.paths, &layout)?;
+    drop(layout);
+    Ok(())
+}
+
+pub fn handle_focus_next_tab_cmd(config: &ServerConfig, layout: &Mutex<SessionLayout>) -> rootcause::Result<()> {
+    let mut layout = crate::server::lock_mutex(layout, "layout")?;
+    self::handle_focus_next_tab(&mut layout)?;
+    crate::state::persisted::write_metadata(&config.paths, &layout)?;
+    drop(layout);
+    Ok(())
+}
+
+fn handle_focus_tab(layout: &mut SessionLayout, tab_id: TabId) -> rootcause::Result<bool> {
     layout.focus_tab(tab_id)
 }
 
-pub fn handle_focus_previous_tab(layout: &mut SessionLayout) -> rootcause::Result<()> {
+fn handle_focus_previous_tab(layout: &mut SessionLayout) -> rootcause::Result<()> {
     layout.focus_previous_tab()
 }
 
-pub fn handle_focus_next_tab(layout: &mut SessionLayout) -> rootcause::Result<()> {
+fn handle_focus_next_tab(layout: &mut SessionLayout) -> rootcause::Result<()> {
     layout.focus_next_tab()
 }
 
@@ -79,7 +112,7 @@ mod tests {
 
         assert2::assert!(handle_focus_tab(&mut layout, TabId::new(2)?)?);
 
-        pretty_assertions::assert_eq!(layout.active_tab_id().get(), 2);
+        pretty_assertions::assert_eq!(layout.active_tab.get(), 2);
         Ok(())
     }
 
@@ -89,7 +122,7 @@ mod tests {
 
         assert2::assert!(!handle_focus_tab(&mut layout, TabId::new(3)?)?);
 
-        pretty_assertions::assert_eq!(layout.active_tab_id().get(), 1);
+        pretty_assertions::assert_eq!(layout.active_tab.get(), 1);
         Ok(())
     }
 

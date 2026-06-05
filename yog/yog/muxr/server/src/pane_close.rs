@@ -3,8 +3,8 @@ use std::sync::Mutex;
 use muxr_core::PaneId;
 use rootcause::report;
 
+use crate::pane_runtime::PaneRuntimes;
 use crate::pty::PtyExitStatus;
-use crate::server::PaneRuntimes;
 use crate::server::ServerConfig;
 use crate::state::PaneTree;
 use crate::state::SessionLayout;
@@ -196,7 +196,7 @@ pub fn handle_close_pane_cmd(
     let exited_at = crate::server::unix_timestamp_millis()?;
     let mut layout = crate::server::lock_mutex(layout, "layout")?;
     // Closing removes the runtime, so any title-derived cwd must be synced before queued PTY events disappear.
-    crate::server::sync_layout_terminal_titles(&mut layout, runtimes)?;
+    crate::pane_runtime::sync_layout_terminal_titles(&mut layout, runtimes)?;
     let outcome = layout.close_active_pane(exited_at)?;
     let pane_id = match &outcome {
         ClosePaneOutcome::Final { pane_id } | ClosePaneOutcome::Removed { pane_id } => *pane_id,
@@ -209,4 +209,69 @@ pub fn handle_close_pane_cmd(
     crate::state::persisted::write_metadata(&config.paths, &layout)?;
     drop(layout);
     Ok(outcome)
+}
+
+#[cfg(test)]
+mod tests {
+    use muxr_core::TerminalSize;
+
+    use super::*;
+    use crate::pane_split::PaneSplitAxis;
+    use crate::state::test_helpers as state_test_helpers;
+
+    #[test]
+    fn test_layout_split_and_close_when_multiple_panes_updates_active_pane() -> rootcause::Result<()> {
+        let mut layout = state_test_helpers::layout("work")?;
+
+        let pane_id = layout.split_active_pane(state_test_helpers::metadata("sh", 2), PaneSplitAxis::Vertical)?;
+
+        pretty_assertions::assert_eq!(pane_id.to_string(), "pane-2");
+        pretty_assertions::assert_eq!(layout.active_pane_id()?.to_string(), "pane-2");
+        pretty_assertions::assert_eq!(
+            state_test_helpers::layout_active_tab_pane_ids(&layout)?,
+            vec!["pane-1", "pane-2"]
+        );
+
+        let close = layout.close_active_pane(3)?;
+
+        pretty_assertions::assert_eq!(
+            close,
+            ClosePaneOutcome::Removed {
+                pane_id: PaneId::new(2)?,
+            },
+        );
+        pretty_assertions::assert_eq!(layout.active_pane_id()?.to_string(), "pane-1");
+        pretty_assertions::assert_eq!(state_test_helpers::layout_active_tab_pane_ids(&layout)?, vec!["pane-1"]);
+        Ok(())
+    }
+
+    #[test]
+    fn test_layout_close_when_nested_pane_closes_collapses_parent_split() -> rootcause::Result<()> {
+        let mut layout = state_test_helpers::layout("work")?;
+
+        layout.split_active_pane(state_test_helpers::metadata("sh", 2), PaneSplitAxis::Vertical)?;
+        layout.split_active_pane(state_test_helpers::metadata("sh", 3), PaneSplitAxis::Horizontal)?;
+        state_test_helpers::force_balanced_test_split_ratio(&mut layout)?;
+        let close = layout.close_active_pane(3)?;
+
+        pretty_assertions::assert_eq!(
+            close,
+            ClosePaneOutcome::Removed {
+                pane_id: PaneId::new(3)?,
+            },
+        );
+        pretty_assertions::assert_eq!(layout.active_pane_id()?.to_string(), "pane-2");
+        pretty_assertions::assert_eq!(
+            state_test_helpers::layout_active_tab_pane_ids(&layout)?,
+            vec!["pane-1", "pane-2"]
+        );
+        pretty_assertions::assert_eq!(
+            state_test_helpers::layout_active_tab_pane_regions(&layout, &TerminalSize::new(80, 24)?)?,
+            vec![
+                ("pane-1".to_owned(), 0, 0, 40, 24),
+                ("pane-2".to_owned(), 41, 0, 39, 24),
+            ],
+        );
+        Ok(())
+    }
 }

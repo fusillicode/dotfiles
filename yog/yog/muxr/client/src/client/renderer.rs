@@ -148,11 +148,6 @@ enum SelectionEdgeScrollTrigger {
 }
 
 impl SelectionEdgeScrollRequest {
-    #[cfg(test)]
-    pub const fn request(&self) -> &ClientRequest {
-        &self.request
-    }
-
     pub fn into_parts(self) -> (SelectionEdgeScrollPending, ClientRequest) {
         (self.pending, self.request)
     }
@@ -595,18 +590,6 @@ impl ClientRenderer {
         self.selection_edge_scroll_acknowledged = false;
         self.selection_edge_scroll_pending = Some(pending);
     }
-
-    #[cfg(test)]
-    pub fn selected_text(&self) -> Option<String> {
-        self.selection.selected_text()
-    }
-
-    #[cfg(test)]
-    pub fn selection_contains(&self, row: u16, col: u16) -> bool {
-        self.selection
-            .range()
-            .is_some_and(|selection| selection.contains(row, col))
-    }
 }
 
 fn selection_rows(previous: Option<&SelectionRange>, next: Option<&SelectionRange>) -> Vec<u16> {
@@ -674,6 +657,28 @@ fn mouse_event_starts_capture(event: ClientMouseEvent) -> bool {
 }
 
 #[cfg(test)]
+pub mod test_helpers {
+    use muxr_core::ClientRequest;
+
+    use super::*;
+
+    pub const fn edge_scroll_request(request: &SelectionEdgeScrollRequest) -> &ClientRequest {
+        &request.request
+    }
+
+    pub fn selected_text(renderer: &ClientRenderer) -> Option<String> {
+        renderer.selection.selected_text()
+    }
+
+    pub fn selection_contains(renderer: &ClientRenderer, row: u16, col: u16) -> bool {
+        renderer
+            .selection
+            .range()
+            .is_some_and(|selection| selection.contains(row, col))
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use std::time::Duration;
     use std::time::Instant;
@@ -685,6 +690,7 @@ mod tests {
     use rootcause::report;
 
     use super::*;
+    use crate::client::renderer::test_helpers;
 
     #[test]
     fn test_client_renderer_apply_layout_when_no_render_arrives_writes_nothing() -> rootcause::Result<()> {
@@ -852,8 +858,8 @@ mod tests {
             SelectionInput::Update(muxr_core::ClientMousePosition { row: 0, col: 1 }),
         )?;
 
-        assert2::assert!(renderer.selection_contains(0, 0));
-        assert2::assert!(renderer.selection_contains(0, 1));
+        assert2::assert!(test_helpers::selection_contains(&renderer, 0, 0));
+        assert2::assert!(test_helpers::selection_contains(&renderer, 0, 1));
         let selection_output = output.rendered_string()?;
         assert2::assert!(!selection_output.contains("\x1b[7m"));
         pretty_assertions::assert_eq!(output.flushes, 1);
@@ -931,8 +937,11 @@ mod tests {
             muxr_core::RenderUpdate::Baseline(three_row_render_baseline("bb", "cc", "dd")?),
         )?;
 
-        pretty_assertions::assert_eq!(renderer.selected_text(), Some("aa\nbb\ncc\ndd".to_owned()),);
-        assert2::assert!(renderer.selection_contains(2, 0));
+        pretty_assertions::assert_eq!(
+            test_helpers::selected_text(&renderer),
+            Some("aa\nbb\ncc\ndd".to_owned()),
+        );
+        assert2::assert!(test_helpers::selection_contains(&renderer, 2, 0));
         Ok(())
     }
 
@@ -1073,7 +1082,7 @@ mod tests {
         renderer.apply_selection_input_at(&mut output, SelectionInput::End(first_position), now)?;
         renderer.apply_selection_input_at(&mut output, SelectionInput::Start(second_position), second_click_at)?;
 
-        pretty_assertions::assert_eq!(renderer.selected_text(), Some("two".to_owned()),);
+        pretty_assertions::assert_eq!(test_helpers::selected_text(&renderer), Some("two".to_owned()),);
         let selection_output = output.rendered_string()?;
         assert2::assert!(!selection_output.contains("\x1b[7m"));
         pretty_assertions::assert_eq!(output.flushes, 1);
@@ -1104,7 +1113,7 @@ mod tests {
         renderer.apply_pane_regions(&mut output, word_pane_regions_snapshot()?)?;
         renderer.apply_selection_input_at(&mut output, SelectionInput::Start(position), second_click_at)?;
 
-        pretty_assertions::assert_eq!(renderer.selected_text(), Some("two".to_owned()),);
+        pretty_assertions::assert_eq!(test_helpers::selected_text(&renderer), Some("two".to_owned()),);
         Ok(())
     }
 
