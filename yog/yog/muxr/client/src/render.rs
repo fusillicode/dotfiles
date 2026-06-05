@@ -41,6 +41,9 @@ const MOUSE_ANY_EVENT_CAPTURE_DISABLE: &[u8] = b"\x1b[?1003l";
 const MOUSE_ANY_EVENT_CAPTURE_ENABLE: &[u8] = b"\x1b[?1003h";
 const MOUSE_SGR_DISABLE: &[u8] = b"\x1b[?1006l";
 const MOUSE_SGR_ENABLE: &[u8] = b"\x1b[?1006h";
+const OSC8_CLOSE: &[u8] = b"\x1b]8;;\x1b\\";
+const OSC8_OPEN_PREFIX: &[u8] = b"\x1b]8;;";
+const OSC8_TERMINATOR: &[u8] = b"\x1b\\";
 const SELECTION_BG: RenderColor = RenderColor::Indexed(238);
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -312,9 +315,13 @@ fn render_row_span(
             .checked_add(u16::try_from(index).context("muxr render cell index overflowed")?)
             .ok_or_else(|| report!("muxr render cell column overflowed"))?;
         let cell_style = self::selected_style(cell.style(), selection, row.row(), cell_col);
-        if run_style != Some(cell_style) {
+        let cell_run_style = RenderRunStyle {
+            hyperlink_uri: cell.hyperlink().map(muxr_core::RenderHyperlink::uri),
+            style: cell_style,
+        };
+        if run_style != Some(cell_run_style) {
             flush_text_run(stdout, active_style, run_style, &mut run_text)?;
-            run_style = Some(cell_style);
+            run_style = Some(cell_run_style);
         }
         if cell.text().is_empty() {
             run_text.push(' ');
@@ -358,10 +365,16 @@ impl SelectionVisual {
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct RenderRunStyle<'a> {
+    hyperlink_uri: Option<&'a str>,
+    style: RenderStyle,
+}
+
 fn flush_text_run(
     stdout: &mut impl Write,
     active_style: &mut RenderStyle,
-    run_style: Option<RenderStyle>,
+    run_style: Option<RenderRunStyle<'_>>,
     run_text: &mut String,
 ) -> rootcause::Result<()> {
     if run_text.is_empty() {
@@ -371,10 +384,26 @@ fn flush_text_run(
         return Err(report!("muxr render text run is missing style"));
     };
 
-    apply_style_transition(stdout, active_style, style)?;
+    apply_style_transition(stdout, active_style, style.style)?;
+    if let Some(uri) = style.hyperlink_uri {
+        queue_hyperlink_start(stdout, uri)?;
+    }
     queue_cmd(stdout, Print(run_text.as_str()))?;
+    if style.hyperlink_uri.is_some() {
+        queue_hyperlink_end(stdout)?;
+    }
     run_text.clear();
     Ok(())
+}
+
+fn queue_hyperlink_start(stdout: &mut impl Write, uri: &str) -> rootcause::Result<()> {
+    queue_bytes(stdout, OSC8_OPEN_PREFIX)?;
+    queue_bytes(stdout, uri.as_bytes())?;
+    queue_bytes(stdout, OSC8_TERMINATOR)
+}
+
+fn queue_hyperlink_end(stdout: &mut impl Write) -> rootcause::Result<()> {
+    queue_bytes(stdout, OSC8_CLOSE)
 }
 
 fn apply_style_transition(
@@ -457,6 +486,7 @@ pub fn enter_terminal(stdout: &mut impl Write) -> rootcause::Result<()> {
 /// # Errors
 /// - The terminal restore cmds cannot be written or flushed.
 pub fn restore_terminal(stdout: &mut impl Write) -> rootcause::Result<()> {
+    queue_hyperlink_end(stdout)?;
     queue_bytes(stdout, MOUSE_SGR_DISABLE)?;
     queue_bytes(stdout, MOUSE_ANY_EVENT_CAPTURE_DISABLE)?;
     queue_bytes(stdout, MOUSE_BUTTON_EVENT_CAPTURE_DISABLE)?;
@@ -651,6 +681,82 @@ mod tests {
     }
 
     #[test]
+    fn test_frame_buffer_render_when_linked_cells_arrive_emits_osc8_around_run() -> rootcause::Result<()> {
+        let uri = "https://example.com";
+        let mut frame_buffer = FrameBuffer::default();
+        let ApplyOutcome::Applied(changes) =
+            frame_buffer.apply(RenderUpdate::Baseline(linked_render_baseline(uri)?))?
+        else {
+            return Err(report!("expected applied baseline"));
+        };
+        let mut output = Vec::new();
+
+        frame_buffer.queue_at_with_selection(&mut output, &changes, 0, 0, None)?;
+
+        let rendered = String::from_utf8(output).context("muxr render test output was not utf8")?;
+        let open = osc8_open(uri);
+        let close = osc8_close()?;
+        assert2::assert!(rendered.contains(&format!("{open}ab{close}c")));
+        pretty_assertions::assert_eq!(occurrence_count(&rendered, &open), 1);
+        pretty_assertions::assert_eq!(occurrence_count(&rendered, &close), 1);
+        let close_index = rendered.find(&close).ok_or_else(|| report!("expected OSC 8 close"))?;
+        let reset_index = rendered
+            .rfind("\x1b[0m")
+            .ok_or_else(|| report!("expected terminal style reset"))?;
+        assert2::assert!(close_index < reset_index);
+        Ok(())
+    }
+
+    #[test]
+    fn test_frame_buffer_render_when_linked_diff_starts_mid_row_emits_osc8_start() -> rootcause::Result<()> {
+        let uri = "https://example.com/diff";
+        let mut frame_buffer = FrameBuffer::default();
+        let ApplyOutcome::Applied(_) = frame_buffer.apply(RenderUpdate::Baseline(render_baseline()?))? else {
+            return Err(report!("expected applied baseline"));
+        };
+        let diff = RenderDiff::new(
+            1,
+            2,
+            terminal_size()?,
+            RenderCursor {
+                row: 1,
+                col: 1,
+                visible: true,
+            },
+            vec![RenderRowSpan::new(1, 1, vec![linked_render_cell("x", uri)?])?],
+        )?;
+        let ApplyOutcome::Applied(changes) = frame_buffer.apply(RenderUpdate::Diff(diff))? else {
+            return Err(report!("expected applied diff"));
+        };
+        let mut output = Vec::new();
+
+        frame_buffer.queue_at_with_selection(&mut output, &changes, 0, 0, None)?;
+
+        let rendered = String::from_utf8(output).context("muxr render test output was not utf8")?;
+        assert2::assert!(rendered.contains(&format!("{}x{}", osc8_open(uri), osc8_close()?)));
+        Ok(())
+    }
+
+    #[test]
+    fn test_frame_buffer_render_when_linked_cell_is_selected_preserves_osc8() -> rootcause::Result<()> {
+        let uri = "https://example.com/selected";
+        let (selection, _) = self::selection_range_and_style()?;
+        let mut frame_buffer = FrameBuffer::default();
+        let ApplyOutcome::Applied(changes) =
+            frame_buffer.apply(RenderUpdate::Baseline(linked_render_baseline(uri)?))?
+        else {
+            return Err(report!("expected applied baseline"));
+        };
+        let mut output = Vec::new();
+
+        frame_buffer.queue_at_with_selection(&mut output, &changes, 0, 0, Some(&selection))?;
+
+        let rendered = String::from_utf8(output).context("muxr render test output was not utf8")?;
+        assert2::assert!(rendered.contains(&osc8_open(uri)));
+        Ok(())
+    }
+
+    #[test]
     fn test_selection_visual_when_cell_is_selected_marks_only_selected_cells() -> rootcause::Result<()> {
         let (selection, unselected_style) = self::selection_range_and_style()?;
 
@@ -809,6 +915,7 @@ mod tests {
         assert2::assert!(rendered.contains("\x1b[?1049l"));
         assert2::assert!(rendered.contains("\x1b[?25h"));
         assert2::assert!(rendered.contains("\x1b[0m"));
+        assert2::assert!(rendered.starts_with(&osc8_close()?));
         Ok(())
     }
 
@@ -895,12 +1002,45 @@ mod tests {
         )
     }
 
+    fn linked_render_baseline(uri: &str) -> rootcause::Result<muxr_core::RenderBaseline> {
+        muxr_core::RenderBaseline::new(
+            1,
+            TerminalSize::new(3, 1)?,
+            RenderCursor {
+                row: 0,
+                col: 0,
+                visible: true,
+            },
+            vec![RenderRowSpan::new(
+                0,
+                0,
+                vec![
+                    linked_render_cell("a", uri)?,
+                    linked_render_cell("b", uri)?,
+                    render_cell("c"),
+                ],
+            )?],
+        )
+    }
+
     fn render_style(fg: RenderColor, bg: RenderColor, attrs: RenderTextStyle) -> RenderStyle {
         RenderStyle { attrs, bg, fg }
     }
 
+    fn linked_render_cell(text: &str, uri: &str) -> rootcause::Result<RenderCell> {
+        render_cell(text).with_hyperlink_uri(uri)
+    }
+
     fn render_cell(text: &str) -> RenderCell {
         RenderCell::narrow(text, RenderStyle::default())
+    }
+
+    fn osc8_open(uri: &str) -> String {
+        format!("\x1b]8;;{uri}\x1b\\")
+    }
+
+    fn osc8_close() -> rootcause::Result<String> {
+        Ok(String::from_utf8(OSC8_CLOSE.to_vec()).context("muxr OSC 8 close was not utf8")?)
     }
 
     fn terminal_size() -> rootcause::Result<TerminalSize> {
