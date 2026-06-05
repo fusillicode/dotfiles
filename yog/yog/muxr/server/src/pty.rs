@@ -64,13 +64,6 @@ impl ShellCmd {
         })
     }
 
-    #[must_use]
-    #[cfg(test)]
-    pub fn arg(mut self, arg: impl Into<String>) -> Self {
-        self.args.push(arg.into());
-        self
-    }
-
     /// Build the default shell cmd from `$SHELL`, falling back to `/bin/sh`.
     ///
     /// # Errors
@@ -383,19 +376,6 @@ struct PtyState {
 }
 
 impl PtyState {
-    #[cfg(test)]
-    fn new(size: &TerminalSize) -> Self {
-        Self {
-            active_sink: Mutex::new(None),
-            exited: AtomicBool::new(false),
-            exit_status: Mutex::new(None),
-            history: Mutex::new(None),
-            screen_dirty: AtomicBool::new(false),
-            terminal: Mutex::new(TerminalState::new(size)),
-            title_changes: Mutex::new(Vec::new()),
-        }
-    }
-
     fn with_history(size: &TerminalSize, history_path: &Path) -> rootcause::Result<Self> {
         let (history, replay) = PaneHistory::open(history_path)?;
         let mut terminal = TerminalState::new(size);
@@ -745,9 +725,31 @@ fn spawn_reader_thread(
 }
 
 #[cfg(test)]
+pub mod test_helpers {
+    use super::*;
+
+    pub fn shell_cmd_arg(mut cmd: ShellCmd, arg: impl Into<String>) -> ShellCmd {
+        cmd.args.push(arg.into());
+        cmd
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::terminal::TerminalMouseProtocolMode;
+
+    fn pty_state(size: &TerminalSize) -> PtyState {
+        PtyState {
+            active_sink: Mutex::new(None),
+            exited: AtomicBool::new(false),
+            exit_status: Mutex::new(None),
+            history: Mutex::new(None),
+            screen_dirty: AtomicBool::new(false),
+            terminal: Mutex::new(TerminalState::new(size)),
+            title_changes: Mutex::new(Vec::new()),
+        }
+    }
 
     #[test]
     fn test_shell_cmd_new_when_program_is_empty_returns_error() {
@@ -778,7 +780,7 @@ mod tests {
 
     #[test]
     fn test_spawn_reader_thread_when_pty_reaches_eof_does_not_mark_child_exited() -> rootcause::Result<()> {
-        let state = Arc::new(PtyState::new(&terminal_size()?));
+        let state = Arc::new(pty_state(&terminal_size()?));
         let reader_handle = spawn_reader_thread(
             Box::new(std::io::Cursor::new(Vec::new())),
             Arc::clone(&state),
@@ -796,7 +798,7 @@ mod tests {
 
     #[test]
     fn test_attach_sink_when_output_arrives_after_attach_delivers_live_event() -> rootcause::Result<()> {
-        let state = Arc::new(PtyState::new(&terminal_size()?));
+        let state = Arc::new(pty_state(&terminal_size()?));
         pretty_assertions::assert_eq!(state.append_output(b"before")?, Vec::<Vec<u8>>::new());
         let (sender, receiver) = mpsc::sync_channel(1);
 
@@ -809,7 +811,7 @@ mod tests {
 
     #[test]
     fn test_attach_sink_when_output_arrived_before_attach_clears_screen_dirty() -> rootcause::Result<()> {
-        let state = Arc::new(PtyState::new(&terminal_size()?));
+        let state = Arc::new(pty_state(&terminal_size()?));
         pretty_assertions::assert_eq!(state.append_output(b"before")?, Vec::<Vec<u8>>::new());
         assert2::assert!(state.take_screen_dirty());
         pretty_assertions::assert_eq!(state.append_output(b"before again")?, Vec::<Vec<u8>>::new());
@@ -823,7 +825,7 @@ mod tests {
 
     #[test]
     fn test_append_output_when_title_only_changes_does_not_mark_screen_dirty() -> rootcause::Result<()> {
-        let state = Arc::new(PtyState::new(&terminal_size()?));
+        let state = Arc::new(pty_state(&terminal_size()?));
         let (sender, receiver) = mpsc::sync_channel(1);
         let _guard = state.attach_sink(sender)?;
 
@@ -837,7 +839,7 @@ mod tests {
 
     #[test]
     fn test_append_output_when_visible_output_arrives_marks_screen_dirty_until_taken() -> rootcause::Result<()> {
-        let state = PtyState::new(&terminal_size()?);
+        let state = pty_state(&terminal_size()?);
 
         pretty_assertions::assert_eq!(state.append_output(b"visible")?, Vec::<Vec<u8>>::new());
 
@@ -866,7 +868,7 @@ mod tests {
 
     #[test]
     fn test_append_output_when_sink_is_full_coalesces_without_blocking() -> rootcause::Result<()> {
-        let state = PtyState::new(&terminal_size()?);
+        let state = pty_state(&terminal_size()?);
         let (sender, receiver) = mpsc::sync_channel(1);
         let output_current = Arc::new(AtomicBool::new(true));
         *lock_mutex(&state.active_sink, "pty active sink")? = Some(ActivePtySink {
@@ -887,7 +889,7 @@ mod tests {
 
     #[test]
     fn test_append_output_when_sink_is_full_and_title_changes_preserves_title_changes() -> rootcause::Result<()> {
-        let state = PtyState::new(&terminal_size()?);
+        let state = pty_state(&terminal_size()?);
         let (sender, receiver) = mpsc::sync_channel(1);
         let output_current = Arc::new(AtomicBool::new(true));
         *lock_mutex(&state.active_sink, "pty active sink")? = Some(ActivePtySink {
@@ -911,7 +913,7 @@ mod tests {
 
     #[test]
     fn test_append_output_when_terminal_reply_is_generated_writes_reply_to_pty() -> rootcause::Result<()> {
-        let state = PtyState::new(&terminal_size()?);
+        let state = pty_state(&terminal_size()?);
         let written = Arc::new(Mutex::new(Vec::new()));
         let writer = self::capturing_pty_writer(Arc::clone(&written));
 

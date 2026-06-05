@@ -5,6 +5,10 @@ pub use self::pane::PaneTree;
 pub use self::session::SessionLayout;
 pub use self::session::SessionMetadata;
 pub use self::tab::Tab;
+#[cfg(test)]
+pub mod test_helpers {
+    pub use super::session::test_helpers::*;
+}
 
 mod pane;
 pub mod persisted;

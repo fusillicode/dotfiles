@@ -1,49 +1,38 @@
-use std::fs;
 use std::future::Future;
-use std::io::IsTerminal;
 use std::io::Read;
 use std::io::Write;
-use std::os::unix::process::CommandExt;
 use std::path::Path;
-use std::process::Command;
-use std::process::Stdio;
 use std::thread;
 use std::time::Duration;
-use std::time::Instant;
 
-use muxr_core::AttachRequest;
 use muxr_core::ClientMouseEvent;
 use muxr_core::ClientRequest;
-use muxr_core::INTERNAL_SERVER_ARG;
-use muxr_core::LayoutSnapshot;
-use muxr_core::PaneRegionsSnapshot;
 use muxr_core::ServerEvent;
 use muxr_core::SessionName;
-use muxr_core::SessionPaths;
 use muxr_core::TerminalSize;
-use muxr_transport::ClientConnection;
-use muxr_transport::ClientEventReader;
 use muxr_transport::ClientRequestWriter;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
 
-use self::copy_selection::SelectionInput;
-use self::pane_focus::LocalMouseAction;
 use self::renderer::ClientRenderOutcome;
 use self::renderer::ClientRenderer;
 use self::renderer::SelectionEdgeScrollRequest;
+use self::session_attach::AttachedSession;
+use self::terminal::TerminalGuard;
 use crate::input::DecodedInput;
 use crate::input::InputDecoder;
 
 pub mod copy_selection;
 mod pane_focus;
+mod pane_mouse;
 mod pane_scroll;
 mod renderer;
+mod session_attach;
+mod session_start;
 mod tab_bar;
+mod terminal;
 
 const RESIZE_POLL_INTERVAL: Duration = Duration::from_millis(250);
-const ATTACH_TIMEOUT: Duration = Duration::from_secs(2);
-const SERVER_READY_TIMEOUT: Duration = Duration::from_secs(2);
 const AMBIGUOUS_INPUT_TIMEOUT: Duration = Duration::from_millis(50);
 const DOUBLE_CLICK_THRESHOLD: Duration = Duration::from_millis(400);
 const SELECTION_EDGE_SCROLL_INTERVAL: Duration = Duration::from_millis(50);
@@ -74,161 +63,12 @@ enum ClientInputAction {
 /// - Terminal input/output or protocol IO fails.
 pub fn start(session: &SessionName, server_executable: &Path) -> rootcause::Result<()> {
     self::run_async(async {
-        let terminal_size = self::current_terminal_size()?;
-        let pane_size = self::pane_size_for_terminal(&terminal_size)?;
-        let attached_session = self::open_session(session, pane_size.clone(), server_executable).await?;
+        let terminal_size = self::terminal::current_terminal_size()?;
+        let pane_size = self::terminal::pane_size_for_terminal(&terminal_size)?;
+        let attached_session =
+            self::session_attach::open_session(session, pane_size.clone(), server_executable).await?;
         self::run_interactive(attached_session, pane_size).await
     })
-}
-
-struct AttachedSession {
-    layout: LayoutSnapshot,
-    pane_regions: PaneRegionsSnapshot,
-    reader: ClientEventReader,
-    writer: ClientRequestWriter,
-}
-
-enum AttachFailure {
-    Rejected(rootcause::Report),
-    Unusable(rootcause::Report),
-}
-
-struct TerminalGuard {
-    entered_render_screen: bool,
-    raw_mode_enabled: bool,
-}
-
-impl TerminalGuard {
-    fn enable_if_terminal() -> rootcause::Result<Self> {
-        let raw_mode_enabled = std::io::stdin().is_terminal();
-        if raw_mode_enabled {
-            crossterm::terminal::enable_raw_mode().context("failed to enable muxr client raw mode")?;
-        }
-        let entered_render_screen = std::io::stdout().is_terminal();
-        if entered_render_screen {
-            let mut stdout = std::io::stdout();
-            if let Err(error) = crate::render::enter_terminal(&mut stdout) {
-                if raw_mode_enabled {
-                    drop(crossterm::terminal::disable_raw_mode());
-                }
-                return Err(error).context("failed to enter muxr client terminal screen")?;
-            }
-        }
-
-        Ok(Self {
-            entered_render_screen,
-            raw_mode_enabled,
-        })
-    }
-}
-
-impl Drop for TerminalGuard {
-    fn drop(&mut self) {
-        if self.entered_render_screen {
-            let mut stdout = std::io::stdout();
-            drop(crate::render::restore_terminal(&mut stdout));
-        }
-        if self.raw_mode_enabled {
-            drop(crossterm::terminal::disable_raw_mode());
-        }
-    }
-}
-
-async fn open_session(
-    session: &SessionName,
-    terminal_size: TerminalSize,
-    server_executable: &Path,
-) -> rootcause::Result<AttachedSession> {
-    let paths = SessionPaths::from_home(session)?;
-
-    match self::attach(session, &paths, terminal_size.clone()).await {
-        Ok(attached_session) => return Ok(attached_session),
-        Err(attach_failure) => {
-            self::handle_attach_failure(attach_failure)?;
-            self::cleanup_stale_session_files(&paths)?;
-        }
-    }
-
-    self::spawn_server_process(session, server_executable)?;
-    self::attach_started_server(session, &paths, terminal_size).await
-}
-
-async fn attach(
-    session: &SessionName,
-    paths: &SessionPaths,
-    terminal_size: TerminalSize,
-) -> Result<AttachedSession, AttachFailure> {
-    let mut connection = self::connect_with_timeout(paths).await?;
-
-    tokio::time::timeout(
-        ATTACH_TIMEOUT,
-        connection.send_request(&ClientRequest::Attach(AttachRequest {
-            session: session.clone(),
-            terminal_size,
-        })),
-    )
-    .await
-    .map_err(|_| AttachFailure::Unusable(report!("timed out writing muxr attach request")))?
-    .map_err(AttachFailure::Unusable)?;
-
-    let (layout, pane_regions) = match tokio::time::timeout(ATTACH_TIMEOUT, connection.recv_event())
-        .await
-        .map_err(|_| AttachFailure::Unusable(report!("timed out waiting for muxr attach response")))?
-        .map_err(AttachFailure::Unusable)?
-    {
-        Some(ServerEvent::Attached(attached)) => (attached.layout, attached.pane_regions),
-        Some(ServerEvent::Error(error)) => {
-            return Err(AttachFailure::Rejected(
-                report!("muxr server rejected attach")
-                    .attach(format!("code={}", error.code()))
-                    .attach(format!("msg={}", error.msg())),
-            ));
-        }
-        Some(event) => {
-            return Err(AttachFailure::Unusable(
-                report!("unexpected muxr server attach event").attach(format!("{event:?}")),
-            ));
-        }
-        None => return Err(AttachFailure::Unusable(report!("muxr server closed before attach"))),
-    };
-
-    let (reader, writer) = connection.split();
-    Ok(AttachedSession {
-        layout,
-        pane_regions,
-        reader,
-        writer,
-    })
-}
-
-async fn connect_with_timeout(paths: &SessionPaths) -> Result<ClientConnection, AttachFailure> {
-    tokio::time::timeout(ATTACH_TIMEOUT, ClientConnection::connect(&paths.socket))
-        .await
-        .map_err(|_| AttachFailure::Unusable(report!("timed out connecting muxr session socket")))?
-        .map_err(AttachFailure::Unusable)
-}
-
-async fn attach_started_server(
-    session: &SessionName,
-    paths: &SessionPaths,
-    terminal_size: TerminalSize,
-) -> rootcause::Result<AttachedSession> {
-    let started_at = Instant::now();
-
-    loop {
-        match self::attach(session, paths, terminal_size.clone()).await {
-            Ok(attached_session) => return Ok(attached_session),
-            Err(AttachFailure::Rejected(error)) => return Err(error),
-            Err(AttachFailure::Unusable(error)) => {
-                // Socket path creation can win the race against listener readiness after spawning the server.
-                if started_at.elapsed() > SERVER_READY_TIMEOUT {
-                    return Err(error);
-                }
-            }
-        }
-
-        tokio::time::sleep(Duration::from_millis(10)).await;
-    }
 }
 
 async fn run_interactive(mut attached_session: AttachedSession, initial_size: TerminalSize) -> rootcause::Result<()> {
@@ -334,7 +174,9 @@ async fn handle_client_input_action(
             renderer.copy_selection()?;
             Ok(true)
         }
-        ClientInputAction::Mouse(event) => self::handle_mouse_input_action(event, input_sender, renderer, stdout).await,
+        ClientInputAction::Mouse(event) => {
+            self::pane_mouse::handle_mouse_input_action(event, input_sender, renderer, stdout).await
+        }
         ClientInputAction::ServerRequest(request) => {
             if input_sender.send(request).await.is_err() {
                 return Ok(false);
@@ -342,97 +184,6 @@ async fn handle_client_input_action(
             Ok(true)
         }
     }
-}
-
-async fn handle_mouse_input_action(
-    event: ClientMouseEvent,
-    input_sender: &tokio::sync::mpsc::Sender<ClientRequest>,
-    renderer: &mut ClientRenderer,
-    stdout: &mut impl Write,
-) -> rootcause::Result<bool> {
-    let Some(position) = self::pane_position(event.position) else {
-        if let Some(request) = self::tab_focus_request_for_sidebar_click(event, renderer) {
-            if input_sender.send(request).await.is_err() {
-                return Ok(false);
-            }
-            return Ok(true);
-        }
-        // Captured app drags can finish over the tab bar; forward them clamped to the captured pane before dropping
-        // ordinary tab bar mouse packets.
-        if renderer.has_mouse_capture()
-            && let Some(position) = self::pane_position_for_sidebar_drag(event.position)
-            && let Some(event) = renderer.mouse_request_for_event(ClientMouseEvent { position, ..event })
-        {
-            return self::send_mouse_request(input_sender, event).await;
-        }
-        // Local selections can also finish over the tab bar; keep update/end routed so the retained pane drag is
-        // clamped and finalized instead of leaving stale drag state behind.
-        let tab_bar_position = event.position;
-        match self::pane_focus::local_mouse_action(event) {
-            Some(LocalMouseAction::SelectionUpdate(_)) => {
-                if let Some(position) = self::pane_position_for_sidebar_drag(tab_bar_position) {
-                    let scroll_request = renderer.set_selection_outside_edge_drag(position);
-                    renderer.apply_selection_input(stdout, SelectionInput::Update(position))?;
-                    if let Some(request) = scroll_request {
-                        return Ok(self::send_edge_scroll_request(input_sender, renderer, request));
-                    }
-                }
-            }
-            Some(LocalMouseAction::SelectionEnd(_)) => {
-                if let Some(position) = self::pane_position_for_sidebar_drag(tab_bar_position) {
-                    renderer.apply_selection_input(stdout, SelectionInput::End(position))?;
-                }
-            }
-            Some(LocalMouseAction::FocusAndSelectionStart(_)) | None => {}
-        }
-        return Ok(true);
-    };
-    let event = ClientMouseEvent { position, ..event };
-    if self::pane_scroll::is_wheel_event(event) {
-        return self::send_mouse_request(input_sender, event).await;
-    }
-    if let Some(event) = renderer.mouse_request_for_event(event) {
-        return self::send_mouse_request(input_sender, event).await;
-    }
-
-    match self::pane_focus::local_mouse_action(event) {
-        Some(LocalMouseAction::FocusAndSelectionStart(position)) => {
-            if input_sender.send(ClientRequest::FocusPaneAt(position)).await.is_err() {
-                return Ok(false);
-            }
-            renderer.apply_selection_input(stdout, SelectionInput::Start(position))?;
-            Ok(true)
-        }
-        Some(LocalMouseAction::SelectionUpdate(position)) => {
-            let scroll_request = renderer.set_selection_edge_drag(position, None);
-            renderer.apply_selection_input(stdout, SelectionInput::Update(position))?;
-            if let Some(request) = scroll_request {
-                return Ok(self::send_edge_scroll_request(input_sender, renderer, request));
-            }
-            Ok(true)
-        }
-        Some(LocalMouseAction::SelectionEnd(position)) => {
-            renderer.apply_selection_input(stdout, SelectionInput::End(position))?;
-            Ok(true)
-        }
-        None => Ok(true),
-    }
-}
-
-async fn send_mouse_request(
-    input_sender: &tokio::sync::mpsc::Sender<ClientRequest>,
-    event: ClientMouseEvent,
-) -> rootcause::Result<bool> {
-    if self::mouse_event_can_be_dropped(event) {
-        return Ok(!matches!(
-            self::send_droppable_request(input_sender, ClientRequest::Mouse(event)),
-            DroppableSendOutcome::Closed
-        ));
-    }
-    if input_sender.send(ClientRequest::Mouse(event)).await.is_err() {
-        return Ok(false);
-    }
-    Ok(true)
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -524,65 +275,6 @@ async fn forward_client_requests(
     Ok(())
 }
 
-fn handle_attach_failure(attach_failure: AttachFailure) -> rootcause::Result<()> {
-    match attach_failure {
-        AttachFailure::Rejected(attach_error) => {
-            // A structured muxr rejection proves the socket is live even if pid metadata is missing or stale.
-            Err(attach_error).attach("socket returned a structured muxr response")
-        }
-        AttachFailure::Unusable(attach_error) => {
-            // Even stale/incompatible servers may still answer Ping; an unusable attach is the compatibility signal.
-            drop(attach_error);
-            Ok(())
-        }
-    }
-}
-
-fn cleanup_stale_session_files(paths: &SessionPaths) -> rootcause::Result<()> {
-    // Structured rejections stop before cleanup; unusable attach failures may be stale incompatible servers.
-    self::remove_file_if_exists(&paths.socket)?;
-    self::remove_file_if_exists(&paths.pid)?;
-    Ok(())
-}
-
-fn spawn_server_process(session: &SessionName, server_executable: &Path) -> rootcause::Result<()> {
-    let mut cmd = self::server_cmd(session, server_executable);
-
-    let child = cmd.spawn().context("failed to spawn muxr internal server")?;
-    drop(child);
-    Ok(())
-}
-
-fn server_cmd(session: &SessionName, server_executable: &Path) -> Command {
-    let mut cmd = Command::new(server_executable);
-    cmd.arg(INTERNAL_SERVER_ARG)
-        .arg(session.as_ref())
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .process_group(0);
-
-    cmd
-}
-
-fn remove_file_if_exists(path: &Path) -> rootcause::Result<()> {
-    match fs::remove_file(path) {
-        Ok(()) => Ok(()),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(error) => Err(error).context("failed to remove stale muxr file")?,
-    }
-}
-
-fn current_terminal_size() -> rootcause::Result<TerminalSize> {
-    let (cols, rows) = crossterm::terminal::size().context("failed to read muxr terminal size")?;
-    TerminalSize::new(cols, rows)
-}
-
-fn pane_size_for_terminal(size: &TerminalSize) -> rootcause::Result<TerminalSize> {
-    let cols = size.cols().saturating_sub(TAB_BAR_COLS).max(1);
-    TerminalSize::new(cols, size.rows())
-}
-
 fn spawn_stdin_forwarder(input_sender: tokio::sync::mpsc::Sender<ClientInputAction>) -> thread::JoinHandle<()> {
     thread::spawn(move || {
         let (read_sender, read_receiver) = std::sync::mpsc::channel();
@@ -661,7 +353,7 @@ fn send_decoded_input(input_sender: &tokio::sync::mpsc::Sender<ClientInputAction
                 // PTY bytes.
                 ClientInputAction::ServerRequest(ClientRequest::Key(key))
             }
-            DecodedInput::Mouse(event) if self::mouse_event_can_be_dropped(event) => {
+            DecodedInput::Mouse(event) if self::pane_mouse::mouse_event_can_be_dropped(event) => {
                 if !self::send_droppable_input_action(input_sender, ClientInputAction::Mouse(event)) {
                     return false;
                 }
@@ -695,38 +387,6 @@ fn send_droppable_input_action(
     }
 }
 
-const fn mouse_event_can_be_dropped(event: ClientMouseEvent) -> bool {
-    event.button & 32 != 0 && !crate::client::pane_scroll::is_wheel_event(event)
-}
-
-fn tab_focus_request_for_sidebar_click(event: ClientMouseEvent, renderer: &ClientRenderer) -> Option<ClientRequest> {
-    if event.phase != muxr_core::ClientMouseEventPhase::Press || event.button != 0 {
-        return None;
-    }
-    renderer
-        .tab_id_at_sidebar_row(event.position.row)
-        .map(ClientRequest::FocusTab)
-}
-
-fn pane_position(position: muxr_core::ClientMousePosition) -> Option<muxr_core::ClientMousePosition> {
-    Some(muxr_core::ClientMousePosition {
-        row: position.row,
-        col: position.col.checked_sub(TAB_BAR_COLS)?,
-    })
-}
-
-const fn pane_position_for_sidebar_drag(
-    position: muxr_core::ClientMousePosition,
-) -> Option<muxr_core::ClientMousePosition> {
-    if position.col >= TAB_BAR_COLS {
-        return None;
-    }
-    Some(muxr_core::ClientMousePosition {
-        row: position.row,
-        col: 0,
-    })
-}
-
 fn spawn_resize_forwarder(
     sender: tokio::sync::mpsc::Sender<ClientRequest>,
     initial_size: TerminalSize,
@@ -740,11 +400,11 @@ fn spawn_resize_forwarder(
             }
 
             thread::sleep(RESIZE_POLL_INTERVAL);
-            let Ok(next_terminal_size) = self::current_terminal_size() else {
+            let Ok(next_terminal_size) = self::terminal::current_terminal_size() else {
                 break;
             };
             // Resize requests use the pane viewport, because left-side host-terminal columns are reserved for tab UI.
-            let Ok(next_size) = self::pane_size_for_terminal(&next_terminal_size) else {
+            let Ok(next_size) = self::terminal::pane_size_for_terminal(&next_terminal_size) else {
                 break;
             };
             if next_size == last_size {
@@ -767,7 +427,7 @@ fn run_async<T>(future: impl Future<Output = rootcause::Result<T>>) -> rootcause
 
 #[cfg(test)]
 mod tests {
-    use std::ffi::OsStr;
+    use std::fs;
     use std::io::Write;
     use std::path::Path;
 
@@ -778,107 +438,19 @@ mod tests {
     use muxr_core::ClientMousePosition;
     use muxr_core::LayoutSnapshot;
     use muxr_core::PaneId;
+    use muxr_core::PaneRegionsSnapshot;
     use muxr_core::PaneScrollDirection;
     use muxr_core::PaneSnapshot;
-    use muxr_core::ServerError;
+    use muxr_core::SessionPaths;
     use muxr_core::TabId;
     use muxr_core::TabSnapshot;
+    use muxr_transport::ClientConnection;
     use muxr_transport::ServerListener;
 
     use super::*;
+    use crate::client::copy_selection::SelectionInput;
+    use crate::client::renderer::test_helpers as renderer_test_helpers;
     use crate::render::SynchronizedOutput;
-
-    #[test]
-    fn test_cleanup_stale_session_files_when_running_pid_has_missing_socket_removes_pid() -> rootcause::Result<()> {
-        self::runtime()?.block_on(async {
-            let tempdir = tempfile::tempdir()?;
-            let (_, paths) = self::session_paths(tempdir.path(), "work")?;
-            fs::create_dir_all(&paths.root)?;
-            fs::write(&paths.pid, std::process::id().to_string())?;
-
-            handle_attach_failure(AttachFailure::Unusable(report!("connect failed")))?;
-            cleanup_stale_session_files(&paths)?;
-
-            assert2::assert!(!paths.pid.exists());
-            assert2::assert!(!paths.socket.exists());
-            Ok(())
-        })
-    }
-
-    #[test]
-    fn test_handle_attach_failure_when_server_rejects_and_pid_is_missing_returns_error() -> rootcause::Result<()> {
-        self::runtime()?.block_on(async {
-            let tempdir = tempfile::tempdir()?;
-            let (_, paths) = self::session_paths(tempdir.path(), "work")?;
-            fs::create_dir_all(&paths.root)?;
-            let _listener = ServerListener::bind(&paths.socket)?;
-
-            assert2::assert!(handle_attach_failure(AttachFailure::Rejected(report!("already attached"))).is_err());
-            assert2::assert!(paths.socket.exists());
-            Ok(())
-        })
-    }
-
-    #[test]
-    fn test_cleanup_stale_session_files_when_attach_is_unusable_removes_live_socket_path() -> rootcause::Result<()> {
-        self::runtime()?.block_on(async {
-            let tempdir = tempfile::tempdir()?;
-            let (_, paths) = self::session_paths(tempdir.path(), "work")?;
-            fs::create_dir_all(&paths.root)?;
-            let _listener = ServerListener::bind(&paths.socket)?;
-
-            handle_attach_failure(AttachFailure::Unusable(report!("failed to attach")))?;
-            cleanup_stale_session_files(&paths)?;
-
-            assert2::assert!(!paths.socket.exists());
-            Ok(())
-        })
-    }
-
-    #[test]
-    fn test_server_cmd_uses_supplied_executable_for_internal_server() -> rootcause::Result<()> {
-        let session: SessionName = "work".parse()?;
-        let cmd = server_cmd(&session, Path::new("/tmp/custom-muxr"));
-        let args: Vec<_> = cmd.get_args().collect();
-
-        pretty_assertions::assert_eq!(cmd.get_program(), OsStr::new("/tmp/custom-muxr"));
-        pretty_assertions::assert_eq!(args.as_slice(), [OsStr::new(INTERNAL_SERVER_ARG), OsStr::new("work")]);
-        Ok(())
-    }
-
-    #[test]
-    fn test_attach_when_server_rejects_returns_rejected_error() -> rootcause::Result<()> {
-        self::runtime()?.block_on(async {
-            let tempdir = tempfile::tempdir()?;
-            let (session, paths) = self::session_paths(tempdir.path(), "work")?;
-            fs::create_dir_all(&paths.root)?;
-            let listener = ServerListener::bind(&paths.socket)?;
-            let handle = tokio::spawn(async move {
-                let mut connection = listener.accept().await?;
-                assert2::assert!(matches!(
-                    connection.recv_request().await?,
-                    Some(ClientRequest::Attach(_))
-                ));
-                connection
-                    .send_event(&ServerEvent::Error(ServerError::ClientAlreadyAttached))
-                    .await?;
-                Ok::<(), rootcause::Report>(())
-            });
-
-            let attach_error = attach(&session, &paths, TerminalSize::new(80, 24)?).await.map_or_else(
-                |failure| match failure {
-                    AttachFailure::Rejected(error) | AttachFailure::Unusable(error) => error,
-                },
-                |_| report!("expected rejected attach"),
-            );
-
-            assert2::assert!(attach_error.to_string().contains("muxr server rejected attach"));
-            handle
-                .await
-                .map_err(|error| report!("muxr rejected attach test task panicked").attach(format!("{error}")))??;
-            Ok(())
-        })
-    }
 
     #[test]
     fn test_forward_client_requests_when_input_queue_is_ready_sends_control_first() -> rootcause::Result<()> {
@@ -1149,201 +721,6 @@ mod tests {
     }
 
     #[test]
-    fn test_handle_client_input_action_when_plain_mouse_click_arrives_focuses_pane() -> rootcause::Result<()> {
-        self::runtime()?.block_on(async {
-            let (input_sender, mut input_receiver) = tokio::sync::mpsc::channel(1);
-            let mut renderer = ClientRenderer::with_synchronized_output(
-                layout_snapshot()?,
-                pane_regions_snapshot()?,
-                SynchronizedOutput::Csi,
-            );
-            let mut output = CountingWriter::default();
-
-            assert2::assert!(
-                handle_client_input_action(
-                    ClientInputAction::Mouse(ClientMouseEvent {
-                        button: 0,
-                        phase: ClientMouseEventPhase::Press,
-                        position: muxr_core::ClientMousePosition {
-                            row: 0,
-                            col: TAB_BAR_COLS.saturating_add(1)
-                        }
-                    }),
-                    &input_sender,
-                    &mut renderer,
-                    &mut output,
-                )
-                .await?
-            );
-
-            pretty_assertions::assert_eq!(
-                input_receiver.recv().await,
-                Some(ClientRequest::FocusPaneAt(muxr_core::ClientMousePosition {
-                    row: 0,
-                    col: 1
-                })),
-            );
-            Ok(())
-        })
-    }
-
-    #[test]
-    fn test_handle_client_input_action_when_tab_sidebar_is_clicked_focuses_tab() -> rootcause::Result<()> {
-        self::runtime()?.block_on(async {
-            let (input_sender, mut input_receiver) = tokio::sync::mpsc::channel(1);
-            let mut renderer = ClientRenderer::with_synchronized_output(
-                two_tab_layout()?,
-                pane_regions_snapshot()?,
-                SynchronizedOutput::Csi,
-            );
-            let mut output = CountingWriter::default();
-
-            assert2::assert!(
-                handle_client_input_action(
-                    ClientInputAction::Mouse(ClientMouseEvent {
-                        button: 0,
-                        phase: ClientMouseEventPhase::Press,
-                        position: muxr_core::ClientMousePosition { row: 3, col: 1 }
-                    }),
-                    &input_sender,
-                    &mut renderer,
-                    &mut output,
-                )
-                .await?
-            );
-
-            pretty_assertions::assert_eq!(
-                input_receiver.recv().await,
-                Some(ClientRequest::FocusTab(TabId::new(2)?)),
-            );
-            pretty_assertions::assert_eq!(output.flushes, 0);
-            Ok(())
-        })
-    }
-
-    #[test]
-    fn test_handle_client_input_action_when_selection_release_is_on_tab_sidebar_finalizes_selection()
-    -> rootcause::Result<()> {
-        self::runtime()?.block_on(async {
-            let (input_sender, mut input_receiver) = tokio::sync::mpsc::channel(1);
-            let mut renderer = ClientRenderer::with_synchronized_output(
-                layout_snapshot()?,
-                pane_regions_snapshot()?,
-                SynchronizedOutput::Csi,
-            );
-            let mut initial_output = CountingWriter::default();
-            renderer.apply_render(
-                &mut initial_output,
-                muxr_core::RenderUpdate::Baseline(render_baseline()?),
-            )?;
-            let mut output = CountingWriter::default();
-
-            assert2::assert!(
-                handle_client_input_action(
-                    ClientInputAction::Mouse(ClientMouseEvent {
-                        button: 0,
-                        phase: ClientMouseEventPhase::Press,
-                        position: muxr_core::ClientMousePosition {
-                            row: 0,
-                            col: TAB_BAR_COLS.saturating_add(1)
-                        }
-                    }),
-                    &input_sender,
-                    &mut renderer,
-                    &mut output,
-                )
-                .await?
-            );
-            assert2::assert!(
-                handle_client_input_action(
-                    ClientInputAction::Mouse(ClientMouseEvent {
-                        button: 0,
-                        phase: ClientMouseEventPhase::Release,
-                        position: muxr_core::ClientMousePosition { row: 0, col: 1 }
-                    }),
-                    &input_sender,
-                    &mut renderer,
-                    &mut output,
-                )
-                .await?
-            );
-
-            pretty_assertions::assert_eq!(
-                input_receiver.recv().await,
-                Some(ClientRequest::FocusPaneAt(muxr_core::ClientMousePosition {
-                    row: 0,
-                    col: 1
-                })),
-            );
-            pretty_assertions::assert_eq!(renderer.selected_text(), Some("ab".to_owned()),);
-            Ok(())
-        })
-    }
-
-    #[test]
-    fn test_handle_client_input_action_when_selection_drag_moves_into_tab_sidebar_clamps_to_left_edge()
-    -> rootcause::Result<()> {
-        self::runtime()?.block_on(async {
-            let (input_sender, mut input_receiver) = tokio::sync::mpsc::channel(2);
-            let mut renderer = ClientRenderer::with_synchronized_output(
-                layout_snapshot()?,
-                pane_regions_snapshot()?,
-                SynchronizedOutput::Csi,
-            );
-            let mut initial_output = CountingWriter::default();
-            renderer.apply_render(
-                &mut initial_output,
-                muxr_core::RenderUpdate::Baseline(render_baseline()?),
-            )?;
-            let mut output = CountingWriter::default();
-
-            assert2::assert!(
-                handle_client_input_action(
-                    ClientInputAction::Mouse(ClientMouseEvent {
-                        button: 0,
-                        phase: ClientMouseEventPhase::Press,
-                        position: muxr_core::ClientMousePosition {
-                            row: 0,
-                            col: TAB_BAR_COLS.saturating_add(1)
-                        }
-                    }),
-                    &input_sender,
-                    &mut renderer,
-                    &mut output,
-                )
-                .await?
-            );
-            assert2::assert!(
-                handle_client_input_action(
-                    ClientInputAction::Mouse(ClientMouseEvent {
-                        button: 32,
-                        phase: ClientMouseEventPhase::Press,
-                        position: muxr_core::ClientMousePosition { row: 0, col: 0 }
-                    }),
-                    &input_sender,
-                    &mut renderer,
-                    &mut output,
-                )
-                .await?
-            );
-
-            pretty_assertions::assert_eq!(
-                self::recv_client_request(&mut input_receiver).await?,
-                Some(ClientRequest::FocusPaneAt(muxr_core::ClientMousePosition {
-                    row: 0,
-                    col: 1
-                })),
-            );
-            assert2::assert!(matches!(
-                input_receiver.try_recv(),
-                Err(tokio::sync::mpsc::error::TryRecvError::Empty)
-            ));
-            pretty_assertions::assert_eq!(renderer.selected_text(), Some("ab".to_owned()),);
-            Ok(())
-        })
-    }
-
-    #[test]
     fn test_send_selection_edge_scroll_request_when_scroll_is_pending_waits_for_render_ack() -> rootcause::Result<()> {
         let (input_sender, mut input_receiver) = tokio::sync::mpsc::channel(2);
         let mut renderer = ClientRenderer::with_synchronized_output(
@@ -1364,7 +741,7 @@ mod tests {
             direction: PaneScrollDirection::Down,
             position: ClientMousePosition { row: 0, col: 1 },
         };
-        pretty_assertions::assert_eq!(initial.request(), &expected);
+        pretty_assertions::assert_eq!(renderer_test_helpers::edge_scroll_request(&initial), &expected);
         assert2::assert!(send_edge_scroll_request(&input_sender, &mut renderer, initial));
         pretty_assertions::assert_eq!(input_receiver.blocking_recv(), Some(expected.clone()));
         assert2::assert!(send_selection_edge_scroll_request(&input_sender, &mut renderer));
@@ -1414,255 +791,6 @@ mod tests {
         Ok(())
     }
 
-    #[test]
-    fn test_handle_client_input_action_when_pane_tracks_mouse_forwards_mouse_to_server() -> rootcause::Result<()> {
-        self::runtime()?.block_on(async {
-            let (input_sender, mut input_receiver) = tokio::sync::mpsc::channel(1);
-            let mut renderer = ClientRenderer::with_synchronized_output(
-                layout_snapshot()?,
-                mouse_tracking_pane_regions_snapshot()?,
-                SynchronizedOutput::Csi,
-            );
-            let mut output = CountingWriter::default();
-
-            assert2::assert!(
-                handle_client_input_action(
-                    ClientInputAction::Mouse(ClientMouseEvent {
-                        button: 0,
-                        phase: ClientMouseEventPhase::Press,
-                        position: muxr_core::ClientMousePosition {
-                            row: 0,
-                            col: TAB_BAR_COLS.saturating_add(1)
-                        }
-                    }),
-                    &input_sender,
-                    &mut renderer,
-                    &mut output,
-                )
-                .await?
-            );
-
-            pretty_assertions::assert_eq!(
-                input_receiver.recv().await,
-                Some(ClientRequest::Mouse(ClientMouseEvent {
-                    button: 0,
-                    phase: ClientMouseEventPhase::Press,
-                    position: muxr_core::ClientMousePosition { row: 0, col: 1 }
-                })),
-            );
-            pretty_assertions::assert_eq!(output.flushes, 0);
-            Ok(())
-        })
-    }
-
-    #[test]
-    fn test_handle_client_input_action_when_pane_receives_wheel_forwards_mouse_to_server() -> rootcause::Result<()> {
-        self::runtime()?.block_on(async {
-            let (input_sender, mut input_receiver) = tokio::sync::mpsc::channel(1);
-            let mut renderer = ClientRenderer::with_synchronized_output(
-                layout_snapshot()?,
-                pane_regions_snapshot()?,
-                SynchronizedOutput::Csi,
-            );
-            let mut output = CountingWriter::default();
-            let event = ClientMouseEvent {
-                button: 64,
-                phase: ClientMouseEventPhase::Press,
-                position: muxr_core::ClientMousePosition {
-                    row: 0,
-                    col: TAB_BAR_COLS.saturating_add(1),
-                },
-            };
-
-            assert2::assert!(
-                handle_client_input_action(
-                    ClientInputAction::Mouse(event),
-                    &input_sender,
-                    &mut renderer,
-                    &mut output,
-                )
-                .await?
-            );
-
-            pretty_assertions::assert_eq!(
-                input_receiver.recv().await,
-                Some(ClientRequest::Mouse(ClientMouseEvent {
-                    position: muxr_core::ClientMousePosition { row: 0, col: 1 },
-                    ..event
-                })),
-            );
-            pretty_assertions::assert_eq!(output.flushes, 0);
-            Ok(())
-        })
-    }
-
-    #[test]
-    fn test_handle_client_input_action_when_pane_wheel_request_queue_is_full_waits_for_queue_space()
-    -> rootcause::Result<()> {
-        self::runtime()?.block_on(async {
-            let (input_sender, mut input_receiver) = tokio::sync::mpsc::channel(1);
-            assert2::assert!(input_sender.try_send(ClientRequest::Pong).is_ok());
-            let mut renderer = ClientRenderer::with_synchronized_output(
-                layout_snapshot()?,
-                pane_regions_snapshot()?,
-                SynchronizedOutput::Csi,
-            );
-            let mut output = CountingWriter::default();
-            let event = ClientMouseEvent {
-                button: 64,
-                phase: ClientMouseEventPhase::Press,
-                position: muxr_core::ClientMousePosition {
-                    row: 0,
-                    col: TAB_BAR_COLS.saturating_add(1),
-                },
-            };
-            let handle = handle_client_input_action(
-                ClientInputAction::Mouse(event),
-                &input_sender,
-                &mut renderer,
-                &mut output,
-            );
-            tokio::pin!(handle);
-
-            tokio::select! {
-                result = &mut handle => {
-                    return Err(report!("muxr wheel request did not wait for queue space").attach(format!("{result:?}")));
-                }
-                () = tokio::time::sleep(Duration::from_millis(50)) => {}
-            }
-
-            pretty_assertions::assert_eq!(input_receiver.recv().await, Some(ClientRequest::Pong));
-            assert2::assert!(handle.await?);
-            pretty_assertions::assert_eq!(
-                input_receiver.recv().await,
-                Some(ClientRequest::Mouse(ClientMouseEvent {
-                    position: muxr_core::ClientMousePosition { row: 0, col: 1 },
-                    ..event
-                })),
-            );
-            Ok(())
-        })
-    }
-
-    #[test]
-    fn test_handle_client_input_action_when_tracking_drag_crosses_pane_routes_to_pressed_pane() -> rootcause::Result<()>
-    {
-        self::runtime()?.block_on(async {
-            let (input_sender, mut input_receiver) = tokio::sync::mpsc::channel(4);
-            let mut renderer = ClientRenderer::with_synchronized_output(
-                layout_snapshot()?,
-                split_mouse_tracking_pane_regions_snapshot()?,
-                SynchronizedOutput::Csi,
-            );
-            let mut output = CountingWriter::default();
-
-            assert2::assert!(
-                handle_client_input_action(
-                    ClientInputAction::Mouse(ClientMouseEvent {
-                        button: 0,
-                        phase: ClientMouseEventPhase::Press,
-                        position: muxr_core::ClientMousePosition {
-                            row: 0,
-                            col: TAB_BAR_COLS.saturating_add(1)
-                        }
-                    }),
-                    &input_sender,
-                    &mut renderer,
-                    &mut output,
-                )
-                .await?
-            );
-            assert2::assert!(
-                handle_client_input_action(
-                    ClientInputAction::Mouse(ClientMouseEvent {
-                        button: 32,
-                        phase: ClientMouseEventPhase::Press,
-                        position: muxr_core::ClientMousePosition {
-                            row: 0,
-                            col: TAB_BAR_COLS.saturating_add(3)
-                        }
-                    }),
-                    &input_sender,
-                    &mut renderer,
-                    &mut output,
-                )
-                .await?
-            );
-            assert2::assert!(
-                handle_client_input_action(
-                    ClientInputAction::Mouse(ClientMouseEvent {
-                        button: 0,
-                        phase: ClientMouseEventPhase::Release,
-                        position: muxr_core::ClientMousePosition { row: 0, col: 1 }
-                    }),
-                    &input_sender,
-                    &mut renderer,
-                    &mut output,
-                )
-                .await?
-            );
-            assert2::assert!(
-                handle_client_input_action(
-                    ClientInputAction::Mouse(ClientMouseEvent {
-                        button: 32,
-                        phase: ClientMouseEventPhase::Press,
-                        position: muxr_core::ClientMousePosition {
-                            row: 0,
-                            col: TAB_BAR_COLS.saturating_add(3)
-                        }
-                    }),
-                    &input_sender,
-                    &mut renderer,
-                    &mut output,
-                )
-                .await?
-            );
-
-            pretty_assertions::assert_eq!(
-                self::recv_client_request(&mut input_receiver).await?,
-                Some(ClientRequest::Mouse(ClientMouseEvent {
-                    button: 0,
-                    phase: ClientMouseEventPhase::Press,
-                    position: muxr_core::ClientMousePosition { row: 0, col: 1 }
-                })),
-            );
-            pretty_assertions::assert_eq!(
-                self::recv_client_request(&mut input_receiver).await?,
-                Some(ClientRequest::Mouse(ClientMouseEvent {
-                    button: 32,
-                    phase: ClientMouseEventPhase::Press,
-                    position: muxr_core::ClientMousePosition { row: 0, col: 1 }
-                })),
-            );
-            pretty_assertions::assert_eq!(
-                self::recv_client_request(&mut input_receiver).await?,
-                Some(ClientRequest::Mouse(ClientMouseEvent {
-                    button: 0,
-                    phase: ClientMouseEventPhase::Release,
-                    position: muxr_core::ClientMousePosition { row: 0, col: 0 }
-                })),
-            );
-            assert2::assert!(matches!(
-                input_receiver.try_recv(),
-                Err(tokio::sync::mpsc::error::TryRecvError::Empty)
-            ));
-            Ok(())
-        })
-    }
-
-    #[test]
-    fn test_pane_size_for_terminal_when_tab_bar_has_room_reserves_sidebar_columns() -> rootcause::Result<()> {
-        pretty_assertions::assert_eq!(
-            pane_size_for_terminal(&TerminalSize::new(80, 24)?)?,
-            TerminalSize::new(80_u16.saturating_sub(TAB_BAR_COLS), 24)?,
-        );
-        pretty_assertions::assert_eq!(
-            pane_size_for_terminal(&TerminalSize::new(80, 1)?)?,
-            TerminalSize::new(80_u16.saturating_sub(TAB_BAR_COLS), 1)?,
-        );
-        Ok(())
-    }
-
     fn session_paths(base: &Path, raw: &str) -> rootcause::Result<(SessionName, SessionPaths)> {
         let session = raw.parse()?;
         let root = base.join("sessions").join(raw);
@@ -1677,14 +805,6 @@ mod tests {
                 root,
             },
         ))
-    }
-
-    async fn recv_client_request(
-        input_receiver: &mut tokio::sync::mpsc::Receiver<ClientRequest>,
-    ) -> rootcause::Result<Option<ClientRequest>> {
-        Ok(tokio::time::timeout(Duration::from_secs(1), input_receiver.recv())
-            .await
-            .context("timed out waiting for muxr client request")?)
     }
 
     fn layout_snapshot() -> rootcause::Result<LayoutSnapshot> {
@@ -1715,73 +835,6 @@ mod tests {
             muxr_core::PaneMouseMode::None,
             visible_top_row,
         )?])
-    }
-
-    fn two_tab_layout() -> rootcause::Result<LayoutSnapshot> {
-        LayoutSnapshot::new(
-            TabId::new(1)?,
-            vec![
-                TabSnapshot::new(
-                    TabId::new(1)?,
-                    "default",
-                    PaneId::new(1)?,
-                    vec![PaneSnapshot {
-                        agent_state: muxr_core::PaneAgentState::NoAgent,
-                        cwd: "/tmp/tab-1".to_owned(),
-                        cmd_label: None,
-                        id: PaneId::new(1)?,
-                        title: "shell".to_owned(),
-                    }],
-                )?,
-                TabSnapshot::new(
-                    TabId::new(2)?,
-                    "tab 2",
-                    PaneId::new(2)?,
-                    vec![PaneSnapshot {
-                        agent_state: muxr_core::PaneAgentState::NoAgent,
-                        cwd: "/tmp/tab-2".to_owned(),
-                        cmd_label: None,
-                        id: PaneId::new(2)?,
-                        title: "shell".to_owned(),
-                    }],
-                )?,
-            ],
-        )
-    }
-
-    fn mouse_tracking_pane_regions_snapshot() -> rootcause::Result<PaneRegionsSnapshot> {
-        PaneRegionsSnapshot::new(vec![muxr_core::PaneRegionSnapshot::new(
-            muxr_core::PaneId::new(1)?,
-            0,
-            0,
-            2,
-            1,
-            muxr_core::PaneMouseMode::ButtonMotion,
-            0,
-        )?])
-    }
-
-    fn split_mouse_tracking_pane_regions_snapshot() -> rootcause::Result<PaneRegionsSnapshot> {
-        PaneRegionsSnapshot::new(vec![
-            muxr_core::PaneRegionSnapshot::new(
-                muxr_core::PaneId::new(1)?,
-                0,
-                0,
-                2,
-                1,
-                muxr_core::PaneMouseMode::ButtonMotion,
-                0,
-            )?,
-            muxr_core::PaneRegionSnapshot::new(
-                muxr_core::PaneId::new(2)?,
-                2,
-                0,
-                2,
-                1,
-                muxr_core::PaneMouseMode::None,
-                0,
-            )?,
-        ])
     }
 
     fn render_baseline() -> rootcause::Result<muxr_core::RenderBaseline> {

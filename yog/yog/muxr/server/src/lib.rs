@@ -1,7 +1,9 @@
 pub use server::serve_session;
 
+mod attached_client;
 mod cmd_label;
 mod history;
+mod keyboard_input;
 mod pane_agent;
 mod pane_attention;
 mod pane_borders;
@@ -9,12 +11,15 @@ mod pane_close;
 mod pane_focus;
 mod pane_layout;
 mod pane_mouse;
+mod pane_render;
 mod pane_resize;
+mod pane_runtime;
 mod pane_scroll;
 mod pane_split;
 mod pane_url_links;
 mod pty;
 mod server;
+mod session_files;
 mod sessions_delete;
 mod state;
 mod tab_create;

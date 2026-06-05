@@ -7,7 +7,7 @@ use muxr_core::TerminalSize;
 use rootcause::report;
 
 use crate::pane_layout::PaneRegion;
-use crate::server::PaneRuntimes;
+use crate::pane_runtime::PaneRuntimes;
 use crate::server::ServerConfig;
 use crate::state::SessionLayout;
 use crate::state::Tab;
@@ -120,6 +120,40 @@ pub fn handle_focus_pane_at_request(
     Ok(focused)
 }
 
+pub fn mouse_event_region(
+    layout: &Mutex<SessionLayout>,
+    runtimes: &Mutex<PaneRuntimes>,
+    terminal_size: &TerminalSize,
+    position: ClientMousePosition,
+) -> rootcause::Result<Option<PaneRegionSnapshot>> {
+    let region = {
+        let layout = crate::server::lock_mutex(layout, "layout")?;
+        let region = layout
+            .pane_regions(terminal_size)?
+            .into_iter()
+            .find(|region| region.contains(position.into()));
+        drop(layout);
+        let Some(region) = region else {
+            return Ok(None);
+        };
+        region
+    };
+    let runtimes = crate::server::lock_mutex(runtimes, "pane runtimes")?;
+    let handle = runtimes.handle(region.id)?;
+    let mouse_mode = handle.mouse_mode()?;
+    let visible_top_row = handle.visible_top_row()?;
+    drop(runtimes);
+    Ok(Some(PaneRegionSnapshot::new(
+        region.id,
+        region.area.origin.col,
+        region.area.origin.row,
+        region.area.size.cols,
+        region.area.size.rows,
+        mouse_mode,
+        visible_top_row,
+    )?))
+}
+
 fn pane_regions_are_adjacent(region: &PaneRegion, other: &PaneRegion, direction: PaneFocusDirection) -> bool {
     // Muxr pane regions exclude the separator cell, so visible neighbors have a one-cell gap where Zellij's
     // frame-inclusive pane geometry uses exact edge equality.
@@ -163,36 +197,88 @@ const fn ranges_overlap(first_start: u32, first_len: u32, second_start: u32, sec
     first_start < second_end && second_start < first_end
 }
 
-pub fn mouse_event_region(
-    layout: &Mutex<SessionLayout>,
-    runtimes: &Mutex<PaneRuntimes>,
-    terminal_size: &TerminalSize,
-    position: ClientMousePosition,
-) -> rootcause::Result<Option<PaneRegionSnapshot>> {
-    let region = {
-        let layout = crate::server::lock_mutex(layout, "layout")?;
-        let region = layout
-            .pane_regions(terminal_size)?
-            .into_iter()
-            .find(|region| region.contains(position.into()));
-        drop(layout);
-        let Some(region) = region else {
-            return Ok(None);
-        };
-        region
-    };
-    let runtimes = crate::server::lock_mutex(runtimes, "pane runtimes")?;
-    let handle = runtimes.handle(region.id)?;
-    let mouse_mode = handle.mouse_mode()?;
-    let visible_top_row = handle.visible_top_row()?;
-    drop(runtimes);
-    Ok(Some(PaneRegionSnapshot::new(
-        region.id,
-        region.area.origin.col,
-        region.area.origin.row,
-        region.area.size.cols,
-        region.area.size.rows,
-        mouse_mode,
-        visible_top_row,
-    )?))
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::pane_split::PaneSplitAxis;
+    use crate::state::test_helpers as state_test_helpers;
+
+    #[rstest::rstest]
+    #[case::first_pane(ClientMousePosition { row: 0, col: 0 }, "pane-1", true)]
+    #[case::border(ClientMousePosition { row: 0, col: 40 }, "pane-2", false)]
+    #[case::second_pane(ClientMousePosition { row: 0, col: 41 }, "pane-2", false)]
+    fn test_layout_focus_pane_at_when_mouse_position_arrives_updates_active_pane(
+        #[case] position: ClientMousePosition,
+        #[case] expected_active_pane: &str,
+        #[case] expected_changed: bool,
+    ) -> rootcause::Result<()> {
+        let mut layout = state_test_helpers::layout("work")?;
+        layout.split_active_pane(state_test_helpers::metadata("sh", 2), PaneSplitAxis::Vertical)?;
+        state_test_helpers::force_balanced_test_split_ratio(&mut layout)?;
+
+        pretty_assertions::assert_eq!(
+            layout.focus_pane_at(&TerminalSize::new(80, 24)?, position)?,
+            expected_changed,
+        );
+        pretty_assertions::assert_eq!(layout.active_pane_id()?.to_string(), expected_active_pane);
+        Ok(())
+    }
+
+    #[rstest::rstest]
+    #[case::first_pane(ClientMousePosition { row: 0, col: 0 }, Some("pane-1"))]
+    #[case::border(ClientMousePosition { row: 0, col: 40 }, None)]
+    #[case::second_pane(ClientMousePosition { row: 0, col: 41 }, Some("pane-2"))]
+    fn test_layout_pane_at_when_mouse_position_arrives_returns_pane_without_focus_change(
+        #[case] position: ClientMousePosition,
+        #[case] expected_pane: Option<&str>,
+    ) -> rootcause::Result<()> {
+        let mut layout = state_test_helpers::layout("work")?;
+        layout.split_active_pane(state_test_helpers::metadata("sh", 2), PaneSplitAxis::Vertical)?;
+        state_test_helpers::force_balanced_test_split_ratio(&mut layout)?;
+
+        let pane_id = layout.pane_at(&TerminalSize::new(80, 24)?, position)?;
+
+        pretty_assertions::assert_eq!(pane_id.map(|id| id.to_string()), expected_pane.map(str::to_owned));
+        pretty_assertions::assert_eq!(layout.active_pane_id()?.to_string(), "pane-2");
+        Ok(())
+    }
+
+    #[rstest::rstest]
+    #[case::left(PaneFocusDirection::Left, "pane-1", true)]
+    #[case::right_edge(PaneFocusDirection::Right, "pane-2", false)]
+    #[case::up_edge(PaneFocusDirection::Up, "pane-2", false)]
+    #[case::down_edge(PaneFocusDirection::Down, "pane-2", false)]
+    fn test_layout_focus_pane_direction_when_adjacent_pane_exists_updates_active_pane(
+        #[case] direction: PaneFocusDirection,
+        #[case] expected_active_pane: &str,
+        #[case] expected_changed: bool,
+    ) -> rootcause::Result<()> {
+        let mut layout = state_test_helpers::layout("work")?;
+        layout.split_active_pane(state_test_helpers::metadata("sh", 2), PaneSplitAxis::Vertical)?;
+
+        pretty_assertions::assert_eq!(
+            layout.focus_pane_direction(&TerminalSize::new(80, 24)?, direction)?,
+            expected_changed,
+        );
+        pretty_assertions::assert_eq!(layout.active_pane_id()?.to_string(), expected_active_pane);
+        Ok(())
+    }
+
+    #[test]
+    fn test_layout_focus_pane_direction_when_multiple_adjacent_panes_exist_uses_recent_focus() -> rootcause::Result<()>
+    {
+        let mut layout = state_test_helpers::layout("work")?;
+        layout.split_active_pane(state_test_helpers::metadata("sh", 2), PaneSplitAxis::Vertical)?;
+        layout.split_active_pane(state_test_helpers::metadata("sh", 3), PaneSplitAxis::Horizontal)?;
+
+        assert2::assert!(layout.focus_pane_direction(&TerminalSize::new(80, 24)?, PaneFocusDirection::Up)?);
+        pretty_assertions::assert_eq!(layout.active_pane_id()?.to_string(), "pane-2");
+        assert2::assert!(layout.focus_pane_direction(&TerminalSize::new(80, 24)?, PaneFocusDirection::Left)?);
+        pretty_assertions::assert_eq!(layout.active_pane_id()?.to_string(), "pane-1");
+
+        assert2::assert!(layout.focus_pane_direction(&TerminalSize::new(80, 24)?, PaneFocusDirection::Right)?);
+
+        pretty_assertions::assert_eq!(layout.active_pane_id()?.to_string(), "pane-2");
+        Ok(())
+    }
 }

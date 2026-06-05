@@ -4,13 +4,30 @@ use muxr_core::ClientMousePosition;
 use muxr_core::PaneScrollDirection;
 use muxr_core::TerminalSize;
 
-use crate::server::PaneRuntimes;
+use crate::pane_runtime::PaneRuntimes;
 use crate::state::SessionLayout;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PaneScrollAmount {
     Line,
     Wheel,
+}
+
+pub fn handle_scroll_pane_line_at_request(
+    position: ClientMousePosition,
+    direction: PaneScrollDirection,
+    layout: &Mutex<SessionLayout>,
+    runtimes: &Mutex<PaneRuntimes>,
+    terminal_size: &TerminalSize,
+) -> rootcause::Result<bool> {
+    self::handle_scroll_pane_at_request(
+        position,
+        direction,
+        PaneScrollAmount::Line,
+        layout,
+        runtimes,
+        terminal_size,
+    )
 }
 
 pub fn handle_scroll_pane_at_request(

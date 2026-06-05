@@ -120,11 +120,6 @@ impl SessionLayout {
         Ok(self.active_tab()?.active_pane)
     }
 
-    #[cfg(test)]
-    pub const fn active_tab_id(&self) -> &TabId {
-        &self.active_tab
-    }
-
     /// Return panes in layout order.
     pub fn panes(&self) -> Vec<&Pane> {
         self.entries.iter().flat_map(Tab::panes).collect()
@@ -201,4 +196,105 @@ fn next_number(ids: impl Iterator<Item = u32>, kind: &str) -> rootcause::Result<
     max_number
         .checked_add(1)
         .ok_or_else(|| report!("muxr layout id counter overflowed").attach(format!("kind={kind}")))
+}
+
+#[cfg(test)]
+pub mod test_helpers {
+    use muxr_core::TerminalSize;
+
+    use super::*;
+    use crate::pane_borders::PaneBorderAxis;
+    use crate::pane_split::PaneSplitRatio;
+
+    const BALANCED_TEST_SPLIT_RATIO: u16 = 500;
+
+    pub type PaneRegionTuple = (String, u16, u16, u16, u16);
+
+    pub fn layout(raw: &str) -> rootcause::Result<SessionLayout> {
+        let session: SessionName = raw.parse()?;
+        SessionLayout::initial(&session, metadata("sh", 1))
+    }
+
+    pub fn metadata(cmd_label: &str, started_at: u64) -> SessionMetadata {
+        SessionMetadata {
+            cmd_label: cmd_label.to_owned(),
+            cwd: "/tmp".to_owned(),
+            started_at,
+        }
+    }
+
+    pub fn force_balanced_test_split_ratio(layout: &mut SessionLayout) -> rootcause::Result<()> {
+        let ratio = PaneSplitRatio::new(BALANCED_TEST_SPLIT_RATIO)?;
+        for tab in &mut layout.entries {
+            self::force_balanced_pane_tree_split_ratio(&mut tab.pane_tree, ratio);
+        }
+        Ok(())
+    }
+
+    pub fn layout_tab_ids(layout: &SessionLayout) -> rootcause::Result<Vec<String>> {
+        Ok(layout
+            .snapshot()?
+            .tabs()
+            .iter()
+            .map(|tab| tab.id().to_string())
+            .collect::<Vec<_>>())
+    }
+
+    pub fn layout_active_tab_pane_ids(layout: &SessionLayout) -> rootcause::Result<Vec<String>> {
+        let snapshot = layout.snapshot()?;
+        let active_tab = snapshot
+            .tabs()
+            .iter()
+            .find(|tab| tab.id() == snapshot.active_tab())
+            .ok_or_else(|| report!("expected active tab in muxr test layout snapshot"))?;
+
+        Ok(active_tab.panes().iter().map(|pane| pane.id.to_string()).collect())
+    }
+
+    pub fn layout_active_tab_pane_regions(
+        layout: &SessionLayout,
+        size: &TerminalSize,
+    ) -> rootcause::Result<Vec<PaneRegionTuple>> {
+        Ok(layout
+            .pane_regions(size)?
+            .iter()
+            .map(|region| {
+                (
+                    region.id.to_string(),
+                    region.area.origin.col,
+                    region.area.origin.row,
+                    region.area.size.cols,
+                    region.area.size.rows,
+                )
+            })
+            .collect())
+    }
+
+    pub fn layout_active_tab_pane_borders(
+        layout: &SessionLayout,
+        size: &TerminalSize,
+    ) -> rootcause::Result<Vec<(PaneBorderAxis, u16, u16, u16)>> {
+        Ok(layout
+            .pane_layout(size)?
+            .borders()
+            .iter()
+            .map(|border| (border.axis(), border.col(), border.row(), border.len()))
+            .collect())
+    }
+
+    fn force_balanced_pane_tree_split_ratio(pane_tree: &mut PaneTree, ratio: PaneSplitRatio) {
+        match pane_tree {
+            PaneTree::Pane(_) => {}
+            PaneTree::Split {
+                first_ratio,
+                first,
+                second,
+                ..
+            } => {
+                *first_ratio = ratio;
+                self::force_balanced_pane_tree_split_ratio(first, ratio);
+                self::force_balanced_pane_tree_split_ratio(second, ratio);
+            }
+        }
+    }
 }

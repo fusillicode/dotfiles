@@ -116,31 +116,6 @@ pub enum PaneBorderAxis {
     Vertical,
 }
 
-fn pane_region_owns_border_cell(region: &PaneRegion, axis: PaneBorderAxis, position: PanePosition) -> bool {
-    match axis {
-        PaneBorderAxis::Horizontal => {
-            // Pane regions exclude separator cells; extending the perpendicular span by exactly one cell
-            // gives split junctions to the pane corner without coloring unrelated diagonal border cells.
-            let col = u32::from(position.col);
-            let start_col = u32::from(region.area.origin.col).saturating_sub(1);
-            let end_col = region.area.end_col_exclusive();
-            let contains_col = col >= start_col && col <= end_col;
-            let touches_top = position.row.checked_add(1) == Some(region.area.origin.row) && contains_col;
-            let touches_bottom = region.area.end_row() == Some(position.row) && contains_col;
-            touches_top || touches_bottom
-        }
-        PaneBorderAxis::Vertical => {
-            let row = u32::from(position.row);
-            let start_row = u32::from(region.area.origin.row).saturating_sub(1);
-            let end_row = region.area.end_row_exclusive();
-            let contains_row = row >= start_row && row <= end_row;
-            let touches_left = position.col.checked_add(1) == Some(region.area.origin.col) && contains_row;
-            let touches_right = region.area.end_col() == Some(position.col) && contains_row;
-            touches_left || touches_right
-        }
-    }
-}
-
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum BorderRenderMode {
     Focus,
@@ -165,6 +140,31 @@ pub fn paste_borders(
         *target = RenderCell::narrow(cell.shape.glyph(), cell.visual.style());
     }
     Ok(())
+}
+
+fn pane_region_owns_border_cell(region: &PaneRegion, axis: PaneBorderAxis, position: PanePosition) -> bool {
+    match axis {
+        PaneBorderAxis::Horizontal => {
+            // Pane regions exclude separator cells; extending the perpendicular span by exactly one cell
+            // gives split junctions to the pane corner without coloring unrelated diagonal border cells.
+            let col = u32::from(position.col);
+            let start_col = u32::from(region.area.origin.col).saturating_sub(1);
+            let end_col = region.area.end_col_exclusive();
+            let contains_col = col >= start_col && col <= end_col;
+            let touches_top = position.row.checked_add(1) == Some(region.area.origin.row) && contains_col;
+            let touches_bottom = region.area.end_row() == Some(position.row) && contains_col;
+            touches_top || touches_bottom
+        }
+        PaneBorderAxis::Vertical => {
+            let row = u32::from(position.row);
+            let start_row = u32::from(region.area.origin.row).saturating_sub(1);
+            let end_row = region.area.end_row_exclusive();
+            let contains_row = row >= start_row && row <= end_row;
+            let touches_left = position.col.checked_add(1) == Some(region.area.origin.col) && contains_row;
+            let touches_right = region.area.end_col() == Some(position.col) && contains_row;
+            touches_left || touches_right
+        }
+    }
 }
 
 fn compose_border_cells(

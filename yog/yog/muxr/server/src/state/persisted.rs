@@ -77,3 +77,84 @@ pub fn load_metadata(paths: &SessionPaths, session: &SessionName) -> rootcause::
 
     Ok(Some(SessionLayout::from_persisted(session, persisted)?))
 }
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+
+    use muxr_core::TerminalSize;
+
+    use super::*;
+    use crate::pane_resize::PaneResizeDirection;
+    use crate::pane_split::PaneSplitAxis;
+    use crate::state::test_helpers as state_test_helpers;
+
+    #[test]
+    fn test_layout_metadata_when_nested_panes_exist_round_trips_tree() -> rootcause::Result<()> {
+        let tempdir = tempfile::tempdir()?;
+        let (session, paths) = self::session_paths(tempdir.path(), "work")?;
+        fs::create_dir_all(&paths.root)?;
+        let mut layout = SessionLayout::initial(&session, state_test_helpers::metadata("sh", 1))?;
+
+        layout.split_active_pane(state_test_helpers::metadata("sh", 2), PaneSplitAxis::Vertical)?;
+        layout.split_active_pane(state_test_helpers::metadata("sh", 3), PaneSplitAxis::Horizontal)?;
+        state_test_helpers::force_balanced_test_split_ratio(&mut layout)?;
+        self::write_metadata(&paths, &layout)?;
+
+        let loaded =
+            self::load_metadata(&paths, &session)?.ok_or_else(|| report!("expected muxr layout metadata to load"))?;
+
+        pretty_assertions::assert_eq!(loaded.active_pane_id()?.to_string(), "pane-3");
+        pretty_assertions::assert_eq!(
+            state_test_helpers::layout_active_tab_pane_regions(&loaded, &TerminalSize::new(80, 24)?)?,
+            vec![
+                ("pane-1".to_owned(), 0, 0, 40, 24),
+                ("pane-2".to_owned(), 41, 0, 39, 12),
+                ("pane-3".to_owned(), 41, 13, 39, 11),
+            ],
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_layout_metadata_when_resized_panes_exist_round_trips_split_ratio() -> rootcause::Result<()> {
+        let tempdir = tempfile::tempdir()?;
+        let (session, paths) = self::session_paths(tempdir.path(), "work")?;
+        fs::create_dir_all(&paths.root)?;
+        let mut layout = SessionLayout::initial(&session, state_test_helpers::metadata("sh", 1))?;
+
+        layout.split_active_pane(state_test_helpers::metadata("sh", 2), PaneSplitAxis::Vertical)?;
+        state_test_helpers::force_balanced_test_split_ratio(&mut layout)?;
+        assert2::assert!(layout.resize_active_pane(PaneResizeDirection::Left)?);
+        self::write_metadata(&paths, &layout)?;
+
+        let loaded =
+            self::load_metadata(&paths, &session)?.ok_or_else(|| report!("expected muxr layout metadata to load"))?;
+
+        pretty_assertions::assert_eq!(
+            state_test_helpers::layout_active_tab_pane_regions(&loaded, &TerminalSize::new(80, 24)?)?,
+            vec![
+                ("pane-1".to_owned(), 0, 0, 36, 24),
+                ("pane-2".to_owned(), 37, 0, 43, 24),
+            ],
+        );
+        Ok(())
+    }
+
+    fn session_paths(base: &std::path::Path, raw: &str) -> rootcause::Result<(SessionName, SessionPaths)> {
+        let session = raw.parse()?;
+        let state_root = base.join("muxr");
+        let root = state_root.join("sessions").join(raw);
+
+        Ok((
+            session,
+            SessionPaths {
+                socket: state_root.join("s").join(format!("{raw}.sock")),
+                pid: root.join("server.pid"),
+                layout: root.join("layout.json"),
+                panes: root.join("panes"),
+                root,
+            },
+        ))
+    }
+}
