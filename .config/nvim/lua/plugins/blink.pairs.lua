@@ -1,6 +1,6 @@
 return {
   'saghen/blink.pairs',
-  build = 'cargo build --release',
+  build = function() require('blink.pairs').build():pwait(60000) end,
   event = 'InsertEnter',
   opts = {
     mappings = {
