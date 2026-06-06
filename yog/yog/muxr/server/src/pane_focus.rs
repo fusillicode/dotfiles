@@ -199,6 +199,8 @@ const fn ranges_overlap(first_start: u32, first_len: u32, second_start: u32, sec
 
 #[cfg(test)]
 mod tests {
+    use muxr_config::MuxrConfig;
+
     use super::*;
     use crate::pane_split::PaneSplitAxis;
     use crate::state::test_helpers as state_test_helpers;
@@ -213,7 +215,11 @@ mod tests {
         #[case] expected_changed: bool,
     ) -> rootcause::Result<()> {
         let mut layout = state_test_helpers::layout("work")?;
-        layout.split_active_pane(state_test_helpers::metadata("sh", 2), PaneSplitAxis::Vertical)?;
+        layout.split_active_pane(
+            MuxrConfig::default().layout,
+            state_test_helpers::metadata("sh", 2),
+            PaneSplitAxis::Vertical,
+        )?;
         state_test_helpers::force_balanced_test_split_ratio(&mut layout)?;
 
         pretty_assertions::assert_eq!(
@@ -233,7 +239,11 @@ mod tests {
         #[case] expected_pane: Option<&str>,
     ) -> rootcause::Result<()> {
         let mut layout = state_test_helpers::layout("work")?;
-        layout.split_active_pane(state_test_helpers::metadata("sh", 2), PaneSplitAxis::Vertical)?;
+        layout.split_active_pane(
+            MuxrConfig::default().layout,
+            state_test_helpers::metadata("sh", 2),
+            PaneSplitAxis::Vertical,
+        )?;
         state_test_helpers::force_balanced_test_split_ratio(&mut layout)?;
 
         let pane_id = layout.pane_at(&TerminalSize::new(80, 24)?, position)?;
@@ -254,7 +264,11 @@ mod tests {
         #[case] expected_changed: bool,
     ) -> rootcause::Result<()> {
         let mut layout = state_test_helpers::layout("work")?;
-        layout.split_active_pane(state_test_helpers::metadata("sh", 2), PaneSplitAxis::Vertical)?;
+        layout.split_active_pane(
+            MuxrConfig::default().layout,
+            state_test_helpers::metadata("sh", 2),
+            PaneSplitAxis::Vertical,
+        )?;
 
         pretty_assertions::assert_eq!(
             layout.focus_pane_direction(&TerminalSize::new(80, 24)?, direction)?,
@@ -268,8 +282,16 @@ mod tests {
     fn test_layout_focus_pane_direction_when_multiple_adjacent_panes_exist_uses_recent_focus() -> rootcause::Result<()>
     {
         let mut layout = state_test_helpers::layout("work")?;
-        layout.split_active_pane(state_test_helpers::metadata("sh", 2), PaneSplitAxis::Vertical)?;
-        layout.split_active_pane(state_test_helpers::metadata("sh", 3), PaneSplitAxis::Horizontal)?;
+        layout.split_active_pane(
+            MuxrConfig::default().layout,
+            state_test_helpers::metadata("sh", 2),
+            PaneSplitAxis::Vertical,
+        )?;
+        layout.split_active_pane(
+            MuxrConfig::default().layout,
+            state_test_helpers::metadata("sh", 3),
+            PaneSplitAxis::Horizontal,
+        )?;
 
         assert2::assert!(layout.focus_pane_direction(&TerminalSize::new(80, 24)?, PaneFocusDirection::Up)?);
         pretty_assertions::assert_eq!(layout.active_pane_id()?.to_string(), "pane-2");

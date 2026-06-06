@@ -3,8 +3,6 @@ use std::io::IsTerminal;
 use muxr_core::TerminalSize;
 use rootcause::prelude::ResultExt;
 
-use super::TAB_BAR_COLS;
-
 pub struct TerminalGuard {
     entered_render_screen: bool,
     raw_mode_enabled: bool,
@@ -60,8 +58,8 @@ pub fn current_terminal_size() -> rootcause::Result<TerminalSize> {
     }
 }
 
-pub fn pane_size_for_terminal(size: &TerminalSize) -> rootcause::Result<TerminalSize> {
-    let cols = size.cols().saturating_sub(TAB_BAR_COLS).max(1);
+pub fn pane_size_for_terminal(tab_bar_width: u16, size: &TerminalSize) -> rootcause::Result<TerminalSize> {
+    let cols = size.cols().saturating_sub(tab_bar_width).max(1);
     TerminalSize::new(cols, size.rows())
 }
 
@@ -80,17 +78,21 @@ fn terminal_size_from_env() -> rootcause::Result<Option<TerminalSize>> {
 
 #[cfg(test)]
 mod tests {
+    use muxr_config::MuxrConfig;
+
     use super::*;
 
     #[test]
     fn test_pane_size_for_terminal_when_tab_bar_has_room_reserves_sidebar_columns() -> rootcause::Result<()> {
+        let tab_bar_width = MuxrConfig::default().tab_bar.width;
+
         pretty_assertions::assert_eq!(
-            pane_size_for_terminal(&TerminalSize::new(80, 24)?)?,
-            TerminalSize::new(80_u16.saturating_sub(TAB_BAR_COLS), 24)?,
+            pane_size_for_terminal(tab_bar_width, &TerminalSize::new(80, 24)?)?,
+            TerminalSize::new(80_u16.saturating_sub(tab_bar_width), 24)?,
         );
         pretty_assertions::assert_eq!(
-            pane_size_for_terminal(&TerminalSize::new(80, 1)?)?,
-            TerminalSize::new(80_u16.saturating_sub(TAB_BAR_COLS), 1)?,
+            pane_size_for_terminal(tab_bar_width, &TerminalSize::new(80, 1)?)?,
+            TerminalSize::new(80_u16.saturating_sub(tab_bar_width), 1)?,
         );
         Ok(())
     }

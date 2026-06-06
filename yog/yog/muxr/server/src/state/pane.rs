@@ -1,6 +1,6 @@
-use muxr_core::PaneAgentState;
 use muxr_core::PaneId;
 use muxr_core::PaneSnapshot;
+use muxr_core::TrackedProcessState;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -121,11 +121,11 @@ impl Pane {
         &self,
         terminal_title: Option<&str>,
         runtime_cmd_label: Option<&str>,
-        runtime_agent_state: PaneAgentState,
+        runtime_tracked_process_state: TrackedProcessState,
     ) -> PaneSnapshot {
         let terminal_title = crate::cmd_label::classify_terminal_title(terminal_title, &self.cwd);
         PaneSnapshot {
-            agent_state: runtime_agent_state,
+            tracked_process_state: runtime_tracked_process_state,
             cmd_label: runtime_cmd_label
                 .map(str::trim)
                 .filter(|cmd| !cmd.is_empty())
@@ -153,7 +153,7 @@ mod tests {
 
     #[test]
     fn test_snapshot_with_runtime_metadata_when_title_is_cwd_updates_snapshot_cwd() -> rootcause::Result<()> {
-        let snapshot = self::pane()?.snapshot_with_runtime_metadata(Some("~"), None, PaneAgentState::NoAgent);
+        let snapshot = self::pane()?.snapshot_with_runtime_metadata(Some("~"), None, TrackedProcessState::None);
 
         pretty_assertions::assert_eq!(snapshot.cwd, "~");
         pretty_assertions::assert_eq!(snapshot.cmd_label, None);
@@ -162,7 +162,8 @@ mod tests {
 
     #[test]
     fn test_snapshot_with_runtime_metadata_when_title_is_cmd_keeps_pane_cwd() -> rootcause::Result<()> {
-        let snapshot = self::pane()?.snapshot_with_runtime_metadata(Some("cargo test"), None, PaneAgentState::NoAgent);
+        let snapshot =
+            self::pane()?.snapshot_with_runtime_metadata(Some("cargo test"), None, TrackedProcessState::None);
 
         pretty_assertions::assert_eq!(snapshot.cwd, "/old/project");
         pretty_assertions::assert_eq!(snapshot.cmd_label, Some("cargo test".to_owned()));
@@ -170,16 +171,16 @@ mod tests {
     }
 
     #[rstest::rstest]
-    #[case::no_agent(PaneAgentState::NoAgent)]
-    #[case::seen(PaneAgentState::Seen)]
-    #[case::busy(PaneAgentState::Busy)]
-    #[case::unseen(PaneAgentState::Unseen)]
-    fn test_snapshot_with_runtime_metadata_when_runtime_agent_state_varies_projects_state(
-        #[case] agent_state: PaneAgentState,
+    #[case::no_agent(TrackedProcessState::None)]
+    #[case::seen(TrackedProcessState::Seen)]
+    #[case::busy(TrackedProcessState::Busy)]
+    #[case::unseen(TrackedProcessState::Unseen)]
+    fn test_snapshot_with_runtime_metadata_when_runtime_tracked_process_state_varies_projects_state(
+        #[case] tracked_process_state: TrackedProcessState,
     ) -> rootcause::Result<()> {
-        let snapshot = self::pane()?.snapshot_with_runtime_metadata(Some("dotfiles"), None, agent_state);
+        let snapshot = self::pane()?.snapshot_with_runtime_metadata(Some("dotfiles"), None, tracked_process_state);
 
-        pretty_assertions::assert_eq!(snapshot.agent_state, agent_state);
+        pretty_assertions::assert_eq!(snapshot.tracked_process_state, tracked_process_state);
         pretty_assertions::assert_eq!(snapshot.cmd_label, Some("dotfiles".to_owned()));
         Ok(())
     }
@@ -188,7 +189,7 @@ mod tests {
     fn test_snapshot_with_runtime_metadata_when_runtime_cmd_is_present_overrides_terminal_title()
     -> rootcause::Result<()> {
         let snapshot =
-            self::pane()?.snapshot_with_runtime_metadata(Some("dotfiles"), Some("codex"), PaneAgentState::NoAgent);
+            self::pane()?.snapshot_with_runtime_metadata(Some("dotfiles"), Some("codex"), TrackedProcessState::None);
 
         pretty_assertions::assert_eq!(snapshot.cmd_label, Some("codex".to_owned()));
         Ok(())

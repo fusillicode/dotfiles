@@ -5,6 +5,7 @@ use std::path::Path;
 use std::thread;
 use std::time::Duration;
 
+use muxr_config::MuxrConfig;
 use muxr_core::ClientMouseEvent;
 use muxr_core::ClientRequest;
 use muxr_core::ServerEvent;
@@ -37,7 +38,6 @@ const AMBIGUOUS_INPUT_TIMEOUT: Duration = Duration::from_millis(50);
 const DOUBLE_CLICK_THRESHOLD: Duration = Duration::from_millis(400);
 const SELECTION_EDGE_SCROLL_INTERVAL: Duration = Duration::from_millis(50);
 const STDIN_BUFFER_SIZE: usize = 8192;
-const TAB_BAR_COLS: u16 = self::tab_bar::WIDTH;
 const CONTROL_REQUEST_CHANNEL_LIMIT: usize = 128;
 const INPUT_REQUEST_CHANNEL_LIMIT: usize = 1024;
 
@@ -63,26 +63,31 @@ enum ClientInputAction {
 /// - Terminal input/output or protocol IO fails.
 pub fn start(session: &SessionName, server_executable: &Path) -> rootcause::Result<()> {
     self::run_async(async {
+        let muxr_config = MuxrConfig::default();
         let terminal_size = self::terminal::current_terminal_size()?;
-        let pane_size = self::terminal::pane_size_for_terminal(&terminal_size)?;
+        let pane_size = self::terminal::pane_size_for_terminal(muxr_config.tab_bar.width, &terminal_size)?;
         let attached_session =
             self::session_attach::open_session(session, pane_size.clone(), server_executable).await?;
-        self::run_interactive(attached_session, pane_size).await
+        self::run_interactive(&muxr_config, attached_session, pane_size).await
     })
 }
 
-async fn run_interactive(mut attached_session: AttachedSession, initial_size: TerminalSize) -> rootcause::Result<()> {
+async fn run_interactive(
+    muxr_config: &MuxrConfig,
+    mut attached_session: AttachedSession,
+    initial_size: TerminalSize,
+) -> rootcause::Result<()> {
     let _terminal_guard = TerminalGuard::enable_if_terminal()?;
     let (control_sender, control_receiver) = tokio::sync::mpsc::channel(CONTROL_REQUEST_CHANNEL_LIMIT);
     let (input_action_sender, mut input_action_receiver) = tokio::sync::mpsc::channel(INPUT_REQUEST_CHANNEL_LIMIT);
     let (input_request_sender, input_receiver) = tokio::sync::mpsc::channel(INPUT_REQUEST_CHANNEL_LIMIT);
     let stdin_handle = self::spawn_stdin_forwarder(input_action_sender);
-    let resize_handle = self::spawn_resize_forwarder(control_sender.clone(), initial_size);
+    let resize_handle = self::spawn_resize_forwarder(control_sender.clone(), muxr_config.tab_bar.width, initial_size);
     let writer = attached_session.writer;
     let writer_handle =
         tokio::spawn(async move { self::forward_client_requests(writer, control_receiver, input_receiver).await });
     let mut stdout = std::io::stdout();
-    let mut renderer = ClientRenderer::new(attached_session.layout, attached_session.pane_regions);
+    let mut renderer = ClientRenderer::new(muxr_config, attached_session.layout, attached_session.pane_regions);
     renderer.sync_mouse_capture(&mut stdout)?;
     let edge_scroll_tick_start = tokio::time::Instant::now()
         .checked_add(SELECTION_EDGE_SCROLL_INTERVAL)
@@ -139,7 +144,7 @@ async fn run_interactive(mut attached_session: AttachedSession, initial_size: Te
                     input_actions_closed = true;
                     continue;
                 };
-                if !self::handle_client_input_action(action, &input_request_sender, &mut renderer, &mut stdout).await? {
+                if !self::handle_client_input_action(action, muxr_config, &input_request_sender, &mut renderer, &mut stdout).await? {
                     break;
                 }
             },
@@ -165,6 +170,7 @@ async fn run_interactive(mut attached_session: AttachedSession, initial_size: Te
 
 async fn handle_client_input_action(
     action: ClientInputAction,
+    muxr_config: &MuxrConfig,
     input_sender: &tokio::sync::mpsc::Sender<ClientRequest>,
     renderer: &mut ClientRenderer,
     stdout: &mut impl Write,
@@ -175,7 +181,7 @@ async fn handle_client_input_action(
             Ok(true)
         }
         ClientInputAction::Mouse(event) => {
-            self::pane_mouse::handle_mouse_input_action(event, input_sender, renderer, stdout).await
+            self::pane_mouse::handle_mouse_input_action(muxr_config, event, input_sender, renderer, stdout).await
         }
         ClientInputAction::ServerRequest(request) => {
             if input_sender.send(request).await.is_err() {
@@ -389,6 +395,7 @@ fn send_droppable_input_action(
 
 fn spawn_resize_forwarder(
     sender: tokio::sync::mpsc::Sender<ClientRequest>,
+    tab_bar_width: u16,
     initial_size: TerminalSize,
 ) -> thread::JoinHandle<()> {
     thread::spawn(move || {
@@ -404,7 +411,7 @@ fn spawn_resize_forwarder(
                 break;
             };
             // Resize requests use the pane viewport, because left-side host-terminal columns are reserved for tab UI.
-            let Ok(next_size) = self::terminal::pane_size_for_terminal(&next_terminal_size) else {
+            let Ok(next_size) = self::terminal::pane_size_for_terminal(tab_bar_width, &next_terminal_size) else {
                 break;
             };
             if next_size == last_size {
@@ -811,7 +818,7 @@ mod tests {
         let active_tab = TabId::new(1)?;
         let active_pane = PaneId::new(1)?;
         let pane = PaneSnapshot {
-            agent_state: muxr_core::PaneAgentState::NoAgent,
+            tracked_process_state: muxr_core::TrackedProcessState::None,
             cwd: "/tmp".to_owned(),
             cmd_label: None,
             focus_seq: 1,

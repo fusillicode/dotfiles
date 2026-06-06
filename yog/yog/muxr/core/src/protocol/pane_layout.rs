@@ -7,7 +7,7 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use super::ClientMousePosition;
-use super::PaneAgentState;
+use super::TrackedProcessState;
 
 #[derive(
     rkyv::Archive,
@@ -263,12 +263,12 @@ where
     }
 }
 
-/// Agent status rendered by the client tab bar.
+/// Tracked-process status rendered by the client tab bar.
 
 #[derive(rkyv::Archive, Clone, Debug, Eq, PartialEq, Serialize, rkyv::Serialize)]
 pub struct PaneSnapshot {
-    /// Agent status used by the client tab bar.
-    pub agent_state: PaneAgentState,
+    /// Tracked-process status used by the client tab bar.
+    pub tracked_process_state: TrackedProcessState,
     /// Current pane working directory, used by the client tab bar.
     pub cwd: String,
     /// Shell-provided cmd label from the pane terminal title, used by the client tab bar.
@@ -287,14 +287,15 @@ where
     D::Error: rkyv::rancor::Source,
 {
     fn deserialize(&self, deserializer: &mut D) -> Result<PaneSnapshot, D::Error> {
-        let agent_state = rkyv::Deserialize::<PaneAgentState, D>::deserialize(&self.agent_state, deserializer)?;
+        let tracked_process_state =
+            rkyv::Deserialize::<TrackedProcessState, D>::deserialize(&self.tracked_process_state, deserializer)?;
         let cwd = rkyv::Deserialize::<String, D>::deserialize(&self.cwd, deserializer)?;
         let cmd_label = rkyv::Deserialize::<Option<String>, D>::deserialize(&self.cmd_label, deserializer)?;
         let focus_seq = rkyv::Deserialize::<u64, D>::deserialize(&self.focus_seq, deserializer)?;
         let id = rkyv::Deserialize::<PaneId, D>::deserialize(&self.id, deserializer)?;
         let title = rkyv::Deserialize::<String, D>::deserialize(&self.title, deserializer)?;
         Ok(PaneSnapshot {
-            agent_state,
+            tracked_process_state,
             cwd,
             cmd_label,
             focus_seq,
@@ -635,7 +636,7 @@ mod tests {
         let active_tab = TabId::new(1)?;
         let active_pane = PaneId::new(1)?;
         let pane = PaneSnapshot {
-            agent_state: PaneAgentState::NoAgent,
+            tracked_process_state: TrackedProcessState::None,
             cwd: "/tmp".to_owned(),
             cmd_label: None,
             focus_seq: 1,
@@ -652,7 +653,7 @@ mod tests {
 
     fn raw_pane_snapshot(id: u32, title: &str) -> PaneSnapshot {
         PaneSnapshot {
-            agent_state: PaneAgentState::NoAgent,
+            tracked_process_state: TrackedProcessState::None,
             cwd: "/tmp".to_owned(),
             cmd_label: None,
             focus_seq: 1,

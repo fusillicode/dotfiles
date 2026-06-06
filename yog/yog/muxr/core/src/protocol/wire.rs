@@ -168,7 +168,6 @@ mod tests {
 
     use super::super::keyboard_input::ClientKeyCode;
     use super::super::keyboard_input::ClientKeyModifiers;
-    use super::super::pane_agent::PaneAgentState;
     use super::super::pane_layout::PaneId;
     use super::super::pane_layout::PaneMouseMode;
     use super::super::pane_layout::PaneRegionSnapshot;
@@ -186,6 +185,7 @@ mod tests {
     use super::super::pane_render::test_helpers as pane_render_test_helpers;
     use super::super::session_attach::AttachRequest;
     use super::super::terminal::TerminalSize;
+    use super::super::tracked_process::TrackedProcessState;
     use super::*;
 
     #[rstest]
@@ -321,7 +321,7 @@ mod tests {
         let active_tab = TabId::new(1)?;
         let active_pane = PaneId::new(1)?;
         let pane = PaneSnapshot {
-            agent_state: PaneAgentState::NoAgent,
+            tracked_process_state: TrackedProcessState::None,
             cwd: "/tmp".to_owned(),
             cmd_label: None,
             focus_seq: 1,
@@ -355,7 +355,7 @@ mod tests {
 
     fn pane_snapshot(id: u32, title: &str) -> rootcause::Result<PaneSnapshot> {
         Ok(PaneSnapshot {
-            agent_state: PaneAgentState::NoAgent,
+            tracked_process_state: TrackedProcessState::None,
             cwd: "/tmp".to_owned(),
             cmd_label: None,
             focus_seq: 1,

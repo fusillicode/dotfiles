@@ -1,8 +1,9 @@
 use std::collections::BTreeMap;
 
+use muxr_config::CellStyle;
+use muxr_config::PaneBorderStyles;
 use muxr_core::PaneId;
 use muxr_core::RenderCell;
-use muxr_core::RenderColor;
 use muxr_core::RenderStyle;
 use muxr_core::RenderTextStyle;
 use rootcause::report;
@@ -124,6 +125,7 @@ pub enum BorderRenderMode {
 
 pub fn paste_borders(
     rows: &mut [Vec<RenderCell>],
+    styles: PaneBorderStyles,
     borders: &[PaneBorder],
     active_pane: Option<&PaneId>,
     attention_panes: &[PaneId],
@@ -137,7 +139,7 @@ pub fn paste_borders(
         let target = target_row
             .get_mut(usize::from(col))
             .ok_or_else(|| report!("muxr pane border col outside composite frame"))?;
-        *target = RenderCell::narrow(cell.shape.glyph(), cell.visual.style());
+        *target = RenderCell::narrow(cell.shape.glyph(), cell.visual.style(styles));
     }
     Ok(())
 }
@@ -523,12 +525,12 @@ impl BorderVisual {
         }
     }
 
-    const fn style(self) -> RenderStyle {
+    const fn style(self, styles: PaneBorderStyles) -> RenderStyle {
         match self {
-            Self::Default => self::border_style(),
-            Self::Focused => self::focused_border_style(),
-            Self::Attention => self::attention_border_style(),
-            Self::Resize => self::resize_border_style(),
+            Self::Default => self::render_style(styles.default),
+            Self::Focused => self::render_style(styles.focused),
+            Self::Attention => self::render_style(styles.attention),
+            Self::Resize => self::render_style(styles.resize),
         }
     }
 
@@ -542,40 +544,17 @@ impl BorderVisual {
     }
 }
 
-const fn border_style() -> RenderStyle {
+const fn render_style(style: CellStyle) -> RenderStyle {
     RenderStyle {
-        attrs: RenderTextStyle::empty(),
-        bg: RenderColor::Default,
-        fg: RenderColor::Rgb { r: 50, g: 50, b: 50 },
-    }
-}
-
-const fn focused_border_style() -> RenderStyle {
-    RenderStyle {
-        attrs: RenderTextStyle::empty().set_bold(true),
-        bg: RenderColor::Default,
-        fg: RenderColor::Rgb { r: 96, g: 96, b: 96 },
-    }
-}
-
-const fn resize_border_style() -> RenderStyle {
-    RenderStyle {
-        attrs: RenderTextStyle::empty().set_bold(true),
-        bg: RenderColor::Default,
-        fg: RenderColor::Rgb { r: 106, g: 106, b: 223 },
-    }
-}
-
-const fn attention_border_style() -> RenderStyle {
-    RenderStyle {
-        attrs: RenderTextStyle::empty().set_bold(true),
-        bg: RenderColor::Default,
-        fg: RenderColor::Rgb { r: 255, g: 0, b: 0 },
+        attrs: RenderTextStyle::empty().set_bold(style.attrs.bold),
+        bg: style.bg,
+        fg: style.fg,
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use muxr_config::MuxrConfig;
     use muxr_core::PaneId;
     use muxr_core::TerminalSize;
     use rootcause::report;
@@ -747,7 +726,14 @@ mod tests {
         let size = TerminalSize::new(80, 24)?;
         let borders = fixture.borders()?;
         let mut rows = self::empty_render_rows(&size);
-        self::paste_borders(&mut rows, &borders, Some(&active_pane), &[], BorderRenderMode::Focus)?;
+        self::paste_borders(
+            &mut rows,
+            MuxrConfig::default().pane_borders,
+            &borders,
+            Some(&active_pane),
+            &[],
+            BorderRenderMode::Focus,
+        )?;
         let border_cells = self::compose_border_cells(&borders, Some(&active_pane), &[], BorderRenderMode::Focus)?;
 
         for (row, col, glyph) in expected_focused_cells {
@@ -778,7 +764,14 @@ mod tests {
             )?,
         ];
 
-        self::paste_borders(&mut rows, &borders, None, &[], BorderRenderMode::Focus)?;
+        self::paste_borders(
+            &mut rows,
+            MuxrConfig::default().pane_borders,
+            &borders,
+            None,
+            &[],
+            BorderRenderMode::Focus,
+        )?;
         let border_cells = self::compose_border_cells(&borders, None, &[], BorderRenderMode::Focus)?;
 
         let vertical_cell = rows
@@ -820,7 +813,14 @@ mod tests {
         )?;
 
         let border_cells = self::compose_border_cells(std::slice::from_ref(&border), Some(&active_pane), &[], mode)?;
-        self::paste_borders(&mut rows, &[border], Some(&active_pane), &[], mode)?;
+        self::paste_borders(
+            &mut rows,
+            MuxrConfig::default().pane_borders,
+            &[border],
+            Some(&active_pane),
+            &[],
+            mode,
+        )?;
 
         let border_cell = rows
             .first()
@@ -854,6 +854,7 @@ mod tests {
         )?;
         self::paste_borders(
             &mut rows,
+            MuxrConfig::default().pane_borders,
             &[border],
             Some(&active_pane),
             std::slice::from_ref(&attention_pane),
@@ -901,6 +902,7 @@ mod tests {
         )?;
         self::paste_borders(
             &mut rows,
+            MuxrConfig::default().pane_borders,
             &[border],
             Some(&active_pane),
             std::slice::from_ref(&attention_pane),
@@ -943,6 +945,7 @@ mod tests {
         )?;
         self::paste_borders(
             &mut rows,
+            MuxrConfig::default().pane_borders,
             &[border],
             Some(&active_pane),
             std::slice::from_ref(&active_pane),
@@ -982,7 +985,14 @@ mod tests {
             horizontal_border,
         ];
         let border_cells = self::compose_border_cells(&borders, Some(&active_pane), &[], mode)?;
-        self::paste_borders(&mut rows, &borders, Some(&active_pane), &[], mode)?;
+        self::paste_borders(
+            &mut rows,
+            MuxrConfig::default().pane_borders,
+            &borders,
+            Some(&active_pane),
+            &[],
+            mode,
+        )?;
 
         let border_cell = rows
             .first()
@@ -1015,7 +1025,14 @@ mod tests {
         )?;
 
         let border_cells = self::compose_border_cells(std::slice::from_ref(&border), Some(&active_pane), &[], mode)?;
-        self::paste_borders(&mut rows, &[border], Some(&active_pane), &[], mode)?;
+        self::paste_borders(
+            &mut rows,
+            MuxrConfig::default().pane_borders,
+            &[border],
+            Some(&active_pane),
+            &[],
+            mode,
+        )?;
 
         let top_segment = rows
             .first()

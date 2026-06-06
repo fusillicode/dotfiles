@@ -1,10 +1,10 @@
 use muxr_core::ClientMousePosition;
 use muxr_core::LayoutSnapshot;
-use muxr_core::PaneAgentState;
 use muxr_core::PaneId;
 use muxr_core::SessionName;
 use muxr_core::TabId;
 use muxr_core::TerminalSize;
+use muxr_core::TrackedProcessState;
 use rootcause::report;
 use serde::Deserialize;
 
@@ -75,12 +75,14 @@ impl SessionLayout {
         &self,
         terminal_titles: &[(PaneId, Option<String>)],
         runtime_cmd_labels: &[(PaneId, Option<String>)],
-        runtime_agent_states: &[(PaneId, PaneAgentState)],
+        runtime_tracked_process_states: &[(PaneId, TrackedProcessState)],
     ) -> rootcause::Result<LayoutSnapshot> {
         let tabs = self
             .entries
             .iter()
-            .map(|tab| tab.snapshot_with_runtime_metadata(terminal_titles, runtime_cmd_labels, runtime_agent_states))
+            .map(|tab| {
+                tab.snapshot_with_runtime_metadata(terminal_titles, runtime_cmd_labels, runtime_tracked_process_states)
+            })
             .collect::<rootcause::Result<Vec<_>>>()?;
         LayoutSnapshot::new(self.active_tab, tabs)
     }

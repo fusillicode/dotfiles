@@ -1,9 +1,9 @@
 use muxr_core::ClientMousePosition;
-use muxr_core::PaneAgentState;
 use muxr_core::PaneId;
 use muxr_core::TabId;
 use muxr_core::TabSnapshot;
 use muxr_core::TerminalSize;
+use muxr_core::TrackedProcessState;
 use rootcause::report;
 use serde::Deserialize;
 use serde::Serialize;
@@ -25,7 +25,7 @@ impl Tab {
         &self,
         terminal_titles: &[(PaneId, Option<String>)],
         runtime_cmd_labels: &[(PaneId, Option<String>)],
-        runtime_agent_states: &[(PaneId, PaneAgentState)],
+        runtime_tracked_process_states: &[(PaneId, TrackedProcessState)],
     ) -> rootcause::Result<TabSnapshot> {
         let panes = self
             .panes()
@@ -39,11 +39,13 @@ impl Tab {
                     .iter()
                     .find(|(pane_id, _cmd_label)| pane_id == &pane.id)
                     .and_then(|(_pane_id, cmd_label)| cmd_label.as_deref());
-                let runtime_agent_state = runtime_agent_states
+                let runtime_tracked_process_state = runtime_tracked_process_states
                     .iter()
-                    .find(|(pane_id, _agent_state)| pane_id == &pane.id)
-                    .map_or(PaneAgentState::NoAgent, |(_pane_id, agent_state)| *agent_state);
-                pane.snapshot_with_runtime_metadata(terminal_title, runtime_cmd_label, runtime_agent_state)
+                    .find(|(pane_id, _tracked_process_state)| pane_id == &pane.id)
+                    .map_or(TrackedProcessState::None, |(_pane_id, tracked_process_state)| {
+                        *tracked_process_state
+                    });
+                pane.snapshot_with_runtime_metadata(terminal_title, runtime_cmd_label, runtime_tracked_process_state)
             })
             .collect();
         TabSnapshot::new(self.id, self.title.clone(), self.active_pane, panes)

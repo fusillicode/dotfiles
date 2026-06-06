@@ -13,6 +13,7 @@ members = [
     "yog/miskatonic",
     "yog/muxr/cli",
     "yog/muxr/client",
+    "yog/muxr/config",
     "yog/muxr/core",
     "yog/muxr/server",
     "yog/muxr/transport",
@@ -64,6 +65,7 @@ chrono = { version = "0.4", default-features = false, features = ["clock", "serd
 convert_case = { version = "0.11" }
 fake = { version = "5.1", features = ["derive"] }
 git2 = { version = "0.21", default-features = false }
+muxr_config = { package = "muxr-config", path = "./yog/muxr/config" }
 muxr_core = { package = "muxr-core", path = "./yog/muxr/core" }
 muxr_transport = { package = "muxr-transport", path = "./yog/muxr/transport" }
 nomicon = { path = "./yog/nomicon" }

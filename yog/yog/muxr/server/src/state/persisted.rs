@@ -82,6 +82,7 @@ pub fn load_metadata(paths: &SessionPaths, session: &SessionName) -> rootcause::
 mod tests {
     use std::fs;
 
+    use muxr_config::MuxrConfig;
     use muxr_core::TerminalSize;
 
     use super::*;
@@ -96,8 +97,16 @@ mod tests {
         fs::create_dir_all(&paths.root)?;
         let mut layout = SessionLayout::initial(&session, state_test_helpers::metadata("sh", 1))?;
 
-        layout.split_active_pane(state_test_helpers::metadata("sh", 2), PaneSplitAxis::Vertical)?;
-        layout.split_active_pane(state_test_helpers::metadata("sh", 3), PaneSplitAxis::Horizontal)?;
+        layout.split_active_pane(
+            MuxrConfig::default().layout,
+            state_test_helpers::metadata("sh", 2),
+            PaneSplitAxis::Vertical,
+        )?;
+        layout.split_active_pane(
+            MuxrConfig::default().layout,
+            state_test_helpers::metadata("sh", 3),
+            PaneSplitAxis::Horizontal,
+        )?;
         state_test_helpers::force_balanced_test_split_ratio(&mut layout)?;
         self::write_metadata(&paths, &layout)?;
 
@@ -123,9 +132,13 @@ mod tests {
         fs::create_dir_all(&paths.root)?;
         let mut layout = SessionLayout::initial(&session, state_test_helpers::metadata("sh", 1))?;
 
-        layout.split_active_pane(state_test_helpers::metadata("sh", 2), PaneSplitAxis::Vertical)?;
+        layout.split_active_pane(
+            MuxrConfig::default().layout,
+            state_test_helpers::metadata("sh", 2),
+            PaneSplitAxis::Vertical,
+        )?;
         state_test_helpers::force_balanced_test_split_ratio(&mut layout)?;
-        assert2::assert!(layout.resize_active_pane(PaneResizeDirection::Left)?);
+        assert2::assert!(layout.resize_active_pane(MuxrConfig::default().layout, PaneResizeDirection::Left)?);
         self::write_metadata(&paths, &layout)?;
 
         let loaded =

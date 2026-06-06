@@ -44,7 +44,6 @@ const MOUSE_SGR_ENABLE: &[u8] = b"\x1b[?1006h";
 const OSC8_CLOSE: &[u8] = b"\x1b]8;;\x1b\\";
 const OSC8_OPEN_PREFIX: &[u8] = b"\x1b]8;;";
 const OSC8_TERMINATOR: &[u8] = b"\x1b\\";
-const SELECTION_BG: RenderColor = RenderColor::Indexed(238);
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SynchronizedOutput {
@@ -140,6 +139,7 @@ impl FrameBuffer {
         row_offset: u16,
         col_offset: u16,
         selection: Option<&SelectionRange>,
+        selection_bg: RenderColor,
     ) -> rootcause::Result<()> {
         if self.cursor.as_ref() != Some(&changes.cursor) {
             return Err(report!("muxr render changes do not match current frame buffer cursor"));
@@ -147,7 +147,15 @@ impl FrameBuffer {
         reset_style(stdout)?;
         let mut active_style = RenderStyle::default();
         for row in &changes.rows {
-            render_row_span(stdout, row, &mut active_style, row_offset, col_offset, selection)?;
+            render_row_span(
+                stdout,
+                row,
+                &mut active_style,
+                row_offset,
+                col_offset,
+                selection,
+                selection_bg,
+            )?;
         }
         reset_style(stdout)?;
         render_cursor(stdout, &changes.cursor, row_offset, col_offset)?;
@@ -335,6 +343,7 @@ fn render_row_span(
     row_offset: u16,
     col_offset: u16,
     selection: Option<&SelectionRange>,
+    selection_bg: RenderColor,
 ) -> rootcause::Result<()> {
     let rendered_row = row
         .row()
@@ -356,7 +365,7 @@ fn render_row_span(
             .col()
             .checked_add(u16::try_from(index).context("muxr render cell index overflowed")?)
             .ok_or_else(|| report!("muxr render cell column overflowed"))?;
-        let cell_style = self::selected_style(cell.style(), selection, row.row(), cell_col);
+        let cell_style = self::selected_style(cell.style(), selection, row.row(), cell_col, selection_bg);
         let cell_run_style = RenderRunStyle {
             hyperlink_uri: cell.hyperlink().map(muxr_core::RenderHyperlink::uri),
             style: cell_style,
@@ -376,8 +385,14 @@ fn render_row_span(
     Ok(())
 }
 
-fn selected_style(style: RenderStyle, selection: Option<&SelectionRange>, row: u16, col: u16) -> RenderStyle {
-    self::selection_visual_for_cell(selection, row, col).apply(style)
+fn selected_style(
+    style: RenderStyle,
+    selection: Option<&SelectionRange>,
+    row: u16,
+    col: u16,
+    selection_bg: RenderColor,
+) -> RenderStyle {
+    self::selection_visual_for_cell(selection, row, col).apply(style, selection_bg)
 }
 
 fn selection_visual_for_cell(selection: Option<&SelectionRange>, row: u16, col: u16) -> SelectionVisual {
@@ -395,11 +410,11 @@ enum SelectionVisual {
 }
 
 impl SelectionVisual {
-    const fn apply(self, mut style: RenderStyle) -> RenderStyle {
+    const fn apply(self, mut style: RenderStyle, selection_bg: RenderColor) -> RenderStyle {
         match self {
             Self::Selected => {
                 style.attrs = style.attrs.set_inverse(false);
-                style.bg = SELECTION_BG;
+                style.bg = selection_bg;
                 style
             }
             Self::Unselected => style,
@@ -521,7 +536,7 @@ fn render_cursor(
     }
 }
 
-const fn crossterm_color(color: RenderColor) -> Color {
+pub const fn crossterm_color(color: RenderColor) -> Color {
     match color {
         RenderColor::Default => Color::Reset,
         RenderColor::Indexed(index) => Color::AnsiValue(index),
@@ -549,6 +564,7 @@ fn queue_bytes(stdout: &mut impl Write, bytes: &[u8]) -> rootcause::Result<()> {
 
 #[cfg(test)]
 mod tests {
+    use muxr_config::MuxrConfig;
     use muxr_core::ClientMousePosition;
     use muxr_core::PaneId;
     use muxr_core::PaneMouseMode;
@@ -634,7 +650,7 @@ mod tests {
         };
         let mut output = CountingWriter::default();
 
-        frame_buffer.queue_at_with_selection(&mut output, &changes, 0, 0, None)?;
+        frame_buffer.queue_at_with_selection(&mut output, &changes, 0, 0, None, MuxrConfig::default().selection.bg)?;
 
         let rendered = output.rendered_string()?;
         assert2::assert!(rendered.contains('a'));
@@ -651,7 +667,7 @@ mod tests {
         };
         let mut output = Vec::new();
 
-        frame_buffer.queue_at_with_selection(&mut output, &changes, 1, 2, None)?;
+        frame_buffer.queue_at_with_selection(&mut output, &changes, 1, 2, None, MuxrConfig::default().selection.bg)?;
 
         let rendered = String::from_utf8(output).context("muxr render test output was not utf8")?;
         assert2::assert!(rendered.contains("\x1b[2;3H"));
@@ -671,7 +687,7 @@ mod tests {
         };
         let mut output = Vec::new();
 
-        frame_buffer.queue_at_with_selection(&mut output, &changes, 0, 0, None)?;
+        frame_buffer.queue_at_with_selection(&mut output, &changes, 0, 0, None, MuxrConfig::default().selection.bg)?;
 
         let rendered = String::from_utf8(output).context("muxr render test output was not utf8")?;
         let foreground_escape = expected_escape(ExpectedEscape::Foreground(RenderColor::Indexed(1)))?;
@@ -691,7 +707,7 @@ mod tests {
         };
         let mut output = Vec::new();
 
-        frame_buffer.queue_at_with_selection(&mut output, &changes, 0, 0, None)?;
+        frame_buffer.queue_at_with_selection(&mut output, &changes, 0, 0, None, MuxrConfig::default().selection.bg)?;
 
         let rendered = String::from_utf8(output).context("muxr render test output was not utf8")?;
         let open = osc8_open(uri);
@@ -730,7 +746,7 @@ mod tests {
         };
         let mut output = Vec::new();
 
-        frame_buffer.queue_at_with_selection(&mut output, &changes, 0, 0, None)?;
+        frame_buffer.queue_at_with_selection(&mut output, &changes, 0, 0, None, MuxrConfig::default().selection.bg)?;
 
         let rendered = String::from_utf8(output).context("muxr render test output was not utf8")?;
         assert2::assert!(rendered.contains(&format!("{}x{}", osc8_open(uri), osc8_close()?)));
@@ -749,7 +765,14 @@ mod tests {
         };
         let mut output = Vec::new();
 
-        frame_buffer.queue_at_with_selection(&mut output, &changes, 0, 0, Some(&selection))?;
+        frame_buffer.queue_at_with_selection(
+            &mut output,
+            &changes,
+            0,
+            0,
+            Some(&selection),
+            MuxrConfig::default().selection.bg,
+        )?;
 
         let rendered = String::from_utf8(output).context("muxr render test output was not utf8")?;
         assert2::assert!(rendered.contains(&osc8_open(uri)));
@@ -759,6 +782,7 @@ mod tests {
     #[test]
     fn test_selection_visual_when_cell_is_selected_marks_only_selected_cells() -> rootcause::Result<()> {
         let (selection, unselected_style) = self::selection_range_and_style()?;
+        let selection_bg = MuxrConfig::default().selection.bg;
 
         pretty_assertions::assert_eq!(
             self::selection_visual_for_cell(Some(&selection), 0, 0),
@@ -769,13 +793,13 @@ mod tests {
             SelectionVisual::Unselected
         );
         pretty_assertions::assert_eq!(self::selection_visual_for_cell(None, 0, 0), SelectionVisual::Unselected);
-        let selected_style = self::selected_style(unselected_style, Some(&selection), 0, 0);
+        let selected_style = self::selected_style(unselected_style, Some(&selection), 0, 0, selection_bg);
 
         // Selection colors are tunable; this only gates the invariant that selected cells stay visibly distinct.
         assert2::assert!(selected_style.bg != unselected_style.bg);
         assert2::assert!(!selected_style.attrs.inverse());
         pretty_assertions::assert_eq!(
-            self::selected_style(unselected_style, Some(&selection), 0, 2),
+            self::selected_style(unselected_style, Some(&selection), 0, 2, selection_bg),
             unselected_style
         );
         Ok(())
@@ -806,7 +830,7 @@ mod tests {
         };
         let mut output = Vec::new();
 
-        frame_buffer.queue_at_with_selection(&mut output, &changes, 0, 0, None)?;
+        frame_buffer.queue_at_with_selection(&mut output, &changes, 0, 0, None, MuxrConfig::default().selection.bg)?;
 
         let rendered = String::from_utf8(output).context("muxr render test output was not utf8")?;
         let expected_escape = expected_escape(expected)?;

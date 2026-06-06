@@ -2,6 +2,9 @@ use std::collections::BTreeSet;
 use std::io::Write;
 use std::time::Instant;
 
+use muxr_config::MuxrConfig;
+use muxr_config::SelectionStyle;
+use muxr_config::TabBarConfig;
 use muxr_core::ClientMouseEvent;
 use muxr_core::ClientMouseEventPhase;
 use muxr_core::ClientMousePosition;
@@ -156,6 +159,8 @@ impl SelectionEdgeScrollRequest {
 pub struct ClientRenderer {
     any_motion_capture_enabled: bool,
     tab_bar_dirty: bool,
+    selection_style: SelectionStyle,
+    tab_bar_config: TabBarConfig,
     clicks: ClickTracker,
     frame_buffer: FrameBuffer,
     layout: LayoutSnapshot,
@@ -169,15 +174,27 @@ pub struct ClientRenderer {
 }
 
 impl ClientRenderer {
-    pub fn new(layout: LayoutSnapshot, pane_regions: PaneRegionsSnapshot) -> Self {
-        Self::with_synchronized_output(
+    pub fn new(config: &MuxrConfig, layout: LayoutSnapshot, pane_regions: PaneRegionsSnapshot) -> Self {
+        Self::with_config_and_synchronized_output(
+            config,
             layout,
             pane_regions,
             SynchronizedOutput::for_term(std::env::var("TERM").ok().as_deref()),
         )
     }
 
+    #[cfg(test)]
     pub fn with_synchronized_output(
+        layout: LayoutSnapshot,
+        pane_regions: PaneRegionsSnapshot,
+        synchronized_output: SynchronizedOutput,
+    ) -> Self {
+        let config = MuxrConfig::default();
+        Self::with_config_and_synchronized_output(&config, layout, pane_regions, synchronized_output)
+    }
+
+    fn with_config_and_synchronized_output(
+        config: &MuxrConfig,
         layout: LayoutSnapshot,
         pane_regions: PaneRegionsSnapshot,
         synchronized_output: SynchronizedOutput,
@@ -185,6 +202,8 @@ impl ClientRenderer {
         Self {
             any_motion_capture_enabled: false,
             tab_bar_dirty: true,
+            selection_style: config.selection,
+            tab_bar_config: config.tab_bar,
             clicks: ClickTracker::default(),
             frame_buffer: FrameBuffer::default(),
             layout,
@@ -284,14 +303,15 @@ impl ClientRenderer {
         }
         if render_tab_bar {
             let rows = self.frame_buffer.size().map_or(0, muxr_core::TerminalSize::rows);
-            crate::client::tab_bar::queue(&mut frame, &self.layout, rows)?;
+            crate::client::tab_bar::queue(&mut frame, self.tab_bar_config, &self.layout, rows)?;
         }
         self.frame_buffer.queue_at_with_selection(
             &mut frame,
             changes,
             0,
-            crate::client::tab_bar::WIDTH,
+            self.tab_bar_config.width,
             self.selection.range(),
+            self.selection_style.bg,
         )?;
         crate::render::queue_synchronized_update_end(&mut frame, self.synchronized_output)?;
         stdout
@@ -311,7 +331,7 @@ impl ClientRenderer {
         };
         let mut frame = Vec::new();
         crate::render::queue_synchronized_update_start(&mut frame, self.synchronized_output)?;
-        crate::client::tab_bar::queue(&mut frame, &self.layout, size.rows())?;
+        crate::client::tab_bar::queue(&mut frame, self.tab_bar_config, &self.layout, size.rows())?;
         crate::render::queue_synchronized_update_end(&mut frame, self.synchronized_output)?;
         stdout
             .write_all(&frame)
@@ -1153,7 +1173,7 @@ mod tests {
         let active_tab = TabId::new(1)?;
         let active_pane = PaneId::new(1)?;
         let pane = PaneSnapshot {
-            agent_state: muxr_core::PaneAgentState::NoAgent,
+            tracked_process_state: muxr_core::TrackedProcessState::None,
             cwd: "/tmp/default".to_owned(),
             cmd_label: None,
             focus_seq: 1,
@@ -1225,7 +1245,7 @@ mod tests {
                     "default",
                     muxr_core::PaneId::new(1)?,
                     vec![muxr_core::PaneSnapshot {
-                        agent_state: muxr_core::PaneAgentState::NoAgent,
+                        tracked_process_state: muxr_core::TrackedProcessState::None,
                         cwd: "/tmp/tab-1".to_owned(),
                         cmd_label: None,
                         focus_seq: 1,
@@ -1238,7 +1258,7 @@ mod tests {
                     "tab 2",
                     muxr_core::PaneId::new(2)?,
                     vec![muxr_core::PaneSnapshot {
-                        agent_state: muxr_core::PaneAgentState::NoAgent,
+                        tracked_process_state: muxr_core::TrackedProcessState::None,
                         cwd: "/tmp/tab-2".to_owned(),
                         cmd_label: None,
                         focus_seq: 1,

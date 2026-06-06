@@ -1,5 +1,7 @@
 use std::sync::Mutex;
 
+use muxr_config::LayoutConfig;
+
 use crate::pane_split::PaneSplitAxis;
 use crate::pane_split::PaneSplitResize;
 use crate::server::ServerConfig;
@@ -16,20 +18,29 @@ pub enum PaneResizeDirection {
 }
 
 impl SessionLayout {
-    pub fn resize_active_pane(&mut self, direction: PaneResizeDirection) -> rootcause::Result<bool> {
-        self.active_tab_mut()?.resize_active_pane(direction)
+    pub fn resize_active_pane(
+        &mut self,
+        layout_config: LayoutConfig,
+        direction: PaneResizeDirection,
+    ) -> rootcause::Result<bool> {
+        self.active_tab_mut()?.resize_active_pane(layout_config, direction)
     }
 }
 
 impl Tab {
-    pub fn resize_active_pane(&mut self, direction: PaneResizeDirection) -> rootcause::Result<bool> {
-        self.pane_tree.resize_pane(self.active_pane, direction)
+    pub fn resize_active_pane(
+        &mut self,
+        layout_config: LayoutConfig,
+        direction: PaneResizeDirection,
+    ) -> rootcause::Result<bool> {
+        self.pane_tree.resize_pane(layout_config, self.active_pane, direction)
     }
 }
 
 impl PaneTree {
     pub fn resize_pane(
         &mut self,
+        layout_config: LayoutConfig,
         pane_id: muxr_core::PaneId,
         direction: PaneResizeDirection,
     ) -> rootcause::Result<bool> {
@@ -42,9 +53,9 @@ impl PaneTree {
                 second,
             } => {
                 let child_resized = if first.contains_pane(pane_id) {
-                    first.resize_pane(pane_id, direction)?
+                    first.resize_pane(layout_config, pane_id, direction)?
                 } else if second.contains_pane(pane_id) {
-                    second.resize_pane(pane_id, direction)?
+                    second.resize_pane(layout_config, pane_id, direction)?
                 } else {
                     return Ok(false);
                 };
@@ -55,7 +66,7 @@ impl PaneTree {
                 let Some(resize) = PaneSplitResize::for_direction(*axis, direction) else {
                     return Ok(false);
                 };
-                let resized_ratio = first_ratio.resized(resize);
+                let resized_ratio = first_ratio.resized(layout_config, resize)?;
                 if resized_ratio == *first_ratio {
                     return Ok(false);
                 }
@@ -86,7 +97,7 @@ pub fn handle_resize_pane_cmd(
     layout: &Mutex<SessionLayout>,
 ) -> rootcause::Result<bool> {
     let mut layout = crate::server::lock_mutex(layout, "layout")?;
-    let resized = layout.resize_active_pane(direction)?;
+    let resized = layout.resize_active_pane(config.user_config.layout, direction)?;
     if resized {
         crate::state::persisted::write_metadata(&config.paths, &layout)?;
     }
@@ -96,6 +107,7 @@ pub fn handle_resize_pane_cmd(
 
 #[cfg(test)]
 mod tests {
+    use muxr_config::MuxrConfig;
     use muxr_core::TerminalSize;
 
     use super::*;
@@ -141,10 +153,14 @@ mod tests {
     ) -> rootcause::Result<()> {
         let mut layout = state_test_helpers::layout("work")?;
 
-        layout.split_active_pane(state_test_helpers::metadata("sh", 2), split_axis)?;
+        layout.split_active_pane(
+            MuxrConfig::default().layout,
+            state_test_helpers::metadata("sh", 2),
+            split_axis,
+        )?;
         state_test_helpers::force_balanced_test_split_ratio(&mut layout)?;
 
-        assert2::assert!(layout.resize_active_pane(direction)?);
+        assert2::assert!(layout.resize_active_pane(MuxrConfig::default().layout, direction)?);
         let expected_regions = expected_regions
             .into_iter()
             .map(|(id, col, row, cols, rows)| (id.to_owned(), col, row, cols, rows))
@@ -160,11 +176,19 @@ mod tests {
     fn test_layout_resize_nested_splits_resizes_nearest_matching_axis() -> rootcause::Result<()> {
         let mut layout = state_test_helpers::layout("work")?;
 
-        layout.split_active_pane(state_test_helpers::metadata("sh", 2), PaneSplitAxis::Vertical)?;
-        layout.split_active_pane(state_test_helpers::metadata("sh", 3), PaneSplitAxis::Horizontal)?;
+        layout.split_active_pane(
+            MuxrConfig::default().layout,
+            state_test_helpers::metadata("sh", 2),
+            PaneSplitAxis::Vertical,
+        )?;
+        layout.split_active_pane(
+            MuxrConfig::default().layout,
+            state_test_helpers::metadata("sh", 3),
+            PaneSplitAxis::Horizontal,
+        )?;
         state_test_helpers::force_balanced_test_split_ratio(&mut layout)?;
 
-        assert2::assert!(layout.resize_active_pane(PaneResizeDirection::Up)?);
+        assert2::assert!(layout.resize_active_pane(MuxrConfig::default().layout, PaneResizeDirection::Up)?);
         pretty_assertions::assert_eq!(
             state_test_helpers::layout_active_tab_pane_regions(&layout, &TerminalSize::new(80, 24)?)?,
             vec![
@@ -174,7 +198,7 @@ mod tests {
             ],
         );
 
-        assert2::assert!(layout.resize_active_pane(PaneResizeDirection::Left)?);
+        assert2::assert!(layout.resize_active_pane(MuxrConfig::default().layout, PaneResizeDirection::Left)?);
         pretty_assertions::assert_eq!(
             state_test_helpers::layout_active_tab_pane_regions(&layout, &TerminalSize::new(80, 24)?)?,
             vec![

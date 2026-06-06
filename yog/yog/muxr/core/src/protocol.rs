@@ -1,7 +1,6 @@
 pub use keyboard_input::ClientKey;
 pub use keyboard_input::ClientKeyCode;
 pub use keyboard_input::ClientKeyModifiers;
-pub use pane_agent::PaneAgentState;
 pub use pane_layout::LayoutSnapshot;
 pub use pane_layout::PaneId;
 pub use pane_layout::PaneMouseMode;
@@ -28,6 +27,7 @@ pub use pane_scroll::PaneScrollDirection;
 pub use session_attach::AttachAccepted;
 pub use session_attach::AttachRequest;
 pub use terminal::TerminalSize;
+pub use tracked_process::TrackedProcessState;
 pub use wire::ClientRequest;
 pub use wire::ServerError;
 pub use wire::ServerEvent;
@@ -37,13 +37,13 @@ pub use wire::encode_client_request;
 pub use wire::encode_server_event;
 
 mod keyboard_input;
-mod pane_agent;
 mod pane_layout;
 mod pane_mouse;
 mod pane_render;
 mod pane_scroll;
 mod session_attach;
 mod terminal;
+mod tracked_process;
 mod wire;
 
 fn rkyv_deserialize_error<E>(error: impl std::fmt::Display) -> E
