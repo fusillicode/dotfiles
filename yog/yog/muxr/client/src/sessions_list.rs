@@ -162,7 +162,11 @@ fn created_at_text(created_at: Option<SystemTime>) -> String {
     )
 }
 
-async fn session_state_async(paths: &SessionPaths) -> rootcause::Result<SessionState> {
+/// Probe a muxr session socket without starting a nested Tokio runtime.
+///
+/// # Errors
+/// - The probe runtime IO fails after connecting to the socket.
+pub async fn session_state_async(paths: &SessionPaths) -> rootcause::Result<SessionState> {
     let Ok(Ok(mut connection)) =
         tokio::time::timeout(SESSION_PROBE_TIMEOUT, ClientConnection::connect(&paths.socket)).await
     else {

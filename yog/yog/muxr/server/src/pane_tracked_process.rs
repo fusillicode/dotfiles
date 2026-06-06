@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::time::Duration;
@@ -16,6 +17,33 @@ const USER_INPUT_VISIBLE_ACTIVITY_SUPPRESSION: Duration = Duration::from_millis(
 #[derive(Debug, Default)]
 pub struct PaneTrackedProcesses {
     by_pane: HashMap<PaneId, PaneTrackedProcessLifecycle>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PaneTrackedProcessSnapshotEntry {
+    label: String,
+    state: TrackedProcessState,
+}
+
+impl PaneTrackedProcessSnapshotEntry {
+    pub fn label(&self) -> &str {
+        &self.label
+    }
+
+    pub const fn state(&self) -> TrackedProcessState {
+        self.state
+    }
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct PaneTrackedProcessSnapshot {
+    panes: BTreeMap<PaneId, PaneTrackedProcessSnapshotEntry>,
+}
+
+impl PaneTrackedProcessSnapshot {
+    pub fn panes(&self) -> impl Iterator<Item = (PaneId, &PaneTrackedProcessSnapshotEntry)> {
+        self.panes.iter().map(|(pane_id, pane)| (*pane_id, pane))
+    }
 }
 
 #[derive(Debug)]
@@ -245,13 +273,21 @@ impl PaneTrackedProcesses {
         Ok(deadline)
     }
 
-    pub fn snapshot_cmd_labels(&self) -> Vec<(PaneId, Option<String>)> {
-        self.by_pane
+    pub fn snapshot(&self) -> PaneTrackedProcessSnapshot {
+        let panes = self
+            .by_pane
             .iter()
             .map(|(pane_id, pane_tracked_process)| {
-                (*pane_id, Some(pane_tracked_process.tracked_process.label.to_owned()))
+                (
+                    *pane_id,
+                    PaneTrackedProcessSnapshotEntry {
+                        label: pane_tracked_process.tracked_process.label.to_owned(),
+                        state: pane_tracked_process.state(),
+                    },
+                )
             })
-            .collect()
+            .collect();
+        PaneTrackedProcessSnapshot { panes }
     }
 
     fn mark_quiet_tracked_processes(&mut self, layout: &SessionLayout, now: Instant) -> rootcause::Result<bool> {
@@ -343,13 +379,6 @@ impl PaneTrackedProcesses {
         self.by_pane
             .get(&pane_id)
             .is_some_and(PaneTrackedProcessLifecycle::needs_attention)
-    }
-
-    pub fn snapshot_states(&self) -> Vec<(PaneId, TrackedProcessState)> {
-        self.by_pane
-            .iter()
-            .map(|(pane_id, pane_tracked_process)| (*pane_id, pane_tracked_process.state()))
-            .collect()
     }
 
     fn retain_panes(&mut self, pane_ids: &BTreeSet<PaneId>) {
@@ -544,10 +573,10 @@ mod tests {
             pane_tracked_process_status(&pane_tracked_processes, pane_id),
             TrackedProcessState::Busy
         );
-        pretty_assertions::assert_eq!(
-            pane_tracked_processes.snapshot_cmd_labels(),
-            vec![(pane_id, Some("cx".to_owned()))]
-        );
+        let snapshot = pane_tracked_processes.snapshot();
+        let pane = self::tracked_process_snapshot_pane(&snapshot, pane_id)?;
+        pretty_assertions::assert_eq!(pane.label(), "cx");
+        pretty_assertions::assert_eq!(pane.state(), TrackedProcessState::Busy);
         Ok(())
     }
 
@@ -763,10 +792,10 @@ mod tests {
             pane_tracked_process_status(&pane_tracked_processes, pane_id),
             TrackedProcessState::Busy
         );
-        pretty_assertions::assert_eq!(
-            pane_tracked_processes.snapshot_cmd_labels(),
-            vec![(pane_id, Some("cu".to_owned()))]
-        );
+        let snapshot = pane_tracked_processes.snapshot();
+        let pane = self::tracked_process_snapshot_pane(&snapshot, pane_id)?;
+        pretty_assertions::assert_eq!(pane.label(), "cu");
+        pretty_assertions::assert_eq!(pane.state(), TrackedProcessState::Busy);
         Ok(())
     }
 
@@ -823,6 +852,17 @@ mod tests {
 
     fn pane_id() -> rootcause::Result<PaneId> {
         PaneId::new(1)
+    }
+
+    fn tracked_process_snapshot_pane(
+        snapshot: &PaneTrackedProcessSnapshot,
+        pane_id: PaneId,
+    ) -> rootcause::Result<&PaneTrackedProcessSnapshotEntry> {
+        snapshot
+            .panes()
+            .find(|(snapshot_pane_id, _pane)| *snapshot_pane_id == pane_id)
+            .map(|(_pane_id, pane)| pane)
+            .ok_or_else(|| rootcause::report!("expected tracked process pane snapshot"))
     }
 
     fn layout() -> rootcause::Result<SessionLayout> {

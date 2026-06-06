@@ -30,8 +30,10 @@ fn classify_terminal_title_with_home(title: Option<&str>, cwd: &str, home: Optio
         };
     }
 
+    // Shell title hooks can report the exact input line for startup commands. Normalize path-like command words so
+    // `/Users/me/bin/demo process start` does not consume the whole fixed-width tab-bar command row.
     TerminalTitle {
-        cmd_label: Some(title.to_owned()),
+        cmd_label: Some(self::cmd_title_label(title)),
         cwd: None,
     }
 }
@@ -87,6 +89,26 @@ fn is_ignored_title(title: &str) -> bool {
     title == "Pane" || title.starts_with("Pane ")
 }
 
+fn cmd_title_label(title: &str) -> String {
+    let title = title.trim();
+    let cmd_end = title.find(char::is_whitespace).unwrap_or(title.len());
+    let Some(cmd) = title.get(..cmd_end) else {
+        return title.to_owned();
+    };
+    if !(cmd.starts_with('/') || cmd.starts_with("~/")) {
+        return title.to_owned();
+    }
+    let Some(cmd) = Path::new(cmd).file_name().and_then(|name| name.to_str()) else {
+        return title.to_owned();
+    };
+    let args = title.get(cmd_end..).unwrap_or_default().trim();
+    if args.is_empty() {
+        cmd.to_owned()
+    } else {
+        format!("{cmd} {args}")
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use rstest::rstest;
@@ -94,20 +116,20 @@ mod tests {
     use super::*;
 
     #[rstest]
-    #[case::alias("gst", "/foo/bar", Some("gst"))]
-    #[case::cmd_with_args("cargo test", "/foo/bar", Some("cargo test"))]
-    #[case::custom_cmd_with_args("gkg server", "/foo/bar", Some("gkg server"))]
-    #[case::relative_cmd("./script.sh", "/foo/bar", Some("./script.sh"))]
-    #[case::relative_cmd_with_args("../bin/gkg server", "/foo/bar", Some("../bin/gkg server"))]
-    #[case::absolute_cmd_with_args("/usr/bin/cargo test", "/foo/bar", Some("/usr/bin/cargo test"))]
-    #[case::home_cmd_with_args("~/bin/tool run", "/foo/bar", Some("~/bin/tool run"))]
-    #[case::absolute_shell("/bin/zsh", "/foo/bar", None)]
-    #[case::shell_with_args("zsh -l", "/foo/bar", None)]
-    #[case::matching_cwd("/foo/bar", "/foo/bar", None)]
+    #[case::alias("gst", "/muxr-test/project", Some("gst"))]
+    #[case::cmd_with_args("cargo test", "/muxr-test/project", Some("cargo test"))]
+    #[case::custom_cmd_with_args("demo process", "/muxr-test/project", Some("demo process"))]
+    #[case::relative_cmd("./script.sh", "/muxr-test/project", Some("./script.sh"))]
+    #[case::relative_cmd_with_args("../bin/demo process", "/muxr-test/project", Some("../bin/demo process"))]
+    #[case::absolute_cmd_with_args("/no-such-bin/cargo test", "/muxr-test/project", Some("cargo test"))]
+    #[case::home_cmd_with_args("~/bin/tool run", "/muxr-test/project", Some("tool run"))]
+    #[case::absolute_shell("/no-such-bin/zsh", "/muxr-test/project", None)]
+    #[case::shell_with_args("zsh -l", "/muxr-test/project", None)]
+    #[case::matching_cwd("/muxr-test/project", "/muxr-test/project", None)]
     #[case::home_cwd("~", "/old/project", None)]
-    #[case::empty("", "/foo/bar", None)]
-    #[case::default_pane_title("Pane 1", "/foo/bar", None)]
-    #[case::cwd_basename("bar", "/foo/bar", None)]
+    #[case::empty("", "/muxr-test/project", None)]
+    #[case::default_pane_title("Pane 1", "/muxr-test/project", None)]
+    #[case::cwd_basename("project", "/muxr-test/project", None)]
     fn test_classify_terminal_title_when_title_is_seen_returns_cmd_label(
         #[case] title: &str,
         #[case] cwd: &str,
@@ -176,7 +198,7 @@ mod tests {
                 Some(home.path().to_string_lossy().as_ref())
             ),
             TerminalTitle {
-                cmd_label: Some("~/bin/tool".to_owned()),
+                cmd_label: Some("tool".to_owned()),
                 cwd: None,
             },
         );

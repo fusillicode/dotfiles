@@ -3152,6 +3152,8 @@ dependencies = [
  "pretty_assertions",
  "rootcause",
  "rstest",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

@@ -1,7 +1,8 @@
 use std::fmt;
 use std::path::Path;
+use std::path::PathBuf;
 
-use muxr_core::INTERNAL_SERVER_ARG;
+use muxr_core::EXTERNAL_LAYOUT_ARG;
 use muxr_core::SessionName;
 use owo_colors::OwoColorize;
 use rootcause::prelude::ResultExt;
@@ -9,11 +10,16 @@ use rootcause::report;
 use strum::EnumIter;
 use strum::IntoEnumIterator;
 
+mod internal_server;
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 enum Cmd {
     Help,
     Sessions,
-    Start { session: SessionName },
+    Start {
+        session: SessionName,
+        external_layout: Option<PathBuf>,
+    },
 }
 
 #[derive(Clone, Copy, Debug, EnumIter, Eq, PartialEq)]
@@ -31,9 +37,21 @@ impl Cmd {
         match self {
             Self::Help => print!("{}", include_str!("../help.txt")),
             Self::Sessions => self::run_session_picker()?,
-            Self::Start { session } => {
+            Self::Start {
+                session,
+                external_layout,
+            } => {
                 let server_executable = std::env::current_exe().context("failed to resolve muxr executable")?;
-                muxr_client::start(&session, &server_executable)?;
+                let external_layout = match external_layout {
+                    Some(path) if path.is_relative() => Some(
+                        std::env::current_dir()
+                            .context("failed to resolve muxr cwd")?
+                            .join(path),
+                    ),
+                    Some(path) => Some(path),
+                    None => None,
+                };
+                muxr_client::start(&session, &server_executable, external_layout.as_deref())?;
             }
         }
 
@@ -54,8 +72,7 @@ impl fmt::Display for SessionAction {
 fn main() -> rootcause::Result<()> {
     let args = ytil_sys::cli::get();
 
-    if let Some(session) = parse_internal_server(&args)? {
-        muxr_server::serve_session(&session)?;
+    if internal_server::serve_if_requested(&args)? {
         return Ok(());
     }
 
@@ -70,20 +87,6 @@ fn main() -> rootcause::Result<()> {
     }
 }
 
-/// Parse hidden internal server arguments.
-///
-/// # Errors
-/// - The internal server invocation is missing its session name, has extra args, or has an invalid session name.
-fn parse_internal_server(args: &[String]) -> rootcause::Result<Option<SessionName>> {
-    match args {
-        [flag, session] if flag == INTERNAL_SERVER_ARG => Ok(Some(session.parse()?)),
-        [flag, rest @ ..] if flag == INTERNAL_SERVER_ARG => {
-            Err(report!("unexpected muxr internal server args").attach(format!("args={rest:?}")))
-        }
-        _ => Ok(None),
-    }
-}
-
 /// Parse muxr CLI arguments.
 ///
 /// # Errors
@@ -95,16 +98,36 @@ fn parse(args: &[String]) -> rootcause::Result<Cmd> {
 
     match args {
         [] => Ok(Cmd::Sessions),
-        [cmd] if cmd == "start" => Ok(Cmd::Start {
-            session: SessionName::default(),
-        }),
-        [cmd, session] if cmd == "start" => Ok(Cmd::Start {
-            session: session.parse()?,
-        }),
-        [cmd, session, rest @ ..] if cmd == "start" => {
-            Err(report!("unexpected muxr start args").attach(format!("session={session:?} extra={rest:?}")))
-        }
+        [cmd, rest @ ..] if cmd == "start" => self::parse_start(rest),
         [cmd, ..] => Err(report!("unknown muxr cmd {cmd:?}")),
+    }
+}
+
+fn parse_start(args: &[String]) -> rootcause::Result<Cmd> {
+    match args {
+        [] => Ok(Cmd::Start {
+            session: SessionName::default(),
+            external_layout: None,
+        }),
+        [layout_flag, layout] if layout_flag == EXTERNAL_LAYOUT_ARG => Ok(Cmd::Start {
+            session: SessionName::default(),
+            external_layout: Some(PathBuf::from(layout)),
+        }),
+        [layout_flag] if layout_flag == EXTERNAL_LAYOUT_ARG => {
+            Err(report!("missing muxr start layout").attach(format!("flag={EXTERNAL_LAYOUT_ARG}")))
+        }
+        [session] => Ok(Cmd::Start {
+            session: session.parse()?,
+            external_layout: None,
+        }),
+        [session, layout_flag, layout] if layout_flag == EXTERNAL_LAYOUT_ARG => Ok(Cmd::Start {
+            session: session.parse()?,
+            external_layout: Some(PathBuf::from(layout)),
+        }),
+        [session, layout_flag] if layout_flag == EXTERNAL_LAYOUT_ARG => {
+            Err(report!("missing muxr start layout").attach(format!("session={session:?}")))
+        }
+        _ => Err(report!("unexpected muxr start args").attach(format!("args={args:?}"))),
     }
 }
 
@@ -112,7 +135,7 @@ fn run_session_picker() -> rootcause::Result<()> {
     let server_executable = std::env::current_exe().context("failed to resolve muxr executable")?;
     let sessions = muxr_client::list_sessions()?;
     if sessions.is_empty() {
-        muxr_client::start(&SessionName::default(), &server_executable)?;
+        muxr_client::start(&SessionName::default(), &server_executable, None)?;
         return Ok(());
     }
 
@@ -146,7 +169,7 @@ fn execute_session_action(
     match action {
         SessionAction::Attach => {
             let session = ytil_tui::require_single(selected, "sessions")?;
-            muxr_client::start(session, server_executable)
+            muxr_client::start(session, server_executable, None)
         }
         SessionAction::Delete => self::delete_selected_sessions(selected, muxr_client::delete_session),
     }
@@ -206,14 +229,29 @@ mod tests {
     use super::*;
 
     #[rstest]
-    #[case::start_without_session(&["start"], "default")]
-    #[case::start_with_session(&["start", "work"], "work")]
+    #[case::start_without_session(&["start"], "default", None)]
+    #[case::start_with_session(&["start", "work"], "work", None)]
+    #[case::start_default_with_layout(
+        &["start", "--layout", "../.config/muxr/layouts/work.json"],
+        "default",
+        Some("../.config/muxr/layouts/work.json")
+    )]
+    #[case::start_session_with_layout(
+        &["start", "work", "--layout", ".config/muxr/layouts/work.json"],
+        "work",
+        Some(".config/muxr/layouts/work.json")
+    )]
     fn test_parse_when_start_args_vary_returns_start_cmd(
         #[case] raw: &[&str],
         #[case] expected_session: &str,
+        #[case] expected_layout: Option<&str>,
     ) -> rootcause::Result<()> {
-        assert2::assert!(let Cmd::Start { session } = parse(&args(raw))?);
+        assert2::assert!(let Cmd::Start {
+            session,
+            external_layout,
+        } = parse(&args(raw))?);
         pretty_assertions::assert_eq!(session.as_ref(), expected_session);
+        pretty_assertions::assert_eq!(external_layout.as_deref().and_then(Path::to_str), expected_layout);
         Ok(())
     }
 
@@ -233,6 +271,9 @@ mod tests {
 
     #[rstest]
     #[case::start_extra_args(&["start", "work", "extra"])]
+    #[case::start_missing_layout(&["start", "--layout"])]
+    #[case::start_session_missing_layout(&["start", "work", "--layout"])]
+    #[case::start_layout_extra_args(&["start", "work", "--layout", "work", "extra"])]
     #[case::unknown_start_flag(&["start", "--bogus"])]
     #[case::old_attach_cmd(&["attach"])]
     #[case::old_detach_cmd(&["detach"])]
@@ -272,23 +313,6 @@ mod tests {
         assert2::assert!(result.is_err());
         pretty_assertions::assert_eq!(attempted, vec!["ok", "bad", "later"]);
         Ok(())
-    }
-
-    #[test]
-    fn test_parse_internal_server_when_server_arg_has_session_returns_session() -> rootcause::Result<()> {
-        let Some(session) = parse_internal_server(&args(&["--server", "work"]))? else {
-            return Err(report!("expected internal server session"));
-        };
-
-        pretty_assertions::assert_eq!(session.as_ref(), "work");
-        Ok(())
-    }
-
-    #[rstest]
-    #[case::missing_session(&["--server"])]
-    #[case::extra_args(&["--server", "work", "extra"])]
-    fn test_parse_internal_server_when_args_are_invalid_returns_error(#[case] raw: &[&str]) {
-        assert2::assert!(parse_internal_server(&args(raw)).is_err());
     }
 
     #[test]

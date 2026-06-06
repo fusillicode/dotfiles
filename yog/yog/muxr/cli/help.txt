@@ -2,9 +2,10 @@ muxr
 
 Usage:
   muxr
-  muxr start [session]
+  muxr start [session] [--layout layout-path]
   muxr --help
 
 `muxr start [session]` opens a server-owned shell pane.
+`muxr start [session] --layout <PATH_TO_LAYOUT_FILE>` creates a new session from that JSON layout file.
 `muxr` lists existing sessions; if no sessions exist, it starts the default session.
 `muxr start [session]` will create the session if missing, then attach.

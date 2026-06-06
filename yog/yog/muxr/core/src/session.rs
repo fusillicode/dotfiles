@@ -11,6 +11,7 @@ use serde::Deserializer;
 use serde::Serialize;
 
 pub const DEFAULT_SESSION_NAME: &str = "default";
+pub const EXTERNAL_LAYOUT_ARG: &str = "--layout";
 pub const INTERNAL_SERVER_ARG: &str = "--server";
 const STATE_HOME_PARTS: &[&str] = &[".local", "state", "muxr"];
 
@@ -56,32 +57,7 @@ impl FromStr for SessionName {
     type Err = rootcause::Report;
 
     fn from_str(raw: &str) -> Result<Self, Self::Err> {
-        if raw.is_empty() {
-            return Err(report!("invalid muxr session name {raw:?}").attach("reason=empty names are not allowed"));
-        }
-
-        if matches!(raw, "." | "..") {
-            return Err(report!("invalid muxr session name {raw:?}").attach("reason=reserved names are not allowed"));
-        }
-
-        if raw.starts_with('-') {
-            // Session names are CLI operands too; leading '-' is reserved for flags before it reaches filesystem paths.
-            return Err(report!("invalid muxr session name {raw:?}").attach("reason=names must not start with -"));
-        }
-
-        if raw.len() > 64 {
-            return Err(report!("invalid muxr session name {raw:?}")
-                .attach("reason=names longer than 64 bytes are not allowed"));
-        }
-
-        if !raw
-            .chars()
-            .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-' | '.'))
-        {
-            return Err(report!("invalid muxr session name {raw:?}")
-                .attach("reason=only ASCII alphanumeric, _, -, and . are allowed"));
-        }
-
+        self::validate_muxr_name(raw, "session")?;
         Ok(Self(raw.to_owned()))
     }
 }
@@ -203,6 +179,37 @@ fn socket_hash(session: &SessionName) -> u64 {
         hash = hash.wrapping_mul(SOCKET_HASH_PRIME);
     }
     hash
+}
+
+fn validate_muxr_name(raw: &str, kind: &str) -> rootcause::Result<()> {
+    if raw.is_empty() {
+        return Err(report!("invalid muxr {kind} name {raw:?}").attach("reason=empty names are not allowed"));
+    }
+
+    if matches!(raw, "." | "..") {
+        return Err(report!("invalid muxr {kind} name {raw:?}").attach("reason=reserved names are not allowed"));
+    }
+
+    if raw.starts_with('-') {
+        // Names are CLI operands too; leading '-' is reserved for flags before the value reaches filesystem paths.
+        return Err(report!("invalid muxr {kind} name {raw:?}").attach("reason=names must not start with -"));
+    }
+
+    if raw.len() > 64 {
+        return Err(
+            report!("invalid muxr {kind} name {raw:?}").attach("reason=names longer than 64 bytes are not allowed")
+        );
+    }
+
+    if !raw
+        .chars()
+        .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-' | '.'))
+    {
+        return Err(report!("invalid muxr {kind} name {raw:?}")
+            .attach("reason=only ASCII alphanumeric, _, -, and . are allowed"));
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]

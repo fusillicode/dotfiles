@@ -1,3 +1,5 @@
+use std::fs;
+use std::io;
 use std::path::Path;
 use std::time::Duration;
 use std::time::Instant;
@@ -37,8 +39,12 @@ pub async fn open_session(
     session: &SessionName,
     terminal_size: TerminalSize,
     server_executable: &Path,
+    external_layout: Option<&Path>,
 ) -> rootcause::Result<AttachedSession> {
     let paths = SessionPaths::from_home(session)?;
+    if let Some(external_layout) = external_layout {
+        self::guard_external_layout_seed(&paths, session, external_layout).await?;
+    }
 
     match self::attach(session, &paths, terminal_size.clone()).await {
         Ok(attached_session) => return Ok(attached_session),
@@ -48,7 +54,7 @@ pub async fn open_session(
         }
     }
 
-    session_start::spawn_server_process(session, server_executable)?;
+    session_start::spawn_server_process(session, server_executable, external_layout)?;
     self::attach_started_server(session, &paths, terminal_size).await
 }
 
@@ -144,6 +150,45 @@ fn handle_attach_failure(attach_failure: AttachFailure) -> rootcause::Result<()>
     }
 }
 
+async fn guard_external_layout_seed(
+    paths: &SessionPaths,
+    session: &SessionName,
+    external_layout: &Path,
+) -> rootcause::Result<()> {
+    match fs::read(&paths.layout) {
+        Ok(_) => {
+            return Err(self::external_layout_existing_session_error(
+                session,
+                external_layout,
+                "persisted-layout",
+            ));
+        }
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+        Err(error) => return Err(error).context("failed to read muxr session layout metadata")?,
+    }
+
+    if crate::sessions_list::session_state_async(paths).await? == crate::sessions_list::SessionState::Live {
+        return Err(self::external_layout_existing_session_error(
+            session,
+            external_layout,
+            "live",
+        ));
+    }
+
+    Ok(())
+}
+
+fn external_layout_existing_session_error(
+    session: &SessionName,
+    external_layout: &Path,
+    state: &str,
+) -> rootcause::Report {
+    report!("muxr external layout can only seed a new session")
+        .attach(format!("session={session}"))
+        .attach(format!("layout={}", external_layout.display()))
+        .attach(format!("state={state}"))
+}
+
 #[cfg(test)]
 mod tests {
     use std::fs;
@@ -154,6 +199,61 @@ mod tests {
     use muxr_transport::ServerListener;
 
     use super::*;
+
+    #[test]
+    fn test_guard_external_layout_seed_when_layout_metadata_exists_returns_error() -> rootcause::Result<()> {
+        let tempdir = tempfile::tempdir()?;
+        let (session, paths) = self::session_paths(tempdir.path(), "work")?;
+        let layout = Path::new("../.config/muxr/layouts/work.json");
+        fs::create_dir_all(&paths.root)?;
+        fs::write(&paths.layout, b"not necessarily valid json")?;
+
+        let error = self::runtime()?
+            .block_on(guard_external_layout_seed(&paths, &session, layout))
+            .expect_err("expected persisted layout to block external layout seed");
+
+        assert2::assert!(
+            error
+                .to_string()
+                .contains("muxr external layout can only seed a new session")
+        );
+        assert2::assert!(error.to_string().contains("state=persisted-layout"));
+        Ok(())
+    }
+
+    #[test]
+    fn test_guard_external_layout_seed_when_socket_is_live_returns_error() -> rootcause::Result<()> {
+        let tempdir = tempfile::tempdir()?;
+        let (session, paths) = self::session_paths(tempdir.path(), "work")?;
+        let layout = Path::new("../.config/muxr/layouts/work.json");
+        fs::create_dir_all(&paths.root)?;
+        let runtime = self::runtime()?;
+        let error = runtime.block_on(async {
+            let listener = ServerListener::bind(&paths.socket)?;
+            let handle = tokio::spawn(async move {
+                let mut connection = listener.accept().await?;
+                pretty_assertions::assert_eq!(connection.recv_request().await?, Some(ClientRequest::Ping));
+                connection.send_event(&ServerEvent::Pong).await?;
+                Ok::<(), rootcause::Report>(())
+            });
+
+            let error = guard_external_layout_seed(&paths, &session, layout)
+                .await
+                .expect_err("expected live session to block external layout seed");
+            handle
+                .await
+                .map_err(|error| report!("muxr live layout guard test task panicked").attach(format!("{error}")))??;
+            Ok::<_, rootcause::Report>(error)
+        })?;
+
+        assert2::assert!(
+            error
+                .to_string()
+                .contains("muxr external layout can only seed a new session")
+        );
+        assert2::assert!(error.to_string().contains("state=live"));
+        Ok(())
+    }
 
     #[test]
     fn test_handle_attach_failure_when_server_rejects_and_pid_is_missing_returns_error() -> rootcause::Result<()> {

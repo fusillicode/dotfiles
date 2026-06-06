@@ -22,6 +22,7 @@ mod pane_url_links;
 mod pty;
 mod server;
 mod session_files;
+mod session_start_seed;
 mod sessions_delete;
 mod state;
 mod tab_create;
