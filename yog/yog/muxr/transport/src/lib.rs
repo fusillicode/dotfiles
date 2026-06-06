@@ -439,7 +439,7 @@ mod tests {
         let active_tab = TabId::new(1)?;
         let active_pane = PaneId::new(1)?;
         let pane = PaneSnapshot {
-            agent_state: muxr_core::PaneAgentState::NoAgent,
+            tracked_process_state: muxr_core::TrackedProcessState::None,
             cwd: "/tmp".to_owned(),
             cmd_label: None,
             focus_seq: 1,

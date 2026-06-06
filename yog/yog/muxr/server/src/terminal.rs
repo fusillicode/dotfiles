@@ -12,7 +12,7 @@ use muxr_core::TerminalSize;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
 
-// Match the local Zellij scroll buffer so long agent sessions are not truncated sooner in muxr.
+// Match the local Zellij scroll buffer so long interactive sessions are not truncated sooner in muxr.
 const SCROLLBACK_ROWS: usize = 50_000;
 const SCROLL_LINES_PER_WHEEL_EVENT: usize = 5;
 

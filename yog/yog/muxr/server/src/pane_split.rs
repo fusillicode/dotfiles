@@ -1,5 +1,8 @@
 use std::sync::Mutex;
 
+use muxr_config::LayoutConfig;
+use muxr_config::SPLIT_RATIO_MAX_PER_MILLE;
+use muxr_config::SPLIT_RATIO_MIN_PER_MILLE;
 use muxr_core::PaneId;
 use muxr_core::TerminalSize;
 use rootcause::prelude::ResultExt;
@@ -20,11 +23,6 @@ use crate::state::Tab;
 
 const SPLIT_RATIO_SCALE: u16 = 1000;
 const SPLIT_RATIO_HALF_SCALE: u16 = 500;
-const DEFAULT_HORIZONTAL_SPLIT_RATIO: u16 = 500;
-const DEFAULT_VERTICAL_SPLIT_RATIO: u16 = 400;
-const MIN_SPLIT_RATIO: u16 = 50;
-const MAX_SPLIT_RATIO: u16 = 950;
-const SPLIT_RESIZE_STEP: u16 = 50;
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum PaneSplitAxis {
@@ -43,28 +41,26 @@ pub enum PaneSplitResize {
 }
 
 impl PaneSplitRatio {
-    const fn default_for_axis(axis: PaneSplitAxis) -> Self {
-        match axis {
-            PaneSplitAxis::Horizontal => Self(DEFAULT_HORIZONTAL_SPLIT_RATIO),
-            PaneSplitAxis::Vertical => Self(DEFAULT_VERTICAL_SPLIT_RATIO),
-        }
+    fn default_for_axis(layout_config: LayoutConfig, axis: PaneSplitAxis) -> rootcause::Result<Self> {
+        let ratio = match axis {
+            PaneSplitAxis::Horizontal => layout_config.horizontal_split_ratio,
+            PaneSplitAxis::Vertical => layout_config.vertical_split_ratio,
+        };
+        Self::new(ratio.per_mille())
     }
 
     pub fn new(value: u16) -> rootcause::Result<Self> {
-        if !(MIN_SPLIT_RATIO..=MAX_SPLIT_RATIO).contains(&value) {
-            return Err(report!("muxr pane split ratio is outside supported bounds")
-                .attach(format!("min={MIN_SPLIT_RATIO}"))
-                .attach(format!("max={MAX_SPLIT_RATIO}"))
-                .attach(format!("actual={value}")));
-        }
+        muxr_config::SplitRatio::new(value)?;
         Ok(Self(value))
     }
 
-    pub fn resized(self, resize: PaneSplitResize) -> Self {
-        match resize {
-            PaneSplitResize::DecreaseFirst => Self(self.0.saturating_sub(SPLIT_RESIZE_STEP).max(MIN_SPLIT_RATIO)),
-            PaneSplitResize::IncreaseFirst => Self(self.0.saturating_add(SPLIT_RESIZE_STEP).min(MAX_SPLIT_RATIO)),
-        }
+    pub fn resized(self, layout_config: LayoutConfig, resize: PaneSplitResize) -> rootcause::Result<Self> {
+        let resize_step = layout_config.resize_step.per_mille();
+        let value = match resize {
+            PaneSplitResize::DecreaseFirst => self.0.saturating_sub(resize_step).max(SPLIT_RATIO_MIN_PER_MILLE),
+            PaneSplitResize::IncreaseFirst => self.0.saturating_add(resize_step).min(SPLIT_RATIO_MAX_PER_MILLE),
+        };
+        Self::new(value)
     }
 
     pub fn split_lengths(self, total: u16) -> rootcause::Result<(u16, u16)> {
@@ -107,6 +103,7 @@ impl<'de> Deserialize<'de> for PaneSplitRatio {
 impl SessionLayout {
     pub fn split_active_pane(
         &mut self,
+        layout_config: LayoutConfig,
         metadata: SessionMetadata,
         split_axis: PaneSplitAxis,
     ) -> rootcause::Result<PaneId> {
@@ -123,15 +120,23 @@ impl SessionLayout {
             state: PaneState::Running,
             title: metadata.cmd_label,
         };
-        tab.split_active_pane(&new_pane, split_axis)?;
+        tab.split_active_pane(layout_config, &new_pane, split_axis)?;
         tab.active_pane = pane_id;
         Ok(pane_id)
     }
 }
 
 impl Tab {
-    pub fn split_active_pane(&mut self, new_pane: &Pane, split_axis: PaneSplitAxis) -> rootcause::Result<()> {
-        if !self.pane_tree.split_pane(self.active_pane, new_pane, split_axis)? {
+    pub fn split_active_pane(
+        &mut self,
+        layout_config: LayoutConfig,
+        new_pane: &Pane,
+        split_axis: PaneSplitAxis,
+    ) -> rootcause::Result<()> {
+        if !self
+            .pane_tree
+            .split_pane(layout_config, self.active_pane, new_pane, split_axis)?
+        {
             return Err(report!("muxr active pane is missing from server layout")
                 .attach(format!("active_pane={}", self.active_pane)));
         }
@@ -142,6 +147,7 @@ impl Tab {
 impl PaneTree {
     pub fn split_pane(
         &mut self,
+        layout_config: LayoutConfig,
         pane_id: PaneId,
         new_pane: &Pane,
         split_axis: PaneSplitAxis,
@@ -151,7 +157,7 @@ impl PaneTree {
                 let old_pane = pane.clone();
                 *self = Self::Split {
                     axis: split_axis,
-                    first_ratio: PaneSplitRatio::default_for_axis(split_axis),
+                    first_ratio: PaneSplitRatio::default_for_axis(layout_config, split_axis)?,
                     first: Box::new(Self::Pane(old_pane)),
                     second: Box::new(Self::Pane(new_pane.clone())),
                 };
@@ -159,10 +165,10 @@ impl PaneTree {
             }
             Self::Pane(_) => Ok(false),
             Self::Split { first, second, .. } => {
-                if first.split_pane(pane_id, new_pane, split_axis)? {
+                if first.split_pane(layout_config, pane_id, new_pane, split_axis)? {
                     return Ok(true);
                 }
-                second.split_pane(pane_id, new_pane, split_axis)
+                second.split_pane(layout_config, pane_id, new_pane, split_axis)
             }
         }
     }
@@ -179,7 +185,7 @@ pub fn handle_split_pane_cmd(
     crate::pane_runtime::sync_layout_terminal_titles(&mut layout, runtimes)?;
     let metadata = crate::server::active_pane_session_metadata(config, &layout)?;
     let previous_layout = layout.clone();
-    let pane_id = layout.split_active_pane(metadata, split_axis)?;
+    let pane_id = layout.split_active_pane(config.user_config.layout, metadata, split_axis)?;
     let pane_id = crate::pane_runtime::spawn_pane_or_restore_layout(
         &mut layout,
         previous_layout,
@@ -195,6 +201,7 @@ pub fn handle_split_pane_cmd(
 
 #[cfg(test)]
 mod tests {
+    use muxr_config::MuxrConfig;
     use muxr_core::TerminalSize;
 
     use super::*;
@@ -229,8 +236,16 @@ mod tests {
     ) -> rootcause::Result<()> {
         let mut layout = state_test_helpers::layout("work")?;
 
-        layout.split_active_pane(state_test_helpers::metadata("sh", 2), first_axis)?;
-        layout.split_active_pane(state_test_helpers::metadata("sh", 3), second_axis)?;
+        layout.split_active_pane(
+            MuxrConfig::default().layout,
+            state_test_helpers::metadata("sh", 2),
+            first_axis,
+        )?;
+        layout.split_active_pane(
+            MuxrConfig::default().layout,
+            state_test_helpers::metadata("sh", 3),
+            second_axis,
+        )?;
         state_test_helpers::force_balanced_test_split_ratio(&mut layout)?;
 
         pretty_assertions::assert_eq!(layout.active_pane_id()?.to_string(), "pane-3");
@@ -264,7 +279,11 @@ mod tests {
     ) -> rootcause::Result<()> {
         let mut layout = state_test_helpers::layout("work")?;
 
-        layout.split_active_pane(state_test_helpers::metadata("sh", 2), split_axis)?;
+        layout.split_active_pane(
+            MuxrConfig::default().layout,
+            state_test_helpers::metadata("sh", 2),
+            split_axis,
+        )?;
         state_test_helpers::force_balanced_test_split_ratio(&mut layout)?;
 
         pretty_assertions::assert_eq!(

@@ -1,30 +1,23 @@
 [package]
-name = "muxr-client"
+name = "muxr-config"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
 readme.workspace = true
-description = "muxr terminal multiplexer client."
-keywords = ["muxr", "terminal", "multiplexer", "client", "cli"]
+description = "Hardcoded muxr configuration."
+keywords = ["muxr", "terminal", "multiplexer", "config"]
 categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
-chrono = { workspace = true }
-crossterm = { version = "0.29" }
-muxr_config = { workspace = true }
 muxr_core = { workspace = true }
-muxr_transport = { workspace = true }
 rootcause = { workspace = true }
-tokio = { workspace = true }
-ytil_sys = { workspace = true }
 
 [dev-dependencies]
 assert2 = { workspace = true }
 pretty_assertions = { workspace = true }
 rstest = { workspace = true }
-tempfile = { workspace = true }
 
 [lints]
 workspace = true

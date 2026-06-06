@@ -6,36 +6,27 @@ use crossterm::cursor::MoveTo;
 use crossterm::cursor::RestorePosition;
 use crossterm::cursor::SavePosition;
 use crossterm::style::Attribute;
-use crossterm::style::Color;
 use crossterm::style::Print;
 use crossterm::style::ResetColor;
 use crossterm::style::SetAttribute;
 use crossterm::style::SetBackgroundColor;
 use crossterm::style::SetForegroundColor;
+use muxr_config::TabBarConfig;
 use muxr_core::LayoutSnapshot;
-use muxr_core::PaneAgentState;
 use muxr_core::PaneSnapshot;
+use muxr_core::RenderColor;
 use muxr_core::TabId;
 use muxr_core::TabSnapshot;
+use muxr_core::TrackedProcessState;
 use rootcause::prelude::ResultExt;
 
-pub const WIDTH: u16 = 24;
-
-const ACTIVE_FG: Color = Color::White;
-const BACKGROUND: Color = Color::Rgb { r: 0, g: 19, b: 0 };
-const INACTIVE_FG: Color = Color::Rgb { r: 119, g: 119, b: 119 };
-const RAIL_ACTIVE_FG: Color = Color::Rgb { r: 106, g: 106, b: 223 };
-const RAIL_INACTIVE_FG: Color = BACKGROUND;
 const ROWS_PER_TAB: u16 = 3;
 const SEPARATOR: &str = "\u{2502}";
-const SEPARATOR_FG: Color = Color::Rgb { r: 50, g: 50, b: 50 };
-const AGENT_BUSY_FG: Color = Color::Rgb { r: 140, g: 228, b: 121 };
-const AGENT_UNSEEN_FG: Color = Color::Rgb { r: 255, g: 0, b: 0 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct SidebarTab {
     active: bool,
-    agent_state: PaneAgentState,
+    tracked_process_state: TrackedProcessState,
     cmd_label: Option<String>,
     path_label: String,
 }
@@ -44,7 +35,12 @@ struct SidebarTab {
 ///
 /// # Errors
 /// - The sidebar cmds cannot be written.
-pub fn queue(stdout: &mut impl Write, layout: &LayoutSnapshot, rows: u16) -> rootcause::Result<()> {
+pub fn queue(
+    stdout: &mut impl Write,
+    config: TabBarConfig,
+    layout: &LayoutSnapshot,
+    rows: u16,
+) -> rootcause::Result<()> {
     queue_cmd(stdout, SavePosition)?;
 
     let tabs = self::sidebar_tabs(layout);
@@ -53,7 +49,14 @@ pub fn queue(stdout: &mut impl Write, layout: &LayoutSnapshot, rows: u16) -> roo
         if row >= rows {
             break;
         }
-        self::queue_sidebar_row(stdout, row, tab.active, PaneAgentState::NoAgent, &tab.path_label)?;
+        self::queue_sidebar_row(
+            stdout,
+            config,
+            row,
+            tab.active,
+            TrackedProcessState::None,
+            &tab.path_label,
+        )?;
         row = row.saturating_add(1);
 
         if row >= rows {
@@ -61,9 +64,10 @@ pub fn queue(stdout: &mut impl Write, layout: &LayoutSnapshot, rows: u16) -> roo
         }
         self::queue_sidebar_row(
             stdout,
+            config,
             row,
             tab.active,
-            tab.agent_state,
+            tab.tracked_process_state,
             tab.cmd_label.as_deref().unwrap_or(""),
         )?;
         row = row.saturating_add(1);
@@ -72,12 +76,12 @@ pub fn queue(stdout: &mut impl Write, layout: &LayoutSnapshot, rows: u16) -> roo
             break;
         }
         // Keep muxr tab entries aligned with the three-row agg tab-bar shape.
-        self::queue_sidebar_row(stdout, row, tab.active, PaneAgentState::NoAgent, "")?;
+        self::queue_sidebar_row(stdout, config, row, tab.active, TrackedProcessState::None, "")?;
         row = row.saturating_add(1);
     }
 
     while row < rows {
-        self::queue_sidebar_row(stdout, row, false, PaneAgentState::NoAgent, "")?;
+        self::queue_sidebar_row(stdout, config, row, false, TrackedProcessState::None, "")?;
         row = row.saturating_add(1);
     }
 
@@ -95,22 +99,27 @@ pub fn tab_id_at_row(layout: &LayoutSnapshot, row: u16) -> Option<TabId> {
 
 fn queue_sidebar_row(
     stdout: &mut impl Write,
+    config: TabBarConfig,
     row: u16,
     active: bool,
-    agent_state: PaneAgentState,
+    tracked_process_state: TrackedProcessState,
     text: &str,
 ) -> rootcause::Result<()> {
-    let content_width = usize::from(WIDTH.saturating_sub(2));
+    let content_width = usize::from(config.width.saturating_sub(2));
     queue_cmd(stdout, MoveTo(0, row))?;
-    queue_cmd(stdout, SetBackgroundColor(BACKGROUND))?;
+    queue_cmd(stdout, SetBackgroundColor(crate::render::crossterm_color(config.bg)))?;
     queue_cmd(
         stdout,
-        SetForegroundColor(if active { RAIL_ACTIVE_FG } else { RAIL_INACTIVE_FG }),
+        SetForegroundColor(if active {
+            crate::render::crossterm_color(config.rail.active_fg)
+        } else {
+            crate::render::crossterm_color(config.rail.inactive_fg)
+        }),
     )?;
     queue_cmd(stdout, Print("\u{258e}"))?;
-    self::queue_sidebar_text_style(stdout, active)?;
+    self::queue_sidebar_text_style(stdout, config, active)?;
     // Keep normal labels flush after the rail; marker rows prefix the dot and one space.
-    let marker_width = if self::agent_state_dot_color(agent_state).is_some() {
+    let marker_width = if self::tracked_process_state_dot_color(config, tracked_process_state).is_some() {
         2
     } else {
         0
@@ -120,52 +129,66 @@ fn queue_sidebar_row(
         .take(content_width.saturating_sub(marker_width))
         .collect::<String>();
     let used_width = label.chars().count().saturating_add(marker_width);
-    self::queue_agent_state_marker(stdout, active, agent_state)?;
+    self::queue_tracked_process_state_marker(stdout, config, active, tracked_process_state)?;
     queue_cmd(stdout, Print(&label))?;
-    self::queue_sidebar_text_style(stdout, active)?;
+    self::queue_sidebar_text_style(stdout, config, active)?;
     let trailing_width = content_width.saturating_sub(used_width);
     if trailing_width > 0 {
         queue_cmd(stdout, Print(pad("", trailing_width)))?;
     }
     queue_cmd(stdout, SetAttribute(Attribute::Reset))?;
-    queue_cmd(stdout, SetBackgroundColor(BACKGROUND))?;
-    queue_cmd(stdout, SetForegroundColor(SEPARATOR_FG))?;
+    queue_cmd(stdout, SetBackgroundColor(crate::render::crossterm_color(config.bg)))?;
+    queue_cmd(
+        stdout,
+        SetForegroundColor(crate::render::crossterm_color(config.separator_fg)),
+    )?;
     queue_cmd(stdout, Print(SEPARATOR))?;
     Ok(())
 }
 
-fn queue_sidebar_text_style(stdout: &mut impl Write, active: bool) -> rootcause::Result<()> {
+fn queue_sidebar_text_style(stdout: &mut impl Write, config: TabBarConfig, active: bool) -> rootcause::Result<()> {
     queue_cmd(stdout, SetAttribute(Attribute::Reset))?;
-    queue_cmd(stdout, SetBackgroundColor(BACKGROUND))?;
-    queue_cmd(stdout, SetForegroundColor(if active { ACTIVE_FG } else { INACTIVE_FG }))?;
+    queue_cmd(stdout, SetBackgroundColor(crate::render::crossterm_color(config.bg)))?;
+    queue_cmd(
+        stdout,
+        SetForegroundColor(if active {
+            crate::render::crossterm_color(config.active_fg)
+        } else {
+            crate::render::crossterm_color(config.inactive_fg)
+        }),
+    )?;
     if active {
         queue_cmd(stdout, SetAttribute(Attribute::Bold))?;
     }
     Ok(())
 }
 
-fn queue_agent_state_marker(
+fn queue_tracked_process_state_marker(
     stdout: &mut impl Write,
+    config: TabBarConfig,
     active: bool,
-    agent_state: PaneAgentState,
+    tracked_process_state: TrackedProcessState,
 ) -> rootcause::Result<()> {
-    let Some(color) = self::agent_state_dot_color(agent_state) else {
+    let Some(color) = self::tracked_process_state_dot_color(config, tracked_process_state) else {
         return Ok(());
     };
 
     queue_cmd(stdout, SetAttribute(Attribute::Bold))?;
-    queue_cmd(stdout, SetForegroundColor(color))?;
+    queue_cmd(stdout, SetForegroundColor(crate::render::crossterm_color(color)))?;
     queue_cmd(stdout, Print("\u{2022}"))?;
-    self::queue_sidebar_text_style(stdout, active)?;
+    self::queue_sidebar_text_style(stdout, config, active)?;
     queue_cmd(stdout, Print(" "))?;
     Ok(())
 }
 
-const fn agent_state_dot_color(agent_state: PaneAgentState) -> Option<Color> {
-    match agent_state {
-        PaneAgentState::Busy => Some(AGENT_BUSY_FG),
-        PaneAgentState::Unseen => Some(AGENT_UNSEEN_FG),
-        PaneAgentState::NoAgent | PaneAgentState::Seen => None,
+const fn tracked_process_state_dot_color(
+    config: TabBarConfig,
+    tracked_process_state: TrackedProcessState,
+) -> Option<RenderColor> {
+    match tracked_process_state {
+        TrackedProcessState::Busy => Some(config.tracked_process.busy_fg),
+        TrackedProcessState::Unseen => Some(config.tracked_process.unseen_fg),
+        TrackedProcessState::None | TrackedProcessState::Seen => None,
     }
 }
 
@@ -183,7 +206,7 @@ fn sidebar_tabs_with_home(layout: &LayoutSnapshot, home: Option<&str>) -> Vec<Si
             let display_pane = self::display_pane(tab, active);
             SidebarTab {
                 active,
-                agent_state: display_pane.map(|pane| pane.agent_state).unwrap_or_default(),
+                tracked_process_state: display_pane.map(|pane| pane.tracked_process_state).unwrap_or_default(),
                 cmd_label: self::cmd_label(display_pane),
                 path_label: self::path_label(tab, display_pane, home),
             }
@@ -193,31 +216,34 @@ fn sidebar_tabs_with_home(layout: &LayoutSnapshot, home: Option<&str>) -> Vec<Si
 
 fn display_pane(tab: &TabSnapshot, active: bool) -> Option<&PaneSnapshot> {
     if active && tab.panes().len() > 1 {
-        return self::unfocused_unseen_agent_pane(tab).or_else(|| self::active_pane(tab));
+        return self::unfocused_unseen_tracked_process_pane(tab).or_else(|| self::active_pane(tab));
     }
 
     self::inactive_tab_display_pane(tab)
 }
 
-fn unfocused_unseen_agent_pane(tab: &TabSnapshot) -> Option<&PaneSnapshot> {
+fn unfocused_unseen_tracked_process_pane(tab: &TabSnapshot) -> Option<&PaneSnapshot> {
     tab.panes()
         .iter()
-        .find(|pane| &pane.id != tab.active_pane() && pane.agent_state == PaneAgentState::Unseen)
+        .find(|pane| &pane.id != tab.active_pane() && pane.tracked_process_state == TrackedProcessState::Unseen)
 }
 
 fn inactive_tab_display_pane(tab: &TabSnapshot) -> Option<&PaneSnapshot> {
     // Inactive tabs need one representative pane: attention/running state wins, while
-    // idle agents still keep their label and no dot. Ties use focus recency.
-    self::focused_pane_with_agent_state(tab, PaneAgentState::Unseen)
-        .or_else(|| self::focused_pane_with_agent_state(tab, PaneAgentState::Busy))
-        .or_else(|| self::focused_pane_with_agent_state(tab, PaneAgentState::Seen))
+    // idle tracked processes still keep their label and no dot. Ties use focus recency.
+    self::focused_pane_with_tracked_process_state(tab, TrackedProcessState::Unseen)
+        .or_else(|| self::focused_pane_with_tracked_process_state(tab, TrackedProcessState::Busy))
+        .or_else(|| self::focused_pane_with_tracked_process_state(tab, TrackedProcessState::Seen))
         .or_else(|| self::active_pane(tab))
 }
 
-fn focused_pane_with_agent_state(tab: &TabSnapshot, agent_state: PaneAgentState) -> Option<&PaneSnapshot> {
+fn focused_pane_with_tracked_process_state(
+    tab: &TabSnapshot,
+    tracked_process_state: TrackedProcessState,
+) -> Option<&PaneSnapshot> {
     tab.panes()
         .iter()
-        .filter(|pane| pane.agent_state == agent_state)
+        .filter(|pane| pane.tracked_process_state == tracked_process_state)
         .max_by_key(|pane| pane.focus_seq)
 }
 
@@ -308,6 +334,7 @@ where
 
 #[cfg(test)]
 mod tests {
+    use muxr_config::MuxrConfig;
     use muxr_core::PaneId;
     use rstest::rstest;
 
@@ -326,7 +353,7 @@ mod tests {
                         1,
                         "/Users/me/work/default",
                         None,
-                        PaneAgentState::NoAgent,
+                        TrackedProcessState::None,
                     )?],
                 )?,
                 self::tab_snapshot(
@@ -337,7 +364,7 @@ mod tests {
                         2,
                         "/Users/me/src/muxr",
                         Some("nvim"),
-                        PaneAgentState::NoAgent,
+                        TrackedProcessState::None,
                     )?],
                 )?,
             ],
@@ -348,13 +375,13 @@ mod tests {
             vec![
                 SidebarTab {
                     active: false,
-                    agent_state: PaneAgentState::NoAgent,
+                    tracked_process_state: TrackedProcessState::None,
                     cmd_label: None,
                     path_label: "~/w/default".to_owned(),
                 },
                 SidebarTab {
                     active: true,
-                    agent_state: PaneAgentState::NoAgent,
+                    tracked_process_state: TrackedProcessState::None,
                     cmd_label: Some("nvim".to_owned()),
                     path_label: "~/s/muxr".to_owned(),
                 },
@@ -364,7 +391,7 @@ mod tests {
     }
 
     #[test]
-    fn test_sidebar_tabs_when_inactive_tab_has_unseen_agent_pane_uses_unseen_pane() -> rootcause::Result<()> {
+    fn test_sidebar_tabs_when_inactive_tab_has_unseen_tracked_process_pane_uses_unseen_pane() -> rootcause::Result<()> {
         let layout = self::layout_snapshot(
             1,
             vec![
@@ -372,16 +399,16 @@ mod tests {
                     1,
                     "active",
                     1,
-                    vec![self::pane_snapshot(1, "/tmp/active", None, PaneAgentState::NoAgent)?],
+                    vec![self::pane_snapshot(1, "/tmp/active", None, TrackedProcessState::None)?],
                 )?,
                 self::tab_snapshot(
                     2,
                     "inactive",
                     2,
                     vec![
-                        self::pane_snapshot(2, "/tmp/shell", Some("zsh"), PaneAgentState::NoAgent)?,
-                        self::pane_snapshot(4, "/tmp/cargo", Some("cargo test"), PaneAgentState::Busy)?,
-                        self::pane_snapshot(3, "/tmp/codex", Some("codex"), PaneAgentState::Unseen)?,
+                        self::pane_snapshot(2, "/tmp/shell", Some("zsh"), TrackedProcessState::None)?,
+                        self::pane_snapshot(4, "/tmp/cargo", Some("cargo test"), TrackedProcessState::Busy)?,
+                        self::pane_snapshot(3, "/tmp/codex", Some("codex"), TrackedProcessState::Unseen)?,
                     ],
                 )?,
             ],
@@ -392,13 +419,13 @@ mod tests {
             vec![
                 SidebarTab {
                     active: true,
-                    agent_state: PaneAgentState::NoAgent,
+                    tracked_process_state: TrackedProcessState::None,
                     cmd_label: None,
                     path_label: "/t/active".to_owned(),
                 },
                 SidebarTab {
                     active: false,
-                    agent_state: PaneAgentState::Unseen,
+                    tracked_process_state: TrackedProcessState::Unseen,
                     cmd_label: Some("codex".to_owned()),
                     path_label: "/t/codex".to_owned(),
                 },
@@ -409,7 +436,7 @@ mod tests {
 
     #[rstest]
     #[case::unseen(
-        PaneAgentState::Unseen,
+        TrackedProcessState::Unseen,
         "/tmp/unseen-old",
         "codex-old",
         "/tmp/unseen-recent",
@@ -418,7 +445,7 @@ mod tests {
         "codex-recent"
     )]
     #[case::busy(
-        PaneAgentState::Busy,
+        TrackedProcessState::Busy,
         "/tmp/busy-old",
         "claude-old",
         "/tmp/busy-recent",
@@ -427,7 +454,7 @@ mod tests {
         "claude-recent"
     )]
     #[case::seen(
-        PaneAgentState::Seen,
+        TrackedProcessState::Seen,
         "/tmp/seen-old",
         "cursor-old",
         "/tmp/seen-recent",
@@ -435,8 +462,8 @@ mod tests {
         "/t/seen-recent",
         "cursor-recent"
     )]
-    fn test_sidebar_tabs_when_inactive_tab_has_multiple_agents_in_same_state_uses_last_focused(
-        #[case] agent_state: PaneAgentState,
+    fn test_sidebar_tabs_when_inactive_tab_has_multiple_tracked_processes_in_same_state_uses_last_focused(
+        #[case] tracked_process_state: TrackedProcessState,
         #[case] first_cwd: &str,
         #[case] first_cmd_label: &str,
         #[case] second_cwd: &str,
@@ -444,10 +471,12 @@ mod tests {
         #[case] expected_path_label: &str,
         #[case] expected_cmd_label: &str,
     ) -> rootcause::Result<()> {
-        let mut older_agent_pane = self::pane_snapshot(4, first_cwd, Some(first_cmd_label), agent_state)?;
-        older_agent_pane.focus_seq = 10;
-        let mut recent_agent_pane = self::pane_snapshot(3, second_cwd, Some(second_cmd_label), agent_state)?;
-        recent_agent_pane.focus_seq = 20;
+        let mut older_tracked_process_pane =
+            self::pane_snapshot(4, first_cwd, Some(first_cmd_label), tracked_process_state)?;
+        older_tracked_process_pane.focus_seq = 10;
+        let mut recent_tracked_process_pane =
+            self::pane_snapshot(3, second_cwd, Some(second_cmd_label), tracked_process_state)?;
+        recent_tracked_process_pane.focus_seq = 20;
 
         let layout = self::layout_snapshot(
             1,
@@ -456,16 +485,16 @@ mod tests {
                     1,
                     "active",
                     1,
-                    vec![self::pane_snapshot(1, "/tmp/active", None, PaneAgentState::NoAgent)?],
+                    vec![self::pane_snapshot(1, "/tmp/active", None, TrackedProcessState::None)?],
                 )?,
                 self::tab_snapshot(
                     2,
                     "inactive",
                     2,
                     vec![
-                        self::pane_snapshot(2, "/tmp/shell", Some("zsh"), PaneAgentState::NoAgent)?,
-                        older_agent_pane,
-                        recent_agent_pane,
+                        self::pane_snapshot(2, "/tmp/shell", Some("zsh"), TrackedProcessState::None)?,
+                        older_tracked_process_pane,
+                        recent_tracked_process_pane,
                     ],
                 )?,
             ],
@@ -477,7 +506,7 @@ mod tests {
             tabs[1],
             SidebarTab {
                 active: false,
-                agent_state,
+                tracked_process_state,
                 cmd_label: Some(expected_cmd_label.to_owned()),
                 path_label: expected_path_label.to_owned(),
             },
@@ -486,7 +515,8 @@ mod tests {
     }
 
     #[test]
-    fn test_sidebar_tabs_when_inactive_tab_has_seen_agent_uses_agent_pane_without_dot_state() -> rootcause::Result<()> {
+    fn test_sidebar_tabs_when_inactive_tab_has_seen_tracked_process_uses_tracked_process_pane_without_dot_state()
+    -> rootcause::Result<()> {
         let layout = self::layout_snapshot(
             1,
             vec![
@@ -494,15 +524,15 @@ mod tests {
                     1,
                     "active",
                     1,
-                    vec![self::pane_snapshot(1, "/tmp/active", None, PaneAgentState::NoAgent)?],
+                    vec![self::pane_snapshot(1, "/tmp/active", None, TrackedProcessState::None)?],
                 )?,
                 self::tab_snapshot(
                     2,
                     "inactive",
                     2,
                     vec![
-                        self::pane_snapshot(2, "/tmp/shell", Some("zsh"), PaneAgentState::NoAgent)?,
-                        self::pane_snapshot(3, "/tmp/codex", Some("codex"), PaneAgentState::Seen)?,
+                        self::pane_snapshot(2, "/tmp/shell", Some("zsh"), TrackedProcessState::None)?,
+                        self::pane_snapshot(3, "/tmp/codex", Some("codex"), TrackedProcessState::Seen)?,
                     ],
                 )?,
             ],
@@ -514,7 +544,7 @@ mod tests {
             tabs[1],
             SidebarTab {
                 active: false,
-                agent_state: PaneAgentState::Seen,
+                tracked_process_state: TrackedProcessState::Seen,
                 cmd_label: Some("codex".to_owned()),
                 path_label: "/t/codex".to_owned(),
             },
@@ -523,7 +553,8 @@ mod tests {
     }
 
     #[test]
-    fn test_sidebar_tabs_when_active_tab_has_unfocused_unseen_agent_uses_agent_pane() -> rootcause::Result<()> {
+    fn test_sidebar_tabs_when_active_tab_has_unfocused_unseen_tracked_process_uses_tracked_process_pane()
+    -> rootcause::Result<()> {
         let layout = self::layout_snapshot(
             1,
             vec![self::tab_snapshot(
@@ -531,8 +562,8 @@ mod tests {
                 "default",
                 1,
                 vec![
-                    self::pane_snapshot(1, "/tmp/shell", Some("zsh"), PaneAgentState::NoAgent)?,
-                    self::pane_snapshot(2, "/tmp/codex", Some("codex"), PaneAgentState::Unseen)?,
+                    self::pane_snapshot(1, "/tmp/shell", Some("zsh"), TrackedProcessState::None)?,
+                    self::pane_snapshot(2, "/tmp/codex", Some("codex"), TrackedProcessState::Unseen)?,
                 ],
             )?],
         )?;
@@ -541,7 +572,7 @@ mod tests {
             sidebar_tabs_with_home(&layout, None),
             vec![SidebarTab {
                 active: true,
-                agent_state: PaneAgentState::Unseen,
+                tracked_process_state: TrackedProcessState::Unseen,
                 cmd_label: Some("codex".to_owned()),
                 path_label: "/t/codex".to_owned(),
             }],
@@ -570,12 +601,17 @@ mod tests {
                 1,
                 "default",
                 1,
-                vec![self::pane_snapshot(1, "project", Some("codex"), PaneAgentState::Busy)?],
+                vec![self::pane_snapshot(
+                    1,
+                    "project",
+                    Some("codex"),
+                    TrackedProcessState::Busy,
+                )?],
             )?],
         )?;
         let mut output = CountingWriter::default();
 
-        queue(&mut output, &layout, 3)?;
+        queue(&mut output, MuxrConfig::default().tab_bar, &layout, 3)?;
 
         let rendered = output.rendered_string()?;
         assert2::assert!(rendered.contains("project"));
@@ -587,19 +623,24 @@ mod tests {
     }
 
     #[test]
-    fn test_queue_when_seen_agent_is_rendered_shows_label_without_marker() -> rootcause::Result<()> {
+    fn test_queue_when_seen_tracked_process_is_rendered_shows_label_without_marker() -> rootcause::Result<()> {
         let layout = self::layout_snapshot(
             1,
             vec![self::tab_snapshot(
                 1,
                 "default",
                 1,
-                vec![self::pane_snapshot(1, "project", Some("cx"), PaneAgentState::Seen)?],
+                vec![self::pane_snapshot(
+                    1,
+                    "project",
+                    Some("cx"),
+                    TrackedProcessState::Seen,
+                )?],
             )?],
         )?;
         let mut output = CountingWriter::default();
 
-        queue(&mut output, &layout, 2)?;
+        queue(&mut output, MuxrConfig::default().tab_bar, &layout, 2)?;
 
         let visible = self::strip_ansi(&output.rendered_string()?);
         assert2::assert!(visible.contains("\u{258e}cx"));
@@ -608,19 +649,25 @@ mod tests {
     }
 
     #[test]
-    fn test_queue_when_agent_marker_is_rendered_keeps_labels_flush_and_spaces_marker() -> rootcause::Result<()> {
+    fn test_queue_when_tracked_process_marker_is_rendered_keeps_labels_flush_and_spaces_marker() -> rootcause::Result<()>
+    {
         let layout = self::layout_snapshot(
             1,
             vec![self::tab_snapshot(
                 1,
                 "default",
                 1,
-                vec![self::pane_snapshot(1, "project", Some("cx"), PaneAgentState::Busy)?],
+                vec![self::pane_snapshot(
+                    1,
+                    "project",
+                    Some("cx"),
+                    TrackedProcessState::Busy,
+                )?],
             )?],
         )?;
         let mut output = CountingWriter::default();
 
-        queue(&mut output, &layout, 2)?;
+        queue(&mut output, MuxrConfig::default().tab_bar, &layout, 2)?;
 
         let visible = self::strip_ansi(&output.rendered_string()?);
         assert2::assert!(visible.contains("\u{258e}project"));
@@ -639,12 +686,17 @@ mod tests {
                 1,
                 "default",
                 1,
-                vec![self::pane_snapshot(1, "project", Some("cx"), PaneAgentState::Busy)?],
+                vec![self::pane_snapshot(
+                    1,
+                    "project",
+                    Some("cx"),
+                    TrackedProcessState::Busy,
+                )?],
             )?],
         )?;
         let mut output = CountingWriter::default();
 
-        queue(&mut output, &layout, 3)?;
+        queue(&mut output, MuxrConfig::default().tab_bar, &layout, 3)?;
 
         let visible = self::strip_ansi(&output.rendered_string()?);
         let rows = visible.split(SEPARATOR).collect::<Vec<_>>();
@@ -674,13 +726,13 @@ mod tests {
                     1,
                     "default",
                     1,
-                    vec![self::pane_snapshot(1, "default", None, PaneAgentState::NoAgent)?],
+                    vec![self::pane_snapshot(1, "default", None, TrackedProcessState::None)?],
                 )?,
                 self::tab_snapshot(
                     2,
                     "tab 2",
                     2,
-                    vec![self::pane_snapshot(2, "tab-2", None, PaneAgentState::NoAgent)?],
+                    vec![self::pane_snapshot(2, "tab-2", None, TrackedProcessState::None)?],
                 )?,
             ],
         )?;
@@ -706,10 +758,10 @@ mod tests {
         id: u32,
         cwd: &str,
         cmd_label: Option<&str>,
-        agent_state: PaneAgentState,
+        tracked_process_state: TrackedProcessState,
     ) -> rootcause::Result<PaneSnapshot> {
         Ok(PaneSnapshot {
-            agent_state,
+            tracked_process_state,
             cwd: cwd.to_owned(),
             cmd_label: cmd_label.map(str::to_owned),
             focus_seq: u64::from(id),

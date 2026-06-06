@@ -7,6 +7,7 @@ use std::time::Duration;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
+use muxr_config::MuxrConfig;
 use muxr_core::SessionName;
 use muxr_core::SessionPaths;
 use muxr_core::TerminalSize;
@@ -33,6 +34,7 @@ pub struct ServerConfig {
     pub client_heartbeat_interval: Duration,
     pub client_heartbeat_timeout: Duration,
     pub client_write_timeout: Duration,
+    pub user_config: Arc<MuxrConfig>,
     pub session: SessionName,
     pub paths: SessionPaths,
     max_accepted_connections: Option<usize>,
@@ -50,6 +52,7 @@ pub fn serve_session(session: &SessionName) -> rootcause::Result<()> {
         client_heartbeat_interval: CLIENT_HEARTBEAT_INTERVAL,
         client_heartbeat_timeout: CLIENT_HEARTBEAT_TIMEOUT,
         client_write_timeout: CLIENT_WRITE_TIMEOUT,
+        user_config: Arc::new(MuxrConfig::default()),
         session: session.clone(),
         paths,
         max_accepted_connections: None,
@@ -199,6 +202,7 @@ pub mod test_helpers {
     use std::path::Path;
     use std::time::Duration;
 
+    use muxr_config::MuxrConfig;
     use muxr_core::SessionName;
     use muxr_core::SessionPaths;
 
@@ -243,6 +247,7 @@ pub mod test_helpers {
             client_heartbeat_interval: TEST_CLIENT_HEARTBEAT_INTERVAL,
             client_heartbeat_timeout: TEST_CLIENT_HEARTBEAT_TIMEOUT,
             client_write_timeout: TEST_CLIENT_WRITE_TIMEOUT,
+            user_config: std::sync::Arc::new(MuxrConfig::default()),
             session,
             paths,
             max_accepted_connections: None,
@@ -543,6 +548,7 @@ mod tests {
         layout.sync_terminal_titles(&[(PaneId::new(1)?, Some(active_cwd.clone()))]);
 
         let pane_id = layout.split_active_pane(
+            config.user_config.layout,
             self::active_pane_session_metadata(&config, &layout)?,
             PaneSplitAxis::Vertical,
         )?;
@@ -629,7 +635,11 @@ mod tests {
         let layout = Mutex::new(SessionLayout::initial(&config.session, self::metadata("sh", 1))?);
         {
             let mut layout = self::lock_mutex(&layout, "layout")?;
-            layout.split_active_pane(self::metadata("sh", 2), PaneSplitAxis::Vertical)?;
+            layout.split_active_pane(
+                config.user_config.layout,
+                self::metadata("sh", 2),
+                PaneSplitAxis::Vertical,
+            )?;
         }
         let runtimes = {
             let layout = self::lock_mutex(&layout, "layout")?;
@@ -643,10 +653,10 @@ mod tests {
 
         self::resize_panes_to_layout(&layout, &runtimes, &terminal_size)?;
         drop(self::initial_attached_render(
-            &config.paths,
+            &config,
             &layout,
             &runtimes,
-            &crate::pane_agent::PaneAgents::default(),
+            &crate::pane_tracked_process::PaneTrackedProcesses::default(),
             &terminal_size,
         )?);
 
@@ -1361,6 +1371,7 @@ mod tests {
             client_heartbeat_interval: TEST_CLIENT_HEARTBEAT_INTERVAL,
             client_heartbeat_timeout: TEST_CLIENT_HEARTBEAT_TIMEOUT,
             client_write_timeout: TEST_CLIENT_WRITE_TIMEOUT,
+            user_config: Arc::new(MuxrConfig::default()),
             session,
             paths: paths.clone(),
             max_accepted_connections: None,
@@ -1400,6 +1411,7 @@ mod tests {
                     client_heartbeat_interval: TEST_CLIENT_HEARTBEAT_INTERVAL,
                     client_heartbeat_timeout: TEST_CLIENT_HEARTBEAT_TIMEOUT,
                     client_write_timeout: TEST_CLIENT_WRITE_TIMEOUT,
+                    user_config: Arc::new(MuxrConfig::default()),
                     session,
                     paths,
                     max_accepted_connections,

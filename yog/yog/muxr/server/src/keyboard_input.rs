@@ -2,11 +2,11 @@ use muxr_core::ClientKey;
 use muxr_core::ClientKeyCode;
 use muxr_core::ClientKeyModifiers;
 
-use crate::pane_agent::PaneUserInteraction;
 use crate::pane_borders::BorderRenderMode;
 use crate::pane_focus::PaneFocusDirection;
 use crate::pane_resize::PaneResizeDirection;
 use crate::pane_split::PaneSplitAxis;
+use crate::pane_tracked_process::TrackedProcessUserInteraction;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ClientCmd {
@@ -55,11 +55,11 @@ pub const fn resolve_key(input_mode: &mut ServerInputMode, key: &ClientKey) -> K
     }
 }
 
-pub fn input_interaction(bytes: &[u8]) -> PaneUserInteraction {
+pub fn input_interaction(bytes: &[u8]) -> TrackedProcessUserInteraction {
     if bytes.contains(&b'\r') || bytes.contains(&b'\n') {
-        PaneUserInteraction::StartsAgentWork
+        TrackedProcessUserInteraction::StartsTrackedProcessWork
     } else {
-        PaneUserInteraction::MayEcho
+        TrackedProcessUserInteraction::MayEcho
     }
 }
 
@@ -132,12 +132,12 @@ mod tests {
     use super::*;
 
     #[rstest::rstest]
-    #[case::typing(b"abc", PaneUserInteraction::MayEcho)]
-    #[case::enter(b"\r", PaneUserInteraction::StartsAgentWork)]
-    #[case::input_with_newline(b"one\ntwo", PaneUserInteraction::StartsAgentWork)]
+    #[case::typing(b"abc", TrackedProcessUserInteraction::MayEcho)]
+    #[case::enter(b"\r", TrackedProcessUserInteraction::StartsTrackedProcessWork)]
+    #[case::input_with_newline(b"one\ntwo", TrackedProcessUserInteraction::StartsTrackedProcessWork)]
     fn test_input_interaction_when_bytes_vary_classifies_prompt_submission(
         #[case] bytes: &[u8],
-        #[case] expected: PaneUserInteraction,
+        #[case] expected: TrackedProcessUserInteraction,
     ) {
         pretty_assertions::assert_eq!(self::input_interaction(bytes), expected);
     }

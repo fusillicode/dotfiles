@@ -1,7 +1,5 @@
 use std::path::Path;
 
-use ytil_agents::agent::Agent;
-
 use crate::pty::PtyHandle;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -79,33 +77,6 @@ pub fn snapshot_from_pty_handle(handle: &PtyHandle) -> rootcause::Result<PaneCmd
     })
 }
 
-pub fn agent_for_cmd(cmd: &PaneCmd) -> Option<Agent> {
-    match cmd.executable.as_str() {
-        "claude" | "claude-code" => Some(Agent::Claude),
-        "codex" | "codex-aarch64-apple-darwin" | "codex-x86_64-apple-darwin" => Some(Agent::Codex),
-        "cursor" | "cursor-agent" => Some(Agent::Cursor),
-        "gemini" => Some(Agent::Gemini),
-        "opencode" => Some(Agent::Opencode),
-        _ if self::is_claude_versioned_runtime(cmd) => Some(Agent::Claude),
-        _ if self::is_cursor_agent_node(cmd) => Some(Agent::Cursor),
-        _ => None,
-    }
-}
-
-fn is_claude_versioned_runtime(cmd: &PaneCmd) -> bool {
-    cmd.path
-        .as_deref()
-        .is_some_and(|path| path.contains("/claude/versions/"))
-}
-
-fn is_cursor_agent_node(cmd: &PaneCmd) -> bool {
-    cmd.executable == "node"
-        && cmd
-            .path
-            .as_deref()
-            .is_some_and(|path| path.contains("/cursor-agent/versions/"))
-}
-
 fn observe_process(process: &PaneProcess, shell_pid: Option<u32>) -> PaneCmdObservation {
     if shell_pid.is_some_and(|shell_pid| process.pid == shell_pid) {
         return PaneCmdObservation::Shell;
@@ -134,8 +105,8 @@ fn process_info(pid: u32) -> Option<PaneProcess> {
         return None;
     };
     Some(PaneProcess {
-        // Process lookup can race with fg-process exit. Treat misses as absent metadata; observation stays
-        // Unknown instead of clearing a live agent from one failed sample.
+        // Process lookup can race with foreground-process exit. Treat misses as absent metadata; observation stays
+        // Unknown instead of clearing a live command from one failed sample.
         name: libproc::proc_pid::name(pid_i32).ok(),
         path: libproc::proc_pid::pidpath(pid_i32).ok(),
         pid,
@@ -144,8 +115,6 @@ fn process_info(pid: u32) -> Option<PaneProcess> {
 
 #[cfg(test)]
 mod tests {
-    use rstest::rstest;
-
     use super::*;
 
     #[test]
@@ -160,21 +129,20 @@ mod tests {
     }
 
     #[test]
-    fn test_observe_pane_cmd_when_fg_leader_is_codex_returns_fg_cmd() {
+    fn test_observe_pane_cmd_when_fg_leader_has_path_returns_fg_cmd() {
         let observation = observe_pane_cmd(&PaneCmdSnapshot {
             fg_process_group: Some(9400),
             fg_process_group_leader: Some(self::process_with_path(
                 9400,
-                "codex-aarch64-apple-darwin",
-                "/opt/homebrew/Caskroom/codex/0.137.0/codex-aarch64-apple-darwin",
+                "demo-aarch64-apple-darwin",
+                "/opt/homebrew/Caskroom/demo/0.137.0/demo-aarch64-apple-darwin",
             )),
             shell_pid: Some(9322),
         });
 
         assert2::assert!(let PaneCmdObservation::FgCmd { cmd } = observation);
-        pretty_assertions::assert_eq!(cmd.executable, "codex-aarch64-apple-darwin");
+        pretty_assertions::assert_eq!(cmd.executable, "demo-aarch64-apple-darwin");
         pretty_assertions::assert_eq!(cmd.pid, 9400);
-        pretty_assertions::assert_eq!(agent_for_cmd(&cmd), Some(Agent::Codex));
     }
 
     #[test]
@@ -205,7 +173,7 @@ mod tests {
     }
 
     #[test]
-    fn test_observe_pane_cmd_when_fg_is_non_agent_returns_cmd_without_agent() {
+    fn test_observe_pane_cmd_when_fg_is_untracked_returns_cmd() {
         let observation = observe_pane_cmd(&PaneCmdSnapshot {
             fg_process_group: Some(4242),
             fg_process_group_leader: Some(self::process(4242, "nvim")),
@@ -214,65 +182,6 @@ mod tests {
 
         assert2::assert!(let PaneCmdObservation::FgCmd { cmd } = observation);
         pretty_assertions::assert_eq!(cmd.executable, "nvim");
-        pretty_assertions::assert_eq!(agent_for_cmd(&cmd), None);
-    }
-
-    #[rstest]
-    #[case::claude("claude", Some(Agent::Claude))]
-    #[case::claude_code("claude-code", Some(Agent::Claude))]
-    #[case::codex("codex", Some(Agent::Codex))]
-    #[case::codex_cask("codex-aarch64-apple-darwin", Some(Agent::Codex))]
-    #[case::cursor("cursor", Some(Agent::Cursor))]
-    #[case::cursor_agent("cursor-agent", Some(Agent::Cursor))]
-    #[case::gemini("gemini", Some(Agent::Gemini))]
-    #[case::opencode("opencode", Some(Agent::Opencode))]
-    #[case::rg_codex("rg-codex", None)]
-    #[case::notcodex("notcodex", None)]
-    #[case::rg("rg", None)]
-    fn test_agent_for_cmd_when_executable_varies_returns_direct_agent_only(
-        #[case] executable: &str,
-        #[case] expected: Option<Agent>,
-    ) {
-        let cmd = PaneCmd {
-            executable: executable.to_owned(),
-            path: None,
-            pid: 1,
-        };
-
-        pretty_assertions::assert_eq!(agent_for_cmd(&cmd), expected);
-    }
-
-    #[test]
-    fn test_agent_for_cmd_when_cursor_agent_execs_bundled_node_returns_cursor() {
-        let cmd = PaneCmd {
-            executable: "node".to_owned(),
-            path: Some("/Users/me/.local/share/cursor-agent/versions/2026.06.04-5fd875e/node".to_owned()),
-            pid: 1,
-        };
-
-        pretty_assertions::assert_eq!(agent_for_cmd(&cmd), Some(Agent::Cursor));
-    }
-
-    #[test]
-    fn test_agent_for_cmd_when_plain_node_runs_returns_no_agent() {
-        let cmd = PaneCmd {
-            executable: "node".to_owned(),
-            path: Some("/opt/homebrew/bin/node".to_owned()),
-            pid: 1,
-        };
-
-        pretty_assertions::assert_eq!(agent_for_cmd(&cmd), None);
-    }
-
-    #[test]
-    fn test_agent_for_cmd_when_claude_path_is_versioned_runtime_returns_claude() {
-        let cmd = PaneCmd {
-            executable: "2.1.165".to_owned(),
-            path: Some("/Users/me/.local/share/claude/versions/2.1.165".to_owned()),
-            pid: 1,
-        };
-
-        pretty_assertions::assert_eq!(agent_for_cmd(&cmd), Some(Agent::Claude));
     }
 
     fn process(pid: u32, name: &str) -> PaneProcess {

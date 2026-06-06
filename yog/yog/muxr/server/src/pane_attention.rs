@@ -46,6 +46,7 @@ impl SessionLayout {
 
 #[cfg(test)]
 mod tests {
+    use muxr_config::MuxrConfig;
     use muxr_core::PaneId;
     use muxr_core::SessionName;
     use muxr_core::TerminalSize;
@@ -86,7 +87,11 @@ mod tests {
     fn layout() -> rootcause::Result<SessionLayout> {
         let session: SessionName = "work".parse()?;
         let mut layout = SessionLayout::initial(&session, self::metadata("sh", 1))?;
-        layout.split_active_pane(self::metadata("sh", 2), PaneSplitAxis::Vertical)?;
+        layout.split_active_pane(
+            MuxrConfig::default().layout,
+            self::metadata("sh", 2),
+            PaneSplitAxis::Vertical,
+        )?;
         Ok(layout)
     }
 

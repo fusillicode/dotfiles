@@ -213,6 +213,7 @@ pub fn handle_close_pane_cmd(
 
 #[cfg(test)]
 mod tests {
+    use muxr_config::MuxrConfig;
     use muxr_core::TerminalSize;
 
     use super::*;
@@ -223,7 +224,11 @@ mod tests {
     fn test_layout_split_and_close_when_multiple_panes_updates_active_pane() -> rootcause::Result<()> {
         let mut layout = state_test_helpers::layout("work")?;
 
-        let pane_id = layout.split_active_pane(state_test_helpers::metadata("sh", 2), PaneSplitAxis::Vertical)?;
+        let pane_id = layout.split_active_pane(
+            MuxrConfig::default().layout,
+            state_test_helpers::metadata("sh", 2),
+            PaneSplitAxis::Vertical,
+        )?;
 
         pretty_assertions::assert_eq!(pane_id.to_string(), "pane-2");
         pretty_assertions::assert_eq!(layout.active_pane_id()?.to_string(), "pane-2");
@@ -249,8 +254,16 @@ mod tests {
     fn test_layout_close_when_nested_pane_closes_collapses_parent_split() -> rootcause::Result<()> {
         let mut layout = state_test_helpers::layout("work")?;
 
-        layout.split_active_pane(state_test_helpers::metadata("sh", 2), PaneSplitAxis::Vertical)?;
-        layout.split_active_pane(state_test_helpers::metadata("sh", 3), PaneSplitAxis::Horizontal)?;
+        layout.split_active_pane(
+            MuxrConfig::default().layout,
+            state_test_helpers::metadata("sh", 2),
+            PaneSplitAxis::Vertical,
+        )?;
+        layout.split_active_pane(
+            MuxrConfig::default().layout,
+            state_test_helpers::metadata("sh", 3),
+            PaneSplitAxis::Horizontal,
+        )?;
         state_test_helpers::force_balanced_test_split_ratio(&mut layout)?;
         let close = layout.close_active_pane(3)?;
 
