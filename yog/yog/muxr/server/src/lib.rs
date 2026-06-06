@@ -8,6 +8,7 @@ mod pane_agent;
 mod pane_attention;
 mod pane_borders;
 mod pane_close;
+mod pane_cmd;
 mod pane_focus;
 mod pane_layout;
 mod pane_mouse;

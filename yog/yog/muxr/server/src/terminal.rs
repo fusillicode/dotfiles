@@ -73,7 +73,7 @@ enum TerminalScreenDirtyState {
     #[default]
     Ground,
     Escape,
-    OscTitleCommand,
+    OscTitleCmd,
     OscTitleSeparator,
     TitleBody,
     TitleBodyEscape,
@@ -104,14 +104,14 @@ impl TerminalScreenDirtyDetector {
             },
             TerminalScreenDirtyState::Escape => {
                 if byte == b']' {
-                    self.state = TerminalScreenDirtyState::OscTitleCommand;
+                    self.state = TerminalScreenDirtyState::OscTitleCmd;
                     false
                 } else {
                     self.state = TerminalScreenDirtyState::Ground;
                     true
                 }
             }
-            TerminalScreenDirtyState::OscTitleCommand => match byte {
+            TerminalScreenDirtyState::OscTitleCmd => match byte {
                 b'0' | b'1' | b'2' => {
                     self.state = TerminalScreenDirtyState::OscTitleSeparator;
                     false

@@ -150,7 +150,7 @@ async fn serve_async(config: &ServerConfig) -> rootcause::Result<()> {
         }
 
         if matches!(
-            crate::attached_client::reap_exited_panes(&config.paths, &layout, &runtimes)?,
+            crate::attached_client::reap_exited_panes(config, &layout, &runtimes)?,
             crate::attached_client::ReapResult::Final
         ) || self::lock_mutex(runtimes.as_ref(), "pane runtimes")?.is_empty()
         {
@@ -646,6 +646,7 @@ mod tests {
             &config.paths,
             &layout,
             &runtimes,
+            &crate::pane_agent::PaneAgents::default(),
             &terminal_size,
         )?);
 
