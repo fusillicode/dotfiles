@@ -233,6 +233,7 @@ mod tests {
 
     #[rstest]
     #[case::start_extra_args(&["start", "work", "extra"])]
+    #[case::unknown_start_flag(&["start", "--bogus"])]
     #[case::old_attach_cmd(&["attach"])]
     #[case::old_detach_cmd(&["detach"])]
     #[case::old_server_cmd(&["server", "work"])]

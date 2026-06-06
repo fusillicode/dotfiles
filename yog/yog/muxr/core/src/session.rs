@@ -64,6 +64,11 @@ impl FromStr for SessionName {
             return Err(report!("invalid muxr session name {raw:?}").attach("reason=reserved names are not allowed"));
         }
 
+        if raw.starts_with('-') {
+            // Session names are CLI operands too; leading '-' is reserved for flags before it reaches filesystem paths.
+            return Err(report!("invalid muxr session name {raw:?}").attach("reason=names must not start with -"));
+        }
+
         if raw.len() > 64 {
             return Err(report!("invalid muxr session name {raw:?}")
                 .attach("reason=names longer than 64 bytes are not allowed"));
@@ -228,6 +233,8 @@ mod tests {
     #[case::backslash("a\\b")]
     #[case::space("a b")]
     #[case::tab("a\tb")]
+    #[case::leading_dash("-work")]
+    #[case::flag_like("--work")]
     #[case::shell_metacharacters("$(x)")]
     #[case::punctuation("name!")]
     fn test_session_name_from_str_when_name_is_invalid_returns_error(#[case] raw: &str) {

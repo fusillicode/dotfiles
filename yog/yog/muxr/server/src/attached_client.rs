@@ -1,4 +1,5 @@
 use std::collections::BTreeSet;
+use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::atomic::AtomicBool;
@@ -33,8 +34,6 @@ use crate::keyboard_input::ClientCmd;
 use crate::keyboard_input::KeyResolution;
 use crate::keyboard_input::ServerInputMode;
 use crate::keyboard_input::TabCmd;
-use crate::pane_agent::PaneAgentDetection;
-use crate::pane_agent::PaneAgentDetectionWorker;
 use crate::pane_agent::PaneAgents;
 use crate::pane_agent::PaneUserInteraction;
 use crate::pane_close::ClosePaneOutcome;
@@ -52,8 +51,10 @@ use crate::state::SessionLayout;
 
 const CLIENT_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(2);
 const CLIENT_EVENT_POLL_INTERVAL: Duration = Duration::from_millis(10);
+const CMD_HANDOFF_SAMPLE_DELAY: Duration = Duration::from_millis(50);
 const OUTPUT_EVENT_CHANNEL_LIMIT: usize = 1024;
 const RENDER_FRAME_INTERVAL: Duration = Duration::from_millis(16);
+const SLEEP_DISABLED_FOR: Duration = Duration::from_hours(24);
 
 struct ClientSlotGuard<'a> {
     active_client: &'a AtomicBool,
@@ -78,9 +79,6 @@ struct AttachedPtySink {
 }
 
 struct AttachedSessionState<'a> {
-    detected_agents: Vec<PaneAgentDetection>,
-    detected_agents_refreshed_at: Option<Instant>,
-    agent_detection_worker: PaneAgentDetectionWorker,
     pane_agents: PaneAgents,
     config: &'a ServerConfig,
     delete_sessions: &'a DeleteSessions,
@@ -88,7 +86,6 @@ struct AttachedSessionState<'a> {
     last_layout_snapshot: LayoutSnapshot,
     layout: &'a Mutex<SessionLayout>,
     pane_regions: PaneRegionsSnapshot,
-    pending_visible_activity_panes: BTreeSet<PaneId>,
     pty_event_sender: &'a mpsc::SyncSender<PtyEvent>,
     render_composer: &'a mut RenderComposer,
     runtimes: &'a Mutex<PaneRuntimes>,
@@ -97,7 +94,10 @@ struct AttachedSessionState<'a> {
 }
 
 struct AttachedClientTimers {
-    attention_tick: tokio::time::Interval,
+    cmd_handoff_sample: Pin<Box<tokio::time::Sleep>>,
+    cmd_handoff_sample_panes: BTreeSet<PaneId>,
+    agent_quiet_deadline: Option<Instant>,
+    agent_quiet_sleep: Pin<Box<tokio::time::Sleep>>,
     heartbeat: tokio::time::Interval,
     render_tick: tokio::time::Interval,
     shell_poll: tokio::time::Interval,
@@ -111,17 +111,59 @@ impl AttachedClientTimers {
         let render_start = tokio::time::Instant::now()
             .checked_add(RENDER_FRAME_INTERVAL)
             .ok_or_else(|| report!("muxr render frame interval overflowed"))?;
-        let attention_start = tokio::time::Instant::now()
-            .checked_add(crate::pane_agent::AGENT_ATTENTION_POLL_INTERVAL)
-            .ok_or_else(|| report!("muxr attention poll interval overflowed"))?;
 
         Ok(Self {
-            attention_tick: tokio::time::interval_at(attention_start, crate::pane_agent::AGENT_ATTENTION_POLL_INTERVAL),
+            cmd_handoff_sample: Box::pin(tokio::time::sleep_until(self::disabled_sleep_deadline()?)),
+            cmd_handoff_sample_panes: BTreeSet::new(),
+            agent_quiet_deadline: None,
+            agent_quiet_sleep: Box::pin(tokio::time::sleep_until(self::disabled_sleep_deadline()?)),
             heartbeat: tokio::time::interval_at(heartbeat_start, config.client_heartbeat_interval),
             render_tick: tokio::time::interval_at(render_start, RENDER_FRAME_INTERVAL),
             shell_poll: tokio::time::interval(CLIENT_EVENT_POLL_INTERVAL),
         })
     }
+
+    fn schedule_cmd_handoff_sample(&mut self, pane_id: PaneId) -> rootcause::Result<()> {
+        let deadline = tokio::time::Instant::now()
+            .checked_add(CMD_HANDOFF_SAMPLE_DELAY)
+            .ok_or_else(|| report!("muxr cmd handoff sample deadline overflowed"))?;
+        self.cmd_handoff_sample.as_mut().reset(deadline);
+        self.cmd_handoff_sample_panes.insert(pane_id);
+        Ok(())
+    }
+
+    fn take_cmd_handoff_sample_panes(&mut self) -> rootcause::Result<Vec<PaneId>> {
+        let pane_ids = std::mem::take(&mut self.cmd_handoff_sample_panes).into_iter().collect();
+        // `tokio::time::Sleep` stays ready after it fires. Disable the one-shot immediately after consuming it so
+        // the attached-client select loop cannot hot-spin and starve PTY rendering after a prompt submit.
+        self.cmd_handoff_sample.as_mut().reset(self::disabled_sleep_deadline()?);
+        Ok(pane_ids)
+    }
+
+    fn sync_agent_quiet_deadline(&mut self, deadline: Option<Instant>) -> rootcause::Result<()> {
+        if self.agent_quiet_deadline == deadline {
+            return Ok(());
+        }
+
+        self.agent_quiet_deadline = deadline;
+        let deadline = deadline.map_or_else(self::disabled_sleep_deadline, |deadline| {
+            Ok(tokio::time::Instant::from_std(deadline))
+        })?;
+        self.agent_quiet_sleep.as_mut().reset(deadline);
+        Ok(())
+    }
+
+    fn disable_agent_quiet_sleep(&mut self) -> rootcause::Result<()> {
+        self.agent_quiet_deadline = None;
+        self.agent_quiet_sleep.as_mut().reset(self::disabled_sleep_deadline()?);
+        Ok(())
+    }
+}
+
+fn disabled_sleep_deadline() -> rootcause::Result<tokio::time::Instant> {
+    tokio::time::Instant::now()
+        .checked_add(SLEEP_DISABLED_FOR)
+        .ok_or_else(|| report!("muxr disabled timer deadline overflowed"))
 }
 
 struct RuntimePaneMetadata {
@@ -143,7 +185,7 @@ pub fn resize_panes_to_layout(
 }
 
 pub fn reap_exited_panes(
-    paths: &SessionPaths,
+    config: &ServerConfig,
     layout: &Mutex<SessionLayout>,
     runtimes: &Mutex<PaneRuntimes>,
 ) -> rootcause::Result<ReapResult> {
@@ -171,7 +213,7 @@ pub fn reap_exited_panes(
             }
             removed_panes.push(pane_id);
         }
-        crate::state::persisted::write_metadata(paths, &layout)?;
+        crate::state::persisted::write_metadata(&config.paths, &layout)?;
         drop(layout);
 
         let mut runtimes = crate::server::lock_mutex(runtimes, "pane runtimes")?;
@@ -215,14 +257,23 @@ pub fn initial_attached_render(
     paths: &SessionPaths,
     layout: &Mutex<SessionLayout>,
     runtimes: &Mutex<PaneRuntimes>,
+    pane_agents: &PaneAgents,
     terminal_size: &TerminalSize,
 ) -> rootcause::Result<(LayoutSnapshot, PaneRegionsSnapshot, RenderComposer, RenderUpdate)> {
     let mut render_composer = RenderComposer::default();
     let mut layout = crate::server::lock_mutex(layout, "layout")?;
     let runtimes = crate::server::lock_mutex(runtimes, "pane runtimes")?;
-    let layout_snapshot = self::layout_snapshot_and_persist(paths, &mut layout, &runtimes, &[], &[])?;
+    let runtime_cmd_labels = pane_agents.snapshot_cmd_labels();
+    let runtime_agent_states = pane_agents.snapshot_states();
+    let layout_snapshot = self::layout_snapshot_and_persist(
+        paths,
+        &mut layout,
+        &runtimes,
+        &runtime_cmd_labels,
+        &runtime_agent_states,
+    )?;
     let pane_regions = self::pane_regions_snapshot(&layout, &runtimes, terminal_size)?;
-    let attention_panes = layout.attention_pane_ids();
+    let attention_panes = self::attention_pane_ids(&layout, pane_agents);
     let render_baseline = render_composer.render_baseline(
         &layout,
         &runtimes,
@@ -337,8 +388,15 @@ async fn handle_client(
     let (pty_event_sender, pty_event_receiver) = mpsc::sync_channel(OUTPUT_EVENT_CHANNEL_LIMIT);
     let mut sink_guards = self::attach_pane_sinks(runtimes, &pty_event_sender)?;
     let (mut request_reader, mut event_writer) = connection.split();
-    let (layout_snapshot, pane_regions, mut render_composer, render_baseline) =
-        self::initial_attached_render(&config.paths, layout, runtimes, &attach_request.terminal_size)?;
+    let mut pane_agents = PaneAgents::default();
+    self::observe_all_pane_cmds(layout, runtimes, &mut pane_agents, Instant::now())?;
+    let (layout_snapshot, pane_regions, mut render_composer, render_baseline) = self::initial_attached_render(
+        &config.paths,
+        layout,
+        runtimes,
+        &pane_agents,
+        &attach_request.terminal_size,
+    )?;
     let last_layout_snapshot = layout_snapshot.clone();
     let attached_pane_regions = pane_regions.clone();
     if !self::send_attached_response_and_baseline(
@@ -362,17 +420,13 @@ async fn handle_client(
         }
     });
     let mut attached_state = AttachedSessionState {
-        detected_agents: Vec::new(),
-        detected_agents_refreshed_at: None,
-        agent_detection_worker: PaneAgentDetectionWorker::default(),
-        pane_agents: PaneAgents::default(),
+        pane_agents,
         config,
         delete_sessions,
         input_mode: ServerInputMode::Normal,
         last_layout_snapshot,
         layout,
         pane_regions: attached_pane_regions,
-        pending_visible_activity_panes: BTreeSet::new(),
         pty_event_sender: &pty_event_sender,
         render_composer: &mut render_composer,
         runtimes,
@@ -474,6 +528,61 @@ fn attention_pane_ids(layout: &SessionLayout, pane_agents: &PaneAgents) -> Vec<P
     pane_ids
 }
 
+fn observe_all_pane_cmds(
+    layout: &Mutex<SessionLayout>,
+    runtimes: &Mutex<PaneRuntimes>,
+    pane_agents: &mut PaneAgents,
+    now: Instant,
+) -> rootcause::Result<bool> {
+    let pane_ids = {
+        let layout = crate::server::lock_mutex(layout, "layout")?;
+        layout.panes().into_iter().map(|pane| pane.id).collect::<Vec<_>>()
+    };
+    self::observe_pane_cmds(runtimes, pane_agents, &pane_ids, now)
+}
+
+fn observe_pane_cmds(
+    runtimes: &Mutex<PaneRuntimes>,
+    pane_agents: &mut PaneAgents,
+    pane_ids: &[PaneId],
+    now: Instant,
+) -> rootcause::Result<bool> {
+    let mut changed = false;
+    for pane_id in pane_ids {
+        let observation = self::pane_cmd_observation(runtimes, *pane_id)?;
+        changed |= pane_agents.observe_pane_cmd(*pane_id, &observation, now);
+    }
+    Ok(changed)
+}
+
+fn observe_visible_activity_panes(
+    runtimes: &Mutex<PaneRuntimes>,
+    pane_agents: &mut PaneAgents,
+    pane_ids: &[PaneId],
+    now: Instant,
+) -> rootcause::Result<bool> {
+    let mut changed = false;
+    for pane_id in pane_ids {
+        let observation = self::pane_cmd_observation(runtimes, *pane_id)?;
+        changed |= pane_agents.observe_visible_activity(*pane_id, &observation, now);
+    }
+    Ok(changed)
+}
+
+fn pane_cmd_observation(
+    runtimes: &Mutex<PaneRuntimes>,
+    pane_id: PaneId,
+) -> rootcause::Result<crate::pane_cmd::PaneCmdObservation> {
+    let handle = {
+        let runtimes = crate::server::lock_mutex(runtimes, "pane runtimes")?;
+        let handle = runtimes.handle(pane_id)?;
+        drop(runtimes);
+        handle
+    };
+    let snapshot = crate::pane_cmd::snapshot_from_pty_handle(&handle)?;
+    Ok(crate::pane_cmd::observe_pane_cmd(&snapshot))
+}
+
 async fn send_attached_response_and_baseline(
     event_writer: &mut ServerEventWriter,
     layout: LayoutSnapshot,
@@ -498,6 +607,10 @@ async fn send_attached_response_and_baseline(
     .await
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "the two biased select branches keep request/output priority ordering explicit"
+)]
 async fn run_attached_client(
     request_reader: &mut ServerRequestReader,
     event_writer: &mut ServerEventWriter,
@@ -505,6 +618,7 @@ async fn run_attached_client(
     pty_event_receiver: &mut tokio::sync::mpsc::Receiver<PtyEvent>,
 ) -> rootcause::Result<()> {
     let mut timers = AttachedClientTimers::new(state.config)?;
+    timers.sync_agent_quiet_deadline(state.pane_agents.next_quiet_deadline()?)?;
     let mut heartbeat_started_at: Option<tokio::time::Instant> = None;
     let mut render_dirty = false;
     let mut request_turn = false;
@@ -538,20 +652,27 @@ async fn run_attached_client(
                         return Ok(());
                     }
                 },
-                _ = timers.attention_tick.tick() => {
-                    if !self::flush_pane_attention(event_writer, state, &mut render_dirty).await? {
+                () = timers.cmd_handoff_sample.as_mut() => {
+                    if !self::handle_cmd_handoff_sample(&mut timers, event_writer, state, &mut render_dirty).await? {
                         return Ok(());
                     }
                 },
+                () = timers.agent_quiet_sleep.as_mut() => {
+                    timers.disable_agent_quiet_sleep()?;
+                    if !self::flush_pane_attention(event_writer, state, &mut render_dirty).await? {
+                        return Ok(());
+                    }
+                    timers.sync_agent_quiet_deadline(state.pane_agents.next_quiet_deadline()?)?;
+                },
                 request = request_reader.recv_request() => {
                     request_turn = false;
-                    if !self::handle_attached_request(request?, event_writer, state, &mut heartbeat_started_at, &mut render_dirty).await? {
+                    if !self::handle_attached_request(request?, event_writer, state, &mut timers, &mut heartbeat_started_at, &mut render_dirty).await? {
                         return Ok(());
                     }
                 },
                 event = pty_event_receiver.recv() => {
                     request_turn = true;
-                    if !self::handle_pty_event(event, event_writer, state, &mut render_dirty).await? {
+                    if !self::handle_pty_event(event, event_writer, state, &mut timers, &mut render_dirty).await? {
                         return Ok(());
                     }
                 },
@@ -580,21 +701,28 @@ async fn run_attached_client(
                         return Ok(());
                     }
                 },
-                _ = timers.attention_tick.tick() => {
+                () = timers.cmd_handoff_sample.as_mut() => {
+                    if !self::handle_cmd_handoff_sample(&mut timers, event_writer, state, &mut render_dirty).await? {
+                        return Ok(());
+                    }
+                },
+                () = timers.agent_quiet_sleep.as_mut() => {
+                    timers.disable_agent_quiet_sleep()?;
                     if !self::flush_pane_attention(event_writer, state, &mut render_dirty).await? {
                         return Ok(());
                     }
+                    timers.sync_agent_quiet_deadline(state.pane_agents.next_quiet_deadline()?)?;
                 },
                 event = pty_event_receiver.recv() => {
                     // Output gets one turn, then client requests get first chance so detach/pong cannot starve.
                     request_turn = true;
-                    if !self::handle_pty_event(event, event_writer, state, &mut render_dirty).await? {
+                    if !self::handle_pty_event(event, event_writer, state, &mut timers, &mut render_dirty).await? {
                         return Ok(());
                     }
                 },
                 request = request_reader.recv_request() => {
                     request_turn = false;
-                    if !self::handle_attached_request(request?, event_writer, state, &mut heartbeat_started_at, &mut render_dirty).await? {
+                    if !self::handle_attached_request(request?, event_writer, state, &mut timers, &mut heartbeat_started_at, &mut render_dirty).await? {
                         return Ok(());
                     }
                 },
@@ -642,6 +770,7 @@ async fn handle_pty_event(
     event: Option<PtyEvent>,
     event_writer: &mut ServerEventWriter,
     state: &mut AttachedSessionState<'_>,
+    timers: &mut AttachedClientTimers,
     render_dirty: &mut bool,
 ) -> rootcause::Result<bool> {
     match event {
@@ -653,12 +782,19 @@ async fn handle_pty_event(
             };
             let screen_dirty = !screen_dirty_panes.is_empty();
             *render_dirty |= screen_dirty;
+            let now = Instant::now();
+            let agent_changed = if screen_dirty {
+                self::observe_visible_activity_panes(state.runtimes, &mut state.pane_agents, &screen_dirty_panes, now)?
+            } else {
+                false
+            };
             if !title_changes.is_empty() && !self::flush_cmd_label_layout(event_writer, state, title_changes).await? {
                 return Ok(false);
             }
-            if screen_dirty {
-                state.pending_visible_activity_panes.extend(screen_dirty_panes);
+            if agent_changed && !self::flush_agent_runtime_layout(event_writer, state, render_dirty).await? {
+                return Ok(false);
             }
+            timers.sync_agent_quiet_deadline(state.pane_agents.next_quiet_deadline()?)?;
             Ok(true)
         }
         None => Ok(false),
@@ -705,33 +841,12 @@ async fn flush_render_diff(
     Ok(true)
 }
 
-fn refresh_detected_agents_if_due(state: &mut AttachedSessionState<'_>, now: Instant) -> rootcause::Result<()> {
-    if let Some(detected_agents) = state.agent_detection_worker.take_finished() {
-        state.detected_agents = detected_agents;
-        state.detected_agents_refreshed_at = Some(now);
-    }
-
-    if state.agent_detection_worker.has_pending()
-        || !crate::pane_agent::detected_agents_refresh_due(state.detected_agents_refreshed_at, now)
-    {
-        return Ok(());
-    }
-
-    // sysinfo refreshes the full process list and can block; the attention tick only submits work and consumes
-    // completed scans so agent attention has one timing model.
-    let shell_processes = {
-        let runtimes = crate::server::lock_mutex(state.runtimes, "pane runtimes")?;
-        runtimes.shell_processes()?
-    };
-    state.agent_detection_worker.request(shell_processes)
-}
-
 fn runtime_pane_metadata(state: &AttachedSessionState<'_>) -> rootcause::Result<RuntimePaneMetadata> {
     let terminal_titles = {
         let runtimes = crate::server::lock_mutex(state.runtimes, "pane runtimes")?;
         runtimes.terminal_titles()?
     };
-    let runtime_cmd_labels = crate::pane_agent::runtime_cmd_labels(&state.detected_agents);
+    let runtime_cmd_labels = state.pane_agents.snapshot_cmd_labels();
     Ok(RuntimePaneMetadata {
         runtime_cmd_labels,
         terminal_titles,
@@ -773,12 +888,50 @@ async fn flush_cmd_label_layout(
     };
 
     for layout_snapshot in changes {
-        // Terminal-title changes affect only sidebar metadata; avoid rebuilding the pane frame for command/cwd churn.
+        // Terminal-title changes affect only sidebar metadata; avoid rebuilding the pane frame for cmd/cwd churn.
         if !self::send_sidebar_layout_if_changed(event_writer, state, layout_snapshot).await? {
             return Ok(false);
         }
     }
     Ok(true)
+}
+
+async fn handle_cmd_handoff_sample(
+    timers: &mut AttachedClientTimers,
+    event_writer: &mut ServerEventWriter,
+    state: &mut AttachedSessionState<'_>,
+    render_dirty: &mut bool,
+) -> rootcause::Result<bool> {
+    let pane_ids = timers.take_cmd_handoff_sample_panes()?;
+    if pane_ids.is_empty() {
+        return Ok(true);
+    }
+
+    let changed = self::observe_pane_cmds(state.runtimes, &mut state.pane_agents, &pane_ids, Instant::now())?;
+    timers.sync_agent_quiet_deadline(state.pane_agents.next_quiet_deadline()?)?;
+    if changed {
+        return self::flush_agent_runtime_layout(event_writer, state, render_dirty).await;
+    }
+    Ok(true)
+}
+
+async fn flush_agent_runtime_layout(
+    event_writer: &mut ServerEventWriter,
+    state: &mut AttachedSessionState<'_>,
+    render_dirty: &mut bool,
+) -> rootcause::Result<bool> {
+    let runtime_metadata = self::runtime_pane_metadata(state)?;
+    let layout_snapshot = {
+        let layout = crate::server::lock_mutex(state.layout, "layout")?;
+        let runtime_agent_states = state.pane_agents.snapshot_states();
+        layout.snapshot_with_runtime_metadata(
+            &runtime_metadata.terminal_titles,
+            &runtime_metadata.runtime_cmd_labels,
+            &runtime_agent_states,
+        )?
+    };
+    *render_dirty = true;
+    self::send_sidebar_layout_if_changed(event_writer, state, layout_snapshot).await
 }
 
 async fn flush_pane_attention(
@@ -787,16 +940,10 @@ async fn flush_pane_attention(
     render_dirty: &mut bool,
 ) -> rootcause::Result<bool> {
     let now = Instant::now();
-    self::refresh_detected_agents_if_due(state, now)?;
     let runtime_metadata = self::runtime_pane_metadata(state)?;
-    let visible_activity_panes = state.pending_visible_activity_panes.iter().copied().collect::<Vec<_>>();
-    state.pending_visible_activity_panes.clear();
     let layout_snapshot = {
         let layout = crate::server::lock_mutex(state.layout, "layout")?;
-        if !state
-            .pane_agents
-            .sync_attention(&layout, &state.detected_agents, &visible_activity_panes, now)?
-        {
+        if !state.pane_agents.mark_quiet_deadlines(&layout, now)? {
             return Ok(true);
         }
         *render_dirty = true;
@@ -890,7 +1037,7 @@ async fn send_layout_and_baseline(
     event_writer: &mut ServerEventWriter,
     state: &mut AttachedSessionState<'_>,
 ) -> rootcause::Result<bool> {
-    let runtime_cmd_labels = crate::pane_agent::runtime_cmd_labels(&state.detected_agents);
+    let runtime_cmd_labels = state.pane_agents.snapshot_cmd_labels();
     let (layout_snapshot, pane_regions, render_update) = {
         let mut layout = crate::server::lock_mutex(state.layout, "layout")?;
         let runtimes = crate::server::lock_mutex(state.runtimes, "pane runtimes")?;
@@ -951,7 +1098,7 @@ async fn handle_reaped_panes(
     state: &mut AttachedSessionState<'_>,
     event_writer: &mut ServerEventWriter,
 ) -> rootcause::Result<bool> {
-    match self::reap_exited_panes(&state.config.paths, state.layout, state.runtimes)? {
+    match self::reap_exited_panes(state.config, state.layout, state.runtimes)? {
         ReapResult::Final => Ok(true),
         ReapResult::NoExitedPanes => Ok(false),
         ReapResult::Removed => {
@@ -977,6 +1124,7 @@ async fn handle_attached_request(
     request: Option<ClientRequest>,
     event_writer: &mut ServerEventWriter,
     state: &mut AttachedSessionState<'_>,
+    timers: &mut AttachedClientTimers,
     heartbeat_started_at: &mut Option<tokio::time::Instant>,
     render_dirty: &mut bool,
 ) -> rootcause::Result<bool> {
@@ -1003,6 +1151,7 @@ async fn handle_attached_request(
             if !bytes.is_empty() {
                 *render_dirty |= self::write_active_pane_user_input(
                     state,
+                    timers,
                     crate::keyboard_input::input_interaction(&bytes),
                     |handle| handle.write_input(&bytes),
                 )?;
@@ -1012,13 +1161,14 @@ async fn handle_attached_request(
         Some(ClientRequest::Paste(bytes)) => {
             if !bytes.is_empty() {
                 // Bracketed paste can contain newlines as data; only raw input newlines mean prompt submission.
-                *render_dirty |= self::write_active_pane_user_input(state, PaneUserInteraction::MayEcho, |handle| {
-                    handle.write_paste(&bytes)
-                })?;
+                *render_dirty |=
+                    self::write_active_pane_user_input(state, timers, PaneUserInteraction::MayEcho, |handle| {
+                        handle.write_paste(&bytes)
+                    })?;
             }
             Ok(true)
         }
-        Some(ClientRequest::Key(key)) => self::handle_key_request(key, event_writer, state, render_dirty).await,
+        Some(ClientRequest::Key(key)) => self::handle_key_request(key, event_writer, state, timers, render_dirty).await,
         Some(ClientRequest::Mouse(event)) => {
             self::handle_mouse_event_request(event, event_writer, state, render_dirty).await
         }
@@ -1117,6 +1267,7 @@ async fn handle_key_request(
     key: ClientKey,
     event_writer: &mut ServerEventWriter,
     state: &mut AttachedSessionState<'_>,
+    timers: &mut AttachedClientTimers,
     render_dirty: &mut bool,
 ) -> rootcause::Result<bool> {
     match crate::keyboard_input::resolve_key(&mut state.input_mode, &key) {
@@ -1125,6 +1276,7 @@ async fn handle_key_request(
             if !key.raw_bytes.is_empty() {
                 *render_dirty |= self::write_active_pane_user_input(
                     state,
+                    timers,
                     crate::keyboard_input::input_interaction(&key.raw_bytes),
                     |handle| handle.write_input(&key.raw_bytes),
                 )?;
@@ -1242,6 +1394,7 @@ fn active_pane_handle_with_id(
 
 fn write_active_pane_user_input(
     state: &mut AttachedSessionState<'_>,
+    timers: &mut AttachedClientTimers,
     interaction: PaneUserInteraction,
     write: impl FnOnce(&PtyHandle) -> rootcause::Result<bool>,
 ) -> rootcause::Result<bool> {
@@ -1250,6 +1403,9 @@ fn write_active_pane_user_input(
     state
         .pane_agents
         .record_user_interaction(pane_id, interaction, Instant::now());
+    if interaction == PaneUserInteraction::StartsAgentWork {
+        timers.schedule_cmd_handoff_sample(pane_id)?;
+    }
     Ok(render_dirty)
 }
 
@@ -1258,7 +1414,12 @@ fn acknowledge_active_agent_attention(state: &mut AttachedSessionState<'_>) -> r
         let layout = crate::server::lock_mutex(state.layout, "layout")?;
         layout.active_pane_id()?
     };
-    Ok(state.pane_agents.acknowledge_attention(active_pane))
+    let observation = self::pane_cmd_observation(state.runtimes, active_pane)?;
+    let mut changed = state
+        .pane_agents
+        .observe_pane_cmd(active_pane, &observation, Instant::now());
+    changed |= state.pane_agents.acknowledge_attention(active_pane);
+    Ok(changed)
 }
 
 async fn handle_mouse_event_request(
@@ -1408,6 +1569,55 @@ mod tests {
             .and_then(|tab| tab.panes().first())
             .ok_or_else(|| report!("expected pane snapshot"))?;
         pretty_assertions::assert_eq!(pane.cmd_label, Some("cx".to_owned()));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_attached_client_timers_when_cmd_handoff_sample_is_taken_disables_sleep() -> rootcause::Result<()> {
+        let tempdir = tempfile::tempdir()?;
+        let config = crate::server::test_helpers::server_config(tempdir.path(), "work")?;
+        let pane_id = PaneId::new(1)?;
+        let mut timers = AttachedClientTimers::new(&config)?;
+
+        timers.schedule_cmd_handoff_sample(pane_id)?;
+        let scheduled_deadline = timers.cmd_handoff_sample.deadline();
+
+        pretty_assertions::assert_eq!(timers.take_cmd_handoff_sample_panes()?, vec![pane_id]);
+
+        assert2::assert!(timers.cmd_handoff_sample_panes.is_empty());
+        assert2::assert!(timers.cmd_handoff_sample.deadline() > scheduled_deadline);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_attached_client_timers_when_multiple_cmd_handoffs_are_pending_returns_all_panes()
+    -> rootcause::Result<()> {
+        let tempdir = tempfile::tempdir()?;
+        let config = crate::server::test_helpers::server_config(tempdir.path(), "work")?;
+        let pane_1 = PaneId::new(1)?;
+        let pane_2 = PaneId::new(2)?;
+        let mut timers = AttachedClientTimers::new(&config)?;
+
+        timers.schedule_cmd_handoff_sample(pane_2)?;
+        timers.schedule_cmd_handoff_sample(pane_1)?;
+
+        pretty_assertions::assert_eq!(timers.take_cmd_handoff_sample_panes()?, vec![pane_1, pane_2]);
+        assert2::assert!(timers.cmd_handoff_sample_panes.is_empty());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_attached_client_timers_when_agent_quiet_sleep_is_disabled_resets_without_deadline()
+    -> rootcause::Result<()> {
+        let tempdir = tempfile::tempdir()?;
+        let config = crate::server::test_helpers::server_config(tempdir.path(), "work")?;
+        let mut timers = AttachedClientTimers::new(&config)?;
+        let disabled_deadline = timers.agent_quiet_sleep.deadline();
+
+        timers.disable_agent_quiet_sleep()?;
+
+        pretty_assertions::assert_eq!(timers.agent_quiet_deadline, None);
+        assert2::assert!(timers.agent_quiet_sleep.deadline() > disabled_deadline);
         Ok(())
     }
 

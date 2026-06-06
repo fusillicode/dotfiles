@@ -158,13 +158,6 @@ impl PaneRuntimes {
         })
     }
 
-    pub fn shell_processes(&self) -> rootcause::Result<Vec<(PaneId, Option<u32>)>> {
-        self.panes
-            .iter()
-            .map(|pane| Ok((pane.id, pane.session.handle().process_id()?)))
-            .collect()
-    }
-
     pub fn take_title_changes(&self) -> rootcause::Result<Vec<(PaneId, Option<String>)>> {
         let mut title_changes = Vec::new();
         for pane in &self.panes {

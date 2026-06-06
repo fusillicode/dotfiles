@@ -11,13 +11,13 @@ keywords = ["muxr", "terminal", "multiplexer", "server", "session"]
 categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
+libproc = { version = "0.14.11" }
 muxr_core = { workspace = true }
 muxr_transport = { workspace = true }
 portable-pty = { version = "0.9" }
 rootcause = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-sysinfo = { version = "0.39.3", default-features = false, features = ["system"] }
 tokio = { workspace = true }
 url = { workspace = true }
 vt100 = { version = "0.16" }

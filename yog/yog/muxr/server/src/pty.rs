@@ -323,6 +323,13 @@ impl PtyHandle {
         Ok(lock_mutex(&self.child, "pty child")?.process_id())
     }
 
+    pub fn fg_process_group(&self) -> rootcause::Result<Option<u32>> {
+        Ok(lock_mutex(&self.master, "pty master")?
+            .process_group_leader()
+            .and_then(|process_group| u32::try_from(process_group).ok())
+            .filter(|process_group| *process_group != 0))
+    }
+
     pub fn terminal_title(&self) -> rootcause::Result<Option<String>> {
         Ok(lock_mutex(&self.state.terminal, "pty terminal")?.title())
     }
