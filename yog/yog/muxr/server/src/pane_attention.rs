@@ -1,3 +1,5 @@
+use muxr_core::RenderColor;
+use muxr_core::RenderStyle;
 use rootcause::report;
 
 use crate::state::Pane;
@@ -44,10 +46,47 @@ impl SessionLayout {
     }
 }
 
+pub fn apply_attention_tint(mut style: RenderStyle, bg_tint: RenderColor) -> RenderStyle {
+    style.bg = tinted_background(style.bg, bg_tint);
+    style
+}
+
+fn tinted_background(background: RenderColor, tint: RenderColor) -> RenderColor {
+    match (background, tint) {
+        (
+            RenderColor::Rgb { r, g, b },
+            RenderColor::Rgb {
+                r: tint_r,
+                g: tint_g,
+                b: tint_b,
+            },
+        ) => RenderColor::Rgb {
+            r: blend_channel(r, tint_r),
+            g: blend_channel(g, tint_g),
+            b: blend_channel(b, tint_b),
+        },
+        (RenderColor::Default | RenderColor::Indexed(_) | RenderColor::Rgb { .. }, tint) => tint,
+    }
+}
+
+fn blend_channel(base: u8, tint: u8) -> u8 {
+    const BASE_WEIGHT: u16 = 3;
+    const TINT_WEIGHT: u16 = 1;
+    const TOTAL_WEIGHT: u16 = 4;
+
+    let value = u16::from(base)
+        .saturating_mul(BASE_WEIGHT)
+        .saturating_add(u16::from(tint).saturating_mul(TINT_WEIGHT))
+        .checked_div(TOTAL_WEIGHT)
+        .unwrap_or_else(|| u16::from(u8::MAX));
+    u8::try_from(value).unwrap_or(u8::MAX)
+}
+
 #[cfg(test)]
 mod tests {
     use muxr_config::MuxrConfig;
     use muxr_core::PaneId;
+    use muxr_core::RenderTextStyle;
     use muxr_core::SessionName;
     use muxr_core::TerminalSize;
 
@@ -82,6 +121,37 @@ mod tests {
 
         pretty_assertions::assert_eq!(layout.attention_pane_ids(), Vec::<PaneId>::new());
         Ok(())
+    }
+
+    #[test]
+    fn test_apply_attention_tint_when_rgb_bg_is_present_blends_with_tint_and_preserves_fg_and_attrs() {
+        let style = RenderStyle {
+            attrs: RenderTextStyle::empty().set_italic(true),
+            bg: RenderColor::Rgb { r: 20, g: 20, b: 20 },
+            fg: RenderColor::Indexed(7),
+        };
+
+        let updated = apply_attention_tint(style, RenderColor::Rgb { r: 80, g: 0, b: 0 });
+
+        assert2::assert!(updated.attrs.italic());
+        assert2::assert!(!updated.attrs.dim());
+        assert2::assert!(updated.bg != style.bg);
+        pretty_assertions::assert_eq!(updated.fg, style.fg);
+    }
+
+    #[test]
+    fn test_apply_attention_tint_when_theme_relative_bg_is_present_uses_tint_and_keeps_default_fg() {
+        let style = RenderStyle {
+            attrs: RenderTextStyle::empty(),
+            bg: RenderColor::Default,
+            fg: RenderColor::Default,
+        };
+        let tint = RenderColor::Rgb { r: 80, g: 0, b: 0 };
+
+        let updated = apply_attention_tint(style, tint);
+
+        pretty_assertions::assert_eq!(updated.bg, tint);
+        pretty_assertions::assert_eq!(updated.fg, style.fg);
     }
 
     fn layout() -> rootcause::Result<SessionLayout> {

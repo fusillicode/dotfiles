@@ -37,7 +37,7 @@ use crate::keyboard_input::ServerInputMode;
 use crate::keyboard_input::TabCmd;
 use crate::pane_close::ClosePaneOutcome;
 use crate::pane_close::PaneExitOutcome;
-use crate::pane_render::PaneBorderRenderConfig;
+use crate::pane_render::PaneRenderConfig;
 use crate::pane_render::RenderComposer;
 use crate::pane_render::RenderDiffReason;
 use crate::pane_runtime::PaneRuntimes;
@@ -279,9 +279,11 @@ pub fn initial_attached_render(
     let pane_regions = self::pane_regions_snapshot(&layout, &runtimes, terminal_size)?;
     let attention_panes = self::attention_pane_ids(&layout, pane_tracked_processes);
     let render_baseline = render_composer.render_baseline(
-        PaneBorderRenderConfig {
+        PaneRenderConfig {
+            border_styles: config.user_config.pane_borders,
             mode: crate::pane_borders::BorderRenderMode::Focus,
-            styles: config.user_config.pane_borders,
+            pane_attention: config.user_config.pane_attention,
+            pane_dim: config.user_config.pane_dim,
         },
         &layout,
         &runtimes,
@@ -847,9 +849,11 @@ async fn flush_render_diff(
             RenderDiffReason::RegionChanged
         };
         let update = state.render_composer.render_diff(
-            PaneBorderRenderConfig {
+            PaneRenderConfig {
+                border_styles: state.config.user_config.pane_borders,
                 mode: crate::keyboard_input::border_render_mode(state.input_mode),
-                styles: state.config.user_config.pane_borders,
+                pane_attention: state.config.user_config.pane_attention,
+                pane_dim: state.config.user_config.pane_dim,
             },
             &layout,
             &runtimes,
@@ -1085,9 +1089,11 @@ async fn send_layout_and_baseline(
         let pane_regions = self::pane_regions_snapshot(&layout, &runtimes, &state.terminal_size)?;
         let attention_panes = self::attention_pane_ids(&layout, &state.pane_tracked_processes);
         let render_update = state.render_composer.render_baseline(
-            PaneBorderRenderConfig {
+            PaneRenderConfig {
+                border_styles: state.config.user_config.pane_borders,
                 mode: crate::keyboard_input::border_render_mode(state.input_mode),
-                styles: state.config.user_config.pane_borders,
+                pane_attention: state.config.user_config.pane_attention,
+                pane_dim: state.config.user_config.pane_dim,
             },
             &layout,
             &runtimes,

@@ -1,7 +1,10 @@
+use muxr_config::PaneAttentionConfig;
 use muxr_config::PaneBorderStyles;
+use muxr_config::PaneDimConfig;
 use muxr_core::PaneId;
 use muxr_core::RenderBaseline;
 use muxr_core::RenderCell;
+use muxr_core::RenderColor;
 use muxr_core::RenderCursor;
 use muxr_core::RenderDiff;
 use muxr_core::RenderRowSpan;
@@ -36,9 +39,41 @@ pub enum RenderDiffReason {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct PaneBorderRenderConfig {
+pub struct PaneRenderConfig {
     pub mode: BorderRenderMode,
-    pub styles: PaneBorderStyles,
+    pub border_styles: PaneBorderStyles,
+    pub pane_attention: PaneAttentionConfig,
+    pub pane_dim: PaneDimConfig,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum PaneVisualRole {
+    Normal,
+    Unfocused,
+    Attention,
+}
+
+impl PaneVisualRole {
+    const fn style(self, pane_dim: PaneDimConfig, pane_attention: PaneAttentionConfig) -> PaneVisualStyle {
+        let dim = match self {
+            Self::Unfocused | Self::Attention if pane_dim.unfocused => Some(pane_dim),
+            Self::Normal | Self::Unfocused | Self::Attention => None,
+        };
+        let bg_tint = match self {
+            Self::Attention => pane_attention.bg_tint,
+            Self::Normal | Self::Unfocused => None,
+        };
+        PaneVisualStyle {
+            attention_bg_tint: bg_tint,
+            dim,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct PaneVisualStyle {
+    attention_bg_tint: Option<RenderColor>,
+    dim: Option<PaneDimConfig>,
 }
 
 impl Default for RenderComposer {
@@ -53,14 +88,14 @@ impl Default for RenderComposer {
 impl RenderComposer {
     pub fn render_baseline(
         &mut self,
-        pane_border_render: PaneBorderRenderConfig,
+        pane_render: PaneRenderConfig,
         layout: &SessionLayout,
         runtimes: &PaneRuntimes,
         size: &TerminalSize,
         attention_panes: &[PaneId],
     ) -> rootcause::Result<RenderUpdate> {
         self.render_frame_baseline(Self::current_frame(
-            pane_border_render,
+            pane_render,
             layout,
             runtimes,
             size,
@@ -77,7 +112,7 @@ impl RenderComposer {
 
     pub fn render_diff(
         &mut self,
-        pane_border_render: PaneBorderRenderConfig,
+        pane_render: PaneRenderConfig,
         layout: &SessionLayout,
         runtimes: &PaneRuntimes,
         size: &TerminalSize,
@@ -86,14 +121,14 @@ impl RenderComposer {
     ) -> rootcause::Result<Option<RenderUpdate>> {
         let Some(previous) = self.last_sent.as_ref() else {
             return Ok(Some(self.render_baseline(
-                pane_border_render,
+                pane_render,
                 layout,
                 runtimes,
                 size,
                 attention_panes,
             )?));
         };
-        let frame = Self::current_frame(pane_border_render, layout, runtimes, size, attention_panes)?;
+        let frame = Self::current_frame(pane_render, layout, runtimes, size, attention_panes)?;
         if frame.size != previous.size {
             return Ok(Some(self.render_frame_baseline(frame)?));
         }
@@ -130,7 +165,7 @@ impl RenderComposer {
     }
 
     fn current_frame(
-        pane_border_render: PaneBorderRenderConfig,
+        pane_render: PaneRenderConfig,
         layout: &SessionLayout,
         runtimes: &PaneRuntimes,
         size: &TerminalSize,
@@ -147,8 +182,14 @@ impl RenderComposer {
 
         for region in pane_layout.regions() {
             let snapshot = runtimes.snapshot(region.id)?;
-            paste_snapshot(&mut rows, region, &snapshot)?;
-            if region.id == active_pane && snapshot.cursor().visible {
+            let visual_role = self::pane_visual_role(region.id, active_pane, attention_panes);
+            paste_snapshot(
+                &mut rows,
+                region,
+                &snapshot,
+                visual_role.style(pane_render.pane_dim, pane_render.pane_attention),
+            )?;
+            if visual_role == PaneVisualRole::Normal && snapshot.cursor().visible {
                 let row = region
                     .area
                     .origin
@@ -170,11 +211,12 @@ impl RenderComposer {
         }
         crate::pane_borders::paste_borders(
             &mut rows,
-            pane_border_render.styles,
+            pane_render.border_styles,
+            pane_render.pane_attention,
             pane_layout.borders(),
             Some(&active_pane),
             attention_panes,
-            pane_border_render.mode,
+            pane_render.mode,
         )?;
 
         let rows = rows
@@ -211,10 +253,21 @@ fn empty_render_rows(size: &TerminalSize) -> Vec<Vec<RenderCell>> {
         .collect()
 }
 
+fn pane_visual_role(pane_id: PaneId, active_pane: PaneId, attention_panes: &[PaneId]) -> PaneVisualRole {
+    if pane_id == active_pane {
+        return PaneVisualRole::Normal;
+    }
+    if attention_panes.contains(&pane_id) {
+        return PaneVisualRole::Attention;
+    }
+    PaneVisualRole::Unfocused
+}
+
 fn paste_snapshot(
     rows: &mut [Vec<RenderCell>],
     region: &PaneRegion,
     snapshot: &TerminalSnapshot,
+    visual_style: PaneVisualStyle,
 ) -> rootcause::Result<()> {
     if snapshot.size().cols() != region.area.size.cols || snapshot.size().rows() != region.area.size.rows {
         return Err(report!("muxr pane snapshot size does not match region")
@@ -252,7 +305,9 @@ fn paste_snapshot(
             return Err(report!("muxr pane span outside composite frame").attach(format!("pane_id={}", region.id)));
         }
         for (cell_index, (target, cell)) in target_row.iter_mut().skip(col).zip(span.cells().iter()).enumerate() {
-            let mut cell = cell.clone();
+            let mut cell = cell
+                .clone()
+                .with_style(self::pane_visual_render_style(cell.style(), visual_style));
             if url_links
                 .peek()
                 .is_some_and(|link| link.row() == span_index && link.cell() == cell_index)
@@ -266,6 +321,16 @@ fn paste_snapshot(
         }
     }
     Ok(())
+}
+
+fn pane_visual_render_style(mut style: RenderStyle, visual_style: PaneVisualStyle) -> RenderStyle {
+    if let Some(pane_dim) = visual_style.dim {
+        style = crate::pane_dim::apply_dim_style(style, pane_dim);
+    }
+    if let Some(bg_tint) = visual_style.attention_bg_tint {
+        style = crate::pane_attention::apply_attention_tint(style, bg_tint);
+    }
+    style
 }
 
 #[cfg(test)]
@@ -330,6 +395,72 @@ mod tests {
         Ok(())
     }
 
+    #[rstest::rstest]
+    #[case::active_pane(1, &[2], PaneVisualRole::Normal)]
+    #[case::unfocused_pane(2, &[], PaneVisualRole::Unfocused)]
+    #[case::attention_pane(2, &[2], PaneVisualRole::Attention)]
+    #[case::active_attention_pane(1, &[1], PaneVisualRole::Normal)]
+    fn test_pane_visual_role_when_focus_and_attention_vary_selects_semantic_role(
+        #[case] pane_id: u32,
+        #[case] attention_panes: &[u32],
+        #[case] expected: PaneVisualRole,
+    ) -> rootcause::Result<()> {
+        let attention_panes = attention_panes
+            .iter()
+            .map(|pane_id| PaneId::new(*pane_id))
+            .collect::<rootcause::Result<Vec<_>>>()?;
+
+        pretty_assertions::assert_eq!(
+            self::pane_visual_role(PaneId::new(pane_id)?, PaneId::new(1)?, &attention_panes),
+            expected
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_pane_visual_render_style_when_normal_keeps_style_unchanged() {
+        let style = RenderStyle {
+            attrs: muxr_core::RenderTextStyle::empty().set_bold(true),
+            bg: RenderColor::Rgb { r: 20, g: 20, b: 20 },
+            fg: RenderColor::Indexed(7),
+        };
+
+        let updated = self::pane_visual_render_style(
+            style,
+            PaneVisualStyle {
+                attention_bg_tint: None,
+                dim: None,
+            },
+        );
+
+        pretty_assertions::assert_eq!(updated, style);
+    }
+
+    #[test]
+    fn test_pane_visual_render_style_when_attention_tints_rgb_bg_and_darkens_explicit_fg() {
+        let style = RenderStyle {
+            attrs: muxr_core::RenderTextStyle::empty().set_italic(true),
+            bg: RenderColor::Rgb { r: 20, g: 20, b: 20 },
+            fg: RenderColor::Indexed(7),
+        };
+
+        let updated = self::pane_visual_render_style(
+            style,
+            PaneVisualStyle {
+                attention_bg_tint: Some(RenderColor::Rgb { r: 80, g: 0, b: 0 }),
+                dim: Some(PaneDimConfig {
+                    explicit_color_percent: 80,
+                    unfocused: true,
+                }),
+            },
+        );
+
+        assert2::assert!(updated.attrs.italic());
+        assert2::assert!(!updated.attrs.dim());
+        assert2::assert!(updated.bg != style.bg);
+        assert2::assert!(updated.fg != style.fg);
+    }
+
     #[test]
     fn test_paste_snapshot_when_visible_url_is_present_adds_hyperlink_metadata() -> rootcause::Result<()> {
         let size = TerminalSize::new(24, 1)?;
@@ -346,13 +477,25 @@ mod tests {
         };
         let mut rows = empty_render_rows(&size);
 
-        paste_snapshot(&mut rows, &region, &snapshot)?;
+        paste_snapshot(
+            &mut rows,
+            &region,
+            &snapshot,
+            PaneVisualStyle {
+                attention_bg_tint: None,
+                dim: Some(PaneDimConfig {
+                    explicit_color_percent: 80,
+                    unfocused: true,
+                }),
+            },
+        )?;
 
         let row = rows.first().ok_or_else(|| report!("expected muxr composite row"))?;
         let linked_cells = row.iter().filter(|cell| cell.hyperlink().is_some()).collect::<Vec<_>>();
         let linked_text = linked_cells.iter().map(|cell| cell.text()).collect::<String>();
         pretty_assertions::assert_eq!(linked_text, "https://example.com");
         for cell in linked_cells {
+            assert2::assert!(cell.style().attrs.dim());
             pretty_assertions::assert_eq!(
                 cell.hyperlink().map(muxr_core::RenderHyperlink::uri),
                 Some("https://example.com")
