@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -42,6 +43,7 @@ use crate::pane_render::RenderComposer;
 use crate::pane_render::RenderDiffReason;
 use crate::pane_runtime::PaneRuntimes;
 use crate::pane_scroll::PaneScrollAmount;
+use crate::pane_tracked_process::PaneTrackedProcessSnapshot;
 use crate::pane_tracked_process::PaneTrackedProcesses;
 use crate::pane_tracked_process::TrackedProcessUserInteraction;
 use crate::pty::PtyEvent;
@@ -49,6 +51,7 @@ use crate::pty::PtyHandle;
 use crate::pty::PtySinkGuard;
 use crate::server::ServerConfig;
 use crate::sessions_delete::DeleteSessions;
+use crate::state::PaneSnapshotFields;
 use crate::state::SessionLayout;
 
 const CLIENT_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(2);
@@ -170,9 +173,70 @@ fn disabled_sleep_deadline() -> rootcause::Result<tokio::time::Instant> {
         .ok_or_else(|| report!("muxr disabled timer deadline overflowed"))
 }
 
-struct RuntimePaneMetadata {
-    runtime_cmd_labels: Vec<(PaneId, Option<String>)>,
-    terminal_titles: Vec<(PaneId, Option<String>)>,
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+struct PaneRuntimeMetadataEntry {
+    startup_cmd_label: Option<String>,
+    terminal_title: Option<String>,
+    tracked_cmd_label: Option<String>,
+    tracked_process_state: muxr_core::TrackedProcessState,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct PaneRuntimeMetadata {
+    panes: BTreeMap<PaneId, PaneRuntimeMetadataEntry>,
+}
+
+impl PaneRuntimeMetadata {
+    fn from_sources(
+        terminal_titles: Vec<(PaneId, Option<String>)>,
+        startup_cmd_labels: Vec<(PaneId, Option<String>)>,
+        tracked_processes: &PaneTrackedProcessSnapshot,
+    ) -> Self {
+        let mut panes = BTreeMap::<PaneId, PaneRuntimeMetadataEntry>::new();
+        for (pane_id, terminal_title) in terminal_titles {
+            panes.entry(pane_id).or_default().terminal_title = terminal_title;
+        }
+        for (pane_id, startup_cmd_label) in startup_cmd_labels {
+            panes.entry(pane_id).or_default().startup_cmd_label = startup_cmd_label;
+        }
+        for (pane_id, tracked_process) in tracked_processes.panes() {
+            let pane = panes.entry(pane_id).or_default();
+            pane.tracked_cmd_label = Some(tracked_process.label().to_owned());
+            pane.tracked_process_state = tracked_process.state();
+        }
+        Self { panes }
+    }
+
+    fn with_terminal_title_override(&self, pane_id: PaneId, terminal_title: Option<String>) -> Self {
+        let mut out = self.clone();
+        out.panes.entry(pane_id).or_default().terminal_title = terminal_title;
+        out
+    }
+
+    fn pane_snapshot_fields(&self) -> PaneSnapshotFields {
+        let mut fields = PaneSnapshotFields::default();
+        for (pane_id, pane) in &self.panes {
+            fields.set_terminal_title(*pane_id, pane.terminal_title.clone());
+            fields.set_cmd_label(*pane_id, self::runtime_cmd_label(pane));
+            fields.set_tracked_process_state(*pane_id, pane.tracked_process_state);
+        }
+        fields
+    }
+}
+
+fn runtime_cmd_label(pane: &PaneRuntimeMetadataEntry) -> Option<String> {
+    pane.tracked_cmd_label
+        .as_ref()
+        .or_else(|| {
+            let has_terminal_title = pane
+                .terminal_title
+                .as_deref()
+                .is_some_and(|title| !title.trim().is_empty());
+            (!has_terminal_title)
+                .then_some(pane.startup_cmd_label.as_ref())
+                .flatten()
+        })
+        .cloned()
 }
 
 pub fn resize_panes_to_layout(
@@ -267,15 +331,8 @@ pub fn initial_attached_render(
     let mut render_composer = RenderComposer::default();
     let mut layout = crate::server::lock_mutex(layout, "layout")?;
     let runtimes = crate::server::lock_mutex(runtimes, "pane runtimes")?;
-    let runtime_cmd_labels = pane_tracked_processes.snapshot_cmd_labels();
-    let runtime_tracked_process_states = pane_tracked_processes.snapshot_states();
-    let layout_snapshot = self::layout_snapshot_and_persist(
-        &config.paths,
-        &mut layout,
-        &runtimes,
-        &runtime_cmd_labels,
-        &runtime_tracked_process_states,
-    )?;
+    let tracked_processes = pane_tracked_processes.snapshot();
+    let layout_snapshot = self::layout_snapshot_and_persist(&config.paths, &mut layout, &runtimes, &tracked_processes)?;
     let pane_regions = self::pane_regions_snapshot(&layout, &runtimes, terminal_size)?;
     let attention_panes = self::attention_pane_ids(&layout, pane_tracked_processes);
     let render_baseline = render_composer.render_baseline(
@@ -321,14 +378,18 @@ fn layout_snapshot_and_persist(
     paths: &SessionPaths,
     layout: &mut SessionLayout,
     runtimes: &PaneRuntimes,
-    runtime_cmd_labels: &[(PaneId, Option<String>)],
-    runtime_tracked_process_states: &[(PaneId, muxr_core::TrackedProcessState)],
+    tracked_processes: &PaneTrackedProcessSnapshot,
 ) -> rootcause::Result<LayoutSnapshot> {
     let synced = runtimes.sync_layout_terminal_titles(layout)?;
     if synced.layout_changed() {
         crate::state::persisted::write_metadata(paths, layout)?;
     }
-    layout.snapshot_with_runtime_metadata(synced.titles(), runtime_cmd_labels, runtime_tracked_process_states)
+    let runtime_metadata = PaneRuntimeMetadata::from_sources(
+        synced.titles().to_vec(),
+        runtimes.startup_cmd_labels(),
+        tracked_processes,
+    );
+    layout.snapshot_with_runtime_metadata(&runtime_metadata.pane_snapshot_fields())
 }
 
 fn attach_pane_sinks(
@@ -872,16 +933,17 @@ async fn flush_render_diff(
     Ok(true)
 }
 
-fn runtime_pane_metadata(state: &AttachedSessionState<'_>) -> rootcause::Result<RuntimePaneMetadata> {
-    let terminal_titles = {
+fn runtime_pane_metadata(state: &AttachedSessionState<'_>) -> rootcause::Result<PaneRuntimeMetadata> {
+    let (terminal_titles, startup_cmd_labels) = {
         let runtimes = crate::server::lock_mutex(state.runtimes, "pane runtimes")?;
-        runtimes.terminal_titles()?
+        (runtimes.terminal_titles()?, runtimes.startup_cmd_labels())
     };
-    let runtime_cmd_labels = state.pane_tracked_processes.snapshot_cmd_labels();
-    Ok(RuntimePaneMetadata {
-        runtime_cmd_labels,
+    let tracked_processes = state.pane_tracked_processes.snapshot();
+    Ok(PaneRuntimeMetadata::from_sources(
         terminal_titles,
-    })
+        startup_cmd_labels,
+        &tracked_processes,
+    ))
 }
 
 async fn flush_cmd_label_layout(
@@ -894,17 +956,11 @@ async fn flush_cmd_label_layout(
         let mut layout = crate::server::lock_mutex(state.layout, "layout")?;
         let mut last_layout_snapshot = state.last_layout_snapshot.clone();
         let mut layout_changed = false;
-        let runtime_tracked_process_states = state.pane_tracked_processes.snapshot_states();
         let mut changes = Vec::new();
         for (pane_id, title) in title_changes {
             layout_changed |= layout.sync_terminal_titles(&[(pane_id, title.clone())]);
-            let terminal_titles =
-                self::terminal_titles_with_override(&runtime_metadata.terminal_titles, pane_id, title);
-            let layout_snapshot = layout.snapshot_with_runtime_metadata(
-                &terminal_titles,
-                &runtime_metadata.runtime_cmd_labels,
-                &runtime_tracked_process_states,
-            )?;
+            let runtime_metadata = runtime_metadata.with_terminal_title_override(pane_id, title);
+            let layout_snapshot = layout.snapshot_with_runtime_metadata(&runtime_metadata.pane_snapshot_fields())?;
             if layout_snapshot == last_layout_snapshot {
                 continue;
             }
@@ -960,12 +1016,7 @@ async fn flush_tracked_process_runtime_layout(
     let runtime_metadata = self::runtime_pane_metadata(state)?;
     let layout_snapshot = {
         let layout = crate::server::lock_mutex(state.layout, "layout")?;
-        let runtime_tracked_process_states = state.pane_tracked_processes.snapshot_states();
-        layout.snapshot_with_runtime_metadata(
-            &runtime_metadata.terminal_titles,
-            &runtime_metadata.runtime_cmd_labels,
-            &runtime_tracked_process_states,
-        )?
+        layout.snapshot_with_runtime_metadata(&runtime_metadata.pane_snapshot_fields())?
     };
     *render_dirty = true;
     self::send_sidebar_layout_if_changed(event_writer, state, layout_snapshot).await
@@ -984,12 +1035,7 @@ async fn flush_pane_attention(
             return Ok(true);
         }
         *render_dirty = true;
-        let runtime_tracked_process_states = state.pane_tracked_processes.snapshot_states();
-        layout.snapshot_with_runtime_metadata(
-            &runtime_metadata.terminal_titles,
-            &runtime_metadata.runtime_cmd_labels,
-            &runtime_tracked_process_states,
-        )?
+        layout.snapshot_with_runtime_metadata(&runtime_metadata.pane_snapshot_fields())?
     };
 
     self::send_sidebar_layout_if_changed(event_writer, state, layout_snapshot).await
@@ -1014,27 +1060,6 @@ async fn send_sidebar_layout_if_changed(
     }
     state.last_layout_snapshot = layout_snapshot;
     Ok(true)
-}
-
-fn terminal_titles_with_override(
-    terminal_titles: &[(PaneId, Option<String>)],
-    pane_id: PaneId,
-    title: Option<String>,
-) -> Vec<(PaneId, Option<String>)> {
-    let mut out = Vec::with_capacity(terminal_titles.len().saturating_add(1));
-    let mut replaced = false;
-    for (existing_pane_id, existing_title) in terminal_titles {
-        if *existing_pane_id == pane_id {
-            out.push((*existing_pane_id, title.clone()));
-            replaced = true;
-        } else {
-            out.push((*existing_pane_id, existing_title.clone()));
-        }
-    }
-    if !replaced {
-        out.push((pane_id, title));
-    }
-    out
 }
 
 async fn send_pane_regions_and_render(
@@ -1074,18 +1099,12 @@ async fn send_layout_and_baseline(
     event_writer: &mut ServerEventWriter,
     state: &mut AttachedSessionState<'_>,
 ) -> rootcause::Result<bool> {
-    let runtime_cmd_labels = state.pane_tracked_processes.snapshot_cmd_labels();
     let (layout_snapshot, pane_regions, render_update) = {
         let mut layout = crate::server::lock_mutex(state.layout, "layout")?;
         let runtimes = crate::server::lock_mutex(state.runtimes, "pane runtimes")?;
-        let runtime_tracked_process_states = state.pane_tracked_processes.snapshot_states();
-        let layout_snapshot = self::layout_snapshot_and_persist(
-            &state.config.paths,
-            &mut layout,
-            &runtimes,
-            &runtime_cmd_labels,
-            &runtime_tracked_process_states,
-        )?;
+        let tracked_processes = state.pane_tracked_processes.snapshot();
+        let layout_snapshot =
+            self::layout_snapshot_and_persist(&state.config.paths, &mut layout, &runtimes, &tracked_processes)?;
         let pane_regions = self::pane_regions_snapshot(&layout, &runtimes, &state.terminal_size)?;
         let attention_panes = self::attention_pane_ids(&layout, &state.pane_tracked_processes);
         let render_update = state.render_composer.render_baseline(
@@ -1593,8 +1612,11 @@ mod tests {
 
     use muxr_core::SessionName;
     use muxr_core::SessionPaths;
+    use muxr_core::TrackedProcessState;
 
     use super::*;
+    use crate::pane_cmd::PaneCmd;
+    use crate::pane_cmd::PaneCmdObservation;
     use crate::pane_runtime::test_helpers as pane_runtime_test_helpers;
     use crate::state::SessionMetadata;
 
@@ -1605,14 +1627,22 @@ mod tests {
         let mut layout = SessionLayout::initial(&session, self::metadata("zsh", 1))?;
         let runtimes = pane_runtime_test_helpers::empty_runtimes();
         let pane_id = PaneId::new(1)?;
+        let mut tracked_processes = PaneTrackedProcesses::default();
+        assert2::assert!(tracked_processes.observe_pane_cmd(
+            &MuxrConfig::default(),
+            pane_id,
+            &PaneCmdObservation::FgCmd {
+                cmd: PaneCmd {
+                    executable: "codex".to_owned(),
+                    path: None,
+                    pid: 42,
+                },
+            },
+            Instant::now(),
+        ));
 
-        let snapshot = self::layout_snapshot_and_persist(
-            &paths,
-            &mut layout,
-            &runtimes,
-            &[(pane_id, Some("cx".to_owned()))],
-            &[],
-        )?;
+        let snapshot =
+            self::layout_snapshot_and_persist(&paths, &mut layout, &runtimes, &tracked_processes.snapshot())?;
 
         let pane = snapshot
             .tabs()
@@ -1620,6 +1650,45 @@ mod tests {
             .and_then(|tab| tab.panes().first())
             .ok_or_else(|| report!("expected pane snapshot"))?;
         pretty_assertions::assert_eq!(pane.cmd_label, Some("cx".to_owned()));
+        Ok(())
+    }
+
+    #[test]
+    fn test_runtime_pane_metadata_cmd_labels_when_title_or_tracked_label_exists_suppresses_startup_label()
+    -> rootcause::Result<()> {
+        let pane_1 = PaneId::new(1)?;
+        let pane_2 = PaneId::new(2)?;
+        let pane_3 = PaneId::new(3)?;
+        let mut tracked_processes = PaneTrackedProcesses::default();
+        assert2::assert!(tracked_processes.observe_pane_cmd(
+            &MuxrConfig::default(),
+            pane_1,
+            &PaneCmdObservation::FgCmd {
+                cmd: PaneCmd {
+                    executable: "codex".to_owned(),
+                    path: None,
+                    pid: 42,
+                },
+            },
+            Instant::now(),
+        ));
+
+        let metadata = PaneRuntimeMetadata::from_sources(
+            vec![(pane_2, Some("~/work".to_owned()))],
+            vec![
+                (pane_1, Some("codex".to_owned())),
+                (pane_2, Some("demo process start".to_owned())),
+                (pane_3, Some("echo seeded".to_owned())),
+            ],
+            &tracked_processes.snapshot(),
+        );
+        let snapshot_fields = metadata.pane_snapshot_fields();
+
+        pretty_assertions::assert_eq!(snapshot_fields.cmd_label(pane_1), Some("cx"));
+        pretty_assertions::assert_eq!(snapshot_fields.cmd_label(pane_2), None);
+        pretty_assertions::assert_eq!(snapshot_fields.cmd_label(pane_3), Some("echo seeded"));
+        pretty_assertions::assert_eq!(snapshot_fields.terminal_title(pane_2), Some("~/work"));
+        pretty_assertions::assert_eq!(snapshot_fields.tracked_process_state(pane_1), TrackedProcessState::Busy);
         Ok(())
     }
 

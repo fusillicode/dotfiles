@@ -8,6 +8,12 @@ use std::time::Duration;
 
 use muxr_core::RenderColor;
 
+pub use self::session_layout::ExternalLayoutPane;
+pub use self::session_layout::ExternalLayoutTab;
+pub use self::session_layout::ExternalSessionLayout;
+
+mod session_layout;
+
 pub const SPLIT_RATIO_MIN_PER_MILLE: u16 = 50;
 pub const SPLIT_RATIO_MAX_PER_MILLE: u16 = 950;
 const SPLIT_RESIZE_STEP_MIN: u16 = 1;

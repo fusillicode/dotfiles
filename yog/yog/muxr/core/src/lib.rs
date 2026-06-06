@@ -36,6 +36,7 @@ pub use protocol::decode_server_event;
 pub use protocol::encode_client_request;
 pub use protocol::encode_server_event;
 pub use session::DEFAULT_SESSION_NAME;
+pub use session::EXTERNAL_LAYOUT_ARG;
 pub use session::INTERNAL_SERVER_ARG;
 pub use session::SessionName;
 pub use session::SessionPaths;

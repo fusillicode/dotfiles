@@ -1,4 +1,5 @@
 use std::fs;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::MutexGuard;
@@ -34,6 +35,7 @@ pub struct ServerConfig {
     pub client_heartbeat_interval: Duration,
     pub client_heartbeat_timeout: Duration,
     pub client_write_timeout: Duration,
+    pub external_layout: Option<PathBuf>,
     pub user_config: Arc<MuxrConfig>,
     pub session: SessionName,
     pub paths: SessionPaths,
@@ -43,15 +45,18 @@ pub struct ServerConfig {
 
 /// Run the muxr server for one internally launched session.
 ///
+/// `external_layout` is a one-shot seed for brand-new sessions; persisted layout metadata remains authoritative.
+///
 /// # Errors
 /// - Server startup, socket IO, PTY setup, or pid file persistence fails.
-pub fn serve_session(session: &SessionName) -> rootcause::Result<()> {
+pub fn serve_session(session: &SessionName, external_layout: Option<PathBuf>) -> rootcause::Result<()> {
     let paths = SessionPaths::from_home(session)?;
 
     self::serve(&ServerConfig {
         client_heartbeat_interval: CLIENT_HEARTBEAT_INTERVAL,
         client_heartbeat_timeout: CLIENT_HEARTBEAT_TIMEOUT,
         client_write_timeout: CLIENT_WRITE_TIMEOUT,
+        external_layout,
         user_config: Arc::new(MuxrConfig::default()),
         session: session.clone(),
         paths,
@@ -131,12 +136,14 @@ async fn serve_async(config: &ServerConfig) -> rootcause::Result<()> {
     fs::write(&config.paths.pid, std::process::id().to_string()).context("failed to write muxr server pid")?;
     let initial_size = TerminalSize::new(80, 24)?;
     let metadata = self::session_metadata(config)?;
-    let layout = match crate::state::persisted::load_metadata(&config.paths, &config.session)? {
-        Some(layout) => layout,
-        None => SessionLayout::initial(&config.session, metadata)?,
-    };
-    let runtimes = PaneRuntimes::spawn_for_layout(config, &layout, &initial_size)?;
-    let layout = Arc::new(Mutex::new(layout));
+    let layout_seed = crate::session_start_seed::load_session_start_seed(config, metadata)?;
+    let runtimes = PaneRuntimes::spawn_for_layout_with_cmds(
+        config,
+        &layout_seed.layout,
+        &initial_size,
+        &layout_seed.startup_cmds,
+    )?;
+    let layout = Arc::new(Mutex::new(layout_seed.layout));
     let runtimes = Arc::new(Mutex::new(runtimes));
     {
         let locked_layout = self::lock_mutex(layout.as_ref(), "layout")?;
@@ -208,7 +215,6 @@ pub mod test_helpers {
 
     use super::ServerConfig;
     use crate::pty::ShellCmd;
-    use crate::pty::test_helpers as pty_test_helpers;
 
     const TEST_CLIENT_HEARTBEAT_INTERVAL: Duration = Duration::from_millis(100);
     const TEST_CLIENT_HEARTBEAT_TIMEOUT: Duration = Duration::from_millis(500);
@@ -236,9 +242,7 @@ pub mod test_helpers {
     }
 
     pub fn shell_cmd_with_args(program: &str, args: &[&str]) -> ShellCmd {
-        args.iter().fold(self::shell_cmd(program), |cmd, arg| {
-            pty_test_helpers::shell_cmd_arg(cmd, *arg)
-        })
+        ShellCmd::with_args(program, args.iter().copied()).expect("test shell cmd must have valid args")
     }
 
     pub fn server_config(base: &Path, raw: &str) -> rootcause::Result<ServerConfig> {
@@ -247,6 +251,7 @@ pub mod test_helpers {
             client_heartbeat_interval: TEST_CLIENT_HEARTBEAT_INTERVAL,
             client_heartbeat_timeout: TEST_CLIENT_HEARTBEAT_TIMEOUT,
             client_write_timeout: TEST_CLIENT_WRITE_TIMEOUT,
+            external_layout: None,
             user_config: std::sync::Arc::new(MuxrConfig::default()),
             session,
             paths,
@@ -588,7 +593,7 @@ mod tests {
         let terminal_size = TerminalSize::new(80, 24)?;
         let runtimes = {
             let layout = self::lock_mutex(&layout, "layout")?;
-            PaneRuntimes::spawn_for_layout(&config, &layout, &terminal_size)?
+            PaneRuntimes::spawn_for_layout_with_cmds(&config, &layout, &terminal_size, &[])?
         };
         let runtimes = Mutex::new(runtimes);
         let pane_id = PaneId::new(1)?;
@@ -643,7 +648,7 @@ mod tests {
         }
         let runtimes = {
             let layout = self::lock_mutex(&layout, "layout")?;
-            PaneRuntimes::spawn_for_layout(&config, &layout, &terminal_size)?
+            PaneRuntimes::spawn_for_layout_with_cmds(&config, &layout, &terminal_size, &[])?
         };
         let runtimes = Mutex::new(runtimes);
         let inactive_pane = PaneId::new(1)?;
@@ -1371,6 +1376,7 @@ mod tests {
             client_heartbeat_interval: TEST_CLIENT_HEARTBEAT_INTERVAL,
             client_heartbeat_timeout: TEST_CLIENT_HEARTBEAT_TIMEOUT,
             client_write_timeout: TEST_CLIENT_WRITE_TIMEOUT,
+            external_layout: None,
             user_config: Arc::new(MuxrConfig::default()),
             session,
             paths: paths.clone(),
@@ -1411,6 +1417,7 @@ mod tests {
                     client_heartbeat_interval: TEST_CLIENT_HEARTBEAT_INTERVAL,
                     client_heartbeat_timeout: TEST_CLIENT_HEARTBEAT_TIMEOUT,
                     client_write_timeout: TEST_CLIENT_WRITE_TIMEOUT,
+                    external_layout: None,
                     user_config: Arc::new(MuxrConfig::default()),
                     session,
                     paths,

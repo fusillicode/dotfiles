@@ -61,13 +61,13 @@ enum ClientInputAction {
 /// - The server cannot be started or attached.
 /// - The current terminal size cannot be read.
 /// - Terminal input/output or protocol IO fails.
-pub fn start(session: &SessionName, server_executable: &Path) -> rootcause::Result<()> {
+pub fn start(session: &SessionName, server_executable: &Path, external_layout: Option<&Path>) -> rootcause::Result<()> {
     self::run_async(async {
         let muxr_config = MuxrConfig::default();
         let terminal_size = self::terminal::current_terminal_size()?;
         let pane_size = self::terminal::pane_size_for_terminal(muxr_config.tab_bar.width, &terminal_size)?;
         let attached_session =
-            self::session_attach::open_session(session, pane_size.clone(), server_executable).await?;
+            self::session_attach::open_session(session, pane_size.clone(), server_executable, external_layout).await?;
         self::run_interactive(&muxr_config, attached_session, pane_size).await
     })
 }

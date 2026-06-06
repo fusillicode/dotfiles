@@ -4,6 +4,7 @@ use std::path::Path;
 use std::process::Command;
 use std::process::Stdio;
 
+use muxr_core::EXTERNAL_LAYOUT_ARG;
 use muxr_core::INTERNAL_SERVER_ARG;
 use muxr_core::SessionName;
 use muxr_core::SessionPaths;
@@ -16,15 +17,19 @@ pub fn cleanup_stale_session_files(paths: &SessionPaths) -> rootcause::Result<()
     Ok(())
 }
 
-pub fn spawn_server_process(session: &SessionName, server_executable: &Path) -> rootcause::Result<()> {
-    let mut cmd = self::server_cmd(session, server_executable);
+pub fn spawn_server_process(
+    session: &SessionName,
+    server_executable: &Path,
+    external_layout: Option<&Path>,
+) -> rootcause::Result<()> {
+    let mut cmd = self::server_cmd(session, server_executable, external_layout);
 
     let child = cmd.spawn().context("failed to spawn muxr internal server")?;
     drop(child);
     Ok(())
 }
 
-fn server_cmd(session: &SessionName, server_executable: &Path) -> Command {
+fn server_cmd(session: &SessionName, server_executable: &Path, external_layout: Option<&Path>) -> Command {
     let mut cmd = Command::new(server_executable);
     cmd.arg(INTERNAL_SERVER_ARG)
         .arg(session.as_ref())
@@ -32,6 +37,9 @@ fn server_cmd(session: &SessionName, server_executable: &Path) -> Command {
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .process_group(0);
+    if let Some(external_layout) = external_layout {
+        cmd.arg(EXTERNAL_LAYOUT_ARG).arg(external_layout);
+    }
 
     cmd
 }
@@ -85,11 +93,30 @@ mod tests {
     #[test]
     fn test_server_cmd_uses_supplied_executable_for_internal_server() -> rootcause::Result<()> {
         let session: SessionName = "work".parse()?;
-        let cmd = server_cmd(&session, Path::new("/tmp/custom-muxr"));
+        let cmd = server_cmd(&session, Path::new("/tmp/custom-muxr"), None);
         let args: Vec<_> = cmd.get_args().collect();
 
         pretty_assertions::assert_eq!(cmd.get_program(), OsStr::new("/tmp/custom-muxr"));
         pretty_assertions::assert_eq!(args.as_slice(), [OsStr::new(INTERNAL_SERVER_ARG), OsStr::new("work")]);
+        Ok(())
+    }
+
+    #[test]
+    fn test_server_cmd_when_external_layout_is_supplied_passes_layout_to_internal_server() -> rootcause::Result<()> {
+        let session: SessionName = "work".parse()?;
+        let layout = Path::new("../.config/muxr/layouts/work.json");
+        let cmd = server_cmd(&session, Path::new("/tmp/custom-muxr"), Some(layout));
+        let args: Vec<_> = cmd.get_args().collect();
+
+        pretty_assertions::assert_eq!(
+            args.as_slice(),
+            [
+                OsStr::new(INTERNAL_SERVER_ARG),
+                OsStr::new("work"),
+                OsStr::new(EXTERNAL_LAYOUT_ARG),
+                OsStr::new("../.config/muxr/layouts/work.json")
+            ]
+        );
         Ok(())
     }
 

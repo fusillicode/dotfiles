@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use muxr_core::ClientMousePosition;
 use muxr_core::LayoutSnapshot;
 use muxr_core::PaneId;
@@ -19,6 +21,46 @@ use crate::state::Tab;
 const INITIAL_PANE_ID: u32 = 1;
 const INITIAL_TAB_ID: u32 = 1;
 const INITIAL_TAB_TITLE: &str = "default";
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+struct PaneSnapshotFieldsEntry {
+    cmd_label: Option<String>,
+    terminal_title: Option<String>,
+    tracked_process_state: TrackedProcessState,
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct PaneSnapshotFields {
+    panes: BTreeMap<PaneId, PaneSnapshotFieldsEntry>,
+}
+
+impl PaneSnapshotFields {
+    pub fn set_cmd_label(&mut self, pane_id: PaneId, cmd_label: Option<String>) {
+        self.panes.entry(pane_id).or_default().cmd_label = cmd_label;
+    }
+
+    pub fn set_terminal_title(&mut self, pane_id: PaneId, terminal_title: Option<String>) {
+        self.panes.entry(pane_id).or_default().terminal_title = terminal_title;
+    }
+
+    pub fn set_tracked_process_state(&mut self, pane_id: PaneId, tracked_process_state: TrackedProcessState) {
+        self.panes.entry(pane_id).or_default().tracked_process_state = tracked_process_state;
+    }
+
+    pub fn cmd_label(&self, pane_id: PaneId) -> Option<&str> {
+        self.panes.get(&pane_id)?.cmd_label.as_deref()
+    }
+
+    pub fn terminal_title(&self, pane_id: PaneId) -> Option<&str> {
+        self.panes.get(&pane_id)?.terminal_title.as_deref()
+    }
+
+    pub fn tracked_process_state(&self, pane_id: PaneId) -> TrackedProcessState {
+        self.panes
+            .get(&pane_id)
+            .map_or(TrackedProcessState::None, |pane| pane.tracked_process_state)
+    }
+}
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SessionMetadata {
@@ -68,21 +110,21 @@ impl SessionLayout {
         &self,
         terminal_titles: &[(PaneId, Option<String>)],
     ) -> rootcause::Result<LayoutSnapshot> {
-        self.snapshot_with_runtime_metadata(terminal_titles, &[], &[])
+        let mut snapshot_fields = PaneSnapshotFields::default();
+        for (pane_id, terminal_title) in terminal_titles {
+            snapshot_fields.set_terminal_title(*pane_id, terminal_title.clone());
+        }
+        self.snapshot_with_runtime_metadata(&snapshot_fields)
     }
 
     pub fn snapshot_with_runtime_metadata(
         &self,
-        terminal_titles: &[(PaneId, Option<String>)],
-        runtime_cmd_labels: &[(PaneId, Option<String>)],
-        runtime_tracked_process_states: &[(PaneId, TrackedProcessState)],
+        snapshot_fields: &PaneSnapshotFields,
     ) -> rootcause::Result<LayoutSnapshot> {
         let tabs = self
             .entries
             .iter()
-            .map(|tab| {
-                tab.snapshot_with_runtime_metadata(terminal_titles, runtime_cmd_labels, runtime_tracked_process_states)
-            })
+            .map(|tab| tab.snapshot_with_runtime_metadata(snapshot_fields))
             .collect::<rootcause::Result<Vec<_>>>()?;
         LayoutSnapshot::new(self.active_tab, tabs)
     }

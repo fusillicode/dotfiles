@@ -13,6 +13,7 @@ use crate::pty::PtyExitStatus;
 use crate::pty::PtyHandle;
 use crate::pty::PtySession;
 use crate::pty::PtySinkGuard;
+use crate::pty::ShellCmd;
 use crate::server::ServerConfig;
 use crate::state::SessionLayout;
 use crate::terminal::TerminalSnapshot;
@@ -20,6 +21,7 @@ use crate::terminal::TerminalSnapshot;
 struct PaneRuntime {
     id: PaneId,
     session: PtySession,
+    startup_cmd_label: Option<String>,
 }
 
 /// Terminal-title sync result for layout metadata derived from live pane runtimes.
@@ -45,14 +47,19 @@ pub struct PaneRuntimes {
 }
 
 impl PaneRuntimes {
-    pub fn spawn_for_layout(
+    pub fn spawn_for_layout_with_cmds(
         config: &ServerConfig,
         layout: &SessionLayout,
         size: &TerminalSize,
+        startup_cmds: &[(PaneId, ShellCmd)],
     ) -> rootcause::Result<Self> {
         let mut panes = Vec::new();
         for pane in layout.panes() {
-            panes.push(PaneRuntime {
+            let startup_cmd = startup_cmds
+                .iter()
+                .find(|(startup_pane_id, _cmd)| *startup_pane_id == pane.id);
+            let runtime = PaneRuntime {
+                startup_cmd_label: startup_cmd.map(|(_pane_id, cmd)| cmd.label_with_args()),
                 session: PtySession::spawn(
                     &config.shell_cmd,
                     &pane.cwd,
@@ -60,7 +67,16 @@ impl PaneRuntimes {
                     &self::pane_output_path(&config.paths.panes, pane.id),
                 )?,
                 id: pane.id,
-            });
+            };
+            if let Some((_pane_id, cmd)) = startup_cmd {
+                // External-layout commands are startup input, not the pane lifetime process. A one-shot command such
+                // as `demo process start` may exit immediately, but the shell pane must remain part of the layout.
+                let _scrolled = runtime
+                    .session
+                    .handle()
+                    .write_input(cmd.shell_input_line().as_bytes())?;
+            }
+            panes.push(runtime);
         }
         Ok(Self { panes })
     }
@@ -75,6 +91,7 @@ impl PaneRuntimes {
         let history_path = self::pane_output_path(&config.paths.panes, pane_id);
         self.panes.push(PaneRuntime {
             id: pane_id,
+            startup_cmd_label: None,
             session: PtySession::spawn(&config.shell_cmd, cwd, size, &history_path)?,
         });
         Ok(())
@@ -97,6 +114,17 @@ impl PaneRuntimes {
 
     pub fn pane_ids(&self) -> Vec<PaneId> {
         self.panes.iter().map(|pane| pane.id).collect()
+    }
+
+    pub fn startup_cmd_labels(&self) -> Vec<(PaneId, Option<String>)> {
+        self.panes
+            .iter()
+            .filter_map(|pane| {
+                pane.startup_cmd_label
+                    .as_ref()
+                    .map(|cmd_label| (pane.id, Some(cmd_label.clone())))
+            })
+            .collect()
     }
 
     pub fn remove(&mut self, pane_id: PaneId) {
@@ -221,5 +249,79 @@ pub mod test_helpers {
 
     pub fn empty_runtimes() -> PaneRuntimes {
         PaneRuntimes { panes: Vec::new() }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::thread;
+    use std::time::Duration;
+    use std::time::Instant;
+
+    use muxr_core::PaneId;
+    use muxr_core::TerminalSize;
+    use rootcause::report;
+
+    use super::*;
+    use crate::server::test_helpers as server_test_helpers;
+    use crate::state::SessionLayout;
+    use crate::state::SessionMetadata;
+    use crate::terminal::TerminalSnapshot;
+
+    #[test]
+    fn test_spawn_for_layout_with_cmds_when_pane_cmd_exists_runs_cmd_inside_shell() -> rootcause::Result<()> {
+        let tempdir = tempfile::tempdir()?;
+        let mut config = server_test_helpers::server_config(tempdir.path(), "work")?;
+        config.shell_cmd = server_test_helpers::shell_cmd("/bin/sh");
+        let layout = SessionLayout::initial(
+            &config.session,
+            SessionMetadata {
+                cmd_label: "sh".to_owned(),
+                cwd: tempdir.path().to_string_lossy().into_owned(),
+                started_at: 1,
+            },
+        )?;
+        let pane_id = PaneId::new(1)?;
+        let runtimes = PaneRuntimes::spawn_for_layout_with_cmds(
+            &config,
+            &layout,
+            &TerminalSize::new(80, 24)?,
+            &[(pane_id, ShellCmd::with_args("/bin/echo", ["seeded"])?)],
+        )?;
+
+        pretty_assertions::assert_eq!(
+            runtimes.startup_cmd_labels(),
+            vec![(pane_id, Some("echo seeded".to_owned()))]
+        );
+        self::wait_for_runtime_snapshot_contains(&runtimes, pane_id, "seeded")?;
+        pretty_assertions::assert_eq!(runtimes.exited_panes()?, Vec::new());
+        Ok(())
+    }
+
+    fn wait_for_runtime_snapshot_contains(
+        runtimes: &PaneRuntimes,
+        pane_id: PaneId,
+        needle: &str,
+    ) -> rootcause::Result<()> {
+        let started_at = Instant::now();
+        loop {
+            let snapshot = runtimes.handle(pane_id)?.render_snapshot()?;
+            if self::snapshot_text(&snapshot).contains(needle) {
+                return Ok(());
+            }
+            if started_at.elapsed() > Duration::from_secs(2) {
+                return Err(report!("timed out waiting for muxr runtime snapshot").attach(format!("needle={needle}")));
+            }
+            thread::sleep(Duration::from_millis(10));
+        }
+    }
+
+    fn snapshot_text(snapshot: &TerminalSnapshot) -> String {
+        snapshot
+            .rows()
+            .iter()
+            .flat_map(muxr_core::RenderRowSpan::cells)
+            .map(muxr_core::RenderCell::text)
+            .collect()
     }
 }

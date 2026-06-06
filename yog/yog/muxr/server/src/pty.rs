@@ -64,6 +64,19 @@ impl ShellCmd {
         })
     }
 
+    /// Build a pane startup cmd with arguments.
+    ///
+    /// # Errors
+    /// - The program path is empty.
+    pub fn with_args(
+        program: impl Into<PathBuf>,
+        args: impl IntoIterator<Item = impl Into<String>>,
+    ) -> rootcause::Result<Self> {
+        let mut cmd = Self::new(program)?;
+        cmd.args = args.into_iter().map(Into::into).collect();
+        Ok(cmd)
+    }
+
     /// Build the default shell cmd from `$SHELL`, falling back to `/bin/sh`.
     ///
     /// # Errors
@@ -82,6 +95,27 @@ impl ShellCmd {
             .file_name()
             .and_then(|name| name.to_str())
             .map_or_else(|| self.program.to_string_lossy().into_owned(), ToOwned::to_owned)
+    }
+
+    #[must_use]
+    pub fn label_with_args(&self) -> String {
+        let mut label = self.label();
+        for arg in &self.args {
+            label.push(' ');
+            label.push_str(arg);
+        }
+        label
+    }
+
+    #[must_use]
+    pub fn shell_input_line(&self) -> String {
+        let mut line = self::shell_quote(&self.program.to_string_lossy());
+        for arg in &self.args {
+            line.push(' ');
+            line.push_str(&self::shell_quote(arg));
+        }
+        line.push('\n');
+        line
     }
 
     fn cmd_builder(&self, cwd: &str) -> rootcause::Result<CommandBuilder> {
@@ -540,6 +574,24 @@ fn resolved_cwd(cwd: &str) -> rootcause::Result<PathBuf> {
     Ok(path)
 }
 
+fn shell_quote(raw: &str) -> String {
+    if raw.is_empty() {
+        return "''".to_owned();
+    }
+
+    if raw.bytes().all(|byte| {
+        byte.is_ascii_alphanumeric()
+            || matches!(
+                byte,
+                b'/' | b'.' | b'_' | b'-' | b':' | b'+' | b'=' | b',' | b'@' | b'%'
+            )
+    }) {
+        return raw.to_owned();
+    }
+
+    format!("'{}'", raw.replace('\'', "'\\''"))
+}
+
 fn lock_mutex<'a, T>(mutex: &'a Mutex<T>, name: &str) -> rootcause::Result<MutexGuard<'a, T>> {
     mutex.lock().map_err(|_| report!("poisoned muxr {name} mutex"))
 }
@@ -729,16 +781,6 @@ fn spawn_reader_thread(
             }
         }
     })
-}
-
-#[cfg(test)]
-pub mod test_helpers {
-    use super::*;
-
-    pub fn shell_cmd_arg(mut cmd: ShellCmd, arg: impl Into<String>) -> ShellCmd {
-        cmd.args.push(arg.into());
-        cmd
-    }
 }
 
 #[cfg(test)]
@@ -961,6 +1003,17 @@ mod tests {
     #[test]
     fn test_pty_paste_bytes_when_bracketed_paste_is_disabled_preserves_payload() {
         pretty_assertions::assert_eq!(pty_paste_bytes(b"one\ntwo\n", false), b"one\ntwo\n".to_vec());
+    }
+
+    #[test]
+    fn test_shell_cmd_shell_input_line_quotes_shell_words() -> rootcause::Result<()> {
+        let cmd = ShellCmd::with_args("/tmp/with space/cmd", ["simple", "two words", "it's"])?;
+
+        pretty_assertions::assert_eq!(
+            cmd.shell_input_line(),
+            "'/tmp/with space/cmd' simple 'two words' 'it'\\''s'\n"
+        );
+        Ok(())
     }
 
     #[test]

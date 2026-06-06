@@ -306,20 +306,20 @@ mod file_target_tests {
     }
 
     #[rstest]
-    #[case("/foo/bar/baz/")]
-    #[case("bim/bum/bam")]
-    #[case("foo.yaml:222")]
+    #[case("/tmp/root/")]
+    #[case("nested/path/")]
+    #[case("target.yaml:222")]
     fn test_file_target_reconstructed_from_lines_returns_wrapped_target(#[case] clicked: &str) {
         let lines = [
-            " - [warning] /foo/bar/baz/".to_owned(),
-            "    bim/bum/bam".to_owned(),
-            "    foo.yaml:222 - local admin config enable".to_owned(),
+            " - [warning] /tmp/root/".to_owned(),
+            "    nested/path/".to_owned(),
+            "    target.yaml:222 - generated config enable".to_owned(),
         ];
 
         pretty_assertions::assert_eq!(
             FileTargetReconstructed::from_lines(&lines, clicked),
             FileTargetReconstructed::Unique(FileTarget {
-                path: PathBuf::from("/foo/bar/baz/bim/bum/bamfoo.yaml"),
+                path: PathBuf::from("/tmp/root/nested/path/target.yaml"),
                 line: 222,
                 column: 1,
             })
@@ -329,9 +329,9 @@ mod file_target_tests {
     #[test]
     fn test_file_target_reconstructed_from_lines_ignores_text_outside_path() {
         let lines = [
-            " - [warning] /foo/bar/baz/".to_owned(),
-            "    bim/bum/bam".to_owned(),
-            "    foo.yaml:222 - local admin config enable".to_owned(),
+            " - [warning] /tmp/root/".to_owned(),
+            "    nested/path/".to_owned(),
+            "    target.yaml:222 - generated config enable".to_owned(),
         ];
 
         pretty_assertions::assert_eq!(
