@@ -460,6 +460,12 @@ impl RenderCell {
         self
     }
 
+    #[must_use]
+    pub const fn with_style(mut self, style: RenderStyle) -> Self {
+        self.style = style;
+        self
+    }
+
     /// Attach hyperlink metadata to the render cell.
     ///
     /// # Errors
@@ -684,6 +690,28 @@ mod tests {
 
         pretty_assertions::assert_eq!(cell.hyperlink().map(RenderHyperlink::uri), Some("https://example.com"));
         assert2::assert!(cell != self::render_cell("x"));
+        Ok(())
+    }
+
+    #[test]
+    fn test_render_cell_with_style_when_cell_has_metadata_preserves_non_style_fields() -> rootcause::Result<()> {
+        let original_style = RenderStyle::default();
+        let updated_style = RenderStyle {
+            attrs: RenderTextStyle::empty().set_dim(true),
+            bg: RenderColor::Indexed(1),
+            fg: RenderColor::Indexed(2),
+        };
+        let cell = RenderCell::wide("字", original_style).with_hyperlink_uri("https://example.com")?;
+
+        let updated = cell.with_style(updated_style);
+
+        pretty_assertions::assert_eq!(updated.style(), updated_style);
+        pretty_assertions::assert_eq!(updated.text(), "字");
+        pretty_assertions::assert_eq!(updated.width(), RenderCellWidth::Wide);
+        pretty_assertions::assert_eq!(
+            updated.hyperlink().map(RenderHyperlink::uri),
+            Some("https://example.com")
+        );
         Ok(())
     }
 

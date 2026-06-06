@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 
 use muxr_config::CellStyle;
+use muxr_config::PaneAttentionConfig;
 use muxr_config::PaneBorderStyles;
 use muxr_core::PaneId;
 use muxr_core::RenderCell;
@@ -126,6 +127,7 @@ pub enum BorderRenderMode {
 pub fn paste_borders(
     rows: &mut [Vec<RenderCell>],
     styles: PaneBorderStyles,
+    pane_attention: PaneAttentionConfig,
     borders: &[PaneBorder],
     active_pane: Option<&PaneId>,
     attention_panes: &[PaneId],
@@ -139,7 +141,7 @@ pub fn paste_borders(
         let target = target_row
             .get_mut(usize::from(col))
             .ok_or_else(|| report!("muxr pane border col outside composite frame"))?;
-        *target = RenderCell::narrow(cell.shape.glyph(), cell.visual.style(styles));
+        *target = RenderCell::narrow(cell.shape.glyph(), cell.visual.style(styles, pane_attention));
     }
     Ok(())
 }
@@ -525,11 +527,11 @@ impl BorderVisual {
         }
     }
 
-    const fn style(self, styles: PaneBorderStyles) -> RenderStyle {
+    const fn style(self, styles: PaneBorderStyles, pane_attention: PaneAttentionConfig) -> RenderStyle {
         match self {
             Self::Default => self::render_style(styles.default),
             Self::Focused => self::render_style(styles.focused),
-            Self::Attention => self::render_style(styles.attention),
+            Self::Attention => self::render_style(pane_attention.border),
             Self::Resize => self::render_style(styles.resize),
         }
     }
@@ -729,6 +731,7 @@ mod tests {
         self::paste_borders(
             &mut rows,
             MuxrConfig::default().pane_borders,
+            MuxrConfig::default().pane_attention,
             &borders,
             Some(&active_pane),
             &[],
@@ -767,6 +770,7 @@ mod tests {
         self::paste_borders(
             &mut rows,
             MuxrConfig::default().pane_borders,
+            MuxrConfig::default().pane_attention,
             &borders,
             None,
             &[],
@@ -816,6 +820,7 @@ mod tests {
         self::paste_borders(
             &mut rows,
             MuxrConfig::default().pane_borders,
+            MuxrConfig::default().pane_attention,
             &[border],
             Some(&active_pane),
             &[],
@@ -855,6 +860,7 @@ mod tests {
         self::paste_borders(
             &mut rows,
             MuxrConfig::default().pane_borders,
+            MuxrConfig::default().pane_attention,
             &[border],
             Some(&active_pane),
             std::slice::from_ref(&attention_pane),
@@ -903,6 +909,7 @@ mod tests {
         self::paste_borders(
             &mut rows,
             MuxrConfig::default().pane_borders,
+            MuxrConfig::default().pane_attention,
             &[border],
             Some(&active_pane),
             std::slice::from_ref(&attention_pane),
@@ -946,6 +953,7 @@ mod tests {
         self::paste_borders(
             &mut rows,
             MuxrConfig::default().pane_borders,
+            MuxrConfig::default().pane_attention,
             &[border],
             Some(&active_pane),
             std::slice::from_ref(&active_pane),
@@ -988,6 +996,7 @@ mod tests {
         self::paste_borders(
             &mut rows,
             MuxrConfig::default().pane_borders,
+            MuxrConfig::default().pane_attention,
             &borders,
             Some(&active_pane),
             &[],
@@ -1028,6 +1037,7 @@ mod tests {
         self::paste_borders(
             &mut rows,
             MuxrConfig::default().pane_borders,
+            MuxrConfig::default().pane_attention,
             &[border],
             Some(&active_pane),
             &[],

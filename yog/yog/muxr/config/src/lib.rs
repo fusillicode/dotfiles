@@ -17,13 +17,19 @@ const SPLIT_RESIZE_STEP_MAX: u16 = 950;
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct MuxrConfig {
     pub layout: LayoutConfig,
+    pub pane_attention: PaneAttentionConfig,
     pub pane_borders: PaneBorderStyles,
+    pub pane_dim: PaneDimConfig,
     pub selection: SelectionStyle,
     pub tab_bar: TabBarConfig,
     pub tracked_processes: Vec<TrackedProcess>,
 }
 
 impl Default for MuxrConfig {
+    #[expect(
+        clippy::too_many_lines,
+        reason = "the hardcoded config stays in one visible literal so local tuning does not require jumping between helpers"
+    )]
     fn default() -> Self {
         Self {
             layout: LayoutConfig {
@@ -31,27 +37,34 @@ impl Default for MuxrConfig {
                 resize_step: SplitResizeStep(50),
                 vertical_split_ratio: SplitRatio(400),
             },
-            pane_borders: PaneBorderStyles {
-                attention: CellStyle {
-                    attrs: TextAttrs { bold: true },
+            pane_attention: PaneAttentionConfig {
+                border: CellStyle {
+                    attrs: TextAttrs { bold: false },
                     bg: RenderColor::Default,
-                    fg: RenderColor::Rgb { r: 255, g: 0, b: 0 },
+                    fg: RenderColor::Rgb { r: 50, g: 50, b: 50 },
                 },
+                bg_tint: Some(RenderColor::Rgb { r: 32, g: 0, b: 0 }),
+            },
+            pane_borders: PaneBorderStyles {
                 default: CellStyle {
                     attrs: TextAttrs { bold: false },
                     bg: RenderColor::Default,
                     fg: RenderColor::Rgb { r: 50, g: 50, b: 50 },
                 },
                 focused: CellStyle {
-                    attrs: TextAttrs { bold: true },
+                    attrs: TextAttrs { bold: false },
                     bg: RenderColor::Default,
-                    fg: RenderColor::Rgb { r: 96, g: 96, b: 96 },
+                    fg: RenderColor::Rgb { r: 50, g: 50, b: 50 },
                 },
                 resize: CellStyle {
                     attrs: TextAttrs { bold: true },
                     bg: RenderColor::Default,
                     fg: RenderColor::Rgb { r: 106, g: 106, b: 223 },
                 },
+            },
+            pane_dim: PaneDimConfig {
+                explicit_color_percent: 80,
+                unfocused: true,
             },
             selection: SelectionStyle {
                 bg: RenderColor::Indexed(238),
@@ -192,10 +205,23 @@ impl SplitResizeStep {
 /// Pane border styles by semantic border role.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct PaneBorderStyles {
-    pub attention: CellStyle,
     pub default: CellStyle,
     pub focused: CellStyle,
     pub resize: CellStyle,
+}
+
+/// Pane attention styling.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct PaneAttentionConfig {
+    pub border: CellStyle,
+    pub bg_tint: Option<RenderColor>,
+}
+
+/// Unfocused pane dimming config.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct PaneDimConfig {
+    pub explicit_color_percent: u8,
+    pub unfocused: bool,
 }
 
 /// Muxr-owned selection styling.
@@ -388,9 +414,13 @@ mod tests {
     fn test_config_default_exposes_semantic_roles() {
         let config = MuxrConfig::default();
 
-        assert2::assert!(config.pane_borders.focused.attrs.bold);
+        pretty_assertions::assert_eq!(config.pane_borders.focused, config.pane_borders.default);
+        pretty_assertions::assert_eq!(config.pane_attention.border, config.pane_borders.default);
         assert2::assert!(config.pane_borders.resize.attrs.bold);
-        assert2::assert!(config.pane_borders.attention.attrs.bold);
+        assert2::assert!(config.pane_attention.bg_tint.is_some());
+        assert2::assert!(config.pane_dim.unfocused);
+        assert2::assert!(config.pane_dim.explicit_color_percent > 0);
+        assert2::assert!(config.pane_dim.explicit_color_percent <= 100);
         assert2::assert!(config.tab_bar.width > 0);
     }
 }
