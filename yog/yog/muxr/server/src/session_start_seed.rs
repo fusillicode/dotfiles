@@ -24,6 +24,32 @@ pub struct SessionStartSeed {
 }
 
 impl SessionStartSeed {
+    pub fn load(config: &ServerConfig, metadata: SessionMetadata) -> rootcause::Result<Self> {
+        let persisted_layout = crate::state::persisted::load_metadata(&config.paths, &config.session)?;
+        match (persisted_layout, config.external_layout.as_deref()) {
+            (Some(_), Some(layout_path)) => Err(report!("muxr external layout can only seed a new session")
+                .attach(format!("layout={}", layout_path.display()))
+                .attach(format!("session={}", config.session))),
+            (Some(layout), None) => Ok(Self {
+                layout,
+                startup_cmds: Vec::new(),
+            }),
+            (None, Some(layout_path)) => {
+                let external_layout = self::load_external_layout(layout_path)?;
+                Self::from_external_layout(
+                    &config.session,
+                    &external_layout,
+                    &config.shell_cmd,
+                    metadata.started_at,
+                )
+            }
+            (None, None) => Ok(Self {
+                layout: SessionLayout::initial(&config.session, metadata)?,
+                startup_cmds: Vec::new(),
+            }),
+        }
+    }
+
     fn from_external_layout(
         session: &SessionName,
         external_layout: &ExternalSessionLayout,
@@ -81,35 +107,6 @@ impl SessionStartSeed {
     }
 }
 
-pub fn load_session_start_seed(
-    config: &ServerConfig,
-    metadata: SessionMetadata,
-) -> rootcause::Result<SessionStartSeed> {
-    let persisted_layout = crate::state::persisted::load_metadata(&config.paths, &config.session)?;
-    match (persisted_layout, config.external_layout.as_deref()) {
-        (Some(_), Some(layout_path)) => Err(report!("muxr external layout can only seed a new session")
-            .attach(format!("layout={}", layout_path.display()))
-            .attach(format!("session={}", config.session))),
-        (Some(layout), None) => Ok(SessionStartSeed {
-            layout,
-            startup_cmds: Vec::new(),
-        }),
-        (None, Some(layout_path)) => {
-            let external_layout = self::load_external_layout(layout_path)?;
-            SessionStartSeed::from_external_layout(
-                &config.session,
-                &external_layout,
-                &config.shell_cmd,
-                metadata.started_at,
-            )
-        }
-        (None, None) => Ok(SessionStartSeed {
-            layout: SessionLayout::initial(&config.session, metadata)?,
-            startup_cmds: Vec::new(),
-        }),
-    }
-}
-
 fn load_external_layout(path: &Path) -> rootcause::Result<ExternalSessionLayout> {
     let bytes = fs::read(path).map_err(|error| {
         report!("failed to read muxr external layout")
@@ -147,7 +144,7 @@ mod tests {
     use crate::server::test_helpers as server_test_helpers;
 
     #[test]
-    fn test_load_session_start_seed_when_external_layout_is_requested_builds_seed_layout() -> rootcause::Result<()> {
+    fn test_load_when_external_layout_is_requested_builds_seed_layout() -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
         let mut config = server_test_helpers::server_config(tempdir.path(), "work")?;
         let layout_path = tempdir.path().join("work.json");
@@ -162,7 +159,7 @@ mod tests {
         )?;
         config.external_layout = Some(layout_path);
 
-        let seed = load_session_start_seed(
+        let seed = SessionStartSeed::load(
             &config,
             SessionMetadata {
                 cmd_label: "sh".to_owned(),
@@ -201,8 +198,8 @@ mod tests {
     }
 
     #[test]
-    fn test_load_session_start_seed_when_persisted_layout_exists_and_external_layout_is_requested_returns_error()
-    -> rootcause::Result<()> {
+    fn test_load_when_persisted_layout_exists_and_external_layout_is_requested_returns_error() -> rootcause::Result<()>
+    {
         let tempdir = tempfile::tempdir()?;
         let mut config = server_test_helpers::server_config(tempdir.path(), "work")?;
         std::fs::create_dir_all(&config.paths.root)?;
@@ -218,7 +215,7 @@ mod tests {
         config.external_layout = Some(tempdir.path().join("work.json"));
 
         assert2::assert!(
-            let Err(_) = load_session_start_seed(
+            let Err(_) = SessionStartSeed::load(
                 &config,
                 SessionMetadata {
                     cmd_label: "sh".to_owned(),
@@ -231,13 +228,13 @@ mod tests {
     }
 
     #[test]
-    fn test_load_session_start_seed_when_external_layout_is_missing_returns_error() -> rootcause::Result<()> {
+    fn test_load_when_external_layout_is_missing_returns_error() -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
         let mut config = server_test_helpers::server_config(tempdir.path(), "work")?;
         config.external_layout = Some(tempdir.path().join("missing.json"));
 
         assert2::assert!(
-            let Err(_) = load_session_start_seed(
+            let Err(_) = SessionStartSeed::load(
                 &config,
                 SessionMetadata {
                     cmd_label: "sh".to_owned(),

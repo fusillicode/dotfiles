@@ -43,7 +43,7 @@ pub async fn open_session(
 ) -> rootcause::Result<AttachedSession> {
     let paths = SessionPaths::from_home(session)?;
     if let Some(external_layout) = external_layout {
-        self::guard_external_layout_seed(&paths, session, external_layout).await?;
+        self::guard_external_start_seed(&paths, session, external_layout).await?;
     }
 
     match self::attach(session, &paths, terminal_size.clone()).await {
@@ -150,7 +150,7 @@ fn handle_attach_failure(attach_failure: AttachFailure) -> rootcause::Result<()>
     }
 }
 
-async fn guard_external_layout_seed(
+async fn guard_external_start_seed(
     paths: &SessionPaths,
     session: &SessionName,
     external_layout: &Path,
@@ -201,7 +201,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_guard_external_layout_seed_when_layout_metadata_exists_returns_error() -> rootcause::Result<()> {
+    fn test_guard_external_start_seed_when_layout_metadata_exists_returns_error() -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
         let (session, paths) = self::session_paths(tempdir.path(), "work")?;
         let layout = Path::new("../.config/muxr/layouts/work.json");
@@ -209,7 +209,7 @@ mod tests {
         fs::write(&paths.layout, b"not necessarily valid json")?;
 
         let error = self::runtime()?
-            .block_on(guard_external_layout_seed(&paths, &session, layout))
+            .block_on(guard_external_start_seed(&paths, &session, layout))
             .expect_err("expected persisted layout to block external layout seed");
 
         assert2::assert!(
@@ -222,7 +222,7 @@ mod tests {
     }
 
     #[test]
-    fn test_guard_external_layout_seed_when_socket_is_live_returns_error() -> rootcause::Result<()> {
+    fn test_guard_external_start_seed_when_socket_is_live_returns_error() -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
         let (session, paths) = self::session_paths(tempdir.path(), "work")?;
         let layout = Path::new("../.config/muxr/layouts/work.json");
@@ -237,7 +237,7 @@ mod tests {
                 Ok::<(), rootcause::Report>(())
             });
 
-            let error = guard_external_layout_seed(&paths, &session, layout)
+            let error = guard_external_start_seed(&paths, &session, layout)
                 .await
                 .expect_err("expected live session to block external layout seed");
             handle

@@ -1,4 +1,3 @@
-use std::collections::BTreeSet;
 use std::io::Write;
 use std::time::Instant;
 
@@ -8,7 +7,6 @@ use muxr_config::TabBarConfig;
 use muxr_core::ClientMouseEvent;
 use muxr_core::ClientMouseEventPhase;
 use muxr_core::ClientMousePosition;
-use muxr_core::ClientRequest;
 use muxr_core::LayoutSnapshot;
 use muxr_core::PaneId;
 use muxr_core::PaneRegionSnapshot;
@@ -18,90 +16,21 @@ use muxr_core::RenderUpdate;
 use muxr_core::TabId;
 use rootcause::prelude::ResultExt;
 
-use super::DOUBLE_CLICK_THRESHOLD;
+use crate::client::copy_selection::SelectionClickTracker;
+use crate::client::copy_selection::SelectionEdgeScrollPending;
+use crate::client::copy_selection::SelectionEdgeScrollRequest;
+use crate::client::copy_selection::SelectionEdgeScrollState;
 use crate::client::copy_selection::SelectionInput;
 use crate::client::copy_selection::SelectionRange;
 use crate::client::copy_selection::SelectionState;
+use crate::client::terminal::SynchronizedOutput;
 use crate::render::ApplyOutcome;
 use crate::render::FrameBuffer;
-use crate::render::SynchronizedOutput;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ClientRenderOutcome {
     Drawn,
     NeedsResync,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum ClickKind {
-    Double,
-    Other,
-}
-
-#[derive(Clone, Debug, Default)]
-struct ClickTracker {
-    count: u8,
-    previous: Option<TrackedClick>,
-}
-
-impl ClickTracker {
-    fn record(&mut self, target: ClickTarget, now: Instant) -> ClickKind {
-        let continues_previous = self.previous.as_ref().is_some_and(|previous| {
-            previous.target == target
-                && now
-                    .checked_duration_since(previous.at)
-                    .is_some_and(|elapsed| elapsed <= DOUBLE_CLICK_THRESHOLD)
-        });
-        self.count = if continues_previous {
-            self.count.saturating_add(1)
-        } else {
-            1
-        };
-        self.previous = Some(TrackedClick { at: now, target });
-        if self.count == 2 {
-            ClickKind::Double
-        } else {
-            ClickKind::Other
-        }
-    }
-
-    fn retain_for_regions(&mut self, regions: &PaneRegionsSnapshot) {
-        let keep_previous = self
-            .previous
-            .as_ref()
-            .is_some_and(|previous| previous.target.remains_in_regions(regions));
-        if !keep_previous {
-            self.reset();
-        }
-    }
-
-    const fn reset(&mut self) {
-        self.count = 0;
-        self.previous = None;
-    }
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-enum ClickTarget {
-    Cell {
-        pane_id: PaneId,
-        position: ClientMousePosition,
-    },
-    Word {
-        end: ClientMousePosition,
-        pane_id: PaneId,
-        start: ClientMousePosition,
-    },
-}
-
-impl ClickTarget {
-    fn remains_in_regions(&self, regions: &PaneRegionsSnapshot) -> bool {
-        match self {
-            Self::Cell { pane_id, position } => regions.pane_at(*position).is_some_and(|region| region.id() == pane_id),
-            Self::Word { end, pane_id, start } => self::region_for_pane_id(regions, *pane_id)
-                .is_some_and(|region| region.contains(start.row, start.col) && region.contains(end.row, end.col)),
-        }
-    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -117,58 +46,17 @@ impl MouseCapture {
     }
 }
 
-#[derive(Clone, Debug)]
-struct TrackedClick {
-    at: Instant,
-    target: ClickTarget,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-struct SelectionEdgeDrag {
-    col: u16,
-    direction: PaneScrollDirection,
-    pane_id: PaneId,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct SelectionEdgeScrollPending {
-    direction: PaneScrollDirection,
-    pane_id: PaneId,
-    position: ClientMousePosition,
-    previous_visible_top_row: u64,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct SelectionEdgeScrollRequest {
-    pending: SelectionEdgeScrollPending,
-    request: ClientRequest,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum SelectionEdgeScrollTrigger {
-    EdgeRow,
-    OutsideOnly,
-}
-
-impl SelectionEdgeScrollRequest {
-    pub fn into_parts(self) -> (SelectionEdgeScrollPending, ClientRequest) {
-        (self.pending, self.request)
-    }
-}
-
 pub struct ClientRenderer {
     any_motion_capture_enabled: bool,
     tab_bar_dirty: bool,
     selection_style: SelectionStyle,
     tab_bar_config: TabBarConfig,
-    clicks: ClickTracker,
+    clicks: SelectionClickTracker,
     frame_buffer: FrameBuffer,
     layout: LayoutSnapshot,
     mouse_capture: Option<MouseCapture>,
     pane_regions: PaneRegionsSnapshot,
-    selection_edge_drag: Option<SelectionEdgeDrag>,
-    selection_edge_scroll_acknowledged: bool,
-    selection_edge_scroll_pending: Option<SelectionEdgeScrollPending>,
+    selection_edge_scroll: SelectionEdgeScrollState,
     selection: SelectionState,
     synchronized_output: SynchronizedOutput,
 }
@@ -204,14 +92,12 @@ impl ClientRenderer {
             tab_bar_dirty: true,
             selection_style: config.selection,
             tab_bar_config: config.tab_bar,
-            clicks: ClickTracker::default(),
+            clicks: SelectionClickTracker::default(),
             frame_buffer: FrameBuffer::default(),
             layout,
             mouse_capture: None,
             pane_regions,
-            selection_edge_drag: None,
-            selection_edge_scroll_acknowledged: false,
-            selection_edge_scroll_pending: None,
+            selection_edge_scroll: SelectionEdgeScrollState::default(),
             selection: SelectionState::default(),
             synchronized_output,
         }
@@ -245,11 +131,7 @@ impl ClientRenderer {
             .mouse_capture
             .take()
             .and_then(|capture| capture.retain_for_regions(&self.pane_regions));
-        self.selection_edge_drag = self
-            .selection_edge_drag
-            .take()
-            .and_then(|drag| self::region_for_pane_id(&self.pane_regions, drag.pane_id).map(|_| drag));
-        self.update_selection_edge_scroll_pending();
+        self.selection_edge_scroll.retain_for_regions(&self.pane_regions);
         let selection_changed = self.selection.clear_if_regions_changed(&self.pane_regions);
         self.sync_mouse_capture(stdout)?;
         if selection_changed {
@@ -269,7 +151,7 @@ impl ClientRenderer {
             return Ok(());
         }
 
-        crate::render::set_mouse_any_motion_capture(stdout, next)?;
+        crate::client::terminal::set_mouse_any_motion_capture(stdout, next)?;
         self.any_motion_capture_enabled = next;
         Ok(())
     }
@@ -284,10 +166,7 @@ impl ClientRenderer {
                 self.selection.refresh_visible_rows(&self.frame_buffer)?;
                 self.draw(stdout, &changes)?;
                 self.refresh_edge_drag_selection(stdout)?;
-                if self.selection_edge_scroll_acknowledged {
-                    self.selection_edge_scroll_acknowledged = false;
-                    self.selection_edge_scroll_pending = None;
-                }
+                self.selection_edge_scroll.clear_render_acknowledged_pending();
                 Ok(ClientRenderOutcome::Drawn)
             }
             ApplyOutcome::NeedsResync => Ok(ClientRenderOutcome::NeedsResync),
@@ -297,7 +176,7 @@ impl ClientRenderer {
     fn draw(&mut self, stdout: &mut impl Write, changes: &crate::render::RenderFrameChanges) -> rootcause::Result<()> {
         let render_tab_bar = self.tab_bar_dirty || changes.is_full_redraw();
         let mut frame = Vec::new();
-        crate::render::queue_synchronized_update_start(&mut frame, self.synchronized_output)?;
+        crate::client::terminal::queue_synchronized_update_start(&mut frame, self.synchronized_output)?;
         if changes.is_full_redraw() {
             crate::render::queue_full_redraw_start(&mut frame)?;
         }
@@ -313,7 +192,7 @@ impl ClientRenderer {
             self.selection.range(),
             self.selection_style.bg,
         )?;
-        crate::render::queue_synchronized_update_end(&mut frame, self.synchronized_output)?;
+        crate::client::terminal::queue_synchronized_update_end(&mut frame, self.synchronized_output)?;
         stdout
             .write_all(&frame)
             .context("failed to write muxr client render transaction")?;
@@ -330,9 +209,9 @@ impl ClientRenderer {
             return Ok(());
         };
         let mut frame = Vec::new();
-        crate::render::queue_synchronized_update_start(&mut frame, self.synchronized_output)?;
+        crate::client::terminal::queue_synchronized_update_start(&mut frame, self.synchronized_output)?;
         crate::client::tab_bar::queue(&mut frame, self.tab_bar_config, &self.layout, size.rows())?;
-        crate::render::queue_synchronized_update_end(&mut frame, self.synchronized_output)?;
+        crate::client::terminal::queue_synchronized_update_end(&mut frame, self.synchronized_output)?;
         stdout
             .write_all(&frame)
             .context("failed to write muxr client sidebar render transaction")?;
@@ -355,14 +234,17 @@ impl ClientRenderer {
     ) -> rootcause::Result<()> {
         let previous_selection = self.selection.range().cloned();
         if matches!(input, SelectionInput::Start(_) | SelectionInput::End(_)) {
-            self.selection_edge_drag = None;
-            self.selection_edge_scroll_acknowledged = false;
-            self.selection_edge_scroll_pending = None;
+            self.selection_edge_scroll.clear();
         }
         let changed = match input {
-            SelectionInput::Start(position) if self.record_click(position, now) == ClickKind::Double => self
-                .selection
-                .select_word(position, &self.pane_regions, &self.frame_buffer)?,
+            SelectionInput::Start(position)
+                if self
+                    .clicks
+                    .record_selection_start(position, &self.pane_regions, &self.frame_buffer, now) =>
+            {
+                self.selection
+                    .select_word(position, &self.pane_regions, &self.frame_buffer)?
+            }
             SelectionInput::Start(position) => {
                 self.selection
                     .apply(SelectionInput::Start(position), &self.pane_regions, &self.frame_buffer)?
@@ -381,32 +263,6 @@ impl ClientRenderer {
             self.redraw_selection(stdout, previous_selection.as_ref(), next_selection.as_ref())?;
         }
         Ok(())
-    }
-
-    fn record_click(&mut self, position: ClientMousePosition, now: Instant) -> ClickKind {
-        let Some(region) = self.pane_regions.pane_at(position) else {
-            self.clicks.reset();
-            return ClickKind::Other;
-        };
-        self.clicks.record(self.click_target(position, region), now)
-    }
-
-    fn click_target(&self, position: ClientMousePosition, region: &PaneRegionSnapshot) -> ClickTarget {
-        if let Some(selection) =
-            crate::client::copy_selection::word_selection_at(position, &self.pane_regions, &self.frame_buffer)
-            && let Some((start, end)) = selection.bounds_positions()
-        {
-            return ClickTarget::Word {
-                end,
-                pane_id: selection.pane_id(),
-                start,
-            };
-        }
-
-        ClickTarget::Cell {
-            pane_id: *region.id(),
-            position,
-        }
     }
 
     pub fn mouse_request_for_event(&mut self, event: ClientMouseEvent) -> Option<ClientMouseEvent> {
@@ -447,66 +303,23 @@ impl ClientRenderer {
         position: ClientMousePosition,
         forced_direction: Option<PaneScrollDirection>,
     ) -> Option<SelectionEdgeScrollRequest> {
-        self.set_selection_edge_drag_with_trigger(position, forced_direction, SelectionEdgeScrollTrigger::EdgeRow)
+        let drag_region = self.selection.drag_region().cloned();
+        self.selection_edge_scroll
+            .set_edge_drag(position, forced_direction, drag_region.as_ref())
     }
 
     pub fn set_selection_outside_edge_drag(
         &mut self,
         position: ClientMousePosition,
     ) -> Option<SelectionEdgeScrollRequest> {
-        self.set_selection_edge_drag_with_trigger(position, None, SelectionEdgeScrollTrigger::OutsideOnly)
-    }
-
-    fn set_selection_edge_drag_with_trigger(
-        &mut self,
-        position: ClientMousePosition,
-        forced_direction: Option<PaneScrollDirection>,
-        trigger: SelectionEdgeScrollTrigger,
-    ) -> Option<SelectionEdgeScrollRequest> {
-        let Some(region) = self.selection.drag_region() else {
-            self.selection_edge_scroll_acknowledged = false;
-            self.selection_edge_scroll_pending = None;
-            return None;
-        };
-        let (direction, row) = if let Some(direction) = forced_direction {
-            (direction, self::selection_edge_row(region, direction))
-        } else if let Some(direction) = self::selection_edge_direction(position, region, trigger) {
-            (direction, self::selection_edge_row(region, direction))
-        } else {
-            self.selection_edge_drag = None;
-            self.selection_edge_scroll_acknowledged = false;
-            self.selection_edge_scroll_pending = None;
-            return None;
-        };
-        if self
-            .selection_edge_scroll_pending
-            .as_ref()
-            .is_some_and(|pending| pending.direction != direction || pending.pane_id != *region.id())
-        {
-            self.selection_edge_scroll_acknowledged = false;
-            self.selection_edge_scroll_pending = None;
-        }
-        let col = position
-            .col
-            .clamp(region.col(), self::last_region_col_saturating(region));
-        let pane_id = *region.id();
-        let previous_visible_top_row = region.visible_top_row();
-        self.selection_edge_drag = Some(SelectionEdgeDrag {
-            col,
-            direction,
-            pane_id,
-        });
-        self.selection_edge_scroll_request_for(
-            direction,
-            pane_id,
-            previous_visible_top_row,
-            ClientMousePosition { row, col },
-        )
+        let drag_region = self.selection.drag_region().cloned();
+        self.selection_edge_scroll
+            .set_outside_edge_drag(position, drag_region.as_ref())
     }
 
     fn refresh_edge_drag_selection(&mut self, stdout: &mut impl Write) -> rootcause::Result<()> {
-        let Some(position) = self.selection_edge_drag_position() else {
-            self.selection_edge_drag = None;
+        let Some(position) = self.selection_edge_scroll.drag_position(&self.pane_regions) else {
+            self.selection_edge_scroll.clear();
             return Ok(());
         };
         // Edge-drag scrolling changes the viewport before the next mouse packet arrives; refresh the drag focus after
@@ -514,41 +327,8 @@ impl ClientRenderer {
         self.apply_selection_input(stdout, SelectionInput::Update(position))
     }
 
-    fn selection_edge_drag_position(&self) -> Option<ClientMousePosition> {
-        let drag = self.selection_edge_drag.as_ref()?;
-        let region = self::region_for_pane_id(&self.pane_regions, drag.pane_id)?;
-        Some(ClientMousePosition {
-            row: self::selection_edge_row(region, drag.direction),
-            col: drag.col.clamp(region.col(), self::last_region_col_saturating(region)),
-        })
-    }
-
     pub fn selection_edge_scroll_request(&self) -> Option<SelectionEdgeScrollRequest> {
-        let drag = self.selection_edge_drag.clone()?;
-        let previous_visible_top_row = self::region_for_pane_id(&self.pane_regions, drag.pane_id)?.visible_top_row();
-        let position = self.selection_edge_drag_position()?;
-        self.selection_edge_scroll_request_for(drag.direction, drag.pane_id, previous_visible_top_row, position)
-    }
-
-    const fn selection_edge_scroll_request_for(
-        &self,
-        direction: PaneScrollDirection,
-        pane_id: PaneId,
-        previous_visible_top_row: u64,
-        position: ClientMousePosition,
-    ) -> Option<SelectionEdgeScrollRequest> {
-        if self.selection_edge_scroll_pending.is_some() {
-            return None;
-        }
-        Some(SelectionEdgeScrollRequest {
-            pending: SelectionEdgeScrollPending {
-                direction,
-                pane_id,
-                position,
-                previous_visible_top_row,
-            },
-            request: ClientRequest::ScrollPaneLineAt { direction, position },
-        })
+        self.selection_edge_scroll.scroll_request(&self.pane_regions)
     }
 
     pub fn apply_scroll_pane_line_result(
@@ -557,32 +337,8 @@ impl ClientRenderer {
         direction: PaneScrollDirection,
         scrolled: bool,
     ) {
-        let matches_pending = self
-            .selection_edge_scroll_pending
-            .as_ref()
-            .is_some_and(|pending| pending.position == position && pending.direction == direction);
-        if matches_pending && !scrolled {
-            // No-op scrolls, usually hard top/bottom scrollback bounds, do not produce a render ack. Clear only the
-            // matching pending request so the held edge drag can retry without unrelated events breaking coalescing.
-            self.selection_edge_scroll_acknowledged = false;
-            self.selection_edge_scroll_pending = None;
-        }
-    }
-
-    fn update_selection_edge_scroll_pending(&mut self) {
-        let Some(pending) = self.selection_edge_scroll_pending.as_ref() else {
-            self.selection_edge_scroll_acknowledged = false;
-            return;
-        };
-        let Some(region) = self::region_for_pane_id(&self.pane_regions, pending.pane_id) else {
-            self.selection_edge_scroll_acknowledged = false;
-            self.selection_edge_scroll_pending = None;
-            return;
-        };
-        self.selection_edge_scroll_acknowledged = match pending.direction {
-            PaneScrollDirection::Down => region.visible_top_row() > pending.previous_visible_top_row,
-            PaneScrollDirection::Up => region.visible_top_row() < pending.previous_visible_top_row,
-        };
+        self.selection_edge_scroll
+            .apply_scroll_pane_line_result(position, direction, scrolled);
     }
 
     fn redraw_selection(
@@ -591,7 +347,7 @@ impl ClientRenderer {
         previous: Option<&SelectionRange>,
         next: Option<&SelectionRange>,
     ) -> rootcause::Result<()> {
-        let rows = self::selection_rows(previous, next);
+        let rows = crate::client::copy_selection::changed_selection_rows(previous, next);
         let Some(changes) = self.frame_buffer.row_redraw_changes(&rows)? else {
             return Ok(());
         };
@@ -603,25 +359,12 @@ impl ClientRenderer {
     }
 
     pub const fn selection_edge_drag_active(&self) -> bool {
-        self.selection_edge_drag.is_some()
+        self.selection_edge_scroll.active()
     }
 
     pub const fn mark_selection_edge_scroll_sent(&mut self, pending: SelectionEdgeScrollPending) {
-        self.selection_edge_scroll_acknowledged = false;
-        self.selection_edge_scroll_pending = Some(pending);
+        self.selection_edge_scroll.mark_sent(pending);
     }
-}
-
-fn selection_rows(previous: Option<&SelectionRange>, next: Option<&SelectionRange>) -> Vec<u16> {
-    let mut rows = BTreeSet::new();
-    for selection in [previous, next].into_iter().flatten() {
-        if let Some((start_row, end_row)) = selection.row_bounds() {
-            for row in start_row..=end_row {
-                rows.insert(row);
-            }
-        }
-    }
-    rows.into_iter().collect()
 }
 
 fn region_for_pane_id(regions: &PaneRegionsSnapshot, pane_id: PaneId) -> Option<&PaneRegionSnapshot> {
@@ -639,31 +382,6 @@ fn clamp_mouse_position_to_region(position: ClientMousePosition, region: &PaneRe
     }
 }
 
-const fn selection_edge_row(region: &PaneRegionSnapshot, direction: PaneScrollDirection) -> u16 {
-    match direction {
-        PaneScrollDirection::Up => region.row(),
-        PaneScrollDirection::Down => self::last_region_row_saturating(region),
-    }
-}
-
-const fn selection_edge_direction(
-    position: ClientMousePosition,
-    region: &PaneRegionSnapshot,
-    trigger: SelectionEdgeScrollTrigger,
-) -> Option<PaneScrollDirection> {
-    match trigger {
-        SelectionEdgeScrollTrigger::EdgeRow if position.row <= region.row() => Some(PaneScrollDirection::Up),
-        SelectionEdgeScrollTrigger::EdgeRow if position.row >= self::last_region_row_saturating(region) => {
-            Some(PaneScrollDirection::Down)
-        }
-        SelectionEdgeScrollTrigger::OutsideOnly if position.row < region.row() => Some(PaneScrollDirection::Up),
-        SelectionEdgeScrollTrigger::OutsideOnly if position.row > self::last_region_row_saturating(region) => {
-            Some(PaneScrollDirection::Down)
-        }
-        SelectionEdgeScrollTrigger::EdgeRow | SelectionEdgeScrollTrigger::OutsideOnly => None,
-    }
-}
-
 const fn last_region_col_saturating(region: &PaneRegionSnapshot) -> u16 {
     region.col().saturating_add(region.cols().saturating_sub(1))
 }
@@ -678,13 +396,7 @@ fn mouse_event_starts_capture(event: ClientMouseEvent) -> bool {
 
 #[cfg(test)]
 pub mod test_helpers {
-    use muxr_core::ClientRequest;
-
     use super::*;
-
-    pub const fn edge_scroll_request(request: &SelectionEdgeScrollRequest) -> &ClientRequest {
-        &request.request
-    }
 
     pub fn selected_text(renderer: &ClientRenderer) -> Option<String> {
         renderer.selection.selected_text()
@@ -703,6 +415,7 @@ mod tests {
     use std::time::Duration;
     use std::time::Instant;
 
+    use muxr_core::ClientRequest;
     use muxr_core::PaneSnapshot;
     use muxr_core::TabId;
     use muxr_core::TabSnapshot;
@@ -1137,38 +850,6 @@ mod tests {
         Ok(())
     }
 
-    #[rstest::rstest]
-    #[case::same_cell_within_threshold(0, 0, 399, true)]
-    #[case::same_cell_after_threshold(0, 0, 401, false)]
-    #[case::different_cell_within_threshold(0, 1, 100, false)]
-    fn test_click_tracker_record_when_clicks_are_repeated_detects_double_click(
-        #[case] row: u16,
-        #[case] col: u16,
-        #[case] elapsed_ms: u64,
-        #[case] expected_double: bool,
-    ) -> rootcause::Result<()> {
-        let mut clicks = ClickTracker::default();
-        let now = Instant::now();
-        pretty_assertions::assert_eq!(clicks.record(click_target(0, 0)?, now), ClickKind::Other,);
-
-        let expected = if expected_double {
-            ClickKind::Double
-        } else {
-            ClickKind::Other
-        };
-        let next_click_at = now
-            .checked_add(Duration::from_millis(elapsed_ms))
-            .ok_or_else(|| report!("muxr click tracker test instant overflowed"))?;
-        pretty_assertions::assert_eq!(clicks.record(click_target(row, col)?, next_click_at), expected,);
-        Ok(())
-    }
-
-    fn click_target(row: u16, col: u16) -> rootcause::Result<ClickTarget> {
-        Ok(ClickTarget::Cell {
-            pane_id: muxr_core::PaneId::new(1)?,
-            position: muxr_core::ClientMousePosition { row, col },
-        })
-    }
     fn layout_snapshot() -> rootcause::Result<LayoutSnapshot> {
         let active_tab = TabId::new(1)?;
         let active_pane = PaneId::new(1)?;

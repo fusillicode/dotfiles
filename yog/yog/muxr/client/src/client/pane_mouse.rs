@@ -150,8 +150,8 @@ mod tests {
 
     use super::super::renderer::ClientRenderer;
     use super::super::renderer::test_helpers as renderer_test_helpers;
+    use super::super::terminal::SynchronizedOutput;
     use super::*;
-    use crate::render::SynchronizedOutput;
 
     #[test]
     fn test_handle_mouse_input_action_when_plain_mouse_click_arrives_focuses_pane() -> rootcause::Result<()> {

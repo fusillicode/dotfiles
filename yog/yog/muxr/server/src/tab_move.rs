@@ -31,7 +31,7 @@ pub fn handle_move_active_tab_previous_cmd(
     layout: &Mutex<SessionLayout>,
 ) -> rootcause::Result<()> {
     let mut layout = crate::server::lock_mutex(layout, "layout")?;
-    self::handle_move_active_tab_previous(&mut layout)?;
+    layout.move_active_tab_previous()?;
     crate::state::persisted::write_metadata(&config.paths, &layout)?;
     drop(layout);
     Ok(())
@@ -39,18 +39,10 @@ pub fn handle_move_active_tab_previous_cmd(
 
 pub fn handle_move_active_tab_next_cmd(config: &ServerConfig, layout: &Mutex<SessionLayout>) -> rootcause::Result<()> {
     let mut layout = crate::server::lock_mutex(layout, "layout")?;
-    self::handle_move_active_tab_next(&mut layout)?;
+    layout.move_active_tab_next()?;
     crate::state::persisted::write_metadata(&config.paths, &layout)?;
     drop(layout);
     Ok(())
-}
-
-fn handle_move_active_tab_previous(layout: &mut SessionLayout) -> rootcause::Result<()> {
-    layout.move_active_tab_previous()
-}
-
-fn handle_move_active_tab_next(layout: &mut SessionLayout) -> rootcause::Result<()> {
-    layout.move_active_tab_next()
 }
 
 #[cfg(test)]

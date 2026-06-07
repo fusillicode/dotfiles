@@ -14,8 +14,6 @@ use crossterm::style::SetBackgroundColor;
 use crossterm::style::SetForegroundColor;
 use crossterm::terminal::Clear;
 use crossterm::terminal::ClearType;
-use crossterm::terminal::EnterAlternateScreen;
-use crossterm::terminal::LeaveAlternateScreen;
 use muxr_core::RenderCell;
 use muxr_core::RenderCellWidth;
 use muxr_core::RenderColor;
@@ -31,51 +29,9 @@ use rootcause::report;
 
 use crate::client::copy_selection::SelectionRange;
 
-const BRACKETED_PASTE_DISABLE: &[u8] = b"\x1b[?2004l";
-const BRACKETED_PASTE_ENABLE: &[u8] = b"\x1b[?2004h";
-const MOUSE_BUTTON_CAPTURE_DISABLE: &[u8] = b"\x1b[?1000l";
-const MOUSE_BUTTON_CAPTURE_ENABLE: &[u8] = b"\x1b[?1000h";
-const MOUSE_BUTTON_EVENT_CAPTURE_DISABLE: &[u8] = b"\x1b[?1002l";
-const MOUSE_BUTTON_EVENT_CAPTURE_ENABLE: &[u8] = b"\x1b[?1002h";
-const MOUSE_ANY_EVENT_CAPTURE_DISABLE: &[u8] = b"\x1b[?1003l";
-const MOUSE_ANY_EVENT_CAPTURE_ENABLE: &[u8] = b"\x1b[?1003h";
-const MOUSE_SGR_DISABLE: &[u8] = b"\x1b[?1006l";
-const MOUSE_SGR_ENABLE: &[u8] = b"\x1b[?1006h";
 const OSC8_CLOSE: &[u8] = b"\x1b]8;;\x1b\\";
 const OSC8_OPEN_PREFIX: &[u8] = b"\x1b]8;;";
 const OSC8_TERMINATOR: &[u8] = b"\x1b\\";
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum SynchronizedOutput {
-    Csi,
-    Dcs,
-}
-
-impl SynchronizedOutput {
-    #[must_use]
-    pub fn for_term(term: Option<&str>) -> Self {
-        match term {
-            Some("alacritty") => Self::Dcs,
-            Some(_) | None => Self::Csi,
-        }
-    }
-
-    #[must_use]
-    pub const fn start_sequence(self) -> &'static [u8] {
-        match self {
-            Self::Csi => b"\x1b[?2026h",
-            Self::Dcs => b"\x1bP=1s\x1b\\",
-        }
-    }
-
-    #[must_use]
-    pub const fn end_sequence(self) -> &'static [u8] {
-        match self {
-            Self::Csi => b"\x1b[?2026l",
-            Self::Dcs => b"\x1bP=2s\x1b\\",
-        }
-    }
-}
 
 #[derive(Debug, Default)]
 pub struct FrameBuffer {
@@ -202,86 +158,6 @@ impl FrameBuffer {
 pub fn queue_full_redraw_start(stdout: &mut impl Write) -> rootcause::Result<()> {
     queue_cmd(stdout, Hide)?;
     queue_cmd(stdout, Clear(ClearType::All))
-}
-
-pub fn queue_synchronized_update_start(stdout: &mut impl Write, mode: SynchronizedOutput) -> rootcause::Result<()> {
-    stdout
-        .write_all(mode.start_sequence())
-        .context("failed to write muxr synchronized render start")?;
-    Ok(())
-}
-
-pub fn queue_synchronized_update_end(stdout: &mut impl Write, mode: SynchronizedOutput) -> rootcause::Result<()> {
-    stdout
-        .write_all(mode.end_sequence())
-        .context("failed to write muxr synchronized render end")?;
-    Ok(())
-}
-
-/// Enable or disable outer-terminal any-motion mouse capture.
-///
-/// Pane applications request this mode dynamically. Button-event capture remains enabled, so disabling any-motion
-/// returns the client to the lower-volume mouse mode.
-///
-/// # Errors
-/// - The terminal mode sequence cannot be written or flushed.
-pub fn set_mouse_any_motion_capture(stdout: &mut impl Write, enabled: bool) -> rootcause::Result<()> {
-    if enabled {
-        queue_bytes(stdout, MOUSE_ANY_EVENT_CAPTURE_ENABLE)?;
-    } else {
-        // Some terminals treat mode churn around any-motion capture as a broader mouse-reporting reset. Reassert the
-        // button modes muxr owns so pane selection and wheel routing keep working after an app leaves any-motion mode.
-        queue_bytes(stdout, MOUSE_ANY_EVENT_CAPTURE_DISABLE)?;
-        queue_bytes(stdout, MOUSE_BUTTON_CAPTURE_ENABLE)?;
-        queue_bytes(stdout, MOUSE_BUTTON_EVENT_CAPTURE_ENABLE)?;
-        queue_bytes(stdout, MOUSE_SGR_ENABLE)?;
-    }
-    stdout
-        .flush()
-        .context("failed to flush muxr any-motion mouse capture")?;
-    Ok(())
-}
-
-/// Enter muxr's attached terminal surface.
-///
-/// The client renders muxr frames on the alternate screen so detach, errors, and final-pane exits cannot leave the muxr
-/// screen in the user's outer shell.
-///
-/// # Errors
-/// - The terminal enter cmds cannot be written or flushed.
-pub fn enter_terminal(stdout: &mut impl Write) -> rootcause::Result<()> {
-    queue_cmd(stdout, EnterAlternateScreen)?;
-    queue_bytes(stdout, BRACKETED_PASTE_ENABLE)?;
-    // Clear stale any-motion capture; the renderer re-enables it only when a pane requests that mode.
-    queue_bytes(stdout, MOUSE_ANY_EVENT_CAPTURE_DISABLE)?;
-    queue_bytes(stdout, MOUSE_BUTTON_CAPTURE_ENABLE)?;
-    queue_bytes(stdout, MOUSE_BUTTON_EVENT_CAPTURE_ENABLE)?;
-    queue_bytes(stdout, MOUSE_SGR_ENABLE)?;
-    queue_cmd(stdout, Clear(ClearType::All))?;
-    queue_cmd(stdout, Hide)?;
-    stdout.flush().context("failed to flush muxr terminal enter")?;
-    Ok(())
-}
-
-/// Restore terminal render state after muxr exits a rendered session.
-///
-/// Render frames can hide the cursor and set styles while the client owns the terminal; exit paths call this
-/// best-effort cleanup so detach or errors do not leak those modes into the user's shell.
-///
-/// # Errors
-/// - The terminal restore cmds cannot be written or flushed.
-pub fn restore_terminal(stdout: &mut impl Write) -> rootcause::Result<()> {
-    queue_hyperlink_end(stdout)?;
-    queue_bytes(stdout, MOUSE_SGR_DISABLE)?;
-    queue_bytes(stdout, MOUSE_ANY_EVENT_CAPTURE_DISABLE)?;
-    queue_bytes(stdout, MOUSE_BUTTON_EVENT_CAPTURE_DISABLE)?;
-    queue_bytes(stdout, MOUSE_BUTTON_CAPTURE_DISABLE)?;
-    queue_bytes(stdout, BRACKETED_PASTE_DISABLE)?;
-    queue_cmd(stdout, LeaveAlternateScreen)?;
-    reset_style(stdout)?;
-    queue_cmd(stdout, Show)?;
-    stdout.flush().context("failed to flush muxr terminal restore")?;
-    Ok(())
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -558,7 +434,7 @@ where
 fn queue_bytes(stdout: &mut impl Write, bytes: &[u8]) -> rootcause::Result<()> {
     stdout
         .write_all(bytes)
-        .context("failed to write muxr terminal mode sequence")?;
+        .context("failed to write muxr render escape sequence")?;
     Ok(())
 }
 
@@ -839,79 +715,6 @@ mod tests {
     }
 
     #[test]
-    fn test_enter_terminal_writes_alternate_screen_and_clear() -> rootcause::Result<()> {
-        let mut output = Vec::new();
-
-        enter_terminal(&mut output)?;
-
-        let rendered = String::from_utf8(output).context("muxr render test output was not utf8")?;
-        assert2::assert!(rendered.contains("\x1b[?1049h"));
-        assert2::assert!(rendered.contains("\x1b[?2004h"));
-        assert2::assert!(rendered.contains("\x1b[?1003l"));
-        assert2::assert!(rendered.contains("\x1b[?1000h"));
-        assert2::assert!(rendered.contains("\x1b[?1002h"));
-        assert2::assert!(!rendered.contains("\x1b[?1003h"));
-        assert2::assert!(rendered.contains("\x1b[?1006h"));
-        assert2::assert!(rendered.contains("\x1b[2J"));
-        assert2::assert!(rendered.contains("\x1b[?25l"));
-        Ok(())
-    }
-
-    #[test]
-    fn test_set_mouse_any_motion_capture_when_enabled_writes_any_motion_sequence() -> rootcause::Result<()> {
-        let mut output = CountingWriter::default();
-
-        set_mouse_any_motion_capture(&mut output, true)?;
-
-        pretty_assertions::assert_eq!(output.rendered_string()?, "\x1b[?1003h");
-        pretty_assertions::assert_eq!(output.flushes, 1);
-        Ok(())
-    }
-
-    #[test]
-    fn test_set_mouse_any_motion_capture_when_disabled_reasserts_button_capture() -> rootcause::Result<()> {
-        let mut output = CountingWriter::default();
-
-        set_mouse_any_motion_capture(&mut output, false)?;
-
-        pretty_assertions::assert_eq!(
-            output.rendered_string()?,
-            "\x1b[?1003l\x1b[?1000h\x1b[?1002h\x1b[?1006h",
-        );
-        pretty_assertions::assert_eq!(output.flushes, 1);
-        Ok(())
-    }
-
-    #[rstest]
-    #[case::alacritty(Some("alacritty"), SynchronizedOutput::Dcs)]
-    #[case::xterm(Some("xterm-256color"), SynchronizedOutput::Csi)]
-    #[case::unknown(None, SynchronizedOutput::Csi)]
-    fn test_synchronized_output_for_term_when_term_is_known_returns_expected_mode(
-        #[case] term: Option<&str>,
-        #[case] expected: SynchronizedOutput,
-    ) {
-        pretty_assertions::assert_eq!(SynchronizedOutput::for_term(term), expected);
-    }
-
-    #[rstest]
-    #[case::csi(SynchronizedOutput::Csi, "\x1b[?2026h", "\x1b[?2026l")]
-    #[case::dcs(SynchronizedOutput::Dcs, "\x1bP=1s\x1b\\", "\x1bP=2s\x1b\\")]
-    fn test_synchronized_update_queue_when_mode_is_selected_writes_expected_sequences(
-        #[case] mode: SynchronizedOutput,
-        #[case] start: &str,
-        #[case] end: &str,
-    ) -> rootcause::Result<()> {
-        let mut output = Vec::new();
-
-        queue_synchronized_update_start(&mut output, mode)?;
-        queue_synchronized_update_end(&mut output, mode)?;
-
-        let rendered = String::from_utf8(output).context("muxr render test output was not utf8")?;
-        pretty_assertions::assert_eq!(rendered, format!("{start}{end}"));
-        Ok(())
-    }
-
-    #[test]
     fn test_queue_full_redraw_start_writes_hide_and_clear_without_flushing() -> rootcause::Result<()> {
         let mut output = CountingWriter::default();
 
@@ -921,25 +724,6 @@ mod tests {
         assert2::assert!(rendered.contains("\x1b[?25l"));
         assert2::assert!(rendered.contains("\x1b[2J"));
         pretty_assertions::assert_eq!(output.flushes, 0);
-        Ok(())
-    }
-
-    #[test]
-    fn test_restore_terminal_writes_alternate_screen_exit_cursor_and_style_reset() -> rootcause::Result<()> {
-        let mut output = Vec::new();
-
-        restore_terminal(&mut output)?;
-
-        let rendered = String::from_utf8(output).context("muxr render test output was not utf8")?;
-        assert2::assert!(rendered.contains("\x1b[?1006l"));
-        assert2::assert!(rendered.contains("\x1b[?1003l"));
-        assert2::assert!(rendered.contains("\x1b[?1002l"));
-        assert2::assert!(rendered.contains("\x1b[?1000l"));
-        assert2::assert!(rendered.contains("\x1b[?2004l"));
-        assert2::assert!(rendered.contains("\x1b[?1049l"));
-        assert2::assert!(rendered.contains("\x1b[?25h"));
-        assert2::assert!(rendered.contains("\x1b[0m"));
-        assert2::assert!(rendered.starts_with(&osc8_close()?));
         Ok(())
     }
 

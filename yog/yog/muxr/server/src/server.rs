@@ -21,6 +21,7 @@ use crate::pty::ShellCmd;
 use crate::session_files::ServerFilesGuard;
 use crate::session_files::prepare_session_dirs;
 use crate::session_files::secure_socket_file;
+use crate::session_start_seed::SessionStartSeed;
 use crate::sessions_delete::DeleteSessions;
 use crate::state::SessionLayout;
 use crate::state::SessionMetadata;
@@ -51,8 +52,7 @@ pub struct ServerConfig {
 /// - Server startup, socket IO, PTY setup, or pid file persistence fails.
 pub fn serve_session(session: &SessionName, external_layout: Option<PathBuf>) -> rootcause::Result<()> {
     let paths = SessionPaths::from_home(session)?;
-
-    self::serve(&ServerConfig {
+    let config = ServerConfig {
         client_heartbeat_interval: CLIENT_HEARTBEAT_INTERVAL,
         client_heartbeat_timeout: CLIENT_HEARTBEAT_TIMEOUT,
         client_write_timeout: CLIENT_WRITE_TIMEOUT,
@@ -62,7 +62,11 @@ pub fn serve_session(session: &SessionName, external_layout: Option<PathBuf>) ->
         paths,
         max_accepted_connections: None,
         shell_cmd: ShellCmd::default_from_env()?,
-    })
+    };
+
+    tokio::runtime::Runtime::new()
+        .context("failed to build muxr tokio runtime")?
+        .block_on(self::serve_async(&config))
 }
 
 pub fn unix_timestamp_millis() -> rootcause::Result<u64> {
@@ -72,17 +76,6 @@ pub fn unix_timestamp_millis() -> rootcause::Result<u64> {
         .as_millis();
 
     Ok(u64::try_from(millis).context("muxr layout metadata timestamp overflowed")?)
-}
-
-pub fn session_metadata(config: &ServerConfig) -> rootcause::Result<SessionMetadata> {
-    Ok(SessionMetadata {
-        cmd_label: config.shell_cmd.label(),
-        cwd: std::env::current_dir()
-            .context("failed to read muxr server cwd")?
-            .to_string_lossy()
-            .into_owned(),
-        started_at: self::unix_timestamp_millis()?,
-    })
 }
 
 /// Build metadata for panes spawned from the currently active pane.
@@ -107,18 +100,23 @@ pub fn active_pane_session_metadata(
     })
 }
 
+impl TryFrom<&ServerConfig> for SessionMetadata {
+    type Error = rootcause::Report;
+
+    fn try_from(config: &ServerConfig) -> rootcause::Result<Self> {
+        Ok(Self {
+            cmd_label: config.shell_cmd.label(),
+            cwd: std::env::current_dir()
+                .context("failed to read muxr server cwd")?
+                .to_string_lossy()
+                .into_owned(),
+            started_at: self::unix_timestamp_millis()?,
+        })
+    }
+}
+
 pub fn lock_mutex<'a, T>(mutex: &'a Mutex<T>, name: &str) -> rootcause::Result<MutexGuard<'a, T>> {
     mutex.lock().map_err(|_| report!("poisoned muxr {name} mutex"))
-}
-
-fn serve(config: &ServerConfig) -> rootcause::Result<()> {
-    self::run_async(self::serve_async(config))
-}
-
-fn run_async<T>(future: impl std::future::Future<Output = rootcause::Result<T>>) -> rootcause::Result<T> {
-    tokio::runtime::Runtime::new()
-        .context("failed to build muxr tokio runtime")?
-        .block_on(future)
 }
 
 async fn serve_async(config: &ServerConfig) -> rootcause::Result<()> {
@@ -135,15 +133,10 @@ async fn serve_async(config: &ServerConfig) -> rootcause::Result<()> {
     secure_socket_file(&config.paths.socket)?;
     fs::write(&config.paths.pid, std::process::id().to_string()).context("failed to write muxr server pid")?;
     let initial_size = TerminalSize::new(80, 24)?;
-    let metadata = self::session_metadata(config)?;
-    let layout_seed = crate::session_start_seed::load_session_start_seed(config, metadata)?;
-    let runtimes = PaneRuntimes::spawn_for_layout_with_cmds(
-        config,
-        &layout_seed.layout,
-        &initial_size,
-        &layout_seed.startup_cmds,
-    )?;
-    let layout = Arc::new(Mutex::new(layout_seed.layout));
+    let metadata = SessionMetadata::try_from(config)?;
+    let start_seed = SessionStartSeed::load(config, metadata)?;
+    let runtimes = PaneRuntimes::spawn_for_start_seed(config, &start_seed, &initial_size)?;
+    let layout = Arc::new(Mutex::new(start_seed.layout));
     let runtimes = Arc::new(Mutex::new(runtimes));
     {
         let locked_layout = self::lock_mutex(layout.as_ref(), "layout")?;
@@ -591,10 +584,14 @@ mod tests {
         fs::create_dir_all(&config.paths.root).context("failed to create muxr test session root")?;
         let layout = Mutex::new(SessionLayout::initial(&config.session, self::metadata("sh", 1))?);
         let terminal_size = TerminalSize::new(80, 24)?;
-        let runtimes = {
+        let start_seed = {
             let layout = self::lock_mutex(&layout, "layout")?;
-            PaneRuntimes::spawn_for_layout_with_cmds(&config, &layout, &terminal_size, &[])?
+            SessionStartSeed {
+                layout: layout.clone(),
+                startup_cmds: Vec::new(),
+            }
         };
+        let runtimes = PaneRuntimes::spawn_for_start_seed(&config, &start_seed, &terminal_size)?;
         let runtimes = Mutex::new(runtimes);
         let pane_id = PaneId::new(1)?;
         {
@@ -646,10 +643,14 @@ mod tests {
                 PaneSplitAxis::Vertical,
             )?;
         }
-        let runtimes = {
+        let start_seed = {
             let layout = self::lock_mutex(&layout, "layout")?;
-            PaneRuntimes::spawn_for_layout_with_cmds(&config, &layout, &terminal_size, &[])?
+            SessionStartSeed {
+                layout: layout.clone(),
+                startup_cmds: Vec::new(),
+            }
         };
+        let runtimes = PaneRuntimes::spawn_for_start_seed(&config, &start_seed, &terminal_size)?;
         let runtimes = Mutex::new(runtimes);
         let inactive_pane = PaneId::new(1)?;
         let active_pane = PaneId::new(2)?;
@@ -1372,7 +1373,7 @@ mod tests {
         let tempdir = tempfile::tempdir()?;
         let (session, paths) = self::session_paths(tempdir.path(), "work")?;
 
-        let result = serve(&ServerConfig {
+        let config = ServerConfig {
             client_heartbeat_interval: TEST_CLIENT_HEARTBEAT_INTERVAL,
             client_heartbeat_timeout: TEST_CLIENT_HEARTBEAT_TIMEOUT,
             client_write_timeout: TEST_CLIENT_WRITE_TIMEOUT,
@@ -1382,7 +1383,10 @@ mod tests {
             paths: paths.clone(),
             max_accepted_connections: None,
             shell_cmd: self::shell_cmd("/bin/muxr-missing-shell"),
-        });
+        };
+        let result = tokio::runtime::Runtime::new()
+            .context("failed to build muxr tokio runtime")?
+            .block_on(self::serve_async(&config));
 
         assert2::assert!(result.is_err());
         assert2::assert!(!paths.socket.exists());
@@ -1413,7 +1417,7 @@ mod tests {
             let session = session.clone();
             let paths = paths.clone();
             move || {
-                serve(&ServerConfig {
+                let config = ServerConfig {
                     client_heartbeat_interval: TEST_CLIENT_HEARTBEAT_INTERVAL,
                     client_heartbeat_timeout: TEST_CLIENT_HEARTBEAT_TIMEOUT,
                     client_write_timeout: TEST_CLIENT_WRITE_TIMEOUT,
@@ -1423,7 +1427,10 @@ mod tests {
                     paths,
                     max_accepted_connections,
                     shell_cmd,
-                })
+                };
+                tokio::runtime::Runtime::new()
+                    .context("failed to build muxr tokio runtime")?
+                    .block_on(self::serve_async(&config))
             }
         })
     }
