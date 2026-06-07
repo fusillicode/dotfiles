@@ -1,5 +1,3 @@
-use std::sync::Mutex;
-
 use muxr_core::PaneId;
 use muxr_core::TabId;
 use muxr_core::TerminalSize;
@@ -49,21 +47,19 @@ impl SessionLayout {
 
 pub fn handle_create_tab_cmd(
     config: &ServerConfig,
-    layout: &Mutex<SessionLayout>,
-    runtimes: &Mutex<PaneRuntimes>,
+    layout: &mut SessionLayout,
+    runtimes: &mut PaneRuntimes,
     terminal_size: &TerminalSize,
 ) -> rootcause::Result<PaneId> {
-    let mut layout = crate::server::lock_mutex(layout, "layout")?;
-    let pane_id = self::handle_create_tab(&mut layout, config, runtimes, terminal_size)?;
-    crate::state::persisted::write_metadata(&config.paths, &layout)?;
-    drop(layout);
+    let pane_id = self::handle_create_tab(layout, config, runtimes, terminal_size)?;
+    crate::state::persisted::write_metadata(&config.paths, layout)?;
     Ok(pane_id)
 }
 
 fn handle_create_tab(
     layout: &mut SessionLayout,
     config: &ServerConfig,
-    runtimes: &Mutex<PaneRuntimes>,
+    runtimes: &mut PaneRuntimes,
     terminal_size: &TerminalSize,
 ) -> rootcause::Result<PaneId> {
     crate::pane_runtime::sync_layout_terminal_titles(layout, runtimes)?;
@@ -75,8 +71,6 @@ fn handle_create_tab(
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Mutex;
-
     use muxr_core::TerminalSize;
 
     use super::*;
@@ -90,18 +84,14 @@ mod tests {
         let mut config = server_test_helpers::server_config(tempdir.path(), "work")?;
         config.shell_cmd = server_test_helpers::shell_cmd("/bin/muxr-missing-shell");
         let initial_layout = SessionLayout::initial(&config.session, state_test_helpers::metadata("sh", 1))?;
-        let layout = Mutex::new(initial_layout.clone());
-        let runtimes = Mutex::new(pane_runtime_test_helpers::empty_runtimes());
+        let mut layout = initial_layout.clone();
+        let mut runtimes = pane_runtime_test_helpers::empty_runtimes();
 
-        let create_result = {
-            let mut layout = crate::server::lock_mutex(&layout, "layout")?;
-            self::handle_create_tab(&mut layout, &config, &runtimes, &TerminalSize::new(80, 24)?)
-        };
+        let create_result = self::handle_create_tab(&mut layout, &config, &mut runtimes, &TerminalSize::new(80, 24)?);
         assert2::assert!(create_result.is_err());
 
-        let layout = crate::server::lock_mutex(&layout, "layout")?;
-        pretty_assertions::assert_eq!(*layout, initial_layout);
-        assert2::assert!(crate::server::lock_mutex(&runtimes, "pane runtimes")?.is_empty());
+        pretty_assertions::assert_eq!(layout, initial_layout);
+        assert2::assert!(runtimes.is_empty());
         assert2::assert!(!config.paths.layout.exists());
         Ok(())
     }

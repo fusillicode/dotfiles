@@ -1,5 +1,3 @@
-use std::sync::Mutex;
-
 use rootcause::report;
 
 use crate::server::ServerConfig;
@@ -26,22 +24,15 @@ impl SessionLayout {
     }
 }
 
-pub fn handle_move_active_tab_previous_cmd(
-    config: &ServerConfig,
-    layout: &Mutex<SessionLayout>,
-) -> rootcause::Result<()> {
-    let mut layout = crate::server::lock_mutex(layout, "layout")?;
+pub fn handle_move_active_tab_previous_cmd(config: &ServerConfig, layout: &mut SessionLayout) -> rootcause::Result<()> {
     layout.move_active_tab_previous()?;
-    crate::state::persisted::write_metadata(&config.paths, &layout)?;
-    drop(layout);
+    crate::state::persisted::write_metadata(&config.paths, layout)?;
     Ok(())
 }
 
-pub fn handle_move_active_tab_next_cmd(config: &ServerConfig, layout: &Mutex<SessionLayout>) -> rootcause::Result<()> {
-    let mut layout = crate::server::lock_mutex(layout, "layout")?;
+pub fn handle_move_active_tab_next_cmd(config: &ServerConfig, layout: &mut SessionLayout) -> rootcause::Result<()> {
     layout.move_active_tab_next()?;
-    crate::state::persisted::write_metadata(&config.paths, &layout)?;
-    drop(layout);
+    crate::state::persisted::write_metadata(&config.paths, layout)?;
     Ok(())
 }
 

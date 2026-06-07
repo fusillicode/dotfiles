@@ -1,5 +1,3 @@
-use std::sync::Mutex;
-
 use muxr_config::LayoutConfig;
 
 use crate::pane_split::PaneSplitAxis;
@@ -94,14 +92,12 @@ impl PaneSplitResize {
 pub fn handle_resize_pane_cmd(
     direction: PaneResizeDirection,
     config: &ServerConfig,
-    layout: &Mutex<SessionLayout>,
+    layout: &mut SessionLayout,
 ) -> rootcause::Result<bool> {
-    let mut layout = crate::server::lock_mutex(layout, "layout")?;
     let resized = layout.resize_active_pane(config.user_config.layout, direction)?;
     if resized {
-        crate::state::persisted::write_metadata(&config.paths, &layout)?;
+        crate::state::persisted::write_metadata(&config.paths, layout)?;
     }
-    drop(layout);
     Ok(resized)
 }
 

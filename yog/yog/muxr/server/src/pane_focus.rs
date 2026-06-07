@@ -1,4 +1,3 @@
-use std::sync::Mutex;
 use std::time::Instant;
 
 use muxr_core::ClientMousePosition;
@@ -95,23 +94,21 @@ impl Tab {
 pub fn handle_focus_pane_cmd(
     direction: PaneFocusDirection,
     config: &ServerConfig,
-    layout: &Mutex<SessionLayout>,
+    layout: &mut SessionLayout,
     terminal_size: &TerminalSize,
 ) -> rootcause::Result<bool> {
-    let mut layout = crate::server::lock_mutex(layout, "layout")?;
     let focused = layout.focus_pane_direction(terminal_size, direction)?;
     if focused {
-        crate::state::persisted::write_metadata(&config.paths, &layout)?;
+        crate::state::persisted::write_metadata(&config.paths, layout)?;
     }
-    drop(layout);
     Ok(focused)
 }
 
 pub fn handle_focus_pane_cmd_with_tracked_process_ack(
     direction: PaneFocusDirection,
     config: &ServerConfig,
-    layout: &Mutex<SessionLayout>,
-    runtimes: &Mutex<PaneRuntimes>,
+    layout: &mut SessionLayout,
+    runtimes: &PaneRuntimes,
     pane_tracked_processes: &mut PaneTrackedProcesses,
     terminal_size: &TerminalSize,
     now: Instant,
@@ -131,23 +128,21 @@ pub fn handle_focus_pane_cmd_with_tracked_process_ack(
 pub fn handle_focus_pane_at_request(
     position: ClientMousePosition,
     config: &ServerConfig,
-    layout: &Mutex<SessionLayout>,
+    layout: &mut SessionLayout,
     terminal_size: &TerminalSize,
 ) -> rootcause::Result<bool> {
-    let mut layout = crate::server::lock_mutex(layout, "layout")?;
     let focused = layout.focus_pane_at(terminal_size, position)?;
     if focused {
-        crate::state::persisted::write_metadata(&config.paths, &layout)?;
+        crate::state::persisted::write_metadata(&config.paths, layout)?;
     }
-    drop(layout);
     Ok(focused)
 }
 
 pub fn handle_focus_pane_at_request_with_tracked_process_ack(
     position: ClientMousePosition,
     config: &ServerConfig,
-    layout: &Mutex<SessionLayout>,
-    runtimes: &Mutex<PaneRuntimes>,
+    layout: &mut SessionLayout,
+    runtimes: &PaneRuntimes,
     pane_tracked_processes: &mut PaneTrackedProcesses,
     terminal_size: &TerminalSize,
     now: Instant,
@@ -165,28 +160,21 @@ pub fn handle_focus_pane_at_request_with_tracked_process_ack(
 }
 
 pub fn mouse_event_region(
-    layout: &Mutex<SessionLayout>,
-    runtimes: &Mutex<PaneRuntimes>,
+    layout: &SessionLayout,
+    runtimes: &PaneRuntimes,
     terminal_size: &TerminalSize,
     position: ClientMousePosition,
 ) -> rootcause::Result<Option<PaneRegionSnapshot>> {
-    let region = {
-        let layout = crate::server::lock_mutex(layout, "layout")?;
-        let region = layout
-            .pane_regions(terminal_size)?
-            .into_iter()
-            .find(|region| region.contains(position.into()));
-        drop(layout);
-        let Some(region) = region else {
-            return Ok(None);
-        };
-        region
+    let Some(region) = layout
+        .pane_regions(terminal_size)?
+        .into_iter()
+        .find(|region| region.contains(position.into()))
+    else {
+        return Ok(None);
     };
-    let runtimes = crate::server::lock_mutex(runtimes, "pane runtimes")?;
     let handle = runtimes.handle(region.id)?;
     let mouse_mode = handle.mouse_mode()?;
     let visible_top_row = handle.visible_top_row()?;
-    drop(runtimes);
     Ok(Some(PaneRegionSnapshot::new(
         region.id,
         region.area.origin.col,

@@ -1,7 +1,6 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
-use std::sync::Mutex;
 use std::time::Duration;
 use std::time::Instant;
 
@@ -222,21 +221,18 @@ impl PaneTrackedProcesses {
     pub fn observe_all_runtime_pane_cmds(
         &mut self,
         config: &MuxrConfig,
-        layout: &Mutex<SessionLayout>,
-        runtimes: &Mutex<PaneRuntimes>,
+        layout: &SessionLayout,
+        runtimes: &PaneRuntimes,
         now: Instant,
     ) -> rootcause::Result<bool> {
-        let pane_ids = {
-            let layout = crate::server::lock_mutex(layout, "layout")?;
-            layout.panes().into_iter().map(|pane| pane.id).collect::<Vec<_>>()
-        };
+        let pane_ids = layout.panes().into_iter().map(|pane| pane.id).collect::<Vec<_>>();
         self.observe_runtime_pane_cmds(config, runtimes, &pane_ids, now)
     }
 
     pub fn observe_runtime_pane_cmds(
         &mut self,
         config: &MuxrConfig,
-        runtimes: &Mutex<PaneRuntimes>,
+        runtimes: &PaneRuntimes,
         pane_ids: &[PaneId],
         now: Instant,
     ) -> rootcause::Result<bool> {
@@ -251,7 +247,7 @@ impl PaneTrackedProcesses {
     pub fn observe_runtime_visible_activity(
         &mut self,
         config: &MuxrConfig,
-        runtimes: &Mutex<PaneRuntimes>,
+        runtimes: &PaneRuntimes,
         pane_ids: &[PaneId],
         now: Instant,
     ) -> rootcause::Result<bool> {
@@ -266,14 +262,11 @@ impl PaneTrackedProcesses {
     pub fn acknowledge_active_pane_attention(
         &mut self,
         config: &MuxrConfig,
-        layout: &Mutex<SessionLayout>,
-        runtimes: &Mutex<PaneRuntimes>,
+        layout: &SessionLayout,
+        runtimes: &PaneRuntimes,
         now: Instant,
     ) -> rootcause::Result<bool> {
-        let active_pane = {
-            let layout = crate::server::lock_mutex(layout, "layout")?;
-            layout.active_pane_id()?
-        };
+        let active_pane = layout.active_pane_id()?;
         let observation = self::runtime_pane_cmd_observation(runtimes, active_pane)?;
         let mut changed = self.observe_pane_cmd(config, active_pane, &observation, now);
         changed |= self.acknowledge_attention(active_pane);
@@ -485,16 +478,8 @@ fn tracked_process_from_pane_cmd<'a>(
     config.tracked_process_for_cmd(&cmd.executable, cmd.path.as_deref())
 }
 
-fn runtime_pane_cmd_observation(
-    runtimes: &Mutex<PaneRuntimes>,
-    pane_id: PaneId,
-) -> rootcause::Result<PaneCmdObservation> {
-    let handle = {
-        let runtimes = crate::server::lock_mutex(runtimes, "pane runtimes")?;
-        let handle = runtimes.handle(pane_id)?;
-        drop(runtimes);
-        handle
-    };
+fn runtime_pane_cmd_observation(runtimes: &PaneRuntimes, pane_id: PaneId) -> rootcause::Result<PaneCmdObservation> {
+    let handle = runtimes.handle(pane_id)?;
     let snapshot = PaneCmdSnapshot::try_from(&handle)?;
     Ok(PaneCmdObservation::from(&snapshot))
 }
