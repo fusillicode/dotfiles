@@ -1,5 +1,3 @@
-use std::sync::Mutex;
-
 use muxr_config::LayoutConfig;
 use muxr_config::SPLIT_RATIO_MAX_PER_MILLE;
 use muxr_config::SPLIT_RATIO_MIN_PER_MILLE;
@@ -177,25 +175,23 @@ impl PaneTree {
 pub fn handle_split_pane_cmd(
     split_axis: PaneSplitAxis,
     config: &ServerConfig,
-    layout: &Mutex<SessionLayout>,
-    runtimes: &Mutex<PaneRuntimes>,
+    layout: &mut SessionLayout,
+    runtimes: &mut PaneRuntimes,
     terminal_size: &TerminalSize,
 ) -> rootcause::Result<PaneId> {
-    let mut layout = crate::server::lock_mutex(layout, "layout")?;
-    crate::pane_runtime::sync_layout_terminal_titles(&mut layout, runtimes)?;
-    let metadata = crate::server::active_pane_session_metadata(config, &layout)?;
+    crate::pane_runtime::sync_layout_terminal_titles(layout, runtimes)?;
+    let metadata = crate::server::active_pane_session_metadata(config, layout)?;
     let previous_layout = layout.clone();
     let pane_id = layout.split_active_pane(config.user_config.layout, metadata, split_axis)?;
     let pane_id = crate::pane_runtime::spawn_pane_or_restore_layout(
-        &mut layout,
+        layout,
         previous_layout,
         pane_id,
         config,
         runtimes,
         terminal_size,
     )?;
-    crate::state::persisted::write_metadata(&config.paths, &layout)?;
-    drop(layout);
+    crate::state::persisted::write_metadata(&config.paths, layout)?;
     Ok(pane_id)
 }
 
@@ -299,23 +295,22 @@ mod tests {
         let mut config = server_test_helpers::server_config(tempdir.path(), "work")?;
         config.shell_cmd = server_test_helpers::shell_cmd("/bin/muxr-missing-shell");
         let initial_layout = SessionLayout::initial(&config.session, state_test_helpers::metadata("sh", 1))?;
-        let layout = Mutex::new(initial_layout.clone());
-        let runtimes = Mutex::new(pane_runtime_test_helpers::empty_runtimes());
+        let mut layout = initial_layout.clone();
+        let mut runtimes = pane_runtime_test_helpers::empty_runtimes();
 
         assert2::assert!(
             self::handle_split_pane_cmd(
                 PaneSplitAxis::Vertical,
                 &config,
-                &layout,
-                &runtimes,
+                &mut layout,
+                &mut runtimes,
                 &TerminalSize::new(80, 24)?,
             )
             .is_err()
         );
 
-        let layout = crate::server::lock_mutex(&layout, "layout")?;
-        pretty_assertions::assert_eq!(*layout, initial_layout);
-        assert2::assert!(crate::server::lock_mutex(&runtimes, "pane runtimes")?.is_empty());
+        pretty_assertions::assert_eq!(layout, initial_layout);
+        assert2::assert!(runtimes.is_empty());
         assert2::assert!(!config.paths.layout.exists());
         Ok(())
     }

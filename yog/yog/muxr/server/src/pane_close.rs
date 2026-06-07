@@ -1,5 +1,3 @@
-use std::sync::Mutex;
-
 use muxr_core::PaneId;
 use rootcause::report;
 
@@ -190,24 +188,18 @@ impl PaneTree {
 
 pub fn handle_close_pane_cmd(
     config: &ServerConfig,
-    layout: &Mutex<SessionLayout>,
-    runtimes: &Mutex<PaneRuntimes>,
+    layout: &mut SessionLayout,
+    runtimes: &mut PaneRuntimes,
 ) -> rootcause::Result<ClosePaneOutcome> {
     let exited_at = crate::server::unix_timestamp_millis()?;
-    let mut layout = crate::server::lock_mutex(layout, "layout")?;
     // Closing removes the runtime, so any title-derived cwd must be synced before queued PTY events disappear.
-    crate::pane_runtime::sync_layout_terminal_titles(&mut layout, runtimes)?;
+    crate::pane_runtime::sync_layout_terminal_titles(layout, runtimes)?;
     let outcome = layout.close_active_pane(exited_at)?;
     let pane_id = match &outcome {
         ClosePaneOutcome::Final { pane_id } | ClosePaneOutcome::Removed { pane_id } => *pane_id,
     };
-    {
-        let mut runtimes = crate::server::lock_mutex(runtimes, "pane runtimes")?;
-        runtimes.remove(pane_id);
-        drop(runtimes);
-    }
-    crate::state::persisted::write_metadata(&config.paths, &layout)?;
-    drop(layout);
+    runtimes.remove(pane_id);
+    crate::state::persisted::write_metadata(&config.paths, layout)?;
     Ok(outcome)
 }
 

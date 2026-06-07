@@ -1,5 +1,4 @@
 use std::collections::BTreeMap;
-use std::sync::Mutex;
 use std::sync::mpsc;
 
 use muxr_core::PaneId;
@@ -277,14 +276,9 @@ impl PaneRuntimes {
     }
 }
 
-/// Apply live runtime terminal titles to layout metadata through the shared runtime lock.
-pub fn sync_layout_terminal_titles(
-    layout: &mut SessionLayout,
-    runtimes: &Mutex<PaneRuntimes>,
-) -> rootcause::Result<()> {
-    let runtimes = crate::server::lock_mutex(runtimes, "pane runtimes")?;
+/// Apply live runtime terminal titles to layout metadata before layout mutations.
+pub fn sync_layout_terminal_titles(layout: &mut SessionLayout, runtimes: &PaneRuntimes) -> rootcause::Result<()> {
     let _ = runtimes.sync_layout_terminal_titles(layout)?;
-    drop(runtimes);
     Ok(())
 }
 
@@ -293,7 +287,7 @@ pub fn spawn_pane_or_restore_layout(
     previous_layout: SessionLayout,
     pane_id: PaneId,
     config: &ServerConfig,
-    runtimes: &Mutex<PaneRuntimes>,
+    runtimes: &mut PaneRuntimes,
     terminal_size: &TerminalSize,
 ) -> rootcause::Result<PaneId> {
     // New panes update layout and runtimes together; rollback the layout if PTY spawn fails so render cannot see
@@ -302,10 +296,7 @@ pub fn spawn_pane_or_restore_layout(
         .pane(pane_id)
         .map(|pane| pane.cwd.clone())
         .ok_or_else(|| report!("muxr new pane is missing from server layout").attach(format!("pane_id={pane_id}")))?;
-    let spawn_result = match crate::server::lock_mutex(runtimes, "pane runtimes") {
-        Ok(mut runtimes) => runtimes.spawn_pane(pane_id, &cwd, config, terminal_size),
-        Err(error) => Err(error),
-    };
+    let spawn_result = runtimes.spawn_pane(pane_id, &cwd, config, terminal_size);
     if let Err(error) = spawn_result {
         *layout = previous_layout;
         return Err(error).attach("rolled back muxr layout after pane spawn failure");

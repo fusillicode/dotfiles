@@ -1,4 +1,3 @@
-use std::sync::Mutex;
 use std::time::Instant;
 
 use muxr_core::TabId;
@@ -57,22 +56,20 @@ impl SessionLayout {
 pub fn handle_focus_tab_request(
     tab_id: TabId,
     config: &ServerConfig,
-    layout: &Mutex<SessionLayout>,
+    layout: &mut SessionLayout,
 ) -> rootcause::Result<bool> {
-    let mut layout = crate::server::lock_mutex(layout, "layout")?;
     let changed = layout.focus_tab(tab_id)?;
     if changed {
-        crate::state::persisted::write_metadata(&config.paths, &layout)?;
+        crate::state::persisted::write_metadata(&config.paths, layout)?;
     }
-    drop(layout);
     Ok(changed)
 }
 
 pub fn handle_focus_tab_request_with_tracked_process_ack(
     tab_id: TabId,
     config: &ServerConfig,
-    layout: &Mutex<SessionLayout>,
-    runtimes: &Mutex<PaneRuntimes>,
+    layout: &mut SessionLayout,
+    runtimes: &PaneRuntimes,
     pane_tracked_processes: &mut PaneTrackedProcesses,
     now: Instant,
 ) -> rootcause::Result<bool> {
@@ -88,18 +85,16 @@ pub fn handle_focus_tab_request_with_tracked_process_ack(
     Ok(changed)
 }
 
-pub fn handle_focus_previous_tab_cmd(config: &ServerConfig, layout: &Mutex<SessionLayout>) -> rootcause::Result<()> {
-    let mut layout = crate::server::lock_mutex(layout, "layout")?;
+pub fn handle_focus_previous_tab_cmd(config: &ServerConfig, layout: &mut SessionLayout) -> rootcause::Result<()> {
     layout.focus_previous_tab()?;
-    crate::state::persisted::write_metadata(&config.paths, &layout)?;
-    drop(layout);
+    crate::state::persisted::write_metadata(&config.paths, layout)?;
     Ok(())
 }
 
 pub fn handle_focus_previous_tab_cmd_with_tracked_process_ack(
     config: &ServerConfig,
-    layout: &Mutex<SessionLayout>,
-    runtimes: &Mutex<PaneRuntimes>,
+    layout: &mut SessionLayout,
+    runtimes: &PaneRuntimes,
     pane_tracked_processes: &mut PaneTrackedProcesses,
     now: Instant,
 ) -> rootcause::Result<()> {
@@ -109,18 +104,16 @@ pub fn handle_focus_previous_tab_cmd_with_tracked_process_ack(
     Ok(())
 }
 
-pub fn handle_focus_next_tab_cmd(config: &ServerConfig, layout: &Mutex<SessionLayout>) -> rootcause::Result<()> {
-    let mut layout = crate::server::lock_mutex(layout, "layout")?;
+pub fn handle_focus_next_tab_cmd(config: &ServerConfig, layout: &mut SessionLayout) -> rootcause::Result<()> {
     layout.focus_next_tab()?;
-    crate::state::persisted::write_metadata(&config.paths, &layout)?;
-    drop(layout);
+    crate::state::persisted::write_metadata(&config.paths, layout)?;
     Ok(())
 }
 
 pub fn handle_focus_next_tab_cmd_with_tracked_process_ack(
     config: &ServerConfig,
-    layout: &Mutex<SessionLayout>,
-    runtimes: &Mutex<PaneRuntimes>,
+    layout: &mut SessionLayout,
+    runtimes: &PaneRuntimes,
     pane_tracked_processes: &mut PaneTrackedProcesses,
     now: Instant,
 ) -> rootcause::Result<()> {

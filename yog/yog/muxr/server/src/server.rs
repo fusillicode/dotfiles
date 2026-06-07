@@ -1,9 +1,6 @@
 use std::fs;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::sync::Mutex;
-use std::sync::MutexGuard;
-use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
@@ -12,16 +9,22 @@ use muxr_config::MuxrConfig;
 use muxr_core::SessionName;
 use muxr_core::SessionPaths;
 use muxr_core::TerminalSize;
+use muxr_transport::ServerConnection;
 use muxr_transport::ServerListener;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
 
-use crate::pane_runtime::PaneRuntimes;
 use crate::pty::ShellCmd;
 use crate::session_files::ServerFilesGuard;
 use crate::session_files::prepare_session_dirs;
 use crate::session_files::secure_socket_file;
-use crate::session_start_seed::SessionStartSeed;
+use crate::session_runtime::CLIENT_HANDSHAKE_CHANNEL_LIMIT;
+use crate::session_runtime::ReapResult;
+use crate::session_runtime::SessionAttachedClientTaskMessage;
+use crate::session_runtime::SessionClientHandshake;
+use crate::session_runtime::SessionHandshakeOutcome;
+use crate::session_runtime::SessionRuntime;
+use crate::session_runtime::SessionRuntimeShutdownMessage;
 use crate::sessions_delete::DeleteSessions;
 use crate::state::SessionLayout;
 use crate::state::SessionMetadata;
@@ -30,6 +33,12 @@ const ACCEPT_POLL_INTERVAL: Duration = Duration::from_millis(10);
 const CLIENT_HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
 const CLIENT_HEARTBEAT_TIMEOUT: Duration = Duration::from_secs(15);
 const CLIENT_WRITE_TIMEOUT: Duration = Duration::from_secs(2);
+
+struct SessionHandshakeContext<'a> {
+    attached_client_task_sender: &'a tokio::sync::mpsc::Sender<SessionAttachedClientTaskMessage>,
+    config: &'a ServerConfig,
+    delete_sessions: &'a Arc<DeleteSessions>,
+}
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ServerConfig {
@@ -115,10 +124,6 @@ impl TryFrom<&ServerConfig> for SessionMetadata {
     }
 }
 
-pub fn lock_mutex<'a, T>(mutex: &'a Mutex<T>, name: &str) -> rootcause::Result<MutexGuard<'a, T>> {
-    mutex.lock().map_err(|_| report!("poisoned muxr {name} mutex"))
-}
-
 async fn serve_async(config: &ServerConfig) -> rootcause::Result<()> {
     if matches!(config.max_accepted_connections, Some(0)) {
         return Ok(());
@@ -133,66 +138,180 @@ async fn serve_async(config: &ServerConfig) -> rootcause::Result<()> {
     secure_socket_file(&config.paths.socket)?;
     fs::write(&config.paths.pid, std::process::id().to_string()).context("failed to write muxr server pid")?;
     let initial_size = TerminalSize::new(80, 24)?;
-    let metadata = SessionMetadata::try_from(config)?;
-    let start_seed = SessionStartSeed::load(config, metadata)?;
-    let runtimes = PaneRuntimes::spawn_for_start_seed(config, &start_seed, &initial_size)?;
-    let layout = Arc::new(Mutex::new(start_seed.layout));
-    let runtimes = Arc::new(Mutex::new(runtimes));
-    {
-        let locked_layout = self::lock_mutex(layout.as_ref(), "layout")?;
-        crate::state::persisted::write_metadata(&config.paths, &locked_layout)?;
-    }
-    let active_client = Arc::new(AtomicBool::new(false));
+    let mut runtime = SessionRuntime::spawn(config, &initial_size)?;
+    runtime.persist_metadata(&config.paths)?;
     let delete_sessions = Arc::new(DeleteSessions::default());
+    let (handshake_sender, mut handshake_receiver) = tokio::sync::mpsc::channel(CLIENT_HANDSHAKE_CHANNEL_LIMIT);
+    let (attached_client_task_sender, mut attached_client_task_receiver) = tokio::sync::mpsc::channel(1);
+    let handshake_context = SessionHandshakeContext {
+        attached_client_task_sender: &attached_client_task_sender,
+        config,
+        delete_sessions: &delete_sessions,
+    };
     let mut accepted_connections = 0_usize;
+    let mut accepting_connections = true;
     let mut handles = Vec::new();
 
-    loop {
+    let shutdown_message = loop {
+        self::drain_session_runtime_messages(
+            &mut runtime,
+            &handshake_context,
+            &mut attached_client_task_receiver,
+            &mut handshake_receiver,
+            &mut handles,
+        )
+        .await?;
+
         if delete_sessions.is_requested() {
-            break;
+            break SessionRuntimeShutdownMessage::DeleteSessionRequested;
         }
 
-        if matches!(
-            crate::attached_client::reap_exited_panes(config, &layout, &runtimes)?,
-            crate::attached_client::ReapResult::Final
-        ) || self::lock_mutex(runtimes.as_ref(), "pane runtimes")?.is_empty()
-        {
-            break;
+        if matches!(runtime.reap_exited_panes(config)?, ReapResult::Final) {
+            break SessionRuntimeShutdownMessage::FinalPaneExited;
+        }
+        if runtime.pane_runtime_set_empty() {
+            break SessionRuntimeShutdownMessage::PaneRuntimeSetEmpty;
         }
 
         crate::attached_client::join_finished_client_tasks(&mut handles).await?;
+        // A handshake task can finish between the first drain and task join; drain again before honoring the
+        // accepted-connection limit so the queued handshake can spawn its attached client.
+        self::drain_session_runtime_messages(
+            &mut runtime,
+            &handshake_context,
+            &mut attached_client_task_receiver,
+            &mut handshake_receiver,
+            &mut handles,
+        )
+        .await?;
+        if !accepting_connections && handles.is_empty() {
+            break SessionRuntimeShutdownMessage::AcceptedConnectionLimitReached;
+        }
 
         tokio::select! {
-            accepted = listener.accept() => {
-                let connection = accepted?;
-                accepted_connections = accepted_connections
-                    .checked_add(1)
-                    .ok_or_else(|| report!("muxr accepted connection count overflowed"))?;
-                crate::attached_client::spawn_client_task(
-                    config,
-                    &active_client,
-                    &delete_sessions,
-                    &layout,
-                    &runtimes,
-                    connection,
-                    &mut handles,
-                );
-
-                if let Some(max_accepted_connections) = config.max_accepted_connections
-                    && accepted_connections >= max_accepted_connections
-                {
-                    break;
+            biased;
+            message = attached_client_task_receiver.recv() => {
+                if let Some(message) = message {
+                    runtime.handle_attached_client_task_message(message);
                 }
+            }
+            handshake = handshake_receiver.recv() => {
+                if let Some(handshake) = handshake {
+                    self::handle_session_handshake(
+                        &mut runtime,
+                        &handshake_context,
+                        handshake,
+                        &mut handles,
+                    ).await?;
+                }
+            }
+            accepted = listener.accept(), if accepting_connections => {
+                self::handle_accepted_connection(
+                    config,
+                    accepted?,
+                    &handshake_sender,
+                    &mut accepted_connections,
+                    &mut accepting_connections,
+                    &mut handles,
+                )?;
             }
             () = tokio::time::sleep(ACCEPT_POLL_INTERVAL) => {}
         }
-    }
+    };
 
+    // Shutdown cancels only pre-attach handshakes; while the loop is live they still use bounded backpressure.
+    handshake_receiver.close();
     crate::attached_client::join_client_tasks(handles).await?;
-    if delete_sessions.is_requested() {
-        drop(runtimes);
-        drop(layout);
+    while let Ok(message) = attached_client_task_receiver.try_recv() {
+        runtime.handle_attached_client_task_message(message);
+    }
+    if matches!(shutdown_message, SessionRuntimeShutdownMessage::DeleteSessionRequested)
+        || delete_sessions.is_requested()
+    {
+        drop(runtime);
         crate::sessions_delete::remove_session_files(&config.paths)?;
+    }
+    Ok(())
+}
+
+fn handle_accepted_connection(
+    config: &ServerConfig,
+    connection: ServerConnection,
+    handshake_sender: &tokio::sync::mpsc::Sender<SessionClientHandshake>,
+    accepted_connections: &mut usize,
+    accepting_connections: &mut bool,
+    handles: &mut Vec<tokio::task::JoinHandle<rootcause::Result<()>>>,
+) -> rootcause::Result<()> {
+    *accepted_connections = accepted_connections
+        .checked_add(1)
+        .ok_or_else(|| report!("muxr accepted connection count overflowed"))?;
+    crate::attached_client::spawn_client_handshake_task(connection, handshake_sender, handles);
+
+    if let Some(max_accepted_connections) = config.max_accepted_connections
+        && *accepted_connections >= max_accepted_connections
+    {
+        *accepting_connections = false;
+    }
+    Ok(())
+}
+
+async fn drain_session_runtime_messages(
+    runtime: &mut SessionRuntime,
+    context: &SessionHandshakeContext<'_>,
+    attached_client_task_receiver: &mut tokio::sync::mpsc::Receiver<SessionAttachedClientTaskMessage>,
+    handshake_receiver: &mut tokio::sync::mpsc::Receiver<SessionClientHandshake>,
+    handles: &mut Vec<tokio::task::JoinHandle<rootcause::Result<()>>>,
+) -> rootcause::Result<()> {
+    while let Ok(message) = attached_client_task_receiver.try_recv() {
+        runtime.handle_attached_client_task_message(message);
+    }
+    while let Ok(handshake) = handshake_receiver.try_recv() {
+        self::handle_session_handshake(runtime, context, handshake, handles).await?;
+    }
+    Ok(())
+}
+
+async fn handle_session_handshake(
+    runtime: &mut SessionRuntime,
+    context: &SessionHandshakeContext<'_>,
+    handshake: SessionClientHandshake,
+    handles: &mut Vec<tokio::task::JoinHandle<rootcause::Result<()>>>,
+) -> rootcause::Result<()> {
+    let SessionClientHandshake {
+        mut connection,
+        message,
+    } = handshake;
+    match runtime.handle_handshake_message(context.config, message) {
+        SessionHandshakeOutcome::AttachAccepted(attach_request) => {
+            let attached_client_task_runtime = runtime.attached_client_task_runtime(
+                context.attached_client_task_sender.clone(),
+                Arc::clone(context.delete_sessions),
+            )?;
+            crate::attached_client::spawn_attached_client_task(
+                context.config,
+                attached_client_task_runtime,
+                connection,
+                attach_request,
+                handles,
+            );
+        }
+        SessionHandshakeOutcome::DeleteSessionRequested => {
+            crate::sessions_delete::handle_handshake_delete(
+                &mut connection,
+                context.delete_sessions.as_ref(),
+                context.config.client_write_timeout,
+            )
+            .await?;
+        }
+        SessionHandshakeOutcome::NoClient => {}
+        SessionHandshakeOutcome::Respond(event) => {
+            let _sent = crate::attached_client::send_connection_event_with_timeout(
+                &mut connection,
+                &event,
+                context.config.client_write_timeout,
+            )
+            .await?;
+        }
     }
     Ok(())
 }
@@ -287,12 +406,14 @@ mod tests {
     use super::test_helpers::shell_cmd;
     use super::test_helpers::shell_cmd_with_args;
     use super::*;
-    use crate::attached_client::initial_attached_render;
-    use crate::attached_client::resize_panes_to_layout;
     use crate::pane_close::ClosePaneOutcome;
+    use crate::pane_runtime::PaneRuntimes;
     use crate::pane_split::PaneSplitAxis;
     use crate::session_files::PRIVATE_DIR_MODE;
     use crate::session_files::PRIVATE_SOCKET_MODE;
+    use crate::session_runtime::initial_attached_render;
+    use crate::session_runtime::resize_panes_to_layout;
+    use crate::session_start_seed::SessionStartSeed;
 
     const SERVER_READY_TIMEOUT: Duration = Duration::from_secs(2);
     const TEST_CLIENT_HEARTBEAT_INTERVAL: Duration = Duration::from_millis(100);
@@ -582,31 +703,22 @@ mod tests {
         let mut config = self::server_config(tempdir.path(), "work")?;
         config.shell_cmd = self::shell_cmd("/bin/cat");
         fs::create_dir_all(&config.paths.root).context("failed to create muxr test session root")?;
-        let layout = Mutex::new(SessionLayout::initial(&config.session, self::metadata("sh", 1))?);
+        let mut layout = SessionLayout::initial(&config.session, self::metadata("sh", 1))?;
         let terminal_size = TerminalSize::new(80, 24)?;
-        let start_seed = {
-            let layout = self::lock_mutex(&layout, "layout")?;
-            SessionStartSeed {
-                layout: layout.clone(),
-                startup_cmds: Vec::new(),
-            }
+        let start_seed = SessionStartSeed {
+            layout: layout.clone(),
+            startup_cmds: Vec::new(),
         };
-        let runtimes = PaneRuntimes::spawn_for_start_seed(&config, &start_seed, &terminal_size)?;
-        let runtimes = Mutex::new(runtimes);
+        let mut runtimes = PaneRuntimes::spawn_for_start_seed(&config, &start_seed, &terminal_size)?;
         let pane_id = PaneId::new(1)?;
         {
-            let runtimes = self::lock_mutex(&runtimes, "pane runtimes")?;
             let handle = runtimes.handle(pane_id)?;
-            drop(runtimes);
             let _scrolled_to_bottom = handle.write_input(b"\x1b]2;~\x07\n")?;
         }
 
         let started_at = Instant::now();
         loop {
-            let title = {
-                let runtimes = self::lock_mutex(&runtimes, "pane runtimes")?;
-                runtimes.handle(pane_id)?.terminal_title()?
-            };
+            let title = runtimes.handle(pane_id)?.terminal_title()?;
             if title.as_deref() == Some("~") {
                 break;
             }
@@ -616,7 +728,7 @@ mod tests {
             thread::sleep(Duration::from_millis(10));
         }
 
-        let outcome = crate::pane_close::handle_close_pane_cmd(&config, &layout, &runtimes)?;
+        let outcome = crate::pane_close::handle_close_pane_cmd(&config, &mut layout, &mut runtimes)?;
 
         pretty_assertions::assert_eq!(outcome, ClosePaneOutcome::Final { pane_id });
         let persisted = crate::state::persisted::load_metadata(&config.paths, &config.session)?
@@ -634,24 +746,17 @@ mod tests {
         let mut config = self::server_config(tempdir.path(), "work")?;
         config.shell_cmd = self::shell_cmd_with_args("/bin/sh", &["-c", "printf dirty; sleep 30"]);
         let terminal_size = TerminalSize::new(80, 24)?;
-        let layout = Mutex::new(SessionLayout::initial(&config.session, self::metadata("sh", 1))?);
-        {
-            let mut layout = self::lock_mutex(&layout, "layout")?;
-            layout.split_active_pane(
-                config.user_config.layout,
-                self::metadata("sh", 2),
-                PaneSplitAxis::Vertical,
-            )?;
-        }
-        let start_seed = {
-            let layout = self::lock_mutex(&layout, "layout")?;
-            SessionStartSeed {
-                layout: layout.clone(),
-                startup_cmds: Vec::new(),
-            }
+        let mut layout = SessionLayout::initial(&config.session, self::metadata("sh", 1))?;
+        layout.split_active_pane(
+            config.user_config.layout,
+            self::metadata("sh", 2),
+            PaneSplitAxis::Vertical,
+        )?;
+        let start_seed = SessionStartSeed {
+            layout: layout.clone(),
+            startup_cmds: Vec::new(),
         };
         let runtimes = PaneRuntimes::spawn_for_start_seed(&config, &start_seed, &terminal_size)?;
-        let runtimes = Mutex::new(runtimes);
         let inactive_pane = PaneId::new(1)?;
         let active_pane = PaneId::new(2)?;
         self::wait_for_runtime_snapshot_contains(&runtimes, inactive_pane, "dirty")?;
@@ -660,13 +765,12 @@ mod tests {
         self::resize_panes_to_layout(&layout, &runtimes, &terminal_size)?;
         drop(self::initial_attached_render(
             &config,
-            &layout,
+            &mut layout,
             &runtimes,
             &crate::pane_tracked_process::PaneTrackedProcesses::default(),
             &terminal_size,
         )?);
 
-        let layout = self::lock_mutex(&layout, "layout")?;
         pretty_assertions::assert_eq!(layout.attention_pane_ids(), Vec::<PaneId>::new());
         Ok(())
     }
@@ -1554,22 +1658,19 @@ mod tests {
     }
 
     fn wait_for_runtime_snapshot_contains(
-        runtimes: &Mutex<PaneRuntimes>,
+        runtimes: &PaneRuntimes,
         pane_id: PaneId,
         needle: &str,
     ) -> rootcause::Result<()> {
         let started_at = Instant::now();
         loop {
-            let rendered = {
-                let runtimes = self::lock_mutex(runtimes, "pane runtimes")?;
-                runtimes
-                    .handle(pane_id)?
-                    .render_snapshot()?
-                    .rows()
-                    .iter()
-                    .flat_map(|row| row.cells().iter().map(RenderCell::text))
-                    .collect::<String>()
-            };
+            let rendered = runtimes
+                .handle(pane_id)?
+                .render_snapshot()?
+                .rows()
+                .iter()
+                .flat_map(|row| row.cells().iter().map(RenderCell::text))
+                .collect::<String>();
             if rendered.contains(needle) {
                 return Ok(());
             }
