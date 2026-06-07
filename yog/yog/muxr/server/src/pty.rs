@@ -13,7 +13,6 @@ use std::sync::mpsc::TrySendError;
 use std::thread;
 
 use muxr_core::ClientMouseEvent;
-use muxr_core::ClientMouseEventPhase;
 use muxr_core::PaneMouseMode;
 use muxr_core::PaneRegionSnapshot;
 use muxr_core::PaneScrollDirection;
@@ -32,14 +31,10 @@ use serde::Serialize;
 use crate::history::PaneHistory;
 use crate::terminal::TerminalApplicationMode;
 use crate::terminal::TerminalMouseProtocol;
-use crate::terminal::TerminalMouseProtocolEncoding;
 use crate::terminal::TerminalSnapshot;
 use crate::terminal::TerminalState;
 
 const READ_BUFFER_SIZE: usize = 8192;
-const BRACKETED_PASTE_END: &[u8] = b"\x1b[201~";
-const BRACKETED_PASTE_START: &[u8] = b"\x1b[200~";
-const FAUX_SCROLL_LINES_PER_WHEEL_EVENT: usize = 3;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ShellCmd {
@@ -275,7 +270,7 @@ impl PtyHandle {
             let scrolled_to_bottom = terminal.scroll_to_bottom();
             (scrolled_to_bottom, terminal.bracketed_paste_enabled())
         };
-        let framed = self::pty_paste_bytes(bytes, bracketed_paste_enabled);
+        let framed = crate::terminal::paste_input_bytes(bytes, bracketed_paste_enabled);
         self::write_pty_bytes(
             self.writer.as_ref(),
             &framed,
@@ -291,7 +286,7 @@ impl PtyHandle {
         region: &PaneRegionSnapshot,
         protocol: TerminalMouseProtocol,
     ) -> rootcause::Result<Option<bool>> {
-        let Some(bytes) = self::pty_mouse_event_bytes(event, region, protocol)? else {
+        let Some(bytes) = crate::pane_mouse::encode_pty_mouse_event(event, region, protocol)? else {
             return Ok(None);
         };
         // Scrollback follows only events that reach the PTY, so filtered motion does not hide history.
@@ -310,7 +305,10 @@ impl PtyHandle {
         direction: PaneScrollDirection,
         application_cursor: bool,
     ) -> rootcause::Result<bool> {
-        self.write_input(&self::faux_scroll_input_bytes(direction, application_cursor))
+        self.write_input(&crate::pane_scroll::faux_scroll_input_bytes(
+            direction,
+            application_cursor,
+        ))
     }
 
     pub fn mouse_mode(&self) -> rootcause::Result<PaneMouseMode> {
@@ -613,119 +611,6 @@ fn write_pty_bytes(
     Ok(())
 }
 
-fn pty_paste_bytes(bytes: &[u8], bracketed_paste_enabled: bool) -> Vec<u8> {
-    if !bracketed_paste_enabled {
-        return bytes.to_vec();
-    }
-
-    let mut framed = Vec::with_capacity(
-        BRACKETED_PASTE_START
-            .len()
-            .saturating_add(bytes.len())
-            .saturating_add(BRACKETED_PASTE_END.len()),
-    );
-    framed.extend_from_slice(BRACKETED_PASTE_START);
-    framed.extend_from_slice(bytes);
-    framed.extend_from_slice(BRACKETED_PASTE_END);
-    framed
-}
-
-fn pty_mouse_event_bytes(
-    event: ClientMouseEvent,
-    region: &PaneRegionSnapshot,
-    protocol: TerminalMouseProtocol,
-) -> rootcause::Result<Option<Vec<u8>>> {
-    if !protocol.reports_event(event) {
-        return Ok(None);
-    }
-
-    let Some((row, col)) = self::pane_local_mouse_position(event.position, region) else {
-        return Ok(None);
-    };
-    let row = row.checked_add(1).ok_or_else(|| report!("muxr mouse row overflowed"))?;
-    let col = col
-        .checked_add(1)
-        .ok_or_else(|| report!("muxr mouse column overflowed"))?;
-
-    match protocol.encoding {
-        TerminalMouseProtocolEncoding::Sgr => Ok(Some(self::sgr_mouse_event_bytes(event, row, col))),
-        TerminalMouseProtocolEncoding::Default => Ok(self::default_mouse_event_bytes(event, row, col)),
-        TerminalMouseProtocolEncoding::Utf8 => Ok(self::utf8_mouse_event_bytes(event, row, col)),
-    }
-}
-
-fn pane_local_mouse_position(
-    position: muxr_core::ClientMousePosition,
-    region: &PaneRegionSnapshot,
-) -> Option<(u16, u16)> {
-    if !region.contains(position.row, position.col) {
-        return None;
-    }
-    Some((
-        position.row.checked_sub(region.row())?,
-        position.col.checked_sub(region.col())?,
-    ))
-}
-
-fn sgr_mouse_event_bytes(event: ClientMouseEvent, row: u16, col: u16) -> Vec<u8> {
-    let final_byte = match event.phase {
-        ClientMouseEventPhase::Press => "M",
-        ClientMouseEventPhase::Release => "m",
-    };
-    format!("\x1b[<{};{col};{row}{final_byte}", event.button).into_bytes()
-}
-
-fn default_mouse_event_bytes(event: ClientMouseEvent, row: u16, col: u16) -> Option<Vec<u8>> {
-    let button = if event.phase == ClientMouseEventPhase::Release {
-        (event.button & !0b11) | 0b11
-    } else {
-        event.button
-    };
-    let button = u8::try_from(button.checked_add(32)?).ok()?;
-    let col = u8::try_from(col.checked_add(32)?).ok()?;
-    let row = u8::try_from(row.checked_add(32)?).ok()?;
-
-    Some(vec![0x1b, b'[', b'M', button, col, row])
-}
-
-fn utf8_mouse_event_bytes(event: ClientMouseEvent, row: u16, col: u16) -> Option<Vec<u8>> {
-    let button = if event.phase == ClientMouseEventPhase::Release {
-        (event.button & !0b11) | 0b11
-    } else {
-        event.button
-    };
-    let mut bytes = b"\x1b[M".to_vec();
-    self::push_utf8_mouse_value(&mut bytes, button.checked_add(32)?)?;
-    self::push_utf8_mouse_value(&mut bytes, col.checked_add(32)?)?;
-    self::push_utf8_mouse_value(&mut bytes, row.checked_add(32)?)?;
-    Some(bytes)
-}
-
-fn push_utf8_mouse_value(bytes: &mut Vec<u8>, value: u16) -> Option<()> {
-    let ch = char::from_u32(u32::from(value))?;
-    let mut encoded = [0; 4];
-    bytes.extend_from_slice(ch.encode_utf8(&mut encoded).as_bytes());
-    Some(())
-}
-
-fn faux_scroll_input_bytes(direction: PaneScrollDirection, application_cursor: bool) -> Vec<u8> {
-    let sequence = self::faux_scroll_sequence(direction, application_cursor);
-    let mut bytes = Vec::with_capacity(sequence.len().saturating_mul(FAUX_SCROLL_LINES_PER_WHEEL_EVENT));
-    for _ in 0..FAUX_SCROLL_LINES_PER_WHEEL_EVENT {
-        bytes.extend_from_slice(sequence);
-    }
-    bytes
-}
-
-const fn faux_scroll_sequence(direction: PaneScrollDirection, application_cursor: bool) -> &'static [u8] {
-    match (direction, application_cursor) {
-        (PaneScrollDirection::Up, false) => b"\x1b[A",
-        (PaneScrollDirection::Down, false) => b"\x1b[B",
-        (PaneScrollDirection::Up, true) => b"\x1bOA",
-        (PaneScrollDirection::Down, true) => b"\x1bOB",
-    }
-}
-
 fn write_terminal_replies(writer: &Mutex<Box<dyn Write + Send>>, replies: &[Vec<u8>]) -> rootcause::Result<()> {
     if replies.is_empty() {
         return Ok(());
@@ -786,7 +671,6 @@ fn spawn_reader_thread(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::terminal::TerminalMouseProtocolMode;
 
     fn pty_state(size: &TerminalSize) -> PtyState {
         PtyState {
@@ -993,19 +877,6 @@ mod tests {
     }
 
     #[test]
-    fn test_pty_paste_bytes_when_bracketed_paste_is_enabled_wraps_payload() {
-        pretty_assertions::assert_eq!(
-            pty_paste_bytes(b"one\ntwo\n", true),
-            b"\x1b[200~one\ntwo\n\x1b[201~".to_vec(),
-        );
-    }
-
-    #[test]
-    fn test_pty_paste_bytes_when_bracketed_paste_is_disabled_preserves_payload() {
-        pretty_assertions::assert_eq!(pty_paste_bytes(b"one\ntwo\n", false), b"one\ntwo\n".to_vec());
-    }
-
-    #[test]
     fn test_shell_cmd_shell_input_line_quotes_shell_words() -> rootcause::Result<()> {
         let cmd = ShellCmd::with_args("/tmp/with space/cmd", ["simple", "two words", "it's"])?;
 
@@ -1014,146 +885,6 @@ mod tests {
             "'/tmp/with space/cmd' simple 'two words' 'it'\\''s'\n"
         );
         Ok(())
-    }
-
-    #[test]
-    fn test_pty_mouse_event_bytes_when_sgr_mouse_is_enabled_translates_to_pane_local_position() -> rootcause::Result<()>
-    {
-        let event = ClientMouseEvent {
-            button: 0,
-            phase: ClientMouseEventPhase::Press,
-            position: muxr_core::ClientMousePosition { row: 4, col: 7 },
-        };
-        let region = PaneRegionSnapshot::new(muxr_core::PaneId::new(1)?, 5, 3, 10, 4, PaneMouseMode::ButtonMotion, 0)?;
-
-        pretty_assertions::assert_eq!(
-            pty_mouse_event_bytes(
-                event,
-                &region,
-                TerminalMouseProtocol {
-                    mode: TerminalMouseProtocolMode::PressRelease,
-                    encoding: TerminalMouseProtocolEncoding::Sgr
-                },
-            )?,
-            Some(b"\x1b[<0;3;2M".to_vec()),
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn test_pty_mouse_event_bytes_when_protocol_ignores_motion_returns_none() -> rootcause::Result<()> {
-        let event = ClientMouseEvent {
-            button: 32,
-            phase: ClientMouseEventPhase::Press,
-            position: muxr_core::ClientMousePosition { row: 4, col: 7 },
-        };
-        let region = PaneRegionSnapshot::new(muxr_core::PaneId::new(1)?, 5, 3, 10, 4, PaneMouseMode::ButtonMotion, 0)?;
-
-        pretty_assertions::assert_eq!(
-            pty_mouse_event_bytes(
-                event,
-                &region,
-                TerminalMouseProtocol {
-                    mode: TerminalMouseProtocolMode::Press,
-                    encoding: TerminalMouseProtocolEncoding::Sgr
-                },
-            )?,
-            None,
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn test_pty_mouse_event_bytes_when_button_motion_gets_no_button_motion_returns_none() -> rootcause::Result<()> {
-        let event = ClientMouseEvent {
-            button: 35,
-            phase: ClientMouseEventPhase::Press,
-            position: muxr_core::ClientMousePosition { row: 4, col: 7 },
-        };
-        let region = PaneRegionSnapshot::new(muxr_core::PaneId::new(1)?, 5, 3, 10, 4, PaneMouseMode::ButtonMotion, 0)?;
-
-        pretty_assertions::assert_eq!(
-            pty_mouse_event_bytes(
-                event,
-                &region,
-                TerminalMouseProtocol {
-                    mode: TerminalMouseProtocolMode::ButtonMotion,
-                    encoding: TerminalMouseProtocolEncoding::Sgr
-                },
-            )?,
-            None,
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn test_pty_mouse_event_bytes_when_any_motion_gets_no_button_motion_reports_event() -> rootcause::Result<()> {
-        let event = ClientMouseEvent {
-            button: 35,
-            phase: ClientMouseEventPhase::Press,
-            position: muxr_core::ClientMousePosition { row: 4, col: 7 },
-        };
-        let region = PaneRegionSnapshot::new(muxr_core::PaneId::new(1)?, 5, 3, 10, 4, PaneMouseMode::AnyMotion, 0)?;
-
-        pretty_assertions::assert_eq!(
-            pty_mouse_event_bytes(
-                event,
-                &region,
-                TerminalMouseProtocol {
-                    mode: TerminalMouseProtocolMode::AnyMotion,
-                    encoding: TerminalMouseProtocolEncoding::Sgr
-                },
-            )?,
-            Some(b"\x1b[<35;3;2M".to_vec()),
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn test_pty_mouse_event_bytes_when_utf8_mouse_is_enabled_writes_utf8_values() -> rootcause::Result<()> {
-        let event = ClientMouseEvent {
-            button: 0,
-            phase: ClientMouseEventPhase::Press,
-            position: muxr_core::ClientMousePosition { row: 4, col: 7 },
-        };
-        let region = PaneRegionSnapshot::new(muxr_core::PaneId::new(1)?, 5, 3, 10, 4, PaneMouseMode::ButtonMotion, 0)?;
-
-        pretty_assertions::assert_eq!(
-            pty_mouse_event_bytes(
-                event,
-                &region,
-                TerminalMouseProtocol {
-                    mode: TerminalMouseProtocolMode::PressRelease,
-                    encoding: TerminalMouseProtocolEncoding::Utf8
-                },
-            )?,
-            Some(b"\x1b[M #\"".to_vec()),
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn test_faux_scroll_input_bytes_when_application_cursor_mode_is_disabled_uses_csi_arrows() {
-        pretty_assertions::assert_eq!(
-            faux_scroll_input_bytes(PaneScrollDirection::Up, false),
-            b"\x1b[A\x1b[A\x1b[A".to_vec(),
-        );
-        pretty_assertions::assert_eq!(
-            faux_scroll_input_bytes(PaneScrollDirection::Down, false),
-            b"\x1b[B\x1b[B\x1b[B".to_vec(),
-        );
-    }
-
-    #[test]
-    fn test_faux_scroll_input_bytes_when_application_cursor_mode_is_enabled_uses_ss3_arrows() {
-        pretty_assertions::assert_eq!(
-            faux_scroll_input_bytes(PaneScrollDirection::Up, true),
-            b"\x1bOA\x1bOA\x1bOA".to_vec(),
-        );
-        pretty_assertions::assert_eq!(
-            faux_scroll_input_bytes(PaneScrollDirection::Down, true),
-            b"\x1bOB\x1bOB\x1bOB".to_vec(),
-        );
     }
 
     fn terminal_size() -> rootcause::Result<TerminalSize> {

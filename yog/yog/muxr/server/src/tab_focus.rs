@@ -1,8 +1,11 @@
 use std::sync::Mutex;
+use std::time::Instant;
 
 use muxr_core::TabId;
 use rootcause::report;
 
+use crate::pane_runtime::PaneRuntimes;
+use crate::pane_tracked_process::PaneTrackedProcesses;
 use crate::server::ServerConfig;
 use crate::state::SessionLayout;
 
@@ -57,7 +60,7 @@ pub fn handle_focus_tab_request(
     layout: &Mutex<SessionLayout>,
 ) -> rootcause::Result<bool> {
     let mut layout = crate::server::lock_mutex(layout, "layout")?;
-    let changed = self::handle_focus_tab(&mut layout, tab_id)?;
+    let changed = layout.focus_tab(tab_id)?;
     if changed {
         crate::state::persisted::write_metadata(&config.paths, &layout)?;
     }
@@ -65,32 +68,66 @@ pub fn handle_focus_tab_request(
     Ok(changed)
 }
 
+pub fn handle_focus_tab_request_with_tracked_process_ack(
+    tab_id: TabId,
+    config: &ServerConfig,
+    layout: &Mutex<SessionLayout>,
+    runtimes: &Mutex<PaneRuntimes>,
+    pane_tracked_processes: &mut PaneTrackedProcesses,
+    now: Instant,
+) -> rootcause::Result<bool> {
+    let changed = self::handle_focus_tab_request(tab_id, config, layout)?;
+    if changed {
+        let _acknowledged = pane_tracked_processes.acknowledge_active_pane_attention(
+            config.user_config.as_ref(),
+            layout,
+            runtimes,
+            now,
+        )?;
+    }
+    Ok(changed)
+}
+
 pub fn handle_focus_previous_tab_cmd(config: &ServerConfig, layout: &Mutex<SessionLayout>) -> rootcause::Result<()> {
     let mut layout = crate::server::lock_mutex(layout, "layout")?;
-    self::handle_focus_previous_tab(&mut layout)?;
+    layout.focus_previous_tab()?;
     crate::state::persisted::write_metadata(&config.paths, &layout)?;
     drop(layout);
+    Ok(())
+}
+
+pub fn handle_focus_previous_tab_cmd_with_tracked_process_ack(
+    config: &ServerConfig,
+    layout: &Mutex<SessionLayout>,
+    runtimes: &Mutex<PaneRuntimes>,
+    pane_tracked_processes: &mut PaneTrackedProcesses,
+    now: Instant,
+) -> rootcause::Result<()> {
+    self::handle_focus_previous_tab_cmd(config, layout)?;
+    let _acknowledged =
+        pane_tracked_processes.acknowledge_active_pane_attention(config.user_config.as_ref(), layout, runtimes, now)?;
     Ok(())
 }
 
 pub fn handle_focus_next_tab_cmd(config: &ServerConfig, layout: &Mutex<SessionLayout>) -> rootcause::Result<()> {
     let mut layout = crate::server::lock_mutex(layout, "layout")?;
-    self::handle_focus_next_tab(&mut layout)?;
+    layout.focus_next_tab()?;
     crate::state::persisted::write_metadata(&config.paths, &layout)?;
     drop(layout);
     Ok(())
 }
 
-fn handle_focus_tab(layout: &mut SessionLayout, tab_id: TabId) -> rootcause::Result<bool> {
-    layout.focus_tab(tab_id)
-}
-
-fn handle_focus_previous_tab(layout: &mut SessionLayout) -> rootcause::Result<()> {
-    layout.focus_previous_tab()
-}
-
-fn handle_focus_next_tab(layout: &mut SessionLayout) -> rootcause::Result<()> {
-    layout.focus_next_tab()
+pub fn handle_focus_next_tab_cmd_with_tracked_process_ack(
+    config: &ServerConfig,
+    layout: &Mutex<SessionLayout>,
+    runtimes: &Mutex<PaneRuntimes>,
+    pane_tracked_processes: &mut PaneTrackedProcesses,
+    now: Instant,
+) -> rootcause::Result<()> {
+    self::handle_focus_next_tab_cmd(config, layout)?;
+    let _acknowledged =
+        pane_tracked_processes.acknowledge_active_pane_attention(config.user_config.as_ref(), layout, runtimes, now)?;
+    Ok(())
 }
 
 #[cfg(test)]
@@ -110,7 +147,7 @@ mod tests {
     fn test_focus_tab_when_tab_exists_updates_active_tab() -> rootcause::Result<()> {
         let mut layout = self::layout()?;
 
-        assert2::assert!(handle_focus_tab(&mut layout, TabId::new(2)?)?);
+        assert2::assert!(layout.focus_tab(TabId::new(2)?)?);
 
         pretty_assertions::assert_eq!(layout.active_tab.get(), 2);
         Ok(())
@@ -120,7 +157,7 @@ mod tests {
     fn test_focus_tab_when_tab_is_missing_keeps_active_tab() -> rootcause::Result<()> {
         let mut layout = self::layout()?;
 
-        assert2::assert!(!handle_focus_tab(&mut layout, TabId::new(3)?)?);
+        assert2::assert!(!layout.focus_tab(TabId::new(3)?)?);
 
         pretty_assertions::assert_eq!(layout.active_tab.get(), 1);
         Ok(())

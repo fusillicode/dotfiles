@@ -15,6 +15,8 @@ use rootcause::report;
 // Match the local Zellij scroll buffer so long interactive sessions are not truncated sooner in muxr.
 const SCROLLBACK_ROWS: usize = 50_000;
 const SCROLL_LINES_PER_WHEEL_EVENT: usize = 5;
+const BRACKETED_PASTE_END: &[u8] = b"\x1b[201~";
+const BRACKETED_PASTE_START: &[u8] = b"\x1b[200~";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TerminalSnapshot {
@@ -431,6 +433,23 @@ impl TerminalState {
     }
 }
 
+pub fn paste_input_bytes(bytes: &[u8], bracketed_paste_enabled: bool) -> Vec<u8> {
+    if !bracketed_paste_enabled {
+        return bytes.to_vec();
+    }
+
+    let mut framed = Vec::with_capacity(
+        BRACKETED_PASTE_START
+            .len()
+            .saturating_add(bytes.len())
+            .saturating_add(BRACKETED_PASTE_END.len()),
+    );
+    framed.extend_from_slice(BRACKETED_PASTE_START);
+    framed.extend_from_slice(bytes);
+    framed.extend_from_slice(BRACKETED_PASTE_END);
+    framed
+}
+
 fn single_csi_param(params: &[&[u16]]) -> Option<u16> {
     let param = params.first()?;
     if params.len() != 1 || param.len() != 1 {
@@ -481,6 +500,19 @@ mod tests {
     use rstest::rstest;
 
     use super::*;
+
+    #[test]
+    fn test_paste_input_bytes_when_bracketed_paste_is_enabled_wraps_payload() {
+        pretty_assertions::assert_eq!(
+            paste_input_bytes(b"one\ntwo\n", true),
+            b"\x1b[200~one\ntwo\n\x1b[201~".to_vec(),
+        );
+    }
+
+    #[test]
+    fn test_paste_input_bytes_when_bracketed_paste_is_disabled_preserves_payload() {
+        pretty_assertions::assert_eq!(paste_input_bytes(b"one\ntwo\n", false), b"one\ntwo\n".to_vec());
+    }
 
     #[test]
     fn test_terminal_state_snapshot_when_output_processed_contains_screen() -> rootcause::Result<()> {

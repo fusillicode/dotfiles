@@ -1,6 +1,3 @@
-use std::collections::BTreeMap;
-use std::collections::BTreeSet;
-use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::atomic::AtomicBool;
@@ -9,7 +6,6 @@ use std::sync::mpsc;
 use std::time::Duration;
 use std::time::Instant;
 
-use muxr_config::MuxrConfig;
 use muxr_core::AttachAccepted;
 use muxr_core::AttachRequest;
 use muxr_core::ClientKey;
@@ -32,6 +28,7 @@ use muxr_transport::ServerEventWriter;
 use muxr_transport::ServerRequestReader;
 use rootcause::report;
 
+use crate::attached_client_timers::AttachedClientTimers;
 use crate::keyboard_input::ClientCmd;
 use crate::keyboard_input::KeyResolution;
 use crate::keyboard_input::ServerInputMode;
@@ -41,6 +38,7 @@ use crate::pane_close::PaneExitOutcome;
 use crate::pane_render::PaneRenderConfig;
 use crate::pane_render::RenderComposer;
 use crate::pane_render::RenderDiffReason;
+use crate::pane_runtime::PaneRuntimeMetadata;
 use crate::pane_runtime::PaneRuntimes;
 use crate::pane_scroll::PaneScrollAmount;
 use crate::pane_tracked_process::PaneTrackedProcessSnapshot;
@@ -51,15 +49,10 @@ use crate::pty::PtyHandle;
 use crate::pty::PtySinkGuard;
 use crate::server::ServerConfig;
 use crate::sessions_delete::DeleteSessions;
-use crate::state::PaneSnapshotFields;
 use crate::state::SessionLayout;
 
 const CLIENT_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(2);
-const CLIENT_EVENT_POLL_INTERVAL: Duration = Duration::from_millis(10);
-const CMD_HANDOFF_SAMPLE_DELAY: Duration = Duration::from_millis(50);
 const OUTPUT_EVENT_CHANNEL_LIMIT: usize = 1024;
-const RENDER_FRAME_INTERVAL: Duration = Duration::from_millis(16);
-const SLEEP_DISABLED_FOR: Duration = Duration::from_hours(24);
 
 struct ClientSlotGuard<'a> {
     active_client: &'a AtomicBool,
@@ -96,147 +89,6 @@ struct AttachedSessionState<'a> {
     runtimes: &'a Mutex<PaneRuntimes>,
     sink_guards: &'a mut Vec<AttachedPtySink>,
     terminal_size: TerminalSize,
-}
-
-struct AttachedClientTimers {
-    cmd_handoff_sample: Pin<Box<tokio::time::Sleep>>,
-    cmd_handoff_sample_panes: BTreeSet<PaneId>,
-    tracked_process_quiet_deadline: Option<Instant>,
-    tracked_process_quiet_sleep: Pin<Box<tokio::time::Sleep>>,
-    heartbeat: tokio::time::Interval,
-    render_tick: tokio::time::Interval,
-    shell_poll: tokio::time::Interval,
-}
-
-impl AttachedClientTimers {
-    fn new(config: &ServerConfig) -> rootcause::Result<Self> {
-        let heartbeat_start = tokio::time::Instant::now()
-            .checked_add(config.client_heartbeat_interval)
-            .ok_or_else(|| report!("muxr heartbeat interval overflowed"))?;
-        let render_start = tokio::time::Instant::now()
-            .checked_add(RENDER_FRAME_INTERVAL)
-            .ok_or_else(|| report!("muxr render frame interval overflowed"))?;
-
-        Ok(Self {
-            cmd_handoff_sample: Box::pin(tokio::time::sleep_until(self::disabled_sleep_deadline()?)),
-            cmd_handoff_sample_panes: BTreeSet::new(),
-            tracked_process_quiet_deadline: None,
-            tracked_process_quiet_sleep: Box::pin(tokio::time::sleep_until(self::disabled_sleep_deadline()?)),
-            heartbeat: tokio::time::interval_at(heartbeat_start, config.client_heartbeat_interval),
-            render_tick: tokio::time::interval_at(render_start, RENDER_FRAME_INTERVAL),
-            shell_poll: tokio::time::interval(CLIENT_EVENT_POLL_INTERVAL),
-        })
-    }
-
-    fn schedule_cmd_handoff_sample(&mut self, pane_id: PaneId) -> rootcause::Result<()> {
-        let deadline = tokio::time::Instant::now()
-            .checked_add(CMD_HANDOFF_SAMPLE_DELAY)
-            .ok_or_else(|| report!("muxr cmd handoff sample deadline overflowed"))?;
-        self.cmd_handoff_sample.as_mut().reset(deadline);
-        self.cmd_handoff_sample_panes.insert(pane_id);
-        Ok(())
-    }
-
-    fn take_cmd_handoff_sample_panes(&mut self) -> rootcause::Result<Vec<PaneId>> {
-        let pane_ids = std::mem::take(&mut self.cmd_handoff_sample_panes).into_iter().collect();
-        // `tokio::time::Sleep` stays ready after it fires. Disable the one-shot immediately after consuming it so
-        // the attached-client select loop cannot hot-spin and starve PTY rendering after a prompt submit.
-        self.cmd_handoff_sample.as_mut().reset(self::disabled_sleep_deadline()?);
-        Ok(pane_ids)
-    }
-
-    fn sync_tracked_process_quiet_deadline(&mut self, deadline: Option<Instant>) -> rootcause::Result<()> {
-        if self.tracked_process_quiet_deadline == deadline {
-            return Ok(());
-        }
-
-        self.tracked_process_quiet_deadline = deadline;
-        let deadline = deadline.map_or_else(self::disabled_sleep_deadline, |deadline| {
-            Ok(tokio::time::Instant::from_std(deadline))
-        })?;
-        self.tracked_process_quiet_sleep.as_mut().reset(deadline);
-        Ok(())
-    }
-
-    fn disable_tracked_process_quiet_sleep(&mut self) -> rootcause::Result<()> {
-        self.tracked_process_quiet_deadline = None;
-        self.tracked_process_quiet_sleep
-            .as_mut()
-            .reset(self::disabled_sleep_deadline()?);
-        Ok(())
-    }
-}
-
-fn disabled_sleep_deadline() -> rootcause::Result<tokio::time::Instant> {
-    tokio::time::Instant::now()
-        .checked_add(SLEEP_DISABLED_FOR)
-        .ok_or_else(|| report!("muxr disabled timer deadline overflowed"))
-}
-
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-struct PaneRuntimeMetadataEntry {
-    startup_cmd_label: Option<String>,
-    terminal_title: Option<String>,
-    tracked_cmd_label: Option<String>,
-    tracked_process_state: muxr_core::TrackedProcessState,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-struct PaneRuntimeMetadata {
-    panes: BTreeMap<PaneId, PaneRuntimeMetadataEntry>,
-}
-
-impl PaneRuntimeMetadata {
-    fn from_sources(
-        terminal_titles: Vec<(PaneId, Option<String>)>,
-        startup_cmd_labels: Vec<(PaneId, Option<String>)>,
-        tracked_processes: &PaneTrackedProcessSnapshot,
-    ) -> Self {
-        let mut panes = BTreeMap::<PaneId, PaneRuntimeMetadataEntry>::new();
-        for (pane_id, terminal_title) in terminal_titles {
-            panes.entry(pane_id).or_default().terminal_title = terminal_title;
-        }
-        for (pane_id, startup_cmd_label) in startup_cmd_labels {
-            panes.entry(pane_id).or_default().startup_cmd_label = startup_cmd_label;
-        }
-        for (pane_id, tracked_process) in tracked_processes.panes() {
-            let pane = panes.entry(pane_id).or_default();
-            pane.tracked_cmd_label = Some(tracked_process.label().to_owned());
-            pane.tracked_process_state = tracked_process.state();
-        }
-        Self { panes }
-    }
-
-    fn with_terminal_title_override(&self, pane_id: PaneId, terminal_title: Option<String>) -> Self {
-        let mut out = self.clone();
-        out.panes.entry(pane_id).or_default().terminal_title = terminal_title;
-        out
-    }
-
-    fn pane_snapshot_fields(&self) -> PaneSnapshotFields {
-        let mut fields = PaneSnapshotFields::default();
-        for (pane_id, pane) in &self.panes {
-            fields.set_terminal_title(*pane_id, pane.terminal_title.clone());
-            fields.set_cmd_label(*pane_id, self::runtime_cmd_label(pane));
-            fields.set_tracked_process_state(*pane_id, pane.tracked_process_state);
-        }
-        fields
-    }
-}
-
-fn runtime_cmd_label(pane: &PaneRuntimeMetadataEntry) -> Option<String> {
-    pane.tracked_cmd_label
-        .as_ref()
-        .or_else(|| {
-            let has_terminal_title = pane
-                .terminal_title
-                .as_deref()
-                .is_some_and(|title| !title.trim().is_empty());
-            (!has_terminal_title)
-                .then_some(pane.startup_cmd_label.as_ref())
-                .flatten()
-        })
-        .cloned()
 }
 
 pub fn resize_panes_to_layout(
@@ -459,11 +311,10 @@ async fn handle_client(
     let mut sink_guards = self::attach_pane_sinks(runtimes, &pty_event_sender)?;
     let (mut request_reader, mut event_writer) = connection.split();
     let mut pane_tracked_processes = PaneTrackedProcesses::default();
-    self::observe_all_pane_cmds(
+    pane_tracked_processes.observe_all_runtime_pane_cmds(
         config.user_config.as_ref(),
         layout,
         runtimes,
-        &mut pane_tracked_processes,
         Instant::now(),
     )?;
     let (layout_snapshot, pane_regions, mut render_composer, render_baseline) = self::initial_attached_render(
@@ -602,64 +453,6 @@ fn attention_pane_ids(layout: &SessionLayout, pane_tracked_processes: &PaneTrack
         }
     }
     pane_ids
-}
-
-fn observe_all_pane_cmds(
-    config: &MuxrConfig,
-    layout: &Mutex<SessionLayout>,
-    runtimes: &Mutex<PaneRuntimes>,
-    pane_tracked_processes: &mut PaneTrackedProcesses,
-    now: Instant,
-) -> rootcause::Result<bool> {
-    let pane_ids = {
-        let layout = crate::server::lock_mutex(layout, "layout")?;
-        layout.panes().into_iter().map(|pane| pane.id).collect::<Vec<_>>()
-    };
-    self::observe_pane_cmds(config, runtimes, pane_tracked_processes, &pane_ids, now)
-}
-
-fn observe_pane_cmds(
-    config: &MuxrConfig,
-    runtimes: &Mutex<PaneRuntimes>,
-    pane_tracked_processes: &mut PaneTrackedProcesses,
-    pane_ids: &[PaneId],
-    now: Instant,
-) -> rootcause::Result<bool> {
-    let mut changed = false;
-    for pane_id in pane_ids {
-        let observation = self::pane_cmd_observation(runtimes, *pane_id)?;
-        changed |= pane_tracked_processes.observe_pane_cmd(config, *pane_id, &observation, now);
-    }
-    Ok(changed)
-}
-
-fn observe_visible_activity_panes(
-    config: &MuxrConfig,
-    runtimes: &Mutex<PaneRuntimes>,
-    pane_tracked_processes: &mut PaneTrackedProcesses,
-    pane_ids: &[PaneId],
-    now: Instant,
-) -> rootcause::Result<bool> {
-    let mut changed = false;
-    for pane_id in pane_ids {
-        let observation = self::pane_cmd_observation(runtimes, *pane_id)?;
-        changed |= pane_tracked_processes.observe_visible_activity(config, *pane_id, &observation, now);
-    }
-    Ok(changed)
-}
-
-fn pane_cmd_observation(
-    runtimes: &Mutex<PaneRuntimes>,
-    pane_id: PaneId,
-) -> rootcause::Result<crate::pane_cmd::PaneCmdObservation> {
-    let handle = {
-        let runtimes = crate::server::lock_mutex(runtimes, "pane runtimes")?;
-        let handle = runtimes.handle(pane_id)?;
-        drop(runtimes);
-        handle
-    };
-    let snapshot = crate::pane_cmd::snapshot_from_pty_handle(&handle)?;
-    Ok(crate::pane_cmd::observe_pane_cmd(&snapshot))
 }
 
 async fn send_attached_response_and_baseline(
@@ -863,10 +656,9 @@ async fn handle_pty_event(
             *render_dirty |= screen_dirty;
             let now = Instant::now();
             let tracked_process_changed = if screen_dirty {
-                self::observe_visible_activity_panes(
+                state.pane_tracked_processes.observe_runtime_visible_activity(
                     state.config.user_config.as_ref(),
                     state.runtimes,
-                    &mut state.pane_tracked_processes,
                     &screen_dirty_panes,
                     now,
                 )?
@@ -994,10 +786,9 @@ async fn handle_cmd_handoff_sample(
         return Ok(true);
     }
 
-    let changed = self::observe_pane_cmds(
+    let changed = state.pane_tracked_processes.observe_runtime_pane_cmds(
         state.config.user_config.as_ref(),
         state.runtimes,
-        &mut state.pane_tracked_processes,
         &pane_ids,
         Instant::now(),
     )?;
@@ -1189,17 +980,13 @@ async fn handle_attached_request(
     heartbeat_started_at: &mut Option<tokio::time::Instant>,
     render_dirty: &mut bool,
 ) -> rootcause::Result<bool> {
+    let Some(request) = request else {
+        return Ok(false);
+    };
+
     match request {
-        Some(ClientRequest::Detach) => {
-            let _sent = self::send_writer_event_with_timeout(
-                event_writer,
-                &ServerEvent::Detached,
-                state.config.client_write_timeout,
-            )
-            .await?;
-            Ok(false)
-        }
-        Some(ClientRequest::DeleteSession) => {
+        ClientRequest::Detach => self::send_detached_event(event_writer, state).await,
+        ClientRequest::DeleteSession => {
             crate::sessions_delete::handle_attached_delete(
                 event_writer,
                 state.delete_sessions,
@@ -1208,63 +995,57 @@ async fn handle_attached_request(
             .await?;
             Ok(false)
         }
-        Some(ClientRequest::Input(bytes)) => {
-            if !bytes.is_empty() {
-                *render_dirty |= self::write_active_pane_user_input(
-                    state,
-                    timers,
-                    crate::keyboard_input::input_interaction(&bytes),
-                    |handle| handle.write_input(&bytes),
-                )?;
-            }
-            Ok(true)
+        ClientRequest::Input(bytes) => self::handle_pane_bytes_request(
+            &bytes,
+            state,
+            timers,
+            crate::keyboard_input::input_interaction(&bytes),
+            render_dirty,
+            PtyHandle::write_input,
+        ),
+        ClientRequest::Paste(bytes) => {
+            // Bracketed paste can contain newlines as data; only raw input newlines mean prompt submission.
+            self::handle_pane_bytes_request(
+                &bytes,
+                state,
+                timers,
+                TrackedProcessUserInteraction::MayEcho,
+                render_dirty,
+                PtyHandle::write_paste,
+            )
         }
-        Some(ClientRequest::Paste(bytes)) => {
-            if !bytes.is_empty() {
-                // Bracketed paste can contain newlines as data; only raw input newlines mean prompt submission.
-                *render_dirty |= self::write_active_pane_user_input(
-                    state,
-                    timers,
-                    TrackedProcessUserInteraction::MayEcho,
-                    |handle| handle.write_paste(&bytes),
-                )?;
-            }
-            Ok(true)
+        ClientRequest::Key(key) => self::handle_key_request(key, event_writer, state, timers, render_dirty).await,
+        ClientRequest::Mouse(event) => self::handle_mouse_event_request(event, event_writer, state, render_dirty).await,
+        ClientRequest::ScrollPaneLineAt { position, direction } => {
+            self::handle_scroll_pane_line_at_client_request(position, direction, event_writer, state, render_dirty)
+                .await
         }
-        Some(ClientRequest::Key(key)) => self::handle_key_request(key, event_writer, state, timers, render_dirty).await,
-        Some(ClientRequest::Mouse(event)) => {
-            self::handle_mouse_event_request(event, event_writer, state, render_dirty).await
+        ClientRequest::FocusPaneAt(position) => {
+            self::handle_focus_pane_at_client_request(position, event_writer, state).await
         }
-        Some(ClientRequest::ScrollPaneLineAt { position, direction }) => {
-            let event = self::scroll_pane_line_event(position, direction, state, render_dirty)?;
-            self::send_writer_event_with_timeout(event_writer, &event, state.config.client_write_timeout).await
-        }
-        Some(ClientRequest::FocusPaneAt(position)) => {
-            self::handle_focus_pane_at_request(position, event_writer, state).await
-        }
-        Some(ClientRequest::FocusTab(tab_id)) => self::focus_tab_and_render(tab_id, event_writer, state).await,
-        Some(ClientRequest::Resize(size)) => {
+        ClientRequest::FocusTab(tab_id) => self::handle_focus_tab_client_request(tab_id, event_writer, state).await,
+        ClientRequest::Resize(size) => {
             state.terminal_size = size;
             if !self::resize_panes_and_render(event_writer, state).await? {
                 return Ok(false);
             }
             Ok(true)
         }
-        Some(ClientRequest::RenderResync) => {
+        ClientRequest::RenderResync => {
             if !self::send_layout_and_baseline(event_writer, state).await? {
                 return Ok(false);
             }
             Ok(true)
         }
-        Some(ClientRequest::Ping) => {
+        ClientRequest::Ping => {
             self::send_writer_event_with_timeout(event_writer, &ServerEvent::Pong, state.config.client_write_timeout)
                 .await
         }
-        Some(ClientRequest::Pong) => {
+        ClientRequest::Pong => {
             *heartbeat_started_at = None;
             Ok(true)
         }
-        Some(request @ ClientRequest::Attach(_)) => {
+        request @ ClientRequest::Attach(_) => {
             let _sent = self::send_writer_event_with_timeout(
                 event_writer,
                 &ServerEvent::Error(ServerError::unexpected_request(request)),
@@ -1273,57 +1054,86 @@ async fn handle_attached_request(
             .await?;
             Ok(false)
         }
-        None => Ok(false),
     }
 }
 
-fn scroll_pane_line_event(
+fn handle_pane_bytes_request(
+    bytes: &[u8],
+    state: &mut AttachedSessionState<'_>,
+    timers: &mut AttachedClientTimers,
+    interaction: TrackedProcessUserInteraction,
+    render_dirty: &mut bool,
+    write: impl FnOnce(&PtyHandle, &[u8]) -> rootcause::Result<bool>,
+) -> rootcause::Result<bool> {
+    if !bytes.is_empty() {
+        *render_dirty |= self::write_active_pane_user_input(state, timers, interaction, |handle| write(handle, bytes))?;
+    }
+    Ok(true)
+}
+
+async fn handle_scroll_pane_line_at_client_request(
     position: ClientMousePosition,
     direction: PaneScrollDirection,
+    event_writer: &mut ServerEventWriter,
     state: &AttachedSessionState<'_>,
     render_dirty: &mut bool,
-) -> rootcause::Result<ServerEvent> {
-    let scrolled = crate::pane_scroll::handle_scroll_pane_line_at_request(
+) -> rootcause::Result<bool> {
+    let outcome = crate::pane_scroll::handle_scroll_pane_line_request(
         position,
         direction,
         state.layout,
         state.runtimes,
         &state.terminal_size,
     )?;
-    if scrolled {
-        // Edge-drag autoscroll can outpace render IO; keep viewport changes coalesced on the render tick.
-        *render_dirty = true;
-    }
-    // Clients keep one edge-scroll request pending until either a moved viewport renders or this no-op result arrives.
-    Ok(ServerEvent::ScrollPaneLineResult {
-        position,
-        direction,
-        scrolled,
-    })
+    *render_dirty |= outcome.render_dirty;
+    self::send_writer_event_with_timeout(event_writer, &outcome.event, state.config.client_write_timeout).await
 }
 
-async fn handle_focus_pane_at_request(
+async fn handle_focus_pane_at_client_request(
     position: ClientMousePosition,
     event_writer: &mut ServerEventWriter,
     state: &mut AttachedSessionState<'_>,
 ) -> rootcause::Result<bool> {
-    if !crate::pane_focus::handle_focus_pane_at_request(position, state.config, state.layout, &state.terminal_size)? {
+    if !crate::pane_focus::handle_focus_pane_at_request_with_tracked_process_ack(
+        position,
+        state.config,
+        state.layout,
+        state.runtimes,
+        &mut state.pane_tracked_processes,
+        &state.terminal_size,
+        Instant::now(),
+    )? {
         return Ok(true);
     }
-    let _tracked_process_acknowledged = self::acknowledge_active_tracked_process_attention(state)?;
     self::send_layout_and_baseline(event_writer, state).await
 }
 
-async fn focus_tab_and_render(
+async fn handle_focus_tab_client_request(
     tab_id: TabId,
     event_writer: &mut ServerEventWriter,
     state: &mut AttachedSessionState<'_>,
 ) -> rootcause::Result<bool> {
-    if !crate::tab_focus::handle_focus_tab_request(tab_id, state.config, state.layout)? {
+    if !crate::tab_focus::handle_focus_tab_request_with_tracked_process_ack(
+        tab_id,
+        state.config,
+        state.layout,
+        state.runtimes,
+        &mut state.pane_tracked_processes,
+        Instant::now(),
+    )? {
         return Ok(true);
     }
-    let _tracked_process_acknowledged = self::acknowledge_active_tracked_process_attention(state)?;
     self::send_layout_and_baseline(event_writer, state).await
+}
+
+async fn send_detached_event(
+    event_writer: &mut ServerEventWriter,
+    state: &AttachedSessionState<'_>,
+) -> rootcause::Result<bool> {
+    let _sent =
+        self::send_writer_event_with_timeout(event_writer, &ServerEvent::Detached, state.config.client_write_timeout)
+            .await?;
+    Ok(false)
 }
 
 async fn handle_key_request(
@@ -1377,15 +1187,7 @@ async fn handle_cmd_request(
                 }
             }
             match outcome {
-                ClosePaneOutcome::Final { .. } => {
-                    let _sent = self::send_writer_event_with_timeout(
-                        event_writer,
-                        &ServerEvent::Detached,
-                        state.config.client_write_timeout,
-                    )
-                    .await?;
-                    Ok(false)
-                }
+                ClosePaneOutcome::Final { .. } => self::send_detached_event(event_writer, state).await,
                 ClosePaneOutcome::Removed { .. } => self::resize_panes_and_render(event_writer, state).await,
             }
         }
@@ -1396,10 +1198,17 @@ async fn handle_cmd_request(
             self::resize_panes_and_render(event_writer, state).await
         }
         ClientCmd::FocusPane(direction) => {
-            if !crate::pane_focus::handle_focus_pane_cmd(direction, state.config, state.layout, &state.terminal_size)? {
+            if !crate::pane_focus::handle_focus_pane_cmd_with_tracked_process_ack(
+                direction,
+                state.config,
+                state.layout,
+                state.runtimes,
+                &mut state.pane_tracked_processes,
+                &state.terminal_size,
+                Instant::now(),
+            )? {
                 return Ok(true);
             }
-            let _tracked_process_acknowledged = self::acknowledge_active_tracked_process_attention(state)?;
             self::send_layout_and_baseline(event_writer, state).await
         }
         ClientCmd::EnterResizeMode | ClientCmd::ExitMode => self::send_layout_and_baseline(event_writer, state).await,
@@ -1424,12 +1233,22 @@ async fn handle_tab_cmd_request(
                 .push(self::attach_pane_sink(state.runtimes, state.pty_event_sender, pane_id)?);
         }
         TabCmd::FocusPrevious => {
-            crate::tab_focus::handle_focus_previous_tab_cmd(state.config, state.layout)?;
-            let _tracked_process_acknowledged = self::acknowledge_active_tracked_process_attention(state)?;
+            crate::tab_focus::handle_focus_previous_tab_cmd_with_tracked_process_ack(
+                state.config,
+                state.layout,
+                state.runtimes,
+                &mut state.pane_tracked_processes,
+                Instant::now(),
+            )?;
         }
         TabCmd::FocusNext => {
-            crate::tab_focus::handle_focus_next_tab_cmd(state.config, state.layout)?;
-            let _tracked_process_acknowledged = self::acknowledge_active_tracked_process_attention(state)?;
+            crate::tab_focus::handle_focus_next_tab_cmd_with_tracked_process_ack(
+                state.config,
+                state.layout,
+                state.runtimes,
+                &mut state.pane_tracked_processes,
+                Instant::now(),
+            )?;
         }
         TabCmd::MovePrevious => {
             crate::tab_move::handle_move_active_tab_previous_cmd(state.config, state.layout)?;
@@ -1470,22 +1289,6 @@ fn write_active_pane_user_input(
         timers.schedule_cmd_handoff_sample(pane_id)?;
     }
     Ok(render_dirty)
-}
-
-fn acknowledge_active_tracked_process_attention(state: &mut AttachedSessionState<'_>) -> rootcause::Result<bool> {
-    let active_pane = {
-        let layout = crate::server::lock_mutex(state.layout, "layout")?;
-        layout.active_pane_id()?
-    };
-    let observation = self::pane_cmd_observation(state.runtimes, active_pane)?;
-    let mut changed = state.pane_tracked_processes.observe_pane_cmd(
-        state.config.user_config.as_ref(),
-        active_pane,
-        &observation,
-        Instant::now(),
-    );
-    changed |= state.pane_tracked_processes.acknowledge_attention(active_pane);
-    Ok(changed)
 }
 
 async fn handle_mouse_event_request(
@@ -1558,15 +1361,17 @@ async fn handle_mouse_focus(
     event_writer: &mut ServerEventWriter,
     state: &mut AttachedSessionState<'_>,
 ) -> rootcause::Result<bool> {
-    if !crate::pane_focus::handle_focus_pane_at_request(
+    if !crate::pane_focus::handle_focus_pane_at_request_with_tracked_process_ack(
         event.position,
         state.config,
         state.layout,
+        state.runtimes,
+        &mut state.pane_tracked_processes,
         &state.terminal_size,
+        Instant::now(),
     )? {
         return Ok(true);
     }
-    let _tracked_process_acknowledged = self::acknowledge_active_tracked_process_attention(state)?;
     self::send_layout_and_baseline(event_writer, state).await
 }
 
@@ -1610,9 +1415,9 @@ async fn join_client_task(handle: tokio::task::JoinHandle<rootcause::Result<()>>
 mod tests {
     use std::path::Path;
 
+    use muxr_config::MuxrConfig;
     use muxr_core::SessionName;
     use muxr_core::SessionPaths;
-    use muxr_core::TrackedProcessState;
 
     use super::*;
     use crate::pane_cmd::PaneCmd;
@@ -1650,94 +1455,6 @@ mod tests {
             .and_then(|tab| tab.panes().first())
             .ok_or_else(|| report!("expected pane snapshot"))?;
         pretty_assertions::assert_eq!(pane.cmd_label, Some("cx".to_owned()));
-        Ok(())
-    }
-
-    #[test]
-    fn test_runtime_pane_metadata_cmd_labels_when_title_or_tracked_label_exists_suppresses_startup_label()
-    -> rootcause::Result<()> {
-        let pane_1 = PaneId::new(1)?;
-        let pane_2 = PaneId::new(2)?;
-        let pane_3 = PaneId::new(3)?;
-        let mut tracked_processes = PaneTrackedProcesses::default();
-        assert2::assert!(tracked_processes.observe_pane_cmd(
-            &MuxrConfig::default(),
-            pane_1,
-            &PaneCmdObservation::FgCmd {
-                cmd: PaneCmd {
-                    executable: "codex".to_owned(),
-                    path: None,
-                    pid: 42,
-                },
-            },
-            Instant::now(),
-        ));
-
-        let metadata = PaneRuntimeMetadata::from_sources(
-            vec![(pane_2, Some("~/work".to_owned()))],
-            vec![
-                (pane_1, Some("codex".to_owned())),
-                (pane_2, Some("demo process start".to_owned())),
-                (pane_3, Some("echo seeded".to_owned())),
-            ],
-            &tracked_processes.snapshot(),
-        );
-        let snapshot_fields = metadata.pane_snapshot_fields();
-
-        pretty_assertions::assert_eq!(snapshot_fields.cmd_label(pane_1), Some("cx"));
-        pretty_assertions::assert_eq!(snapshot_fields.cmd_label(pane_2), None);
-        pretty_assertions::assert_eq!(snapshot_fields.cmd_label(pane_3), Some("echo seeded"));
-        pretty_assertions::assert_eq!(snapshot_fields.terminal_title(pane_2), Some("~/work"));
-        pretty_assertions::assert_eq!(snapshot_fields.tracked_process_state(pane_1), TrackedProcessState::Busy);
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_attached_client_timers_when_cmd_handoff_sample_is_taken_disables_sleep() -> rootcause::Result<()> {
-        let tempdir = tempfile::tempdir()?;
-        let config = crate::server::test_helpers::server_config(tempdir.path(), "work")?;
-        let pane_id = PaneId::new(1)?;
-        let mut timers = AttachedClientTimers::new(&config)?;
-
-        timers.schedule_cmd_handoff_sample(pane_id)?;
-        let scheduled_deadline = timers.cmd_handoff_sample.deadline();
-
-        pretty_assertions::assert_eq!(timers.take_cmd_handoff_sample_panes()?, vec![pane_id]);
-
-        assert2::assert!(timers.cmd_handoff_sample_panes.is_empty());
-        assert2::assert!(timers.cmd_handoff_sample.deadline() > scheduled_deadline);
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_attached_client_timers_when_multiple_cmd_handoffs_are_pending_returns_all_panes()
-    -> rootcause::Result<()> {
-        let tempdir = tempfile::tempdir()?;
-        let config = crate::server::test_helpers::server_config(tempdir.path(), "work")?;
-        let pane_1 = PaneId::new(1)?;
-        let pane_2 = PaneId::new(2)?;
-        let mut timers = AttachedClientTimers::new(&config)?;
-
-        timers.schedule_cmd_handoff_sample(pane_2)?;
-        timers.schedule_cmd_handoff_sample(pane_1)?;
-
-        pretty_assertions::assert_eq!(timers.take_cmd_handoff_sample_panes()?, vec![pane_1, pane_2]);
-        assert2::assert!(timers.cmd_handoff_sample_panes.is_empty());
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_attached_client_timers_when_tracked_process_quiet_sleep_is_disabled_resets_without_deadline()
-    -> rootcause::Result<()> {
-        let tempdir = tempfile::tempdir()?;
-        let config = crate::server::test_helpers::server_config(tempdir.path(), "work")?;
-        let mut timers = AttachedClientTimers::new(&config)?;
-        let disabled_deadline = timers.tracked_process_quiet_sleep.deadline();
-
-        timers.disable_tracked_process_quiet_sleep()?;
-
-        pretty_assertions::assert_eq!(timers.tracked_process_quiet_deadline, None);
-        assert2::assert!(timers.tracked_process_quiet_sleep.deadline() > disabled_deadline);
         Ok(())
     }
 

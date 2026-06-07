@@ -1,4 +1,3 @@
-use std::future::Future;
 use std::io::Read;
 use std::io::Write;
 use std::path::Path;
@@ -15,9 +14,9 @@ use muxr_transport::ClientRequestWriter;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
 
+use self::copy_selection::SelectionEdgeScrollRequest;
 use self::renderer::ClientRenderOutcome;
 use self::renderer::ClientRenderer;
-use self::renderer::SelectionEdgeScrollRequest;
 use self::session_attach::AttachedSession;
 use self::terminal::TerminalGuard;
 use crate::input::DecodedInput;
@@ -62,14 +61,17 @@ enum ClientInputAction {
 /// - The current terminal size cannot be read.
 /// - Terminal input/output or protocol IO fails.
 pub fn start(session: &SessionName, server_executable: &Path, external_layout: Option<&Path>) -> rootcause::Result<()> {
-    self::run_async(async {
-        let muxr_config = MuxrConfig::default();
-        let terminal_size = self::terminal::current_terminal_size()?;
-        let pane_size = self::terminal::pane_size_for_terminal(muxr_config.tab_bar.width, &terminal_size)?;
-        let attached_session =
-            self::session_attach::open_session(session, pane_size.clone(), server_executable, external_layout).await?;
-        self::run_interactive(&muxr_config, attached_session, pane_size).await
-    })
+    tokio::runtime::Runtime::new()
+        .context("failed to build muxr tokio runtime")?
+        .block_on(async {
+            let muxr_config = MuxrConfig::default();
+            let terminal_size = self::terminal::current_terminal_size()?;
+            let pane_size = self::terminal::pane_size_for_terminal(muxr_config.tab_bar.width, &terminal_size)?;
+            let attached_session =
+                self::session_attach::open_session(session, pane_size.clone(), server_executable, external_layout)
+                    .await?;
+            self::run_interactive(&muxr_config, attached_session, pane_size).await
+        })
 }
 
 async fn run_interactive(
@@ -426,12 +428,6 @@ fn spawn_resize_forwarder(
     })
 }
 
-fn run_async<T>(future: impl Future<Output = rootcause::Result<T>>) -> rootcause::Result<T> {
-    tokio::runtime::Runtime::new()
-        .context("failed to build muxr tokio runtime")?
-        .block_on(future)
-}
-
 #[cfg(test)]
 mod tests {
     use std::fs;
@@ -454,10 +450,10 @@ mod tests {
     use muxr_transport::ClientConnection;
     use muxr_transport::ServerListener;
 
+    use super::terminal::SynchronizedOutput;
     use super::*;
     use crate::client::copy_selection::SelectionInput;
-    use crate::client::renderer::test_helpers as renderer_test_helpers;
-    use crate::render::SynchronizedOutput;
+    use crate::client::copy_selection::test_helpers as copy_selection_test_helpers;
 
     #[test]
     fn test_forward_client_requests_when_input_queue_is_ready_sends_control_first() -> rootcause::Result<()> {
@@ -748,7 +744,7 @@ mod tests {
             direction: PaneScrollDirection::Down,
             position: ClientMousePosition { row: 0, col: 1 },
         };
-        pretty_assertions::assert_eq!(renderer_test_helpers::edge_scroll_request(&initial), &expected);
+        pretty_assertions::assert_eq!(copy_selection_test_helpers::edge_scroll_request(&initial), &expected);
         assert2::assert!(send_edge_scroll_request(&input_sender, &mut renderer, initial));
         pretty_assertions::assert_eq!(input_receiver.blocking_recv(), Some(expected.clone()));
         assert2::assert!(send_selection_edge_scroll_request(&input_sender, &mut renderer));

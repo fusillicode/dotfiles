@@ -10,6 +10,19 @@ pub struct PaneProcess {
 }
 
 impl PaneProcess {
+    fn from_pid(pid: u32) -> Option<Self> {
+        let Ok(pid_i32) = i32::try_from(pid) else {
+            return None;
+        };
+        Some(Self {
+            // Process lookup can race with foreground-process exit. Treat misses as absent metadata; observation stays
+            // Unknown instead of clearing a live command from one failed sample.
+            name: libproc::proc_pid::name(pid_i32).ok(),
+            path: libproc::proc_pid::pidpath(pid_i32).ok(),
+            pid,
+        })
+    }
+
     fn cmd(&self) -> Option<PaneCmd> {
         let executable = self::process_executable(self.path.as_deref())
             .or_else(|| self::process_executable(self.name.as_deref()))?;
@@ -35,6 +48,22 @@ pub struct PaneCmdSnapshot {
     pub shell_pid: Option<u32>,
 }
 
+impl TryFrom<&PtyHandle> for PaneCmdSnapshot {
+    type Error = rootcause::Report;
+
+    fn try_from(handle: &PtyHandle) -> rootcause::Result<Self> {
+        let shell_pid = handle.process_id()?;
+        let fg_process_group = handle.fg_process_group()?;
+        let fg_process_group_leader = fg_process_group.and_then(PaneProcess::from_pid);
+
+        Ok(Self {
+            fg_process_group,
+            fg_process_group_leader,
+            shell_pid,
+        })
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum PaneCmdObservation {
     FgCmd { cmd: PaneCmd },
@@ -42,39 +71,29 @@ pub enum PaneCmdObservation {
     Unknown { reason: PaneCmdUnknownReason },
 }
 
+impl From<&PaneCmdSnapshot> for PaneCmdObservation {
+    fn from(snapshot: &PaneCmdSnapshot) -> Self {
+        if snapshot.fg_process_group.is_none() {
+            return Self::Unknown {
+                reason: PaneCmdUnknownReason::MissingFgProcessGroup,
+            };
+        }
+
+        if let Some(process) = &snapshot.fg_process_group_leader {
+            return self::observe_process(process, snapshot.shell_pid);
+        }
+
+        Self::Unknown {
+            reason: PaneCmdUnknownReason::MissingFgProcess,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PaneCmdUnknownReason {
     FgProcessHasNoExecutable,
     MissingFgProcess,
     MissingFgProcessGroup,
-}
-
-pub fn observe_pane_cmd(snapshot: &PaneCmdSnapshot) -> PaneCmdObservation {
-    if snapshot.fg_process_group.is_none() {
-        return PaneCmdObservation::Unknown {
-            reason: PaneCmdUnknownReason::MissingFgProcessGroup,
-        };
-    }
-
-    if let Some(process) = &snapshot.fg_process_group_leader {
-        return self::observe_process(process, snapshot.shell_pid);
-    }
-
-    PaneCmdObservation::Unknown {
-        reason: PaneCmdUnknownReason::MissingFgProcess,
-    }
-}
-
-pub fn snapshot_from_pty_handle(handle: &PtyHandle) -> rootcause::Result<PaneCmdSnapshot> {
-    let shell_pid = handle.process_id()?;
-    let fg_process_group = handle.fg_process_group()?;
-    let fg_process_group_leader = fg_process_group.and_then(self::process_info);
-
-    Ok(PaneCmdSnapshot {
-        fg_process_group,
-        fg_process_group_leader,
-        shell_pid,
-    })
 }
 
 fn observe_process(process: &PaneProcess, shell_pid: Option<u32>) -> PaneCmdObservation {
@@ -100,26 +119,13 @@ fn process_executable(raw: Option<&str>) -> Option<&str> {
     Path::new(raw).file_name().and_then(|name| name.to_str()).or(Some(raw))
 }
 
-fn process_info(pid: u32) -> Option<PaneProcess> {
-    let Ok(pid_i32) = i32::try_from(pid) else {
-        return None;
-    };
-    Some(PaneProcess {
-        // Process lookup can race with foreground-process exit. Treat misses as absent metadata; observation stays
-        // Unknown instead of clearing a live command from one failed sample.
-        name: libproc::proc_pid::name(pid_i32).ok(),
-        path: libproc::proc_pid::pidpath(pid_i32).ok(),
-        pid,
-    })
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn test_observe_pane_cmd_when_fg_leader_is_shell_returns_shell() {
-        let observation = observe_pane_cmd(&PaneCmdSnapshot {
+        let observation = PaneCmdObservation::from(&PaneCmdSnapshot {
             fg_process_group: Some(9322),
             fg_process_group_leader: Some(self::process(9322, "zsh")),
             shell_pid: Some(9322),
@@ -130,7 +136,7 @@ mod tests {
 
     #[test]
     fn test_observe_pane_cmd_when_fg_leader_has_path_returns_fg_cmd() {
-        let observation = observe_pane_cmd(&PaneCmdSnapshot {
+        let observation = PaneCmdObservation::from(&PaneCmdSnapshot {
             fg_process_group: Some(9400),
             fg_process_group_leader: Some(self::process_with_path(
                 9400,
@@ -147,7 +153,7 @@ mod tests {
 
     #[test]
     fn test_observe_pane_cmd_when_leader_is_missing_returns_unknown() {
-        let observation = observe_pane_cmd(&PaneCmdSnapshot {
+        let observation = PaneCmdObservation::from(&PaneCmdSnapshot {
             fg_process_group: Some(9400),
             fg_process_group_leader: None,
             shell_pid: Some(9322),
@@ -163,7 +169,7 @@ mod tests {
 
     #[test]
     fn test_observe_pane_cmd_when_cmd_exits_and_shell_is_fg_returns_shell() {
-        let observation = observe_pane_cmd(&PaneCmdSnapshot {
+        let observation = PaneCmdObservation::from(&PaneCmdSnapshot {
             fg_process_group: Some(9322),
             fg_process_group_leader: Some(self::process(9322, "zsh")),
             shell_pid: Some(9322),
@@ -174,7 +180,7 @@ mod tests {
 
     #[test]
     fn test_observe_pane_cmd_when_fg_is_untracked_returns_cmd() {
-        let observation = observe_pane_cmd(&PaneCmdSnapshot {
+        let observation = PaneCmdObservation::from(&PaneCmdSnapshot {
             fg_process_group: Some(4242),
             fg_process_group_leader: Some(self::process(4242, "nvim")),
             shell_pid: Some(9322),

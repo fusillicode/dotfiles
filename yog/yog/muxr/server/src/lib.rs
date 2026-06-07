@@ -1,6 +1,7 @@
 pub use server::serve_session;
 
 mod attached_client;
+mod attached_client_timers;
 mod cmd_label;
 mod history;
 mod keyboard_input;

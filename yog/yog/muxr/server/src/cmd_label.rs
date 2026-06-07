@@ -9,32 +9,34 @@ pub struct TerminalTitle {
     pub cwd: Option<String>,
 }
 
-/// Classify an OSC terminal title as either cwd metadata or cmd-label text.
-pub fn classify_terminal_title(title: Option<&str>, cwd: &str) -> TerminalTitle {
-    let home = std::env::var("HOME").ok();
-    self::classify_terminal_title_with_home(title, cwd, home.as_deref())
-}
-
-fn classify_terminal_title_with_home(title: Option<&str>, cwd: &str, home: Option<&str>) -> TerminalTitle {
-    let Some(title) = title.map(str::trim).filter(|title| !title.is_empty()) else {
-        return TerminalTitle {
-            cmd_label: None,
-            cwd: None,
-        };
-    };
-    let title_cwd = self::cwd_from_title(title, cwd, home);
-    if self::is_shell_title(title) || title_cwd.is_some() || self::is_ignored_title(title) {
-        return TerminalTitle {
-            cmd_label: None,
-            cwd: title_cwd,
-        };
+impl TerminalTitle {
+    /// Classify an OSC terminal title as either cwd metadata or cmd-label text.
+    pub fn classify(title: Option<&str>, cwd: &str) -> Self {
+        let home = std::env::var("HOME").ok();
+        Self::classify_with_home(title, cwd, home.as_deref())
     }
 
-    // Shell title hooks can report the exact input line for startup commands. Normalize path-like command words so
-    // `/Users/me/bin/demo process start` does not consume the whole fixed-width tab-bar command row.
-    TerminalTitle {
-        cmd_label: Some(self::cmd_title_label(title)),
-        cwd: None,
+    fn classify_with_home(title: Option<&str>, cwd: &str, home: Option<&str>) -> Self {
+        let Some(title) = title.map(str::trim).filter(|title| !title.is_empty()) else {
+            return Self {
+                cmd_label: None,
+                cwd: None,
+            };
+        };
+        let title_cwd = self::cwd_from_title(title, cwd, home);
+        if self::is_shell_title(title) || title_cwd.is_some() || self::is_ignored_title(title) {
+            return Self {
+                cmd_label: None,
+                cwd: title_cwd,
+            };
+        }
+
+        // Shell title hooks can report the exact input line for startup commands. Normalize path-like command words so
+        // `/Users/me/bin/demo process start` does not consume the whole fixed-width tab-bar command row.
+        Self {
+            cmd_label: Some(self::cmd_title_label(title)),
+            cwd: None,
+        }
     }
 }
 
@@ -136,7 +138,7 @@ mod tests {
         #[case] expected: Option<&str>,
     ) {
         pretty_assertions::assert_eq!(
-            classify_terminal_title_with_home(Some(title), cwd, Some("/foo/bar")).cmd_label,
+            TerminalTitle::classify_with_home(Some(title), cwd, Some("/foo/bar")).cmd_label,
             expected.map(ToOwned::to_owned)
         );
     }
@@ -144,7 +146,7 @@ mod tests {
     #[test]
     fn test_classify_terminal_title_when_title_is_cwd_basename_keeps_known_cwd() {
         pretty_assertions::assert_eq!(
-            classify_terminal_title_with_home(Some("project"), "/baz/project", Some("/foo/bar")),
+            TerminalTitle::classify_with_home(Some("project"), "/baz/project", Some("/foo/bar")),
             TerminalTitle {
                 cmd_label: None,
                 cwd: Some("/baz/project".to_owned()),
@@ -157,7 +159,7 @@ mod tests {
         let home = tempfile::Builder::new().prefix("muxr-home.").tempdir()?;
 
         pretty_assertions::assert_eq!(
-            classify_terminal_title_with_home(Some("~"), "/old/project", Some(home.path().to_string_lossy().as_ref())),
+            TerminalTitle::classify_with_home(Some("~"), "/old/project", Some(home.path().to_string_lossy().as_ref())),
             TerminalTitle {
                 cmd_label: None,
                 cwd: Some("~".to_owned()),
@@ -172,7 +174,7 @@ mod tests {
         std::fs::create_dir(home.path().join("My Project"))?;
 
         pretty_assertions::assert_eq!(
-            classify_terminal_title_with_home(
+            TerminalTitle::classify_with_home(
                 Some("~/My Project"),
                 "/old/project",
                 Some(home.path().to_string_lossy().as_ref())
@@ -192,7 +194,7 @@ mod tests {
         std::fs::write(home.path().join("bin").join("tool"), b"")?;
 
         pretty_assertions::assert_eq!(
-            classify_terminal_title_with_home(
+            TerminalTitle::classify_with_home(
                 Some("~/bin/tool"),
                 "/old/project",
                 Some(home.path().to_string_lossy().as_ref())

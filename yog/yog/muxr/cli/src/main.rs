@@ -29,6 +29,50 @@ enum SessionAction {
 }
 
 impl Cmd {
+    /// Parse muxr CLI arguments.
+    ///
+    /// # Errors
+    /// - The cmd is unknown, has unexpected extra arguments, or uses an invalid session name.
+    fn parse(args: &[String]) -> rootcause::Result<Self> {
+        if args.iter().any(|arg| arg == "--help") {
+            return Ok(Self::Help);
+        }
+
+        match args {
+            [] => Ok(Self::Sessions),
+            [cmd, rest @ ..] if cmd == "start" => Self::parse_start(rest),
+            [cmd, ..] => Err(report!("unknown muxr cmd {cmd:?}")),
+        }
+    }
+
+    fn parse_start(args: &[String]) -> rootcause::Result<Self> {
+        match args {
+            [] => Ok(Self::Start {
+                session: SessionName::default(),
+                external_layout: None,
+            }),
+            [layout_flag, layout] if layout_flag == EXTERNAL_LAYOUT_ARG => Ok(Self::Start {
+                session: SessionName::default(),
+                external_layout: Some(PathBuf::from(layout)),
+            }),
+            [layout_flag] if layout_flag == EXTERNAL_LAYOUT_ARG => {
+                Err(report!("missing muxr start layout").attach(format!("flag={EXTERNAL_LAYOUT_ARG}")))
+            }
+            [session] => Ok(Self::Start {
+                session: session.parse()?,
+                external_layout: None,
+            }),
+            [session, layout_flag, layout] if layout_flag == EXTERNAL_LAYOUT_ARG => Ok(Self::Start {
+                session: session.parse()?,
+                external_layout: Some(PathBuf::from(layout)),
+            }),
+            [session, layout_flag] if layout_flag == EXTERNAL_LAYOUT_ARG => {
+                Err(report!("missing muxr start layout").attach(format!("session={session:?}")))
+            }
+            _ => Err(report!("unexpected muxr start args").attach(format!("args={args:?}"))),
+        }
+    }
+
     /// Execute the muxr CLI cmd.
     ///
     /// # Errors
@@ -76,7 +120,7 @@ fn main() -> rootcause::Result<()> {
         return Ok(());
     }
 
-    let cmd = parse(&args);
+    let cmd = Cmd::parse(&args);
 
     match cmd {
         Ok(cmd) => cmd.execute(),
@@ -84,50 +128,6 @@ fn main() -> rootcause::Result<()> {
             print!("{}", include_str!("../help.txt"));
             Err(err)
         }
-    }
-}
-
-/// Parse muxr CLI arguments.
-///
-/// # Errors
-/// - The cmd is unknown, has unexpected extra arguments, or uses an invalid session name.
-fn parse(args: &[String]) -> rootcause::Result<Cmd> {
-    if args.iter().any(|arg| arg == "--help") {
-        return Ok(Cmd::Help);
-    }
-
-    match args {
-        [] => Ok(Cmd::Sessions),
-        [cmd, rest @ ..] if cmd == "start" => self::parse_start(rest),
-        [cmd, ..] => Err(report!("unknown muxr cmd {cmd:?}")),
-    }
-}
-
-fn parse_start(args: &[String]) -> rootcause::Result<Cmd> {
-    match args {
-        [] => Ok(Cmd::Start {
-            session: SessionName::default(),
-            external_layout: None,
-        }),
-        [layout_flag, layout] if layout_flag == EXTERNAL_LAYOUT_ARG => Ok(Cmd::Start {
-            session: SessionName::default(),
-            external_layout: Some(PathBuf::from(layout)),
-        }),
-        [layout_flag] if layout_flag == EXTERNAL_LAYOUT_ARG => {
-            Err(report!("missing muxr start layout").attach(format!("flag={EXTERNAL_LAYOUT_ARG}")))
-        }
-        [session] => Ok(Cmd::Start {
-            session: session.parse()?,
-            external_layout: None,
-        }),
-        [session, layout_flag, layout] if layout_flag == EXTERNAL_LAYOUT_ARG => Ok(Cmd::Start {
-            session: session.parse()?,
-            external_layout: Some(PathBuf::from(layout)),
-        }),
-        [session, layout_flag] if layout_flag == EXTERNAL_LAYOUT_ARG => {
-            Err(report!("missing muxr start layout").attach(format!("session={session:?}")))
-        }
-        _ => Err(report!("unexpected muxr start args").attach(format!("args={args:?}"))),
     }
 }
 
@@ -249,7 +249,7 @@ mod tests {
         assert2::assert!(let Cmd::Start {
             session,
             external_layout,
-        } = parse(&args(raw))?);
+        } = Cmd::parse(&args(raw))?);
         pretty_assertions::assert_eq!(session.as_ref(), expected_session);
         pretty_assertions::assert_eq!(external_layout.as_deref().and_then(Path::to_str), expected_layout);
         Ok(())
@@ -259,13 +259,13 @@ mod tests {
     #[case::help_arg(&["--help"])]
     #[case::help_among_args(&["start", "--help"])]
     fn test_parse_when_help_requested_returns_help(#[case] raw: &[&str]) -> rootcause::Result<()> {
-        pretty_assertions::assert_eq!(parse(&args(raw))?, Cmd::Help);
+        pretty_assertions::assert_eq!(Cmd::parse(&args(raw))?, Cmd::Help);
         Ok(())
     }
 
     #[test]
     fn test_parse_when_no_args_returns_session_picker() -> rootcause::Result<()> {
-        pretty_assertions::assert_eq!(parse(&args(&[]))?, Cmd::Sessions);
+        pretty_assertions::assert_eq!(Cmd::parse(&args(&[]))?, Cmd::Sessions);
         Ok(())
     }
 
@@ -280,7 +280,7 @@ mod tests {
     #[case::old_server_cmd(&["server", "work"])]
     #[case::unknown_cmd(&["bogus"])]
     fn test_parse_when_args_are_invalid_returns_error(#[case] raw: &[&str]) {
-        assert2::assert!(parse(&args(raw)).is_err());
+        assert2::assert!(Cmd::parse(&args(raw)).is_err());
     }
 
     #[rstest]

@@ -1,4 +1,5 @@
 use std::sync::Mutex;
+use std::time::Instant;
 
 use muxr_core::ClientMousePosition;
 use muxr_core::PaneId;
@@ -8,6 +9,7 @@ use rootcause::report;
 
 use crate::pane_layout::PaneRegion;
 use crate::pane_runtime::PaneRuntimes;
+use crate::pane_tracked_process::PaneTrackedProcesses;
 use crate::server::ServerConfig;
 use crate::state::SessionLayout;
 use crate::state::Tab;
@@ -105,6 +107,27 @@ pub fn handle_focus_pane_cmd(
     Ok(focused)
 }
 
+pub fn handle_focus_pane_cmd_with_tracked_process_ack(
+    direction: PaneFocusDirection,
+    config: &ServerConfig,
+    layout: &Mutex<SessionLayout>,
+    runtimes: &Mutex<PaneRuntimes>,
+    pane_tracked_processes: &mut PaneTrackedProcesses,
+    terminal_size: &TerminalSize,
+    now: Instant,
+) -> rootcause::Result<bool> {
+    let focused = self::handle_focus_pane_cmd(direction, config, layout, terminal_size)?;
+    if focused {
+        let _acknowledged = pane_tracked_processes.acknowledge_active_pane_attention(
+            config.user_config.as_ref(),
+            layout,
+            runtimes,
+            now,
+        )?;
+    }
+    Ok(focused)
+}
+
 pub fn handle_focus_pane_at_request(
     position: ClientMousePosition,
     config: &ServerConfig,
@@ -117,6 +140,27 @@ pub fn handle_focus_pane_at_request(
         crate::state::persisted::write_metadata(&config.paths, &layout)?;
     }
     drop(layout);
+    Ok(focused)
+}
+
+pub fn handle_focus_pane_at_request_with_tracked_process_ack(
+    position: ClientMousePosition,
+    config: &ServerConfig,
+    layout: &Mutex<SessionLayout>,
+    runtimes: &Mutex<PaneRuntimes>,
+    pane_tracked_processes: &mut PaneTrackedProcesses,
+    terminal_size: &TerminalSize,
+    now: Instant,
+) -> rootcause::Result<bool> {
+    let focused = self::handle_focus_pane_at_request(position, config, layout, terminal_size)?;
+    if focused {
+        let _acknowledged = pane_tracked_processes.acknowledge_active_pane_attention(
+            config.user_config.as_ref(),
+            layout,
+            runtimes,
+            now,
+        )?;
+    }
     Ok(focused)
 }
 

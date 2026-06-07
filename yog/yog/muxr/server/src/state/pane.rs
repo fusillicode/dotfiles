@@ -4,6 +4,7 @@ use muxr_core::TrackedProcessState;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::cmd_label::TerminalTitle;
 use crate::pane_split::PaneSplitAxis;
 use crate::pane_split::PaneSplitRatio;
 use crate::pty::PtyExitStatus;
@@ -106,7 +107,7 @@ impl Pane {
 
     /// Refresh pane cwd metadata from path-like shell title updates.
     pub fn sync_terminal_title(&mut self, terminal_title: Option<&str>) -> bool {
-        if let Some(cwd) = crate::cmd_label::classify_terminal_title(terminal_title, &self.cwd).cwd {
+        if let Some(cwd) = TerminalTitle::classify(terminal_title, &self.cwd).cwd {
             if self.cwd == cwd {
                 return false;
             }
@@ -123,7 +124,7 @@ impl Pane {
         runtime_cmd_label: Option<&str>,
         runtime_tracked_process_state: TrackedProcessState,
     ) -> PaneSnapshot {
-        let terminal_title = crate::cmd_label::classify_terminal_title(terminal_title, &self.cwd);
+        let terminal_title = TerminalTitle::classify(terminal_title, &self.cwd);
         PaneSnapshot {
             tracked_process_state: runtime_tracked_process_state,
             cmd_label: runtime_cmd_label
