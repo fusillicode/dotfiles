@@ -33,7 +33,6 @@ use crate::terminal::TerminalApplicationMode;
 use crate::terminal::TerminalMouseProtocol;
 use crate::terminal::TerminalSnapshot;
 use crate::terminal::TerminalState;
-use crate::terminal::TerminalTitleEvent;
 
 const READ_BUFFER_SIZE: usize = 8192;
 
@@ -367,8 +366,8 @@ impl PtyHandle {
         Ok(lock_mutex(&self.state.terminal, "pty terminal")?.title())
     }
 
-    pub fn take_title_events(&self) -> rootcause::Result<Vec<TerminalTitleEvent>> {
-        self.state.take_title_events()
+    pub fn take_title_changes(&self) -> rootcause::Result<Vec<Option<String>>> {
+        self.state.take_title_changes()
     }
 
     pub fn take_screen_dirty(&self) -> bool {
@@ -412,7 +411,7 @@ struct PtyState {
     history: Mutex<Option<PaneHistory>>,
     screen_dirty: AtomicBool,
     terminal: Mutex<TerminalState>,
-    title_events: Mutex<Vec<TerminalTitleEvent>>,
+    title_changes: Mutex<Vec<Option<String>>>,
 }
 
 impl PtyState {
@@ -430,13 +429,13 @@ impl PtyState {
             history: Mutex::new(Some(history)),
             screen_dirty: AtomicBool::new(false),
             terminal: Mutex::new(terminal),
-            title_events: Mutex::new(Vec::new()),
+            title_changes: Mutex::new(Vec::new()),
         })
     }
 
     fn attach_sink(self: &Arc<Self>, sender: mpsc::SyncSender<PtyEvent>) -> rootcause::Result<PtySinkGuard> {
         let output_current = Arc::new(AtomicBool::new(true));
-        lock_mutex(&self.title_events, "pty title events")?.clear();
+        lock_mutex(&self.title_changes, "pty title changes")?.clear();
         // Attach sends a fresh baseline; discard dirty state accumulated before the client could observe output events.
         self.screen_dirty.store(false, Ordering::Release);
         *lock_mutex(&self.active_sink, "pty active sink")? = Some(ActivePtySink {
@@ -463,13 +462,13 @@ impl PtyState {
                 self.screen_dirty.store(true, Ordering::Release);
             }
             let terminal_replies = process_outcome.into_replies();
-            let title_events = terminal.take_title_events();
+            let title_changes = terminal.take_title_changes();
             drop(terminal);
-            // Title events are queued separately from coalesced output events. Changed events drive tab-bar labels;
-            // repeated path-like prompt events still complete pending git refreshes after shell commands.
+            // Title changes are queued separately from coalesced output events so cmd->cwd title transitions are
+            // not collapsed before the server can emit matching tab bar updates.
             let active_sink = lock_mutex(&self.active_sink, "pty active sink")?;
-            if !title_events.is_empty() && active_sink.is_some() {
-                lock_mutex(&self.title_events, "pty title events")?.extend(title_events);
+            if !title_changes.is_empty() && active_sink.is_some() {
+                lock_mutex(&self.title_changes, "pty title changes")?.extend(title_changes);
             }
             drop(active_sink);
             terminal_replies
@@ -493,9 +492,9 @@ impl PtyState {
         Ok(terminal_replies)
     }
 
-    fn take_title_events(&self) -> rootcause::Result<Vec<TerminalTitleEvent>> {
-        let mut title_events = lock_mutex(&self.title_events, "pty title events")?;
-        Ok(std::mem::take(&mut *title_events))
+    fn take_title_changes(&self) -> rootcause::Result<Vec<Option<String>>> {
+        let mut title_changes = lock_mutex(&self.title_changes, "pty title changes")?;
+        Ok(std::mem::take(&mut *title_changes))
     }
 
     fn take_screen_dirty(&self) -> bool {
@@ -681,7 +680,7 @@ mod tests {
             history: Mutex::new(None),
             screen_dirty: AtomicBool::new(false),
             terminal: Mutex::new(TerminalState::new(size)),
-            title_events: Mutex::new(Vec::new()),
+            title_changes: Mutex::new(Vec::new()),
         }
     }
 
@@ -766,34 +765,7 @@ mod tests {
         pretty_assertions::assert_eq!(state.append_output(b"\x1b]2;~\x07")?, Vec::<Vec<u8>>::new());
 
         assert2::assert!(!state.take_screen_dirty());
-        pretty_assertions::assert_eq!(
-            state.take_title_events()?,
-            vec![TerminalTitleEvent::Changed(Some("~".to_owned()))],
-        );
-        assert2::assert!(matches!(receiver.recv(), Ok(PtyEvent::OutputReady)));
-        Ok(())
-    }
-
-    #[test]
-    fn test_append_output_when_title_repeats_preserves_repeated_title_event() -> rootcause::Result<()> {
-        let state = Arc::new(pty_state(&terminal_size()?));
-        let (sender, receiver) = mpsc::sync_channel(1);
-        let _guard = state.attach_sink(sender)?;
-
-        pretty_assertions::assert_eq!(state.append_output(b"\x1b]2;/repo\x07")?, Vec::<Vec<u8>>::new());
-        pretty_assertions::assert_eq!(
-            state.take_title_events()?,
-            vec![TerminalTitleEvent::Changed(Some("/repo".to_owned()))],
-        );
-        assert2::assert!(matches!(receiver.recv(), Ok(PtyEvent::OutputReady)));
-
-        pretty_assertions::assert_eq!(state.append_output(b"\x1b]2;/repo\x07")?, Vec::<Vec<u8>>::new());
-
-        assert2::assert!(!state.take_screen_dirty());
-        pretty_assertions::assert_eq!(
-            state.take_title_events()?,
-            vec![TerminalTitleEvent::Unchanged(Some("/repo".to_owned()))],
-        );
+        pretty_assertions::assert_eq!(state.take_title_changes()?, vec![Some("~".to_owned())]);
         assert2::assert!(matches!(receiver.recv(), Ok(PtyEvent::OutputReady)));
         Ok(())
     }
@@ -823,7 +795,7 @@ mod tests {
         let state = PtyState::with_history(&terminal_size()?, &history_path)?;
 
         pretty_assertions::assert_eq!(lock_mutex(&state.terminal, "pty terminal")?.title(), None);
-        pretty_assertions::assert_eq!(state.take_title_events()?, Vec::<TerminalTitleEvent>::new());
+        pretty_assertions::assert_eq!(state.take_title_changes()?, Vec::<Option<String>>::new());
         Ok(())
     }
 
@@ -849,7 +821,7 @@ mod tests {
     }
 
     #[test]
-    fn test_append_output_when_sink_is_full_and_title_events_preserves_title_events() -> rootcause::Result<()> {
+    fn test_append_output_when_sink_is_full_and_title_changes_preserves_title_changes() -> rootcause::Result<()> {
         let state = pty_state(&terminal_size()?);
         let (sender, receiver) = mpsc::sync_channel(1);
         let output_current = Arc::new(AtomicBool::new(true));
@@ -865,11 +837,8 @@ mod tests {
         );
 
         pretty_assertions::assert_eq!(
-            state.take_title_events()?,
-            vec![
-                TerminalTitleEvent::Changed(Some("cargo test".to_owned())),
-                TerminalTitleEvent::Changed(Some("~".to_owned())),
-            ],
+            state.take_title_changes()?,
+            vec![Some("cargo test".to_owned()), Some("~".to_owned())],
         );
         assert2::assert!(matches!(receiver.recv(), Ok(PtyEvent::OutputReady)));
         Ok(())

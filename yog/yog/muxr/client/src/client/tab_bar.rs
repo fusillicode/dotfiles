@@ -12,7 +12,6 @@ use crossterm::style::SetAttribute;
 use crossterm::style::SetBackgroundColor;
 use crossterm::style::SetForegroundColor;
 use muxr_config::TabBarConfig;
-use muxr_core::GitStats;
 use muxr_core::LayoutSnapshot;
 use muxr_core::PaneSnapshot;
 use muxr_core::RenderColor;
@@ -29,7 +28,6 @@ struct SidebarTab {
     active: bool,
     tracked_process_state: TrackedProcessState,
     cmd_label: Option<String>,
-    git_stats: Option<GitStats>,
     path_label: String,
 }
 
@@ -57,7 +55,6 @@ pub fn queue(
             row,
             tab.active,
             TrackedProcessState::None,
-            None,
             &tab.path_label,
         )?;
         row = row.saturating_add(1);
@@ -71,7 +68,6 @@ pub fn queue(
             row,
             tab.active,
             tab.tracked_process_state,
-            tab.git_stats,
             tab.cmd_label.as_deref().unwrap_or(""),
         )?;
         row = row.saturating_add(1);
@@ -80,12 +76,12 @@ pub fn queue(
             break;
         }
         // Keep muxr tab entries aligned with the three-row agg tab-bar shape.
-        self::queue_sidebar_row(stdout, config, row, tab.active, TrackedProcessState::None, None, "")?;
+        self::queue_sidebar_row(stdout, config, row, tab.active, TrackedProcessState::None, "")?;
         row = row.saturating_add(1);
     }
 
     while row < rows {
-        self::queue_sidebar_row(stdout, config, row, false, TrackedProcessState::None, None, "")?;
+        self::queue_sidebar_row(stdout, config, row, false, TrackedProcessState::None, "")?;
         row = row.saturating_add(1);
     }
 
@@ -107,7 +103,6 @@ fn queue_sidebar_row(
     row: u16,
     active: bool,
     tracked_process_state: TrackedProcessState,
-    git_stats: Option<GitStats>,
     text: &str,
 ) -> rootcause::Result<()> {
     let content_width = usize::from(config.width.saturating_sub(2));
@@ -129,28 +124,11 @@ fn queue_sidebar_row(
     } else {
         0
     };
-    // Git counters can grow wider than the fixed sidebar; clip them before row-width math so they cannot spill into
-    // pane content.
-    let max_git_stats_width = content_width.saturating_sub(marker_width);
-    let git_stats_parts = self::git_stats_parts(config, git_stats, max_git_stats_width);
-    let git_stats_width = self::git_stats_parts_width(&git_stats_parts);
-    let git_stats_separator_width = usize::from(git_stats_width > 0);
     let label = text
         .chars()
-        .take(
-            content_width
-                .saturating_sub(marker_width)
-                .saturating_sub(git_stats_width)
-                .saturating_sub(git_stats_separator_width),
-        )
+        .take(content_width.saturating_sub(marker_width))
         .collect::<String>();
-    let git_stats_separator_width = usize::from(git_stats_width > 0 && !label.is_empty());
-    let used_width = label
-        .chars()
-        .count()
-        .saturating_add(marker_width)
-        .saturating_add(git_stats_width)
-        .saturating_add(git_stats_separator_width);
+    let used_width = label.chars().count().saturating_add(marker_width);
     self::queue_tracked_process_state_marker(stdout, config, active, tracked_process_state)?;
     queue_cmd(stdout, Print(&label))?;
     self::queue_sidebar_text_style(stdout, config, active)?;
@@ -158,10 +136,6 @@ fn queue_sidebar_row(
     if trailing_width > 0 {
         queue_cmd(stdout, Print(pad("", trailing_width)))?;
     }
-    if git_stats_separator_width > 0 {
-        queue_cmd(stdout, Print(" "))?;
-    }
-    self::queue_git_stats_parts(stdout, &git_stats_parts)?;
     queue_cmd(stdout, SetAttribute(Attribute::Reset))?;
     queue_cmd(stdout, SetBackgroundColor(crate::render::crossterm_color(config.bg)))?;
     queue_cmd(
@@ -170,58 +144,6 @@ fn queue_sidebar_row(
     )?;
     queue_cmd(stdout, Print(SEPARATOR))?;
     Ok(())
-}
-
-fn queue_git_stats_parts(stdout: &mut impl Write, git_stats_parts: &[(RenderColor, String)]) -> rootcause::Result<()> {
-    for (color, text) in git_stats_parts {
-        queue_cmd(stdout, SetForegroundColor(crate::render::crossterm_color(*color)))?;
-        queue_cmd(stdout, Print(text))?;
-    }
-    Ok(())
-}
-
-fn git_stats_parts(config: TabBarConfig, git_stats: Option<GitStats>, max_width: usize) -> Vec<(RenderColor, String)> {
-    let Some(git_stats) = git_stats.filter(|git_stats| !git_stats.is_clean()) else {
-        return Vec::new();
-    };
-    let mut parts = Vec::new();
-    if git_stats.insertions > 0 {
-        parts.push((config.git_stats.insertions_fg, format!("+{}", git_stats.insertions)));
-    }
-    if git_stats.deletions > 0 {
-        parts.push((config.git_stats.deletions_fg, format!("-{}", git_stats.deletions)));
-    }
-    if git_stats.new_files > 0 {
-        parts.push((config.git_stats.new_files_fg, format!("?{}", git_stats.new_files)));
-    }
-    self::truncate_git_stats_parts(parts, max_width)
-}
-
-fn truncate_git_stats_parts(parts: Vec<(RenderColor, String)>, max_width: usize) -> Vec<(RenderColor, String)> {
-    let mut out = Vec::new();
-    let mut used_width = 0_usize;
-    for (color, text) in parts {
-        let separator_width = usize::from(!out.is_empty());
-        if used_width.saturating_add(separator_width) >= max_width {
-            break;
-        }
-        let remaining = max_width.saturating_sub(used_width).saturating_sub(separator_width);
-        let text = text.chars().take(remaining).collect::<String>();
-        if text.is_empty() {
-            break;
-        }
-        let text = if separator_width > 0 { format!(" {text}") } else { text };
-        used_width = used_width.saturating_add(text.chars().count());
-        out.push((color, text));
-    }
-    out
-}
-
-fn git_stats_parts_width(git_stats_parts: &[(RenderColor, String)]) -> usize {
-    git_stats_parts
-        .iter()
-        .map(|(_color, text)| text.chars().count())
-        .sum::<usize>()
 }
 
 fn queue_sidebar_text_style(stdout: &mut impl Write, config: TabBarConfig, active: bool) -> rootcause::Result<()> {
@@ -286,7 +208,6 @@ fn sidebar_tabs_with_home(layout: &LayoutSnapshot, home: Option<&str>) -> Vec<Si
                 active,
                 tracked_process_state: display_pane.map(|pane| pane.tracked_process_state).unwrap_or_default(),
                 cmd_label: self::cmd_label(display_pane),
-                git_stats: display_pane.and_then(|pane| pane.git_stats),
                 path_label: self::path_label(tab, display_pane, home),
             }
         })
@@ -456,14 +377,12 @@ mod tests {
                     active: false,
                     tracked_process_state: TrackedProcessState::None,
                     cmd_label: None,
-                    git_stats: None,
                     path_label: "~/w/default".to_owned(),
                 },
                 SidebarTab {
                     active: true,
                     tracked_process_state: TrackedProcessState::None,
                     cmd_label: Some("nvim".to_owned()),
-                    git_stats: None,
                     path_label: "~/s/muxr".to_owned(),
                 },
             ],
@@ -502,14 +421,12 @@ mod tests {
                     active: true,
                     tracked_process_state: TrackedProcessState::None,
                     cmd_label: None,
-                    git_stats: None,
                     path_label: "/t/active".to_owned(),
                 },
                 SidebarTab {
                     active: false,
                     tracked_process_state: TrackedProcessState::Unseen,
                     cmd_label: Some("codex".to_owned()),
-                    git_stats: None,
                     path_label: "/t/codex".to_owned(),
                 },
             ],
@@ -591,7 +508,6 @@ mod tests {
                 active: false,
                 tracked_process_state,
                 cmd_label: Some(expected_cmd_label.to_owned()),
-                git_stats: None,
                 path_label: expected_path_label.to_owned(),
             },
         );
@@ -630,7 +546,6 @@ mod tests {
                 active: false,
                 tracked_process_state: TrackedProcessState::Seen,
                 cmd_label: Some("codex".to_owned()),
-                git_stats: None,
                 path_label: "/t/codex".to_owned(),
             },
         );
@@ -659,51 +574,8 @@ mod tests {
                 active: true,
                 tracked_process_state: TrackedProcessState::Unseen,
                 cmd_label: Some("codex".to_owned()),
-                git_stats: None,
                 path_label: "/t/codex".to_owned(),
             }],
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn test_sidebar_tabs_when_inactive_tab_uses_tracked_process_pane_uses_same_cwd_git_stats() -> rootcause::Result<()>
-    {
-        let shell_pane = self::pane_snapshot(2, "/tmp/shell", Some("zsh"), TrackedProcessState::None)?;
-        let mut tracked_process_pane = self::pane_snapshot(3, "/tmp/codex", Some("codex"), TrackedProcessState::Busy)?;
-        tracked_process_pane.git_stats = Some(GitStats {
-            deletions: 1,
-            insertions: 2,
-            new_files: 3,
-        });
-        let layout = self::layout_snapshot(
-            1,
-            vec![
-                self::tab_snapshot(
-                    1,
-                    "active",
-                    1,
-                    vec![self::pane_snapshot(1, "/tmp/active", None, TrackedProcessState::None)?],
-                )?,
-                self::tab_snapshot(2, "inactive", 2, vec![shell_pane, tracked_process_pane])?,
-            ],
-        )?;
-
-        let tabs = sidebar_tabs_with_home(&layout, None);
-
-        pretty_assertions::assert_eq!(
-            tabs[1],
-            SidebarTab {
-                active: false,
-                tracked_process_state: TrackedProcessState::Busy,
-                cmd_label: Some("codex".to_owned()),
-                git_stats: Some(GitStats {
-                    deletions: 1,
-                    insertions: 2,
-                    new_files: 3,
-                }),
-                path_label: "/t/codex".to_owned(),
-            },
         );
         Ok(())
     }
@@ -835,87 +707,6 @@ mod tests {
         Ok(())
     }
 
-    #[test]
-    fn test_queue_when_git_stats_is_rendered_right_aligns_counters_on_cmd_row() -> rootcause::Result<()> {
-        let mut pane = self::pane_snapshot(1, "project", Some("cx"), TrackedProcessState::Busy)?;
-        pane.git_stats = Some(GitStats {
-            deletions: 1,
-            insertions: 2,
-            new_files: 3,
-        });
-        let layout = self::layout_snapshot(1, vec![self::tab_snapshot(1, "default", 1, vec![pane])?])?;
-        let mut output = CountingWriter::default();
-
-        queue(&mut output, MuxrConfig::default().tab_bar, &layout, 3)?;
-
-        let visible = self::strip_ansi(&output.rendered_string()?);
-        let rows = visible.split(SEPARATOR).collect::<Vec<_>>();
-        assert2::assert!(rows[1].starts_with("\u{258e}\u{2022} cx"));
-        assert2::assert!(rows[1].ends_with("+2 -1 ?3"));
-        Ok(())
-    }
-
-    #[test]
-    fn test_queue_when_git_stats_and_long_label_are_rendered_keeps_separator_space() -> rootcause::Result<()> {
-        let mut pane = self::pane_snapshot(
-            1,
-            "project",
-            Some("very-long-running-command"),
-            TrackedProcessState::Seen,
-        )?;
-        pane.git_stats = Some(GitStats {
-            deletions: 0,
-            insertions: 12,
-            new_files: 0,
-        });
-        let layout = self::layout_snapshot(1, vec![self::tab_snapshot(1, "default", 1, vec![pane])?])?;
-        let mut output = CountingWriter::default();
-
-        queue(&mut output, MuxrConfig::default().tab_bar, &layout, 3)?;
-
-        let visible = self::strip_ansi(&output.rendered_string()?);
-        let rows = visible.split(SEPARATOR).collect::<Vec<_>>();
-        assert2::assert!(rows[1].contains(" +12"));
-        assert2::assert!(!rows[1].contains("d+12"));
-        Ok(())
-    }
-
-    #[test]
-    fn test_queue_when_git_stats_is_clean_does_not_render_counters() -> rootcause::Result<()> {
-        let mut pane = self::pane_snapshot(1, "project", Some("cx"), TrackedProcessState::Seen)?;
-        pane.git_stats = Some(GitStats::default());
-        let layout = self::layout_snapshot(1, vec![self::tab_snapshot(1, "default", 1, vec![pane])?])?;
-        let mut output = CountingWriter::default();
-
-        queue(&mut output, MuxrConfig::default().tab_bar, &layout, 3)?;
-
-        let visible = self::strip_ansi(&output.rendered_string()?);
-        assert2::assert!(!visible.contains("+0"));
-        assert2::assert!(!visible.contains("-0"));
-        assert2::assert!(!visible.contains("?0"));
-        Ok(())
-    }
-
-    #[test]
-    fn test_queue_when_git_stats_is_wider_than_row_keeps_sidebar_width() -> rootcause::Result<()> {
-        let mut pane = self::pane_snapshot(1, "project", Some("cx"), TrackedProcessState::Busy)?;
-        pane.git_stats = Some(GitStats {
-            deletions: 123_456,
-            insertions: 123_456,
-            new_files: 123_456,
-        });
-        let config = MuxrConfig::default().tab_bar;
-        let layout = self::layout_snapshot(1, vec![self::tab_snapshot(1, "default", 1, vec![pane])?])?;
-        let mut output = CountingWriter::default();
-
-        queue(&mut output, config, &layout, 3)?;
-
-        let visible = self::strip_ansi(&output.rendered_string()?);
-        let rows = visible.split(SEPARATOR).collect::<Vec<_>>();
-        pretty_assertions::assert_eq!(rows[1].chars().count(), usize::from(config.width.saturating_sub(1)));
-        Ok(())
-    }
-
     #[rstest]
     #[case::first_path_row(0, Some(1))]
     #[case::first_cmd_row(1, Some(1))]
@@ -974,7 +765,6 @@ mod tests {
             cwd: cwd.to_owned(),
             cmd_label: cmd_label.map(str::to_owned),
             focus_seq: u64::from(id),
-            git_stats: None,
             id: PaneId::new(id)?,
             title: "shell".to_owned(),
         })

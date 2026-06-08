@@ -1,4 +1,3 @@
-use std::collections::BTreeSet;
 use std::sync::mpsc;
 use std::time::Duration;
 use std::time::Instant;
@@ -26,9 +25,6 @@ use muxr_transport::ServerRequestReader;
 use rootcause::report;
 
 use crate::attached_client_timers::AttachedClientTimers;
-use crate::cwd_git_stats::CwdGitStats;
-use crate::cwd_git_stats::CwdGitStatsRequester;
-use crate::cwd_git_stats::CwdGitStatsResult;
 use crate::keyboard_input::ClientCmd;
 use crate::keyboard_input::KeyResolution;
 use crate::keyboard_input::ServerInputMode;
@@ -58,7 +54,6 @@ use crate::session_runtime::SessionRuntimeState;
 use crate::session_runtime::SessionRuntimeTimerMessage;
 use crate::sessions_delete::DeleteSessions;
 use crate::state::SessionLayout;
-use crate::terminal::TerminalTitleEvent;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ReapResult {
@@ -76,8 +71,6 @@ struct AttachedSessionState<'a> {
     pane_tracked_processes: PaneTrackedProcesses,
     config: &'a ServerConfig,
     delete_sessions: &'a DeleteSessions,
-    cwd_git_stats_requester: CwdGitStatsRequester,
-    cwd_git_stats: CwdGitStats,
     input_mode: ServerInputMode,
     last_layout_snapshot: LayoutSnapshot,
     layout: &'a mut SessionLayout,
@@ -185,14 +178,11 @@ pub fn initial_attached_render(
     layout: &mut SessionLayout,
     runtimes: &PaneRuntimes,
     pane_tracked_processes: &PaneTrackedProcesses,
-    cwd_git_stats: &CwdGitStats,
     terminal_size: &TerminalSize,
 ) -> rootcause::Result<(LayoutSnapshot, PaneRegionsSnapshot, RenderComposer, RenderUpdate)> {
     let mut render_composer = RenderComposer::default();
     let tracked_processes = pane_tracked_processes.snapshot();
-    let (runtime_metadata, _changed_panes) =
-        self::synced_runtime_metadata_and_persist(&config.paths, layout, runtimes, &tracked_processes)?;
-    let layout_snapshot = self::layout_snapshot_from_runtime_metadata(layout, &runtime_metadata, cwd_git_stats)?;
+    let layout_snapshot = self::layout_snapshot_and_persist(&config.paths, layout, runtimes, &tracked_processes)?;
     let pane_regions = self::pane_regions_snapshot(layout, runtimes, terminal_size)?;
     let attention_panes = self::attention_pane_ids(layout, pane_tracked_processes);
     let render_baseline = render_composer.render_baseline(
@@ -210,12 +200,12 @@ pub fn initial_attached_render(
     Ok((layout_snapshot, pane_regions, render_composer, render_baseline))
 }
 
-fn synced_runtime_metadata_and_persist(
+fn layout_snapshot_and_persist(
     paths: &SessionPaths,
     layout: &mut SessionLayout,
     runtimes: &PaneRuntimes,
     tracked_processes: &PaneTrackedProcessSnapshot,
-) -> rootcause::Result<(PaneRuntimeMetadata, Vec<PaneId>)> {
+) -> rootcause::Result<LayoutSnapshot> {
     let synced = runtimes.sync_layout_terminal_titles(layout)?;
     if synced.layout_changed() {
         crate::state::persisted::write_metadata(paths, layout)?;
@@ -225,17 +215,7 @@ fn synced_runtime_metadata_and_persist(
         runtimes.startup_cmd_labels(),
         tracked_processes,
     );
-    Ok((runtime_metadata, synced.changed_panes().to_vec()))
-}
-
-fn layout_snapshot_from_runtime_metadata(
-    layout: &SessionLayout,
-    runtime_metadata: &PaneRuntimeMetadata,
-    cwd_git_stats: &CwdGitStats,
-) -> rootcause::Result<LayoutSnapshot> {
-    let mut snapshot_fields = runtime_metadata.pane_snapshot_fields();
-    cwd_git_stats.populate_snapshot_fields(layout, &mut snapshot_fields);
-    layout.snapshot_with_runtime_metadata(&snapshot_fields)
+    layout.snapshot_with_runtime_metadata(&runtime_metadata.pane_snapshot_fields())
 }
 
 fn attach_pane_sinks(
@@ -278,14 +258,11 @@ async fn handle_client(
         &state.pane_runtimes,
         Instant::now(),
     )?;
-    let cwd_git_stats = CwdGitStats::default();
-    let (cwd_git_stats_requester, mut git_stats_result_receiver) = crate::cwd_git_stats::cwd_git_stats_worker();
     let (layout_snapshot, pane_regions, mut render_composer, render_baseline) = self::initial_attached_render(
         config,
         &mut state.layout,
         &state.pane_runtimes,
         &pane_tracked_processes,
-        &cwd_git_stats,
         &attach_request.terminal_size,
     )?;
     let last_layout_snapshot = layout_snapshot.clone();
@@ -317,8 +294,6 @@ async fn handle_client(
         pane_tracked_processes,
         config,
         delete_sessions,
-        cwd_git_stats_requester,
-        cwd_git_stats,
         input_mode: ServerInputMode::Normal,
         last_layout_snapshot,
         layout: &mut state.layout,
@@ -329,20 +304,11 @@ async fn handle_client(
         sink_guards: &mut sink_guards,
         terminal_size: attach_request.terminal_size,
     };
-    let runtime_metadata = self::runtime_pane_metadata(&attached_state)?;
-    let pane_ids = attached_state
-        .layout
-        .panes()
-        .into_iter()
-        .map(|pane| pane.id)
-        .collect::<Vec<_>>();
-    self::request_cwd_git_stats_for_runtime_metadata(&mut attached_state, &runtime_metadata, pane_ids)?;
     let result = self::run_attached_client(
         &mut request_reader,
         &mut event_writer,
         &mut attached_state,
         &mut async_pty_receiver,
-        &mut git_stats_result_receiver,
     )
     .await;
 
@@ -424,7 +390,6 @@ async fn run_attached_client(
     event_writer: &mut ServerEventWriter,
     state: &mut AttachedSessionState<'_>,
     pty_event_receiver: &mut tokio::sync::mpsc::Receiver<SessionPaneOutputMessage>,
-    git_stats_result_receiver: &mut tokio::sync::mpsc::Receiver<Vec<CwdGitStatsResult>>,
 ) -> rootcause::Result<()> {
     let mut timers = AttachedClientTimers::new(state.config)?;
     timers.sync_tracked_process_quiet_deadline(state.pane_tracked_processes.next_quiet_deadline()?)?;
@@ -497,11 +462,6 @@ async fn run_attached_client(
                         &mut heartbeat_started_at,
                         &mut render_dirty,
                     ).await? {
-                        return Ok(());
-                    }
-                },
-                git_stats_results = git_stats_result_receiver.recv() => {
-                    if !self::handle_git_stats_results(git_stats_results, event_writer, state).await? {
                         return Ok(());
                     }
                 },
@@ -579,11 +539,6 @@ async fn run_attached_client(
                         &mut heartbeat_started_at,
                         &mut render_dirty,
                     ).await? {
-                        return Ok(());
-                    }
-                },
-                git_stats_results = git_stats_result_receiver.recv() => {
-                    if !self::handle_git_stats_results(git_stats_results, event_writer, state).await? {
                         return Ok(());
                     }
                 },
@@ -680,7 +635,7 @@ async fn handle_pane_output_message(
         Some(SessionPaneOutputMessage::PaneExited) => Ok(!self::handle_reaped_panes(state, event_writer).await?),
         Some(SessionPaneOutputMessage::PaneOutputReady) => {
             let screen_dirty_panes = state.runtimes.take_screen_dirty_panes();
-            let title_events = state.runtimes.take_title_events()?;
+            let title_changes = state.runtimes.take_title_changes()?;
             let screen_dirty = !screen_dirty_panes.is_empty();
             *render_dirty |= screen_dirty;
             let now = Instant::now();
@@ -694,7 +649,7 @@ async fn handle_pane_output_message(
             } else {
                 false
             };
-            if !title_events.is_empty() && !self::flush_cmd_label_layout(event_writer, state, title_events).await? {
+            if !title_changes.is_empty() && !self::flush_cmd_label_layout(event_writer, state, title_changes).await? {
                 return Ok(false);
             }
             if tracked_process_changed
@@ -750,39 +705,6 @@ async fn flush_render_diff(
     Ok(true)
 }
 
-fn request_cwd_git_stats_for_runtime_metadata(
-    state: &mut AttachedSessionState<'_>,
-    runtime_metadata: &PaneRuntimeMetadata,
-    pane_ids: impl IntoIterator<Item = PaneId>,
-) -> rootcause::Result<()> {
-    let snapshot_fields = runtime_metadata.pane_snapshot_fields();
-    let refreshes = state
-        .cwd_git_stats
-        .prepare_refreshes(state.layout, &snapshot_fields, pane_ids);
-    state.cwd_git_stats_requester.request_refreshes(refreshes)
-}
-
-async fn handle_git_stats_results(
-    results: Option<Vec<CwdGitStatsResult>>,
-    event_writer: &mut ServerEventWriter,
-    state: &mut AttachedSessionState<'_>,
-) -> rootcause::Result<bool> {
-    let Some(results) = results else {
-        return Ok(false);
-    };
-    let runtime_metadata = self::runtime_pane_metadata(state)?;
-    let snapshot_fields = runtime_metadata.pane_snapshot_fields();
-    let changed_panes = state
-        .cwd_git_stats
-        .apply_results(state.layout, &snapshot_fields, results);
-    if changed_panes.is_empty() {
-        return Ok(true);
-    }
-    let layout_snapshot =
-        self::layout_snapshot_from_runtime_metadata(state.layout, &runtime_metadata, &state.cwd_git_stats)?;
-    self::send_sidebar_layout_if_changed(event_writer, state, layout_snapshot).await
-}
-
 fn runtime_pane_metadata(state: &AttachedSessionState<'_>) -> rootcause::Result<PaneRuntimeMetadata> {
     let terminal_titles = state.runtimes.terminal_titles()?;
     let startup_cmd_labels = state.runtimes.startup_cmd_labels();
@@ -797,34 +719,19 @@ fn runtime_pane_metadata(state: &AttachedSessionState<'_>) -> rootcause::Result<
 async fn flush_cmd_label_layout(
     event_writer: &mut ServerEventWriter,
     state: &mut AttachedSessionState<'_>,
-    title_events: Vec<(PaneId, TerminalTitleEvent)>,
+    title_changes: Vec<(PaneId, Option<String>)>,
 ) -> rootcause::Result<bool> {
     let runtime_metadata = self::runtime_pane_metadata(state)?;
     let changes = {
         let mut last_layout_snapshot = state.last_layout_snapshot.clone();
         let mut layout_changed = false;
         let mut changes = Vec::new();
-        for (pane_id, event) in title_events {
-            let title = event.into_title();
-            let title_event = [(pane_id, title.clone())];
-            let changed_panes = state.layout.sync_terminal_titles(&title_event);
-            let prompt_refreshes = state
-                .cwd_git_stats
-                .take_ready_submit_refreshes(state.layout, &title_event);
+        for (pane_id, title) in title_changes {
+            layout_changed |= state.layout.sync_terminal_titles(&[(pane_id, title.clone())]);
             let runtime_metadata = runtime_metadata.with_terminal_title_override(pane_id, title);
-            if !changed_panes.is_empty() {
-                layout_changed = true;
-                state
-                    .cwd_git_stats
-                    .clear_pending_submit_cwds_for_panes(changed_panes.iter().copied());
-            }
-            let refresh_panes = changed_panes.into_iter().collect::<BTreeSet<_>>();
-            if !refresh_panes.is_empty() {
-                self::request_cwd_git_stats_for_runtime_metadata(state, &runtime_metadata, refresh_panes)?;
-            }
-            state.cwd_git_stats_requester.request_refreshes(prompt_refreshes)?;
-            let layout_snapshot =
-                self::layout_snapshot_from_runtime_metadata(state.layout, &runtime_metadata, &state.cwd_git_stats)?;
+            let layout_snapshot = state
+                .layout
+                .snapshot_with_runtime_metadata(&runtime_metadata.pane_snapshot_fields())?;
             if layout_snapshot == last_layout_snapshot {
                 continue;
             }
@@ -876,8 +783,9 @@ async fn flush_tracked_process_runtime_layout(
     render_dirty: &mut bool,
 ) -> rootcause::Result<bool> {
     let runtime_metadata = self::runtime_pane_metadata(state)?;
-    let layout_snapshot =
-        self::layout_snapshot_from_runtime_metadata(state.layout, &runtime_metadata, &state.cwd_git_stats)?;
+    let layout_snapshot = state
+        .layout
+        .snapshot_with_runtime_metadata(&runtime_metadata.pane_snapshot_fields())?;
     *render_dirty = true;
     self::send_sidebar_layout_if_changed(event_writer, state, layout_snapshot).await
 }
@@ -888,18 +796,15 @@ async fn flush_pane_attention(
     render_dirty: &mut bool,
 ) -> rootcause::Result<bool> {
     let now = Instant::now();
-    let unseen_panes = match state.pane_tracked_processes.mark_quiet_deadlines(state.layout, now)? {
-        TrackedProcessAttention::Seen => Vec::new(),
+    match state.pane_tracked_processes.mark_quiet_deadlines(state.layout, now)? {
+        TrackedProcessAttention::Seen | TrackedProcessAttention::Unseen { .. } => {}
         TrackedProcessAttention::Unchanged => return Ok(true),
-        TrackedProcessAttention::Unseen { pane_ids } => pane_ids,
-    };
+    }
     *render_dirty = true;
     let runtime_metadata = self::runtime_pane_metadata(state)?;
-    if !unseen_panes.is_empty() {
-        self::request_cwd_git_stats_for_runtime_metadata(state, &runtime_metadata, unseen_panes)?;
-    }
-    let layout_snapshot =
-        self::layout_snapshot_from_runtime_metadata(state.layout, &runtime_metadata, &state.cwd_git_stats)?;
+    let layout_snapshot = state
+        .layout
+        .snapshot_with_runtime_metadata(&runtime_metadata.pane_snapshot_fields())?;
 
     self::send_sidebar_layout_if_changed(event_writer, state, layout_snapshot).await
 }
@@ -964,18 +869,8 @@ async fn send_layout_and_baseline(
 ) -> rootcause::Result<bool> {
     let (layout_snapshot, pane_regions, render_update) = {
         let tracked_processes = state.pane_tracked_processes.snapshot();
-        let (runtime_metadata, changed_panes) = self::synced_runtime_metadata_and_persist(
-            &state.config.paths,
-            state.layout,
-            state.runtimes,
-            &tracked_processes,
-        )?;
-        // Baseline sync can observe the post-command cwd before the queued title event is drained. Keep pending
-        // command-submit refreshes until the title-event path consumes them, so shared-repo sibling panes refresh the
-        // repo where Enter was pressed even if the submitting pane has already moved elsewhere.
-        self::request_cwd_git_stats_for_runtime_metadata(state, &runtime_metadata, changed_panes)?;
         let layout_snapshot =
-            self::layout_snapshot_from_runtime_metadata(state.layout, &runtime_metadata, &state.cwd_git_stats)?;
+            self::layout_snapshot_and_persist(&state.config.paths, state.layout, state.runtimes, &tracked_processes)?;
         let pane_regions = self::pane_regions_snapshot(state.layout, state.runtimes, &state.terminal_size)?;
         let attention_panes = self::attention_pane_ids(state.layout, &state.pane_tracked_processes);
         let render_update = state.render_composer.render_baseline(
@@ -1265,8 +1160,6 @@ async fn handle_cmd_request(
             state
                 .sink_guards
                 .push(self::attach_pane_sink(state.runtimes, state.pty_event_sender, pane_id)?);
-            let runtime_metadata = self::runtime_pane_metadata(state)?;
-            self::request_cwd_git_stats_for_runtime_metadata(state, &runtime_metadata, [pane_id])?;
             self::resize_panes_and_render(event_writer, state).await
         }
         ClientCmd::ClosePane => {
@@ -1321,8 +1214,6 @@ async fn handle_tab_cmd_request(
             state
                 .sink_guards
                 .push(self::attach_pane_sink(state.runtimes, state.pty_event_sender, pane_id)?);
-            let runtime_metadata = self::runtime_pane_metadata(state)?;
-            self::request_cwd_git_stats_for_runtime_metadata(state, &runtime_metadata, [pane_id])?;
         }
         TabCmd::FocusPrevious => {
             crate::tab_focus::handle_focus_previous_tab_cmd_with_tracked_process_ack(
@@ -1368,34 +1259,12 @@ fn write_active_pane_user_input(
     write: impl FnOnce(&PtyHandle) -> rootcause::Result<bool>,
 ) -> rootcause::Result<bool> {
     let (pane_id, handle) = self::active_pane_handle_with_id(state.layout, state.runtimes)?;
-    let shell_submit_cwd = if interaction == TrackedProcessUserInteraction::StartsTrackedProcessWork {
-        let application_mode = handle.application_mode()?;
-        if application_mode.alternate_screen {
-            None
-        } else {
-            let terminal_title = handle.terminal_title()?;
-            Some(
-                state
-                    .layout
-                    .pane(pane_id)
-                    .ok_or_else(|| rootcause::report!("muxr active pane is missing from server layout"))?
-                    .runtime_cwd(terminal_title.as_deref()),
-            )
-        }
-    } else {
-        None
-    };
     let render_dirty = write(&handle)?;
     state
         .pane_tracked_processes
         .record_user_interaction(pane_id, interaction, Instant::now());
     if interaction == TrackedProcessUserInteraction::StartsTrackedProcessWork {
         timers.schedule_cmd_handoff_sample(pane_id)?;
-        if let Some(cwd) = shell_submit_cwd {
-            // Git stats follow shell completion, not an arbitrary timeout. Shell prompts report cwd through title
-            // updates, so the pending refresh uses the cwd where Enter was pressed even if the command also runs `cd`.
-            state.cwd_git_stats.mark_shell_submit_cwd(pane_id, cwd);
-        }
     }
     Ok(render_dirty)
 }
@@ -1509,7 +1378,7 @@ mod tests {
     use crate::state::SessionMetadata;
 
     #[test]
-    fn test_synced_runtime_metadata_when_runtime_cmd_exists_sets_snapshot_cmd() -> rootcause::Result<()> {
+    fn test_layout_snapshot_and_persist_when_runtime_cmd_exists_sets_snapshot_cmd() -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
         let (session, paths) = self::session_paths(tempdir.path(), "work")?;
         let mut layout = SessionLayout::initial(&session, self::metadata("zsh", 1))?;
@@ -1529,10 +1398,8 @@ mod tests {
             Instant::now(),
         ));
 
-        let (runtime_metadata, _changed_panes) =
-            self::synced_runtime_metadata_and_persist(&paths, &mut layout, &runtimes, &tracked_processes.snapshot())?;
         let snapshot =
-            self::layout_snapshot_from_runtime_metadata(&layout, &runtime_metadata, &CwdGitStats::default())?;
+            self::layout_snapshot_and_persist(&paths, &mut layout, &runtimes, &tracked_processes.snapshot())?;
 
         let pane = snapshot
             .tabs()

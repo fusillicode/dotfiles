@@ -3,7 +3,6 @@ pub use server::serve_session;
 mod attached_client;
 mod attached_client_timers;
 mod cmd_label;
-mod cwd_git_stats;
 mod history;
 mod keyboard_input;
 mod pane_attention;

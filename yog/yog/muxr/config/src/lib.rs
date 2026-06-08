@@ -79,11 +79,6 @@ impl Default for MuxrConfig {
                 active_fg: RenderColor::Indexed(7),
                 bg: RenderColor::Rgb { r: 0, g: 19, b: 0 },
                 inactive_fg: RenderColor::Rgb { r: 119, g: 119, b: 119 },
-                git_stats: GitStatsStyle {
-                    deletions_fg: RenderColor::Rgb { r: 236, g: 99, b: 92 },
-                    insertions_fg: RenderColor::Rgb { r: 140, g: 228, b: 121 },
-                    new_files_fg: RenderColor::Rgb { r: 0, g: 255, b: 255 },
-                },
                 rail: RailStyle {
                     active_fg: RenderColor::Rgb { r: 106, g: 106, b: 223 },
                     inactive_fg: RenderColor::Rgb { r: 0, g: 19, b: 0 },
@@ -247,19 +242,10 @@ pub struct TabBarConfig {
     pub active_fg: RenderColor,
     pub bg: RenderColor,
     pub inactive_fg: RenderColor,
-    pub git_stats: GitStatsStyle,
     pub rail: RailStyle,
     pub separator_fg: RenderColor,
     pub tracked_process: TrackedProcessStyle,
     pub width: u16,
-}
-
-/// Tab-bar git stats counter styling.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct GitStatsStyle {
-    pub deletions_fg: RenderColor,
-    pub insertions_fg: RenderColor,
-    pub new_files_fg: RenderColor,
 }
 
 /// Tab-bar rail styling.

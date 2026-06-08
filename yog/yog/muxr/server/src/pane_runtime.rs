@@ -20,7 +20,6 @@ use crate::session_start_seed::SessionStartSeed;
 use crate::state::PaneSnapshotFields;
 use crate::state::SessionLayout;
 use crate::terminal::TerminalSnapshot;
-use crate::terminal::TerminalTitleEvent;
 
 struct PaneRuntime {
     id: PaneId,
@@ -30,19 +29,14 @@ struct PaneRuntime {
 
 /// Terminal-title sync result for layout metadata derived from live pane runtimes.
 pub struct SyncedTerminalTitles {
-    changed_panes: Vec<PaneId>,
+    layout_changed: bool,
     titles: Vec<(PaneId, Option<String>)>,
 }
 
 impl SyncedTerminalTitles {
     /// Return whether applying the runtime titles changed persisted layout metadata.
     pub const fn layout_changed(&self) -> bool {
-        !self.changed_panes.is_empty()
-    }
-
-    /// Return pane ids whose persisted cwd metadata changed.
-    pub fn changed_panes(&self) -> &[PaneId] {
-        &self.changed_panes
+        self.layout_changed
     }
 
     /// Return the runtime terminal titles that were applied to the layout.
@@ -254,21 +248,21 @@ impl PaneRuntimes {
         let terminal_titles = self.terminal_titles()?;
         // Shell prompts report cwd through OSC title updates. Keep layout metadata in sync before layout mutations so
         // new panes inherit the live cwd instead of the server startup directory.
-        let changed_panes = layout.sync_terminal_titles(&terminal_titles);
+        let layout_changed = layout.sync_terminal_titles(&terminal_titles);
         Ok(SyncedTerminalTitles {
-            changed_panes,
+            layout_changed,
             titles: terminal_titles,
         })
     }
 
-    pub fn take_title_events(&self) -> rootcause::Result<Vec<(PaneId, TerminalTitleEvent)>> {
-        let mut title_events = Vec::new();
+    pub fn take_title_changes(&self) -> rootcause::Result<Vec<(PaneId, Option<String>)>> {
+        let mut title_changes = Vec::new();
         for pane in &self.panes {
-            for event in pane.session.handle().take_title_events()? {
-                title_events.push((pane.id, event));
+            for title in pane.session.handle().take_title_changes()? {
+                title_changes.push((pane.id, title));
             }
         }
-        Ok(title_events)
+        Ok(title_changes)
     }
 
     pub fn take_screen_dirty_panes(&self) -> Vec<PaneId> {
