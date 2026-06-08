@@ -95,6 +95,21 @@ impl fmt::Display for PaneId {
     }
 }
 
+/// Git worktree counters rendered by the client tab bar.
+#[derive(rkyv::Archive, Clone, Copy, Debug, Default, rkyv::Deserialize, Eq, PartialEq, Serialize, rkyv::Serialize)]
+pub struct GitStats {
+    pub deletions: u32,
+    pub insertions: u32,
+    pub new_files: u32,
+}
+
+impl GitStats {
+    #[must_use]
+    pub const fn is_clean(self) -> bool {
+        self.deletions == 0 && self.insertions == 0 && self.new_files == 0
+    }
+}
+
 #[derive(rkyv::Archive, Clone, Debug, Eq, PartialEq, Serialize, rkyv::Serialize)]
 pub struct LayoutSnapshot {
     active_tab: TabId,
@@ -263,8 +278,6 @@ where
     }
 }
 
-/// Tracked-process status rendered by the client tab bar.
-
 #[derive(rkyv::Archive, Clone, Debug, Eq, PartialEq, Serialize, rkyv::Serialize)]
 pub struct PaneSnapshot {
     /// Tracked-process status used by the client tab bar.
@@ -275,6 +288,8 @@ pub struct PaneSnapshot {
     pub cmd_label: Option<String>,
     /// Last focus sequence assigned by the server, used to pick a representative pane.
     pub focus_seq: u64,
+    /// Git stats for the pane cwd used by the client tab bar.
+    pub git_stats: Option<GitStats>,
     /// Stable pane id.
     pub id: PaneId,
     /// Pane title displayed in tab and pane UI.
@@ -292,6 +307,7 @@ where
         let cwd = rkyv::Deserialize::<String, D>::deserialize(&self.cwd, deserializer)?;
         let cmd_label = rkyv::Deserialize::<Option<String>, D>::deserialize(&self.cmd_label, deserializer)?;
         let focus_seq = rkyv::Deserialize::<u64, D>::deserialize(&self.focus_seq, deserializer)?;
+        let git_stats = rkyv::Deserialize::<Option<GitStats>, D>::deserialize(&self.git_stats, deserializer)?;
         let id = rkyv::Deserialize::<PaneId, D>::deserialize(&self.id, deserializer)?;
         let title = rkyv::Deserialize::<String, D>::deserialize(&self.title, deserializer)?;
         Ok(PaneSnapshot {
@@ -299,6 +315,7 @@ where
             cwd,
             cmd_label,
             focus_seq,
+            git_stats,
             id,
             title,
         })
@@ -640,6 +657,7 @@ mod tests {
             cwd: "/tmp".to_owned(),
             cmd_label: None,
             focus_seq: 1,
+            git_stats: None,
             id: active_pane,
             title: "shell".to_owned(),
         };
@@ -657,6 +675,7 @@ mod tests {
             cwd: "/tmp".to_owned(),
             cmd_label: None,
             focus_seq: 1,
+            git_stats: None,
             id: pane_id(id),
             title: title.to_owned(),
         }

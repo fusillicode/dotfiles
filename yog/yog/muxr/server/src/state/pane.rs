@@ -1,3 +1,4 @@
+use muxr_core::GitStats;
 use muxr_core::PaneId;
 use muxr_core::PaneSnapshot;
 use muxr_core::TrackedProcessState;
@@ -123,6 +124,7 @@ impl Pane {
         terminal_title: Option<&str>,
         runtime_cmd_label: Option<&str>,
         runtime_tracked_process_state: TrackedProcessState,
+        runtime_git_stats: Option<GitStats>,
     ) -> PaneSnapshot {
         let terminal_title = TerminalTitle::classify(terminal_title, &self.cwd);
         PaneSnapshot {
@@ -134,9 +136,16 @@ impl Pane {
                 .or(terminal_title.cmd_label),
             cwd: terminal_title.cwd.unwrap_or_else(|| self.cwd.clone()),
             focus_seq: self.focus_seq,
+            git_stats: runtime_git_stats,
             id: self.id,
             title: self.title.clone(),
         }
+    }
+
+    pub fn runtime_cwd(&self, terminal_title: Option<&str>) -> String {
+        TerminalTitle::classify(terminal_title, &self.cwd)
+            .cwd
+            .unwrap_or_else(|| self.cwd.clone())
     }
 }
 
@@ -154,7 +163,7 @@ mod tests {
 
     #[test]
     fn test_snapshot_with_runtime_metadata_when_title_is_cwd_updates_snapshot_cwd() -> rootcause::Result<()> {
-        let snapshot = self::pane()?.snapshot_with_runtime_metadata(Some("~"), None, TrackedProcessState::None);
+        let snapshot = self::pane()?.snapshot_with_runtime_metadata(Some("~"), None, TrackedProcessState::None, None);
 
         pretty_assertions::assert_eq!(snapshot.cwd, "~");
         pretty_assertions::assert_eq!(snapshot.cmd_label, None);
@@ -164,7 +173,7 @@ mod tests {
     #[test]
     fn test_snapshot_with_runtime_metadata_when_title_is_cmd_keeps_pane_cwd() -> rootcause::Result<()> {
         let snapshot =
-            self::pane()?.snapshot_with_runtime_metadata(Some("cargo test"), None, TrackedProcessState::None);
+            self::pane()?.snapshot_with_runtime_metadata(Some("cargo test"), None, TrackedProcessState::None, None);
 
         pretty_assertions::assert_eq!(snapshot.cwd, "/old/project");
         pretty_assertions::assert_eq!(snapshot.cmd_label, Some("cargo test".to_owned()));
@@ -179,7 +188,8 @@ mod tests {
     fn test_snapshot_with_runtime_metadata_when_runtime_tracked_process_state_varies_projects_state(
         #[case] tracked_process_state: TrackedProcessState,
     ) -> rootcause::Result<()> {
-        let snapshot = self::pane()?.snapshot_with_runtime_metadata(Some("dotfiles"), None, tracked_process_state);
+        let snapshot =
+            self::pane()?.snapshot_with_runtime_metadata(Some("dotfiles"), None, tracked_process_state, None);
 
         pretty_assertions::assert_eq!(snapshot.tracked_process_state, tracked_process_state);
         pretty_assertions::assert_eq!(snapshot.cmd_label, Some("dotfiles".to_owned()));
@@ -189,8 +199,12 @@ mod tests {
     #[test]
     fn test_snapshot_with_runtime_metadata_when_runtime_cmd_is_present_overrides_terminal_title()
     -> rootcause::Result<()> {
-        let snapshot =
-            self::pane()?.snapshot_with_runtime_metadata(Some("dotfiles"), Some("codex"), TrackedProcessState::None);
+        let snapshot = self::pane()?.snapshot_with_runtime_metadata(
+            Some("dotfiles"),
+            Some("codex"),
+            TrackedProcessState::None,
+            None,
+        );
 
         pretty_assertions::assert_eq!(snapshot.cmd_label, Some("codex".to_owned()));
         Ok(())

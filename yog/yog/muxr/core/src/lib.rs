@@ -7,6 +7,7 @@ pub use protocol::ClientMouseEvent;
 pub use protocol::ClientMouseEventPhase;
 pub use protocol::ClientMousePosition;
 pub use protocol::ClientRequest;
+pub use protocol::GitStats;
 pub use protocol::LayoutSnapshot;
 pub use protocol::PaneId;
 pub use protocol::PaneMouseMode;

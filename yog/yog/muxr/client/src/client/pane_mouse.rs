@@ -572,6 +572,7 @@ mod tests {
             cwd: "/tmp".to_owned(),
             cmd_label: None,
             focus_seq: 1,
+            git_stats: None,
             id: active_pane,
             title: "shell".to_owned(),
         };
@@ -604,6 +605,7 @@ mod tests {
                         cwd: "/tmp/tab-1".to_owned(),
                         cmd_label: None,
                         focus_seq: 1,
+                        git_stats: None,
                         id: PaneId::new(1)?,
                         title: "shell".to_owned(),
                     }],
@@ -617,6 +619,7 @@ mod tests {
                         cwd: "/tmp/tab-2".to_owned(),
                         cmd_label: None,
                         focus_seq: 1,
+                        git_stats: None,
                         id: PaneId::new(2)?,
                         title: "shell".to_owned(),
                     }],
