@@ -763,13 +763,11 @@ mod tests {
         self::wait_for_runtime_snapshot_contains(&runtimes, active_pane, "dirty")?;
 
         self::resize_panes_to_layout(&layout, &runtimes, &terminal_size)?;
-        let cwd_git_stats = crate::cwd_git_stats::CwdGitStats::default();
         drop(self::initial_attached_render(
             &config,
             &mut layout,
             &runtimes,
             &crate::pane_tracked_process::PaneTrackedProcesses::default(),
-            &cwd_git_stats,
             &terminal_size,
         )?);
 
@@ -1589,11 +1587,7 @@ mod tests {
     }
 
     async fn detach_client(mut client: AttachedTestClient) -> rootcause::Result<()> {
-        client
-            .writer
-            .send_request(&ClientRequest::Detach)
-            .await
-            .context("failed to send muxr test detach request")?;
+        client.writer.send_request(&ClientRequest::Detach).await?;
         self::read_client_until_detached(&mut client).await
     }
 
@@ -1601,10 +1595,7 @@ mod tests {
         loop {
             match client.reader.recv_event().await? {
                 Some(ServerEvent::Detached) => break,
-                Some(ServerEvent::Ping) => {
-                    // After Detach, a queued heartbeat can race with server close; keep draining for Detached.
-                    let _sent = client.writer.send_request(&ClientRequest::Pong).await;
-                }
+                Some(ServerEvent::Ping) => client.writer.send_request(&ClientRequest::Pong).await?,
                 Some(
                     ServerEvent::Attached(_)
                     | ServerEvent::Pong
@@ -1621,10 +1612,9 @@ mod tests {
     }
 
     fn join_server(handle: thread::JoinHandle<rootcause::Result<()>>) -> rootcause::Result<()> {
-        Ok(handle
+        handle
             .join()
             .unwrap_or_else(|_| Err(report!("test muxr server thread panicked")))
-            .context("muxr test server returned an error")?)
     }
 
     fn join_server_with_timeout(handle: thread::JoinHandle<rootcause::Result<()>>) -> rootcause::Result<()> {

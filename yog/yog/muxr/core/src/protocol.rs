@@ -1,7 +1,6 @@
 pub use keyboard_input::ClientKey;
 pub use keyboard_input::ClientKeyCode;
 pub use keyboard_input::ClientKeyModifiers;
-pub use pane_layout::GitStats;
 pub use pane_layout::LayoutSnapshot;
 pub use pane_layout::PaneId;
 pub use pane_layout::PaneMouseMode;

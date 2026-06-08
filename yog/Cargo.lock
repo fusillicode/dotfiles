@@ -3174,7 +3174,6 @@ name = "muxr-server"
 version = "0.1.0"
 dependencies = [
  "assert2",
- "git2",
  "libproc",
  "muxr-config",
  "muxr-core",

@@ -1,7 +1,6 @@
 use std::collections::BTreeMap;
 
 use muxr_core::ClientMousePosition;
-use muxr_core::GitStats;
 use muxr_core::LayoutSnapshot;
 use muxr_core::PaneId;
 use muxr_core::SessionName;
@@ -26,7 +25,6 @@ const INITIAL_TAB_TITLE: &str = "default";
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 struct PaneSnapshotFieldsEntry {
     cmd_label: Option<String>,
-    git_stats: Option<GitStats>,
     terminal_title: Option<String>,
     tracked_process_state: TrackedProcessState,
 }
@@ -41,10 +39,6 @@ impl PaneSnapshotFields {
         self.panes.entry(pane_id).or_default().cmd_label = cmd_label;
     }
 
-    pub fn set_git_stats(&mut self, pane_id: PaneId, git_stats: Option<GitStats>) {
-        self.panes.entry(pane_id).or_default().git_stats = git_stats;
-    }
-
     pub fn set_terminal_title(&mut self, pane_id: PaneId, terminal_title: Option<String>) {
         self.panes.entry(pane_id).or_default().terminal_title = terminal_title;
     }
@@ -55,10 +49,6 @@ impl PaneSnapshotFields {
 
     pub fn cmd_label(&self, pane_id: PaneId) -> Option<&str> {
         self.panes.get(&pane_id)?.cmd_label.as_deref()
-    }
-
-    pub fn git_stats(&self, pane_id: PaneId) -> Option<GitStats> {
-        self.panes.get(&pane_id)?.git_stats
     }
 
     pub fn terminal_title(&self, pane_id: PaneId) -> Option<&str> {
@@ -139,14 +129,6 @@ impl SessionLayout {
         LayoutSnapshot::new(self.active_tab, tabs)
     }
 
-    pub fn pane_cwds_with_runtime_metadata(&self, snapshot_fields: &PaneSnapshotFields) -> Vec<(PaneId, String)> {
-        self.entries
-            .iter()
-            .flat_map(Tab::panes)
-            .map(|pane| (pane.id, pane.runtime_cwd(snapshot_fields.terminal_title(pane.id))))
-            .collect()
-    }
-
     pub fn pane_at(&self, size: &TerminalSize, position: ClientMousePosition) -> rootcause::Result<Option<PaneId>> {
         self.active_tab()?.pane_at(size, position)
     }
@@ -197,17 +179,15 @@ impl SessionLayout {
         self.entries.iter_mut().find_map(|tab| tab.pane_tree.pane_mut(pane_id))
     }
 
-    /// Apply path-like terminal titles to pane cwd metadata and return panes whose cwd changed.
-    pub fn sync_terminal_titles(&mut self, terminal_titles: &[(PaneId, Option<String>)]) -> Vec<PaneId> {
-        let mut changed_panes = Vec::new();
+    /// Apply path-like terminal titles to pane cwd metadata.
+    pub fn sync_terminal_titles(&mut self, terminal_titles: &[(PaneId, Option<String>)]) -> bool {
+        let mut changed = false;
         for (pane_id, title) in terminal_titles {
-            if let Some(pane) = self.pane_mut(*pane_id)
-                && pane.sync_terminal_title(title.as_deref())
-            {
-                changed_panes.push(*pane_id);
+            if let Some(pane) = self.pane_mut(*pane_id) {
+                changed |= pane.sync_terminal_title(title.as_deref());
             }
         }
-        changed_panes
+        changed
     }
 
     pub fn pane_regions(&self, size: &TerminalSize) -> rootcause::Result<Vec<PaneRegion>> {
