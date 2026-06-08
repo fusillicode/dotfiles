@@ -22,6 +22,13 @@ pub struct PaneTrackedProcesses {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub enum TrackedProcessAttention {
+    Seen,
+    Unchanged,
+    Unseen { pane_ids: Vec<PaneId> },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PaneTrackedProcessSnapshotEntry {
     label: String,
     state: TrackedProcessState,
@@ -304,7 +311,11 @@ impl PaneTrackedProcesses {
         changed
     }
 
-    pub fn mark_quiet_deadlines(&mut self, layout: &SessionLayout, now: Instant) -> rootcause::Result<bool> {
+    pub fn mark_quiet_deadlines(
+        &mut self,
+        layout: &SessionLayout,
+        now: Instant,
+    ) -> rootcause::Result<TrackedProcessAttention> {
         self.retain_layout_panes(layout);
         self.discard_stale_user_interactions(now);
         self.mark_quiet_tracked_processes(layout, now)
@@ -347,14 +358,34 @@ impl PaneTrackedProcesses {
         PaneTrackedProcessSnapshot { panes }
     }
 
-    fn mark_quiet_tracked_processes(&mut self, layout: &SessionLayout, now: Instant) -> rootcause::Result<bool> {
+    fn mark_quiet_tracked_processes(
+        &mut self,
+        layout: &SessionLayout,
+        now: Instant,
+    ) -> rootcause::Result<TrackedProcessAttention> {
         let focused_pane = layout.active_pane_id()?;
         let pane_ids = self::layout_pane_ids(layout);
-        let mut changed = false;
+        let mut seen = false;
+        let mut unseen_panes = Vec::new();
         for pane_id in pane_ids {
-            changed |= self.mark_quiet_if_due(pane_id, now, pane_id == focused_pane);
+            let focused = pane_id == focused_pane;
+            if self.mark_quiet_if_due(pane_id, now, focused) {
+                // The state machine owns first-time attention transitions; callers should react to this outcome instead
+                // of diffing snapshots and duplicating status rules outside this feature.
+                if focused {
+                    seen = true;
+                } else if self.needs_attention(pane_id) {
+                    unseen_panes.push(pane_id);
+                }
+            }
         }
-        Ok(changed)
+        if !unseen_panes.is_empty() {
+            Ok(TrackedProcessAttention::Unseen { pane_ids: unseen_panes })
+        } else if seen {
+            Ok(TrackedProcessAttention::Seen)
+        } else {
+            Ok(TrackedProcessAttention::Unchanged)
+        }
     }
 
     fn retain_layout_panes(&mut self, layout: &SessionLayout) {
@@ -879,8 +910,13 @@ mod tests {
             pane_tracked_processes.next_quiet_deadline()?,
             Some(self::instant_after(then, Duration::from_secs(3))?)
         );
-        assert2::assert!(
-            pane_tracked_processes.mark_quiet_deadlines(&layout, self::instant_after(then, Duration::from_secs(3))?,)?
+        let outcome =
+            pane_tracked_processes.mark_quiet_deadlines(&layout, self::instant_after(then, Duration::from_secs(3))?)?;
+        pretty_assertions::assert_eq!(
+            outcome,
+            TrackedProcessAttention::Unseen {
+                pane_ids: vec![pane_id]
+            }
         );
 
         pretty_assertions::assert_eq!(
@@ -889,6 +925,31 @@ mod tests {
         );
         pretty_assertions::assert_eq!(pane_tracked_processes.attention_pane_ids(&layout), vec![pane_id]);
         pretty_assertions::assert_eq!(pane_tracked_processes.next_quiet_deadline()?, None);
+        Ok(())
+    }
+
+    #[test]
+    fn test_mark_quiet_deadlines_when_focused_busy_tracked_process_is_quiet_marks_seen() -> rootcause::Result<()> {
+        let mut layout = self::layout()?;
+        let pane_id = PaneId::new(1)?;
+        layout.active_tab_mut()?.focus_pane(pane_id)?;
+        let mut pane_tracked_processes = PaneTrackedProcesses::default();
+        let then = Instant::now();
+        pane_tracked_processes.observe_pane_cmd(
+            &MuxrConfig::default(),
+            pane_id,
+            &self::fg_tracked_process("codex"),
+            then,
+        );
+
+        let outcome =
+            pane_tracked_processes.mark_quiet_deadlines(&layout, self::instant_after(then, Duration::from_secs(3))?)?;
+
+        pretty_assertions::assert_eq!(outcome, TrackedProcessAttention::Seen);
+        pretty_assertions::assert_eq!(
+            pane_tracked_process_status(&pane_tracked_processes, pane_id),
+            TrackedProcessState::Seen
+        );
         Ok(())
     }
 

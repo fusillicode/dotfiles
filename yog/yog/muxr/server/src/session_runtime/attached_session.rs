@@ -39,6 +39,7 @@ use crate::pane_runtime::PaneRuntimes;
 use crate::pane_scroll::PaneScrollAmount;
 use crate::pane_tracked_process::PaneTrackedProcessSnapshot;
 use crate::pane_tracked_process::PaneTrackedProcesses;
+use crate::pane_tracked_process::TrackedProcessAttention;
 use crate::pane_tracked_process::TrackedProcessUserInteraction;
 use crate::pty::PtyEvent;
 use crate::pty::PtyHandle;
@@ -795,11 +796,12 @@ async fn flush_pane_attention(
     render_dirty: &mut bool,
 ) -> rootcause::Result<bool> {
     let now = Instant::now();
-    let runtime_metadata = self::runtime_pane_metadata(state)?;
-    if !state.pane_tracked_processes.mark_quiet_deadlines(state.layout, now)? {
-        return Ok(true);
+    match state.pane_tracked_processes.mark_quiet_deadlines(state.layout, now)? {
+        TrackedProcessAttention::Seen | TrackedProcessAttention::Unseen { .. } => {}
+        TrackedProcessAttention::Unchanged => return Ok(true),
     }
     *render_dirty = true;
+    let runtime_metadata = self::runtime_pane_metadata(state)?;
     let layout_snapshot = state
         .layout
         .snapshot_with_runtime_metadata(&runtime_metadata.pane_snapshot_fields())?;
