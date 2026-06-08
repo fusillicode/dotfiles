@@ -232,11 +232,29 @@ pub enum TerminalMouseProtocolMode {
     PressRelease,
 }
 
+/// One OSC terminal-title set observed by the pane parser.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum TerminalTitleEvent {
+    /// The pane set a title different from the previous live title.
+    Changed(Option<String>),
+    /// The pane set the same title it already had.
+    Unchanged(Option<String>),
+}
+
+impl TerminalTitleEvent {
+    #[must_use]
+    pub fn into_title(self) -> Option<String> {
+        match self {
+            Self::Changed(title) | Self::Unchanged(title) => title,
+        }
+    }
+}
+
 #[derive(Default)]
 struct TerminalCallbacks {
     replies: Vec<Vec<u8>>,
     title: Option<String>,
-    title_changes: Vec<Option<String>>,
+    title_events: Vec<TerminalTitleEvent>,
 }
 
 impl TerminalCallbacks {
@@ -244,13 +262,13 @@ impl TerminalCallbacks {
         std::mem::take(&mut self.replies)
     }
 
-    fn take_title_changes(&mut self) -> Vec<Option<String>> {
-        std::mem::take(&mut self.title_changes)
+    fn take_title_events(&mut self) -> Vec<TerminalTitleEvent> {
+        std::mem::take(&mut self.title_events)
     }
 
     fn clear_title_metadata(&mut self) {
         self.title = None;
-        self.title_changes.clear();
+        self.title_events.clear();
     }
 }
 
@@ -286,10 +304,16 @@ impl vt100::Callbacks for TerminalCallbacks {
     fn set_window_title(&mut self, _screen: &mut vt100::Screen, title: &[u8]) {
         let title = String::from_utf8_lossy(title).trim().to_owned();
         let title = (!title.is_empty()).then_some(title);
-        if self.title != title {
+        let changed = self.title != title;
+        if changed {
             self.title.clone_from(&title);
-            self.title_changes.push(title);
         }
+        let event = if changed {
+            TerminalTitleEvent::Changed(title)
+        } else {
+            TerminalTitleEvent::Unchanged(title)
+        };
+        self.title_events.push(event);
     }
 }
 
@@ -326,8 +350,8 @@ impl TerminalState {
         self.parser.callbacks().title.clone()
     }
 
-    pub fn take_title_changes(&mut self) -> Vec<Option<String>> {
-        self.parser.callbacks_mut().take_title_changes()
+    pub fn take_title_events(&mut self) -> Vec<TerminalTitleEvent> {
+        self.parser.callbacks_mut().take_title_events()
     }
 
     /// Clear OSC title metadata without touching screen contents or scrollback.
@@ -576,7 +600,7 @@ mod tests {
     }
 
     #[test]
-    fn test_terminal_state_take_title_changes_when_window_title_changes_returns_once() -> rootcause::Result<()> {
+    fn test_terminal_state_take_title_events_when_window_title_changes_returns_once() -> rootcause::Result<()> {
         let mut terminal = TerminalState::new(&terminal_size()?);
 
         pretty_assertions::assert_eq!(
@@ -584,31 +608,41 @@ mod tests {
             Vec::<Vec<u8>>::new()
         );
 
-        pretty_assertions::assert_eq!(terminal.take_title_changes(), vec![Some("cargo test".to_owned())]);
-        pretty_assertions::assert_eq!(terminal.take_title_changes(), Vec::<Option<String>>::new());
+        pretty_assertions::assert_eq!(
+            terminal.take_title_events(),
+            vec![TerminalTitleEvent::Changed(Some("cargo test".to_owned()))],
+        );
+        pretty_assertions::assert_eq!(terminal.take_title_events(), Vec::<TerminalTitleEvent>::new());
         Ok(())
     }
 
     #[test]
-    fn test_terminal_state_take_title_changes_when_window_title_repeats_returns_empty() -> rootcause::Result<()> {
+    fn test_terminal_state_take_title_events_when_window_title_repeats_returns_unchanged_event() -> rootcause::Result<()>
+    {
         let mut terminal = TerminalState::new(&terminal_size()?);
 
         pretty_assertions::assert_eq!(
             terminal.process(b"\x1b]2;cargo test\x07").into_replies(),
             Vec::<Vec<u8>>::new()
         );
-        pretty_assertions::assert_eq!(terminal.take_title_changes(), vec![Some("cargo test".to_owned())]);
+        pretty_assertions::assert_eq!(
+            terminal.take_title_events(),
+            vec![TerminalTitleEvent::Changed(Some("cargo test".to_owned()))],
+        );
         pretty_assertions::assert_eq!(
             terminal.process(b"\x1b]2;cargo test\x07").into_replies(),
             Vec::<Vec<u8>>::new()
         );
 
-        pretty_assertions::assert_eq!(terminal.take_title_changes(), Vec::<Option<String>>::new());
+        pretty_assertions::assert_eq!(
+            terminal.take_title_events(),
+            vec![TerminalTitleEvent::Unchanged(Some("cargo test".to_owned()))],
+        );
         Ok(())
     }
 
     #[test]
-    fn test_terminal_state_take_title_changes_when_titles_change_in_one_chunk_preserves_order() -> rootcause::Result<()>
+    fn test_terminal_state_take_title_events_when_titles_change_in_one_chunk_preserves_order() -> rootcause::Result<()>
     {
         let mut terminal = TerminalState::new(&terminal_size()?);
 
@@ -618,8 +652,11 @@ mod tests {
         );
 
         pretty_assertions::assert_eq!(
-            terminal.take_title_changes(),
-            vec![Some("gst".to_owned()), Some("~".to_owned())],
+            terminal.take_title_events(),
+            vec![
+                TerminalTitleEvent::Changed(Some("gst".to_owned())),
+                TerminalTitleEvent::Changed(Some("~".to_owned())),
+            ],
         );
         Ok(())
     }

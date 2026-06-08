@@ -11,6 +11,7 @@ keywords = ["muxr", "terminal", "multiplexer", "server", "session"]
 categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
+git2 = { workspace = true }
 libproc = { version = "0.14.11" }
 muxr_config = { workspace = true }
 muxr_core = { workspace = true }

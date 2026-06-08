@@ -33,6 +33,7 @@ impl Tab {
                     snapshot_fields.terminal_title(pane.id),
                     snapshot_fields.cmd_label(pane.id),
                     snapshot_fields.tracked_process_state(pane.id),
+                    snapshot_fields.git_stats(pane.id),
                 )
             })
             .collect();
