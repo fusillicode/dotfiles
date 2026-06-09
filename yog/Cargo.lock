@@ -3226,6 +3226,7 @@ dependencies = [
  "tokio",
  "url",
  "vt100",
+ "vte 0.15.0",
 ]
 
 [[package]]

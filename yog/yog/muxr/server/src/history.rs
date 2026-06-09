@@ -15,8 +15,8 @@ use rootcause::prelude::ResultExt;
 
 const HISTORY_FILE_MODE: u32 = 0o600;
 const HISTORY_READ_BUFFER_SIZE: usize = 8192;
-// A 64MiB replay cap was tried while investigating Codex resume history, but that history is app-owned UI state rather
-// than muxr scrollback. Keep reattach bounded; large replay tails delay startup for every restored pane.
+// A 64MiB replay cap was tried while investigating Codex resume history, but large raw-history replay delayed every
+// restored pane. Codex-style transcript rows are preserved by terminal scroll-region handling instead.
 const HISTORY_REPLAY_LIMIT_BYTES: u64 = 4_194_304;
 
 pub struct PaneHistory {
