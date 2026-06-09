@@ -2,7 +2,6 @@ use std::time::Instant;
 
 use muxr_core::ClientMousePosition;
 use muxr_core::PaneId;
-use muxr_core::PaneRegionSnapshot;
 use muxr_core::TerminalSize;
 use rootcause::report;
 
@@ -159,33 +158,6 @@ pub fn handle_focus_pane_at_request_with_tracked_process_ack(
     Ok(focused)
 }
 
-pub fn mouse_event_region(
-    layout: &SessionLayout,
-    runtimes: &PaneRuntimes,
-    terminal_size: &TerminalSize,
-    position: ClientMousePosition,
-) -> rootcause::Result<Option<PaneRegionSnapshot>> {
-    let Some(region) = layout
-        .pane_regions(terminal_size)?
-        .into_iter()
-        .find(|region| region.contains(position.into()))
-    else {
-        return Ok(None);
-    };
-    let handle = runtimes.handle(region.id)?;
-    let mouse_mode = handle.mouse_mode()?;
-    let visible_top_row = handle.visible_top_row()?;
-    Ok(Some(PaneRegionSnapshot::new(
-        region.id,
-        region.area.origin.col,
-        region.area.origin.row,
-        region.area.size.cols,
-        region.area.size.rows,
-        mouse_mode,
-        visible_top_row,
-    )?))
-}
-
 fn pane_regions_are_adjacent(region: &PaneRegion, other: &PaneRegion, direction: PaneFocusDirection) -> bool {
     // Muxr pane regions exclude the separator cell, so visible neighbors have a one-cell gap where Zellij's
     // frame-inclusive pane geometry uses exact edge equality.
@@ -266,7 +238,7 @@ mod tests {
     #[case::first_pane(ClientMousePosition { row: 0, col: 0 }, Some("pane-1"))]
     #[case::border(ClientMousePosition { row: 0, col: 40 }, None)]
     #[case::second_pane(ClientMousePosition { row: 0, col: 41 }, Some("pane-2"))]
-    fn test_layout_pane_at_when_mouse_position_arrives_returns_pane_without_focus_change(
+    fn test_tab_pane_at_when_mouse_position_arrives_returns_pane_without_focus_change(
         #[case] position: ClientMousePosition,
         #[case] expected_pane: Option<&str>,
     ) -> rootcause::Result<()> {
@@ -278,7 +250,7 @@ mod tests {
         )?;
         state_test_helpers::force_balanced_test_split_ratio(&mut layout)?;
 
-        let pane_id = layout.pane_at(&TerminalSize::new(80, 24)?, position)?;
+        let pane_id = layout.active_tab()?.pane_at(&TerminalSize::new(80, 24)?, position)?;
 
         pretty_assertions::assert_eq!(pane_id.map(|id| id.to_string()), expected_pane.map(str::to_owned));
         pretty_assertions::assert_eq!(layout.active_pane_id()?.to_string(), "pane-2");

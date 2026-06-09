@@ -11,6 +11,7 @@ mod pane_close;
 mod pane_cmd;
 mod pane_dim;
 mod pane_focus;
+mod pane_fullscreen;
 mod pane_layout;
 mod pane_mouse;
 mod pane_render;

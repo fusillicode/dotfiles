@@ -31,7 +31,11 @@ use crate::keyboard_input::ServerInputMode;
 use crate::keyboard_input::TabCmd;
 use crate::pane_close::ClosePaneOutcome;
 use crate::pane_close::PaneExitOutcome;
+use crate::pane_fullscreen::PaneFullscreen;
+use crate::pane_layout::PaneLayout;
+use crate::pane_layout::PaneRegion;
 use crate::pane_render::PaneRenderConfig;
+use crate::pane_render::PaneRenderLayout;
 use crate::pane_render::RenderComposer;
 use crate::pane_render::RenderDiffReason;
 use crate::pane_runtime::PaneRuntimeMetadata;
@@ -74,6 +78,7 @@ struct AttachedSessionState<'a> {
     input_mode: ServerInputMode,
     last_layout_snapshot: LayoutSnapshot,
     layout: &'a mut SessionLayout,
+    pane_fullscreen: PaneFullscreen,
     pane_regions: PaneRegionsSnapshot,
     pty_event_sender: &'a mpsc::SyncSender<PtyEvent>,
     render_composer: &'a mut RenderComposer,
@@ -183,7 +188,8 @@ pub fn initial_attached_render(
     let mut render_composer = RenderComposer::default();
     let tracked_processes = pane_tracked_processes.snapshot();
     let layout_snapshot = self::layout_snapshot_and_persist(&config.paths, layout, runtimes, &tracked_processes)?;
-    let pane_regions = self::pane_regions_snapshot(layout, runtimes, terminal_size)?;
+    let pane_layout = PaneFullscreen::default().pane_layout(layout, terminal_size)?;
+    let pane_regions = self::pane_regions_snapshot(&pane_layout, runtimes)?;
     let attention_panes = self::attention_pane_ids(layout, pane_tracked_processes);
     let render_baseline = render_composer.render_baseline(
         PaneRenderConfig {
@@ -192,7 +198,10 @@ pub fn initial_attached_render(
             pane_attention: config.user_config.pane_attention,
             pane_dim: config.user_config.pane_dim,
         },
-        layout,
+        PaneRenderLayout {
+            active_pane: layout.active_pane_id()?,
+            pane_layout: &pane_layout,
+        },
         runtimes,
         terminal_size,
         &attention_panes,
@@ -297,6 +306,7 @@ async fn handle_client(
         input_mode: ServerInputMode::Normal,
         last_layout_snapshot,
         layout: &mut state.layout,
+        pane_fullscreen: PaneFullscreen::default(),
         pane_regions: attached_pane_regions,
         pty_event_sender: &pty_event_sender,
         render_composer: &mut render_composer,
@@ -321,30 +331,56 @@ async fn handle_client(
     result
 }
 
-fn pane_regions_snapshot(
-    layout: &SessionLayout,
-    runtimes: &PaneRuntimes,
-    terminal_size: &TerminalSize,
-) -> rootcause::Result<PaneRegionsSnapshot> {
-    let regions = layout
-        .pane_regions(terminal_size)?
-        .into_iter()
-        .map(|region| {
-            let handle = runtimes.handle(region.id)?;
-            let mouse_mode = handle.mouse_mode()?;
-            let visible_top_row = handle.visible_top_row()?;
-            PaneRegionSnapshot::new(
-                region.id,
-                region.area.origin.col,
-                region.area.origin.row,
-                region.area.size.cols,
-                region.area.size.rows,
-                mouse_mode,
-                visible_top_row,
-            )
-        })
+fn pane_regions_snapshot(pane_layout: &PaneLayout, runtimes: &PaneRuntimes) -> rootcause::Result<PaneRegionsSnapshot> {
+    let regions = pane_layout
+        .regions()
+        .iter()
+        .map(|region| self::pane_region_snapshot(region, runtimes))
         .collect::<rootcause::Result<Vec<_>>>()?;
     PaneRegionsSnapshot::new(regions)
+}
+
+fn pane_region_snapshot(region: &PaneRegion, runtimes: &PaneRuntimes) -> rootcause::Result<PaneRegionSnapshot> {
+    let handle = runtimes.handle(region.id)?;
+    let mouse_mode = handle.mouse_mode()?;
+    let visible_top_row = handle.visible_top_row()?;
+    PaneRegionSnapshot::new(
+        region.id,
+        region.area.origin.col,
+        region.area.origin.row,
+        region.area.size.cols,
+        region.area.size.rows,
+        mouse_mode,
+        visible_top_row,
+    )
+}
+
+fn visible_pane_region_at_position(
+    state: &AttachedSessionState<'_>,
+    position: ClientMousePosition,
+) -> rootcause::Result<Option<PaneRegion>> {
+    Ok(self::visible_pane_layout(state)?
+        .regions()
+        .iter()
+        .find(|region| region.contains(position.into()))
+        .cloned())
+}
+
+fn visible_pane_id_at_position(
+    state: &AttachedSessionState<'_>,
+    position: ClientMousePosition,
+) -> rootcause::Result<Option<PaneId>> {
+    Ok(self::visible_pane_region_at_position(state, position)?.map(|region| region.id))
+}
+
+fn visible_pane_region_snapshot_at_position(
+    state: &AttachedSessionState<'_>,
+    position: ClientMousePosition,
+) -> rootcause::Result<Option<PaneRegionSnapshot>> {
+    let Some(region) = self::visible_pane_region_at_position(state, position)? else {
+        return Ok(None);
+    };
+    Ok(Some(self::pane_region_snapshot(&region, state.runtimes)?))
 }
 
 fn attention_pane_ids(layout: &SessionLayout, pane_tracked_processes: &PaneTrackedProcesses) -> Vec<PaneId> {
@@ -674,7 +710,8 @@ async fn flush_render_diff(
     }
 
     let (pane_regions, render_update) = {
-        let pane_regions = self::pane_regions_snapshot(state.layout, state.runtimes, &state.terminal_size)?;
+        let pane_layout = self::visible_pane_layout(state)?;
+        let pane_regions = self::pane_regions_snapshot(&pane_layout, state.runtimes)?;
         let attention_panes = self::attention_pane_ids(state.layout, &state.pane_tracked_processes);
         let reason = if pane_regions == state.pane_regions {
             RenderDiffReason::DirtyFrame
@@ -690,7 +727,10 @@ async fn flush_render_diff(
                 pane_attention: state.config.user_config.pane_attention,
                 pane_dim: state.config.user_config.pane_dim,
             },
-            state.layout,
+            PaneRenderLayout {
+                active_pane: state.layout.active_pane_id()?,
+                pane_layout: &pane_layout,
+            },
             state.runtimes,
             &state.terminal_size,
             &attention_panes,
@@ -871,7 +911,8 @@ async fn send_layout_and_baseline(
         let tracked_processes = state.pane_tracked_processes.snapshot();
         let layout_snapshot =
             self::layout_snapshot_and_persist(&state.config.paths, state.layout, state.runtimes, &tracked_processes)?;
-        let pane_regions = self::pane_regions_snapshot(state.layout, state.runtimes, &state.terminal_size)?;
+        let pane_layout = self::visible_pane_layout(state)?;
+        let pane_regions = self::pane_regions_snapshot(&pane_layout, state.runtimes)?;
         let attention_panes = self::attention_pane_ids(state.layout, &state.pane_tracked_processes);
         let render_update = state.render_composer.render_baseline(
             PaneRenderConfig {
@@ -880,7 +921,10 @@ async fn send_layout_and_baseline(
                 pane_attention: state.config.user_config.pane_attention,
                 pane_dim: state.config.user_config.pane_dim,
             },
-            state.layout,
+            PaneRenderLayout {
+                active_pane: state.layout.active_pane_id()?,
+                pane_layout: &pane_layout,
+            },
             state.runtimes,
             &state.terminal_size,
             &attention_panes,
@@ -938,8 +982,13 @@ async fn resize_panes_and_render(
     event_writer: &mut ServerEventWriter,
     state: &mut AttachedSessionState<'_>,
 ) -> rootcause::Result<bool> {
-    self::resize_panes_to_layout(state.layout, state.runtimes, &state.terminal_size)?;
+    let pane_layout = self::visible_pane_layout(state)?;
+    state.runtimes.resize_panes(pane_layout.regions())?;
     self::send_layout_and_baseline(event_writer, state).await
+}
+
+fn visible_pane_layout(state: &AttachedSessionState<'_>) -> rootcause::Result<PaneLayout> {
+    state.pane_fullscreen.pane_layout(state.layout, &state.terminal_size)
 }
 
 async fn handle_attached_client_message(
@@ -1061,13 +1110,12 @@ async fn handle_scroll_pane_line_at_client_request(
     state: &AttachedSessionState<'_>,
     render_dirty: &mut bool,
 ) -> rootcause::Result<bool> {
-    let outcome = crate::pane_scroll::handle_scroll_pane_line_request(
-        position,
-        direction,
-        state.layout,
-        state.runtimes,
-        &state.terminal_size,
-    )?;
+    let scrolled = if let Some(pane_id) = self::visible_pane_id_at_position(state, position)? {
+        crate::pane_scroll::scroll_pane(pane_id, direction, PaneScrollAmount::Line, state.runtimes)?
+    } else {
+        false
+    };
+    let outcome = crate::pane_scroll::scroll_pane_line_result(position, direction, scrolled);
     *render_dirty |= outcome.render_dirty;
     self::send_writer_event_with_timeout(event_writer, &outcome.event, state.config.client_write_timeout).await
 }
@@ -1077,6 +1125,9 @@ async fn handle_focus_pane_at_client_request(
     event_writer: &mut ServerEventWriter,
     state: &mut AttachedSessionState<'_>,
 ) -> rootcause::Result<bool> {
+    if state.pane_fullscreen.visible_pane_id(state.layout)?.is_some() {
+        return Ok(true);
+    }
     if !crate::pane_focus::handle_focus_pane_at_request_with_tracked_process_ack(
         position,
         state.config,
@@ -1106,7 +1157,7 @@ async fn handle_focus_tab_client_request(
     )? {
         return Ok(true);
     }
-    self::send_layout_and_baseline(event_writer, state).await
+    self::resize_panes_and_render(event_writer, state).await
 }
 
 async fn send_detached_event(
@@ -1150,6 +1201,7 @@ async fn handle_cmd_request(
     match cmd {
         ClientCmd::Tab(cmd) => self::handle_tab_cmd_request(cmd, event_writer, state).await,
         ClientCmd::SplitPane(split_axis) => {
+            state.pane_fullscreen.clear_active_tab(state.layout);
             let pane_id = crate::pane_split::handle_split_pane_cmd(
                 split_axis,
                 state.config,
@@ -1163,6 +1215,7 @@ async fn handle_cmd_request(
             self::resize_panes_and_render(event_writer, state).await
         }
         ClientCmd::ClosePane => {
+            state.pane_fullscreen.clear_active_tab(state.layout);
             let outcome = crate::pane_close::handle_close_pane_cmd(state.config, state.layout, state.runtimes)?;
             match &outcome {
                 ClosePaneOutcome::Final { pane_id } | ClosePaneOutcome::Removed { pane_id } => {
@@ -1192,9 +1245,20 @@ async fn handle_cmd_request(
             )? {
                 return Ok(true);
             }
+            if state.pane_fullscreen.clear_active_tab(state.layout) {
+                return self::resize_panes_and_render(event_writer, state).await;
+            }
             self::send_layout_and_baseline(event_writer, state).await
         }
-        ClientCmd::EnterResizeMode | ClientCmd::ExitMode => self::send_layout_and_baseline(event_writer, state).await,
+        ClientCmd::EnterResizeMode => {
+            state.pane_fullscreen.clear_active_tab(state.layout);
+            self::resize_panes_and_render(event_writer, state).await
+        }
+        ClientCmd::ExitMode => self::send_layout_and_baseline(event_writer, state).await,
+        ClientCmd::TogglePaneFullscreen => {
+            state.pane_fullscreen.toggle_active_pane(state.layout)?;
+            self::resize_panes_and_render(event_writer, state).await
+        }
     }
 }
 
@@ -1275,9 +1339,7 @@ async fn handle_mouse_event_request(
     state: &mut AttachedSessionState<'_>,
     render_dirty: &mut bool,
 ) -> rootcause::Result<bool> {
-    let Some(region) =
-        crate::pane_focus::mouse_event_region(state.layout, state.runtimes, &state.terminal_size, event.position)?
-    else {
+    let Some(region) = self::visible_pane_region_snapshot_at_position(state, event.position)? else {
         return Ok(true);
     };
     let handle = state.runtimes.handle(*region.id())?;
@@ -1310,14 +1372,10 @@ async fn handle_mouse_event_request(
             Ok(true)
         }
         crate::pane_mouse::PaneMouseAction::ScrollHistory { direction } => {
-            if !crate::pane_scroll::handle_scroll_pane_at_request(
-                event.position,
-                direction,
-                PaneScrollAmount::Wheel,
-                state.layout,
-                state.runtimes,
-                &state.terminal_size,
-            )? {
+            let Some(pane_id) = self::visible_pane_id_at_position(state, event.position)? else {
+                return Ok(true);
+            };
+            if !crate::pane_scroll::scroll_pane(pane_id, direction, PaneScrollAmount::Wheel, state.runtimes)? {
                 return Ok(true);
             }
             // Wheel input can arrive much faster than render IO; mark dirty and let the normal render tick coalesce.
@@ -1334,6 +1392,9 @@ async fn handle_mouse_focus(
     event_writer: &mut ServerEventWriter,
     state: &mut AttachedSessionState<'_>,
 ) -> rootcause::Result<bool> {
+    if state.pane_fullscreen.visible_pane_id(state.layout)?.is_some() {
+        return Ok(true);
+    }
     if !crate::pane_focus::handle_focus_pane_at_request_with_tracked_process_ack(
         event.position,
         state.config,

@@ -1,6 +1,5 @@
 use std::collections::BTreeMap;
 
-use muxr_core::ClientMousePosition;
 use muxr_core::LayoutSnapshot;
 use muxr_core::PaneId;
 use muxr_core::SessionName;
@@ -127,10 +126,6 @@ impl SessionLayout {
             .map(|tab| tab.snapshot_with_runtime_metadata(snapshot_fields))
             .collect::<rootcause::Result<Vec<_>>>()?;
         LayoutSnapshot::new(self.active_tab, tabs)
-    }
-
-    pub fn pane_at(&self, size: &TerminalSize, position: ClientMousePosition) -> rootcause::Result<Option<PaneId>> {
-        self.active_tab()?.pane_at(size, position)
     }
 
     pub fn active_tab_index(&self) -> rootcause::Result<usize> {
