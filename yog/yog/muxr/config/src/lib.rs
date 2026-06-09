@@ -26,6 +26,8 @@ pub struct MuxrConfig {
     pub pane_attention: PaneAttentionConfig,
     pub pane_borders: PaneBorderStyles,
     pub pane_dim: PaneDimConfig,
+    /// Terminal scrollback retention.
+    pub scrollback: ScrollbackConfig,
     pub selection: SelectionStyle,
     pub tab_bar: TabBarConfig,
     pub tracked_processes: Vec<TrackedProcess>,
@@ -72,6 +74,7 @@ impl Default for MuxrConfig {
                 explicit_color_percent: 80,
                 unfocused: true,
             },
+            scrollback: ScrollbackConfig { rows: 50_000 },
             selection: SelectionStyle {
                 bg: RenderColor::Indexed(238),
             },
@@ -228,6 +231,13 @@ pub struct PaneAttentionConfig {
 pub struct PaneDimConfig {
     pub explicit_color_percent: u8,
     pub unfocused: bool,
+}
+
+/// Terminal scrollback retention config.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ScrollbackConfig {
+    /// Number of rows retained for each server-side terminal scrollback source.
+    pub rows: usize,
 }
 
 /// Muxr-owned selection styling.

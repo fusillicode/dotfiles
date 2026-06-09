@@ -1,10 +1,12 @@
 use std::fs;
 use std::io::Write;
 use std::path::Path;
+use std::path::PathBuf;
 use std::process::Child;
 use std::process::Command;
 use std::process::Output;
 use std::process::Stdio;
+use std::sync::OnceLock;
 use std::thread;
 use std::time::Duration;
 use std::time::Instant;
@@ -17,6 +19,9 @@ use rootcause::report;
 const PROCESS_TIMEOUT: Duration = Duration::from_secs(5);
 const SOCKET_HASH_OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
 const SOCKET_HASH_PRIME: u64 = 0x0000_0100_0000_01b3;
+const SERVER_EXECUTABLE: &str = "muxr-server";
+
+static SERVER_BUILD: OnceLock<Result<(), String>> = OnceLock::new();
 
 #[test]
 fn test_muxr_start_when_session_is_reused_attaches_to_same_server_and_cleans_up_on_exit() -> rootcause::Result<()> {
@@ -66,6 +71,7 @@ fn test_muxr_when_no_args_and_no_sessions_starts_default_session() -> rootcause:
 }
 
 fn run_muxr<const N: usize>(home: &Path, args: [&str; N]) -> rootcause::Result<Output> {
+    self::ensure_server_binary()?;
     let child = Command::new(env!("CARGO_BIN_EXE_muxr"))
         .args(args)
         .env("HOME", home)
@@ -81,6 +87,7 @@ fn run_muxr<const N: usize>(home: &Path, args: [&str; N]) -> rootcause::Result<O
 }
 
 fn run_muxr_with_stdin<const N: usize>(home: &Path, args: [&str; N], input: &[u8]) -> rootcause::Result<Output> {
+    self::ensure_server_binary()?;
     let mut child = Command::new(env!("CARGO_BIN_EXE_muxr"))
         .args(args)
         .env("HOME", home)
@@ -99,6 +106,56 @@ fn run_muxr_with_stdin<const N: usize>(home: &Path, args: [&str; N], input: &[u8
     drop(stdin);
 
     wait_for_muxr_output(child)
+}
+
+fn ensure_server_binary() -> rootcause::Result<()> {
+    SERVER_BUILD
+        .get_or_init(self::build_server_binary)
+        .as_ref()
+        .map_err(|error| report!("muxr server build failed").attach(error.clone()))?;
+    Ok(())
+}
+
+fn build_server_binary() -> Result<(), String> {
+    // The public muxr binary starts a sibling server runner; existence alone is not enough because a stale binary may
+    // be left from a previous bin name or source revision. Build once in the same profile as the tested CLI binary.
+    let cargo = std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
+    let manifest = workspace_manifest_path().map_err(|error| format!("{error:?}"))?;
+    let manifest = manifest.to_string_lossy().into_owned();
+
+    let mut cmd = Command::new(cargo);
+    cmd.args([
+        "build",
+        "--manifest-path",
+        manifest.as_str(),
+        "-p",
+        "muxr-server",
+        "--bin",
+        SERVER_EXECUTABLE,
+    ]);
+    if Path::new(env!("CARGO_BIN_EXE_muxr"))
+        .parent()
+        .and_then(Path::file_name)
+        .is_some_and(|profile| profile == "release")
+    {
+        cmd.arg("--release");
+    }
+
+    let status = cmd
+        .status()
+        .map_err(|error| format!("failed to build muxr server for cli smoke: {error}"))?;
+    if !status.success() {
+        return Err(format!("status={status}"));
+    }
+    Ok(())
+}
+
+fn workspace_manifest_path() -> rootcause::Result<PathBuf> {
+    Ok(Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .join("Cargo.toml")
+        .canonicalize()
+        .context("failed to resolve yog workspace manifest")?)
 }
 
 fn wait_for_muxr_output(mut child: Child) -> rootcause::Result<Output> {

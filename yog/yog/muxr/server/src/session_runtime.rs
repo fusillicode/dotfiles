@@ -22,7 +22,7 @@ use crate::state::SessionMetadata;
 mod attached_session;
 
 /// High-volume PTY output is bounded and coalesced: a full queue keeps one pending output-ready marker instead of
-/// enqueueing every frame. Session runtime routing must preserve that behavior when S3/S4 remove shared state.
+/// enqueueing every frame. Session runtime routing must preserve that behavior while keeping PTY state single-owned.
 pub const PANE_OUTPUT_EVENT_CHANNEL_LIMIT: usize = 1024;
 pub const CLIENT_HANDSHAKE_CHANNEL_LIMIT: usize = 32;
 

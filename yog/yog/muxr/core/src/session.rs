@@ -12,7 +12,6 @@ use serde::Serialize;
 
 pub const DEFAULT_SESSION_NAME: &str = "default";
 pub const EXTERNAL_LAYOUT_ARG: &str = "--layout";
-pub const INTERNAL_SERVER_ARG: &str = "--server";
 const STATE_HOME_PARTS: &[&str] = &[".local", "state", "muxr"];
 
 const SOCKET_HOME_PARTS: &[&str] = &["s"];

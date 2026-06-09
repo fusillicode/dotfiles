@@ -3152,7 +3152,6 @@ dependencies = [
  "assert2",
  "muxr-client",
  "muxr-core",
- "muxr-server",
  "owo-colors 4.3.0",
  "pretty_assertions",
  "rootcause",
