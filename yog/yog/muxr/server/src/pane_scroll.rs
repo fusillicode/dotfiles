@@ -1,10 +1,9 @@
 use muxr_core::ClientMousePosition;
+use muxr_core::PaneId;
 use muxr_core::PaneScrollDirection;
 use muxr_core::ServerEvent;
-use muxr_core::TerminalSize;
 
 use crate::pane_runtime::PaneRuntimes;
-use crate::state::SessionLayout;
 
 const FAUX_SCROLL_LINES_PER_WHEEL_EVENT: usize = 3;
 
@@ -19,22 +18,12 @@ pub struct PaneScrollLineRequestOutcome {
     pub render_dirty: bool,
 }
 
-pub fn handle_scroll_pane_line_request(
+pub const fn scroll_pane_line_result(
     position: ClientMousePosition,
     direction: PaneScrollDirection,
-    layout: &SessionLayout,
-    runtimes: &PaneRuntimes,
-    terminal_size: &TerminalSize,
-) -> rootcause::Result<PaneScrollLineRequestOutcome> {
-    let scrolled = self::handle_scroll_pane_at_request(
-        position,
-        direction,
-        PaneScrollAmount::Line,
-        layout,
-        runtimes,
-        terminal_size,
-    )?;
-    Ok(PaneScrollLineRequestOutcome {
+    scrolled: bool,
+) -> PaneScrollLineRequestOutcome {
+    PaneScrollLineRequestOutcome {
         event: ServerEvent::ScrollPaneLineResult {
             position,
             direction,
@@ -42,21 +31,15 @@ pub fn handle_scroll_pane_line_request(
         },
         // Edge-drag autoscroll can outpace render IO; keep viewport changes coalesced on the render tick.
         render_dirty: scrolled,
-    })
+    }
 }
 
-pub fn handle_scroll_pane_at_request(
-    position: ClientMousePosition,
+pub fn scroll_pane(
+    pane_id: PaneId,
     direction: PaneScrollDirection,
     amount: PaneScrollAmount,
-    layout: &SessionLayout,
     runtimes: &PaneRuntimes,
-    terminal_size: &TerminalSize,
 ) -> rootcause::Result<bool> {
-    let Some(pane_id) = layout.pane_at(terminal_size, position)? else {
-        return Ok(false);
-    };
-
     match amount {
         PaneScrollAmount::Line => runtimes.handle(pane_id)?.scroll_one_line(direction),
         PaneScrollAmount::Wheel => runtimes.handle(pane_id)?.scroll(direction),

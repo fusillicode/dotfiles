@@ -93,6 +93,24 @@ impl PaneLayout {
         Ok(layout)
     }
 
+    pub fn single_pane(pane_id: PaneId, focus_seq: u64, size: &TerminalSize) -> Self {
+        let region = PaneRegion {
+            area: PaneArea {
+                origin: PanePosition { row: 0, col: 0 },
+                size: PaneSize {
+                    rows: size.rows(),
+                    cols: size.cols(),
+                },
+            },
+            focus_seq,
+            id: pane_id,
+        };
+        Self {
+            borders: Vec::new(),
+            regions: vec![region],
+        }
+    }
+
     pub fn borders(&self) -> &[PaneBorder] {
         &self.borders
     }
@@ -292,6 +310,26 @@ mod tests {
     use super::*;
     use crate::state::Pane;
     use crate::state::PaneState;
+
+    #[test]
+    fn test_pane_layout_single_pane_when_requested_covers_full_size_without_borders() -> rootcause::Result<()> {
+        let pane_id = PaneId::new(7)?;
+        let layout = PaneLayout::single_pane(pane_id, 3, &TerminalSize::new(80, 24)?);
+
+        pretty_assertions::assert_eq!(layout.borders(), &[]);
+        pretty_assertions::assert_eq!(
+            layout.regions(),
+            &[PaneRegion {
+                area: PaneArea {
+                    origin: PanePosition { row: 0, col: 0 },
+                    size: PaneSize { rows: 24, cols: 80 },
+                },
+                focus_seq: 3,
+                id: pane_id,
+            }]
+        );
+        Ok(())
+    }
 
     #[test]
     fn test_pane_layout_from_pane_tree_when_nested_split_exists_preserves_nested_border_ownership()

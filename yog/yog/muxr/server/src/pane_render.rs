@@ -15,9 +15,9 @@ use rootcause::prelude::ResultExt;
 use rootcause::report;
 
 use crate::pane_borders::BorderRenderMode;
+use crate::pane_layout::PaneLayout;
 use crate::pane_layout::PaneRegion;
 use crate::pane_runtime::PaneRuntimes;
-use crate::state::SessionLayout;
 use crate::terminal::TerminalSnapshot;
 
 struct CompositeFrame {
@@ -44,6 +44,12 @@ pub struct PaneRenderConfig {
     pub border_styles: PaneBorderStyles,
     pub pane_attention: PaneAttentionConfig,
     pub pane_dim: PaneDimConfig,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct PaneRenderLayout<'a> {
+    pub active_pane: PaneId,
+    pub pane_layout: &'a PaneLayout,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -89,14 +95,14 @@ impl RenderComposer {
     pub fn render_baseline(
         &mut self,
         pane_render: PaneRenderConfig,
-        layout: &SessionLayout,
+        pane_layout: PaneRenderLayout<'_>,
         runtimes: &PaneRuntimes,
         size: &TerminalSize,
         attention_panes: &[PaneId],
     ) -> rootcause::Result<RenderUpdate> {
         self.render_frame_baseline(Self::current_frame(
             pane_render,
-            layout,
+            pane_layout,
             runtimes,
             size,
             attention_panes,
@@ -113,7 +119,7 @@ impl RenderComposer {
     pub fn render_diff(
         &mut self,
         pane_render: PaneRenderConfig,
-        layout: &SessionLayout,
+        pane_layout: PaneRenderLayout<'_>,
         runtimes: &PaneRuntimes,
         size: &TerminalSize,
         attention_panes: &[PaneId],
@@ -122,13 +128,13 @@ impl RenderComposer {
         let Some(previous) = self.last_sent.as_ref() else {
             return Ok(Some(self.render_baseline(
                 pane_render,
-                layout,
+                pane_layout,
                 runtimes,
                 size,
                 attention_panes,
             )?));
         };
-        let frame = Self::current_frame(pane_render, layout, runtimes, size, attention_panes)?;
+        let frame = Self::current_frame(pane_render, pane_layout, runtimes, size, attention_panes)?;
         if frame.size != previous.size {
             return Ok(Some(self.render_frame_baseline(frame)?));
         }
@@ -166,13 +172,11 @@ impl RenderComposer {
 
     fn current_frame(
         pane_render: PaneRenderConfig,
-        layout: &SessionLayout,
+        pane_layout: PaneRenderLayout<'_>,
         runtimes: &PaneRuntimes,
         size: &TerminalSize,
         attention_panes: &[PaneId],
     ) -> rootcause::Result<CompositeFrame> {
-        let pane_layout = layout.pane_layout(size)?;
-        let active_pane = layout.active_pane_id()?;
         let mut rows = empty_render_rows(size);
         let mut cursor = RenderCursor {
             row: 0,
@@ -180,9 +184,9 @@ impl RenderComposer {
             visible: false,
         };
 
-        for region in pane_layout.regions() {
+        for region in pane_layout.pane_layout.regions() {
             let snapshot = runtimes.snapshot(region.id)?;
-            let visual_role = self::pane_visual_role(region.id, active_pane, attention_panes);
+            let visual_role = self::pane_visual_role(region.id, pane_layout.active_pane, attention_panes);
             paste_snapshot(
                 &mut rows,
                 region,
@@ -213,8 +217,8 @@ impl RenderComposer {
             &mut rows,
             pane_render.border_styles,
             pane_render.pane_attention,
-            pane_layout.borders(),
-            Some(&active_pane),
+            pane_layout.pane_layout.borders(),
+            Some(&pane_layout.active_pane),
             attention_panes,
             pane_render.mode,
         )?;

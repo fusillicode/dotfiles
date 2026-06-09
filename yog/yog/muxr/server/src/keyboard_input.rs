@@ -17,6 +17,7 @@ pub enum ClientCmd {
     ResizePane(PaneResizeDirection),
     SplitPane(PaneSplitAxis),
     Tab(TabCmd),
+    TogglePaneFullscreen,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -95,6 +96,9 @@ const fn resolve_normal_key(input_mode: &mut ServerInputMode, key: &ClientKey) -
         }
         (ClientKeyCode::Char('D'), ClientKeyModifiers::SHIFT_ALT) => {
             KeyResolution::Cmd(ClientCmd::SplitPane(PaneSplitAxis::Horizontal))
+        }
+        (ClientKeyCode::Char('F'), ClientKeyModifiers::SHIFT_ALT) => {
+            KeyResolution::Cmd(ClientCmd::TogglePaneFullscreen)
         }
         (ClientKeyCode::Char('W'), ClientKeyModifiers::SHIFT_ALT) => KeyResolution::Cmd(ClientCmd::ClosePane),
         (ClientKeyCode::Char('R'), ClientKeyModifiers::SHIFT_ALT) => {
@@ -208,6 +212,12 @@ mod tests {
         ClientKeyModifiers::SHIFT_ALT,
         b"\x1bD",
         ClientCmd::SplitPane(PaneSplitAxis::Horizontal)
+    )]
+    #[case::toggle_pane_fullscreen(
+        ClientKeyCode::Char('F'),
+        ClientKeyModifiers::SHIFT_ALT,
+        b"\x1bF",
+        ClientCmd::TogglePaneFullscreen
     )]
     #[case::close_pane(
         ClientKeyCode::Char('W'),

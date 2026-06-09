@@ -176,7 +176,7 @@ fn key_for_escaped_byte(byte: u8) -> Option<ClientKey> {
     let (code, modifiers) = match byte {
         CTRL_N => (ClientKeyCode::Char('n'), ClientKeyModifiers::CTRL_ALT),
         CTRL_P => (ClientKeyCode::Char('p'), ClientKeyModifiers::CTRL_ALT),
-        b'D' | b'E' | b'H' | b'J' | b'K' | b'L' | b'N' | b'P' | b'R' | b'V' | b'W' => {
+        b'D' | b'E' | b'F' | b'H' | b'J' | b'K' | b'L' | b'N' | b'P' | b'R' | b'V' | b'W' => {
             (ClientKeyCode::Char(char::from(byte)), ClientKeyModifiers::SHIFT_ALT)
         }
         _ => return None,
@@ -317,6 +317,7 @@ mod tests {
     #[case::focus_pane_right(b"\x1bL", ClientKeyCode::Char('L'), ClientKeyModifiers::SHIFT_ALT)]
     #[case::split_pane_vertical(b"\x1bV", ClientKeyCode::Char('V'), ClientKeyModifiers::SHIFT_ALT)]
     #[case::split_pane_horizontal(b"\x1bD", ClientKeyCode::Char('D'), ClientKeyModifiers::SHIFT_ALT)]
+    #[case::toggle_pane_fullscreen(b"\x1bF", ClientKeyCode::Char('F'), ClientKeyModifiers::SHIFT_ALT)]
     #[case::close_pane(b"\x1bW", ClientKeyCode::Char('W'), ClientKeyModifiers::SHIFT_ALT)]
     #[case::enter_resize_mode(b"\x1bR", ClientKeyCode::Char('R'), ClientKeyModifiers::SHIFT_ALT)]
     fn test_input_decoder_decode_when_shortcut_arrives_returns_key(
