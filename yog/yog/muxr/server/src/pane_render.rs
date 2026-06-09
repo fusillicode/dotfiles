@@ -339,6 +339,8 @@ fn pane_visual_render_style(mut style: RenderStyle, visual_style: PaneVisualStyl
 
 #[cfg(test)]
 mod tests {
+    use muxr_config::MuxrConfig;
+
     use super::*;
     use crate::pane_layout::PaneArea;
     use crate::pane_layout::PanePosition;
@@ -468,7 +470,7 @@ mod tests {
     #[test]
     fn test_paste_snapshot_when_visible_url_is_present_adds_hyperlink_metadata() -> rootcause::Result<()> {
         let size = TerminalSize::new(24, 1)?;
-        let mut terminal = crate::terminal::TerminalState::new(&size);
+        let mut terminal = crate::terminal::TerminalState::with_scrollback(&size, MuxrConfig::default().scrollback);
         let _ = terminal.process(b"https://example.com");
         let snapshot = terminal.snapshot()?;
         let region = PaneRegion {

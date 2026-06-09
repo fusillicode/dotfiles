@@ -12,6 +12,7 @@ use std::sync::mpsc;
 use std::sync::mpsc::TrySendError;
 use std::thread;
 
+use muxr_config::ScrollbackConfig;
 use muxr_core::ClientMouseEvent;
 use muxr_core::PaneMouseMode;
 use muxr_core::PaneRegionSnapshot;
@@ -142,8 +143,14 @@ pub struct PtySession {
 }
 
 impl PtySession {
-    pub fn spawn(cmd: &ShellCmd, cwd: &str, size: &TerminalSize, history_path: &Path) -> rootcause::Result<Self> {
-        let state = Arc::new(PtyState::with_history(size, history_path)?);
+    pub fn spawn(
+        cmd: &ShellCmd,
+        cwd: &str,
+        size: &TerminalSize,
+        history_path: &Path,
+        scrollback: ScrollbackConfig,
+    ) -> rootcause::Result<Self> {
+        let state = Arc::new(PtyState::with_history(size, history_path, scrollback)?);
         let pty_pair = native_pty_system()
             .openpty(pty_size(size))
             .map_err(|error| report!("failed to open muxr shell pty").attach(format!("error={error:#}")))?;
@@ -415,9 +422,9 @@ struct PtyState {
 }
 
 impl PtyState {
-    fn with_history(size: &TerminalSize, history_path: &Path) -> rootcause::Result<Self> {
+    fn with_history(size: &TerminalSize, history_path: &Path, scrollback: ScrollbackConfig) -> rootcause::Result<Self> {
         let (history, replay) = PaneHistory::open(history_path)?;
-        let mut terminal = TerminalState::new(size);
+        let mut terminal = TerminalState::with_scrollback(size, scrollback);
         let _ = terminal.process(&replay);
         // History replay rebuilds visible cells only; tab bar metadata must come from live PTY output after spawn.
         terminal.clear_title_metadata();
@@ -670,6 +677,8 @@ fn spawn_reader_thread(
 
 #[cfg(test)]
 mod tests {
+    use muxr_config::MuxrConfig;
+
     use super::*;
 
     fn pty_state(size: &TerminalSize) -> PtyState {
@@ -679,7 +688,7 @@ mod tests {
             exit_status: Mutex::new(None),
             history: Mutex::new(None),
             screen_dirty: AtomicBool::new(false),
-            terminal: Mutex::new(TerminalState::new(size)),
+            terminal: Mutex::new(TerminalState::with_scrollback(size, MuxrConfig::default().scrollback)),
             title_changes: Mutex::new(Vec::new()),
         }
     }
@@ -792,7 +801,7 @@ mod tests {
         )?;
         std::fs::write(&history_path, b"\x1b]2;~\x07history")?;
 
-        let state = PtyState::with_history(&terminal_size()?, &history_path)?;
+        let state = PtyState::with_history(&terminal_size()?, &history_path, MuxrConfig::default().scrollback)?;
 
         pretty_assertions::assert_eq!(lock_mutex(&state.terminal, "pty terminal")?.title(), None);
         pretty_assertions::assert_eq!(state.take_title_changes()?, Vec::<Option<String>>::new());
@@ -864,7 +873,7 @@ mod tests {
         std::fs::create_dir_all(path.parent().ok_or_else(|| report!("expected history parent"))?)?;
         std::fs::write(&path, b"history").context("failed to write muxr test history")?;
 
-        let state = PtyState::with_history(&terminal_size()?, &path)?;
+        let state = PtyState::with_history(&terminal_size()?, &path, MuxrConfig::default().scrollback)?;
         let snapshot = lock_mutex(&state.terminal, "pty terminal")?.snapshot()?;
         let rendered = snapshot
             .rows()

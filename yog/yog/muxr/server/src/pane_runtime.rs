@@ -134,6 +134,7 @@ impl PaneRuntimes {
                     &pane.cwd,
                     size,
                     &self::pane_output_path(&config.paths.panes, pane.id),
+                    config.user_config.scrollback,
                 )?,
                 id: pane.id,
             };
@@ -161,7 +162,13 @@ impl PaneRuntimes {
         self.panes.push(PaneRuntime {
             id: pane_id,
             startup_cmd_label: None,
-            session: PtySession::spawn(&config.shell_cmd, cwd, size, &history_path)?,
+            session: PtySession::spawn(
+                &config.shell_cmd,
+                cwd,
+                size,
+                &history_path,
+                config.user_config.scrollback,
+            )?,
         });
         Ok(())
     }

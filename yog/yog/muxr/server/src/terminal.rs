@@ -1,3 +1,4 @@
+use muxr_config::ScrollbackConfig;
 use muxr_core::ClientMouseEvent;
 use muxr_core::ClientMouseEventPhase;
 use muxr_core::PaneMouseMode;
@@ -12,7 +13,6 @@ use muxr_core::TerminalSize;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
 
-use crate::terminal_scrollback::SCROLLBACK_ROWS;
 use crate::terminal_scrollback::TerminalPartialScrollback;
 use crate::terminal_scrollback::TerminalPreParserAction;
 
@@ -297,16 +297,16 @@ impl vt100::Callbacks for TerminalCallbacks {
 }
 
 impl TerminalState {
-    pub fn new(size: &TerminalSize) -> Self {
+    pub fn with_scrollback(size: &TerminalSize, scrollback: ScrollbackConfig) -> Self {
         Self {
             parser: vt100::Parser::new_with_callbacks(
                 size.rows(),
                 size.cols(),
-                SCROLLBACK_ROWS,
+                scrollback.rows,
                 TerminalCallbacks::default(),
             ),
             screen_dirty_detector: TerminalScreenDirtyDetector::default(),
-            partial_scrollback: TerminalPartialScrollback::new(size),
+            partial_scrollback: TerminalPartialScrollback::new(size, scrollback.rows),
         }
     }
 
@@ -551,15 +551,7 @@ impl TerminalState {
         }
 
         if offset <= captured_len {
-            let mut captured_rows = self
-                .partial_scrollback
-                .captured_rows()
-                .iter()
-                .rev()
-                .take(offset)
-                .cloned()
-                .collect::<Vec<_>>();
-            captured_rows.reverse();
+            let captured_rows = self.partial_scrollback.captured_row_cells_for_view(offset, height);
             rows.extend(captured_rows.into_iter().take(height));
             rows.extend(self.row_cells_at_base_scrollback_offset(0, height.saturating_sub(rows.len())));
             return rows;
@@ -570,10 +562,7 @@ impl TerminalState {
         rows.extend(self.row_cells_at_base_scrollback_offset(base_offset, base_rows_in_view));
         rows.extend(
             self.partial_scrollback
-                .captured_rows()
-                .iter()
-                .take(height.saturating_sub(rows.len()))
-                .cloned(),
+                .captured_oldest_row_cells(height.saturating_sub(rows.len())),
         );
         rows.extend(self.row_cells_at_base_scrollback_offset(0, height.saturating_sub(rows.len())));
         rows.truncate(height);
@@ -659,6 +648,8 @@ const fn render_color(color: vt100::Color) -> RenderColor {
 
 #[cfg(test)]
 mod tests {
+    use muxr_config::MuxrConfig;
+    use muxr_config::ScrollbackConfig;
     use rootcause::report;
     use rstest::rstest;
 
@@ -679,7 +670,7 @@ mod tests {
 
     #[test]
     fn test_terminal_state_snapshot_when_output_processed_contains_screen() -> rootcause::Result<()> {
-        let mut terminal = TerminalState::new(&terminal_size()?);
+        let mut terminal = self::terminal_state(&terminal_size()?);
 
         let outcome = terminal.process(b"hi");
         pretty_assertions::assert_eq!(outcome.into_replies(), Vec::<Vec<u8>>::new());
@@ -700,7 +691,7 @@ mod tests {
         #[case] bytes: &[u8],
         #[case] expected: &[u8],
     ) -> rootcause::Result<()> {
-        let mut terminal = TerminalState::new(&terminal_size()?);
+        let mut terminal = self::terminal_state(&terminal_size()?);
 
         pretty_assertions::assert_eq!(terminal.process(bytes).into_replies(), vec![expected.to_vec()]);
         Ok(())
@@ -708,7 +699,7 @@ mod tests {
 
     #[test]
     fn test_terminal_state_process_when_cursor_report_requested_returns_current_cursor() -> rootcause::Result<()> {
-        let mut terminal = TerminalState::new(&terminal_size()?);
+        let mut terminal = self::terminal_state(&terminal_size()?);
 
         pretty_assertions::assert_eq!(terminal.process(b"\x1b[2;3H").into_replies(), Vec::<Vec<u8>>::new());
 
@@ -718,7 +709,7 @@ mod tests {
 
     #[test]
     fn test_terminal_state_process_when_report_sequence_is_split_returns_one_reply() -> rootcause::Result<()> {
-        let mut terminal = TerminalState::new(&terminal_size()?);
+        let mut terminal = self::terminal_state(&terminal_size()?);
 
         pretty_assertions::assert_eq!(terminal.process(b"\x1b[").into_replies(), Vec::<Vec<u8>>::new());
 
@@ -730,7 +721,7 @@ mod tests {
     #[case::osc_zero(b"\x1b]0;cargo test\x07")]
     #[case::osc_two(b"\x1b]2;cargo test\x07")]
     fn test_terminal_state_title_when_window_title_is_set_returns_title(#[case] bytes: &[u8]) -> rootcause::Result<()> {
-        let mut terminal = TerminalState::new(&terminal_size()?);
+        let mut terminal = self::terminal_state(&terminal_size()?);
 
         pretty_assertions::assert_eq!(terminal.process(bytes).into_replies(), Vec::<Vec<u8>>::new());
 
@@ -740,7 +731,7 @@ mod tests {
 
     #[test]
     fn test_terminal_state_take_title_changes_when_window_title_changes_returns_once() -> rootcause::Result<()> {
-        let mut terminal = TerminalState::new(&terminal_size()?);
+        let mut terminal = self::terminal_state(&terminal_size()?);
 
         pretty_assertions::assert_eq!(
             terminal.process(b"\x1b]2;cargo test\x07").into_replies(),
@@ -754,7 +745,7 @@ mod tests {
 
     #[test]
     fn test_terminal_state_take_title_changes_when_window_title_repeats_returns_empty() -> rootcause::Result<()> {
-        let mut terminal = TerminalState::new(&terminal_size()?);
+        let mut terminal = self::terminal_state(&terminal_size()?);
 
         pretty_assertions::assert_eq!(
             terminal.process(b"\x1b]2;cargo test\x07").into_replies(),
@@ -773,7 +764,7 @@ mod tests {
     #[test]
     fn test_terminal_state_take_title_changes_when_titles_change_in_one_chunk_preserves_order() -> rootcause::Result<()>
     {
-        let mut terminal = TerminalState::new(&terminal_size()?);
+        let mut terminal = self::terminal_state(&terminal_size()?);
 
         pretty_assertions::assert_eq!(
             terminal.process(b"\x1b]2;gst\x07\x1b]2;~\x07").into_replies(),
@@ -789,7 +780,7 @@ mod tests {
 
     #[test]
     fn test_terminal_state_title_when_window_title_sequence_is_split_returns_title() -> rootcause::Result<()> {
-        let mut terminal = TerminalState::new(&terminal_size()?);
+        let mut terminal = self::terminal_state(&terminal_size()?);
 
         pretty_assertions::assert_eq!(terminal.process(b"\x1b]2;").into_replies(), Vec::<Vec<u8>>::new());
         pretty_assertions::assert_eq!(terminal.process(b"gst\x07").into_replies(), Vec::<Vec<u8>>::new());
@@ -800,7 +791,7 @@ mod tests {
 
     #[test]
     fn test_terminal_state_title_when_window_title_is_empty_returns_none() -> rootcause::Result<()> {
-        let mut terminal = TerminalState::new(&terminal_size()?);
+        let mut terminal = self::terminal_state(&terminal_size()?);
 
         let _ = terminal.process(b"\x1b]2;cargo test\x07");
         let _ = terminal.process(b"\x1b]2;  \x07");
@@ -816,7 +807,7 @@ mod tests {
     fn test_terminal_state_process_when_only_title_changes_keeps_screen_clean(
         #[case] bytes: &[u8],
     ) -> rootcause::Result<()> {
-        let mut terminal = TerminalState::new(&terminal_size()?);
+        let mut terminal = self::terminal_state(&terminal_size()?);
 
         let outcome = terminal.process(bytes);
 
@@ -827,7 +818,7 @@ mod tests {
 
     #[test]
     fn test_terminal_state_process_when_title_sequence_is_split_keeps_screen_clean() -> rootcause::Result<()> {
-        let mut terminal = TerminalState::new(&terminal_size()?);
+        let mut terminal = self::terminal_state(&terminal_size()?);
 
         let first = terminal.process(b"\x1b]2;");
         let second = terminal.process(b"gst\x07");
@@ -848,7 +839,7 @@ mod tests {
     fn test_terminal_state_process_when_output_is_not_title_only_marks_screen_dirty(
         #[case] bytes: &[u8],
     ) -> rootcause::Result<()> {
-        let mut terminal = TerminalState::new(&terminal_size()?);
+        let mut terminal = self::terminal_state(&terminal_size()?);
 
         assert2::assert!(terminal.process(bytes).screen_dirty());
         Ok(())
@@ -856,7 +847,7 @@ mod tests {
 
     #[test]
     fn test_terminal_state_scroll_when_output_exceeds_viewport_shows_history() -> rootcause::Result<()> {
-        let mut terminal = TerminalState::new(&TerminalSize::new(8, 2)?);
+        let mut terminal = self::terminal_state(&TerminalSize::new(8, 2)?);
 
         let _ = terminal.process(b"one\ntwo\nthree");
 
@@ -868,7 +859,7 @@ mod tests {
 
     #[test]
     fn test_terminal_state_scroll_to_bottom_when_scrolled_shows_live_viewport() -> rootcause::Result<()> {
-        let mut terminal = TerminalState::new(&TerminalSize::new(8, 2)?);
+        let mut terminal = self::terminal_state(&TerminalSize::new(8, 2)?);
 
         let _ = terminal.process(b"one\ntwo\nthree");
         assert2::assert!(terminal.scroll(PaneScrollDirection::Up));
@@ -884,7 +875,7 @@ mod tests {
     #[test]
     fn test_terminal_state_scroll_when_top_partial_scroll_region_moves_rows_preserves_history() -> rootcause::Result<()>
     {
-        let mut terminal = TerminalState::new(&TerminalSize::new(8, 4)?);
+        let mut terminal = self::terminal_state(&TerminalSize::new(8, 4)?);
 
         let _ = terminal.process(b"\x1b[1;1Hone\x1b[2;1Htwo\x1b[3;1Hthree\x1b[4;1Hprompt");
         let _ = terminal.process(b"\x1b[1;3r\x1b[2S\x1b[r");
@@ -898,8 +889,34 @@ mod tests {
     }
 
     #[test]
+    fn test_terminal_state_when_partial_rows_exceed_configured_limit_keeps_recent_rows() -> rootcause::Result<()> {
+        let mut terminal = TerminalState::with_scrollback(&TerminalSize::new(8, 4)?, ScrollbackConfig { rows: 2 });
+
+        for row in 0..4 {
+            let _ = terminal.process(format!("\x1b[1;1Hrow-{row}\x1b[2;1Hstill\x1b[3;1Hprompt").as_bytes());
+            let _ = terminal.process(b"\x1b[1;3r\x1b[1S\x1b[r");
+        }
+
+        pretty_assertions::assert_eq!(terminal.partial_scrollback.captured_len(), 2);
+        let retained_text = terminal
+            .partial_scrollback
+            .captured_oldest_row_cells(2)
+            .iter()
+            .map(|row| row.iter().map(RenderCell::text).collect::<String>())
+            .collect::<Vec<_>>();
+        assert2::assert!(
+            retained_text
+                .iter()
+                .all(|row| !row.starts_with("row-0") && !row.starts_with("row-1"))
+        );
+        assert2::assert!(retained_text.first().is_some_and(|row| row.starts_with("row-2")));
+        assert2::assert!(retained_text.get(1).is_some_and(|row| row.starts_with("row-3")));
+        Ok(())
+    }
+
+    #[test]
     fn test_terminal_state_scroll_when_partial_scroll_sequence_is_split_preserves_history() -> rootcause::Result<()> {
-        let mut terminal = TerminalState::new(&TerminalSize::new(8, 4)?);
+        let mut terminal = self::terminal_state(&TerminalSize::new(8, 4)?);
 
         let _ = terminal.process(b"\x1b[1;1Hone\x1b[2;1Htwo\x1b[3;1Hthree\x1b[4;1Hprompt");
         let _ = terminal.process(b"\x1b[1;3r\x1b[");
@@ -916,7 +933,7 @@ mod tests {
     #[test]
     fn test_terminal_state_scroll_when_top_partial_scroll_region_linefeed_moves_rows_prefers_captured_history()
     -> rootcause::Result<()> {
-        let mut terminal = TerminalState::new(&TerminalSize::new(8, 4)?);
+        let mut terminal = self::terminal_state(&TerminalSize::new(8, 4)?);
 
         let _ = terminal.process(b"old-0\nold-1\nold-2\nold-3\nold-4\n");
         let _ = terminal.process(b"\x1b[1;1Hcod-0\x1b[2;1Hcod-1\x1b[3;1Hcod-2\x1b[4;1Hprompt");
@@ -933,7 +950,7 @@ mod tests {
     #[test]
     fn test_terminal_state_scroll_when_alternate_screen_linefeed_moves_rows_does_not_capture_history()
     -> rootcause::Result<()> {
-        let mut terminal = TerminalState::new(&TerminalSize::new(8, 4)?);
+        let mut terminal = self::terminal_state(&TerminalSize::new(8, 4)?);
 
         let _ = terminal.process(b"\x1b[?1049h\x1b[1;1Hone\x1b[2;1Htwo\x1b[3;1Hthree\x1b[4;1Hprompt");
         let _ = terminal.process(b"\x1b[1;3r\x1b[3;1H\n\x1b[r");
@@ -945,7 +962,7 @@ mod tests {
     #[test]
     fn test_terminal_state_scroll_when_top_partial_scroll_region_delete_lines_moves_rows_preserves_history()
     -> rootcause::Result<()> {
-        let mut terminal = TerminalState::new(&TerminalSize::new(8, 4)?);
+        let mut terminal = self::terminal_state(&TerminalSize::new(8, 4)?);
 
         let _ = terminal.process(b"\x1b[1;1Hone\x1b[2;1Htwo\x1b[3;1Hthree\x1b[4;1Hprompt");
         let _ = terminal.process(b"\x1b[1;3r\x1b[1;1H\x1b[2M\x1b[r");
@@ -961,7 +978,7 @@ mod tests {
     #[test]
     fn test_terminal_state_scroll_when_full_scroll_region_delete_lines_moves_rows_preserves_history()
     -> rootcause::Result<()> {
-        let mut terminal = TerminalState::new(&TerminalSize::new(8, 4)?);
+        let mut terminal = self::terminal_state(&TerminalSize::new(8, 4)?);
 
         let _ = terminal.process(b"\x1b[1;1Hone\x1b[2;1Htwo\x1b[3;1Hthree\x1b[4;1Hprompt");
         let _ = terminal.process(b"\x1b[1;4r\x1b[1;1H\x1b[2M\x1b[r");
@@ -977,7 +994,7 @@ mod tests {
     #[test]
     fn test_terminal_state_scroll_when_mid_partial_scroll_region_delete_lines_moves_rows_does_not_capture_history()
     -> rootcause::Result<()> {
-        let mut terminal = TerminalState::new(&TerminalSize::new(8, 4)?);
+        let mut terminal = self::terminal_state(&TerminalSize::new(8, 4)?);
 
         let _ = terminal.process(b"\x1b[1;1Hone\x1b[2;1Htwo\x1b[3;1Hthree\x1b[4;1Hprompt");
         let _ = terminal.process(b"\x1b[1;3r\x1b[2;1H\x1b[2M\x1b[r");
@@ -989,7 +1006,7 @@ mod tests {
     #[test]
     fn test_terminal_state_scroll_when_alternate_screen_delete_lines_moves_rows_does_not_capture_history()
     -> rootcause::Result<()> {
-        let mut terminal = TerminalState::new(&TerminalSize::new(8, 4)?);
+        let mut terminal = self::terminal_state(&TerminalSize::new(8, 4)?);
 
         let _ = terminal.process(b"\x1b[?1049h\x1b[1;1Hone\x1b[2;1Htwo\x1b[3;1Hthree\x1b[4;1Hprompt");
         let _ = terminal.process(b"\x1b[1;4r\x1b[1;1H\x1b[2M\x1b[r");
@@ -1001,7 +1018,7 @@ mod tests {
     #[test]
     fn test_terminal_state_scroll_when_alternate_screen_partial_scroll_region_moves_rows_does_not_capture_history()
     -> rootcause::Result<()> {
-        let mut terminal = TerminalState::new(&TerminalSize::new(8, 4)?);
+        let mut terminal = self::terminal_state(&TerminalSize::new(8, 4)?);
 
         let _ = terminal.process(b"\x1b[?1049h\x1b[1;1Hone\x1b[2;1Htwo\x1b[3;1Hthree\x1b[4;1Hprompt");
         let _ = terminal.process(b"\x1b[1;3r\x1b[2S\x1b[r");
@@ -1013,7 +1030,7 @@ mod tests {
     #[test]
     fn test_terminal_state_scroll_when_alternate_screen_full_scroll_region_moves_rows_does_not_capture_history()
     -> rootcause::Result<()> {
-        let mut terminal = TerminalState::new(&TerminalSize::new(8, 4)?);
+        let mut terminal = self::terminal_state(&TerminalSize::new(8, 4)?);
 
         let _ = terminal.process(b"\x1b[?1049h\x1b[1;1Hone\x1b[2;1Htwo\x1b[3;1Hthree\x1b[4;1Hprompt");
         let _ = terminal.process(b"\x1b[1;4r\x1b[2S\x1b[r");
@@ -1025,7 +1042,7 @@ mod tests {
     #[test]
     fn test_terminal_state_scroll_when_normal_screen_full_scroll_region_moves_rows_preserves_history()
     -> rootcause::Result<()> {
-        let mut terminal = TerminalState::new(&TerminalSize::new(8, 4)?);
+        let mut terminal = self::terminal_state(&TerminalSize::new(8, 4)?);
 
         let _ = terminal.process(b"\x1b[1;1Hone\x1b[2;1Htwo\x1b[3;1Hthree\x1b[4;1Hprompt");
         let _ = terminal.process(b"\x1b[1;4r\x1b[2S\x1b[r");
@@ -1041,7 +1058,7 @@ mod tests {
 
     #[test]
     fn test_terminal_state_visible_top_row_when_scrolled_tracks_current_viewport() -> rootcause::Result<()> {
-        let mut terminal = TerminalState::new(&TerminalSize::new(8, 2)?);
+        let mut terminal = self::terminal_state(&TerminalSize::new(8, 2)?);
 
         let _ = terminal.process(b"one\ntwo\nthree");
         let bottom_top_row = terminal.visible_top_row()?;
@@ -1057,7 +1074,7 @@ mod tests {
 
     #[test]
     fn test_terminal_state_bracketed_paste_when_mode_is_enabled_returns_true() -> rootcause::Result<()> {
-        let mut terminal = TerminalState::new(&terminal_size()?);
+        let mut terminal = self::terminal_state(&terminal_size()?);
 
         let _ = terminal.process(b"\x1b[?2004h");
 
@@ -1068,7 +1085,7 @@ mod tests {
     #[test]
     fn test_terminal_state_mouse_protocol_when_sgr_button_motion_is_enabled_returns_protocol() -> rootcause::Result<()>
     {
-        let mut terminal = TerminalState::new(&terminal_size()?);
+        let mut terminal = self::terminal_state(&terminal_size()?);
 
         let _ = terminal.process(b"\x1b[?1002h\x1b[?1006h");
 
@@ -1096,7 +1113,7 @@ mod tests {
         #[case] bytes: &[u8],
         #[case] expected: bool,
     ) -> rootcause::Result<()> {
-        let mut terminal = TerminalState::new(&terminal_size()?);
+        let mut terminal = self::terminal_state(&terminal_size()?);
 
         let _ = terminal.process(bytes);
 
@@ -1118,7 +1135,7 @@ mod tests {
         #[case] bytes: &[u8],
         #[case] expected: bool,
     ) -> rootcause::Result<()> {
-        let mut terminal = TerminalState::new(&terminal_size()?);
+        let mut terminal = self::terminal_state(&terminal_size()?);
 
         let _ = terminal.process(bytes);
 
@@ -1135,7 +1152,7 @@ mod tests {
 
     #[test]
     fn test_terminal_state_application_mode_when_mouse_protocol_is_enabled_returns_protocol() -> rootcause::Result<()> {
-        let mut terminal = TerminalState::new(&terminal_size()?);
+        let mut terminal = self::terminal_state(&terminal_size()?);
 
         let _ = terminal.process(b"\x1b[?1002h\x1b[?1006h");
 
@@ -1160,7 +1177,7 @@ mod tests {
     fn test_terminal_state_process_when_report_is_unsupported_returns_no_reply(
         #[case] bytes: &[u8],
     ) -> rootcause::Result<()> {
-        let mut terminal = TerminalState::new(&terminal_size()?);
+        let mut terminal = self::terminal_state(&terminal_size()?);
 
         pretty_assertions::assert_eq!(terminal.process(bytes).into_replies(), Vec::<Vec<u8>>::new());
         Ok(())
@@ -1168,6 +1185,10 @@ mod tests {
 
     fn terminal_size() -> rootcause::Result<TerminalSize> {
         TerminalSize::new(8, 4)
+    }
+
+    fn terminal_state(size: &TerminalSize) -> TerminalState {
+        TerminalState::with_scrollback(size, MuxrConfig::default().scrollback)
     }
 
     fn snapshot_text(snapshot: &TerminalSnapshot) -> String {

@@ -42,20 +42,30 @@ pub async fn open_session(
     external_layout: Option<&Path>,
 ) -> rootcause::Result<AttachedSession> {
     let paths = SessionPaths::from_home(session)?;
+    self::open_session_with_paths(session, &paths, terminal_size, server_executable, external_layout).await
+}
+
+async fn open_session_with_paths(
+    session: &SessionName,
+    paths: &SessionPaths,
+    terminal_size: TerminalSize,
+    server_executable: &Path,
+    external_layout: Option<&Path>,
+) -> rootcause::Result<AttachedSession> {
     if let Some(external_layout) = external_layout {
-        self::guard_external_start_seed(&paths, session, external_layout).await?;
+        self::guard_external_start_seed(paths, session, external_layout).await?;
     }
 
-    match self::attach(session, &paths, terminal_size.clone()).await {
+    match self::attach(session, paths, terminal_size.clone()).await {
         Ok(attached_session) => return Ok(attached_session),
         Err(attach_failure) => {
             handle_attach_failure(attach_failure)?;
-            session_start::cleanup_stale_session_files(&paths)?;
+            session_start::cleanup_stale_session_files(paths)?;
         }
     }
 
     session_start::spawn_server_process(session, server_executable, external_layout)?;
-    self::attach_started_server(session, &paths, terminal_size).await
+    self::attach_started_server(session, paths, terminal_size).await
 }
 
 async fn attach(
@@ -194,8 +204,18 @@ mod tests {
     use std::fs;
     use std::path::Path;
 
+    use muxr_core::AttachAccepted;
+    use muxr_core::LayoutSnapshot;
+    use muxr_core::PaneId;
+    use muxr_core::PaneMouseMode;
+    use muxr_core::PaneRegionSnapshot;
+    use muxr_core::PaneRegionsSnapshot;
+    use muxr_core::PaneSnapshot;
     use muxr_core::ServerError;
     use muxr_core::SessionPaths;
+    use muxr_core::TabId;
+    use muxr_core::TabSnapshot;
+    use muxr_core::TrackedProcessState;
     use muxr_transport::ServerListener;
 
     use super::*;
@@ -301,6 +321,54 @@ mod tests {
                 .map_err(|error| report!("muxr rejected attach test task panicked").attach(format!("{error}")))??;
             Ok(())
         })
+    }
+
+    #[test]
+    fn test_open_session_when_live_session_exists_with_missing_runner_attaches_without_spawning()
+    -> rootcause::Result<()> {
+        self::runtime()?.block_on(async {
+            let tempdir = tempfile::tempdir()?;
+            let (session, paths) = self::session_paths(tempdir.path(), "work")?;
+            fs::create_dir_all(&paths.root)?;
+            let listener = ServerListener::bind(&paths.socket)?;
+            let handle = tokio::spawn(async move {
+                let mut connection = listener.accept().await?;
+                assert2::assert!(matches!(
+                    connection.recv_request().await?,
+                    Some(ClientRequest::Attach(_))
+                ));
+                connection.send_event(&self::attached_event()?).await?;
+                Ok::<(), rootcause::Report>(())
+            });
+            let missing_runner = tempdir.path().join("missing-muxr-server");
+
+            let attached_session =
+                open_session_with_paths(&session, &paths, TerminalSize::new(80, 24)?, &missing_runner, None).await?;
+
+            pretty_assertions::assert_eq!(attached_session.layout.active_tab(), &TabId::new(1)?);
+            handle
+                .await
+                .map_err(|error| report!("muxr live attach test task panicked").attach(format!("{error}")))??;
+            Ok(())
+        })
+    }
+
+    fn attached_event() -> rootcause::Result<ServerEvent> {
+        let pane_id = PaneId::new(1)?;
+        let tab_id = TabId::new(1)?;
+        let pane = PaneSnapshot {
+            cmd_label: None,
+            cwd: "/tmp".to_string(),
+            focus_seq: 0,
+            id: pane_id,
+            title: "shell".to_string(),
+            tracked_process_state: TrackedProcessState::None,
+        };
+        let tab = TabSnapshot::new(tab_id, "default", pane_id, vec![pane])?;
+        let layout = LayoutSnapshot::new(tab_id, vec![tab])?;
+        let region = PaneRegionSnapshot::new(pane_id, 0, 0, 80, 24, PaneMouseMode::None, 0)?;
+        let pane_regions = PaneRegionsSnapshot::new(vec![region])?;
+        Ok(ServerEvent::Attached(AttachAccepted { layout, pane_regions }))
     }
 
     fn session_paths(base: &Path, raw: &str) -> rootcause::Result<(SessionName, SessionPaths)> {

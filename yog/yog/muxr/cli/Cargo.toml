@@ -17,7 +17,6 @@ path = "src/main.rs"
 [dependencies]
 muxr_client = { package = "muxr-client", path = "../client" }
 muxr_core = { workspace = true }
-muxr_server = { package = "muxr-server", path = "../server" }
 owo-colors = { workspace = true }
 rootcause = { workspace = true }
 strum = { workspace = true }

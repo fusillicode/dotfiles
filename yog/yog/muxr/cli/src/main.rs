@@ -10,7 +10,7 @@ use rootcause::report;
 use strum::EnumIter;
 use strum::IntoEnumIterator;
 
-mod internal_server;
+const SERVER_EXECUTABLE: &str = "muxr-server";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 enum Cmd {
@@ -85,7 +85,8 @@ impl Cmd {
                 session,
                 external_layout,
             } => {
-                let server_executable = std::env::current_exe().context("failed to resolve muxr executable")?;
+                let current_exe = std::env::current_exe().context("failed to resolve muxr executable")?;
+                let server_executable = self::server_executable_next_to(&current_exe)?;
                 let external_layout = match external_layout {
                     Some(path) if path.is_relative() => Some(
                         std::env::current_dir()
@@ -115,11 +116,6 @@ impl fmt::Display for SessionAction {
 #[ytil_sys::main]
 fn main() -> rootcause::Result<()> {
     let args = ytil_sys::cli::get();
-
-    if internal_server::serve_if_requested(&args)? {
-        return Ok(());
-    }
-
     let cmd = Cmd::parse(&args);
 
     match cmd {
@@ -132,9 +128,10 @@ fn main() -> rootcause::Result<()> {
 }
 
 fn run_session_picker() -> rootcause::Result<()> {
-    let server_executable = std::env::current_exe().context("failed to resolve muxr executable")?;
     let sessions = muxr_client::list_sessions()?;
     if sessions.is_empty() {
+        let current_exe = std::env::current_exe().context("failed to resolve muxr executable")?;
+        let server_executable = self::server_executable_next_to(&current_exe)?;
         muxr_client::start(&SessionName::default(), &server_executable, None)?;
         return Ok(());
     }
@@ -158,18 +155,16 @@ fn run_session_picker() -> rootcause::Result<()> {
         .iter()
         .map(|session| session.name().clone())
         .collect::<Vec<_>>();
-    self::execute_session_action(action, &sessions, &server_executable)
+    self::execute_session_action(action, &sessions)
 }
 
-fn execute_session_action(
-    action: SessionAction,
-    selected: &[SessionName],
-    server_executable: &Path,
-) -> rootcause::Result<()> {
+fn execute_session_action(action: SessionAction, selected: &[SessionName]) -> rootcause::Result<()> {
     match action {
         SessionAction::Attach => {
             let session = ytil_tui::require_single(selected, "sessions")?;
-            muxr_client::start(session, server_executable, None)
+            let current_exe = std::env::current_exe().context("failed to resolve muxr executable")?;
+            let server_executable = self::server_executable_next_to(&current_exe)?;
+            muxr_client::start(session, &server_executable, None)
         }
         SessionAction::Delete => self::delete_selected_sessions(selected, muxr_client::delete_session),
     }
@@ -222,6 +217,17 @@ fn delete_session_failure_message(session: &SessionName, error: impl fmt::Displa
     format!("{failed} to delete session {session}: {error}")
 }
 
+fn server_executable_next_to(current_exe: &Path) -> rootcause::Result<PathBuf> {
+    let Some(parent) = current_exe.parent().filter(|parent| !parent.as_os_str().is_empty()) else {
+        return Err(
+            report!("muxr executable has no parent dir").attach(format!("executable={}", current_exe.display()))
+        );
+    };
+    // Keep the attached client and long-lived server as separate processes: `muxr` can link picker/UI-only CLI deps,
+    // while `muxr-server` keeps session state, PTYs, and scrollback memory attributable to the server runtime alone.
+    Ok(parent.join(SERVER_EXECUTABLE))
+}
+
 #[cfg(test)]
 mod tests {
     use rstest::rstest;
@@ -269,11 +275,22 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn test_server_executable_next_to_returns_sibling_without_checking_existence() -> rootcause::Result<()> {
+        let tempdir = tempfile::tempdir()?;
+        let muxr = tempdir.path().join("muxr");
+        let runner = tempdir.path().join(SERVER_EXECUTABLE);
+
+        pretty_assertions::assert_eq!(server_executable_next_to(&muxr)?, runner);
+        Ok(())
+    }
+
     #[rstest]
     #[case::start_extra_args(&["start", "work", "extra"])]
     #[case::start_missing_layout(&["start", "--layout"])]
     #[case::start_session_missing_layout(&["start", "work", "--layout"])]
     #[case::start_layout_extra_args(&["start", "work", "--layout", "work", "extra"])]
+    #[case::old_memory_cmd(&["memory"])]
     #[case::unknown_start_flag(&["start", "--bogus"])]
     #[case::old_attach_cmd(&["attach"])]
     #[case::old_detach_cmd(&["detach"])]
@@ -319,7 +336,7 @@ mod tests {
     fn test_execute_session_action_when_attach_has_multiple_sessions_returns_error() -> rootcause::Result<()> {
         let sessions = vec![listed_session("work")?, listed_session("notes")?];
 
-        let error = execute_session_action(SessionAction::Attach, &sessions, Path::new("/muxr"))
+        let error = execute_session_action(SessionAction::Attach, &sessions)
             .expect_err("expected attach multi-selection error");
 
         assert2::assert!(error.to_string().contains("expected exactly one selection"));

@@ -1,4 +1,6 @@
 use std::collections::VecDeque;
+use std::mem;
+use std::num::NonZeroU16;
 
 use muxr_core::PaneScrollDirection;
 use muxr_core::RenderCell;
@@ -6,20 +8,19 @@ use muxr_core::TerminalSize;
 use vte::Params;
 use vte::Perform;
 
-// Match the local Zellij scroll buffer so long interactive sessions are not truncated sooner in muxr.
-pub const SCROLLBACK_ROWS: usize = 50_000;
-
 pub struct TerminalPartialScrollback {
+    max_rows: usize,
     parser: vte::Parser,
-    rows: VecDeque<Vec<RenderCell>>,
+    rows: VecDeque<TerminalScrollbackRow>,
     scroll_region: TerminalScrollRegion,
     size: TerminalSize,
     viewport_offset: usize,
 }
 
 impl TerminalPartialScrollback {
-    pub fn new(size: &TerminalSize) -> Self {
+    pub fn new(size: &TerminalSize, max_rows: usize) -> Self {
         Self {
+            max_rows,
             parser: vte::Parser::new(),
             rows: VecDeque::new(),
             scroll_region: TerminalScrollRegion::full(size),
@@ -41,8 +42,8 @@ impl TerminalPartialScrollback {
 
     pub fn push_rows(&mut self, rows: impl IntoIterator<Item = Vec<RenderCell>>) {
         for row in rows {
-            self.rows.push_back(row);
-            while self.rows.len() > SCROLLBACK_ROWS {
+            self.rows.push_back(TerminalScrollbackRow::from_cells(row));
+            while self.rows.len() > self.max_rows {
                 self.rows.pop_front();
                 self.viewport_offset = self.viewport_offset.saturating_sub(1);
             }
@@ -53,8 +54,18 @@ impl TerminalPartialScrollback {
         self.rows.len()
     }
 
-    pub const fn captured_rows(&self) -> &VecDeque<Vec<RenderCell>> {
-        &self.rows
+    pub fn captured_row_cells_for_view(&self, offset: usize, height: usize) -> Vec<Vec<RenderCell>> {
+        let start = self.rows.len().saturating_sub(offset);
+        self.rows
+            .iter()
+            .skip(start)
+            .take(height)
+            .map(TerminalScrollbackRow::cells)
+            .collect()
+    }
+
+    pub fn captured_oldest_row_cells(&self, count: usize) -> Vec<Vec<RenderCell>> {
+        self.rows.iter().take(count).map(TerminalScrollbackRow::cells).collect()
     }
 
     pub const fn captured_rows_for_linefeed_at(&self, cursor_row: u16) -> Option<TerminalScrolledRows> {
@@ -86,6 +97,91 @@ impl TerminalPartialScrollback {
             PaneScrollDirection::Up => self.viewport_offset.saturating_add(lines).min(total),
         };
         self.viewport_offset != before
+    }
+}
+
+// Partial-scroll-region history can reach tens of thousands of mostly padded rows. Store rows as runs only when that is
+// smaller than raw cells; dense output must not pay extra per-cell run overhead.
+enum TerminalScrollbackRow {
+    Raw(Vec<RenderCell>),
+    Runs(Vec<TerminalScrollbackRun>),
+}
+
+impl TerminalScrollbackRow {
+    fn from_cells(cells: Vec<RenderCell>) -> Self {
+        let mut run_count = 0_usize;
+        let mut previous = None::<&RenderCell>;
+        let mut previous_len = 0_u16;
+        for cell in &cells {
+            if previous.is_some_and(|previous| previous == cell) && previous_len < u16::MAX {
+                previous_len = previous_len.saturating_add(1);
+            } else {
+                run_count = run_count.saturating_add(1);
+                previous = Some(cell);
+                previous_len = 1;
+            }
+        }
+
+        let raw_bytes = cells.len().saturating_mul(mem::size_of::<RenderCell>());
+        let run_bytes = run_count.saturating_mul(mem::size_of::<TerminalScrollbackRun>());
+        if run_bytes >= raw_bytes {
+            return Self::Raw(cells);
+        }
+
+        let mut runs = Vec::<TerminalScrollbackRun>::with_capacity(run_count);
+        for cell in cells {
+            if let Some(run) = runs.last_mut()
+                && run.cell == cell
+                && run.push_cell()
+            {
+                continue;
+            }
+            runs.push(TerminalScrollbackRun::new(cell));
+        }
+        Self::Runs(runs)
+    }
+
+    fn cells(&self) -> Vec<RenderCell> {
+        match self {
+            Self::Raw(cells) => cells.clone(),
+            Self::Runs(runs) => {
+                let len = runs
+                    .iter()
+                    .map(TerminalScrollbackRun::len)
+                    .fold(0_usize, usize::saturating_add);
+                let mut cells = Vec::with_capacity(len);
+                for run in runs {
+                    cells.extend(std::iter::repeat_n(run.cell.clone(), run.len()));
+                }
+                cells
+            }
+        }
+    }
+}
+
+struct TerminalScrollbackRun {
+    cell: RenderCell,
+    len: NonZeroU16,
+}
+
+impl TerminalScrollbackRun {
+    const fn new(cell: RenderCell) -> Self {
+        Self {
+            cell,
+            len: NonZeroU16::MIN,
+        }
+    }
+
+    fn len(&self) -> usize {
+        usize::from(self.len.get())
+    }
+
+    fn push_cell(&mut self) -> bool {
+        let Some(len) = self.len.get().checked_add(1).and_then(NonZeroU16::new) else {
+            return false;
+        };
+        self.len = len;
+        true
     }
 }
 
@@ -231,4 +327,43 @@ impl TerminalScrollRegion {
 
 fn primary_csi_params(params: &Params) -> Vec<u16> {
     params.iter().map(|param| param.first().copied().unwrap_or(0)).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use muxr_core::RenderStyle;
+
+    use super::*;
+
+    #[test]
+    fn test_terminal_partial_scrollback_push_rows_when_row_is_padded_stores_compact_runs() -> rootcause::Result<()> {
+        let mut scrollback = TerminalPartialScrollback::new(&TerminalSize::new(120, 4)?, 50_000);
+        let mut row = vec![RenderCell::narrow("codex", RenderStyle::default())];
+        row.extend(std::iter::repeat_n(
+            RenderCell::narrow(" ", RenderStyle::default()),
+            119,
+        ));
+
+        scrollback.push_rows([row.clone()]);
+
+        assert2::assert!(let Some(TerminalScrollbackRow::Runs(stored_runs)) = scrollback.rows.front());
+        assert2::assert!(stored_runs.len() < row.len() / 2);
+        pretty_assertions::assert_eq!(scrollback.captured_row_cells_for_view(1, 1), vec![row]);
+        Ok(())
+    }
+
+    #[test]
+    fn test_terminal_partial_scrollback_push_rows_when_row_is_dense_stores_raw_cells() -> rootcause::Result<()> {
+        let mut scrollback = TerminalPartialScrollback::new(&TerminalSize::new(120, 4)?, 50_000);
+        let row = (0..120)
+            .map(|col| RenderCell::narrow(format!("{col:03}"), RenderStyle::default()))
+            .collect::<Vec<_>>();
+
+        scrollback.push_rows([row.clone()]);
+
+        assert2::assert!(let Some(TerminalScrollbackRow::Raw(stored_cells)) = scrollback.rows.front());
+        pretty_assertions::assert_eq!(stored_cells, &row);
+        pretty_assertions::assert_eq!(scrollback.captured_row_cells_for_view(1, 1), vec![row]);
+        Ok(())
+    }
 }
