@@ -83,7 +83,7 @@ jobs:
             yog/target/coverage/nextest/ci/junit.xml
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v6
+        uses: codecov/codecov-action@v7
         if: steps.test_run.outcome == 'success'
         with:
           working-directory: yog
@@ -94,7 +94,7 @@ jobs:
           verbose: true
 
       - name: Upload test results to Codecov
-        uses: codecov/codecov-action@v6
+        uses: codecov/codecov-action@v7
         if: steps.test_run.outcome == 'success'
         with:
           working-directory: yog
