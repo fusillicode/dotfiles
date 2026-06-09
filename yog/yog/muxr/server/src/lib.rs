@@ -31,3 +31,4 @@ mod tab_create;
 mod tab_focus;
 mod tab_move;
 mod terminal;
+mod terminal_scrollback;

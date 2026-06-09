@@ -1,5 +1,3 @@
-use std::collections::VecDeque;
-
 use muxr_core::ClientMouseEvent;
 use muxr_core::ClientMouseEventPhase;
 use muxr_core::PaneMouseMode;
@@ -13,11 +11,11 @@ use muxr_core::RenderTextStyle;
 use muxr_core::TerminalSize;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
-use vte::Params;
-use vte::Perform;
 
-// Match the local Zellij scroll buffer so long interactive sessions are not truncated sooner in muxr.
-const SCROLLBACK_ROWS: usize = 50_000;
+use crate::terminal_scrollback::SCROLLBACK_ROWS;
+use crate::terminal_scrollback::TerminalPartialScrollback;
+use crate::terminal_scrollback::TerminalPreParserAction;
+
 const SCROLL_LINES_PER_WHEEL_EVENT: usize = 5;
 const BRACKETED_PASTE_END: &[u8] = b"\x1b[201~";
 const BRACKETED_PASTE_START: &[u8] = b"\x1b[200~";
@@ -50,195 +48,6 @@ pub struct TerminalState {
     parser: vt100::Parser<TerminalCallbacks>,
     screen_dirty_detector: TerminalScreenDirtyDetector,
     partial_scrollback: TerminalPartialScrollback,
-}
-
-struct TerminalPartialScrollback {
-    parser: vte::Parser,
-    rows: VecDeque<Vec<RenderCell>>,
-    scroll_region: TerminalScrollRegion,
-    size: TerminalSize,
-    viewport_offset: usize,
-}
-
-impl TerminalPartialScrollback {
-    fn new(size: &TerminalSize) -> Self {
-        Self {
-            parser: vte::Parser::new(),
-            rows: VecDeque::new(),
-            scroll_region: TerminalScrollRegion::full(size),
-            size: size.clone(),
-            viewport_offset: 0,
-        }
-    }
-
-    fn observe_byte(&mut self, byte: u8) -> Option<TerminalPreParserAction> {
-        let mut performer = TerminalPartialScrollbackParser {
-            action: None,
-            scroll_region: self.scroll_region,
-            size: &self.size,
-        };
-        self.parser.advance(&mut performer, &[byte]);
-        self.scroll_region = performer.scroll_region;
-        performer.action
-    }
-
-    fn push_rows(&mut self, rows: impl IntoIterator<Item = Vec<RenderCell>>) {
-        for row in rows {
-            self.rows.push_back(row);
-            while self.rows.len() > SCROLLBACK_ROWS {
-                self.rows.pop_front();
-                self.viewport_offset = self.viewport_offset.saturating_sub(1);
-            }
-        }
-    }
-
-    const fn captured_rows_for_linefeed_at(&self, cursor_row: u16) -> Option<TerminalScrolledRows> {
-        self.scroll_region.captured_rows_for_linefeed_at(cursor_row, &self.size)
-    }
-
-    const fn should_capture_linefeed(&self, alternate_screen: bool) -> bool {
-        self.scroll_region.should_capture_linefeed(&self.size, alternate_screen)
-    }
-
-    fn resize(&mut self, size: &TerminalSize) {
-        self.size = size.clone();
-        self.scroll_region = self.scroll_region.clamped_to(size);
-    }
-
-    fn scroll_to(&mut self, offset: usize, base_scrollback_len: usize) {
-        self.viewport_offset = offset.min(self.rows.len().saturating_add(base_scrollback_len));
-    }
-
-    fn scroll_by(&mut self, direction: PaneScrollDirection, lines: usize, base_scrollback_len: usize) -> bool {
-        let before = self.viewport_offset;
-        let total = self.rows.len().saturating_add(base_scrollback_len);
-        self.viewport_offset = match direction {
-            PaneScrollDirection::Down => self.viewport_offset.saturating_sub(lines),
-            PaneScrollDirection::Up => self.viewport_offset.saturating_add(lines).min(total),
-        };
-        self.viewport_offset != before
-    }
-}
-
-struct TerminalPartialScrollbackParser<'a> {
-    action: Option<TerminalPreParserAction>,
-    scroll_region: TerminalScrollRegion,
-    size: &'a TerminalSize,
-}
-
-impl Perform for TerminalPartialScrollbackParser<'_> {
-    fn csi_dispatch(&mut self, params: &Params, intermediates: &[u8], ignore: bool, action: char) {
-        if ignore || !intermediates.is_empty() {
-            return;
-        }
-
-        match action {
-            'S' => {
-                if let Some(scrolled_rows) = self.scroll_region.captured_rows_for_scroll_up(params, self.size) {
-                    self.action = Some(TerminalPreParserAction::CaptureTopRows {
-                        count: scrolled_rows.count,
-                        full_height: scrolled_rows.full_height,
-                    });
-                }
-            }
-            'r' => {
-                self.scroll_region = TerminalScrollRegion::from_decstbm(params, self.size);
-            }
-            _ => {}
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum TerminalPreParserAction {
-    CaptureTopRows { count: usize, full_height: bool },
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-struct TerminalScrolledRows {
-    count: usize,
-    full_height: bool,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-struct TerminalScrollRegion {
-    bottom: u16,
-    top: u16,
-}
-
-impl TerminalScrollRegion {
-    const fn full(size: &TerminalSize) -> Self {
-        Self {
-            bottom: size.rows().saturating_sub(1),
-            top: 0,
-        }
-    }
-
-    fn from_decstbm(params: &Params, size: &TerminalSize) -> Self {
-        let primary = self::primary_csi_params(params);
-        let top = primary
-            .first()
-            .copied()
-            .filter(|value| *value != 0)
-            .unwrap_or(1)
-            .saturating_sub(1);
-        let bottom = primary
-            .get(1)
-            .copied()
-            .filter(|value| *value != 0)
-            .unwrap_or_else(|| size.rows())
-            .saturating_sub(1)
-            .min(size.rows().saturating_sub(1));
-        if top < bottom {
-            Self { bottom, top }
-        } else {
-            Self::full(size)
-        }
-    }
-
-    fn captured_rows_for_scroll_up(self, params: &Params, size: &TerminalSize) -> Option<TerminalScrolledRows> {
-        if self.top != 0 {
-            return None;
-        }
-        let count = self::primary_csi_params(params)
-            .first()
-            .copied()
-            .filter(|value| *value != 0)
-            .unwrap_or(1);
-        let region_rows = self.bottom.saturating_sub(self.top).saturating_add(1);
-        Some(TerminalScrolledRows {
-            count: usize::from(count.min(region_rows)),
-            full_height: self.bottom >= size.rows().saturating_sub(1),
-        })
-    }
-
-    const fn captured_rows_for_linefeed_at(self, cursor_row: u16, size: &TerminalSize) -> Option<TerminalScrolledRows> {
-        if self.top != 0 || cursor_row != self.bottom {
-            return None;
-        }
-        Some(TerminalScrolledRows {
-            count: 1,
-            full_height: self.bottom >= size.rows().saturating_sub(1),
-        })
-    }
-
-    const fn should_capture_linefeed(self, size: &TerminalSize, alternate_screen: bool) -> bool {
-        if self.top != 0 {
-            return false;
-        }
-        alternate_screen || self.bottom < size.rows().saturating_sub(1)
-    }
-
-    fn clamped_to(self, size: &TerminalSize) -> Self {
-        let last_row = size.rows().saturating_sub(1);
-        let top = self.top.min(last_row);
-        let bottom = self.bottom.min(last_row);
-        if top < bottom {
-            Self { bottom, top }
-        } else {
-            Self::full(size)
-        }
-    }
 }
 
 /// Result of feeding PTY bytes into the terminal parser.
@@ -507,7 +316,8 @@ impl TerminalState {
         }
 
         let screen_dirty = self.screen_dirty_detector.process(bytes);
-        let before_scrollback_len = (self.partial_scrollback.viewport_offset > 0).then(|| self.total_scrollback_len());
+        let before_scrollback_len =
+            (self.partial_scrollback.viewport_offset() > 0).then(|| self.total_scrollback_len());
         // Applications running inside the PTY expect terminal DSR/CPR replies on stdin.
         // `vt100` owns escape parsing, so callbacks preserve split-sequence behavior.
         self.process_with_partial_scrollback_capture(bytes);
@@ -516,7 +326,7 @@ impl TerminalState {
             let added_rows = after_scrollback_len.saturating_sub(before_scrollback_len);
             let base_scrollback_len = self.base_scrollback_len();
             self.partial_scrollback.scroll_to(
-                self.partial_scrollback.viewport_offset.saturating_add(added_rows),
+                self.partial_scrollback.viewport_offset().saturating_add(added_rows),
                 base_scrollback_len,
             );
         }
@@ -559,17 +369,17 @@ impl TerminalState {
     }
 
     pub fn scroll_to_bottom(&mut self) -> bool {
-        let before = self.partial_scrollback.viewport_offset;
+        let before = self.partial_scrollback.viewport_offset();
         let base_scrollback_len = self.base_scrollback_len();
         self.partial_scrollback.scroll_to(0, base_scrollback_len);
         self.sync_parser_scrollback();
-        self.partial_scrollback.viewport_offset != before
+        self.partial_scrollback.viewport_offset() != before
     }
 
     pub fn visible_top_row(&mut self) -> rootcause::Result<u64> {
         let visible_top_row = self
             .total_scrollback_len()
-            .checked_sub(self.partial_scrollback.viewport_offset)
+            .checked_sub(self.partial_scrollback.viewport_offset())
             .ok_or_else(|| report!("muxr pane scrollback offset exceeded length"))?;
         Ok(u64::try_from(visible_top_row).context("muxr pane visible top row overflowed")?)
     }
@@ -612,7 +422,7 @@ impl TerminalState {
             (rows, cols, cursor_row, cursor_col, screen.hide_cursor())
         };
         let size = TerminalSize::new(screen_cols, screen_rows)?;
-        let cursor_visible = self.partial_scrollback.viewport_offset == 0
+        let cursor_visible = self.partial_scrollback.viewport_offset() == 0
             && !hide_cursor
             && cursor_row < screen_rows
             && cursor_col < screen_cols;
@@ -649,9 +459,9 @@ impl TerminalState {
     }
 
     fn capture_top_rows(&mut self, count: usize, full_height: bool) {
-        // Codex-style transcript TUIs can paint history with top-starting scroll regions. vt100 already owns
-        // normal-screen full-height scrollback, but it drops partial regions and alternate-screen rows.
-        if full_height && !self.parser.screen().alternate_screen() {
+        // Codex-style transcript TUIs can paint history with normal-screen partial scroll regions. vt100 already owns
+        // full-height normal scrollback, and alternate-screen UI state belongs to the pane app instead of muxr history.
+        if self.parser.screen().alternate_screen() || full_height {
             return;
         }
         let rows = self.row_cells_at_base_scrollback_offset(0, count);
@@ -684,6 +494,15 @@ impl TerminalState {
                 self.parser.process(pending);
             }
             match action {
+                TerminalPreParserAction::CaptureDeletedTopRows { count } => {
+                    // `CSI M` only transfers rows to muxr history when deletion starts at the top
+                    // row of a normal-screen top-starting region; vt100 does not put deleted
+                    // lines into scrollback even when the region is full-height.
+                    let (cursor_row, _) = self.parser.screen().cursor_position();
+                    if cursor_row == 0 {
+                        self.capture_top_rows(count, false);
+                    }
+                }
                 // Codex scrolls its transcript with a top-starting partial scroll region. vt100 moves those rows out of
                 // the visible region without adding them to scrollback, so muxr captures them before feeding the final
                 // `S` byte that makes vt100 perform the scroll.
@@ -711,20 +530,20 @@ impl TerminalState {
     fn sync_parser_scrollback(&mut self) {
         let base_offset = self
             .partial_scrollback
-            .viewport_offset
-            .saturating_sub(self.partial_scrollback.rows.len());
+            .viewport_offset()
+            .saturating_sub(self.partial_scrollback.captured_len());
         self.parser.screen_mut().set_scrollback(base_offset);
     }
 
     fn total_scrollback_len(&mut self) -> usize {
         self.base_scrollback_len()
-            .saturating_add(self.partial_scrollback.rows.len())
+            .saturating_add(self.partial_scrollback.captured_len())
     }
 
     fn visible_row_cells(&mut self, screen_rows: u16) -> Vec<Vec<RenderCell>> {
         let height = usize::from(screen_rows);
-        let offset = self.partial_scrollback.viewport_offset;
-        let captured_len = self.partial_scrollback.rows.len();
+        let offset = self.partial_scrollback.viewport_offset();
+        let captured_len = self.partial_scrollback.captured_len();
         let mut rows = Vec::with_capacity(height);
 
         if offset == 0 {
@@ -734,7 +553,7 @@ impl TerminalState {
         if offset <= captured_len {
             let mut captured_rows = self
                 .partial_scrollback
-                .rows
+                .captured_rows()
                 .iter()
                 .rev()
                 .take(offset)
@@ -751,7 +570,7 @@ impl TerminalState {
         rows.extend(self.row_cells_at_base_scrollback_offset(base_offset, base_rows_in_view));
         rows.extend(
             self.partial_scrollback
-                .rows
+                .captured_rows()
                 .iter()
                 .take(height.saturating_sub(rows.len()))
                 .cloned(),
@@ -786,10 +605,6 @@ fn single_csi_param(params: &[&[u16]]) -> Option<u16> {
     }
 
     param.first().copied()
-}
-
-fn primary_csi_params(params: &Params) -> Vec<u16> {
-    params.iter().map(|param| param.first().copied().unwrap_or(0)).collect()
 }
 
 fn screen_row_cells(screen: &vt100::Screen, rows: u16, cols: u16, row_count: usize) -> Vec<Vec<RenderCell>> {
@@ -1116,12 +931,24 @@ mod tests {
     }
 
     #[test]
-    fn test_terminal_state_scroll_when_alternate_screen_partial_scroll_region_moves_rows_preserves_history()
+    fn test_terminal_state_scroll_when_alternate_screen_linefeed_moves_rows_does_not_capture_history()
     -> rootcause::Result<()> {
         let mut terminal = TerminalState::new(&TerminalSize::new(8, 4)?);
 
         let _ = terminal.process(b"\x1b[?1049h\x1b[1;1Hone\x1b[2;1Htwo\x1b[3;1Hthree\x1b[4;1Hprompt");
-        let _ = terminal.process(b"\x1b[1;3r\x1b[2S\x1b[r");
+        let _ = terminal.process(b"\x1b[1;3r\x1b[3;1H\n\x1b[r");
+
+        assert2::assert!(!terminal.scroll(PaneScrollDirection::Up));
+        Ok(())
+    }
+
+    #[test]
+    fn test_terminal_state_scroll_when_top_partial_scroll_region_delete_lines_moves_rows_preserves_history()
+    -> rootcause::Result<()> {
+        let mut terminal = TerminalState::new(&TerminalSize::new(8, 4)?);
+
+        let _ = terminal.process(b"\x1b[1;1Hone\x1b[2;1Htwo\x1b[3;1Hthree\x1b[4;1Hprompt");
+        let _ = terminal.process(b"\x1b[1;3r\x1b[1;1H\x1b[2M\x1b[r");
 
         assert2::assert!(terminal.scroll(PaneScrollDirection::Up));
         let rendered = self::snapshot_text(&terminal.snapshot()?);
@@ -1132,18 +959,66 @@ mod tests {
     }
 
     #[test]
-    fn test_terminal_state_scroll_when_alternate_screen_full_scroll_region_moves_rows_preserves_history()
+    fn test_terminal_state_scroll_when_full_scroll_region_delete_lines_moves_rows_preserves_history()
     -> rootcause::Result<()> {
         let mut terminal = TerminalState::new(&TerminalSize::new(8, 4)?);
 
-        let _ = terminal.process(b"\x1b[?1049h\x1b[1;1Hone\x1b[2;1Htwo\x1b[3;1Hthree\x1b[4;1Hprompt");
-        let _ = terminal.process(b"\x1b[1;4r\x1b[2S\x1b[r");
+        let _ = terminal.process(b"\x1b[1;1Hone\x1b[2;1Htwo\x1b[3;1Hthree\x1b[4;1Hprompt");
+        let _ = terminal.process(b"\x1b[1;4r\x1b[1;1H\x1b[2M\x1b[r");
 
         assert2::assert!(terminal.scroll(PaneScrollDirection::Up));
         let rendered = self::snapshot_text(&terminal.snapshot()?);
 
         assert2::assert!(rendered.contains("one"));
         assert2::assert!(rendered.contains("two"));
+        Ok(())
+    }
+
+    #[test]
+    fn test_terminal_state_scroll_when_mid_partial_scroll_region_delete_lines_moves_rows_does_not_capture_history()
+    -> rootcause::Result<()> {
+        let mut terminal = TerminalState::new(&TerminalSize::new(8, 4)?);
+
+        let _ = terminal.process(b"\x1b[1;1Hone\x1b[2;1Htwo\x1b[3;1Hthree\x1b[4;1Hprompt");
+        let _ = terminal.process(b"\x1b[1;3r\x1b[2;1H\x1b[2M\x1b[r");
+
+        assert2::assert!(!terminal.scroll(PaneScrollDirection::Up));
+        Ok(())
+    }
+
+    #[test]
+    fn test_terminal_state_scroll_when_alternate_screen_delete_lines_moves_rows_does_not_capture_history()
+    -> rootcause::Result<()> {
+        let mut terminal = TerminalState::new(&TerminalSize::new(8, 4)?);
+
+        let _ = terminal.process(b"\x1b[?1049h\x1b[1;1Hone\x1b[2;1Htwo\x1b[3;1Hthree\x1b[4;1Hprompt");
+        let _ = terminal.process(b"\x1b[1;4r\x1b[1;1H\x1b[2M\x1b[r");
+
+        assert2::assert!(!terminal.scroll(PaneScrollDirection::Up));
+        Ok(())
+    }
+
+    #[test]
+    fn test_terminal_state_scroll_when_alternate_screen_partial_scroll_region_moves_rows_does_not_capture_history()
+    -> rootcause::Result<()> {
+        let mut terminal = TerminalState::new(&TerminalSize::new(8, 4)?);
+
+        let _ = terminal.process(b"\x1b[?1049h\x1b[1;1Hone\x1b[2;1Htwo\x1b[3;1Hthree\x1b[4;1Hprompt");
+        let _ = terminal.process(b"\x1b[1;3r\x1b[2S\x1b[r");
+
+        assert2::assert!(!terminal.scroll(PaneScrollDirection::Up));
+        Ok(())
+    }
+
+    #[test]
+    fn test_terminal_state_scroll_when_alternate_screen_full_scroll_region_moves_rows_does_not_capture_history()
+    -> rootcause::Result<()> {
+        let mut terminal = TerminalState::new(&TerminalSize::new(8, 4)?);
+
+        let _ = terminal.process(b"\x1b[?1049h\x1b[1;1Hone\x1b[2;1Htwo\x1b[3;1Hthree\x1b[4;1Hprompt");
+        let _ = terminal.process(b"\x1b[1;4r\x1b[2S\x1b[r");
+
+        assert2::assert!(!terminal.scroll(PaneScrollDirection::Up));
         Ok(())
     }
 
