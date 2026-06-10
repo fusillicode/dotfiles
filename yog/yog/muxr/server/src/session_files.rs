@@ -6,7 +6,6 @@ use muxr_core::SessionPaths;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
 
-const GROUP_OR_OTHER_PERMISSIONS_MASK: u32 = 0o077;
 pub const PRIVATE_DIR_MODE: u32 = 0o700;
 pub const PRIVATE_SOCKET_MODE: u32 = 0o600;
 
@@ -26,23 +25,22 @@ pub fn prepare_session_dirs(paths: &SessionPaths) -> rootcause::Result<()> {
         .root
         .parent()
         .ok_or_else(|| report!("muxr session root has no parent"))?;
-    let socket_root = paths
-        .socket
-        .parent()
-        .ok_or_else(|| report!("muxr socket path has no parent"))?;
-    let state_root = socket_root
-        .parent()
-        .ok_or_else(|| report!("muxr socket root has no parent"))?;
+    let socket_root = self::socket_root(paths)?;
+    let state_root = self::state_root(paths)?;
 
-    // Socket names are deterministic, so every muxr-owned directory that can expose them must be private.
+    fs::create_dir_all(state_root).context("failed to create muxr state root")?;
+    fs::set_permissions(state_root, fs::Permissions::from_mode(PRIVATE_DIR_MODE))
+        .context("failed to secure muxr state root permissions")?;
+
+    // muxr is a personal tool: the only permission invariant is the state root mode. Child paths are ordinary state,
+    // and user-created symlinks are treated as explicit state relocation.
     for (path, label) in [
-        (state_root, "state root"),
         (sessions_root, "sessions root"),
         (socket_root, "socket root"),
         (paths.root.as_path(), "session root"),
         (paths.panes.as_path(), "panes root"),
     ] {
-        self::ensure_private_dir(path, label)?;
+        fs::create_dir_all(path).context(format!("failed to create muxr {label}"))?;
     }
 
     Ok(())
@@ -52,44 +50,52 @@ pub fn secure_socket_file(path: &Path) -> rootcause::Result<()> {
     // The directory is private, but the socket itself should not be group/other accessible if copied or moved.
     fs::set_permissions(path, fs::Permissions::from_mode(PRIVATE_SOCKET_MODE))
         .context("failed to secure muxr socket file permissions")?;
-    self::validate_private_mode(path, "socket file", PRIVATE_SOCKET_MODE)
-}
-
-fn ensure_private_dir(path: &Path, label: &str) -> rootcause::Result<()> {
-    fs::create_dir_all(path).context(format!("failed to create muxr {label}"))?;
-    let metadata = fs::symlink_metadata(path).context(format!("failed to inspect muxr {label}"))?;
-    if metadata.file_type().is_symlink() {
-        return Err(report!("unsafe muxr directory")
-            .attach(format!("label={label}"))
-            .attach("reason=symlinks are not allowed")
-            .attach(format!("path={}", path.display())));
-    }
-    if !metadata.is_dir() {
-        return Err(report!("unsafe muxr directory")
-            .attach(format!("label={label}"))
-            .attach("reason=path is not a directory")
-            .attach(format!("path={}", path.display())));
-    }
-
-    fs::set_permissions(path, fs::Permissions::from_mode(PRIVATE_DIR_MODE))
-        .context(format!("failed to secure muxr {label} permissions"))?;
-    self::validate_private_mode(path, label, PRIVATE_DIR_MODE)
-}
-
-fn validate_private_mode(path: &Path, label: &str, expected_mode: u32) -> rootcause::Result<()> {
-    let mode = fs::metadata(path)
-        .context(format!("failed to read muxr {label} permissions"))?
-        .permissions()
-        .mode()
-        & 0o777;
-
-    if mode & GROUP_OR_OTHER_PERMISSIONS_MASK != 0 {
-        return Err(report!("unsafe muxr permissions")
-            .attach(format!("label={label}"))
-            .attach(format!("expected={expected_mode:o}"))
-            .attach(format!("actual={mode:o}"))
-            .attach(format!("path={}", path.display())));
-    }
-
     Ok(())
+}
+
+fn state_root(paths: &SessionPaths) -> rootcause::Result<&Path> {
+    self::socket_root(paths)?
+        .parent()
+        .ok_or_else(|| report!("muxr socket root has no parent"))
+}
+
+fn socket_root(paths: &SessionPaths) -> rootcause::Result<&Path> {
+    paths
+        .socket
+        .parent()
+        .ok_or_else(|| report!("muxr socket path has no parent"))
+}
+
+#[cfg(test)]
+mod tests {
+    use muxr_core::SessionName;
+    use muxr_core::SessionPaths;
+
+    use super::*;
+
+    #[test]
+    fn test_prepare_session_dirs_when_state_root_is_public_secures_state_root() -> rootcause::Result<()> {
+        let tempdir = tempfile::tempdir()?;
+        let session = SessionName::default();
+        let paths = SessionPaths::from_sessions_root_path(&tempdir.path().join("sessions"), &session)?;
+        let state_root = self::state_root(&paths)?;
+        fs::create_dir_all(state_root).context("failed to create test state root")?;
+        fs::set_permissions(state_root, fs::Permissions::from_mode(0o755))
+            .context("failed to make test state root public")?;
+
+        prepare_session_dirs(&paths)?;
+
+        pretty_assertions::assert_eq!(self::mode(state_root)?, PRIVATE_DIR_MODE);
+        assert2::assert!(paths.root.is_dir());
+        assert2::assert!(paths.panes.is_dir());
+        Ok(())
+    }
+
+    fn mode(path: &Path) -> rootcause::Result<u32> {
+        Ok(fs::metadata(path)
+            .context("failed to read test path mode")?
+            .permissions()
+            .mode()
+            & 0o777)
+    }
 }
