@@ -409,7 +409,6 @@ mod tests {
     use crate::pane_close::ClosePaneOutcome;
     use crate::pane_runtime::PaneRuntimes;
     use crate::pane_split::PaneSplitAxis;
-    use crate::session_files::PRIVATE_DIR_MODE;
     use crate::session_files::PRIVATE_SOCKET_MODE;
     use crate::session_runtime::initial_attached_render;
     use crate::session_runtime::resize_panes_to_layout;
@@ -445,7 +444,7 @@ mod tests {
             assert2::assert!(paths.layout.exists());
             assert2::assert!(paths.socket.exists());
             assert2::assert!(paths.pid.exists());
-            self::assert_session_paths_are_private(&paths)?;
+            self::assert_session_state_is_private(&paths)?;
 
             self::attach_and_detach(&session, &paths).await?;
             self::join_server(handle)
@@ -1859,34 +1858,22 @@ mod tests {
     }
 
     fn make_public_session_dirs(paths: &SessionPaths) -> rootcause::Result<()> {
-        for path in self::session_private_dirs(paths)? {
-            fs::create_dir_all(path).context("failed to create public muxr test dir")?;
-            fs::set_permissions(path, fs::Permissions::from_mode(0o755))
-                .context("failed to set public muxr test dir permissions")?;
-        }
+        let state_root = self::state_root(paths)?;
+        fs::create_dir_all(state_root).context("failed to create public muxr test dir")?;
+        fs::set_permissions(state_root, fs::Permissions::from_mode(0o755))
+            .context("failed to set public muxr test dir permissions")?;
         Ok(())
     }
 
-    fn assert_session_paths_are_private(paths: &SessionPaths) -> rootcause::Result<()> {
-        for path in self::session_private_dirs(paths)? {
-            self::assert_mode(path, PRIVATE_DIR_MODE)?;
-        }
+    fn assert_session_state_is_private(paths: &SessionPaths) -> rootcause::Result<()> {
+        self::assert_mode(self::state_root(paths)?, crate::session_files::PRIVATE_DIR_MODE)?;
         self::assert_mode(&paths.socket, PRIVATE_SOCKET_MODE)?;
         Ok(())
     }
 
-    fn session_private_dirs(paths: &SessionPaths) -> rootcause::Result<Vec<&Path>> {
+    fn state_root(paths: &SessionPaths) -> rootcause::Result<&Path> {
         let socket_root = self::parent_path(&paths.socket, "socket root")?;
-        let state_root = self::parent_path(socket_root, "state root")?;
-        let sessions_root = self::parent_path(&paths.root, "sessions root")?;
-
-        Ok(vec![
-            state_root,
-            sessions_root,
-            socket_root,
-            paths.root.as_path(),
-            paths.panes.as_path(),
-        ])
+        self::parent_path(socket_root, "state root")
     }
 
     fn parent_path<'a>(path: &'a Path, label: &str) -> rootcause::Result<&'a Path> {

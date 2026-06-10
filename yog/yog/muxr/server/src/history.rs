@@ -5,15 +5,12 @@ use std::io::Read;
 use std::io::Seek;
 use std::io::SeekFrom;
 use std::io::Write;
-use std::os::unix::fs::OpenOptionsExt;
-use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::path::PathBuf;
 
 use muxr_core::PaneId;
 use rootcause::prelude::ResultExt;
 
-const HISTORY_FILE_MODE: u32 = 0o600;
 const HISTORY_READ_BUFFER_SIZE: usize = 8192;
 // A 64MiB replay cap was tried while investigating Codex resume history, but large raw-history replay delayed every
 // restored pane. Codex-style transcript rows are preserved by terminal scroll-region handling instead.
@@ -32,11 +29,8 @@ impl PaneHistory {
         let file = OpenOptions::new()
             .create(true)
             .append(true)
-            .mode(HISTORY_FILE_MODE)
             .open(path)
             .context("failed to open muxr pane history")?;
-        fs::set_permissions(path, fs::Permissions::from_mode(HISTORY_FILE_MODE))
-            .context("failed to secure muxr pane history permissions")?;
 
         Ok((Self { file }, replay))
     }

@@ -1,8 +1,6 @@
 use std::fs;
 use std::fs::OpenOptions;
 use std::io::Write;
-use std::os::unix::fs::OpenOptionsExt;
-use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::path::PathBuf;
 use std::time::SystemTime;
@@ -20,7 +18,6 @@ use crate::pane_fullscreen::PaneFullscreen;
 use crate::pane_runtime::PaneRuntimes;
 use crate::pty::ShellCmd;
 use crate::server::ServerConfig;
-use crate::session_files::PRIVATE_DIR_MODE;
 use crate::state::Pane;
 use crate::state::PaneAttentionState;
 use crate::state::PaneState;
@@ -28,7 +25,6 @@ use crate::state::PaneTree;
 use crate::state::SessionLayout;
 use crate::state::SessionMetadata;
 
-const SCROLLBACK_DUMP_FILE_MODE: u32 = 0o600;
 const SCROLLBACK_EDITOR_TITLE: &str = "scrollback";
 
 #[derive(Debug)]
@@ -257,23 +253,15 @@ fn write_scrollback_dump_file(
 ) -> rootcause::Result<PathBuf> {
     let dump_dir = session_root.join("scrollback");
     fs::create_dir_all(&dump_dir).context("failed to create muxr scrollback dump directory")?;
-    fs::set_permissions(&dump_dir, fs::Permissions::from_mode(PRIVATE_DIR_MODE))
-        .context("failed to secure muxr scrollback dump directory")?;
 
     let path = dump_dir.join(self::scrollback_dump_file_name(pane_id, dump_style)?);
     let mut file = OpenOptions::new()
         .write(true)
         .create_new(true)
-        .mode(SCROLLBACK_DUMP_FILE_MODE)
         .open(&path)
         .context("failed to create muxr scrollback dump file")?;
     if let Err(error) =
         write_dump(&mut file).and_then(|()| Ok(file.flush().context("failed to flush muxr scrollback dump file")?))
-    {
-        return Err(self::remove_scrollback_dump_file_after_error(&path, error));
-    }
-    if let Err(error) = fs::set_permissions(&path, fs::Permissions::from_mode(SCROLLBACK_DUMP_FILE_MODE))
-        .context("failed to secure muxr scrollback dump file")
     {
         return Err(self::remove_scrollback_dump_file_after_error(&path, error));
     }
@@ -325,7 +313,7 @@ mod tests {
     use crate::state::test_helpers as state_test_helpers;
 
     #[test]
-    fn test_write_scrollback_dump_file_when_bytes_are_exported_creates_private_file() -> rootcause::Result<()> {
+    fn test_write_scrollback_dump_file_when_bytes_are_exported_creates_dump_file() -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
         let pane_id = PaneId::new(7)?;
 
@@ -337,14 +325,6 @@ mod tests {
 
         pretty_assertions::assert_eq!(fs::read(&path)?, b"one\ntwo\n".to_vec());
         pretty_assertions::assert_eq!(path.extension().and_then(|extension| extension.to_str()), Some("txt"));
-        pretty_assertions::assert_eq!(
-            fs::metadata(&path)?.permissions().mode() & 0o777,
-            SCROLLBACK_DUMP_FILE_MODE
-        );
-        let dump_dir = path
-            .parent()
-            .ok_or_else(|| rootcause::report!("expected dump file parent"))?;
-        pretty_assertions::assert_eq!(fs::metadata(dump_dir)?.permissions().mode() & 0o777, PRIVATE_DIR_MODE);
         Ok(())
     }
 
