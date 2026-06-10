@@ -14,6 +14,7 @@ pub enum ClientCmd {
     EnterResizeMode,
     ExitMode,
     FocusPane(PaneFocusDirection),
+    OpenScrollbackEditor,
     ResizePane(PaneResizeDirection),
     SplitPane(PaneSplitAxis),
     Tab(TabCmd),
@@ -104,6 +105,9 @@ const fn resolve_normal_key(input_mode: &mut ServerInputMode, key: &ClientKey) -
         (ClientKeyCode::Char('R'), ClientKeyModifiers::SHIFT_ALT) => {
             *input_mode = ServerInputMode::Resize;
             KeyResolution::Cmd(ClientCmd::EnterResizeMode)
+        }
+        (ClientKeyCode::Char('S'), ClientKeyModifiers::SHIFT_ALT) => {
+            KeyResolution::Cmd(ClientCmd::OpenScrollbackEditor)
         }
         _ => KeyResolution::Raw,
     }
@@ -224,6 +228,12 @@ mod tests {
         ClientKeyModifiers::SHIFT_ALT,
         b"\x1bW",
         ClientCmd::ClosePane
+    )]
+    #[case::open_scrollback_editor(
+        ClientKeyCode::Char('S'),
+        ClientKeyModifiers::SHIFT_ALT,
+        b"\x1bS",
+        ClientCmd::OpenScrollbackEditor
     )]
     fn test_resolve_key_when_normal_bound_key_arrives_returns_cmd(
         #[case] code: ClientKeyCode,

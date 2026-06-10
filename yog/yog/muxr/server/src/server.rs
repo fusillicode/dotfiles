@@ -800,6 +800,164 @@ mod tests {
     }
 
     #[test]
+    fn test_serve_when_scrollback_editor_key_arrives_opens_dump_and_restores_layout() -> rootcause::Result<()> {
+        self::runtime()?.block_on(async {
+            let tempdir = tempfile::tempdir()?;
+            let (session, paths) = self::session_paths(tempdir.path(), "work")?;
+            let mut user_config = MuxrConfig::default();
+            user_config.scrollback.editor = muxr_config::ScrollbackEditorConfig {
+                program: "/bin/sh",
+                args: &["-c", "cat \"$1\"; cat", "muxr-test-scrollback-editor"],
+            };
+            let handle = self::spawn_test_server_with_user_config(
+                &session,
+                &paths,
+                Some(1),
+                self::shell_cmd("/bin/cat"),
+                user_config,
+            );
+
+            self::wait_for_socket(&paths.socket)?;
+            let mut client = self::open_attached_client(&session, &paths).await?;
+            client
+                .writer
+                .send_request(&ClientRequest::Input(b"before-editor\n".to_vec()))
+                .await?;
+            self::read_until_render_contains(&mut client, b"before-editor").await?;
+
+            client
+                .writer
+                .send_request(&ClientRequest::Key(ClientKey {
+                    code: ClientKeyCode::Char('S'),
+                    modifiers: ClientKeyModifiers::SHIFT_ALT,
+                    raw_bytes: b"\x1bS".to_vec(),
+                }))
+                .await?;
+            let editor_layout = self::read_until_layout(&mut client).await?;
+            let editor_tab = editor_layout
+                .tabs()
+                .first()
+                .ok_or_else(|| report!("expected scrollback editor tab"))?;
+            pretty_assertions::assert_eq!(editor_tab.active_pane().to_string(), "pane-2");
+            self::read_until_render_contains(&mut client, b"before-editor").await?;
+
+            client
+                .writer
+                .send_request(&ClientRequest::Key(ClientKey {
+                    code: ClientKeyCode::Char('W'),
+                    modifiers: ClientKeyModifiers::SHIFT_ALT,
+                    raw_bytes: b"\x1bW".to_vec(),
+                }))
+                .await?;
+            let restored_layout = self::read_until_layout(&mut client).await?;
+            let restored_tab = restored_layout
+                .tabs()
+                .first()
+                .ok_or_else(|| report!("expected restored tab"))?;
+            pretty_assertions::assert_eq!(restored_tab.active_pane().to_string(), "pane-1");
+            self::assert_layout_metadata_panes(&paths, &[1], 1)?;
+            assert2::assert!(!paths.panes.join("2").exists());
+
+            self::detach_client(client).await?;
+            self::join_server(handle)
+        })
+    }
+
+    #[test]
+    fn test_serve_when_scrollback_editor_is_open_focus_pane_at_keeps_editor_active() -> rootcause::Result<()> {
+        self::runtime()?.block_on(async {
+            let tempdir = tempfile::tempdir()?;
+            let (session, paths) = self::session_paths(tempdir.path(), "work")?;
+            let mut user_config = MuxrConfig::default();
+            user_config.scrollback.editor = muxr_config::ScrollbackEditorConfig {
+                program: "/bin/sh",
+                args: &[
+                    "-c",
+                    "cat \"$1\"; exec sed 's/^/editor:/'",
+                    "muxr-test-scrollback-editor",
+                ],
+            };
+            let handle = self::spawn_test_server_with_user_config(
+                &session,
+                &paths,
+                Some(1),
+                self::shell_cmd("/bin/cat"),
+                user_config,
+            );
+
+            self::wait_for_socket(&paths.socket)?;
+            let mut client = self::open_attached_client(&session, &paths).await?;
+            client
+                .writer
+                .send_request(&ClientRequest::Key(ClientKey {
+                    code: ClientKeyCode::Char('V'),
+                    modifiers: ClientKeyModifiers::SHIFT_ALT,
+                    raw_bytes: b"\x1bV".to_vec(),
+                }))
+                .await?;
+            let split_layout = self::read_until_layout(&mut client).await?;
+            let split_tab = split_layout
+                .tabs()
+                .first()
+                .ok_or_else(|| report!("expected split tab before scrollback editor"))?;
+            pretty_assertions::assert_eq!(split_tab.active_pane().to_string(), "pane-2");
+
+            client
+                .writer
+                .send_request(&ClientRequest::Input(b"before-editor\n".to_vec()))
+                .await?;
+            self::read_until_render_contains(&mut client, b"before-editor").await?;
+
+            client
+                .writer
+                .send_request(&ClientRequest::Key(ClientKey {
+                    code: ClientKeyCode::Char('S'),
+                    modifiers: ClientKeyModifiers::SHIFT_ALT,
+                    raw_bytes: b"\x1bS".to_vec(),
+                }))
+                .await?;
+            let editor_layout = self::read_until_layout(&mut client).await?;
+            let editor_tab = editor_layout
+                .tabs()
+                .first()
+                .ok_or_else(|| report!("expected scrollback editor tab"))?;
+            pretty_assertions::assert_eq!(editor_tab.active_pane().to_string(), "pane-3");
+            self::read_until_render_contains(&mut client, b"before-editor").await?;
+            let editor_regions =
+                self::read_until_pane_regions_matching(&mut client, "editor layout includes sibling pane", |regions| {
+                    Ok(regions
+                        .regions()
+                        .iter()
+                        .any(|region| region.id().to_string() == "pane-1")
+                        && regions
+                            .regions()
+                            .iter()
+                            .any(|region| region.id().to_string() == "pane-3"))
+                })
+                .await?;
+
+            client
+                .writer
+                .send_request(&ClientRequest::FocusPaneAt(self::pane_position(
+                    &editor_regions,
+                    "pane-1",
+                )?))
+                .await?;
+            client
+                .writer
+                .send_request(&ClientRequest::Input(b"after-focus\n".to_vec()))
+                .await?;
+            self::read_until_render_contains(&mut client, b"editor:after-focus").await?;
+
+            drop(client);
+            self::join_server_with_timeout(handle)?;
+            self::assert_layout_metadata_panes(&paths, &[1, 2], 2)?;
+            assert2::assert!(!paths.panes.join("3").exists());
+            Ok(())
+        })
+    }
+
+    #[test]
     fn test_serve_when_terminal_title_reports_cwd_persists_metadata() -> rootcause::Result<()> {
         self::runtime()?.block_on(async {
             let tempdir = tempfile::tempdir()?;
@@ -1517,6 +1675,22 @@ mod tests {
         max_accepted_connections: Option<usize>,
         shell_cmd: ShellCmd,
     ) -> thread::JoinHandle<rootcause::Result<()>> {
+        self::spawn_test_server_with_user_config(
+            session,
+            paths,
+            max_accepted_connections,
+            shell_cmd,
+            MuxrConfig::default(),
+        )
+    }
+
+    fn spawn_test_server_with_user_config(
+        session: &SessionName,
+        paths: &SessionPaths,
+        max_accepted_connections: Option<usize>,
+        shell_cmd: ShellCmd,
+        user_config: MuxrConfig,
+    ) -> thread::JoinHandle<rootcause::Result<()>> {
         thread::spawn({
             let session = session.clone();
             let paths = paths.clone();
@@ -1526,7 +1700,7 @@ mod tests {
                     client_heartbeat_timeout: TEST_CLIENT_HEARTBEAT_TIMEOUT,
                     client_write_timeout: TEST_CLIENT_WRITE_TIMEOUT,
                     external_layout: None,
-                    user_config: Arc::new(MuxrConfig::default()),
+                    user_config: Arc::new(user_config),
                     session,
                     paths,
                     max_accepted_connections,

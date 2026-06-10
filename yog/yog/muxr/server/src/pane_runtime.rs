@@ -1,6 +1,8 @@
 use std::collections::BTreeMap;
+use std::io::Write;
 use std::sync::mpsc;
 
+use muxr_config::ScrollbackDumpStyle;
 use muxr_core::PaneId;
 use muxr_core::TerminalSize;
 use muxr_core::TrackedProcessState;
@@ -15,6 +17,7 @@ use crate::pty::PtyExitStatus;
 use crate::pty::PtyHandle;
 use crate::pty::PtySession;
 use crate::pty::PtySinkGuard;
+use crate::pty::ShellCmd;
 use crate::server::ServerConfig;
 use crate::session_start_seed::SessionStartSeed;
 use crate::state::PaneSnapshotFields;
@@ -173,6 +176,24 @@ impl PaneRuntimes {
         Ok(())
     }
 
+    pub fn spawn_cmd_pane(
+        &mut self,
+        pane_id: PaneId,
+        cwd: &str,
+        cmd: &ShellCmd,
+        startup_cmd_label: Option<String>,
+        config: &ServerConfig,
+        size: &TerminalSize,
+    ) -> rootcause::Result<()> {
+        let history_path = self::pane_output_path(&config.paths.panes, pane_id);
+        self.panes.push(PaneRuntime {
+            id: pane_id,
+            startup_cmd_label,
+            session: PtySession::spawn(cmd, cwd, size, &history_path, config.user_config.scrollback)?,
+        });
+        Ok(())
+    }
+
     pub fn handle(&self, pane_id: PaneId) -> rootcause::Result<PtyHandle> {
         self.panes
             .iter()
@@ -237,6 +258,15 @@ impl PaneRuntimes {
 
     pub fn snapshot(&self, pane_id: PaneId) -> rootcause::Result<TerminalSnapshot> {
         self.handle(pane_id)?.render_snapshot()
+    }
+
+    pub fn write_scrollback_dump(
+        &self,
+        pane_id: PaneId,
+        style: ScrollbackDumpStyle,
+        writer: &mut impl Write,
+    ) -> rootcause::Result<()> {
+        self.handle(pane_id)?.write_scrollback_dump(style, writer)
     }
 
     pub fn terminal_titles(&self) -> rootcause::Result<Vec<(PaneId, Option<String>)>> {

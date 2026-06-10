@@ -1,9 +1,13 @@
+use std::io::Write;
+
 use muxr_config::ScrollbackConfig;
+use muxr_config::ScrollbackDumpStyle;
 use muxr_core::ClientMouseEvent;
 use muxr_core::ClientMouseEventPhase;
 use muxr_core::PaneMouseMode;
 use muxr_core::PaneScrollDirection;
 use muxr_core::RenderCell;
+use muxr_core::RenderCellWidth;
 use muxr_core::RenderColor;
 use muxr_core::RenderCursor;
 use muxr_core::RenderRowSpan;
@@ -447,6 +451,29 @@ impl TerminalState {
         Ok(TerminalSnapshot { cursor, rows, size })
     }
 
+    pub fn scrollback_dump(&mut self, style: ScrollbackDumpStyle) -> std::io::Result<Vec<u8>> {
+        let mut dump = Vec::new();
+        let (screen_rows, _screen_cols) = self.parser.screen().size();
+        let base_scrollback_len = self.base_scrollback_len();
+        // Dump order mirrors what a user expects to read: full-height vt100 scrollback first, then muxr-captured
+        // partial-scroll-region rows, then the live bottom viewport.
+        for offset in (1..=base_scrollback_len).rev() {
+            self::write_scrollback_dump_rows(&self.row_cells_at_base_scrollback_offset(offset, 1), style, &mut dump)?;
+        }
+        for row in self
+            .partial_scrollback
+            .captured_oldest_row_cells_iter(self.partial_scrollback.captured_len())
+        {
+            self::write_scrollback_dump_row(&row, style, &mut dump)?;
+        }
+        self::write_scrollback_dump_rows(
+            &self.row_cells_at_base_scrollback_offset(0, usize::from(screen_rows)),
+            style,
+            &mut dump,
+        )?;
+        Ok(dump)
+    }
+
     fn base_scrollback_len(&mut self) -> usize {
         let screen = self.parser.screen_mut();
         let offset = screen.scrollback();
@@ -646,10 +673,116 @@ const fn render_color(color: vt100::Color) -> RenderColor {
     }
 }
 
+fn write_scrollback_dump_rows(
+    rows: &[Vec<RenderCell>],
+    style: ScrollbackDumpStyle,
+    writer: &mut impl Write,
+) -> std::io::Result<()> {
+    for row in rows {
+        self::write_scrollback_dump_row(row, style, writer)?;
+    }
+    Ok(())
+}
+
+fn write_scrollback_dump_row(
+    row: &[RenderCell],
+    style: ScrollbackDumpStyle,
+    writer: &mut impl Write,
+) -> std::io::Result<()> {
+    let mut bytes = Vec::new();
+    match style {
+        ScrollbackDumpStyle::PlainText => self::encode_plain_scrollback_dump_row(row, &mut bytes),
+        ScrollbackDumpStyle::Ansi => self::encode_ansi_scrollback_dump_row(row, &mut bytes),
+    }
+    bytes.push(b'\n');
+    writer.write_all(&bytes)
+}
+
+fn encode_plain_scrollback_dump_row(row: &[RenderCell], bytes: &mut Vec<u8>) {
+    for cell in self::trimmed_dump_cells(row) {
+        if cell.width() == RenderCellWidth::WideContinuation {
+            continue;
+        }
+        bytes.extend_from_slice(cell.text().as_bytes());
+    }
+}
+
+fn encode_ansi_scrollback_dump_row(row: &[RenderCell], bytes: &mut Vec<u8>) {
+    let mut active_style = RenderStyle::default();
+    for cell in self::trimmed_dump_cells(row) {
+        if cell.width() == RenderCellWidth::WideContinuation {
+            continue;
+        }
+        if cell.style() != active_style {
+            self::push_sgr(cell.style(), bytes);
+            active_style = cell.style();
+        }
+        bytes.extend_from_slice(cell.text().as_bytes());
+    }
+    if active_style != RenderStyle::default() {
+        bytes.extend_from_slice(b"\x1b[0m");
+    }
+}
+
+fn trimmed_dump_cells(row: &[RenderCell]) -> &[RenderCell] {
+    let mut cells = row;
+    while let Some((last, rest)) = cells.split_last() {
+        if last.width() == RenderCellWidth::WideContinuation || last.text() != " " {
+            break;
+        }
+        cells = rest;
+    }
+    cells
+}
+
+fn push_sgr(style: RenderStyle, bytes: &mut Vec<u8>) {
+    bytes.extend_from_slice(b"\x1b[0");
+    self::push_text_style_sgr(style.attrs, bytes);
+    self::push_color_sgr(38, style.fg, bytes);
+    self::push_color_sgr(48, style.bg, bytes);
+    bytes.push(b'm');
+}
+
+fn push_text_style_sgr(attrs: RenderTextStyle, bytes: &mut Vec<u8>) {
+    for (enabled, code) in [
+        (attrs.bold(), "1"),
+        (attrs.dim(), "2"),
+        (attrs.italic(), "3"),
+        (attrs.underline(), "4"),
+        (attrs.inverse(), "7"),
+    ] {
+        if enabled {
+            bytes.push(b';');
+            bytes.extend_from_slice(code.as_bytes());
+        }
+    }
+}
+
+fn push_color_sgr(prefix: u8, color: RenderColor, bytes: &mut Vec<u8>) {
+    match color {
+        RenderColor::Default => {}
+        RenderColor::Indexed(index) => {
+            bytes.push(b';');
+            bytes.extend_from_slice(prefix.to_string().as_bytes());
+            bytes.extend_from_slice(b";5;");
+            bytes.extend_from_slice(index.to_string().as_bytes());
+        }
+        RenderColor::Rgb { r, g, b } => {
+            bytes.push(b';');
+            bytes.extend_from_slice(prefix.to_string().as_bytes());
+            bytes.extend_from_slice(b";2;");
+            bytes.extend_from_slice(r.to_string().as_bytes());
+            bytes.push(b';');
+            bytes.extend_from_slice(g.to_string().as_bytes());
+            bytes.push(b';');
+            bytes.extend_from_slice(b.to_string().as_bytes());
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use muxr_config::MuxrConfig;
-    use muxr_config::ScrollbackConfig;
     use rootcause::report;
     use rstest::rstest;
 
@@ -858,6 +991,69 @@ mod tests {
     }
 
     #[test]
+    fn test_terminal_state_scrollback_dump_when_output_exceeds_viewport_returns_history_and_live_rows()
+    -> rootcause::Result<()> {
+        let mut terminal = self::terminal_state(&TerminalSize::new(8, 2)?);
+
+        let _ = terminal.process(b"one\r\ntwo\r\nthree");
+
+        pretty_assertions::assert_eq!(
+            String::from_utf8(self::test_scrollback_dump(
+                &mut terminal,
+                ScrollbackDumpStyle::PlainText
+            )?)?,
+            "one\ntwo\nthree\n",
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_terminal_state_scrollback_dump_when_viewport_is_scrolled_preserves_viewport() -> rootcause::Result<()> {
+        let mut terminal = self::terminal_state(&TerminalSize::new(8, 2)?);
+        let _ = terminal.process(b"one\r\ntwo\r\nthree");
+        assert2::assert!(terminal.scroll(PaneScrollDirection::Up));
+        let before = terminal.snapshot()?;
+
+        let _dump = self::test_scrollback_dump(&mut terminal, ScrollbackDumpStyle::PlainText)?;
+        let after = terminal.snapshot()?;
+
+        pretty_assertions::assert_eq!(after, before);
+        Ok(())
+    }
+
+    #[test]
+    fn test_terminal_state_scrollback_dump_when_top_partial_scroll_region_moves_rows_includes_captured_rows()
+    -> rootcause::Result<()> {
+        let mut terminal = self::terminal_state(&TerminalSize::new(8, 4)?);
+
+        let _ = terminal.process(b"\x1b[1;1Hone\x1b[2;1Htwo\x1b[3;1Hthree\x1b[4;1Hprompt");
+        let _ = terminal.process(b"\x1b[1;3r\x1b[2S\x1b[r");
+
+        pretty_assertions::assert_eq!(
+            String::from_utf8(self::test_scrollback_dump(
+                &mut terminal,
+                ScrollbackDumpStyle::PlainText
+            )?)?,
+            "one\ntwo\nthree\n\n\nprompt\n",
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_terminal_state_scrollback_dump_when_ansi_style_requested_preserves_rendered_style() -> rootcause::Result<()>
+    {
+        let mut terminal = self::terminal_state(&TerminalSize::new(8, 2)?);
+
+        let _ = terminal.process(b"\x1b[31mred\x1b[0m");
+
+        pretty_assertions::assert_eq!(
+            String::from_utf8(self::test_scrollback_dump(&mut terminal, ScrollbackDumpStyle::Ansi)?)?,
+            "\x1b[0;38;5;1mred\x1b[0m\n\n",
+        );
+        Ok(())
+    }
+
+    #[test]
     fn test_terminal_state_scroll_to_bottom_when_scrolled_shows_live_viewport() -> rootcause::Result<()> {
         let mut terminal = self::terminal_state(&TerminalSize::new(8, 2)?);
 
@@ -890,7 +1086,9 @@ mod tests {
 
     #[test]
     fn test_terminal_state_when_partial_rows_exceed_configured_limit_keeps_recent_rows() -> rootcause::Result<()> {
-        let mut terminal = TerminalState::with_scrollback(&TerminalSize::new(8, 4)?, ScrollbackConfig { rows: 2 });
+        let mut scrollback = MuxrConfig::default().scrollback;
+        scrollback.rows = 2;
+        let mut terminal = TerminalState::with_scrollback(&TerminalSize::new(8, 4)?, scrollback);
 
         for row in 0..4 {
             let _ = terminal.process(format!("\x1b[1;1Hrow-{row}\x1b[2;1Hstill\x1b[3;1Hprompt").as_bytes());
@@ -1189,6 +1387,10 @@ mod tests {
 
     fn terminal_state(size: &TerminalSize) -> TerminalState {
         TerminalState::with_scrollback(size, MuxrConfig::default().scrollback)
+    }
+
+    fn test_scrollback_dump(terminal: &mut TerminalState, style: ScrollbackDumpStyle) -> rootcause::Result<Vec<u8>> {
+        Ok(terminal.scrollback_dump(style)?)
     }
 
     fn snapshot_text(snapshot: &TerminalSnapshot) -> String {

@@ -13,6 +13,7 @@ use std::sync::mpsc::TrySendError;
 use std::thread;
 
 use muxr_config::ScrollbackConfig;
+use muxr_config::ScrollbackDumpStyle;
 use muxr_core::ClientMouseEvent;
 use muxr_core::PaneMouseMode;
 use muxr_core::PaneRegionSnapshot;
@@ -383,6 +384,15 @@ impl PtyHandle {
 
     pub fn render_snapshot(&self) -> rootcause::Result<TerminalSnapshot> {
         lock_mutex(&self.state.terminal, "pty terminal")?.snapshot()
+    }
+
+    pub fn write_scrollback_dump(&self, style: ScrollbackDumpStyle, writer: &mut impl Write) -> rootcause::Result<()> {
+        let dump = lock_mutex(&self.state.terminal, "pty terminal")?
+            .scrollback_dump(style)
+            .context("failed to build muxr scrollback dump")?;
+        Ok(writer
+            .write_all(&dump)
+            .context("failed to write muxr scrollback dump")?)
     }
 }
 

@@ -30,6 +30,12 @@ impl PaneFullscreen {
         self.panes.remove(&layout.active_tab).is_some()
     }
 
+    pub fn replace_active_tab_pane(&mut self, layout: &SessionLayout, old_pane: PaneId, new_pane: PaneId) {
+        if self.panes.get(&layout.active_tab).copied() == Some(old_pane) {
+            self.panes.insert(layout.active_tab, new_pane);
+        }
+    }
+
     pub fn pane_layout(&self, layout: &SessionLayout, size: &TerminalSize) -> rootcause::Result<PaneLayout> {
         let Some(pane_id) = self.panes.get(&layout.active_tab).copied() else {
             return layout.pane_layout(size);

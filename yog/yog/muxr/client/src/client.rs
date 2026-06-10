@@ -626,6 +626,23 @@ mod tests {
     }
 
     #[test]
+    fn test_send_decoded_input_when_scrollback_editor_shortcut_arrives_sends_key_request() {
+        let (input_sender, mut input_receiver) = tokio::sync::mpsc::channel(1);
+        let key = ClientKey {
+            code: ClientKeyCode::Char('S'),
+            modifiers: ClientKeyModifiers::SHIFT_ALT,
+            raw_bytes: b"\x1bS".to_vec(),
+        };
+
+        assert2::assert!(send_decoded_input(&input_sender, vec![DecodedInput::Key(key.clone())]));
+
+        pretty_assertions::assert_eq!(
+            input_receiver.blocking_recv(),
+            Some(ClientInputAction::ServerRequest(ClientRequest::Key(key))),
+        );
+    }
+
+    #[test]
     fn test_send_decoded_input_when_paste_arrives_uses_input_queue() {
         let (input_sender, mut input_receiver) = tokio::sync::mpsc::channel(1);
 
