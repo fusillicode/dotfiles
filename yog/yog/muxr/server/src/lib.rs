@@ -22,6 +22,7 @@ mod pane_split;
 mod pane_tracked_process;
 mod pane_url_links;
 mod pty;
+mod scrollback_editor;
 mod server;
 mod session_files;
 mod session_runtime;

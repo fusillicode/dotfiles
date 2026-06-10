@@ -26,7 +26,6 @@ pub struct MuxrConfig {
     pub pane_attention: PaneAttentionConfig,
     pub pane_borders: PaneBorderStyles,
     pub pane_dim: PaneDimConfig,
-    /// Terminal scrollback retention.
     pub scrollback: ScrollbackConfig,
     pub selection: SelectionStyle,
     pub tab_bar: TabBarConfig,
@@ -74,7 +73,24 @@ impl Default for MuxrConfig {
                 explicit_color_percent: 80,
                 unfocused: true,
             },
-            scrollback: ScrollbackConfig { rows: 50_000 },
+            scrollback: ScrollbackConfig {
+                dump_style: ScrollbackDumpStyle::PlainText,
+                editor: ScrollbackEditorConfig {
+                    program: "nvim",
+                    // Scrollback opens in a read-only, no-swap nvim profile at the bottom of the dump; Esc quits the
+                    // temporary viewer so it behaves like a muxr mode instead of a normal editor session.
+                    args: &[
+                        "-u",
+                        "~/.config/nvim/minimal.lua",
+                        "-R",
+                        "-n",
+                        "+",
+                        "-c",
+                        "nnoremap <buffer> <silent> <Esc> :quit!<CR>",
+                    ],
+                },
+                rows: 50_000,
+            },
             selection: SelectionStyle {
                 bg: RenderColor::Indexed(238),
             },
@@ -233,11 +249,32 @@ pub struct PaneDimConfig {
     pub unfocused: bool,
 }
 
-/// Terminal scrollback retention config.
+/// Terminal scrollback config.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ScrollbackConfig {
+    /// Dump format used by the server-owned scrollback viewer keybinding.
+    pub dump_style: ScrollbackDumpStyle,
+    /// External editor used by the scrollback viewer.
+    pub editor: ScrollbackEditorConfig,
     /// Number of rows retained for each server-side terminal scrollback source.
     pub rows: usize,
+}
+
+/// Dump format used by the server-owned scrollback viewer keybinding.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ScrollbackDumpStyle {
+    PlainText,
+    Ansi,
+}
+
+/// External editor used by the scrollback viewer.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ScrollbackEditorConfig {
+    pub program: &'static str,
+    /// Args passed before the generated scrollback dump path.
+    ///
+    /// Args starting with `~/` are expanded against `$HOME` before spawning the editor.
+    pub args: &'static [&'static str],
 }
 
 /// Muxr-owned selection styling.
@@ -437,6 +474,8 @@ mod tests {
         assert2::assert!(config.pane_dim.unfocused);
         assert2::assert!(config.pane_dim.explicit_color_percent > 0);
         assert2::assert!(config.pane_dim.explicit_color_percent <= 100);
+        assert2::assert!(config.scrollback.editor.args.iter().all(|arg| !arg.is_empty()));
+        assert2::assert!(!config.scrollback.editor.program.is_empty());
         assert2::assert!(config.tab_bar.width > 0);
     }
 }

@@ -207,7 +207,7 @@ mod tests {
     #[case::scroll_line(ClientRequest::ScrollPaneLineAt {
             position: ClientMousePosition { row: 2, col: 3 },
             direction: PaneScrollDirection::Down,
-        })]
+    })]
     #[case::focus_pane_at(ClientRequest::FocusPaneAt(ClientMousePosition { row: 2, col: 3 }))]
     #[case::focus_tab(ClientRequest::FocusTab(TabId::new(2)?))]
     fn test_client_request_codec_when_frame_round_trips_returns_original(

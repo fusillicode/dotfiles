@@ -2,6 +2,7 @@ use std::sync::mpsc;
 use std::time::Duration;
 use std::time::Instant;
 
+use muxr_config::ScrollbackDumpStyle;
 use muxr_core::AttachAccepted;
 use muxr_core::AttachRequest;
 use muxr_core::ClientKey;
@@ -48,6 +49,7 @@ use crate::pane_tracked_process::TrackedProcessUserInteraction;
 use crate::pty::PtyEvent;
 use crate::pty::PtyHandle;
 use crate::pty::PtySinkGuard;
+use crate::scrollback_editor::ScrollbackEditorState;
 use crate::server::ServerConfig;
 use crate::session_runtime::PANE_OUTPUT_EVENT_CHANNEL_LIMIT;
 use crate::session_runtime::SessionAttachedClientMessage;
@@ -64,6 +66,13 @@ pub enum ReapResult {
     Final,
     NoExitedPanes,
     Removed,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ScrollbackEditorCmdAction {
+    Ignore,
+    Restore,
+    Run(ClientCmd),
 }
 
 struct AttachedPtySink {
@@ -83,6 +92,7 @@ struct AttachedSessionState<'a> {
     pty_event_sender: &'a mpsc::SyncSender<PtyEvent>,
     render_composer: &'a mut RenderComposer,
     runtimes: &'a mut PaneRuntimes,
+    scrollback_editor: Option<ScrollbackEditorState>,
     sink_guards: &'a mut Vec<AttachedPtySink>,
     terminal_size: TerminalSize,
 }
@@ -215,8 +225,18 @@ fn layout_snapshot_and_persist(
     runtimes: &PaneRuntimes,
     tracked_processes: &PaneTrackedProcessSnapshot,
 ) -> rootcause::Result<LayoutSnapshot> {
+    self::layout_snapshot_and_maybe_persist(paths, layout, runtimes, tracked_processes, true)
+}
+
+fn layout_snapshot_and_maybe_persist(
+    paths: &SessionPaths,
+    layout: &mut SessionLayout,
+    runtimes: &PaneRuntimes,
+    tracked_processes: &PaneTrackedProcessSnapshot,
+    persist_layout: bool,
+) -> rootcause::Result<LayoutSnapshot> {
     let synced = runtimes.sync_layout_terminal_titles(layout)?;
-    if synced.layout_changed() {
+    if persist_layout && synced.layout_changed() {
         crate::state::persisted::write_metadata(paths, layout)?;
     }
     let runtime_metadata = PaneRuntimeMetadata::from_sources(
@@ -311,6 +331,7 @@ async fn handle_client(
         pty_event_sender: &pty_event_sender,
         render_composer: &mut render_composer,
         runtimes: &mut state.pane_runtimes,
+        scrollback_editor: None,
         sink_guards: &mut sink_guards,
         terminal_size: attach_request.terminal_size,
     };
@@ -321,6 +342,8 @@ async fn handle_client(
         &mut async_pty_receiver,
     )
     .await;
+    let restore_result = self::restore_scrollback_editor_without_render(&mut attached_state);
+    drop(attached_state);
 
     drop(sink_guards);
     drop(pty_event_sender);
@@ -328,7 +351,13 @@ async fn handle_client(
     bridge_handle
         .await
         .map_err(|error| report!("muxr server pty bridge task panicked").attach(format!("{error}")))?;
-    result
+    match result {
+        Ok(()) => restore_result,
+        Err(error) => {
+            if let Err(_restore_error) = restore_result {}
+            Err(error)
+        }
+    }
 }
 
 fn pane_regions_snapshot(pane_layout: &PaneLayout, runtimes: &PaneRuntimes) -> rootcause::Result<PaneRegionsSnapshot> {
@@ -778,7 +807,7 @@ async fn flush_cmd_label_layout(
             last_layout_snapshot = layout_snapshot.clone();
             changes.push(layout_snapshot);
         }
-        if layout_changed {
+        if layout_changed && state.scrollback_editor.is_none() {
             crate::state::persisted::write_metadata(&state.config.paths, state.layout)?;
         }
         changes
@@ -909,8 +938,13 @@ async fn send_layout_and_baseline(
 ) -> rootcause::Result<bool> {
     let (layout_snapshot, pane_regions, render_update) = {
         let tracked_processes = state.pane_tracked_processes.snapshot();
-        let layout_snapshot =
-            self::layout_snapshot_and_persist(&state.config.paths, state.layout, state.runtimes, &tracked_processes)?;
+        let layout_snapshot = self::layout_snapshot_and_maybe_persist(
+            &state.config.paths,
+            state.layout,
+            state.runtimes,
+            &tracked_processes,
+            state.scrollback_editor.is_none(),
+        )?;
         let pane_layout = self::visible_pane_layout(state)?;
         let pane_regions = self::pane_regions_snapshot(&pane_layout, state.runtimes)?;
         let attention_panes = self::attention_pane_ids(state.layout, &state.pane_tracked_processes);
@@ -967,6 +1001,11 @@ async fn handle_reaped_panes(
     state: &mut AttachedSessionState<'_>,
     event_writer: &mut ServerEventWriter,
 ) -> rootcause::Result<bool> {
+    if self::restore_scrollback_editor_before_reap_if_needed(state)?
+        && !self::send_layout_and_baseline(event_writer, state).await?
+    {
+        return Ok(true);
+    }
     match self::reap_exited_panes(state.config, state.layout, state.runtimes)? {
         ReapResult::Final => Ok(true),
         ReapResult::NoExitedPanes => Ok(false),
@@ -975,6 +1014,52 @@ async fn handle_reaped_panes(
             state.sink_guards.retain(|sink| live_panes.contains(&sink.pane_id));
             Ok(!self::resize_panes_and_render(event_writer, state).await?)
         }
+    }
+}
+
+fn restore_scrollback_editor_before_reap_if_needed(state: &mut AttachedSessionState<'_>) -> rootcause::Result<bool> {
+    if state.scrollback_editor.is_none() {
+        return Ok(false);
+    }
+    if state.runtimes.exited_panes()?.is_empty() {
+        return Ok(false);
+    }
+    // Reap only against the real pane tree. The editor tree is attached-client-local; restoring first avoids
+    // persisting a temporary `nvim` pane or reaping a hidden original pane against the wrong layout.
+    self::restore_scrollback_editor_without_render(state)?;
+    Ok(true)
+}
+
+fn restore_scrollback_editor_without_render(state: &mut AttachedSessionState<'_>) -> rootcause::Result<()> {
+    let Some(editor) = state.scrollback_editor.take() else {
+        return Ok(());
+    };
+    let editor_pane_id = editor.editor_pane_id();
+    crate::scrollback_editor::restore(
+        state.config,
+        state.layout,
+        state.runtimes,
+        &mut state.pane_fullscreen,
+        editor,
+    )?;
+    state.sink_guards.retain(|sink| sink.pane_id != editor_pane_id);
+    Ok(())
+}
+
+const fn scrollback_editor_cmd_action(cmd: ClientCmd, editor_active: bool) -> ScrollbackEditorCmdAction {
+    if !editor_active {
+        return ScrollbackEditorCmdAction::Run(cmd);
+    }
+    match cmd {
+        ClientCmd::ClosePane => ScrollbackEditorCmdAction::Restore,
+        ClientCmd::EnterResizeMode
+        | ClientCmd::ExitMode
+        | ClientCmd::FocusPane(_)
+        | ClientCmd::OpenScrollbackEditor
+        | ClientCmd::ResizePane(_)
+        | ClientCmd::SplitPane(_)
+        | ClientCmd::Tab(_)
+        | ClientCmd::TogglePaneFullscreen => ScrollbackEditorCmdAction::Ignore,
     }
 }
 
@@ -1053,9 +1138,19 @@ async fn handle_attached_request(
                 .await
         }
         ClientRequest::FocusPaneAt(position) => {
+            // The scrollback editor layout is attached-client-local. Direct mouse focus must not mutate that temporary
+            // tree, otherwise subsequent input can move away from the editor pane before restore.
+            if state.scrollback_editor.is_some() {
+                return Ok(true);
+            }
             self::handle_focus_pane_at_client_request(position, event_writer, state).await
         }
-        ClientRequest::FocusTab(tab_id) => self::handle_focus_tab_client_request(tab_id, event_writer, state).await,
+        ClientRequest::FocusTab(tab_id) => {
+            if state.scrollback_editor.is_some() {
+                return Ok(true);
+            }
+            self::handle_focus_tab_client_request(tab_id, event_writer, state).await
+        }
         ClientRequest::Resize(size) => {
             state.terminal_size = size;
             if !self::resize_panes_and_render(event_writer, state).await? {
@@ -1087,6 +1182,42 @@ async fn handle_attached_request(
             Ok(false)
         }
     }
+}
+
+async fn handle_open_scrollback_editor_request(
+    dump_style: ScrollbackDumpStyle,
+    event_writer: &mut ServerEventWriter,
+    state: &mut AttachedSessionState<'_>,
+) -> rootcause::Result<bool> {
+    if state.scrollback_editor.is_some() {
+        return Ok(true);
+    }
+    state.input_mode = ServerInputMode::Normal;
+    let opened = crate::scrollback_editor::open(
+        state.config,
+        state.layout,
+        state.runtimes,
+        &mut state.pane_fullscreen,
+        &state.terminal_size,
+        dump_style,
+    )?;
+    let editor_pane_id = opened.state.editor_pane_id();
+    let sink = match self::attach_pane_sink(state.runtimes, state.pty_event_sender, editor_pane_id) {
+        Ok(sink) => sink,
+        Err(error) => {
+            crate::scrollback_editor::restore(
+                state.config,
+                state.layout,
+                state.runtimes,
+                &mut state.pane_fullscreen,
+                opened.state,
+            )?;
+            return Err(error);
+        }
+    };
+    state.sink_guards.push(sink);
+    state.scrollback_editor = Some(opened.state);
+    self::resize_panes_and_render(event_writer, state).await
 }
 
 fn handle_pane_bytes_request(
@@ -1162,8 +1293,9 @@ async fn handle_focus_tab_client_request(
 
 async fn send_detached_event(
     event_writer: &mut ServerEventWriter,
-    state: &AttachedSessionState<'_>,
+    state: &mut AttachedSessionState<'_>,
 ) -> rootcause::Result<bool> {
+    self::restore_scrollback_editor_without_render(state)?;
     let _sent =
         self::send_writer_event_with_timeout(event_writer, &ServerEvent::Detached, state.config.client_write_timeout)
             .await?;
@@ -1198,6 +1330,18 @@ async fn handle_cmd_request(
     event_writer: &mut ServerEventWriter,
     state: &mut AttachedSessionState<'_>,
 ) -> rootcause::Result<bool> {
+    let cmd = match self::scrollback_editor_cmd_action(cmd, state.scrollback_editor.is_some()) {
+        ScrollbackEditorCmdAction::Ignore => {
+            // The editor pane is attached-client-local. Muxr layout shortcuts are blocked while it is active so they
+            // cannot create temporary panes/runtimes that disappear from the restored real layout.
+            return Ok(true);
+        }
+        ScrollbackEditorCmdAction::Restore => {
+            self::restore_scrollback_editor_without_render(state)?;
+            return self::resize_panes_and_render(event_writer, state).await;
+        }
+        ScrollbackEditorCmdAction::Run(cmd) => cmd,
+    };
     match cmd {
         ClientCmd::Tab(cmd) => self::handle_tab_cmd_request(cmd, event_writer, state).await,
         ClientCmd::SplitPane(split_axis) => {
@@ -1232,6 +1376,14 @@ async fn handle_cmd_request(
                 return Ok(true);
             }
             self::resize_panes_and_render(event_writer, state).await
+        }
+        ClientCmd::OpenScrollbackEditor => {
+            self::handle_open_scrollback_editor_request(
+                state.config.user_config.scrollback.dump_style,
+                event_writer,
+                state,
+            )
+            .await
         }
         ClientCmd::FocusPane(direction) => {
             if !crate::pane_focus::handle_focus_pane_cmd_with_tracked_process_ack(
@@ -1392,6 +1544,9 @@ async fn handle_mouse_focus(
     event_writer: &mut ServerEventWriter,
     state: &mut AttachedSessionState<'_>,
 ) -> rootcause::Result<bool> {
+    if state.scrollback_editor.is_some() {
+        return Ok(true);
+    }
     if state.pane_fullscreen.visible_pane_id(state.layout)?.is_some() {
         return Ok(true);
     }
@@ -1431,11 +1586,14 @@ mod tests {
     use muxr_config::MuxrConfig;
     use muxr_core::SessionName;
     use muxr_core::SessionPaths;
+    use rstest::rstest;
 
     use super::*;
     use crate::pane_cmd::PaneCmd;
     use crate::pane_cmd::PaneCmdObservation;
+    use crate::pane_focus::PaneFocusDirection;
     use crate::pane_runtime::test_helpers as pane_runtime_test_helpers;
+    use crate::pane_split::PaneSplitAxis;
     use crate::state::SessionMetadata;
 
     #[test]
@@ -1469,6 +1627,37 @@ mod tests {
             .ok_or_else(|| report!("expected pane snapshot"))?;
         pretty_assertions::assert_eq!(pane.cmd_label, Some("cx".to_owned()));
         Ok(())
+    }
+
+    #[rstest]
+    #[case::inactive_runs(
+        ClientCmd::SplitPane(PaneSplitAxis::Vertical),
+        false,
+        ScrollbackEditorCmdAction::Run(ClientCmd::SplitPane(PaneSplitAxis::Vertical))
+    )]
+    #[case::active_close_restores(ClientCmd::ClosePane, true, ScrollbackEditorCmdAction::Restore)]
+    #[case::active_split_is_ignored(
+        ClientCmd::SplitPane(PaneSplitAxis::Vertical),
+        true,
+        ScrollbackEditorCmdAction::Ignore
+    )]
+    #[case::active_create_tab_is_ignored(ClientCmd::Tab(TabCmd::Create), true, ScrollbackEditorCmdAction::Ignore)]
+    #[case::active_open_scrollback_editor_is_ignored(
+        ClientCmd::OpenScrollbackEditor,
+        true,
+        ScrollbackEditorCmdAction::Ignore
+    )]
+    #[case::active_focus_pane_is_ignored(
+        ClientCmd::FocusPane(PaneFocusDirection::Right),
+        true,
+        ScrollbackEditorCmdAction::Ignore
+    )]
+    fn test_scrollback_editor_cmd_action_when_editor_mode_is_active_blocks_layout_mutations(
+        #[case] cmd: ClientCmd,
+        #[case] editor_active: bool,
+        #[case] expected: ScrollbackEditorCmdAction,
+    ) {
+        pretty_assertions::assert_eq!(self::scrollback_editor_cmd_action(cmd, editor_active), expected);
     }
 
     fn session_paths(base: &Path, raw: &str) -> rootcause::Result<(SessionName, SessionPaths)> {

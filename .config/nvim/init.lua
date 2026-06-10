@@ -27,7 +27,15 @@ if not (vim.uv or vim.loop).fs_stat(lazypath) then
 end
 vim.opt.rtp:prepend(lazypath)
 
-require('lazy').setup('plugins', {
+local lazy_specs = { { import = 'plugins', }, }
+if vim.g.enabled_plugin_specs then
+  lazy_specs = {}
+  for _, spec_file in ipairs(vim.g.enabled_plugin_specs) do
+    table.insert(lazy_specs, dofile(vim.fn.stdpath('config') .. '/lua/plugins/' .. spec_file))
+  end
+end
+
+require('lazy').setup(lazy_specs, {
   change_detection = { notify = false, },
   performance = {
     rtp = {

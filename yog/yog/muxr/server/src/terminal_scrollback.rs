@@ -68,6 +68,10 @@ impl TerminalPartialScrollback {
         self.rows.iter().take(count).map(TerminalScrollbackRow::cells).collect()
     }
 
+    pub fn captured_oldest_row_cells_iter(&self, count: usize) -> impl Iterator<Item = Vec<RenderCell>> + '_ {
+        self.rows.iter().take(count).map(TerminalScrollbackRow::cells)
+    }
+
     pub const fn captured_rows_for_linefeed_at(&self, cursor_row: u16) -> Option<TerminalScrolledRows> {
         self.scroll_region.captured_rows_for_linefeed_at(cursor_row, &self.size)
     }
