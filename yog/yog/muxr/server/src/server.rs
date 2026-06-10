@@ -807,7 +807,7 @@ mod tests {
             let mut user_config = MuxrConfig::default();
             user_config.scrollback.editor = muxr_config::ScrollbackEditorConfig {
                 program: "/bin/sh",
-                args: &["-c", "cat \"$1\"; cat", "muxr-test-scrollback-editor"],
+                args: &["-c", "cat \"$1\"; sleep 30", "muxr-test-scrollback-editor"],
             };
             let handle = self::spawn_test_server_with_user_config(
                 &session,
@@ -822,7 +822,8 @@ mod tests {
             client
                 .writer
                 .send_request(&ClientRequest::Input(b"before-editor\n".to_vec()))
-                .await?;
+                .await
+                .context("failed to send pre-editor input")?;
             self::read_until_render_contains(&mut client, b"before-editor").await?;
 
             client
@@ -832,7 +833,8 @@ mod tests {
                     modifiers: ClientKeyModifiers::SHIFT_ALT,
                     raw_bytes: b"\x1bS".to_vec(),
                 }))
-                .await?;
+                .await
+                .context("failed to send open scrollback editor key")?;
             let editor_layout = self::read_until_layout(&mut client).await?;
             let editor_tab = editor_layout
                 .tabs()
@@ -848,7 +850,8 @@ mod tests {
                     modifiers: ClientKeyModifiers::SHIFT_ALT,
                     raw_bytes: b"\x1bW".to_vec(),
                 }))
-                .await?;
+                .await
+                .context("failed to send close scrollback editor key")?;
             let restored_layout = self::read_until_layout(&mut client).await?;
             let restored_tab = restored_layout
                 .tabs()

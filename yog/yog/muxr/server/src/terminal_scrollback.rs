@@ -5,38 +5,49 @@ use std::num::NonZeroU16;
 use muxr_core::PaneScrollDirection;
 use muxr_core::RenderCell;
 use muxr_core::TerminalSize;
+use unicode_width::UnicodeWidthChar as _;
 use vte::Params;
 use vte::Perform;
 
-pub struct TerminalPartialScrollback {
+pub struct TerminalScrollback {
     max_rows: usize,
+    // vt100 keeps normal and alternate grids separate. muxr mirrors only the scroll-region state it needs before vt100
+    // consumes a scroll byte; sharing one region lets alternate-screen TUIs poison later normal scrollback capture.
+    active_screen: TerminalScreen,
+    alternate_scroll_region: TerminalScrollRegion,
+    normal_scroll_region: TerminalScrollRegion,
     parser: vte::Parser,
     rows: VecDeque<TerminalScrollbackRow>,
-    scroll_region: TerminalScrollRegion,
     size: TerminalSize,
     viewport_offset: usize,
 }
 
-impl TerminalPartialScrollback {
+impl TerminalScrollback {
     pub fn new(size: &TerminalSize, max_rows: usize) -> Self {
         Self {
             max_rows,
+            active_screen: TerminalScreen::Normal,
+            alternate_scroll_region: TerminalScrollRegion::full(size),
+            normal_scroll_region: TerminalScrollRegion::full(size),
             parser: vte::Parser::new(),
             rows: VecDeque::new(),
-            scroll_region: TerminalScrollRegion::full(size),
             size: size.clone(),
             viewport_offset: 0,
         }
     }
 
     pub fn observe_byte(&mut self, byte: u8) -> Option<TerminalPreParserAction> {
-        let mut performer = TerminalPartialScrollbackParser {
+        let mut performer = TerminalScrollbackParser {
             action: None,
-            scroll_region: self.scroll_region,
+            active_screen: self.active_screen,
+            alternate_scroll_region: self.alternate_scroll_region,
+            normal_scroll_region: self.normal_scroll_region,
             size: &self.size,
         };
         self.parser.advance(&mut performer, &[byte]);
-        self.scroll_region = performer.scroll_region;
+        self.active_screen = performer.active_screen;
+        self.alternate_scroll_region = performer.alternate_scroll_region;
+        self.normal_scroll_region = performer.normal_scroll_region;
         performer.action
     }
 
@@ -64,20 +75,45 @@ impl TerminalPartialScrollback {
             .collect()
     }
 
-    pub fn captured_oldest_row_cells(&self, count: usize) -> Vec<Vec<RenderCell>> {
-        self.rows.iter().take(count).map(TerminalScrollbackRow::cells).collect()
-    }
-
     pub fn captured_oldest_row_cells_iter(&self, count: usize) -> impl Iterator<Item = Vec<RenderCell>> + '_ {
         self.rows.iter().take(count).map(TerminalScrollbackRow::cells)
     }
 
-    pub const fn captured_rows_for_linefeed_at(&self, cursor_row: u16) -> Option<TerminalScrolledRows> {
-        self.scroll_region.captured_rows_for_linefeed_at(cursor_row, &self.size)
+    pub const fn captured_rows_for_linefeed_at(&self, cursor_row: u16) -> Option<usize> {
+        self.normal_scroll_region.captured_rows_for_linefeed_at(cursor_row)
     }
 
-    pub const fn should_capture_linefeed(&self, alternate_screen: bool) -> bool {
-        self.scroll_region.should_capture_linefeed(&self.size, alternate_screen)
+    pub const fn captured_rows_for_autowrap_at(
+        &self,
+        cursor_row: u16,
+        cursor_col: u16,
+        printable_width: u16,
+    ) -> Option<usize> {
+        self.normal_scroll_region
+            .captured_rows_for_autowrap_at(cursor_row, cursor_col, printable_width, &self.size)
+    }
+
+    pub fn autowrap_capture_possible_after_prints(
+        &self,
+        cursor_row: u16,
+        cursor_col: u16,
+        pending_print_width: usize,
+        next_print_width: u16,
+    ) -> bool {
+        if self.active_screen != TerminalScreen::Normal {
+            return false;
+        }
+        self.normal_scroll_region.autowrap_capture_possible_after_prints(
+            cursor_row,
+            cursor_col,
+            pending_print_width,
+            next_print_width,
+            &self.size,
+        )
+    }
+
+    pub fn should_capture_linefeed(&self, alternate_screen: bool) -> bool {
+        !alternate_screen && self.active_screen == TerminalScreen::Normal && self.normal_scroll_region.should_capture()
     }
 
     pub const fn viewport_offset(&self) -> usize {
@@ -86,26 +122,26 @@ impl TerminalPartialScrollback {
 
     pub fn resize(&mut self, size: &TerminalSize) {
         self.size = size.clone();
-        self.scroll_region = self.scroll_region.clamped_to(size);
+        self.alternate_scroll_region = self.alternate_scroll_region.clamped_to(size);
+        self.normal_scroll_region = self.normal_scroll_region.clamped_to(size);
     }
 
-    pub fn scroll_to(&mut self, offset: usize, base_scrollback_len: usize) {
-        self.viewport_offset = offset.min(self.rows.len().saturating_add(base_scrollback_len));
+    pub fn scroll_to(&mut self, offset: usize) {
+        self.viewport_offset = offset.min(self.rows.len());
     }
 
-    pub fn scroll_by(&mut self, direction: PaneScrollDirection, lines: usize, base_scrollback_len: usize) -> bool {
+    pub fn scroll_by(&mut self, direction: PaneScrollDirection, lines: usize) -> bool {
         let before = self.viewport_offset;
-        let total = self.rows.len().saturating_add(base_scrollback_len);
         self.viewport_offset = match direction {
             PaneScrollDirection::Down => self.viewport_offset.saturating_sub(lines),
-            PaneScrollDirection::Up => self.viewport_offset.saturating_add(lines).min(total),
+            PaneScrollDirection::Up => self.viewport_offset.saturating_add(lines).min(self.rows.len()),
         };
         self.viewport_offset != before
     }
 }
 
-// Partial-scroll-region history can reach tens of thousands of mostly padded rows. Store rows as runs only when that is
-// smaller than raw cells; dense output must not pay extra per-cell run overhead.
+// Terminal scrollback can reach tens of thousands of mostly padded rows. Store rows as runs only when that is smaller
+// than raw cells; dense output must not pay extra per-cell run overhead.
 enum TerminalScrollbackRow {
     Raw(Vec<RenderCell>),
     Runs(Vec<TerminalScrollbackRun>),
@@ -189,50 +225,134 @@ impl TerminalScrollbackRun {
     }
 }
 
-struct TerminalPartialScrollbackParser<'a> {
+struct TerminalScrollbackParser<'a> {
     action: Option<TerminalPreParserAction>,
-    scroll_region: TerminalScrollRegion,
+    active_screen: TerminalScreen,
+    alternate_scroll_region: TerminalScrollRegion,
+    normal_scroll_region: TerminalScrollRegion,
     size: &'a TerminalSize,
 }
 
-impl Perform for TerminalPartialScrollbackParser<'_> {
-    fn csi_dispatch(&mut self, params: &Params, intermediates: &[u8], ignore: bool, action: char) {
+impl Perform for TerminalScrollbackParser<'_> {
+    fn print(&mut self, c: char) {
+        let Some(width) = self::printable_width(c) else {
+            return;
+        };
+        self.action = Some(TerminalPreParserAction::Printable { width });
+    }
+
+    fn execute(&mut self, byte: u8) {
+        match byte {
+            b'\x08' | b'\t' | b'\n' | b'\x0b' | b'\x0c' | b'\r' => {
+                self.action = Some(TerminalPreParserAction::SyncParser);
+            }
+            _ => {}
+        }
+    }
+
+    fn esc_dispatch(&mut self, intermediates: &[u8], ignore: bool, byte: u8) {
         if ignore || !intermediates.is_empty() {
             return;
         }
 
-        match action {
-            'S' => {
-                if let Some(scrolled_rows) = self.scroll_region.captured_rows_for_scroll_up(params, self.size) {
-                    self.action = Some(TerminalPreParserAction::CaptureTopRows {
-                        count: scrolled_rows.count,
-                        full_height: scrolled_rows.full_height,
-                    });
+        if byte == b'c' {
+            self.active_screen = TerminalScreen::Normal;
+            self.alternate_scroll_region = TerminalScrollRegion::full(self.size);
+            self.normal_scroll_region = TerminalScrollRegion::full(self.size);
+        }
+        if matches!(byte, b'7' | b'8' | b'M' | b'c') {
+            self.action = Some(TerminalPreParserAction::SyncParser);
+        }
+    }
+
+    fn csi_dispatch(&mut self, params: &Params, intermediates: &[u8], ignore: bool, action: char) {
+        if ignore {
+            return;
+        }
+
+        match (intermediates, action) {
+            ([], 'S') => {
+                if let Some(count) = self.active_scroll_region().captured_rows_for_scroll_up(params) {
+                    self.action = Some(TerminalPreParserAction::CaptureTopRows { count });
+                } else {
+                    self.action = Some(TerminalPreParserAction::SyncParser);
                 }
             }
-            'M' => {
-                if let Some(count) = self.scroll_region.captured_rows_for_delete_lines(params) {
+            ([], 'M') => {
+                if let Some(count) = self.active_scroll_region().captured_rows_for_delete_lines(params) {
                     self.action = Some(TerminalPreParserAction::CaptureDeletedTopRows { count });
+                } else {
+                    self.action = Some(TerminalPreParserAction::SyncParser);
                 }
             }
-            'r' => {
-                self.scroll_region = TerminalScrollRegion::from_decstbm(params, self.size);
+            ([], 'r') => {
+                self.set_active_scroll_region(TerminalScrollRegion::from_decstbm(params, self.size));
+                self.action = Some(TerminalPreParserAction::SyncParser);
             }
-            _ => {}
+            ([b'?'], 'h') => {
+                self.apply_private_mode(params, true);
+                self.action = Some(TerminalPreParserAction::SyncParser);
+            }
+            ([b'?'], 'l') => {
+                self.apply_private_mode(params, false);
+                self.action = Some(TerminalPreParserAction::SyncParser);
+            }
+            _ => {
+                self.action = Some(TerminalPreParserAction::SyncParser);
+            }
+        }
+    }
+}
+
+impl TerminalScrollbackParser<'_> {
+    const fn active_scroll_region(&self) -> TerminalScrollRegion {
+        match self.active_screen {
+            TerminalScreen::Alternate => self.alternate_scroll_region,
+            TerminalScreen::Normal => self.normal_scroll_region,
+        }
+    }
+
+    fn apply_private_mode(&mut self, params: &Params, enabled: bool) {
+        for param in self::primary_csi_params(params) {
+            match (enabled, param) {
+                (true, 47) => self.active_screen = TerminalScreen::Alternate,
+                (true, 1049) => {
+                    self.active_screen = TerminalScreen::Alternate;
+                    self.alternate_scroll_region = TerminalScrollRegion::full(self.size);
+                }
+                (false, 47 | 1049) => self.active_screen = TerminalScreen::Normal,
+                _ => {}
+            }
+        }
+    }
+
+    const fn set_active_scroll_region(&mut self, region: TerminalScrollRegion) {
+        match self.active_screen {
+            TerminalScreen::Alternate => self.alternate_scroll_region = region,
+            TerminalScreen::Normal => self.normal_scroll_region = region,
         }
     }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TerminalPreParserAction {
-    CaptureDeletedTopRows { count: usize },
-    CaptureTopRows { count: usize, full_height: bool },
+    CaptureDeletedTopRows {
+        count: usize,
+    },
+    CaptureTopRows {
+        count: usize,
+    },
+    Printable {
+        width: u16,
+    },
+    /// Flush bytes through the current byte because the terminal state changed without moving rows into muxr history.
+    SyncParser,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct TerminalScrolledRows {
-    pub count: usize,
-    pub full_height: bool,
+enum TerminalScreen {
+    Alternate,
+    Normal,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -271,7 +391,7 @@ impl TerminalScrollRegion {
         }
     }
 
-    fn captured_rows_for_scroll_up(self, params: &Params, size: &TerminalSize) -> Option<TerminalScrolledRows> {
+    fn captured_rows_for_scroll_up(self, params: &Params) -> Option<usize> {
         if self.top != 0 {
             return None;
         }
@@ -281,10 +401,7 @@ impl TerminalScrollRegion {
             .filter(|value| *value != 0)
             .unwrap_or(1);
         let region_rows = self.bottom.saturating_sub(self.top).saturating_add(1);
-        Some(TerminalScrolledRows {
-            count: usize::from(count.min(region_rows)),
-            full_height: self.bottom >= size.rows().saturating_sub(1),
-        })
+        Some(usize::from(count.min(region_rows)))
     }
 
     fn captured_rows_for_delete_lines(self, params: &Params) -> Option<usize> {
@@ -300,21 +417,54 @@ impl TerminalScrollRegion {
         Some(usize::from(count.min(region_rows)))
     }
 
-    const fn captured_rows_for_linefeed_at(self, cursor_row: u16, size: &TerminalSize) -> Option<TerminalScrolledRows> {
+    const fn captured_rows_for_linefeed_at(self, cursor_row: u16) -> Option<usize> {
         if self.top != 0 || cursor_row != self.bottom {
             return None;
         }
-        Some(TerminalScrolledRows {
-            count: 1,
-            full_height: self.bottom >= size.rows().saturating_sub(1),
-        })
+        Some(1)
     }
 
-    const fn should_capture_linefeed(self, size: &TerminalSize, alternate_screen: bool) -> bool {
-        if alternate_screen || self.top != 0 {
+    const fn captured_rows_for_autowrap_at(
+        self,
+        cursor_row: u16,
+        cursor_col: u16,
+        printable_width: u16,
+        size: &TerminalSize,
+    ) -> Option<usize> {
+        if self.top != 0 || cursor_row != self.bottom {
+            return None;
+        }
+        if cursor_col <= size.cols().saturating_sub(printable_width) {
+            return None;
+        }
+        Some(1)
+    }
+
+    fn autowrap_capture_possible_after_prints(
+        self,
+        cursor_row: u16,
+        cursor_col: u16,
+        pending_print_width: usize,
+        next_print_width: u16,
+        size: &TerminalSize,
+    ) -> bool {
+        if self.top != 0 || cursor_row > self.bottom {
             return false;
         }
-        self.bottom < size.rows().saturating_sub(1)
+        let rows_to_bottom = usize::from(self.bottom.saturating_sub(cursor_row));
+        let cols = usize::from(size.cols());
+        // Keep the batching guard aligned with vt100: a printable scrolls only when the current column is greater than
+        // `cols - width`. If this says "maybe", TerminalState flushes pending bytes and asks vt100 for the exact
+        // cursor.
+        let next_scroll_col = usize::from(size.cols().saturating_sub(next_print_width)).saturating_add(1);
+        let cells_until_scroll_candidate = rows_to_bottom
+            .saturating_mul(cols)
+            .saturating_add(next_scroll_col.saturating_sub(usize::from(cursor_col)));
+        pending_print_width >= cells_until_scroll_candidate
+    }
+
+    const fn should_capture(self) -> bool {
+        self.top == 0
     }
 
     fn clamped_to(self, size: &TerminalSize) -> Self {
@@ -333,6 +483,17 @@ fn primary_csi_params(params: &Params) -> Vec<u16> {
     params.iter().map(|param| param.first().copied().unwrap_or(0)).collect()
 }
 
+fn printable_width(c: char) -> Option<u16> {
+    if c == '\u{fffd}' || ('\u{80}'..'\u{a0}').contains(&c) {
+        return None;
+    }
+    let width = c.width();
+    if width.is_none() && u32::from(c) < 256 {
+        return None;
+    }
+    Some(u16::try_from(width.unwrap_or(1)).unwrap_or(1))
+}
+
 #[cfg(test)]
 mod tests {
     use muxr_core::RenderStyle;
@@ -340,8 +501,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_terminal_partial_scrollback_push_rows_when_row_is_padded_stores_compact_runs() -> rootcause::Result<()> {
-        let mut scrollback = TerminalPartialScrollback::new(&TerminalSize::new(120, 4)?, 50_000);
+    fn test_terminal_scrollback_push_rows_when_row_is_padded_stores_compact_runs() -> rootcause::Result<()> {
+        let mut scrollback = TerminalScrollback::new(&TerminalSize::new(120, 4)?, 50_000);
         let mut row = vec![RenderCell::narrow("codex", RenderStyle::default())];
         row.extend(std::iter::repeat_n(
             RenderCell::narrow(" ", RenderStyle::default()),
@@ -357,8 +518,8 @@ mod tests {
     }
 
     #[test]
-    fn test_terminal_partial_scrollback_push_rows_when_row_is_dense_stores_raw_cells() -> rootcause::Result<()> {
-        let mut scrollback = TerminalPartialScrollback::new(&TerminalSize::new(120, 4)?, 50_000);
+    fn test_terminal_scrollback_push_rows_when_row_is_dense_stores_raw_cells() -> rootcause::Result<()> {
+        let mut scrollback = TerminalScrollback::new(&TerminalSize::new(120, 4)?, 50_000);
         let row = (0..120)
             .map(|col| RenderCell::narrow(format!("{col:03}"), RenderStyle::default()))
             .collect::<Vec<_>>();
