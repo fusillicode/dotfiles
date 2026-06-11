@@ -1,6 +1,7 @@
 use std::fs;
 use std::os::unix::process::CommandExt;
 use std::path::Path;
+use std::path::PathBuf;
 use std::process::Command;
 use std::process::Stdio;
 
@@ -9,6 +10,16 @@ use muxr_core::SessionName;
 use muxr_core::SessionPaths;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
+
+pub struct SpawnedServer {
+    pub log_locator: ServerLogLocator,
+}
+
+pub struct ServerLogLocator {
+    pub file_pattern: String,
+    pub logs_dir: PathBuf,
+    pub pid: u32,
+}
 
 pub fn cleanup_stale_session_files(paths: &SessionPaths) -> rootcause::Result<()> {
     // Structured rejections stop before cleanup; unusable attach failures may be stale incompatible servers.
@@ -19,20 +30,29 @@ pub fn cleanup_stale_session_files(paths: &SessionPaths) -> rootcause::Result<()
 
 pub fn spawn_server_process(
     session: &SessionName,
+    paths: &SessionPaths,
     server_executable: &Path,
     external_layout: Option<&Path>,
-) -> rootcause::Result<()> {
+) -> rootcause::Result<SpawnedServer> {
     // Existing sessions attach before this path; validate the runner only when spawning a missing/new server.
     if !server_executable.is_file() {
         return Err(report!("missing muxr server runner")
             .attach(format!("expected={}", server_executable.display()))
             .attach("run the muxr install/build step so muxr-server is installed next to muxr"));
     }
+    let logs_dir = paths.logs_root()?;
     let mut cmd = self::server_cmd(session, server_executable, external_layout);
 
     let child = cmd.spawn().context("failed to spawn muxr server")?;
+    let pid = child.id();
     drop(child);
-    Ok(())
+    Ok(SpawnedServer {
+        log_locator: ServerLogLocator {
+            file_pattern: SessionPaths::server_log_file_pattern(session, pid),
+            logs_dir,
+            pid,
+        },
+    })
 }
 
 fn server_cmd(session: &SessionName, server_executable: &Path, external_layout: Option<&Path>) -> Command {
@@ -129,8 +149,11 @@ mod tests {
         let session: SessionName = "work".parse()?;
         let tempdir = tempfile::tempdir()?;
         let missing_runner = tempdir.path().join("muxr-server");
+        let (_, paths) = self::session_paths(tempdir.path(), "work")?;
 
-        let error = spawn_server_process(&session, &missing_runner, None).expect_err("expected missing runner error");
+        let Err(error) = spawn_server_process(&session, &paths, &missing_runner, None) else {
+            return Err(report!("expected missing runner error"));
+        };
 
         assert2::assert!(error.to_string().contains("missing muxr server runner"));
         Ok(())

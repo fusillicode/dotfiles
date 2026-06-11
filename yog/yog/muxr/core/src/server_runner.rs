@@ -22,21 +22,30 @@ impl ServerRunnerArgs {
     /// # Errors
     /// - The invocation is missing its session name, has extra args, or has an invalid session name.
     pub fn parse(args: &[OsString]) -> rootcause::Result<Self> {
-        match args {
-            [session] => Ok(Self {
-                external_layout: None,
-                session: self::parse_session_arg(session)?,
-            }),
-            [session, layout_flag, layout] if layout_flag == OsStr::new(EXTERNAL_LAYOUT_ARG) => Ok(Self {
-                external_layout: Some(PathBuf::from(layout.clone())),
-                session: self::parse_session_arg(session)?,
-            }),
-            [session, layout_flag] if layout_flag == OsStr::new(EXTERNAL_LAYOUT_ARG) => {
-                Err(report!("missing muxr server layout").attach(format!("session={}", session.display())))
+        let Some((session, rest)) = args.split_first() else {
+            return Err(report!("missing muxr server session"));
+        };
+        let session = self::parse_session_arg(session)?;
+        let mut external_layout = None;
+        let mut rest = rest.iter();
+
+        while let Some(flag) = rest.next() {
+            if flag == OsStr::new(EXTERNAL_LAYOUT_ARG) {
+                let Some(layout) = rest.next() else {
+                    return Err(report!("missing muxr server layout").attach(format!("session={session}")));
+                };
+                if external_layout.replace(PathBuf::from(layout.clone())).is_some() {
+                    return Err(report!("duplicate muxr server layout").attach(format!("session={session}")));
+                }
+            } else {
+                return Err(report!("unexpected muxr server args").attach(format!("args={args:?}")));
             }
-            [] => Err(report!("missing muxr server session")),
-            rest => Err(report!("unexpected muxr server args").attach(format!("args={rest:?}"))),
         }
+
+        Ok(Self {
+            external_layout,
+            session,
+        })
     }
 
     /// Return argv for `muxr-server`; keep this symmetric with [`Self::parse`].
