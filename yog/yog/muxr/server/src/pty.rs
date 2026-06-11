@@ -32,6 +32,9 @@ use serde::Serialize;
 
 use crate::history::PaneHistory;
 use crate::terminal::TerminalApplicationMode;
+use crate::terminal::TerminalCursorKeyMode;
+use crate::terminal::TerminalFocusEvent;
+use crate::terminal::TerminalFocusReporting;
 use crate::terminal::TerminalMouseProtocol;
 use crate::terminal::TerminalSnapshot;
 use crate::terminal::TerminalState;
@@ -311,12 +314,14 @@ impl PtyHandle {
     pub fn write_faux_scroll_input(
         &self,
         direction: PaneScrollDirection,
-        application_cursor: bool,
+        cursor_key_mode: TerminalCursorKeyMode,
     ) -> rootcause::Result<bool> {
-        self.write_input(&crate::pane_scroll::faux_scroll_input_bytes(
-            direction,
-            application_cursor,
-        ))
+        self.write_input(&crate::pane_scroll::faux_scroll_input_bytes(direction, cursor_key_mode))
+    }
+
+    pub fn write_focus_event(&self, event: TerminalFocusEvent) -> rootcause::Result<()> {
+        let focus_reporting = self.application_mode()?.focus_reporting;
+        self::write_pty_focus_event(self.writer.as_ref(), focus_reporting, event)
     }
 
     pub fn mouse_mode(&self) -> rootcause::Result<PaneMouseMode> {
@@ -436,8 +441,10 @@ impl PtyState {
         let (history, replay) = PaneHistory::open(history_path)?;
         let mut terminal = TerminalState::with_scrollback(size, scrollback);
         let _ = terminal.process(&replay);
-        // History replay rebuilds visible cells only; tab bar metadata must come from live PTY output after spawn.
+        // History replay rebuilds visible cells only; metadata and focus-reporting opt-in must come from live PTY
+        // output after spawn.
         terminal.clear_title_metadata();
+        terminal.clear_replayed_focus_reporting();
 
         Ok(Self {
             active_sink: Mutex::new(None),
@@ -626,6 +633,25 @@ fn write_pty_bytes(
     writer.flush().context(flush_context)?;
     drop(writer);
     Ok(())
+}
+
+fn write_pty_focus_event(
+    writer: &Mutex<Box<dyn Write + Send>>,
+    focus_reporting: TerminalFocusReporting,
+    event: TerminalFocusEvent,
+) -> rootcause::Result<()> {
+    match focus_reporting {
+        TerminalFocusReporting::Disabled => Ok(()),
+        TerminalFocusReporting::Enabled => {
+            self::write_pty_bytes(
+                writer,
+                event.bytes(),
+                "failed to write muxr terminal focus event to shell pty",
+                "failed to flush muxr terminal focus event",
+            )?;
+            Ok(())
+        }
+    }
 }
 
 fn write_terminal_replies(writer: &Mutex<Box<dyn Write + Send>>, replies: &[Vec<u8>]) -> rootcause::Result<()> {
@@ -819,6 +845,24 @@ mod tests {
     }
 
     #[test]
+    fn test_with_history_when_history_contains_focus_reporting_does_not_restore_live_mode() -> rootcause::Result<()> {
+        let tempdir = tempfile::tempdir()?;
+        let history_path = tempdir.path().join("1").join("output.raw");
+        std::fs::create_dir_all(
+            history_path
+                .parent()
+                .ok_or_else(|| report!("expected history parent"))?,
+        )?;
+        std::fs::write(&history_path, b"\x1b[?1004h")?;
+
+        let state = PtyState::with_history(&terminal_size()?, &history_path, MuxrConfig::default().scrollback)?;
+        let mode = lock_mutex(&state.terminal, "pty terminal")?.application_mode();
+
+        pretty_assertions::assert_eq!(mode.focus_reporting, TerminalFocusReporting::Disabled);
+        Ok(())
+    }
+
+    #[test]
     fn test_append_output_when_sink_is_full_coalesces_without_blocking() -> rootcause::Result<()> {
         let state = pty_state(&terminal_size()?);
         let (sender, receiver) = mpsc::sync_channel(1);
@@ -873,6 +917,37 @@ mod tests {
         self::write_terminal_replies(writer.as_ref(), &replies)?;
 
         pretty_assertions::assert_eq!(self::captured_pty_bytes(written.as_ref())?, b"\x1b[1;1R".to_vec());
+        Ok(())
+    }
+
+    #[test]
+    fn test_write_pty_focus_event_when_focus_reporting_is_disabled_skips_write() -> rootcause::Result<()> {
+        let written = Arc::new(Mutex::new(Vec::new()));
+        let writer = self::capturing_pty_writer(Arc::clone(&written));
+
+        self::write_pty_focus_event(
+            writer.as_ref(),
+            TerminalFocusReporting::Disabled,
+            TerminalFocusEvent::Lost,
+        )?;
+
+        pretty_assertions::assert_eq!(self::captured_pty_bytes(written.as_ref())?, Vec::<u8>::new());
+        Ok(())
+    }
+
+    #[test]
+    fn test_write_pty_focus_event_when_focus_reporting_is_enabled_writes_event() -> rootcause::Result<()> {
+        for (event, expected) in [
+            (TerminalFocusEvent::Gained, b"\x1b[I".as_slice()),
+            (TerminalFocusEvent::Lost, b"\x1b[O".as_slice()),
+        ] {
+            let written = Arc::new(Mutex::new(Vec::new()));
+            let writer = self::capturing_pty_writer(Arc::clone(&written));
+
+            self::write_pty_focus_event(writer.as_ref(), TerminalFocusReporting::Enabled, event)?;
+
+            pretty_assertions::assert_eq!(self::captured_pty_bytes(written.as_ref())?, expected.to_vec());
+        }
         Ok(())
     }
 
