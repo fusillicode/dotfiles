@@ -160,6 +160,25 @@ mod tests {
     }
 
     #[test]
+    fn test_delete_session_paths_when_session_is_stopped_keeps_centralized_logs() -> rootcause::Result<()> {
+        let root = tempfile::tempdir().context("failed to create muxr delete test root")?;
+        let session: SessionName = "dead".parse()?;
+        let timestamp = "20260611143012".parse()?;
+        let paths = self::test_paths(root.path(), &session);
+        fs::create_dir_all(&paths.root).context("failed to create session root")?;
+        fs::create_dir_all(paths.logs_root()?).context("failed to create logs root")?;
+        let log_path = paths.server_log_path(&session, &timestamp, 12345)?;
+        fs::write(&log_path, b"log").context("failed to create session log")?;
+
+        let outcome = self::delete_session_paths(&paths)?;
+
+        pretty_assertions::assert_eq!(outcome, SessionDeleteOutcome::StoppedRemoved);
+        assert2::assert!(!paths.root.exists());
+        assert2::assert!(log_path.exists());
+        Ok(())
+    }
+
+    #[test]
     fn test_delete_session_paths_when_session_is_unknown_force_removes_root_and_socket() -> rootcause::Result<()> {
         let root = tempfile::tempdir().context("failed to create muxr delete test root")?;
         let session: SessionName = "dead".parse()?;

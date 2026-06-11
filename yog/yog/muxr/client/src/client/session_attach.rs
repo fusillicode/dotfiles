@@ -64,8 +64,8 @@ async fn open_session_with_paths(
         }
     }
 
-    session_start::spawn_server_process(session, server_executable, external_layout)?;
-    self::attach_started_server(session, paths, terminal_size).await
+    let spawned_server = session_start::spawn_server_process(session, paths, server_executable, external_layout)?;
+    self::attach_started_server(session, paths, terminal_size, &spawned_server.log_locator).await
 }
 
 async fn attach(
@@ -127,6 +127,7 @@ async fn attach_started_server(
     session: &SessionName,
     paths: &SessionPaths,
     terminal_size: TerminalSize,
+    server_log_locator: &session_start::ServerLogLocator,
 ) -> rootcause::Result<AttachedSession> {
     let started_at = Instant::now();
 
@@ -137,13 +138,26 @@ async fn attach_started_server(
             Err(AttachFailure::Unusable(error)) => {
                 // Socket path creation can win the race against listener readiness after spawning the server.
                 if started_at.elapsed() > SERVER_READY_TIMEOUT {
-                    return Err(error);
+                    return Err(self::server_startup_failure_error(error, server_log_locator));
                 }
             }
         }
 
         tokio::time::sleep(Duration::from_millis(10)).await;
     }
+}
+
+fn server_startup_failure_error(
+    error: rootcause::Report,
+    server_log_locator: &session_start::ServerLogLocator,
+) -> rootcause::Report {
+    // The server owns log timestamp generation, and startup failures may happen before attach can return it. Use the
+    // spawned pid as the stable client-known part of the debug hint instead of scanning logs during startup failure.
+    error
+        .attach("muxr server did not become attachable after start")
+        .attach(format!("server_pid={}", server_log_locator.pid))
+        .attach(format!("logs_dir={}", server_log_locator.logs_dir.display()))
+        .attach(format!("log_pattern={}", server_log_locator.file_pattern))
 }
 
 fn handle_attach_failure(attach_failure: AttachFailure) -> rootcause::Result<()> {
@@ -202,6 +216,7 @@ fn external_layout_existing_session_error(
 #[cfg(test)]
 mod tests {
     use std::fs;
+    use std::os::unix::fs::PermissionsExt;
     use std::path::Path;
 
     use muxr_core::AttachAccepted;
@@ -349,6 +364,36 @@ mod tests {
             handle
                 .await
                 .map_err(|error| report!("muxr live attach test task panicked").attach(format!("{error}")))??;
+            Ok(())
+        })
+    }
+
+    #[test]
+    fn test_open_session_when_started_server_exits_before_attach_returns_log_locator() -> rootcause::Result<()> {
+        self::runtime()?.block_on(async {
+            let tempdir = tempfile::tempdir()?;
+            let (session, paths) = self::session_paths(tempdir.path(), "work")?;
+            let runner = tempdir.path().join("muxr-server");
+            fs::write(&runner, "#!/bin/sh\nexit 17\n").context("failed to write fake muxr server")?;
+            fs::set_permissions(&runner, fs::Permissions::from_mode(0o755))
+                .context("failed to make fake muxr server executable")?;
+
+            let Err(error) = open_session_with_paths(&session, &paths, TerminalSize::new(80, 24)?, &runner, None).await
+            else {
+                return Err(report!("expected startup failure"));
+            };
+
+            assert2::assert!(
+                error
+                    .to_string()
+                    .contains("muxr server did not become attachable after start")
+            );
+            let error = error.to_string();
+            assert2::assert!(error.contains("server_pid="));
+            assert2::assert!(error.contains(&format!("logs_dir={}", paths.logs_root()?.display())));
+            assert2::assert!(error.contains("log_pattern=work-*-"));
+            assert2::assert!(!error.contains("server_log="));
+            assert2::assert!(error.contains(".log"));
             Ok(())
         })
     }

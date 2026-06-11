@@ -108,6 +108,17 @@ pub enum SessionRuntimeShutdownMessage {
     PaneRuntimeSetEmpty,
 }
 
+impl SessionRuntimeShutdownMessage {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::AcceptedConnectionLimitReached => "accepted_connection_limit_reached",
+            Self::DeleteSessionRequested => "delete_session_requested",
+            Self::FinalPaneExited => "final_pane_exited",
+            Self::PaneRuntimeSetEmpty => "pane_runtime_set_empty",
+        }
+    }
+}
+
 pub struct SessionRuntimeState {
     layout: SessionLayout,
     pane_runtimes: PaneRuntimes,

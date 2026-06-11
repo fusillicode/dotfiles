@@ -25,6 +25,7 @@ pub fn prepare_session_dirs(paths: &SessionPaths) -> rootcause::Result<()> {
         .root
         .parent()
         .ok_or_else(|| report!("muxr session root has no parent"))?;
+    let logs_root = paths.logs_root()?;
     let socket_root = self::socket_root(paths)?;
     let state_root = self::state_root(paths)?;
 
@@ -36,6 +37,7 @@ pub fn prepare_session_dirs(paths: &SessionPaths) -> rootcause::Result<()> {
     // and user-created symlinks are treated as explicit state relocation.
     for (path, label) in [
         (sessions_root, "sessions root"),
+        (logs_root.as_path(), "logs root"),
         (socket_root, "socket root"),
         (paths.root.as_path(), "session root"),
         (paths.panes.as_path(), "panes root"),
@@ -88,6 +90,7 @@ mod tests {
         pretty_assertions::assert_eq!(self::mode(state_root)?, PRIVATE_DIR_MODE);
         assert2::assert!(paths.root.is_dir());
         assert2::assert!(paths.panes.is_dir());
+        assert2::assert!(paths.logs_root()?.is_dir());
         Ok(())
     }
 

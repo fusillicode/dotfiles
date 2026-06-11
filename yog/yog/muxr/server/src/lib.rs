@@ -27,6 +27,7 @@ mod server;
 mod session_files;
 mod session_runtime;
 mod session_start_seed;
+mod session_tracing;
 mod sessions_delete;
 mod state;
 mod tab_create;

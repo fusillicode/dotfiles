@@ -81,3 +81,51 @@ async fn send_writer_event_with_timeout(
         Ok(Err(_)) | Err(_) => Ok(false),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+    use std::path::Path;
+
+    use muxr_core::SessionName;
+    use rootcause::prelude::ResultExt;
+
+    use super::*;
+
+    #[test]
+    fn test_remove_session_files_keeps_centralized_logs() -> rootcause::Result<()> {
+        let tempdir = tempfile::tempdir()?;
+        let session: SessionName = "work".parse()?;
+        let timestamp = "20260611143012".parse()?;
+        let paths = self::test_paths(tempdir.path(), &session);
+        fs::create_dir_all(&paths.root).context("failed to create test session root")?;
+        fs::create_dir_all(
+            paths
+                .socket
+                .parent()
+                .ok_or_else(|| rootcause::report!("expected socket parent"))?,
+        )
+        .context("failed to create test socket root")?;
+        fs::write(&paths.socket, b"socket").context("failed to create test socket")?;
+        fs::create_dir_all(paths.logs_root()?).context("failed to create test logs root")?;
+        let log_path = paths.server_log_path(&session, &timestamp, 12345)?;
+        fs::write(&log_path, b"log").context("failed to create test log")?;
+
+        remove_session_files(&paths)?;
+
+        assert2::assert!(!paths.root.exists());
+        assert2::assert!(!paths.socket.exists());
+        assert2::assert!(log_path.exists());
+        Ok(())
+    }
+
+    fn test_paths(root: &Path, session: &SessionName) -> SessionPaths {
+        SessionPaths {
+            root: root.join("sessions").join(session.as_ref()),
+            socket: root.join("s").join("work.sock"),
+            pid: root.join("sessions").join(session.as_ref()).join("server.pid"),
+            layout: root.join("sessions").join(session.as_ref()).join("layout.json"),
+            panes: root.join("sessions").join(session.as_ref()).join("panes"),
+        }
+    }
+}

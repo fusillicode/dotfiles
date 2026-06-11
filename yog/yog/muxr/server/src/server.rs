@@ -75,7 +75,22 @@ pub fn serve_session(session: &SessionName, external_layout: Option<PathBuf>) ->
 
     tokio::runtime::Runtime::new()
         .context("failed to build muxr tokio runtime")?
-        .block_on(self::serve_async(&config))
+        .block_on(async {
+            prepare_session_dirs(&config.paths)?;
+            // The public muxr CLI/client is short-lived or foreground UI; the dedicated server owns this guard so
+            // non-blocking log writes flush for the full session without carrying the appender worker in CLI memory.
+            let _session_tracing =
+                crate::session_tracing::SessionTracing::install_global(&config.paths, &config.session)?;
+            crate::session_tracing::record_server_starting(&config.session, &config.paths);
+            let result = self::serve_prepared_async(&config).await;
+            if let Err(error) = &result {
+                // Fatal server errors are logged once at the session boundary after lower layers add context. Errors
+                // that are handled, swallowed, or downgraded must log at their handling site because they never reach
+                // this boundary.
+                crate::session_tracing::record_server_error(&config.session, error);
+            }
+            result
+        })
 }
 
 pub fn unix_timestamp_millis() -> rootcause::Result<u64> {
@@ -124,12 +139,11 @@ impl TryFrom<&ServerConfig> for SessionMetadata {
     }
 }
 
-async fn serve_async(config: &ServerConfig) -> rootcause::Result<()> {
+async fn serve_prepared_async(config: &ServerConfig) -> rootcause::Result<()> {
     if matches!(config.max_accepted_connections, Some(0)) {
         return Ok(());
     }
 
-    prepare_session_dirs(&config.paths)?;
     let listener = ServerListener::bind(&config.paths.socket)?;
     // Own the socket file as soon as bind succeeds so later startup failures do not leave stale sockets.
     let _files_guard = ServerFilesGuard {
@@ -140,6 +154,7 @@ async fn serve_async(config: &ServerConfig) -> rootcause::Result<()> {
     let initial_size = TerminalSize::new(80, 24)?;
     let mut runtime = SessionRuntime::spawn(config, &initial_size)?;
     runtime.persist_metadata(&config.paths)?;
+    crate::session_tracing::record_server_ready(&config.session, &config.paths);
     let delete_sessions = Arc::new(DeleteSessions::default());
     let (handshake_sender, mut handshake_receiver) = tokio::sync::mpsc::channel(CLIENT_HANDSHAKE_CHANNEL_LIMIT);
     let (attached_client_task_sender, mut attached_client_task_receiver) = tokio::sync::mpsc::channel(1);
@@ -219,6 +234,7 @@ async fn serve_async(config: &ServerConfig) -> rootcause::Result<()> {
         }
     };
 
+    crate::session_tracing::record_server_shutdown(&config.session, shutdown_message.as_str());
     // Shutdown cancels only pre-attach handshakes; while the loop is live they still use bounded backpressure.
     handshake_receiver.close();
     crate::attached_client::join_client_tasks(handles).await?;
@@ -1770,7 +1786,10 @@ mod tests {
         };
         let result = tokio::runtime::Runtime::new()
             .context("failed to build muxr tokio runtime")?
-            .block_on(self::serve_async(&config));
+            .block_on(async {
+                prepare_session_dirs(&config.paths)?;
+                self::serve_prepared_async(&config).await
+            });
 
         assert2::assert!(result.is_err());
         assert2::assert!(!paths.socket.exists());
@@ -1830,7 +1849,10 @@ mod tests {
                 };
                 tokio::runtime::Runtime::new()
                     .context("failed to build muxr tokio runtime")?
-                    .block_on(self::serve_async(&config))
+                    .block_on(async {
+                        prepare_session_dirs(&config.paths)?;
+                        self::serve_prepared_async(&config).await
+                    })
             }
         })
     }

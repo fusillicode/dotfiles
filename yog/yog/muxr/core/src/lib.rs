@@ -38,6 +38,8 @@ pub use protocol::encode_server_event;
 pub use server_runner::ServerRunnerArgs;
 pub use session::DEFAULT_SESSION_NAME;
 pub use session::EXTERNAL_LAYOUT_ARG;
+pub use session::SERVER_LOG_TIMESTAMP_FORMAT;
+pub use session::ServerLogTimestamp;
 pub use session::SessionName;
 pub use session::SessionPaths;
 pub use session::validate_socket_path;

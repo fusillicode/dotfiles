@@ -12,12 +12,51 @@ use serde::Serialize;
 
 pub const DEFAULT_SESSION_NAME: &str = "default";
 pub const EXTERNAL_LAYOUT_ARG: &str = "--layout";
+/// Timestamp format used in muxr server log filenames.
+///
+/// The server owns timestamp generation; clients should not pass this through the private runner argv.
+pub const SERVER_LOG_TIMESTAMP_FORMAT: &str = "%Y%m%d%H%M%S";
 const STATE_HOME_PARTS: &[&str] = &[".local", "state", "muxr"];
 
+const LOGS_DIR_NAME: &str = "logs";
 const SOCKET_HOME_PARTS: &[&str] = &["s"];
 const SOCKET_HASH_OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
 const SOCKET_HASH_PRIME: u64 = 0x0000_0100_0000_01b3;
 const SOCKET_PATH_MAX_BYTES: usize = 103;
+const SERVER_LOG_TIMESTAMP_LEN: usize = 14;
+
+/// Validated timestamp component for a muxr server log filename.
+///
+/// This is intentionally a filename-only type, not a protocol/versioning field.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ServerLogTimestamp(String);
+
+impl AsRef<str> for ServerLogTimestamp {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for ServerLogTimestamp {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_ref())
+    }
+}
+
+impl FromStr for ServerLogTimestamp {
+    type Err = rootcause::Report;
+
+    fn from_str(raw: &str) -> Result<Self, Self::Err> {
+        if raw.len() != SERVER_LOG_TIMESTAMP_LEN {
+            return Err(report!("invalid muxr server log timestamp {raw:?}").attach("reason=expected YYYYMMDDHHMMSS"));
+        }
+        let bytes = raw.as_bytes();
+        if !bytes.iter().all(u8::is_ascii_digit) {
+            return Err(report!("invalid muxr server log timestamp {raw:?}").attach("reason=expected YYYYMMDDHHMMSS"));
+        }
+        Ok(Self(raw.to_owned()))
+    }
+}
 
 #[derive(rkyv::Archive, Clone, Debug, Eq, Hash, PartialEq, Serialize, rkyv::Serialize)]
 #[serde(transparent)]
@@ -121,6 +160,37 @@ impl SessionPaths {
         Self::from_state_root_path(state_root, session)
     }
 
+    /// Build the centralized directory containing muxr server logs.
+    ///
+    /// # Errors
+    /// - The session root path has no parent state root.
+    pub fn logs_root(&self) -> rootcause::Result<PathBuf> {
+        Ok(self.state_root()?.join(LOGS_DIR_NAME))
+    }
+
+    /// Build the centralized server log path for one muxr server process start.
+    ///
+    /// # Errors
+    /// - The session root path has no parent state root.
+    pub fn server_log_path(
+        &self,
+        session: &SessionName,
+        timestamp: &ServerLogTimestamp,
+        pid: u32,
+    ) -> rootcause::Result<PathBuf> {
+        Ok(self
+            .logs_root()?
+            .join(self::server_log_file_name(session, timestamp, pid)))
+    }
+
+    /// Return the pid-scoped server log filename pattern used in client startup failure hints.
+    ///
+    /// The timestamp is chosen inside the server, so the client can only know the session name and spawned pid.
+    #[must_use]
+    pub fn server_log_file_pattern(session: &SessionName, pid: u32) -> String {
+        format!("{session}-*-{pid}.log")
+    }
+
     fn from_home_path(home: PathBuf, session: &SessionName) -> rootcause::Result<Self> {
         Self::from_state_root_path(&Self::state_root_from_home_path(home), session)
     }
@@ -147,6 +217,13 @@ impl SessionPaths {
 
     fn state_root_from_home_path(home: PathBuf) -> PathBuf {
         STATE_HOME_PARTS.iter().fold(home, |path, part| path.join(part))
+    }
+
+    fn state_root(&self) -> rootcause::Result<&Path> {
+        self.root
+            .parent()
+            .and_then(Path::parent)
+            .ok_or_else(|| report!("muxr session root has no state parent"))
     }
 }
 
@@ -178,6 +255,10 @@ fn socket_hash(session: &SessionName) -> u64 {
         hash = hash.wrapping_mul(SOCKET_HASH_PRIME);
     }
     hash
+}
+
+fn server_log_file_name(session: &SessionName, timestamp: &ServerLogTimestamp, pid: u32) -> String {
+    format!("{session}-{timestamp}-{pid}.log")
 }
 
 fn validate_muxr_name(raw: &str, kind: &str) -> rootcause::Result<()> {
@@ -264,6 +345,26 @@ mod tests {
         pretty_assertions::assert_eq!(SessionName::default().as_ref(), DEFAULT_SESSION_NAME);
     }
 
+    #[rstest]
+    #[case::midnight("20260611000000")]
+    #[case::with_time("20260611143012")]
+    fn test_server_log_timestamp_from_str_when_timestamp_is_valid_returns_timestamp(
+        #[case] raw: &str,
+    ) -> rootcause::Result<()> {
+        pretty_assertions::assert_eq!(raw.parse::<ServerLogTimestamp>()?.as_ref(), raw);
+        Ok(())
+    }
+
+    #[rstest]
+    #[case::empty("")]
+    #[case::epoch_millis("1781181012000")]
+    #[case::old_separator("20260611-143012")]
+    #[case::slash("20260611/143012")]
+    #[case::letters("20260611abcdef")]
+    fn test_server_log_timestamp_from_str_when_timestamp_is_invalid_returns_error(#[case] raw: &str) {
+        assert2::assert!(raw.parse::<ServerLogTimestamp>().is_err());
+    }
+
     #[test]
     fn test_session_paths_from_home_builds_expected_paths() -> rootcause::Result<()> {
         let home = Path::new("/foo/bar");
@@ -284,6 +385,64 @@ mod tests {
             },
         );
         assert2::assert!(paths.socket.as_os_str().as_encoded_bytes().len() <= SOCKET_PATH_MAX_BYTES);
+        Ok(())
+    }
+
+    #[test]
+    fn test_session_paths_logs_root_returns_state_logs_path() -> rootcause::Result<()> {
+        let session = "work".parse()?;
+        let paths = SessionPaths::from_home_path(Path::new("/foo/bar").to_path_buf(), &session)?;
+
+        pretty_assertions::assert_eq!(
+            paths.logs_root()?,
+            Path::new("/foo/bar")
+                .join(".local")
+                .join("state")
+                .join("muxr")
+                .join("logs"),
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_session_paths_server_log_path_returns_centralized_flat_log_path() -> rootcause::Result<()> {
+        let session = "work.review-1".parse()?;
+        let timestamp = "20260611143012".parse()?;
+        let paths = SessionPaths::from_home_path(Path::new("/foo/bar").to_path_buf(), &session)?;
+
+        pretty_assertions::assert_eq!(
+            paths.server_log_path(&session, &timestamp, 12345)?,
+            Path::new("/foo/bar")
+                .join(".local")
+                .join("state")
+                .join("muxr")
+                .join("logs")
+                .join("work.review-1-20260611143012-12345.log"),
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_session_paths_server_log_file_pattern_returns_pid_scoped_pattern() -> rootcause::Result<()> {
+        let session = "work.review-1".parse()?;
+
+        pretty_assertions::assert_eq!(
+            SessionPaths::server_log_file_pattern(&session, 12345),
+            "work.review-1-*-12345.log",
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_session_paths_server_log_path_when_pid_differs_returns_distinct_path() -> rootcause::Result<()> {
+        let session = "work".parse()?;
+        let timestamp = "20260611143012".parse()?;
+        let paths = SessionPaths::from_home_path(Path::new("/foo/bar").to_path_buf(), &session)?;
+
+        assert2::assert!(
+            paths.server_log_path(&session, &timestamp, 12345)?
+                != paths.server_log_path(&session, &timestamp, 12346)?
+        );
         Ok(())
     }
 
