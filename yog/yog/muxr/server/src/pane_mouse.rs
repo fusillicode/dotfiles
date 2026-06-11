@@ -5,8 +5,10 @@ use muxr_core::PaneScrollDirection;
 use rootcause::report;
 
 use crate::terminal::TerminalApplicationMode;
+use crate::terminal::TerminalCursorKeyMode;
 use crate::terminal::TerminalMouseProtocol;
 use crate::terminal::TerminalMouseProtocolEncoding;
+use crate::terminal::TerminalScreenMode;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PaneMouseAction {
@@ -17,7 +19,7 @@ pub enum PaneMouseAction {
         protocol: TerminalMouseProtocol,
     },
     FauxScrollPty {
-        application_cursor: bool,
+        cursor_key_mode: TerminalCursorKeyMode,
         direction: PaneScrollDirection,
     },
     FocusPane,
@@ -55,9 +57,9 @@ pub fn resolve_pane_mouse_action(event: ClientMouseEvent, mode: TerminalApplicat
                 protocol,
             };
         }
-        if mode.alternate_screen {
+        if mode.screen_mode == TerminalScreenMode::Alternate {
             return PaneMouseAction::FauxScrollPty {
-                application_cursor: mode.application_cursor,
+                cursor_key_mode: mode.cursor_key_mode,
                 direction,
             };
         }
@@ -307,7 +309,11 @@ mod tests {
             encoding: TerminalMouseProtocolEncoding::Sgr,
             mode: TerminalMouseProtocolMode::Press,
         };
-        let mode = self::application_mode(false, false, Some(protocol));
+        let mode = self::application_mode(
+            TerminalScreenMode::Normal,
+            TerminalCursorKeyMode::Normal,
+            Some(protocol),
+        );
 
         pretty_assertions::assert_eq!(
             resolve_pane_mouse_action(event, mode),
@@ -328,9 +334,12 @@ mod tests {
         let event = self::mouse_press(button);
 
         pretty_assertions::assert_eq!(
-            resolve_pane_mouse_action(event, self::application_mode(true, true, None)),
+            resolve_pane_mouse_action(
+                event,
+                self::application_mode(TerminalScreenMode::Alternate, TerminalCursorKeyMode::Application, None),
+            ),
             PaneMouseAction::FauxScrollPty {
-                application_cursor: true,
+                cursor_key_mode: TerminalCursorKeyMode::Application,
                 direction,
             },
         );
@@ -346,7 +355,10 @@ mod tests {
         let event = self::mouse_press(button);
 
         pretty_assertions::assert_eq!(
-            resolve_pane_mouse_action(event, self::application_mode(false, false, None)),
+            resolve_pane_mouse_action(
+                event,
+                self::application_mode(TerminalScreenMode::Normal, TerminalCursorKeyMode::Normal, None),
+            ),
             PaneMouseAction::ScrollHistory { direction },
         );
     }
@@ -358,7 +370,11 @@ mod tests {
             encoding: TerminalMouseProtocolEncoding::Sgr,
             mode: TerminalMouseProtocolMode::Press,
         };
-        let mode = self::application_mode(false, false, Some(protocol));
+        let mode = self::application_mode(
+            TerminalScreenMode::Normal,
+            TerminalCursorKeyMode::Normal,
+            Some(protocol),
+        );
 
         pretty_assertions::assert_eq!(
             resolve_pane_mouse_action(event, mode),
@@ -374,7 +390,10 @@ mod tests {
         let event = self::mouse_press(0);
 
         pretty_assertions::assert_eq!(
-            resolve_pane_mouse_action(event, self::application_mode(false, false, None)),
+            resolve_pane_mouse_action(
+                event,
+                self::application_mode(TerminalScreenMode::Normal, TerminalCursorKeyMode::Normal, None),
+            ),
             PaneMouseAction::FocusPane,
         );
     }
@@ -384,7 +403,10 @@ mod tests {
         let event = self::mouse_press(32);
 
         pretty_assertions::assert_eq!(
-            resolve_pane_mouse_action(event, self::application_mode(false, false, None)),
+            resolve_pane_mouse_action(
+                event,
+                self::application_mode(TerminalScreenMode::Normal, TerminalCursorKeyMode::Normal, None),
+            ),
             PaneMouseAction::NoAction,
         );
     }
@@ -396,7 +418,11 @@ mod tests {
             encoding: TerminalMouseProtocolEncoding::Sgr,
             mode: TerminalMouseProtocolMode::ButtonMotion,
         };
-        let mode = self::application_mode(false, false, Some(protocol));
+        let mode = self::application_mode(
+            TerminalScreenMode::Normal,
+            TerminalCursorKeyMode::Normal,
+            Some(protocol),
+        );
 
         pretty_assertions::assert_eq!(
             resolve_pane_mouse_action(event, mode),
@@ -408,13 +434,14 @@ mod tests {
     }
 
     fn application_mode(
-        alternate_screen: bool,
-        application_cursor: bool,
+        screen_mode: TerminalScreenMode,
+        cursor_key_mode: TerminalCursorKeyMode,
         mouse_protocol: Option<TerminalMouseProtocol>,
     ) -> TerminalApplicationMode {
         TerminalApplicationMode {
-            alternate_screen,
-            application_cursor,
+            screen_mode,
+            cursor_key_mode,
+            focus_reporting: crate::terminal::TerminalFocusReporting::Disabled,
             mouse_protocol,
         }
     }

@@ -23,6 +23,7 @@ use crate::terminal_scrollback::TerminalScrollback;
 const SCROLL_LINES_PER_WHEEL_EVENT: usize = 5;
 const BRACKETED_PASTE_END: &[u8] = b"\x1b[201~";
 const BRACKETED_PASTE_START: &[u8] = b"\x1b[200~";
+const FOCUS_REPORTING_MODE: u16 = 1004;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TerminalSnapshot {
@@ -50,8 +51,29 @@ impl TerminalSnapshot {
 
 pub struct TerminalState {
     parser: vt100::Parser<TerminalCallbacks>,
+    reset_detector: TerminalResetDetector,
     screen_dirty_detector: TerminalScreenDirtyDetector,
     scrollback: TerminalScrollback,
+}
+
+#[derive(Default)]
+struct TerminalResetDetector {
+    pending_escape: bool,
+}
+
+impl TerminalResetDetector {
+    const fn observe_byte(&mut self, byte: u8) -> bool {
+        if self.pending_escape {
+            if byte == b'c' {
+                self.pending_escape = false;
+                return true;
+            }
+            self.pending_escape = byte == 0x1b;
+        } else if byte == 0x1b {
+            self.pending_escape = true;
+        }
+        false
+    }
 }
 
 /// Result of feeding PTY bytes into the terminal parser.
@@ -199,9 +221,11 @@ impl TerminalMouseProtocol {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct TerminalApplicationMode {
     /// Alternate screen is active for a full-screen terminal application.
-    pub alternate_screen: bool,
+    pub screen_mode: TerminalScreenMode,
     /// Application cursor mode changes arrow-key escape sequences.
-    pub application_cursor: bool,
+    pub cursor_key_mode: TerminalCursorKeyMode,
+    /// Focus reporting forwards muxr pane/tab focus changes to applications that enabled `CSI ? 1004 h`.
+    pub focus_reporting: TerminalFocusReporting,
     /// Mouse reporting protocol requested by the pane application.
     pub mouse_protocol: Option<TerminalMouseProtocol>,
 }
@@ -213,6 +237,50 @@ impl TerminalApplicationMode {
             None => PaneMouseMode::None,
         }
     }
+}
+
+/// Terminal screen buffer selected by the pane application.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TerminalScreenMode {
+    Alternate,
+    Normal,
+}
+
+impl TerminalScreenMode {
+    #[must_use]
+    const fn from_alternate_screen(alternate_screen: bool) -> Self {
+        if alternate_screen {
+            Self::Alternate
+        } else {
+            Self::Normal
+        }
+    }
+}
+
+/// Cursor-key escape sequence mode selected by the pane application.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TerminalCursorKeyMode {
+    Application,
+    Normal,
+}
+
+impl TerminalCursorKeyMode {
+    #[must_use]
+    const fn from_application_cursor(application_cursor: bool) -> Self {
+        if application_cursor {
+            Self::Application
+        } else {
+            Self::Normal
+        }
+    }
+}
+
+/// Focus reporting mode selected by the pane application.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum TerminalFocusReporting {
+    #[default]
+    Disabled,
+    Enabled,
 }
 
 /// Mouse event encoding requested by the pane application.
@@ -239,8 +307,26 @@ pub enum TerminalMouseProtocolMode {
     PressRelease,
 }
 
+/// Terminal focus event forwarded to applications that requested focus reporting.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TerminalFocusEvent {
+    Gained,
+    Lost,
+}
+
+impl TerminalFocusEvent {
+    #[must_use]
+    pub const fn bytes(self) -> &'static [u8] {
+        match self {
+            Self::Gained => b"\x1b[I",
+            Self::Lost => b"\x1b[O",
+        }
+    }
+}
+
 #[derive(Default)]
 struct TerminalCallbacks {
+    focus_reporting: TerminalFocusReporting,
     replies: Vec<Vec<u8>>,
     title: Option<String>,
     title_changes: Vec<Option<String>>,
@@ -259,6 +345,20 @@ impl TerminalCallbacks {
         self.title = None;
         self.title_changes.clear();
     }
+
+    const fn clear_focus_reporting(&mut self) {
+        self.focus_reporting = TerminalFocusReporting::Disabled;
+    }
+
+    fn update_focus_reporting(&mut self, params: &[&[u16]], enabled: bool) {
+        if params.iter().any(|param| *param == [FOCUS_REPORTING_MODE]) {
+            self.focus_reporting = if enabled {
+                TerminalFocusReporting::Enabled
+            } else {
+                TerminalFocusReporting::Disabled
+            };
+        }
+    }
 }
 
 impl vt100::Callbacks for TerminalCallbacks {
@@ -270,6 +370,12 @@ impl vt100::Callbacks for TerminalCallbacks {
         params: &[&[u16]],
         cmd: char,
     ) {
+        match (first_intermediate, second_intermediate, cmd) {
+            (Some(b'?'), None, 'h') => self.update_focus_reporting(params, true),
+            (Some(b'?'), None, 'l') => self.update_focus_reporting(params, false),
+            _ => {}
+        }
+
         if cmd != 'n' || first_intermediate.is_some() || second_intermediate.is_some() {
             return;
         }
@@ -304,6 +410,7 @@ impl TerminalState {
     pub fn with_scrollback(size: &TerminalSize, scrollback: ScrollbackConfig) -> Self {
         Self {
             parser: vt100::Parser::new_with_callbacks(size.rows(), size.cols(), 0, TerminalCallbacks::default()),
+            reset_detector: TerminalResetDetector::default(),
             screen_dirty_detector: TerminalScreenDirtyDetector::default(),
             scrollback: TerminalScrollback::new(size, scrollback.rows),
         }
@@ -346,6 +453,11 @@ impl TerminalState {
         self.parser.callbacks_mut().clear_title_metadata();
     }
 
+    /// Clear focus-reporting opt-in that must come only from the live PTY process, not replayed history.
+    pub fn clear_replayed_focus_reporting(&mut self) {
+        self.parser.callbacks_mut().clear_focus_reporting();
+    }
+
     pub fn scroll(&mut self, direction: PaneScrollDirection) -> bool {
         self.scroll_lines(direction, SCROLL_LINES_PER_WHEEL_EVENT)
     }
@@ -379,8 +491,9 @@ impl TerminalState {
     pub fn application_mode(&self) -> TerminalApplicationMode {
         let screen = self.parser.screen();
         TerminalApplicationMode {
-            alternate_screen: screen.alternate_screen(),
-            application_cursor: screen.application_cursor(),
+            screen_mode: TerminalScreenMode::from_alternate_screen(screen.alternate_screen()),
+            cursor_key_mode: TerminalCursorKeyMode::from_application_cursor(screen.application_cursor()),
+            focus_reporting: self.parser.callbacks().focus_reporting,
             mouse_protocol: self.mouse_protocol(),
         }
     }
@@ -480,70 +593,79 @@ impl TerminalState {
                     self.capture_top_rows(count);
                 }
             }
-            let Some(action) = self.scrollback.observe_byte(*byte) else {
-                continue;
-            };
-            match action {
-                TerminalPreParserAction::Printable { width } => {
-                    let (cursor_row, cursor_col) = self.parser.screen().cursor_position();
-                    if !self.scrollback.autowrap_capture_possible_after_prints(
-                        cursor_row,
-                        cursor_col,
-                        pending_print_width,
-                        width,
-                    ) {
-                        pending_print_width = pending_print_width.saturating_add(usize::from(width));
-                        continue;
+            let reset_here = self.reset_detector.observe_byte(*byte);
+            if let Some(action) = self.scrollback.observe_byte(*byte) {
+                match action {
+                    TerminalPreParserAction::Printable { width } => {
+                        let (cursor_row, cursor_col) = self.parser.screen().cursor_position();
+                        if self.scrollback.autowrap_capture_possible_after_prints(
+                            cursor_row,
+                            cursor_col,
+                            pending_print_width,
+                            width,
+                        ) {
+                            if let Some(pending) = bytes.get(flush_start..index) {
+                                self.parser.process(pending);
+                            }
+                            let (cursor_row, cursor_col) = self.parser.screen().cursor_position();
+                            if let Some(count) = self
+                                .scrollback
+                                .captured_rows_for_autowrap_at(cursor_row, cursor_col, width)
+                            {
+                                self.capture_top_rows(count);
+                            }
+                            pending_print_width = usize::from(width);
+                            flush_start = index;
+                        } else {
+                            pending_print_width = pending_print_width.saturating_add(usize::from(width));
+                        }
                     }
-
-                    if let Some(pending) = bytes.get(flush_start..index) {
-                        self.parser.process(pending);
+                    TerminalPreParserAction::CaptureDeletedTopRows { count } => {
+                        if let Some(pending) = bytes.get(flush_start..index) {
+                            self.parser.process(pending);
+                        }
+                        pending_print_width = 0;
+                        // `CSI M` only transfers rows to muxr history when deletion starts at the top
+                        // row of a normal-screen top-starting region; vt100 does not put deleted
+                        // lines into scrollback even when the region is full-height.
+                        let (cursor_row, _) = self.parser.screen().cursor_position();
+                        if cursor_row == 0 {
+                            self.capture_top_rows(count);
+                            flush_start = index;
+                        } else if let Some(pending) = bytes.get(flush_start..index.saturating_add(1)) {
+                            self.parser.process(pending);
+                            flush_start = index.saturating_add(1);
+                        }
                     }
-                    let (cursor_row, cursor_col) = self.parser.screen().cursor_position();
-                    if let Some(count) = self
-                        .scrollback
-                        .captured_rows_for_autowrap_at(cursor_row, cursor_col, width)
-                    {
-                        self.capture_top_rows(count);
-                    }
-                    pending_print_width = usize::from(width);
-                    flush_start = index;
-                }
-                TerminalPreParserAction::CaptureDeletedTopRows { count } => {
-                    if let Some(pending) = bytes.get(flush_start..index) {
-                        self.parser.process(pending);
-                    }
-                    pending_print_width = 0;
-                    // `CSI M` only transfers rows to muxr history when deletion starts at the top
-                    // row of a normal-screen top-starting region; vt100 does not put deleted
-                    // lines into scrollback even when the region is full-height.
-                    let (cursor_row, _) = self.parser.screen().cursor_position();
-                    if cursor_row == 0 {
+                    // Codex scrolls its transcript with a top-starting partial scroll region. vt100 moves those rows
+                    // out of the visible region without adding them to scrollback, so muxr captures
+                    // them before feeding the final `S` byte that makes vt100 perform the scroll.
+                    TerminalPreParserAction::CaptureTopRows { count } => {
+                        if let Some(pending) = bytes.get(flush_start..index) {
+                            self.parser.process(pending);
+                        }
+                        pending_print_width = 0;
                         self.capture_top_rows(count);
                         flush_start = index;
-                    } else if let Some(pending) = bytes.get(flush_start..index.saturating_add(1)) {
-                        self.parser.process(pending);
+                    }
+                    TerminalPreParserAction::SyncParser => {
+                        if let Some(pending) = bytes.get(flush_start..index.saturating_add(1)) {
+                            self.parser.process(pending);
+                        }
+                        pending_print_width = 0;
                         flush_start = index.saturating_add(1);
                     }
                 }
-                // Codex scrolls its transcript with a top-starting partial scroll region. vt100 moves those rows out of
-                // the visible region without adding them to scrollback, so muxr captures them before feeding the final
-                // `S` byte that makes vt100 perform the scroll.
-                TerminalPreParserAction::CaptureTopRows { count } => {
-                    if let Some(pending) = bytes.get(flush_start..index) {
-                        self.parser.process(pending);
-                    }
-                    pending_print_width = 0;
-                    self.capture_top_rows(count);
-                    flush_start = index;
+            }
+            if reset_here {
+                if let Some(pending) = bytes.get(flush_start..index.saturating_add(1)) {
+                    self.parser.process(pending);
                 }
-                TerminalPreParserAction::SyncParser => {
-                    if let Some(pending) = bytes.get(flush_start..index.saturating_add(1)) {
-                        self.parser.process(pending);
-                    }
-                    pending_print_width = 0;
-                    flush_start = index.saturating_add(1);
-                }
+                // `vt100` resets its screen for RIS (`ESC c`) without invoking callbacks, so muxr-owned
+                // focus-reporting state tracked in callbacks must reset at the same byte boundary.
+                self.parser.callbacks_mut().clear_focus_reporting();
+                pending_print_width = 0;
+                flush_start = index.saturating_add(1);
             }
         }
         if let Some(pending) = bytes.get(flush_start..) {
@@ -1377,8 +1499,9 @@ mod tests {
         pretty_assertions::assert_eq!(
             terminal.application_mode(),
             TerminalApplicationMode {
-                alternate_screen: expected,
-                application_cursor: false,
+                screen_mode: TerminalScreenMode::from_alternate_screen(expected),
+                cursor_key_mode: TerminalCursorKeyMode::Normal,
+                focus_reporting: TerminalFocusReporting::Disabled,
                 mouse_protocol: None,
             },
         );
@@ -1399,10 +1522,52 @@ mod tests {
         pretty_assertions::assert_eq!(
             terminal.application_mode(),
             TerminalApplicationMode {
-                alternate_screen: false,
-                application_cursor: expected,
+                screen_mode: TerminalScreenMode::Normal,
+                cursor_key_mode: TerminalCursorKeyMode::from_application_cursor(expected),
+                focus_reporting: TerminalFocusReporting::Disabled,
                 mouse_protocol: None,
             },
+        );
+        Ok(())
+    }
+
+    #[rstest]
+    #[case::enabled(b"\x1b[?1004h", TerminalFocusReporting::Enabled)]
+    #[case::disabled(b"\x1b[?1004h\x1b[?1004l", TerminalFocusReporting::Disabled)]
+    #[case::disabled_by_terminal_reset(b"\x1b[?1004h\x1bc", TerminalFocusReporting::Disabled)]
+    #[case::enabled_after_terminal_reset(b"\x1b[?1004h\x1bc\x1b[?1004h", TerminalFocusReporting::Enabled)]
+    #[case::enabled_with_other_private_modes(b"\x1b[?1;1004h", TerminalFocusReporting::Enabled)]
+    fn test_terminal_state_application_mode_when_focus_reporting_changes_returns_state(
+        #[case] bytes: &[u8],
+        #[case] expected: TerminalFocusReporting,
+    ) -> rootcause::Result<()> {
+        let mut terminal = self::terminal_state(&terminal_size()?);
+
+        let _ = terminal.process(bytes);
+
+        pretty_assertions::assert_eq!(
+            terminal.application_mode(),
+            TerminalApplicationMode {
+                screen_mode: TerminalScreenMode::Normal,
+                cursor_key_mode: TerminalCursorKeyMode::from_application_cursor(bytes == b"\x1b[?1;1004h"),
+                focus_reporting: expected,
+                mouse_protocol: None,
+            },
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_terminal_state_application_mode_when_terminal_reset_sequence_is_split_clears_focus_reporting()
+    -> rootcause::Result<()> {
+        let mut terminal = self::terminal_state(&terminal_size()?);
+
+        let _ = terminal.process(b"\x1b[?1004h\x1b");
+        let _ = terminal.process(b"c");
+
+        pretty_assertions::assert_eq!(
+            terminal.application_mode().focus_reporting,
+            TerminalFocusReporting::Disabled,
         );
         Ok(())
     }
@@ -1416,8 +1581,9 @@ mod tests {
         pretty_assertions::assert_eq!(
             terminal.application_mode(),
             TerminalApplicationMode {
-                alternate_screen: false,
-                application_cursor: false,
+                screen_mode: TerminalScreenMode::Normal,
+                cursor_key_mode: TerminalCursorKeyMode::Normal,
+                focus_reporting: TerminalFocusReporting::Disabled,
                 mouse_protocol: Some(TerminalMouseProtocol {
                     mode: TerminalMouseProtocolMode::ButtonMotion,
                     encoding: TerminalMouseProtocolEncoding::Sgr,

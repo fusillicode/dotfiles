@@ -60,6 +60,7 @@ use crate::session_runtime::SessionRuntimeState;
 use crate::session_runtime::SessionRuntimeTimerMessage;
 use crate::sessions_delete::DeleteSessions;
 use crate::state::SessionLayout;
+use crate::terminal::TerminalFocusEvent;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ReapResult {
@@ -1001,17 +1002,27 @@ async fn handle_reaped_panes(
     state: &mut AttachedSessionState<'_>,
     event_writer: &mut ServerEventWriter,
 ) -> rootcause::Result<bool> {
-    if self::restore_scrollback_editor_before_reap_if_needed(state)?
-        && !self::send_layout_and_baseline(event_writer, state).await?
-    {
-        return Ok(true);
-    }
+    let previous_pane_before_restore = state.layout.active_pane_id()?;
+    let restored_editor = self::restore_scrollback_editor_before_reap_if_needed(state)?;
+    let previous_pane_before_reap = state.layout.active_pane_id()?;
     match self::reap_exited_panes(state.config, state.layout, state.runtimes)? {
         ReapResult::Final => Ok(true),
-        ReapResult::NoExitedPanes => Ok(false),
+        ReapResult::NoExitedPanes => {
+            if !restored_editor {
+                return Ok(false);
+            }
+            self::write_active_pane_focus_events(previous_pane_before_restore, state)?;
+            Ok(!self::send_layout_and_baseline(event_writer, state).await?)
+        }
         ReapResult::Removed => {
             let live_panes = state.runtimes.pane_ids();
             state.sink_guards.retain(|sink| live_panes.contains(&sink.pane_id));
+            let previous_pane = if restored_editor {
+                previous_pane_before_restore
+            } else {
+                previous_pane_before_reap
+            };
+            self::write_active_pane_focus_events(previous_pane, state)?;
             Ok(!self::resize_panes_and_render(event_writer, state).await?)
         }
     }
@@ -1026,6 +1037,7 @@ fn restore_scrollback_editor_before_reap_if_needed(state: &mut AttachedSessionSt
     }
     // Reap only against the real pane tree. The editor tree is attached-client-local; restoring first avoids
     // persisting a temporary `nvim` pane or reaping a hidden original pane against the wrong layout.
+    self::write_scrollback_editor_focus_lost_if_live(state.scrollback_editor.as_ref(), state.runtimes)?;
     self::restore_scrollback_editor_without_render(state)?;
     Ok(true)
 }
@@ -1043,6 +1055,26 @@ fn restore_scrollback_editor_without_render(state: &mut AttachedSessionState<'_>
         editor,
     )?;
     state.sink_guards.retain(|sink| sink.pane_id != editor_pane_id);
+    Ok(())
+}
+
+fn write_scrollback_editor_focus_lost_if_live(
+    editor: Option<&ScrollbackEditorState>,
+    runtimes: &PaneRuntimes,
+) -> rootcause::Result<()> {
+    let Some(editor) = editor else {
+        return Ok(());
+    };
+    let editor_pane_id = editor.editor_pane_id();
+    if !runtimes.pane_ids().contains(&editor_pane_id) {
+        return Ok(());
+    }
+    let handle = runtimes.handle(editor_pane_id)?;
+    if !handle.has_exited()? {
+        // Restore removes the temporary editor runtime, so the editor must receive FocusLost while its PTY is still
+        // live; the restored original pane receives FocusGained after restore.
+        handle.write_focus_event(TerminalFocusEvent::Lost)?;
+    }
     Ok(())
 }
 
@@ -1192,6 +1224,7 @@ async fn handle_open_scrollback_editor_request(
     if state.scrollback_editor.is_some() {
         return Ok(true);
     }
+    let previous_pane = state.layout.active_pane_id()?;
     state.input_mode = ServerInputMode::Normal;
     let opened = crate::scrollback_editor::open(
         state.config,
@@ -1217,6 +1250,7 @@ async fn handle_open_scrollback_editor_request(
     };
     state.sink_guards.push(sink);
     state.scrollback_editor = Some(opened.state);
+    self::write_active_pane_focus_events(previous_pane, state)?;
     self::resize_panes_and_render(event_writer, state).await
 }
 
@@ -1259,6 +1293,7 @@ async fn handle_focus_pane_at_client_request(
     if state.pane_fullscreen.visible_pane_id(state.layout)?.is_some() {
         return Ok(true);
     }
+    let previous_pane = state.layout.active_pane_id()?;
     if !crate::pane_focus::handle_focus_pane_at_request_with_tracked_process_ack(
         position,
         state.config,
@@ -1270,6 +1305,7 @@ async fn handle_focus_pane_at_client_request(
     )? {
         return Ok(true);
     }
+    self::write_active_pane_focus_events(previous_pane, state)?;
     self::send_layout_and_baseline(event_writer, state).await
 }
 
@@ -1278,6 +1314,7 @@ async fn handle_focus_tab_client_request(
     event_writer: &mut ServerEventWriter,
     state: &mut AttachedSessionState<'_>,
 ) -> rootcause::Result<bool> {
+    let previous_pane = state.layout.active_pane_id()?;
     if !crate::tab_focus::handle_focus_tab_request_with_tracked_process_ack(
         tab_id,
         state.config,
@@ -1288,6 +1325,7 @@ async fn handle_focus_tab_client_request(
     )? {
         return Ok(true);
     }
+    self::write_active_pane_focus_events(previous_pane, state)?;
     self::resize_panes_and_render(event_writer, state).await
 }
 
@@ -1337,7 +1375,10 @@ async fn handle_cmd_request(
             return Ok(true);
         }
         ScrollbackEditorCmdAction::Restore => {
+            let previous_pane = state.layout.active_pane_id()?;
+            self::write_scrollback_editor_focus_lost_if_live(state.scrollback_editor.as_ref(), state.runtimes)?;
             self::restore_scrollback_editor_without_render(state)?;
+            self::write_active_pane_focus_events(previous_pane, state)?;
             return self::resize_panes_and_render(event_writer, state).await;
         }
         ScrollbackEditorCmdAction::Run(cmd) => cmd,
@@ -1345,6 +1386,7 @@ async fn handle_cmd_request(
     match cmd {
         ClientCmd::Tab(cmd) => self::handle_tab_cmd_request(cmd, event_writer, state).await,
         ClientCmd::SplitPane(split_axis) => {
+            let previous_pane = state.layout.active_pane_id()?;
             state.pane_fullscreen.clear_active_tab(state.layout);
             let pane_id = crate::pane_split::handle_split_pane_cmd(
                 split_axis,
@@ -1356,9 +1398,11 @@ async fn handle_cmd_request(
             state
                 .sink_guards
                 .push(self::attach_pane_sink(state.runtimes, state.pty_event_sender, pane_id)?);
+            self::write_active_pane_focus_events(previous_pane, state)?;
             self::resize_panes_and_render(event_writer, state).await
         }
         ClientCmd::ClosePane => {
+            let previous_pane = state.layout.active_pane_id()?;
             state.pane_fullscreen.clear_active_tab(state.layout);
             let outcome = crate::pane_close::handle_close_pane_cmd(state.config, state.layout, state.runtimes)?;
             match &outcome {
@@ -1368,7 +1412,10 @@ async fn handle_cmd_request(
             }
             match outcome {
                 ClosePaneOutcome::Final { .. } => self::send_detached_event(event_writer, state).await,
-                ClosePaneOutcome::Removed { .. } => self::resize_panes_and_render(event_writer, state).await,
+                ClosePaneOutcome::Removed { .. } => {
+                    self::write_active_pane_focus_events(previous_pane, state)?;
+                    self::resize_panes_and_render(event_writer, state).await
+                }
             }
         }
         ClientCmd::ResizePane(direction) => {
@@ -1386,6 +1433,7 @@ async fn handle_cmd_request(
             .await
         }
         ClientCmd::FocusPane(direction) => {
+            let previous_pane = state.layout.active_pane_id()?;
             if !crate::pane_focus::handle_focus_pane_cmd_with_tracked_process_ack(
                 direction,
                 state.config,
@@ -1397,6 +1445,7 @@ async fn handle_cmd_request(
             )? {
                 return Ok(true);
             }
+            self::write_active_pane_focus_events(previous_pane, state)?;
             if state.pane_fullscreen.clear_active_tab(state.layout) {
                 return self::resize_panes_and_render(event_writer, state).await;
             }
@@ -1419,6 +1468,8 @@ async fn handle_tab_cmd_request(
     event_writer: &mut ServerEventWriter,
     state: &mut AttachedSessionState<'_>,
 ) -> rootcause::Result<bool> {
+    let previous_pane = state.layout.active_pane_id()?;
+    let focus_may_change = matches!(cmd, TabCmd::Create | TabCmd::FocusPrevious | TabCmd::FocusNext);
     match cmd {
         TabCmd::Create => {
             let pane_id = crate::tab_create::handle_create_tab_cmd(
@@ -1456,6 +1507,9 @@ async fn handle_tab_cmd_request(
             crate::tab_move::handle_move_active_tab_next_cmd(state.config, state.layout)?;
         }
     }
+    if focus_may_change {
+        self::write_active_pane_focus_events(previous_pane, state)?;
+    }
     self::resize_panes_and_render(event_writer, state).await
 }
 
@@ -1466,6 +1520,43 @@ fn active_pane_handle_with_id(
     let active_pane = layout.active_pane_id()?;
     let handle = runtimes.handle(active_pane)?;
     Ok((active_pane, handle))
+}
+
+fn write_active_pane_focus_events(previous_pane: PaneId, state: &AttachedSessionState<'_>) -> rootcause::Result<()> {
+    let next_pane = state.layout.active_pane_id()?;
+    self::write_pane_focus_transition(previous_pane, next_pane, state.runtimes)
+}
+
+fn write_pane_focus_transition(
+    previous_pane: PaneId,
+    next_pane: PaneId,
+    runtimes: &PaneRuntimes,
+) -> rootcause::Result<()> {
+    // Focus reporting is a pane-application opt-in (`CSI ? 1004 h`). Close/reap may remove the old pane runtime
+    // before the new pane receives focus, so skip missing runtimes while still notifying the surviving side.
+    for (pane_id, event) in self::pane_focus_events_for_live_panes(previous_pane, next_pane, &runtimes.pane_ids()) {
+        runtimes.handle(pane_id)?.write_focus_event(event)?;
+    }
+    Ok(())
+}
+
+fn pane_focus_events_for_live_panes(
+    previous_pane: PaneId,
+    next_pane: PaneId,
+    live_panes: &[PaneId],
+) -> Vec<(PaneId, TerminalFocusEvent)> {
+    if previous_pane == next_pane {
+        return Vec::new();
+    }
+
+    let mut events = Vec::with_capacity(2);
+    if live_panes.contains(&previous_pane) {
+        events.push((previous_pane, TerminalFocusEvent::Lost));
+    }
+    if live_panes.contains(&next_pane) {
+        events.push((next_pane, TerminalFocusEvent::Gained));
+    }
+    events
 }
 
 fn write_active_pane_user_input(
@@ -1498,6 +1589,13 @@ async fn handle_mouse_event_request(
     let action = crate::pane_mouse::resolve_pane_mouse_action(event, handle.application_mode()?);
     match action {
         crate::pane_mouse::PaneMouseAction::ForwardToPty { focus, protocol } => {
+            // Focus-reporting apps must observe the pane transition before the click bytes; only the layout render can
+            // wait until after forwarding the mouse packet.
+            let focused_pane = if focus.focuses_pane() {
+                self::focus_pane_at_mouse_event(event, state)?
+            } else {
+                false
+            };
             if let Some(scrolled_to_bottom) = handle.write_mouse_event(event, &region, protocol)? {
                 *render_dirty |= scrolled_to_bottom;
                 state.pane_tracked_processes.record_user_interaction(
@@ -1506,16 +1604,16 @@ async fn handle_mouse_event_request(
                     Instant::now(),
                 );
             }
-            if !focus.focuses_pane() {
-                return Ok(true);
+            if focused_pane {
+                return self::send_layout_and_baseline(event_writer, state).await;
             }
-            self::handle_mouse_focus(event, event_writer, state).await
+            Ok(true)
         }
         crate::pane_mouse::PaneMouseAction::FauxScrollPty {
-            application_cursor,
+            cursor_key_mode,
             direction,
         } => {
-            *render_dirty |= handle.write_faux_scroll_input(direction, application_cursor)?;
+            *render_dirty |= handle.write_faux_scroll_input(direction, cursor_key_mode)?;
             state.pane_tracked_processes.record_user_interaction(
                 *region.id(),
                 TrackedProcessUserInteraction::MayEcho,
@@ -1544,12 +1642,20 @@ async fn handle_mouse_focus(
     event_writer: &mut ServerEventWriter,
     state: &mut AttachedSessionState<'_>,
 ) -> rootcause::Result<bool> {
-    if state.scrollback_editor.is_some() {
+    if !self::focus_pane_at_mouse_event(event, state)? {
         return Ok(true);
+    }
+    self::send_layout_and_baseline(event_writer, state).await
+}
+
+fn focus_pane_at_mouse_event(event: ClientMouseEvent, state: &mut AttachedSessionState<'_>) -> rootcause::Result<bool> {
+    if state.scrollback_editor.is_some() {
+        return Ok(false);
     }
     if state.pane_fullscreen.visible_pane_id(state.layout)?.is_some() {
-        return Ok(true);
+        return Ok(false);
     }
+    let previous_pane = state.layout.active_pane_id()?;
     if !crate::pane_focus::handle_focus_pane_at_request_with_tracked_process_ack(
         event.position,
         state.config,
@@ -1559,9 +1665,10 @@ async fn handle_mouse_focus(
         &state.terminal_size,
         Instant::now(),
     )? {
-        return Ok(true);
+        return Ok(false);
     }
-    self::send_layout_and_baseline(event_writer, state).await
+    self::write_active_pane_focus_events(previous_pane, state)?;
+    Ok(true)
 }
 
 /// Send one event on an attached-client writer with the server's bounded write timeout.
@@ -1582,6 +1689,8 @@ async fn send_writer_event_with_timeout(
 #[cfg(test)]
 mod tests {
     use std::path::Path;
+    use std::sync::Arc;
+    use std::thread;
 
     use muxr_config::MuxrConfig;
     use muxr_core::SessionName;
@@ -1594,6 +1703,8 @@ mod tests {
     use crate::pane_focus::PaneFocusDirection;
     use crate::pane_runtime::test_helpers as pane_runtime_test_helpers;
     use crate::pane_split::PaneSplitAxis;
+    use crate::server::test_helpers as server_test_helpers;
+    use crate::session_start_seed::SessionStartSeed;
     use crate::state::SessionMetadata;
 
     #[test]
@@ -1658,6 +1769,125 @@ mod tests {
         #[case] expected: ScrollbackEditorCmdAction,
     ) {
         pretty_assertions::assert_eq!(self::scrollback_editor_cmd_action(cmd, editor_active), expected);
+    }
+
+    #[test]
+    fn test_write_scrollback_editor_focus_lost_if_live_when_editor_is_reporting_writes_lost() -> rootcause::Result<()> {
+        let tempdir = tempfile::tempdir()?;
+        let mut config = server_test_helpers::server_config(tempdir.path(), "work")?;
+        let mut user_config = MuxrConfig::default();
+        user_config.scrollback.editor = muxr_config::ScrollbackEditorConfig {
+            program: "/bin/sh",
+            args: &[
+                "-c",
+                "printf '\\033[?1004hready\\n'; \
+                 stty raw -echo; \
+                 dd bs=3 count=1 2>/dev/null | od -An -tx1 -v; \
+                 sleep 30",
+                "muxr-test-scrollback-editor",
+            ],
+        };
+        config.user_config = Arc::new(user_config);
+        config.shell_cmd = server_test_helpers::shell_cmd_with_args("/bin/sh", &["-c", "sleep 30"]);
+        let terminal_size = TerminalSize::new(80, 24)?;
+        let mut layout = SessionLayout::initial(&config.session, self::metadata("sh", 1))?;
+        let mut runtimes = PaneRuntimes::spawn_for_start_seed(
+            &config,
+            &SessionStartSeed {
+                layout: layout.clone(),
+                startup_cmds: Vec::new(),
+            },
+            &terminal_size,
+        )?;
+        let mut pane_fullscreen = PaneFullscreen::default();
+        let opened = crate::scrollback_editor::open(
+            &config,
+            &mut layout,
+            &mut runtimes,
+            &mut pane_fullscreen,
+            &terminal_size,
+            config.user_config.scrollback.dump_style,
+        )?;
+        let editor_pane_id = opened.state.editor_pane_id();
+        self::wait_for_runtime_snapshot_contains(&runtimes, editor_pane_id, "ready")?;
+
+        self::write_scrollback_editor_focus_lost_if_live(Some(&opened.state), &runtimes)?;
+
+        self::wait_for_runtime_snapshot_contains(&runtimes, editor_pane_id, "1b 5b 4f")?;
+        Ok(())
+    }
+
+    #[test]
+    fn test_pane_focus_events_for_live_panes_when_runtime_sets_vary_returns_focus_transition() -> rootcause::Result<()>
+    {
+        let previous_pane = PaneId::new(1)?;
+        let next_pane = PaneId::new(2)?;
+
+        for (previous_pane, next_pane, live_panes, expected) in [
+            (
+                previous_pane,
+                next_pane,
+                vec![previous_pane, next_pane],
+                vec![
+                    (previous_pane, TerminalFocusEvent::Lost),
+                    (next_pane, TerminalFocusEvent::Gained),
+                ],
+            ),
+            (previous_pane, previous_pane, vec![previous_pane], Vec::new()),
+            (
+                previous_pane,
+                next_pane,
+                vec![next_pane],
+                vec![(next_pane, TerminalFocusEvent::Gained)],
+            ),
+            (
+                previous_pane,
+                next_pane,
+                vec![previous_pane],
+                vec![(previous_pane, TerminalFocusEvent::Lost)],
+            ),
+            (previous_pane, next_pane, Vec::new(), Vec::new()),
+        ] {
+            pretty_assertions::assert_eq!(
+                self::pane_focus_events_for_live_panes(previous_pane, next_pane, &live_panes),
+                expected,
+            );
+        }
+        Ok(())
+    }
+
+    fn wait_for_runtime_snapshot_contains(
+        runtimes: &PaneRuntimes,
+        pane_id: PaneId,
+        needle: &str,
+    ) -> rootcause::Result<()> {
+        let started_at = Instant::now();
+        loop {
+            let snapshot = runtimes.handle(pane_id)?.render_snapshot()?;
+            let rendered = snapshot
+                .rows()
+                .iter()
+                .flat_map(|row| row.cells().iter().map(muxr_core::RenderCell::text))
+                .collect::<String>();
+            if self::snapshot_contains(&rendered, needle) {
+                return Ok(());
+            }
+            if started_at.elapsed() > Duration::from_secs(2) {
+                return Err(report!("timed out waiting for muxr runtime snapshot").attach(rendered));
+            }
+            thread::sleep(Duration::from_millis(10));
+        }
+    }
+
+    fn snapshot_contains(rendered: &str, needle: &str) -> bool {
+        if rendered.contains(needle) {
+            return true;
+        }
+        let needle_tokens = needle.split_whitespace().collect::<Vec<_>>();
+        let rendered_tokens = rendered.split_whitespace().collect::<Vec<_>>();
+        rendered_tokens
+            .windows(needle_tokens.len())
+            .any(|window| window == needle_tokens.as_slice())
     }
 
     fn session_paths(base: &Path, raw: &str) -> rootcause::Result<(SessionName, SessionPaths)> {

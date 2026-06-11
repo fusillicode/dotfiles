@@ -860,6 +860,73 @@ mod tests {
             self::assert_layout_metadata_panes(&paths, &[1], 1)?;
             assert2::assert!(!paths.panes.join("2").exists());
 
+            drop(client);
+            self::join_server_with_timeout(handle)
+        })
+    }
+
+    #[test]
+    fn test_serve_when_scrollback_editor_restores_sends_focus_events_to_reporting_pane() -> rootcause::Result<()> {
+        self::runtime()?.block_on(async {
+            let tempdir = tempfile::tempdir()?;
+            let (session, paths) = self::session_paths(tempdir.path(), "work")?;
+            let mut user_config = MuxrConfig::default();
+            user_config.scrollback.editor = muxr_config::ScrollbackEditorConfig {
+                program: "/bin/sh",
+                args: &["-c", "cat \"$1\"; sleep 30", "muxr-test-scrollback-editor"],
+            };
+            let handle = self::spawn_test_server_with_user_config(
+                &session,
+                &paths,
+                Some(1),
+                self::shell_cmd_with_args(
+                    "/bin/sh",
+                    &[
+                        "-c",
+                        "printf '\\033[?1004hready\\n'; \
+                         stty raw -echo; \
+                         dd bs=3 count=2 2>/dev/null | od -An -tx1 -v; \
+                         sleep 30",
+                    ],
+                ),
+                user_config,
+            );
+
+            self::wait_for_socket(&paths.socket)?;
+            let mut client = self::open_attached_client(&session, &paths).await?;
+            self::read_until_render_contains(&mut client, b"ready").await?;
+
+            client
+                .writer
+                .send_request(&ClientRequest::Key(ClientKey {
+                    code: ClientKeyCode::Char('S'),
+                    modifiers: ClientKeyModifiers::SHIFT_ALT,
+                    raw_bytes: b"\x1bS".to_vec(),
+                }))
+                .await?;
+            let editor_layout = self::read_until_layout(&mut client).await?;
+            let editor_tab = editor_layout
+                .tabs()
+                .first()
+                .ok_or_else(|| report!("expected scrollback editor tab"))?;
+            pretty_assertions::assert_eq!(editor_tab.active_pane().to_string(), "pane-2");
+
+            client
+                .writer
+                .send_request(&ClientRequest::Key(ClientKey {
+                    code: ClientKeyCode::Char('W'),
+                    modifiers: ClientKeyModifiers::SHIFT_ALT,
+                    raw_bytes: b"\x1bW".to_vec(),
+                }))
+                .await?;
+            let restored_layout = self::read_until_layout(&mut client).await?;
+            let restored_tab = restored_layout
+                .tabs()
+                .first()
+                .ok_or_else(|| report!("expected restored tab"))?;
+            pretty_assertions::assert_eq!(restored_tab.active_pane().to_string(), "pane-1");
+            self::read_until_render_contains_hex_bytes(&mut client, &["1b", "5b", "4f", "1b", "5b", "49"]).await?;
+
             self::detach_client(client).await?;
             self::join_server(handle)
         })
@@ -1020,6 +1087,59 @@ mod tests {
                 vec!["tab-1", "tab-2"],
             );
             self::assert_layout_metadata_tabs(&paths, &[1, 2], 2)?;
+
+            self::detach_client(client).await?;
+            self::join_server(handle)
+        })
+    }
+
+    #[test]
+    fn test_serve_when_tab_focus_changes_sends_focus_events_to_reporting_pane() -> rootcause::Result<()> {
+        self::runtime()?.block_on(async {
+            let tempdir = tempfile::tempdir()?;
+            let (session, paths) = self::session_paths(tempdir.path(), "work")?;
+            let handle = self::spawn_test_server_with_shell(
+                &session,
+                &paths,
+                Some(1),
+                self::shell_cmd_with_args(
+                    "/bin/sh",
+                    &[
+                        "-c",
+                        "printf '\\033[?1004hready\\n'; stty raw -echo; dd bs=3 count=2 2>/dev/null | od -An -tx1 -v; sleep 30",
+                    ],
+                ),
+            );
+
+            self::wait_for_socket(&paths.socket)?;
+            let mut client = self::open_attached_client(&session, &paths).await?;
+            self::read_until_render_contains(&mut client, b"ready").await?;
+            client
+                .writer
+                .send_request(&ClientRequest::Key(ClientKey {
+                    code: ClientKeyCode::Char('E'),
+                    modifiers: ClientKeyModifiers::SHIFT_ALT,
+                    raw_bytes: b"\x1bE".to_vec(),
+                }))
+                .await?;
+            let created_layout = self::read_until_layout(&mut client).await?;
+            pretty_assertions::assert_eq!(created_layout.active_tab().to_string(), "tab-2");
+
+            client
+                .writer
+                .send_request(&ClientRequest::Key(ClientKey {
+                    code: ClientKeyCode::Char('P'),
+                    modifiers: ClientKeyModifiers::SHIFT_ALT,
+                    raw_bytes: b"\x1bP".to_vec(),
+                }))
+                .await?;
+            let focused_layout = self::read_until_layout(&mut client).await?;
+            pretty_assertions::assert_eq!(focused_layout.active_tab().to_string(), "tab-1");
+            self::read_until_render_contains_hex_bytes(
+                &mut client,
+                &["1b", "5b", "4f", "1b", "5b", "49"],
+            )
+            .await?;
 
             self::detach_client(client).await?;
             self::join_server(handle)

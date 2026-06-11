@@ -4,6 +4,7 @@ use muxr_core::PaneScrollDirection;
 use muxr_core::ServerEvent;
 
 use crate::pane_runtime::PaneRuntimes;
+use crate::terminal::TerminalCursorKeyMode;
 
 const FAUX_SCROLL_LINES_PER_WHEEL_EVENT: usize = 3;
 
@@ -46,8 +47,8 @@ pub fn scroll_pane(
     }
 }
 
-pub fn faux_scroll_input_bytes(direction: PaneScrollDirection, application_cursor: bool) -> Vec<u8> {
-    let sequence = self::faux_scroll_sequence(direction, application_cursor);
+pub fn faux_scroll_input_bytes(direction: PaneScrollDirection, cursor_key_mode: TerminalCursorKeyMode) -> Vec<u8> {
+    let sequence = self::faux_scroll_sequence(direction, cursor_key_mode);
     let mut bytes = Vec::with_capacity(sequence.len().saturating_mul(FAUX_SCROLL_LINES_PER_WHEEL_EVENT));
     for _ in 0..FAUX_SCROLL_LINES_PER_WHEEL_EVENT {
         bytes.extend_from_slice(sequence);
@@ -55,12 +56,12 @@ pub fn faux_scroll_input_bytes(direction: PaneScrollDirection, application_curso
     bytes
 }
 
-const fn faux_scroll_sequence(direction: PaneScrollDirection, application_cursor: bool) -> &'static [u8] {
-    match (direction, application_cursor) {
-        (PaneScrollDirection::Up, false) => b"\x1b[A",
-        (PaneScrollDirection::Down, false) => b"\x1b[B",
-        (PaneScrollDirection::Up, true) => b"\x1bOA",
-        (PaneScrollDirection::Down, true) => b"\x1bOB",
+const fn faux_scroll_sequence(direction: PaneScrollDirection, cursor_key_mode: TerminalCursorKeyMode) -> &'static [u8] {
+    match (direction, cursor_key_mode) {
+        (PaneScrollDirection::Up, TerminalCursorKeyMode::Normal) => b"\x1b[A",
+        (PaneScrollDirection::Down, TerminalCursorKeyMode::Normal) => b"\x1b[B",
+        (PaneScrollDirection::Up, TerminalCursorKeyMode::Application) => b"\x1bOA",
+        (PaneScrollDirection::Down, TerminalCursorKeyMode::Application) => b"\x1bOB",
     }
 }
 
@@ -71,11 +72,11 @@ mod tests {
     #[test]
     fn test_faux_scroll_input_bytes_when_application_cursor_mode_is_disabled_uses_csi_arrows() {
         pretty_assertions::assert_eq!(
-            faux_scroll_input_bytes(PaneScrollDirection::Up, false),
+            faux_scroll_input_bytes(PaneScrollDirection::Up, TerminalCursorKeyMode::Normal),
             b"\x1b[A\x1b[A\x1b[A".to_vec(),
         );
         pretty_assertions::assert_eq!(
-            faux_scroll_input_bytes(PaneScrollDirection::Down, false),
+            faux_scroll_input_bytes(PaneScrollDirection::Down, TerminalCursorKeyMode::Normal),
             b"\x1b[B\x1b[B\x1b[B".to_vec(),
         );
     }
@@ -83,11 +84,11 @@ mod tests {
     #[test]
     fn test_faux_scroll_input_bytes_when_application_cursor_mode_is_enabled_uses_ss3_arrows() {
         pretty_assertions::assert_eq!(
-            faux_scroll_input_bytes(PaneScrollDirection::Up, true),
+            faux_scroll_input_bytes(PaneScrollDirection::Up, TerminalCursorKeyMode::Application),
             b"\x1bOA\x1bOA\x1bOA".to_vec(),
         );
         pretty_assertions::assert_eq!(
-            faux_scroll_input_bytes(PaneScrollDirection::Down, true),
+            faux_scroll_input_bytes(PaneScrollDirection::Down, TerminalCursorKeyMode::Application),
             b"\x1bOB\x1bOB\x1bOB".to_vec(),
         );
     }
