@@ -15,8 +15,17 @@ pub struct ServerFilesGuard {
 
 impl Drop for ServerFilesGuard {
     fn drop(&mut self) {
-        drop(fs::remove_file(&self.paths.socket));
-        drop(fs::remove_file(&self.paths.pid));
+        self::remove_server_file("remove_socket", &self.paths.socket);
+        self::remove_server_file("remove_pid", &self.paths.pid);
+    }
+}
+
+fn remove_server_file(event: &str, path: &Path) {
+    match fs::remove_file(path) {
+        Ok(()) => {}
+        // Cleanup can race with explicit delete or partial startup rollback; only other errors leave stale state.
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => crate::session_tracing::server::file_cleanup_failed(event, path, &error),
     }
 }
 
@@ -91,6 +100,20 @@ mod tests {
         assert2::assert!(paths.root.is_dir());
         assert2::assert!(paths.panes.is_dir());
         assert2::assert!(paths.logs_root()?.is_dir());
+        Ok(())
+    }
+
+    #[test]
+    fn test_remove_server_file_when_path_is_missing_is_silent() -> rootcause::Result<()> {
+        let tempdir = tempfile::tempdir()?;
+        let session = SessionName::default();
+
+        let log = crate::session_tracing::collect_test_log(&session, || {
+            self::remove_server_file("remove_socket", &tempdir.path().join("missing.sock"));
+            Ok(())
+        })?;
+
+        assert2::assert!(!log.contains("kind=\"server_file_cleanup_failed\""));
         Ok(())
     }
 

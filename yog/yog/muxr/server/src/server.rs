@@ -81,16 +81,18 @@ pub fn serve_session(session: &SessionName, external_layout: Option<PathBuf>) ->
             // non-blocking log writes flush for the full session without carrying the appender worker in CLI memory.
             let _session_tracing =
                 crate::session_tracing::SessionTracing::install_global(&config.paths, &config.session)?;
-            crate::session_tracing::record_server_starting(&config.session, &config.paths);
-            let result = self::serve_prepared_async(&config).await;
-            if let Err(error) = &result {
-                // Fatal server errors are logged once at the session boundary after lower layers add context. Errors
-                // that are handled, swallowed, or downgraded must log at their handling site because they never reach
-                // this boundary.
-                crate::session_tracing::record_server_error(&config.session, error);
-            }
-            result
+            self::serve_session_traced(&config).await
         })
+}
+
+#[tracing::instrument(name = "muxr_session", skip_all, fields(session = %config.session))]
+async fn serve_session_traced(config: &ServerConfig) -> rootcause::Result<()> {
+    crate::session_tracing::server::starting(&config.paths);
+    self::serve_prepared_async(config).await.inspect_err(|error| {
+        // Fatal server errors are logged once at the session boundary after lower layers add context. Handled,
+        // swallowed, or downgraded errors must log at their handling site because they never reach this boundary.
+        crate::session_tracing::server::error(error);
+    })
 }
 
 pub fn unix_timestamp_millis() -> rootcause::Result<u64> {
@@ -154,7 +156,7 @@ async fn serve_prepared_async(config: &ServerConfig) -> rootcause::Result<()> {
     let initial_size = TerminalSize::new(80, 24)?;
     let mut runtime = SessionRuntime::spawn(config, &initial_size)?;
     runtime.persist_metadata(&config.paths)?;
-    crate::session_tracing::record_server_ready(&config.session, &config.paths);
+    crate::session_tracing::server::ready(&config.paths);
     let delete_sessions = Arc::new(DeleteSessions::default());
     let (handshake_sender, mut handshake_receiver) = tokio::sync::mpsc::channel(CLIENT_HANDSHAKE_CHANNEL_LIMIT);
     let (attached_client_task_sender, mut attached_client_task_receiver) = tokio::sync::mpsc::channel(1);
@@ -234,7 +236,7 @@ async fn serve_prepared_async(config: &ServerConfig) -> rootcause::Result<()> {
         }
     };
 
-    crate::session_tracing::record_server_shutdown(&config.session, shutdown_message.as_str());
+    crate::session_tracing::server::shutdown(shutdown_message.as_str());
     // Shutdown cancels only pre-attach handshakes; while the loop is live they still use bounded backpressure.
     handshake_receiver.close();
     crate::attached_client::join_client_tasks(handles).await?;
@@ -442,6 +444,26 @@ mod tests {
         pane_regions: PaneRegionsSnapshot,
         reader: ClientEventReader,
         writer: ClientRequestWriter,
+    }
+
+    #[test]
+    fn test_serve_session_traced_when_started_adds_session_span_fields() -> rootcause::Result<()> {
+        let tempdir = tempfile::tempdir()?;
+        let mut config = self::server_config(tempdir.path(), "work")?;
+        config.max_accepted_connections = Some(0);
+
+        let log = crate::session_tracing::collect_test_log(&config.session, || {
+            tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .context("failed to build muxr server test runtime")?
+                .block_on(self::serve_session_traced(&config))?;
+            Ok(())
+        })?;
+
+        assert2::assert!(log.contains("kind=\"server_starting\""));
+        assert2::assert!(log.contains("session=work"));
+        Ok(())
     }
 
     #[test]

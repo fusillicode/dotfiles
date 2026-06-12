@@ -9,6 +9,8 @@ use muxr_transport::ServerConnection;
 use muxr_transport::ServerEventWriter;
 use rootcause::prelude::ResultExt;
 
+use crate::session_tracing::ClientEventSendFailure;
+
 #[derive(Debug, Default)]
 pub struct DeleteSessions {
     requested: AtomicBool,
@@ -30,8 +32,9 @@ pub async fn handle_handshake_delete(
     client_write_timeout: Duration,
 ) -> rootcause::Result<()> {
     delete_sessions.request();
-    let _sent =
-        self::send_connection_event_with_timeout(connection, &ServerEvent::Deleted, client_write_timeout).await?;
+    self::record_delete_ack_send_failure(
+        self::send_connection_event_failure(connection, &ServerEvent::Deleted, client_write_timeout).await,
+    );
     Ok(())
 }
 
@@ -41,7 +44,9 @@ pub async fn handle_attached_delete(
     client_write_timeout: Duration,
 ) -> rootcause::Result<()> {
     delete_sessions.request();
-    let _sent = self::send_writer_event_with_timeout(event_writer, &ServerEvent::Deleted, client_write_timeout).await?;
+    self::record_delete_ack_send_failure(
+        self::send_writer_event_failure(event_writer, &ServerEvent::Deleted, client_write_timeout).await,
+    );
     Ok(())
 }
 
@@ -60,25 +65,33 @@ pub fn remove_session_files(paths: &SessionPaths) -> rootcause::Result<()> {
     Ok(())
 }
 
-async fn send_connection_event_with_timeout(
+async fn send_connection_event_failure(
     connection: &mut ServerConnection,
     event: &ServerEvent,
     client_write_timeout: Duration,
-) -> rootcause::Result<bool> {
+) -> Option<ClientEventSendFailure> {
     match tokio::time::timeout(client_write_timeout, connection.send_event(event)).await {
-        Ok(Ok(())) => Ok(true),
-        Ok(Err(_)) | Err(_) => Ok(false),
+        Ok(Ok(())) => None,
+        Ok(Err(_)) => Some(ClientEventSendFailure::SendFailed),
+        Err(_) => Some(ClientEventSendFailure::Timeout),
     }
 }
 
-async fn send_writer_event_with_timeout(
+async fn send_writer_event_failure(
     writer: &mut ServerEventWriter,
     event: &ServerEvent,
     client_write_timeout: Duration,
-) -> rootcause::Result<bool> {
+) -> Option<ClientEventSendFailure> {
     match tokio::time::timeout(client_write_timeout, writer.send_event(event)).await {
-        Ok(Ok(())) => Ok(true),
-        Ok(Err(_)) | Err(_) => Ok(false),
+        Ok(Ok(())) => None,
+        Ok(Err(_)) => Some(ClientEventSendFailure::SendFailed),
+        Err(_) => Some(ClientEventSendFailure::Timeout),
+    }
+}
+
+fn record_delete_ack_send_failure(reason: Option<ClientEventSendFailure>) {
+    if let Some(reason) = reason {
+        crate::session_tracing::ack::delete_failed(reason);
     }
 }
 
@@ -116,6 +129,36 @@ mod tests {
         assert2::assert!(!paths.root.exists());
         assert2::assert!(!paths.socket.exists());
         assert2::assert!(log_path.exists());
+        Ok(())
+    }
+
+    #[test]
+    fn test_record_delete_ack_send_failure_when_reason_exists_warns() -> rootcause::Result<()> {
+        let session = SessionName::default();
+
+        let log = crate::session_tracing::collect_test_log(&session, || {
+            let span = tracing::info_span!("muxr_session", session = %session);
+            let _guard = span.enter();
+            self::record_delete_ack_send_failure(Some(ClientEventSendFailure::Timeout));
+            Ok(())
+        })?;
+        assert2::assert!(log.contains("kind=\"delete_ack_send_failed\""));
+        assert2::assert!(log.contains("event=\"deleted\""));
+        assert2::assert!(log.contains("reason=\"timeout\""));
+        Ok(())
+    }
+
+    #[test]
+    fn test_record_delete_ack_send_failure_when_reason_is_none_is_silent() -> rootcause::Result<()> {
+        let session = SessionName::default();
+        let log = crate::session_tracing::collect_test_log(&session, || {
+            let span = tracing::info_span!("muxr_session", session = %session);
+            let _guard = span.enter();
+            self::record_delete_ack_send_failure(None);
+            Ok(())
+        })?;
+
+        assert2::assert!(!log.contains("kind=\"delete_ack_send_failed\""));
         Ok(())
     }
 
