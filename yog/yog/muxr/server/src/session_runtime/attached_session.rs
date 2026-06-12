@@ -496,18 +496,6 @@ async fn run_attached_client(
                         return Ok(());
                     }
                 },
-                _ = timers.shell_poll.tick() => {
-                    if !self::handle_session_runtime_timer_message(
-                        SessionRuntimeTimerMessage::ShellPollTick,
-                        event_writer,
-                        state,
-                        &mut timers,
-                        &mut heartbeat_started_at,
-                        &mut render_dirty,
-                    ).await? {
-                        return Ok(());
-                    }
-                },
                 _ = timers.render_tick.tick() => {
                     if !self::handle_session_runtime_timer_message(
                         SessionRuntimeTimerMessage::RenderTick,
@@ -564,18 +552,6 @@ async fn run_attached_client(
                 _ = timers.heartbeat.tick() => {
                     if !self::handle_session_runtime_timer_message(
                         SessionRuntimeTimerMessage::HeartbeatTick,
-                        event_writer,
-                        state,
-                        &mut timers,
-                        &mut heartbeat_started_at,
-                        &mut render_dirty,
-                    ).await? {
-                        return Ok(());
-                    }
-                },
-                _ = timers.shell_poll.tick() => {
-                    if !self::handle_session_runtime_timer_message(
-                        SessionRuntimeTimerMessage::ShellPollTick,
                         event_writer,
                         state,
                         &mut timers,
@@ -671,7 +647,6 @@ async fn handle_session_runtime_timer_message(
         SessionRuntimeTimerMessage::HeartbeatTick => {
             self::send_heartbeat_if_idle(event_writer, state.config.client_write_timeout, heartbeat_started_at).await
         }
-        SessionRuntimeTimerMessage::ShellPollTick => Ok(!self::handle_reaped_panes(state, event_writer).await?),
         SessionRuntimeTimerMessage::RenderTick => self::flush_render_diff(event_writer, state, render_dirty).await,
         SessionRuntimeTimerMessage::CmdHandoffSampleReady => {
             self::handle_cmd_handoff_sample(timers, event_writer, state, render_dirty).await
@@ -716,7 +691,15 @@ async fn handle_pane_output_message(
             let screen_dirty_panes = state.runtimes.take_screen_dirty_panes();
             let title_changes = state.runtimes.take_title_changes()?;
             let screen_dirty = !screen_dirty_panes.is_empty();
-            *render_dirty |= screen_dirty;
+            let screen_dirty_visible = self::pane_ids_include_visible(
+                state.layout,
+                &state.pane_fullscreen,
+                &state.terminal_size,
+                &screen_dirty_panes,
+            )?;
+            // PTY output from hidden panes can still update titles/tracked-process state, but it must not make the
+            // attached client rebuild the visible frame when the effective pane layout cannot show those cells.
+            *render_dirty |= screen_dirty_visible;
             let now = Instant::now();
             let tracked_process_changed = if screen_dirty {
                 state.pane_tracked_processes.observe_runtime_visible_activity(
@@ -732,15 +715,38 @@ async fn handle_pane_output_message(
                 return Ok(false);
             }
             if tracked_process_changed
-                && !self::flush_tracked_process_runtime_layout(event_writer, state, render_dirty).await?
+                && !self::flush_tracked_process_runtime_layout(event_writer, state, render_dirty, screen_dirty_visible)
+                    .await?
             {
                 return Ok(false);
             }
             timers.sync_tracked_process_quiet_deadline(state.pane_tracked_processes.next_quiet_deadline()?)?;
+            // PTY exit status is sticky state; the bounded output channel is only a wakeup. A separate lifecycle
+            // channel would model this more explicitly, but sweeping here preserves correctness without another
+            // cross-thread routing path.
+            if self::handle_reaped_panes(state, event_writer).await? {
+                return Ok(false);
+            }
             Ok(true)
         }
         None => Ok(false),
     }
+}
+
+fn pane_ids_include_visible(
+    layout: &SessionLayout,
+    pane_fullscreen: &PaneFullscreen,
+    terminal_size: &TerminalSize,
+    pane_ids: &[PaneId],
+) -> rootcause::Result<bool> {
+    if pane_ids.is_empty() {
+        return Ok(false);
+    }
+    Ok(pane_fullscreen
+        .pane_layout(layout, terminal_size)?
+        .regions()
+        .iter()
+        .any(|region| pane_ids.contains(&region.id)))
 }
 
 async fn flush_render_diff(
@@ -855,7 +861,9 @@ async fn handle_cmd_handoff_sample(
     )?;
     timers.sync_tracked_process_quiet_deadline(state.pane_tracked_processes.next_quiet_deadline()?)?;
     if changed {
-        return self::flush_tracked_process_runtime_layout(event_writer, state, render_dirty).await;
+        let pane_surface_dirty =
+            self::pane_ids_include_visible(state.layout, &state.pane_fullscreen, &state.terminal_size, &pane_ids)?;
+        return self::flush_tracked_process_runtime_layout(event_writer, state, render_dirty, pane_surface_dirty).await;
     }
     Ok(true)
 }
@@ -864,12 +872,13 @@ async fn flush_tracked_process_runtime_layout(
     event_writer: &mut ServerEventWriter,
     state: &mut AttachedSessionState<'_>,
     render_dirty: &mut bool,
+    pane_surface_dirty: bool,
 ) -> rootcause::Result<bool> {
     let runtime_metadata = self::runtime_pane_metadata(state)?;
     let layout_snapshot = state
         .layout
         .snapshot_with_runtime_metadata(&runtime_metadata.pane_snapshot_fields())?;
-    *render_dirty = true;
+    *render_dirty |= pane_surface_dirty;
     self::send_sidebar_layout_if_changed(event_writer, state, layout_snapshot).await
 }
 
@@ -879,11 +888,14 @@ async fn flush_pane_attention(
     render_dirty: &mut bool,
 ) -> rootcause::Result<bool> {
     let now = Instant::now();
-    match state.pane_tracked_processes.mark_quiet_deadlines(state.layout, now)? {
-        TrackedProcessAttention::Seen | TrackedProcessAttention::Unseen { .. } => {}
+    let pane_surface_dirty = match state.pane_tracked_processes.mark_quiet_deadlines(state.layout, now)? {
+        TrackedProcessAttention::Seen => false,
+        TrackedProcessAttention::Unseen { pane_ids } => {
+            self::pane_ids_include_visible(state.layout, &state.pane_fullscreen, &state.terminal_size, &pane_ids)?
+        }
         TrackedProcessAttention::Unchanged => return Ok(true),
-    }
-    *render_dirty = true;
+    };
+    *render_dirty |= pane_surface_dirty;
     let runtime_metadata = self::runtime_pane_metadata(state)?;
     let layout_snapshot = state
         .layout
@@ -1083,7 +1095,7 @@ fn write_scrollback_editor_focus_lost_if_live(
         return Ok(());
     }
     let handle = runtimes.handle(editor_pane_id)?;
-    if !handle.has_exited()? {
+    if !handle.has_exited() {
         // Restore removes the temporary editor runtime, so the editor must receive FocusLost while its PTY is still
         // live; the restored original pane receives FocusGained after restore.
         handle.write_focus_event(TerminalFocusEvent::Lost)?;
@@ -1800,6 +1812,77 @@ mod tests {
         })?;
 
         assert2::assert!(!log.contains("kind=\"detach_ack_send_failed\""));
+        Ok(())
+    }
+
+    #[test]
+    fn test_pane_ids_include_visible_when_pane_is_in_inactive_tab_returns_false() -> rootcause::Result<()> {
+        let session = SessionName::default();
+        let mut layout = SessionLayout::initial(&session, self::metadata("sh", 1))?;
+        let inactive_pane = PaneId::new(1)?;
+        let active_pane = layout.create_tab(self::metadata("sh", 2))?;
+        let fullscreen = PaneFullscreen::default();
+        let terminal_size = TerminalSize::new(80, 24)?;
+
+        assert2::assert!(!self::pane_ids_include_visible(
+            &layout,
+            &fullscreen,
+            &terminal_size,
+            &[inactive_pane]
+        )?);
+        assert2::assert!(self::pane_ids_include_visible(
+            &layout,
+            &fullscreen,
+            &terminal_size,
+            &[active_pane]
+        )?);
+        assert2::assert!(self::pane_ids_include_visible(
+            &layout,
+            &fullscreen,
+            &terminal_size,
+            &[inactive_pane, active_pane],
+        )?);
+        assert2::assert!(!self::pane_ids_include_visible(
+            &layout,
+            &fullscreen,
+            &terminal_size,
+            &[]
+        )?);
+        Ok(())
+    }
+
+    #[test]
+    fn test_pane_ids_include_visible_when_pane_is_hidden_by_fullscreen_returns_false() -> rootcause::Result<()> {
+        let session = SessionName::default();
+        let mut layout = SessionLayout::initial(&session, self::metadata("sh", 1))?;
+        let hidden_pane = PaneId::new(1)?;
+        let visible_pane = layout.split_active_pane(
+            MuxrConfig::default().layout,
+            self::metadata("sh", 2),
+            PaneSplitAxis::Vertical,
+        )?;
+        let mut fullscreen = PaneFullscreen::default();
+        fullscreen.toggle_active_pane(&layout)?;
+        let terminal_size = TerminalSize::new(80, 24)?;
+
+        assert2::assert!(!self::pane_ids_include_visible(
+            &layout,
+            &fullscreen,
+            &terminal_size,
+            &[hidden_pane]
+        )?);
+        assert2::assert!(self::pane_ids_include_visible(
+            &layout,
+            &fullscreen,
+            &terminal_size,
+            &[visible_pane]
+        )?);
+        assert2::assert!(self::pane_ids_include_visible(
+            &layout,
+            &fullscreen,
+            &terminal_size,
+            &[hidden_pane, visible_pane],
+        )?);
         Ok(())
     }
 

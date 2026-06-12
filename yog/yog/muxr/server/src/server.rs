@@ -1065,6 +1065,75 @@ mod tests {
     }
 
     #[test]
+    fn test_serve_when_scrollback_editor_process_exits_restores_original_pane() -> rootcause::Result<()> {
+        self::runtime()?.block_on(async {
+            let tempdir = tempfile::tempdir()?;
+            let (session, paths) = self::session_paths(tempdir.path(), "work")?;
+            let mut user_config = MuxrConfig::default();
+            user_config.scrollback.editor = muxr_config::ScrollbackEditorConfig {
+                program: "/bin/sh",
+                args: &["-c", "cat \"$1\"; sleep 0.1; exit 7", "muxr-test-scrollback-editor"],
+            };
+            let handle = self::spawn_test_server_with_user_config(
+                &session,
+                &paths,
+                Some(1),
+                self::shell_cmd("/bin/cat"),
+                user_config,
+            );
+
+            self::wait_for_socket(&paths.socket)?;
+            let mut client = self::open_attached_client(&session, &paths).await?;
+            client
+                .writer
+                .send_request(&ClientRequest::Input(b"before-editor\n".to_vec()))
+                .await?;
+            self::read_until_render_contains(&mut client, b"before-editor").await?;
+
+            client
+                .writer
+                .send_request(&ClientRequest::Key(ClientKey {
+                    code: ClientKeyCode::Char('S'),
+                    modifiers: ClientKeyModifiers::SHIFT_ALT,
+                    raw_bytes: b"\x1bS".to_vec(),
+                }))
+                .await?;
+            let editor_layout = self::read_until_layout(&mut client).await?;
+            let editor_tab = editor_layout
+                .tabs()
+                .first()
+                .ok_or_else(|| report!("expected scrollback editor tab"))?;
+            pretty_assertions::assert_eq!(editor_tab.active_pane().to_string(), "pane-2");
+
+            let restored_layout = self::read_until_layout(&mut client).await?;
+            let restored_tab = restored_layout
+                .tabs()
+                .first()
+                .ok_or_else(|| report!("expected restored tab after editor exit"))?;
+            pretty_assertions::assert_eq!(restored_tab.active_pane().to_string(), "pane-1");
+            pretty_assertions::assert_eq!(
+                restored_tab
+                    .panes()
+                    .iter()
+                    .map(|pane| pane.id.to_string())
+                    .collect::<Vec<_>>(),
+                vec!["pane-1"],
+            );
+
+            client
+                .writer
+                .send_request(&ClientRequest::Input(b"after-editor\n".to_vec()))
+                .await?;
+            self::read_until_render_contains(&mut client, b"after-editor").await?;
+            self::assert_layout_metadata_panes(&paths, &[1], 1)?;
+            assert2::assert!(!paths.panes.join("2").exists());
+
+            self::detach_client(client).await?;
+            self::join_server(handle)
+        })
+    }
+
+    #[test]
     fn test_serve_when_terminal_title_reports_cwd_persists_metadata() -> rootcause::Result<()> {
         self::runtime()?.block_on(async {
             let tempdir = tempfile::tempdir()?;
@@ -1249,6 +1318,146 @@ mod tests {
                 .await?;
             self::read_until_render_contains(&mut client, b"new-pane").await?;
             self::assert_layout_metadata_panes(&paths, &[1, 2], 2)?;
+
+            self::detach_client(client).await?;
+            self::join_server(handle)
+        })
+    }
+
+    #[test]
+    fn test_serve_when_attached_non_final_pane_exits_reaps_pane_and_keeps_client_attached() -> rootcause::Result<()> {
+        self::runtime()?.block_on(async {
+            let tempdir = tempfile::tempdir()?;
+            let (session, paths) = self::session_paths(tempdir.path(), "work")?;
+            let handle = self::spawn_test_server_with_shell(&session, &paths, Some(1), self::shell_cmd("/bin/sh"));
+
+            self::wait_for_socket(&paths.socket)?;
+            let mut client = self::open_attached_client(&session, &paths).await?;
+            client
+                .writer
+                .send_request(&ClientRequest::Key(ClientKey {
+                    code: ClientKeyCode::Char('V'),
+                    modifiers: ClientKeyModifiers::SHIFT_ALT,
+                    raw_bytes: b"\x1bV".to_vec(),
+                }))
+                .await?;
+            drop(self::read_until_layout(&mut client).await?);
+
+            client
+                .writer
+                .send_request(&ClientRequest::Input(b"exit 7\n".to_vec()))
+                .await?;
+
+            let layout = self::read_until_layout(&mut client).await?;
+            let tab = layout
+                .tabs()
+                .first()
+                .ok_or_else(|| report!("expected tab after pane exit"))?;
+            pretty_assertions::assert_eq!(tab.active_pane().to_string(), "pane-1");
+            pretty_assertions::assert_eq!(
+                tab.panes().iter().map(|pane| pane.id.to_string()).collect::<Vec<_>>(),
+                vec!["pane-1"],
+            );
+
+            client
+                .writer
+                .send_request(&ClientRequest::Input(b"printf survivor\\n\n".to_vec()))
+                .await?;
+            self::read_until_render_contains(&mut client, b"survivor").await?;
+            self::assert_layout_metadata_panes(&paths, &[1], 1)?;
+
+            self::detach_client(client).await?;
+            self::join_server(handle)
+        })
+    }
+
+    #[test]
+    fn test_serve_when_inactive_tab_pane_exits_reaps_hidden_pane_and_keeps_client_attached() -> rootcause::Result<()> {
+        self::runtime()?.block_on(async {
+            let tempdir = tempfile::tempdir()?;
+            let (session, paths) = self::session_paths(tempdir.path(), "work")?;
+            let first_cwd = tempdir.path().join("pane-1-cwd");
+            let second_cwd = tempdir.path().join("pane-2-cwd");
+            let trigger_path = tempdir.path().join("exit-pane-1");
+            fs::create_dir_all(&first_cwd)?;
+            fs::create_dir_all(&second_cwd)?;
+            fs::create_dir_all(&paths.root)?;
+            let first_cwd = fs::canonicalize(first_cwd)?;
+            let second_cwd = fs::canonicalize(second_cwd)?;
+
+            let mut layout = SessionLayout::initial(
+                &session,
+                SessionMetadata {
+                    cmd_label: "sh".to_owned(),
+                    cwd: first_cwd.to_string_lossy().into_owned(),
+                    started_at: 1,
+                },
+            )?;
+            let active_pane = layout.create_tab(SessionMetadata {
+                cmd_label: "sh".to_owned(),
+                cwd: second_cwd.to_string_lossy().into_owned(),
+                started_at: 2,
+            })?;
+            pretty_assertions::assert_eq!(active_pane, PaneId::new(2)?);
+            crate::state::persisted::write_metadata(&paths, &layout)?;
+
+            let first_cwd = first_cwd.to_string_lossy().into_owned();
+            let second_cwd = second_cwd.to_string_lossy().into_owned();
+            let trigger_path = trigger_path.to_string_lossy().into_owned();
+            let shell_script = "\
+                current_dir=$(pwd -P); \
+                if [ \"$current_dir\" = \"$1\" ]; then \
+                    while [ ! -e \"$3\" ]; do sleep 0.01; done; \
+                    exit 7; \
+                elif [ \"$current_dir\" = \"$2\" ]; then \
+                    exec cat; \
+                fi; \
+                exit 99";
+            let handle = self::spawn_test_server_with_shell(
+                &session,
+                &paths,
+                Some(1),
+                self::shell_cmd_with_args(
+                    "/bin/sh",
+                    &[
+                        "-c",
+                        shell_script,
+                        "muxr-test-inactive-exit",
+                        first_cwd.as_str(),
+                        second_cwd.as_str(),
+                        trigger_path.as_str(),
+                    ],
+                ),
+            );
+
+            self::wait_for_socket(&paths.socket)?;
+            let mut client = self::open_attached_client(&session, &paths).await?;
+            pretty_assertions::assert_eq!(client.layout.active_tab().to_string(), "tab-2");
+
+            fs::write(&trigger_path, b"exit")?;
+            let layout = self::read_until_layout(&mut client).await?;
+            pretty_assertions::assert_eq!(layout.active_tab().to_string(), "tab-2");
+            pretty_assertions::assert_eq!(
+                layout.tabs().iter().map(|tab| tab.id().to_string()).collect::<Vec<_>>(),
+                vec!["tab-2"],
+            );
+            let tab = layout
+                .tabs()
+                .first()
+                .ok_or_else(|| report!("expected tab after inactive pane exit"))?;
+            pretty_assertions::assert_eq!(tab.active_pane().to_string(), "pane-2");
+            pretty_assertions::assert_eq!(
+                tab.panes().iter().map(|pane| pane.id.to_string()).collect::<Vec<_>>(),
+                vec!["pane-2"],
+            );
+
+            client
+                .writer
+                .send_request(&ClientRequest::Input(b"survivor\n".to_vec()))
+                .await?;
+            self::read_until_render_contains(&mut client, b"survivor").await?;
+            self::assert_layout_metadata_tabs(&paths, &[2], 2)?;
+            self::assert_layout_metadata_panes(&paths, &[2], 2)?;
 
             self::detach_client(client).await?;
             self::join_server(handle)
@@ -1769,6 +1978,58 @@ mod tests {
         assert2::assert!(!paths.socket.exists());
         assert2::assert!(!paths.pid.exists());
         self::assert_final_layout_metadata(&paths, 0, true)?;
+        Ok(())
+    }
+
+    #[test]
+    fn test_serve_when_attached_shell_exits_removes_socket_and_pid() -> rootcause::Result<()> {
+        let tempdir = tempfile::tempdir()?;
+        let (session, paths) = self::session_paths(tempdir.path(), "work")?;
+        let handle = self::spawn_test_server_with_shell(
+            &session,
+            &paths,
+            Some(1),
+            self::shell_cmd_with_args("/bin/sh", &["-c", "sleep 0.5; exit 7"]),
+        );
+
+        self::runtime()?.block_on(async {
+            self::wait_for_socket(&paths.socket)?;
+            let mut client = self::open_attached_client(&session, &paths).await?;
+            let started_at = Instant::now();
+            loop {
+                if started_at.elapsed() > SERVER_READY_TIMEOUT {
+                    return Err(report!("timed out waiting for muxr attached shell exit"));
+                }
+
+                let event = match tokio::time::timeout(Duration::from_millis(50), client.reader.recv_event()).await {
+                    Ok(Ok(Some(event))) => event,
+                    Ok(Ok(None)) => break,
+                    Ok(Err(error)) => return Err(error),
+                    Err(_) => continue,
+                };
+                match event {
+                    ServerEvent::Ping => client.writer.send_request(&ClientRequest::Pong).await?,
+                    ServerEvent::Error(error) => {
+                        return Err(report!("muxr test server returned error").attach(format!("{error:?}")));
+                    }
+                    ServerEvent::Detached => break,
+                    ServerEvent::Attached(_)
+                    | ServerEvent::Deleted
+                    | ServerEvent::Pong
+                    | ServerEvent::Layout(_)
+                    | ServerEvent::SidebarLayout(_)
+                    | ServerEvent::PaneRegions(_)
+                    | ServerEvent::Render(_)
+                    | ServerEvent::ScrollPaneLineResult { .. } => {}
+                }
+            }
+            Ok::<(), rootcause::Report>(())
+        })?;
+
+        self::join_server_with_timeout(handle)?;
+        assert2::assert!(!paths.socket.exists());
+        assert2::assert!(!paths.pid.exists());
+        self::assert_final_layout_metadata(&paths, 7, false)?;
         Ok(())
     }
 
