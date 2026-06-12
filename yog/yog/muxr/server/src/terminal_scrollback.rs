@@ -116,14 +116,22 @@ impl TerminalScrollback {
         !alternate_screen && self.active_screen == TerminalScreen::Normal && self.normal_scroll_region.should_capture()
     }
 
+    pub fn clear_replayed_application_state(&mut self) {
+        self.active_screen = TerminalScreen::Normal;
+        self.alternate_scroll_region = TerminalScrollRegion::full(&self.size);
+        self.normal_scroll_region = TerminalScrollRegion::full(&self.size);
+        self.parser = vte::Parser::new();
+    }
+
     pub const fn viewport_offset(&self) -> usize {
         self.viewport_offset
     }
 
     pub fn resize(&mut self, size: &TerminalSize) {
+        let previous_size = self.size.clone();
         self.size = size.clone();
-        self.alternate_scroll_region = self.alternate_scroll_region.clamped_to(size);
-        self.normal_scroll_region = self.normal_scroll_region.clamped_to(size);
+        self.alternate_scroll_region = self.alternate_scroll_region.resized_from(&previous_size, size);
+        self.normal_scroll_region = self.normal_scroll_region.resized_from(&previous_size, size);
     }
 
     pub fn scroll_to(&mut self, offset: usize) {
@@ -467,7 +475,14 @@ impl TerminalScrollRegion {
         self.top == 0
     }
 
-    fn clamped_to(self, size: &TerminalSize) -> Self {
+    fn resized_from(self, previous_size: &TerminalSize, size: &TerminalSize) -> Self {
+        // Layout-started panes spawn at the server bootstrap size and grow on first attach. Keep the default
+        // full-height scroll region full-height across that resize; explicit partial regions remain bounded to
+        // their app-set rows.
+        if self == Self::full(previous_size) {
+            return Self::full(size);
+        }
+
         let last_row = size.rows().saturating_sub(1);
         let top = self.top.min(last_row);
         let bottom = self.bottom.min(last_row);

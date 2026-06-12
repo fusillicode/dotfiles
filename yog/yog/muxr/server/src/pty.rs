@@ -479,10 +479,10 @@ impl PtyState {
         let (history, replay) = PaneHistory::open(history_path)?;
         let mut terminal = TerminalState::with_scrollback(size, scrollback);
         let _ = terminal.process(&replay);
-        // History replay rebuilds visible cells only; metadata and focus-reporting opt-in must come from live PTY
-        // output after spawn.
+        // History replay rebuilds visible cells only; metadata and app-owned modes must come from live PTY output
+        // after spawn.
         terminal.clear_title_metadata();
-        terminal.clear_replayed_focus_reporting();
+        terminal.clear_replayed_application_state();
 
         Ok(Self {
             active_sink: Mutex::new(None),
