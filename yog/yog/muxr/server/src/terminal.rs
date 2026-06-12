@@ -24,6 +24,9 @@ const SCROLL_LINES_PER_WHEEL_EVENT: usize = 5;
 const BRACKETED_PASTE_END: &[u8] = b"\x1b[201~";
 const BRACKETED_PASTE_START: &[u8] = b"\x1b[200~";
 const FOCUS_REPORTING_MODE: u16 = 1004;
+const REPLAY_ALTERNATE_SCREEN_EXIT_BYTES: &[u8] = b"\x1b[?1049l";
+const REPLAY_APPLICATION_STATE_RESET_BYTES: &[u8] =
+    b"\x18\x1b>\x1b[?1l\x1b[?6l\x1b[?9l\x1b[?47l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1005l\x1b[?1006l\x1b[?2004l\x1b[?25h\x1b[r";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TerminalSnapshot {
@@ -453,9 +456,17 @@ impl TerminalState {
         self.parser.callbacks_mut().clear_title_metadata();
     }
 
-    /// Clear focus-reporting opt-in that must come only from the live PTY process, not replayed history.
-    pub fn clear_replayed_focus_reporting(&mut self) {
+    /// Clear app-owned terminal modes that must come only from the live PTY process, not replayed history.
+    pub fn clear_replayed_application_state(&mut self) {
+        if self.parser.screen().alternate_screen() {
+            self.process_with_scrollback_capture(REPLAY_ALTERNATE_SCREEN_EXIT_BYTES);
+        }
+        // Raw history replay may start or end inside a full-screen app. Keep replayed cells/scrollback, then return
+        // modes to shell defaults so later normal output is captured as scrollback.
+        self.process_with_scrollback_capture(REPLAY_APPLICATION_STATE_RESET_BYTES);
+        let _replies = self.parser.callbacks_mut().take_replies();
         self.parser.callbacks_mut().clear_focus_reporting();
+        self.scrollback.clear_replayed_application_state();
     }
 
     pub fn scroll(&mut self, direction: PaneScrollDirection) -> bool {
@@ -885,6 +896,8 @@ fn push_color_sgr(prefix: u8, color: RenderColor, bytes: &mut Vec<u8>) {
 
 #[cfg(test)]
 mod tests {
+    use std::fmt::Write as _;
+
     use muxr_config::MuxrConfig;
     use rootcause::report;
     use rstest::rstest;
@@ -1089,6 +1102,62 @@ mod tests {
 
         assert2::assert!(terminal.scroll(PaneScrollDirection::Up));
         let rendered = self::snapshot_text(&terminal.snapshot()?);
+        assert2::assert!(rendered.contains("one"));
+        Ok(())
+    }
+
+    #[test]
+    fn test_terminal_state_scroll_when_large_normal_output_finishes_shows_capped_history() -> rootcause::Result<()> {
+        let mut scrollback = MuxrConfig::default().scrollback;
+        scrollback.rows = 6;
+        let mut terminal = TerminalState::with_scrollback(&TerminalSize::new(8, 4)?, scrollback);
+        let mut output = String::new();
+        for row in 0..20 {
+            write!(output, "row-{row:02}\r\n").context("failed to format test output")?;
+        }
+
+        let _ = terminal.process(output.as_bytes());
+
+        assert2::assert!(terminal.scroll_one_line(PaneScrollDirection::Up));
+        let rendered = self::snapshot_text(&terminal.snapshot()?);
+
+        assert2::assert!(rendered.contains("row-16"));
+        Ok(())
+    }
+
+    #[test]
+    fn test_terminal_state_scroll_when_layout_pane_grows_before_output_captures_full_history() -> rootcause::Result<()>
+    {
+        let mut terminal = self::terminal_state(&TerminalSize::new(8, 2)?);
+        terminal.resize(&TerminalSize::new(8, 4)?);
+        let mut output = String::new();
+        for row in 0..20 {
+            write!(output, "row-{row:02}\r\n").context("failed to format test output")?;
+        }
+
+        let _ = terminal.process(output.as_bytes());
+        for _ in 0..20 {
+            terminal.scroll_one_line(PaneScrollDirection::Up);
+        }
+        let rendered = self::snapshot_text(&terminal.snapshot()?);
+
+        assert2::assert!(rendered.contains("row-00"));
+        assert2::assert!(rendered.contains("row-03"));
+        Ok(())
+    }
+
+    #[test]
+    fn test_terminal_state_scroll_when_replayed_history_left_alternate_screen_captures_later_shell_output()
+    -> rootcause::Result<()> {
+        let mut terminal = self::terminal_state(&TerminalSize::new(8, 2)?);
+
+        let _ = terminal.process(b"\x1b[?1049h");
+        terminal.clear_replayed_application_state();
+        let _ = terminal.process(b"one\r\ntwo\r\nthree");
+
+        assert2::assert!(terminal.scroll_one_line(PaneScrollDirection::Up));
+        let rendered = self::snapshot_text(&terminal.snapshot()?);
+
         assert2::assert!(rendered.contains("one"));
         Ok(())
     }
