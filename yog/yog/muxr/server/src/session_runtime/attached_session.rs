@@ -24,6 +24,7 @@ use muxr_transport::ServerConnection;
 use muxr_transport::ServerEventWriter;
 use muxr_transport::ServerRequestReader;
 use rootcause::report;
+use tokio::sync::mpsc::error::TrySendError;
 
 use crate::attached_client_timers::AttachedClientTimers;
 use crate::keyboard_input::ClientCmd;
@@ -58,6 +59,7 @@ use crate::session_runtime::SessionPaneOutputMessage;
 use crate::session_runtime::SessionRuntime;
 use crate::session_runtime::SessionRuntimeState;
 use crate::session_runtime::SessionRuntimeTimerMessage;
+use crate::session_tracing::ClientEventSendFailure;
 use crate::sessions_delete::DeleteSessions;
 use crate::state::SessionLayout;
 use crate::terminal::TerminalFocusEvent;
@@ -105,6 +107,7 @@ pub struct AttachedClientTaskRuntime {
 }
 
 impl AttachedClientTaskRuntime {
+    #[tracing::instrument(name = "muxr_session", skip_all, fields(session = %config.session))]
     pub async fn run_attached_client(
         mut self,
         config: &ServerConfig,
@@ -119,9 +122,17 @@ impl AttachedClientTaskRuntime {
             &mut self.state,
         )
         .await;
-        let _sent = self
+        match self
             .completion_sender
-            .try_send(SessionAttachedClientTaskMessage::Finished(self.state));
+            .try_send(SessionAttachedClientTaskMessage::Finished(self.state))
+        {
+            // Closed means the session loop is already gone; a full channel can strand live state without another
+            // recovery path.
+            Ok(()) | Err(TrySendError::Closed(_)) => {}
+            Err(TrySendError::Full(_)) => {
+                crate::session_tracing::attached_client::state_handoff_failed("channel_full");
+            }
+        }
         result
     }
 }
@@ -355,7 +366,9 @@ async fn handle_client(
     match result {
         Ok(()) => restore_result,
         Err(error) => {
-            if let Err(_restore_error) = restore_result {}
+            let _ = restore_result.inspect_err(|restore_error| {
+                crate::session_tracing::scrollback::restore_failed(restore_error);
+            });
             Err(error)
         }
     }
@@ -1334,10 +1347,16 @@ async fn send_detached_event(
     state: &mut AttachedSessionState<'_>,
 ) -> rootcause::Result<bool> {
     self::restore_scrollback_editor_without_render(state)?;
-    let _sent =
-        self::send_writer_event_with_timeout(event_writer, &ServerEvent::Detached, state.config.client_write_timeout)
-            .await?;
+    self::record_detach_ack_send_failure(
+        self::send_writer_event_failure(event_writer, &ServerEvent::Detached, state.config.client_write_timeout).await,
+    );
     Ok(false)
+}
+
+fn record_detach_ack_send_failure(reason: Option<ClientEventSendFailure>) {
+    if let Some(reason) = reason {
+        crate::session_tracing::ack::detach_failed(reason);
+    }
 }
 
 async fn handle_key_request(
@@ -1680,9 +1699,20 @@ async fn send_writer_event_with_timeout(
     event: &ServerEvent,
     client_write_timeout: Duration,
 ) -> rootcause::Result<bool> {
+    Ok(self::send_writer_event_failure(writer, event, client_write_timeout)
+        .await
+        .is_none())
+}
+
+async fn send_writer_event_failure(
+    writer: &mut ServerEventWriter,
+    event: &ServerEvent,
+    client_write_timeout: Duration,
+) -> Option<ClientEventSendFailure> {
     match tokio::time::timeout(client_write_timeout, writer.send_event(event)).await {
-        Ok(Ok(())) => Ok(true),
-        Ok(Err(_)) | Err(_) => Ok(false),
+        Ok(Ok(())) => None,
+        Ok(Err(_)) => Some(ClientEventSendFailure::SendFailed),
+        Err(_) => Some(ClientEventSendFailure::Timeout),
     }
 }
 
@@ -1695,6 +1725,8 @@ mod tests {
     use muxr_config::MuxrConfig;
     use muxr_core::SessionName;
     use muxr_core::SessionPaths;
+    use muxr_transport::ClientConnection;
+    use muxr_transport::ServerListener;
     use rstest::rstest;
 
     use super::*;
@@ -1737,6 +1769,87 @@ mod tests {
             .and_then(|tab| tab.panes().first())
             .ok_or_else(|| report!("expected pane snapshot"))?;
         pretty_assertions::assert_eq!(pane.cmd_label, Some("cx".to_owned()));
+        Ok(())
+    }
+
+    #[test]
+    fn test_record_detach_ack_send_failure_when_reason_exists_warns() -> rootcause::Result<()> {
+        let session = SessionName::default();
+
+        let log = crate::session_tracing::collect_test_log(&session, || {
+            let span = tracing::info_span!("muxr_session", session = %session);
+            let _guard = span.enter();
+            self::record_detach_ack_send_failure(Some(ClientEventSendFailure::SendFailed));
+            Ok(())
+        })?;
+
+        assert2::assert!(log.contains("kind=\"detach_ack_send_failed\""));
+        assert2::assert!(log.contains("event=\"detached\""));
+        assert2::assert!(log.contains("reason=\"send_failed\""));
+        Ok(())
+    }
+
+    #[test]
+    fn test_record_detach_ack_send_failure_when_reason_is_none_is_silent() -> rootcause::Result<()> {
+        let session = SessionName::default();
+        let log = crate::session_tracing::collect_test_log(&session, || {
+            let span = tracing::info_span!("muxr_session", session = %session);
+            let _guard = span.enter();
+            self::record_detach_ack_send_failure(None);
+            Ok(())
+        })?;
+
+        assert2::assert!(!log.contains("kind=\"detach_ack_send_failed\""));
+        Ok(())
+    }
+
+    #[test]
+    fn test_run_attached_client_when_completion_channel_full_warns_with_session_span() -> rootcause::Result<()> {
+        let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build()?;
+        let tempdir = tempfile::tempdir()?;
+        let config = server_test_helpers::server_config(tempdir.path(), "work")?;
+        let session = config.session.clone();
+
+        let log = crate::session_tracing::collect_test_log(&session, || {
+            runtime.block_on(async {
+                let terminal_size = TerminalSize::new(80, 24)?;
+                let attach_request = AttachRequest {
+                    session: config.session.clone(),
+                    terminal_size,
+                };
+
+                crate::session_files::prepare_session_dirs(&config.paths)?;
+                let mut session_runtime = SessionRuntime::spawn(&config, &attach_request.terminal_size)?;
+                let (completion_sender, _completion_receiver) = tokio::sync::mpsc::channel(1);
+                let blocked_state = SessionRuntimeState {
+                    layout: SessionLayout::initial(&config.session, self::metadata("sh", 1))?,
+                    pane_runtimes: pane_runtime_test_helpers::empty_runtimes(),
+                };
+                completion_sender
+                    .send(SessionAttachedClientTaskMessage::Finished(blocked_state))
+                    .await
+                    .map_err(|_| report!("failed to pre-fill attached-client completion channel"))?;
+                let task_runtime = session_runtime
+                    .attached_client_task_runtime(completion_sender, Arc::new(DeleteSessions::default()))?;
+                let listener = ServerListener::bind(&config.paths.socket)?;
+                let (mut client_connection, server_connection) =
+                    tokio::try_join!(ClientConnection::connect(&config.paths.socket), listener.accept())?;
+
+                let attached_client = task_runtime.run_attached_client(&config, server_connection, attach_request);
+                let detached_client = async {
+                    client_connection.send_request(&ClientRequest::Detach).await?;
+                    self::read_connection_until_detached(&mut client_connection).await
+                };
+                let (attached_client_result, detached_client_result) = tokio::join!(attached_client, detached_client);
+                attached_client_result?;
+                detached_client_result?;
+                Ok(())
+            })
+        })?;
+
+        assert2::assert!(log.contains("kind=\"attached_client_state_handoff_failed\""));
+        assert2::assert!(log.contains("reason=\"channel_full\""));
+        assert2::assert!(log.contains("session=work"));
         Ok(())
     }
 
@@ -1888,6 +2001,37 @@ mod tests {
         rendered_tokens
             .windows(needle_tokens.len())
             .any(|window| window == needle_tokens.as_slice())
+    }
+
+    async fn read_connection_until_detached(connection: &mut ClientConnection) -> rootcause::Result<()> {
+        let started_at = Instant::now();
+
+        loop {
+            if started_at.elapsed() > Duration::from_secs(2) {
+                return Err(report!("timed out waiting for muxr detach ack"));
+            }
+
+            match tokio::time::timeout(Duration::from_millis(50), connection.recv_event()).await {
+                Ok(Ok(Some(ServerEvent::Detached))) => return Ok(()),
+                Ok(Ok(Some(ServerEvent::Ping))) => connection.send_request(&ClientRequest::Pong).await?,
+                Ok(Ok(Some(ServerEvent::Error(error)))) => {
+                    return Err(report!("muxr test server returned error").attach(format!("{error:?}")));
+                }
+                Ok(Ok(Some(
+                    ServerEvent::Attached(_)
+                    | ServerEvent::Deleted
+                    | ServerEvent::Pong
+                    | ServerEvent::Layout(_)
+                    | ServerEvent::SidebarLayout(_)
+                    | ServerEvent::PaneRegions(_)
+                    | ServerEvent::Render(_)
+                    | ServerEvent::ScrollPaneLineResult { .. },
+                )))
+                | Err(_) => {}
+                Ok(Err(error)) => return Err(error),
+                Ok(Ok(None)) => return Err(report!("expected detached event")),
+            }
+        }
     }
 
     fn session_paths(base: &Path, raw: &str) -> rootcause::Result<(SessionName, SessionPaths)> {

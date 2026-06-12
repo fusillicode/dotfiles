@@ -191,27 +191,65 @@ impl PtySession {
 
 impl Drop for PtySession {
     fn drop(&mut self) {
-        if !self.handle.state.exited.load(Ordering::Acquire)
-            && let Ok(mut child) = self.handle.child.lock()
-        {
-            match child.try_wait() {
-                Ok(Some(exit_status)) => {
-                    drop(self.handle.state.mark_exited(PtyExitStatus::from(&exit_status)));
-                }
-                Ok(None) => {
-                    drop(child.kill());
-                    if let Ok(exit_status) = child.wait() {
-                        drop(self.handle.state.mark_exited(PtyExitStatus::from(&exit_status)));
-                    }
-                }
-                Err(_) => {
-                    drop(child.kill());
-                }
+        if self.handle.state.exited.load(Ordering::Acquire) {
+            if let Some(reader_handle) = self.reader_handle.take()
+                && reader_handle.join().is_err()
+            {
+                crate::session_tracing::pty::shutdown_failed("join_reader", "reader thread panicked");
             }
+            return;
         }
 
-        if let Some(reader_handle) = self.reader_handle.take() {
-            drop(reader_handle.join());
+        let mut child = match self::lock_mutex(&self.handle.child, "pty child") {
+            Ok(child) => child,
+            Err(error) => {
+                crate::session_tracing::pty::shutdown_failed("lock_child", &error);
+                if let Some(reader_handle) = self.reader_handle.take()
+                    && reader_handle.join().is_err()
+                {
+                    crate::session_tracing::pty::shutdown_failed("join_reader", "reader thread panicked");
+                }
+                return;
+            }
+        };
+
+        let exit_status = match child.try_wait() {
+            Ok(Some(exit_status)) => Some(exit_status),
+            Ok(None) => {
+                let _ = child.kill().inspect_err(|error| {
+                    crate::session_tracing::pty::shutdown_failed("kill_child", error);
+                });
+                match child.wait() {
+                    Ok(exit_status) => Some(exit_status),
+                    Err(error) => {
+                        crate::session_tracing::pty::shutdown_failed("wait_child", &error);
+                        None
+                    }
+                }
+            }
+            Err(error) => {
+                crate::session_tracing::pty::shutdown_failed("poll_child", &error);
+                let _ = child.kill().inspect_err(|error| {
+                    crate::session_tracing::pty::shutdown_failed("kill_child", error);
+                });
+                None
+            }
+        };
+        if let Some(exit_status) = exit_status {
+            let _ = self
+                .handle
+                .state
+                .mark_exited(PtyExitStatus::from(&exit_status))
+                .inspect_err(|error| {
+                    crate::session_tracing::pty::shutdown_failed("mark_exited", error);
+                });
+        }
+        drop(child);
+
+        if let Some(reader_handle) = self.reader_handle.take()
+            && reader_handle.join().is_err()
+        {
+            crate::session_tracing::pty::shutdown_failed("join_reader", "reader thread panicked");
         }
     }
 }
@@ -686,34 +724,59 @@ fn spawn_reader_thread(
     state: Arc<PtyState>,
     writer: Arc<Mutex<Box<dyn Write + Send>>>,
 ) -> thread::JoinHandle<()> {
+    // Raw OS threads do not inherit thread-local tracing state, so carry both the dispatcher and span explicitly.
+    let span = tracing::Span::current();
+    let dispatch = tracing::dispatcher::get_default(Clone::clone);
     thread::spawn(move || {
-        let mut buffer = [0; READ_BUFFER_SIZE];
-        loop {
-            match reader.read(&mut buffer) {
-                Ok(0) | Err(_) => {
-                    // PTY EOF only means the slave side closed; the child may still be running
-                    // after redirecting stdio, so only child polling is allowed to mark exit.
+        tracing::dispatcher::with_default(&dispatch, || {
+            let _guard = span.enter();
+            self::run_reader_loop(&mut *reader, state.as_ref(), writer.as_ref());
+        });
+    })
+}
+
+fn run_reader_loop(reader: &mut dyn Read, state: &PtyState, writer: &Mutex<Box<dyn Write + Send>>) {
+    let mut buffer = [0; READ_BUFFER_SIZE];
+    loop {
+        match reader.read(&mut buffer) {
+            Ok(0) => {
+                // PTY EOF only means the slave side closed; the child may still be running
+                // after redirecting stdio, so only child polling is allowed to mark exit.
+                break;
+            }
+            Err(_) => {
+                // Read errors stop only the reader loop; child polling still owns exit detection, and a later
+                // input/write path will surface broken PTY state if it remains user-visible.
+                break;
+            }
+            Ok(bytes_read) => {
+                let Some(bytes) = buffer.get(..bytes_read) else {
                     break;
-                }
-                Ok(bytes_read) => {
-                    let Some(bytes) = buffer.get(..bytes_read) else {
-                        break;
-                    };
-                    let Ok(terminal_replies) = state.append_output(bytes) else {
-                        break;
-                    };
-                    if self::write_terminal_replies(writer.as_ref(), &terminal_replies).is_err() {
+                };
+                let terminal_replies = match state.append_output(bytes) {
+                    Ok(terminal_replies) => terminal_replies,
+                    Err(error) => {
+                        crate::session_tracing::pty::reader_stopped_after_error("append_output", &error);
                         break;
                     }
+                };
+                if self::write_terminal_replies(writer, &terminal_replies)
+                    .inspect_err(|error| {
+                        crate::session_tracing::pty::reader_stopped_after_error("write_terminal_replies", error);
+                    })
+                    .is_err()
+                {
+                    break;
                 }
             }
         }
-    })
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use muxr_config::MuxrConfig;
+    use muxr_core::SessionName;
 
     use super::*;
 
@@ -921,6 +984,53 @@ mod tests {
     }
 
     #[test]
+    fn test_run_reader_loop_when_terminal_reply_write_fails_warns() -> rootcause::Result<()> {
+        let session = SessionName::default();
+        let state = Arc::new(pty_state(&terminal_size()?));
+
+        let log = crate::session_tracing::collect_test_log(&session, || {
+            let span = tracing::info_span!("muxr_session", session = %session);
+            let _guard = span.enter();
+            let mut reader = std::io::Cursor::new(b"\x1b[6n".to_vec());
+            let writer = self::failing_pty_writer();
+            self::run_reader_loop(&mut reader, state.as_ref(), writer.as_ref());
+            Ok(())
+        })?;
+
+        assert2::assert!(log.contains("kind=\"pty_reader_stopped_after_error\""));
+        assert2::assert!(log.contains("event=\"write_terminal_replies\""));
+        assert2::assert!(log.contains("session="));
+        assert2::assert!(log.contains("test pty writer failed"));
+        Ok(())
+    }
+
+    #[test]
+    fn test_spawn_reader_thread_when_terminal_reply_write_fails_carries_current_span() -> rootcause::Result<()> {
+        let session: SessionName = "work".parse()?;
+        let state = Arc::new(pty_state(&terminal_size()?));
+
+        let log = crate::session_tracing::collect_test_log(&session, || {
+            let span = tracing::info_span!("muxr_session", session = %session);
+            let _guard = span.enter();
+            let reader_handle = self::spawn_reader_thread(
+                Box::new(std::io::Cursor::new(b"\x1b[6n".to_vec())),
+                Arc::clone(&state),
+                self::failing_pty_writer(),
+            );
+            reader_handle
+                .join()
+                .map_err(|_| report!("muxr pty reader test thread panicked"))?;
+            Ok(())
+        })?;
+
+        assert2::assert!(log.contains("kind=\"pty_reader_stopped_after_error\""));
+        assert2::assert!(log.contains("event=\"write_terminal_replies\""));
+        assert2::assert!(log.contains("session=work"));
+        assert2::assert!(log.contains("test pty writer failed"));
+        Ok(())
+    }
+
+    #[test]
     fn test_write_pty_focus_event_when_focus_reporting_is_disabled_skips_write() -> rootcause::Result<()> {
         let written = Arc::new(Mutex::new(Vec::new()));
         let writer = self::capturing_pty_writer(Arc::clone(&written));
@@ -993,6 +1103,10 @@ mod tests {
         Arc::new(Mutex::new(Box::new(CapturingWriter { written })))
     }
 
+    fn failing_pty_writer() -> Arc<Mutex<Box<dyn Write + Send>>> {
+        Arc::new(Mutex::new(Box::new(FailingWriter)))
+    }
+
     fn captured_pty_bytes(written: &Mutex<Vec<u8>>) -> rootcause::Result<Vec<u8>> {
         Ok(lock_mutex(written, "captured pty bytes")?.clone())
     }
@@ -1010,6 +1124,18 @@ mod tests {
             written.extend_from_slice(buf);
             drop(written);
             Ok(buf.len())
+        }
+
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    struct FailingWriter;
+
+    impl Write for FailingWriter {
+        fn write(&mut self, _buf: &[u8]) -> std::io::Result<usize> {
+            Err(std::io::Error::other("test pty writer failed"))
         }
 
         fn flush(&mut self) -> std::io::Result<()> {

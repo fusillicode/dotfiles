@@ -289,18 +289,36 @@ const fn scrollback_dump_file_extension(dump_style: ScrollbackDumpStyle) -> &'st
 }
 
 fn remove_scrollback_dump_file(path: &Path) {
-    drop(fs::remove_file(path));
+    self::remove_scrollback_dump_file_with_event("remove_dump", path);
+}
+
+fn remove_scrollback_dump_file_with_event(event: &str, path: &Path) {
+    match fs::remove_file(path) {
+        Ok(()) => {}
+        // Temporary files may already be gone after editor/process cleanup; only other errors leave stale state.
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => crate::session_tracing::scrollback::cleanup_failed(event, None, path, &error),
+    }
 }
 
 fn remove_editor_pane_history(config: &ServerConfig, editor_pane_id: PaneId) {
     let path = self::pane_output_path(&config.paths.panes, editor_pane_id);
     if let Some(parent) = path.parent() {
-        drop(fs::remove_dir_all(parent));
+        match fs::remove_dir_all(parent) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => crate::session_tracing::scrollback::cleanup_failed(
+                "remove_editor_history",
+                Some(editor_pane_id),
+                parent,
+                &error,
+            ),
+        }
     }
 }
 
 fn remove_scrollback_dump_file_after_error(path: &Path, error: impl Into<rootcause::Report>) -> rootcause::Report {
-    self::remove_scrollback_dump_file(path);
+    self::remove_scrollback_dump_file_with_event("remove_dump_after_error", path);
     error.into()
 }
 
@@ -325,6 +343,22 @@ mod tests {
 
         pretty_assertions::assert_eq!(fs::read(&path)?, b"one\ntwo\n".to_vec());
         pretty_assertions::assert_eq!(path.extension().and_then(|extension| extension.to_str()), Some("txt"));
+        Ok(())
+    }
+
+    #[test]
+    fn test_scrollback_cleanup_when_paths_are_missing_is_silent() -> rootcause::Result<()> {
+        let tempdir = tempfile::tempdir()?;
+        let config = server_test_helpers::server_config(tempdir.path(), "work")?;
+        let pane_id = PaneId::new(99)?;
+
+        let log = crate::session_tracing::collect_test_log(&config.session, || {
+            self::remove_scrollback_dump_file(&tempdir.path().join("missing.txt"));
+            self::remove_editor_pane_history(&config, pane_id);
+            Ok(())
+        })?;
+
+        assert2::assert!(!log.contains("kind=\"scrollback_cleanup_failed\""));
         Ok(())
     }
 
