@@ -8,7 +8,6 @@ use rootcause::report;
 
 use crate::server::ServerConfig;
 
-const CLIENT_EVENT_POLL_INTERVAL: Duration = Duration::from_millis(10);
 const CMD_HANDOFF_SAMPLE_DELAY: Duration = Duration::from_millis(50);
 const RENDER_FRAME_INTERVAL: Duration = Duration::from_millis(16);
 const SLEEP_DISABLED_FOR: Duration = Duration::from_hours(24);
@@ -20,7 +19,6 @@ pub struct AttachedClientTimers {
     pub tracked_process_quiet_sleep: Pin<Box<tokio::time::Sleep>>,
     pub heartbeat: tokio::time::Interval,
     pub render_tick: tokio::time::Interval,
-    pub shell_poll: tokio::time::Interval,
 }
 
 impl AttachedClientTimers {
@@ -39,7 +37,6 @@ impl AttachedClientTimers {
             tracked_process_quiet_sleep: Box::pin(tokio::time::sleep_until(self::disabled_sleep_deadline()?)),
             heartbeat: tokio::time::interval_at(heartbeat_start, config.client_heartbeat_interval),
             render_tick: tokio::time::interval_at(render_start, RENDER_FRAME_INTERVAL),
-            shell_poll: tokio::time::interval(CLIENT_EVENT_POLL_INTERVAL),
         })
     }
 

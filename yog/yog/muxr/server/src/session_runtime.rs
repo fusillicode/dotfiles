@@ -96,7 +96,6 @@ pub enum SessionRuntimeTimerMessage {
     CmdHandoffSampleReady,
     HeartbeatTick,
     RenderTick,
-    ShellPollTick,
     TrackedProcessQuietDeadlineReached,
 }
 

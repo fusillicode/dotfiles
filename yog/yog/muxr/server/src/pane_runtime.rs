@@ -236,7 +236,7 @@ impl PaneRuntimes {
         let mut exited_panes = Vec::new();
         for pane in &self.panes {
             let handle = pane.session.handle();
-            if handle.has_exited()? {
+            if handle.has_exited() {
                 let Some(exit_status) = handle.exit_status()? else {
                     return Err(
                         report!("muxr exited pane is missing exit status").attach(format!("pane_id={}", pane.id))

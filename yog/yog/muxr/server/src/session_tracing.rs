@@ -132,6 +132,16 @@ pub mod scrollback {
 }
 
 pub mod pty {
+    pub fn exit_wakeup_not_queued(reason: &str) {
+        tracing::warn!(
+            kind = "pty_exit_wakeup_not_queued",
+            event = "send_exit_wakeup",
+            reason = reason,
+            summary = "muxr pty exit wakeup was not queued",
+            "muxr pty exit wakeup was not queued"
+        );
+    }
+
     pub fn shutdown_failed(event: &str, error: impl std::fmt::Display) {
         tracing::warn!(
             kind = "pty_shutdown_failed",
@@ -344,6 +354,7 @@ mod tests {
                 &std::io::Error::other("dump busy"),
             );
             pty::shutdown_failed("kill_child", std::io::Error::other("kill busy"));
+            pty::exit_wakeup_not_queued("channel_full");
             pty::reader_stopped_after_error("write_terminal_replies", rootcause::report!("reply failed"));
         });
         drop(dispatch);
@@ -383,6 +394,9 @@ mod tests {
         assert2::assert!(log.contains("event=\"kill_child\""));
         assert2::assert!(log.contains("summary=\"muxr pty shutdown cleanup failed\""));
         assert2::assert!(log.contains("kill busy"));
+        assert2::assert!(log.contains("kind=\"pty_exit_wakeup_not_queued\""));
+        assert2::assert!(log.contains("event=\"send_exit_wakeup\""));
+        assert2::assert!(log.contains("reason=\"channel_full\""));
         assert2::assert!(log.contains("kind=\"pty_reader_stopped_after_error\""));
         assert2::assert!(log.contains("event=\"write_terminal_replies\""));
         assert2::assert!(log.contains("summary=\"muxr pty reader stopped after recoverable processing error\""));
