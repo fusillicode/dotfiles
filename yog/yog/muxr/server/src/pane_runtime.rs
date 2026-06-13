@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 use std::io::Write;
+use std::sync::Arc;
 use std::sync::mpsc;
 
 use muxr_config::ScrollbackDumpStyle;
@@ -115,6 +116,7 @@ fn runtime_cmd_label(pane: &PaneRuntimeMetadataEntry) -> Option<String> {
 }
 
 pub struct PaneRuntimes {
+    pane_exit_notify: Arc<tokio::sync::Notify>,
     panes: Vec<PaneRuntime>,
 }
 
@@ -123,6 +125,7 @@ impl PaneRuntimes {
         config: &ServerConfig,
         start_seed: &SessionStartSeed,
         size: &TerminalSize,
+        pane_exit_notify: Arc<tokio::sync::Notify>,
     ) -> rootcause::Result<Self> {
         let mut panes = Vec::new();
         for pane in start_seed.layout.panes() {
@@ -138,6 +141,7 @@ impl PaneRuntimes {
                     size,
                     &self::pane_output_path(&config.paths.panes, pane.id),
                     config.user_config.scrollback,
+                    Arc::clone(&pane_exit_notify),
                 )?,
                 id: pane.id,
             };
@@ -151,7 +155,10 @@ impl PaneRuntimes {
             }
             panes.push(runtime);
         }
-        Ok(Self { panes })
+        Ok(Self {
+            pane_exit_notify,
+            panes,
+        })
     }
 
     pub fn spawn_pane(
@@ -171,6 +178,7 @@ impl PaneRuntimes {
                 size,
                 &history_path,
                 config.user_config.scrollback,
+                Arc::clone(&self.pane_exit_notify),
             )?,
         });
         Ok(())
@@ -189,7 +197,14 @@ impl PaneRuntimes {
         self.panes.push(PaneRuntime {
             id: pane_id,
             startup_cmd_label,
-            session: PtySession::spawn(cmd, cwd, size, &history_path, config.user_config.scrollback)?,
+            session: PtySession::spawn(
+                cmd,
+                cwd,
+                size,
+                &history_path,
+                config.user_config.scrollback,
+                Arc::clone(&self.pane_exit_notify),
+            )?,
         });
         Ok(())
     }
@@ -346,7 +361,10 @@ pub mod test_helpers {
     use super::*;
 
     pub fn empty_runtimes() -> PaneRuntimes {
-        PaneRuntimes { panes: Vec::new() }
+        PaneRuntimes {
+            pane_exit_notify: Arc::new(tokio::sync::Notify::new()),
+            panes: Vec::new(),
+        }
     }
 }
 
@@ -389,7 +407,12 @@ mod tests {
             layout,
             startup_cmds: vec![(pane_id, ShellCmd::with_args("/bin/echo", ["seeded"])?)],
         };
-        let runtimes = PaneRuntimes::spawn_for_start_seed(&config, &start_seed, &TerminalSize::new(80, 24)?)?;
+        let runtimes = PaneRuntimes::spawn_for_start_seed(
+            &config,
+            &start_seed,
+            &TerminalSize::new(80, 24)?,
+            Arc::new(tokio::sync::Notify::new()),
+        )?;
 
         pretty_assertions::assert_eq!(
             runtimes.startup_cmd_labels(),

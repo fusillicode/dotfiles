@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 pub use attached_session::AttachedClientTaskRuntime;
 pub use attached_session::ReapResult;
 #[cfg(test)]
@@ -95,7 +97,7 @@ impl From<PtyEvent> for SessionPaneOutputMessage {
 pub enum SessionRuntimeTimerMessage {
     CmdHandoffSampleReady,
     HeartbeatTick,
-    RenderTick,
+    RenderDeadlineReached,
     TrackedProcessQuietDeadlineReached,
 }
 
@@ -128,10 +130,14 @@ pub struct SessionRuntime {
 }
 
 impl SessionRuntime {
-    pub fn spawn(config: &ServerConfig, initial_size: &TerminalSize) -> rootcause::Result<Self> {
+    pub fn spawn(
+        config: &ServerConfig,
+        initial_size: &TerminalSize,
+        pane_exit_notify: Arc<tokio::sync::Notify>,
+    ) -> rootcause::Result<Self> {
         let metadata = SessionMetadata::try_from(config)?;
         let start_seed = SessionStartSeed::load(config, metadata)?;
-        let pane_runtimes = PaneRuntimes::spawn_for_start_seed(config, &start_seed, initial_size)?;
+        let pane_runtimes = PaneRuntimes::spawn_for_start_seed(config, &start_seed, initial_size, pane_exit_notify)?;
         Ok(Self {
             state: Some(SessionRuntimeState {
                 layout: start_seed.layout,

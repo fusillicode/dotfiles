@@ -446,6 +446,7 @@ mod tests {
                 startup_cmds: Vec::new(),
             },
             &size,
+            std::sync::Arc::new(tokio::sync::Notify::new()),
         )?;
         let dump_path = self::write_scrollback_dump_file(
             &config.paths.root,

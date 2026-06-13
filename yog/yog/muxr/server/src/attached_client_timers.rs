@@ -15,10 +15,11 @@ const SLEEP_DISABLED_FOR: Duration = Duration::from_hours(24);
 pub struct AttachedClientTimers {
     pub cmd_handoff_sample: Pin<Box<tokio::time::Sleep>>,
     cmd_handoff_sample_panes: BTreeSet<PaneId>,
+    render_deadline: Option<tokio::time::Instant>,
+    pub render_sleep: Pin<Box<tokio::time::Sleep>>,
     tracked_process_quiet_deadline: Option<Instant>,
     pub tracked_process_quiet_sleep: Pin<Box<tokio::time::Sleep>>,
     pub heartbeat: tokio::time::Interval,
-    pub render_tick: tokio::time::Interval,
 }
 
 impl AttachedClientTimers {
@@ -26,17 +27,15 @@ impl AttachedClientTimers {
         let heartbeat_start = tokio::time::Instant::now()
             .checked_add(config.client_heartbeat_interval)
             .ok_or_else(|| report!("muxr heartbeat interval overflowed"))?;
-        let render_start = tokio::time::Instant::now()
-            .checked_add(RENDER_FRAME_INTERVAL)
-            .ok_or_else(|| report!("muxr render frame interval overflowed"))?;
 
         Ok(Self {
             cmd_handoff_sample: Box::pin(tokio::time::sleep_until(self::disabled_sleep_deadline()?)),
             cmd_handoff_sample_panes: BTreeSet::new(),
+            render_deadline: None,
+            render_sleep: Box::pin(tokio::time::sleep_until(self::disabled_sleep_deadline()?)),
             tracked_process_quiet_deadline: None,
             tracked_process_quiet_sleep: Box::pin(tokio::time::sleep_until(self::disabled_sleep_deadline()?)),
             heartbeat: tokio::time::interval_at(heartbeat_start, config.client_heartbeat_interval),
-            render_tick: tokio::time::interval_at(render_start, RENDER_FRAME_INTERVAL),
         })
     }
 
@@ -55,6 +54,34 @@ impl AttachedClientTimers {
         // the attached-client select loop cannot hot-spin and starve PTY rendering after a prompt submit.
         self.cmd_handoff_sample.as_mut().reset(self::disabled_sleep_deadline()?);
         Ok(pane_ids)
+    }
+
+    pub fn sync_render_deadline(&mut self, render_dirty: bool) -> rootcause::Result<()> {
+        if !render_dirty {
+            if self.render_deadline.is_some() {
+                self.disable_render_sleep()?;
+            }
+            return Ok(());
+        }
+        if self.render_deadline.is_none() {
+            self.schedule_render_frame()?;
+        }
+        Ok(())
+    }
+
+    fn schedule_render_frame(&mut self) -> rootcause::Result<()> {
+        let deadline = tokio::time::Instant::now()
+            .checked_add(RENDER_FRAME_INTERVAL)
+            .ok_or_else(|| report!("muxr render frame deadline overflowed"))?;
+        self.render_deadline = Some(deadline);
+        self.render_sleep.as_mut().reset(deadline);
+        Ok(())
+    }
+
+    pub fn disable_render_sleep(&mut self) -> rootcause::Result<()> {
+        self.render_deadline = None;
+        self.render_sleep.as_mut().reset(self::disabled_sleep_deadline()?);
+        Ok(())
     }
 
     pub fn sync_tracked_process_quiet_deadline(&mut self, deadline: Option<Instant>) -> rootcause::Result<()> {
@@ -120,6 +147,75 @@ mod tests {
 
         pretty_assertions::assert_eq!(timers.take_cmd_handoff_sample_panes()?, vec![pane_1, pane_2]);
         assert2::assert!(timers.cmd_handoff_sample_panes.is_empty());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_attached_client_timers_when_render_is_clean_keeps_render_sleep_disabled() -> rootcause::Result<()> {
+        let tempdir = tempfile::tempdir()?;
+        let config = crate::server::test_helpers::server_config(tempdir.path(), "work")?;
+        let mut timers = AttachedClientTimers::new(&config)?;
+        let threshold = tokio::time::Instant::now()
+            .checked_add(Duration::from_hours(23))
+            .ok_or_else(|| report!("muxr test threshold overflowed"))?;
+
+        timers.sync_render_deadline(false)?;
+
+        pretty_assertions::assert_eq!(timers.render_deadline, None);
+        assert2::assert!(timers.render_sleep.deadline() > threshold);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_attached_client_timers_when_render_becomes_dirty_schedules_frame() -> rootcause::Result<()> {
+        let tempdir = tempfile::tempdir()?;
+        let config = crate::server::test_helpers::server_config(tempdir.path(), "work")?;
+        let mut timers = AttachedClientTimers::new(&config)?;
+        let disabled_deadline = timers.render_sleep.deadline();
+
+        let earliest_deadline = tokio::time::Instant::now()
+            .checked_add(RENDER_FRAME_INTERVAL)
+            .ok_or_else(|| report!("muxr test render deadline overflowed"))?;
+        timers.sync_render_deadline(true)?;
+        let latest_deadline = tokio::time::Instant::now()
+            .checked_add(RENDER_FRAME_INTERVAL)
+            .ok_or_else(|| report!("muxr test render deadline overflowed"))?;
+
+        let scheduled_deadline = timers.render_sleep.deadline();
+        pretty_assertions::assert_eq!(timers.render_deadline, Some(scheduled_deadline));
+        assert2::assert!(scheduled_deadline >= earliest_deadline);
+        assert2::assert!(scheduled_deadline <= latest_deadline);
+        assert2::assert!(scheduled_deadline < disabled_deadline);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_attached_client_timers_when_render_stays_dirty_keeps_existing_deadline() -> rootcause::Result<()> {
+        let tempdir = tempfile::tempdir()?;
+        let config = crate::server::test_helpers::server_config(tempdir.path(), "work")?;
+        let mut timers = AttachedClientTimers::new(&config)?;
+
+        timers.sync_render_deadline(true)?;
+        let scheduled_deadline = timers.render_sleep.deadline();
+        timers.sync_render_deadline(true)?;
+
+        pretty_assertions::assert_eq!(timers.render_sleep.deadline(), scheduled_deadline);
+        pretty_assertions::assert_eq!(timers.render_deadline, Some(scheduled_deadline));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_attached_client_timers_when_render_flushes_disables_render_sleep() -> rootcause::Result<()> {
+        let tempdir = tempfile::tempdir()?;
+        let config = crate::server::test_helpers::server_config(tempdir.path(), "work")?;
+        let mut timers = AttachedClientTimers::new(&config)?;
+
+        timers.sync_render_deadline(true)?;
+        let scheduled_deadline = timers.render_sleep.deadline();
+        timers.disable_render_sleep()?;
+
+        pretty_assertions::assert_eq!(timers.render_deadline, None);
+        assert2::assert!(timers.render_sleep.deadline() > scheduled_deadline);
         Ok(())
     }
 

@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use std::time::Duration;
 
 use muxr_core::AttachRequest;
@@ -12,13 +13,25 @@ use crate::session_runtime::SessionHandshakeMessage;
 
 const CLIENT_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(2);
 
+// Client task completion must wake the server even if the task returns an error or panics; otherwise task joins would
+// rely on the old lifecycle poll.
+struct TaskFinishedNotify(Arc<tokio::sync::Notify>);
+
+impl Drop for TaskFinishedNotify {
+    fn drop(&mut self) {
+        self.0.notify_one();
+    }
+}
+
 pub fn spawn_client_handshake_task(
     connection: ServerConnection,
     handshake_sender: &tokio::sync::mpsc::Sender<SessionClientHandshake>,
+    task_finished_notify: Arc<tokio::sync::Notify>,
     handles: &mut Vec<tokio::task::JoinHandle<rootcause::Result<()>>>,
 ) {
     let handshake_sender = handshake_sender.clone();
     handles.push(tokio::spawn(async move {
+        let _task_finished = TaskFinishedNotify(task_finished_notify);
         let mut connection = connection;
         let message = self::read_client_handshake(&mut connection).await?;
         if handshake_sender
@@ -37,10 +50,12 @@ pub fn spawn_attached_client_task(
     runtime: AttachedClientTaskRuntime,
     connection: ServerConnection,
     attach_request: AttachRequest,
+    task_finished_notify: Arc<tokio::sync::Notify>,
     handles: &mut Vec<tokio::task::JoinHandle<rootcause::Result<()>>>,
 ) {
     let config = config.clone();
     handles.push(tokio::spawn(async move {
+        let _task_finished = TaskFinishedNotify(task_finished_notify);
         runtime.run_attached_client(&config, connection, attach_request).await
     }));
 }

@@ -30,7 +30,7 @@ pub const fn scroll_pane_line_result(
             direction,
             scrolled,
         },
-        // Edge-drag autoscroll can outpace render IO; keep viewport changes coalesced on the render tick.
+        // Edge-drag autoscroll can outpace render IO; keep viewport changes coalesced on the render deadline.
         render_dirty: scrolled,
     }
 }
