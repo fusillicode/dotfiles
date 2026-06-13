@@ -155,8 +155,14 @@ impl PtySession {
         size: &TerminalSize,
         history_path: &Path,
         scrollback: ScrollbackConfig,
+        pane_exit_notify: Arc<tokio::sync::Notify>,
     ) -> rootcause::Result<Self> {
-        let state = Arc::new(PtyState::with_history(size, history_path, scrollback)?);
+        let state = Arc::new(PtyState::with_history(
+            size,
+            history_path,
+            scrollback,
+            pane_exit_notify,
+        )?);
         let pty_pair = native_pty_system()
             .openpty(pty_size(size))
             .map_err(|error| report!("failed to open muxr shell pty").attach(format!("error={error:#}")))?;
@@ -414,13 +420,19 @@ struct PtyState {
     exited: AtomicBool,
     exit_status: Mutex<Option<PtyExitStatus>>,
     history: Mutex<Option<PaneHistory>>,
+    pane_exit_notify: Arc<tokio::sync::Notify>,
     screen_dirty: AtomicBool,
     terminal: Mutex<TerminalState>,
     title_changes: Mutex<Vec<Option<String>>>,
 }
 
 impl PtyState {
-    fn with_history(size: &TerminalSize, history_path: &Path, scrollback: ScrollbackConfig) -> rootcause::Result<Self> {
+    fn with_history(
+        size: &TerminalSize,
+        history_path: &Path,
+        scrollback: ScrollbackConfig,
+        pane_exit_notify: Arc<tokio::sync::Notify>,
+    ) -> rootcause::Result<Self> {
         let (history, replay) = PaneHistory::open(history_path)?;
         let mut terminal = TerminalState::with_scrollback(size, scrollback);
         let _ = terminal.process(&replay);
@@ -434,6 +446,7 @@ impl PtyState {
             exited: AtomicBool::new(false),
             exit_status: Mutex::new(None),
             history: Mutex::new(Some(history)),
+            pane_exit_notify,
             screen_dirty: AtomicBool::new(false),
             terminal: Mutex::new(terminal),
             title_changes: Mutex::new(Vec::new()),
@@ -516,6 +529,8 @@ impl PtyState {
         drop(stored_exit_status);
 
         self.exited.store(true, Ordering::Release);
+        // Detached sessions have no active PTY sink; notify the server loop so it can reap sticky exit state.
+        self.pane_exit_notify.notify_one();
 
         let mut active_sink = lock_mutex(&self.active_sink, "pty active sink")?;
         if let Some(sink) = active_sink.as_ref() {
@@ -763,6 +778,7 @@ mod tests {
             exited: AtomicBool::new(false),
             exit_status: Mutex::new(None),
             history: Mutex::new(None),
+            pane_exit_notify: Arc::new(tokio::sync::Notify::new()),
             screen_dirty: AtomicBool::new(false),
             terminal: Mutex::new(TerminalState::with_scrollback(size, MuxrConfig::default().scrollback)),
             title_changes: Mutex::new(Vec::new()),
@@ -829,6 +845,7 @@ mod tests {
             &terminal_size()?,
             &history_path,
             MuxrConfig::default().scrollback,
+            Arc::new(tokio::sync::Notify::new()),
         )?;
         let handle = session.handle();
         let (sender, receiver) = mpsc::sync_channel(1);
@@ -949,7 +966,12 @@ mod tests {
         )?;
         std::fs::write(&history_path, b"\x1b]2;~\x07history")?;
 
-        let state = PtyState::with_history(&terminal_size()?, &history_path, MuxrConfig::default().scrollback)?;
+        let state = PtyState::with_history(
+            &terminal_size()?,
+            &history_path,
+            MuxrConfig::default().scrollback,
+            Arc::new(tokio::sync::Notify::new()),
+        )?;
 
         pretty_assertions::assert_eq!(lock_mutex(&state.terminal, "pty terminal")?.title(), None);
         pretty_assertions::assert_eq!(state.take_title_changes()?, Vec::<Option<String>>::new());
@@ -967,7 +989,12 @@ mod tests {
         )?;
         std::fs::write(&history_path, b"\x1b[?1004h")?;
 
-        let state = PtyState::with_history(&terminal_size()?, &history_path, MuxrConfig::default().scrollback)?;
+        let state = PtyState::with_history(
+            &terminal_size()?,
+            &history_path,
+            MuxrConfig::default().scrollback,
+            Arc::new(tokio::sync::Notify::new()),
+        )?;
         let mode = lock_mutex(&state.terminal, "pty terminal")?.application_mode();
 
         pretty_assertions::assert_eq!(mode.focus_reporting, TerminalFocusReporting::Disabled);
@@ -1117,7 +1144,12 @@ mod tests {
         std::fs::create_dir_all(path.parent().ok_or_else(|| report!("expected history parent"))?)?;
         std::fs::write(&path, b"history").context("failed to write muxr test history")?;
 
-        let state = PtyState::with_history(&terminal_size()?, &path, MuxrConfig::default().scrollback)?;
+        let state = PtyState::with_history(
+            &terminal_size()?,
+            &path,
+            MuxrConfig::default().scrollback,
+            Arc::new(tokio::sync::Notify::new()),
+        )?;
         let snapshot = lock_mutex(&state.terminal, "pty terminal")?.snapshot()?;
         let rendered = snapshot
             .rows()

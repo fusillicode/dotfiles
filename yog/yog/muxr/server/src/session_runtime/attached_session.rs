@@ -480,6 +480,7 @@ async fn run_attached_client(
         if self::attached_client_should_exit(state, heartbeat_started_at) {
             return Ok(());
         }
+        timers.sync_render_deadline(render_dirty)?;
 
         if request_turn {
             tokio::select! {
@@ -496,9 +497,9 @@ async fn run_attached_client(
                         return Ok(());
                     }
                 },
-                _ = timers.render_tick.tick() => {
+                () = timers.render_sleep.as_mut() => {
                     if !self::handle_session_runtime_timer_message(
-                        SessionRuntimeTimerMessage::RenderTick,
+                        SessionRuntimeTimerMessage::RenderDeadlineReached,
                         event_writer,
                         state,
                         &mut timers,
@@ -561,9 +562,9 @@ async fn run_attached_client(
                         return Ok(());
                     }
                 },
-                _ = timers.render_tick.tick() => {
+                () = timers.render_sleep.as_mut() => {
                     if !self::handle_session_runtime_timer_message(
-                        SessionRuntimeTimerMessage::RenderTick,
+                        SessionRuntimeTimerMessage::RenderDeadlineReached,
                         event_writer,
                         state,
                         &mut timers,
@@ -647,13 +648,19 @@ async fn handle_session_runtime_timer_message(
         SessionRuntimeTimerMessage::HeartbeatTick => {
             self::send_heartbeat_if_idle(event_writer, state.config.client_write_timeout, heartbeat_started_at).await
         }
-        SessionRuntimeTimerMessage::RenderTick => self::flush_render_diff(event_writer, state, render_dirty).await,
+        SessionRuntimeTimerMessage::RenderDeadlineReached => {
+            let keep_attached = self::flush_render_diff(event_writer, state, render_dirty).await?;
+            // `Sleep` stays ready after it fires. Disable the render deadline immediately so an idle attached
+            // client cannot hot-spin after consuming the one-shot render wakeup.
+            timers.disable_render_sleep()?;
+            Ok(keep_attached)
+        }
         SessionRuntimeTimerMessage::CmdHandoffSampleReady => {
             self::handle_cmd_handoff_sample(timers, event_writer, state, render_dirty).await
         }
         SessionRuntimeTimerMessage::TrackedProcessQuietDeadlineReached => {
             timers.disable_tracked_process_quiet_sleep()?;
-            if !self::flush_pane_attention(event_writer, state, render_dirty).await? {
+            if !self::flush_pane_attention(timers, event_writer, state, render_dirty).await? {
                 return Ok(false);
             }
             timers.sync_tracked_process_quiet_deadline(state.pane_tracked_processes.next_quiet_deadline()?)?;
@@ -700,6 +707,8 @@ async fn handle_pane_output_message(
             // PTY output from hidden panes can still update titles/tracked-process state, but it must not make the
             // attached client rebuild the visible frame when the effective pane layout cannot show those cells.
             *render_dirty |= screen_dirty_visible;
+            // Start the coalescing window before bounded writer sends below; otherwise slow sends add another frame.
+            timers.sync_render_deadline(*render_dirty)?;
             let now = Instant::now();
             let tracked_process_changed = if screen_dirty {
                 state.pane_tracked_processes.observe_runtime_visible_activity(
@@ -715,15 +724,20 @@ async fn handle_pane_output_message(
                 return Ok(false);
             }
             if tracked_process_changed
-                && !self::flush_tracked_process_runtime_layout(event_writer, state, render_dirty, screen_dirty_visible)
-                    .await?
+                && !self::flush_tracked_process_runtime_layout(
+                    timers,
+                    event_writer,
+                    state,
+                    render_dirty,
+                    screen_dirty_visible,
+                )
+                .await?
             {
                 return Ok(false);
             }
             timers.sync_tracked_process_quiet_deadline(state.pane_tracked_processes.next_quiet_deadline()?)?;
-            // PTY exit status is sticky state; the bounded output channel is only a wakeup. A separate lifecycle
-            // channel would model this more explicitly, but sweeping here preserves correctness without another
-            // cross-thread routing path.
+            // PTY exit status is sticky state. Detached exits wake the server loop through `pane_exit_notify`; while
+            // attached, the bounded output channel is only a wakeup hint, so sweep the sticky state here.
             if self::handle_reaped_panes(state, event_writer).await? {
                 return Ok(false);
             }
@@ -863,12 +877,20 @@ async fn handle_cmd_handoff_sample(
     if changed {
         let pane_surface_dirty =
             self::pane_ids_include_visible(state.layout, &state.pane_fullscreen, &state.terminal_size, &pane_ids)?;
-        return self::flush_tracked_process_runtime_layout(event_writer, state, render_dirty, pane_surface_dirty).await;
+        return self::flush_tracked_process_runtime_layout(
+            timers,
+            event_writer,
+            state,
+            render_dirty,
+            pane_surface_dirty,
+        )
+        .await;
     }
     Ok(true)
 }
 
 async fn flush_tracked_process_runtime_layout(
+    timers: &mut AttachedClientTimers,
     event_writer: &mut ServerEventWriter,
     state: &mut AttachedSessionState<'_>,
     render_dirty: &mut bool,
@@ -879,10 +901,12 @@ async fn flush_tracked_process_runtime_layout(
         .layout
         .snapshot_with_runtime_metadata(&runtime_metadata.pane_snapshot_fields())?;
     *render_dirty |= pane_surface_dirty;
+    timers.sync_render_deadline(*render_dirty)?;
     self::send_sidebar_layout_if_changed(event_writer, state, layout_snapshot).await
 }
 
 async fn flush_pane_attention(
+    timers: &mut AttachedClientTimers,
     event_writer: &mut ServerEventWriter,
     state: &mut AttachedSessionState<'_>,
     render_dirty: &mut bool,
@@ -896,6 +920,7 @@ async fn flush_pane_attention(
         TrackedProcessAttention::Unchanged => return Ok(true),
     };
     *render_dirty |= pane_surface_dirty;
+    timers.sync_render_deadline(*render_dirty)?;
     let runtime_metadata = self::runtime_pane_metadata(state)?;
     let layout_snapshot = state
         .layout
@@ -1189,10 +1214,19 @@ async fn handle_attached_request(
             )
         }
         ClientRequest::Key(key) => self::handle_key_request(key, event_writer, state, timers, render_dirty).await,
-        ClientRequest::Mouse(event) => self::handle_mouse_event_request(event, event_writer, state, render_dirty).await,
+        ClientRequest::Mouse(event) => {
+            self::handle_mouse_event_request(event, event_writer, state, timers, render_dirty).await
+        }
         ClientRequest::ScrollPaneLineAt { position, direction } => {
-            self::handle_scroll_pane_line_at_client_request(position, direction, event_writer, state, render_dirty)
-                .await
+            self::handle_scroll_pane_line_at_client_request(
+                position,
+                direction,
+                event_writer,
+                state,
+                timers,
+                render_dirty,
+            )
+            .await
         }
         ClientRequest::FocusPaneAt(position) => {
             // The scrollback editor layout is attached-client-local. Direct mouse focus must not mutate that temporary
@@ -1289,6 +1323,7 @@ fn handle_pane_bytes_request(
 ) -> rootcause::Result<bool> {
     if !bytes.is_empty() {
         *render_dirty |= self::write_active_pane_user_input(state, timers, interaction, |handle| write(handle, bytes))?;
+        timers.sync_render_deadline(*render_dirty)?;
     }
     Ok(true)
 }
@@ -1298,6 +1333,7 @@ async fn handle_scroll_pane_line_at_client_request(
     direction: PaneScrollDirection,
     event_writer: &mut ServerEventWriter,
     state: &AttachedSessionState<'_>,
+    timers: &mut AttachedClientTimers,
     render_dirty: &mut bool,
 ) -> rootcause::Result<bool> {
     let scrolled = if let Some(pane_id) = self::visible_pane_id_at_position(state, position)? {
@@ -1307,6 +1343,7 @@ async fn handle_scroll_pane_line_at_client_request(
     };
     let outcome = crate::pane_scroll::scroll_pane_line_result(position, direction, scrolled);
     *render_dirty |= outcome.render_dirty;
+    timers.sync_render_deadline(*render_dirty)?;
     self::send_writer_event_with_timeout(event_writer, &outcome.event, state.config.client_write_timeout).await
 }
 
@@ -1388,6 +1425,7 @@ async fn handle_key_request(
                     crate::keyboard_input::input_interaction(&key.raw_bytes),
                     |handle| handle.write_input(&key.raw_bytes),
                 )?;
+                timers.sync_render_deadline(*render_dirty)?;
             }
             Ok(true)
         }
@@ -1611,6 +1649,7 @@ async fn handle_mouse_event_request(
     event: ClientMouseEvent,
     event_writer: &mut ServerEventWriter,
     state: &mut AttachedSessionState<'_>,
+    timers: &mut AttachedClientTimers,
     render_dirty: &mut bool,
 ) -> rootcause::Result<bool> {
     let Some(region) = self::visible_pane_region_snapshot_at_position(state, event.position)? else {
@@ -1629,6 +1668,7 @@ async fn handle_mouse_event_request(
             };
             if let Some(scrolled_to_bottom) = handle.write_mouse_event(event, &region, protocol)? {
                 *render_dirty |= scrolled_to_bottom;
+                timers.sync_render_deadline(*render_dirty)?;
                 state.pane_tracked_processes.record_user_interaction(
                     *region.id(),
                     TrackedProcessUserInteraction::MayEcho,
@@ -1645,6 +1685,7 @@ async fn handle_mouse_event_request(
             direction,
         } => {
             *render_dirty |= handle.write_faux_scroll_input(direction, cursor_key_mode)?;
+            timers.sync_render_deadline(*render_dirty)?;
             state.pane_tracked_processes.record_user_interaction(
                 *region.id(),
                 TrackedProcessUserInteraction::MayEcho,
@@ -1659,8 +1700,9 @@ async fn handle_mouse_event_request(
             if !crate::pane_scroll::scroll_pane(pane_id, direction, PaneScrollAmount::Wheel, state.runtimes)? {
                 return Ok(true);
             }
-            // Wheel input can arrive much faster than render IO; mark dirty and let the normal render tick coalesce.
+            // Wheel input can arrive much faster than render IO; mark dirty and let the render deadline coalesce.
             *render_dirty = true;
+            timers.sync_render_deadline(*render_dirty)?;
             Ok(true)
         }
         crate::pane_mouse::PaneMouseAction::FocusPane => self::handle_mouse_focus(event, event_writer, state).await,
@@ -1902,7 +1944,11 @@ mod tests {
                 };
 
                 crate::session_files::prepare_session_dirs(&config.paths)?;
-                let mut session_runtime = SessionRuntime::spawn(&config, &attach_request.terminal_size)?;
+                let mut session_runtime = SessionRuntime::spawn(
+                    &config,
+                    &attach_request.terminal_size,
+                    Arc::new(tokio::sync::Notify::new()),
+                )?;
                 let (completion_sender, _completion_receiver) = tokio::sync::mpsc::channel(1);
                 let blocked_state = SessionRuntimeState {
                     layout: SessionLayout::initial(&config.session, self::metadata("sh", 1))?,
@@ -1994,6 +2040,7 @@ mod tests {
                 startup_cmds: Vec::new(),
             },
             &terminal_size,
+            Arc::new(tokio::sync::Notify::new()),
         )?;
         let mut pane_fullscreen = PaneFullscreen::default();
         let opened = crate::scrollback_editor::open(

@@ -29,13 +29,13 @@ use crate::sessions_delete::DeleteSessions;
 use crate::state::SessionLayout;
 use crate::state::SessionMetadata;
 
-const ACCEPT_POLL_INTERVAL: Duration = Duration::from_millis(10);
 const CLIENT_HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
 const CLIENT_HEARTBEAT_TIMEOUT: Duration = Duration::from_secs(15);
 const CLIENT_WRITE_TIMEOUT: Duration = Duration::from_secs(2);
 
 struct SessionHandshakeContext<'a> {
     attached_client_task_sender: &'a tokio::sync::mpsc::Sender<SessionAttachedClientTaskMessage>,
+    client_task_finished_notify: &'a Arc<tokio::sync::Notify>,
     config: &'a ServerConfig,
     delete_sessions: &'a Arc<DeleteSessions>,
 }
@@ -154,14 +154,17 @@ async fn serve_prepared_async(config: &ServerConfig) -> rootcause::Result<()> {
     secure_socket_file(&config.paths.socket)?;
     fs::write(&config.paths.pid, std::process::id().to_string()).context("failed to write muxr server pid")?;
     let initial_size = TerminalSize::new(80, 24)?;
-    let mut runtime = SessionRuntime::spawn(config, &initial_size)?;
+    let pane_exit_notify = Arc::new(tokio::sync::Notify::new());
+    let mut runtime = SessionRuntime::spawn(config, &initial_size, Arc::clone(&pane_exit_notify))?;
     runtime.persist_metadata(&config.paths)?;
     crate::session_tracing::server::ready(&config.paths);
     let delete_sessions = Arc::new(DeleteSessions::default());
+    let client_task_finished_notify = Arc::new(tokio::sync::Notify::new());
     let (handshake_sender, mut handshake_receiver) = tokio::sync::mpsc::channel(CLIENT_HANDSHAKE_CHANNEL_LIMIT);
     let (attached_client_task_sender, mut attached_client_task_receiver) = tokio::sync::mpsc::channel(1);
     let handshake_context = SessionHandshakeContext {
         attached_client_task_sender: &attached_client_task_sender,
+        client_task_finished_notify: &client_task_finished_notify,
         config,
         delete_sessions: &delete_sessions,
     };
@@ -179,15 +182,8 @@ async fn serve_prepared_async(config: &ServerConfig) -> rootcause::Result<()> {
         )
         .await?;
 
-        if delete_sessions.is_requested() {
-            break SessionRuntimeShutdownMessage::DeleteSessionRequested;
-        }
-
-        if matches!(runtime.reap_exited_panes(config)?, ReapResult::Final) {
-            break SessionRuntimeShutdownMessage::FinalPaneExited;
-        }
-        if runtime.pane_runtime_set_empty() {
-            break SessionRuntimeShutdownMessage::PaneRuntimeSetEmpty;
+        if let Some(message) = self::runtime_shutdown_message(&mut runtime, config, &delete_sessions)? {
+            break message;
         }
 
         crate::attached_client::join_finished_client_tasks(&mut handles).await?;
@@ -227,12 +223,16 @@ async fn serve_prepared_async(config: &ServerConfig) -> rootcause::Result<()> {
                     config,
                     accepted?,
                     &handshake_sender,
+                    &client_task_finished_notify,
                     &mut accepted_connections,
                     &mut accepting_connections,
                     &mut handles,
                 )?;
             }
-            () = tokio::time::sleep(ACCEPT_POLL_INTERVAL) => {}
+            () = client_task_finished_notify.notified() => {}
+            () = pane_exit_notify.notified() => {
+                // Pane exit state is sticky in the runtimes; wake up so the next loop iteration can reap it.
+            }
         }
     };
 
@@ -252,10 +252,28 @@ async fn serve_prepared_async(config: &ServerConfig) -> rootcause::Result<()> {
     Ok(())
 }
 
+fn runtime_shutdown_message(
+    runtime: &mut SessionRuntime,
+    config: &ServerConfig,
+    delete_sessions: &DeleteSessions,
+) -> rootcause::Result<Option<SessionRuntimeShutdownMessage>> {
+    if delete_sessions.is_requested() {
+        return Ok(Some(SessionRuntimeShutdownMessage::DeleteSessionRequested));
+    }
+    if matches!(runtime.reap_exited_panes(config)?, ReapResult::Final) {
+        return Ok(Some(SessionRuntimeShutdownMessage::FinalPaneExited));
+    }
+    if runtime.pane_runtime_set_empty() {
+        return Ok(Some(SessionRuntimeShutdownMessage::PaneRuntimeSetEmpty));
+    }
+    Ok(None)
+}
+
 fn handle_accepted_connection(
     config: &ServerConfig,
     connection: ServerConnection,
     handshake_sender: &tokio::sync::mpsc::Sender<SessionClientHandshake>,
+    client_task_finished_notify: &Arc<tokio::sync::Notify>,
     accepted_connections: &mut usize,
     accepting_connections: &mut bool,
     handles: &mut Vec<tokio::task::JoinHandle<rootcause::Result<()>>>,
@@ -263,7 +281,12 @@ fn handle_accepted_connection(
     *accepted_connections = accepted_connections
         .checked_add(1)
         .ok_or_else(|| report!("muxr accepted connection count overflowed"))?;
-    crate::attached_client::spawn_client_handshake_task(connection, handshake_sender, handles);
+    crate::attached_client::spawn_client_handshake_task(
+        connection,
+        handshake_sender,
+        Arc::clone(client_task_finished_notify),
+        handles,
+    );
 
     if let Some(max_accepted_connections) = config.max_accepted_connections
         && *accepted_connections >= max_accepted_connections
@@ -310,6 +333,7 @@ async fn handle_session_handshake(
                 attached_client_task_runtime,
                 connection,
                 attach_request,
+                Arc::clone(context.client_task_finished_notify),
                 handles,
             );
         }
@@ -418,6 +442,7 @@ mod tests {
     use muxr_transport::ClientConnection;
     use muxr_transport::ClientEventReader;
     use muxr_transport::ClientRequestWriter;
+    use tokio::io::AsyncWriteExt;
 
     use super::test_helpers::server_config;
     use super::test_helpers::session_paths;
@@ -593,6 +618,45 @@ mod tests {
     }
 
     #[test]
+    fn test_serve_when_pre_attach_handshake_errors_with_accepted_limit_joins_failed_task() -> rootcause::Result<()> {
+        self::runtime()?.block_on(async {
+            let tempdir = tempfile::tempdir()?;
+            let (session, paths) = self::session_paths(tempdir.path(), "work")?;
+            let handle = self::spawn_test_server_with_shell(
+                &session,
+                &paths,
+                Some(1),
+                self::shell_cmd_with_args("/bin/sh", &["-c", "sleep 2; exit 0"]),
+            );
+
+            self::wait_for_socket(&paths.socket)?;
+            let mut stream = tokio::net::UnixStream::connect(&paths.socket)
+                .await
+                .context("failed to connect raw muxr test socket")?;
+            stream.write_all(&[0, 0, 0, 9]).await?;
+            stream.write_all(b"MUXR-BINV").await?;
+            drop(stream);
+
+            let started_at = Instant::now();
+            while !handle.is_finished() {
+                if started_at.elapsed() > Duration::from_millis(800) {
+                    let _cleanup_result = self::join_server_with_timeout(handle);
+                    return Err(report!(
+                        "timed out waiting for muxr invalid-handshake task join before shell exit"
+                    ));
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+            let result = self::join_server(handle);
+
+            assert2::assert!(result.is_err());
+            assert2::assert!(!paths.socket.exists());
+            assert2::assert!(!paths.pid.exists());
+            Ok(())
+        })
+    }
+
+    #[test]
     fn test_serve_when_attached_client_does_not_answer_heartbeat_releases_slot() -> rootcause::Result<()> {
         self::runtime()?.block_on(async {
             let tempdir = tempfile::tempdir()?;
@@ -746,7 +810,12 @@ mod tests {
             layout: layout.clone(),
             startup_cmds: Vec::new(),
         };
-        let mut runtimes = PaneRuntimes::spawn_for_start_seed(&config, &start_seed, &terminal_size)?;
+        let mut runtimes = PaneRuntimes::spawn_for_start_seed(
+            &config,
+            &start_seed,
+            &terminal_size,
+            Arc::new(tokio::sync::Notify::new()),
+        )?;
         let pane_id = PaneId::new(1)?;
         {
             let handle = runtimes.handle(pane_id)?;
@@ -793,7 +862,12 @@ mod tests {
             layout: layout.clone(),
             startup_cmds: Vec::new(),
         };
-        let runtimes = PaneRuntimes::spawn_for_start_seed(&config, &start_seed, &terminal_size)?;
+        let runtimes = PaneRuntimes::spawn_for_start_seed(
+            &config,
+            &start_seed,
+            &terminal_size,
+            Arc::new(tokio::sync::Notify::new()),
+        )?;
         let inactive_pane = PaneId::new(1)?;
         let active_pane = PaneId::new(2)?;
         self::wait_for_runtime_snapshot_contains(&runtimes, inactive_pane, "dirty")?;
@@ -1465,6 +1539,104 @@ mod tests {
     }
 
     #[test]
+    fn test_serve_when_detached_inactive_tab_pane_exits_reaps_hidden_pane_before_attach() -> rootcause::Result<()> {
+        self::runtime()?.block_on(async {
+            let tempdir = tempfile::tempdir()?;
+            let (session, paths) = self::session_paths(tempdir.path(), "work")?;
+            let first_cwd = tempdir.path().join("pane-1-cwd");
+            let second_cwd = tempdir.path().join("pane-2-cwd");
+            let trigger_path = tempdir.path().join("exit-pane-1");
+            fs::create_dir_all(&first_cwd)?;
+            fs::create_dir_all(&second_cwd)?;
+            fs::create_dir_all(&paths.root)?;
+            let first_cwd = fs::canonicalize(first_cwd)?;
+            let second_cwd = fs::canonicalize(second_cwd)?;
+
+            let mut layout = SessionLayout::initial(
+                &session,
+                SessionMetadata {
+                    cmd_label: "sh".to_owned(),
+                    cwd: first_cwd.to_string_lossy().into_owned(),
+                    started_at: 1,
+                },
+            )?;
+            let active_pane = layout.create_tab(SessionMetadata {
+                cmd_label: "sh".to_owned(),
+                cwd: second_cwd.to_string_lossy().into_owned(),
+                started_at: 2,
+            })?;
+            pretty_assertions::assert_eq!(active_pane, PaneId::new(2)?);
+            crate::state::persisted::write_metadata(&paths, &layout)?;
+
+            let first_cwd = first_cwd.to_string_lossy().into_owned();
+            let second_cwd = second_cwd.to_string_lossy().into_owned();
+            let trigger_path = trigger_path.to_string_lossy().into_owned();
+            let shell_script = "\
+                current_dir=$(pwd -P); \
+                if [ \"$current_dir\" = \"$1\" ]; then \
+                    while [ ! -e \"$3\" ]; do sleep 0.01; done; \
+                    exit 7; \
+                elif [ \"$current_dir\" = \"$2\" ]; then \
+                    exec cat; \
+                fi; \
+                exit 99";
+            let handle = self::spawn_test_server_with_shell(
+                &session,
+                &paths,
+                Some(1),
+                self::shell_cmd_with_args(
+                    "/bin/sh",
+                    &[
+                        "-c",
+                        shell_script,
+                        "muxr-test-detached-inactive-exit",
+                        first_cwd.as_str(),
+                        second_cwd.as_str(),
+                        trigger_path.as_str(),
+                    ],
+                ),
+            );
+
+            self::wait_for_socket(&paths.socket)?;
+            fs::write(&trigger_path, b"exit")?;
+            let started_at = Instant::now();
+            loop {
+                let layout: serde_json::Value =
+                    serde_json::from_slice(&fs::read(&paths.layout).context("failed to read muxr test layout")?)
+                        .context("failed to parse muxr test layout")?;
+                let Some(tabs) = layout["tabs"].as_array() else {
+                    return Err(report!("muxr test layout tabs are missing"));
+                };
+                let actual_tabs = tabs
+                    .iter()
+                    .map(|tab| {
+                        tab["id"]
+                            .as_u64()
+                            .ok_or_else(|| report!("muxr test layout tab id is missing"))
+                    })
+                    .collect::<rootcause::Result<Vec<_>>>()?;
+                let actual_panes = self::json_pane_tree_pane_ids(&layout["tabs"][0]["pane_tree"])?;
+                if layout["active_tab"].as_u64() == Some(2)
+                    && layout["tabs"][0]["active_pane"].as_u64() == Some(2)
+                    && actual_tabs == vec![2]
+                    && actual_panes == vec![2]
+                {
+                    break;
+                }
+                if started_at.elapsed() > SERVER_READY_TIMEOUT {
+                    return Err(report!("timed out waiting for muxr detached pane reap").attach(layout.to_string()));
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+
+            let client = self::open_attached_client(&session, &paths).await?;
+            pretty_assertions::assert_eq!(client.layout.active_tab().to_string(), "tab-2");
+            self::detach_client(client).await?;
+            self::join_server(handle)
+        })
+    }
+
+    #[test]
     fn test_serve_when_no_button_mouse_motion_arrives_does_not_focus_hovered_pane() -> rootcause::Result<()> {
         self::runtime()?.block_on(async {
             let tempdir = tempfile::tempdir()?;
@@ -1944,7 +2116,15 @@ mod tests {
                 &session,
                 &paths,
                 Some(1),
-                self::shell_cmd_with_args("/bin/sh", &["-c", "while :; do printf x; done"]),
+                // Keep the flood bounded so parallel test runs do not starve the detach path; the payload is still
+                // large enough to leave PTY output queued while detach is requested.
+                self::shell_cmd_with_args(
+                    "/bin/sh",
+                    &[
+                        "-c",
+                        "i=0; while [ $i -lt 65536 ]; do printf xxxxxxxxxxxxxxxx; i=$((i + 1)); done; sleep 30",
+                    ],
+                ),
             );
 
             self::wait_for_socket(&paths.socket)?;
@@ -1972,7 +2152,6 @@ mod tests {
             self::shell_cmd_with_args("/bin/sh", &["-c", "printf done"]),
         );
 
-        self::wait_for_socket(&paths.socket)?;
         self::join_server_with_timeout(handle)?;
 
         assert2::assert!(!paths.socket.exists());
@@ -2044,7 +2223,6 @@ mod tests {
             self::shell_cmd_with_args("/bin/sh", &["-c", "exit 7"]),
         );
 
-        self::wait_for_socket(&paths.socket)?;
         self::join_server_with_timeout(handle)?;
 
         self::assert_final_layout_metadata(&paths, 7, false)?;
