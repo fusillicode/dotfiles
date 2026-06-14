@@ -14,27 +14,16 @@ use muxr_transport::ClientRequestWriter;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
 
-use self::copy_selection::SelectionEdgeScrollRequest;
-use self::renderer::ClientRenderOutcome;
-use self::renderer::ClientRenderer;
-use self::session_attach::AttachedSession;
-use self::terminal::TerminalGuard;
+use crate::copy_selection::SelectionEdgeScrollRequest;
 use crate::input::DecodedInput;
 use crate::input::InputDecoder;
-
-pub mod copy_selection;
-mod pane_focus;
-mod pane_mouse;
-mod pane_scroll;
-mod renderer;
-mod session_attach;
-mod session_start;
-mod tab_bar;
-mod terminal;
+use crate::renderer::ClientRenderOutcome;
+use crate::renderer::ClientRenderer;
+use crate::session::attach::AttachedSession;
+use crate::terminal::TerminalGuard;
 
 const RESIZE_POLL_INTERVAL: Duration = Duration::from_millis(250);
 const AMBIGUOUS_INPUT_TIMEOUT: Duration = Duration::from_millis(50);
-const DOUBLE_CLICK_THRESHOLD: Duration = Duration::from_millis(400);
 const SELECTION_EDGE_SCROLL_INTERVAL: Duration = Duration::from_millis(50);
 const STDIN_BUFFER_SIZE: usize = 8192;
 const CONTROL_REQUEST_CHANNEL_LIMIT: usize = 128;
@@ -66,10 +55,10 @@ pub fn start(session: &SessionName, server_executable: &Path, external_layout: O
         .context("failed to build muxr tokio runtime")?
         .block_on(async {
             let muxr_config = MuxrConfig::default();
-            let terminal_size = self::terminal::current_terminal_size()?;
-            let pane_size = self::terminal::pane_size_for_terminal(muxr_config.tab_bar.width, &terminal_size)?;
+            let terminal_size = crate::terminal::current_terminal_size()?;
+            let pane_size = crate::terminal::pane_size_for_terminal(muxr_config.tab_bar.width, &terminal_size)?;
             let attached_session =
-                self::session_attach::open_session(session, pane_size.clone(), server_executable, external_layout)
+                crate::session::attach::open_session(session, pane_size.clone(), server_executable, external_layout)
                     .await?;
             self::run_interactive(&muxr_config, attached_session, pane_size).await
         })
@@ -188,7 +177,7 @@ async fn handle_client_input_action(
             Ok(true)
         }
         ClientInputAction::Mouse(event) => {
-            self::pane_mouse::handle_mouse_input_action(muxr_config, event, input_sender, renderer, stdout).await
+            crate::pane::mouse::handle_mouse_input_action(muxr_config, event, input_sender, renderer, stdout).await
         }
         ClientInputAction::ServerRequest(request) => {
             if input_sender.send(request).await.is_err() {
@@ -200,13 +189,13 @@ async fn handle_client_input_action(
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum DroppableSendOutcome {
+pub enum DroppableSendOutcome {
     Closed,
     Dropped,
     Sent,
 }
 
-fn send_droppable_request(
+pub fn send_droppable_request(
     input_sender: &tokio::sync::mpsc::Sender<ClientRequest>,
     request: ClientRequest,
 ) -> DroppableSendOutcome {
@@ -223,7 +212,7 @@ fn send_droppable_request(
     }
 }
 
-fn send_edge_scroll_request(
+pub fn send_edge_scroll_request(
     input_sender: &tokio::sync::mpsc::Sender<ClientRequest>,
     renderer: &mut ClientRenderer,
     request: SelectionEdgeScrollRequest,
@@ -367,7 +356,7 @@ fn send_decoded_input(input_sender: &tokio::sync::mpsc::Sender<ClientInputAction
                 // PTY bytes.
                 ClientInputAction::ServerRequest(ClientRequest::Key(key))
             }
-            DecodedInput::Mouse(event) if self::pane_mouse::mouse_event_can_be_dropped(event) => {
+            DecodedInput::Mouse(event) if crate::pane::mouse::mouse_event_can_be_dropped(event) => {
                 if !self::send_droppable_input_action(input_sender, ClientInputAction::Mouse(event)) {
                     return false;
                 }
@@ -415,11 +404,11 @@ fn spawn_resize_forwarder(
             }
 
             thread::sleep(RESIZE_POLL_INTERVAL);
-            let Ok(next_terminal_size) = self::terminal::current_terminal_size() else {
+            let Ok(next_terminal_size) = crate::terminal::current_terminal_size() else {
                 break;
             };
             // Resize requests use the pane viewport, because left-side host-terminal columns are reserved for tab UI.
-            let Ok(next_size) = self::terminal::pane_size_for_terminal(tab_bar_width, &next_terminal_size) else {
+            let Ok(next_size) = crate::terminal::pane_size_for_terminal(tab_bar_width, &next_terminal_size) else {
                 break;
             };
             if next_size == last_size {
@@ -456,10 +445,10 @@ mod tests {
     use muxr_transport::ClientConnection;
     use muxr_transport::ServerListener;
 
-    use super::terminal::SynchronizedOutput;
     use super::*;
-    use crate::client::copy_selection::SelectionInput;
-    use crate::client::copy_selection::test_helpers as copy_selection_test_helpers;
+    use crate::copy_selection::SelectionInput;
+    use crate::copy_selection::test_helpers as copy_selection_test_helpers;
+    use crate::terminal::SynchronizedOutput;
 
     #[test]
     fn test_forward_client_requests_when_input_queue_is_ready_sends_control_first() -> rootcause::Result<()> {

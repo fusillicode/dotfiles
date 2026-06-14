@@ -12,9 +12,9 @@ use muxr_transport::ClientConnection;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
 
-use crate::sessions_list::SESSION_PROBE_TIMEOUT;
-use crate::sessions_list::SessionState;
-use crate::sessions_list::session_state;
+use crate::session::list::SESSION_PROBE_TIMEOUT;
+use crate::session::list::SessionState;
+use crate::session::list::session_state;
 
 // Live delete can race with one bounded server write to an attached client; keep the cleanup wait above that path.
 const SESSION_DELETE_TIMEOUT: Duration = Duration::from_secs(5);

@@ -18,7 +18,7 @@ use muxr_transport::ClientRequestWriter;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
 
-use super::session_start;
+use crate::session::start;
 
 const ATTACH_TIMEOUT: Duration = Duration::from_secs(2);
 const SERVER_READY_TIMEOUT: Duration = Duration::from_secs(2);
@@ -60,11 +60,11 @@ async fn open_session_with_paths(
         Ok(attached_session) => return Ok(attached_session),
         Err(attach_failure) => {
             handle_attach_failure(attach_failure)?;
-            session_start::cleanup_stale_session_files(paths)?;
+            start::cleanup_stale_session_files(paths)?;
         }
     }
 
-    let spawned_server = session_start::spawn_server_process(session, paths, server_executable, external_layout)?;
+    let spawned_server = start::spawn_server_process(session, paths, server_executable, external_layout)?;
     self::attach_started_server(session, paths, terminal_size, &spawned_server.log_locator).await
 }
 
@@ -127,7 +127,7 @@ async fn attach_started_server(
     session: &SessionName,
     paths: &SessionPaths,
     terminal_size: TerminalSize,
-    server_log_locator: &session_start::ServerLogLocator,
+    server_log_locator: &start::ServerLogLocator,
 ) -> rootcause::Result<AttachedSession> {
     let started_at = Instant::now();
 
@@ -149,7 +149,7 @@ async fn attach_started_server(
 
 fn server_startup_failure_error(
     error: rootcause::Report,
-    server_log_locator: &session_start::ServerLogLocator,
+    server_log_locator: &start::ServerLogLocator,
 ) -> rootcause::Report {
     // The server owns log timestamp generation, and startup failures may happen before attach can return it. Use the
     // spawned pid as the stable client-known part of the debug hint instead of scanning logs during startup failure.
@@ -191,7 +191,7 @@ async fn guard_external_start_seed(
         Err(error) => return Err(error).context("failed to read muxr session layout metadata")?,
     }
 
-    if crate::sessions_list::session_state_async(paths).await? == crate::sessions_list::SessionState::Live {
+    if crate::session::list::session_state_async(paths).await? == crate::session::list::SessionState::Live {
         return Err(self::external_layout_existing_session_error(
             session,
             external_layout,

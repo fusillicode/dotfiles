@@ -107,13 +107,16 @@ fn queue_sidebar_row(
 ) -> rootcause::Result<()> {
     let content_width = usize::from(config.width.saturating_sub(2));
     queue_cmd(stdout, MoveTo(0, row))?;
-    queue_cmd(stdout, SetBackgroundColor(crate::render::crossterm_color(config.bg)))?;
+    queue_cmd(
+        stdout,
+        SetBackgroundColor(crate::frame_buffer::crossterm_color(config.bg)),
+    )?;
     queue_cmd(
         stdout,
         SetForegroundColor(if active {
-            crate::render::crossterm_color(config.rail.active_fg)
+            crate::frame_buffer::crossterm_color(config.rail.active_fg)
         } else {
-            crate::render::crossterm_color(config.rail.inactive_fg)
+            crate::frame_buffer::crossterm_color(config.rail.inactive_fg)
         }),
     )?;
     queue_cmd(stdout, Print("\u{258e}"))?;
@@ -137,10 +140,13 @@ fn queue_sidebar_row(
         queue_cmd(stdout, Print(pad("", trailing_width)))?;
     }
     queue_cmd(stdout, SetAttribute(Attribute::Reset))?;
-    queue_cmd(stdout, SetBackgroundColor(crate::render::crossterm_color(config.bg)))?;
     queue_cmd(
         stdout,
-        SetForegroundColor(crate::render::crossterm_color(config.separator_fg)),
+        SetBackgroundColor(crate::frame_buffer::crossterm_color(config.bg)),
+    )?;
+    queue_cmd(
+        stdout,
+        SetForegroundColor(crate::frame_buffer::crossterm_color(config.separator_fg)),
     )?;
     queue_cmd(stdout, Print(SEPARATOR))?;
     Ok(())
@@ -148,13 +154,16 @@ fn queue_sidebar_row(
 
 fn queue_sidebar_text_style(stdout: &mut impl Write, config: TabBarConfig, active: bool) -> rootcause::Result<()> {
     queue_cmd(stdout, SetAttribute(Attribute::Reset))?;
-    queue_cmd(stdout, SetBackgroundColor(crate::render::crossterm_color(config.bg)))?;
+    queue_cmd(
+        stdout,
+        SetBackgroundColor(crate::frame_buffer::crossterm_color(config.bg)),
+    )?;
     queue_cmd(
         stdout,
         SetForegroundColor(if active {
-            crate::render::crossterm_color(config.active_fg)
+            crate::frame_buffer::crossterm_color(config.active_fg)
         } else {
-            crate::render::crossterm_color(config.inactive_fg)
+            crate::frame_buffer::crossterm_color(config.inactive_fg)
         }),
     )?;
     if active {
@@ -174,7 +183,7 @@ fn queue_tracked_process_state_marker(
     };
 
     queue_cmd(stdout, SetAttribute(Attribute::Bold))?;
-    queue_cmd(stdout, SetForegroundColor(crate::render::crossterm_color(color)))?;
+    queue_cmd(stdout, SetForegroundColor(crate::frame_buffer::crossterm_color(color)))?;
     queue_cmd(stdout, Print("\u{2022}"))?;
     self::queue_sidebar_text_style(stdout, config, active)?;
     queue_cmd(stdout, Print(" "))?;
