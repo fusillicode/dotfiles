@@ -25,7 +25,7 @@ fn remove_server_file(event: &str, path: &Path) {
         Ok(()) => {}
         // Cleanup can race with explicit delete or partial startup rollback; only other errors leave stale state.
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-        Err(error) => crate::session_tracing::server::file_cleanup_failed(event, path, &error),
+        Err(error) => crate::session::tracing::server::file_cleanup_failed(event, path, &error),
     }
 }
 
@@ -108,7 +108,7 @@ mod tests {
         let tempdir = tempfile::tempdir()?;
         let session = SessionName::default();
 
-        let log = crate::session_tracing::collect_test_log(&session, || {
+        let log = crate::session::tracing::collect_test_log(&session, || {
             self::remove_server_file("remove_socket", &tempdir.path().join("missing.sock"));
             Ok(())
         })?;

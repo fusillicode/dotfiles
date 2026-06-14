@@ -4,9 +4,9 @@ use muxr_core::PaneId;
 use muxr_core::TabId;
 use rootcause::report;
 
-use crate::client_session::ClientSessionState;
-use crate::pane_runtime::PaneRuntimes;
-use crate::pane_tracked_process::PaneTrackedProcesses;
+use crate::client::session::ClientSessionState;
+use crate::pane::runtime::PaneRuntimes;
+use crate::pane::tracked_process::PaneTrackedProcesses;
 use crate::server::ServerConfig;
 use crate::state::SessionLayout;
 

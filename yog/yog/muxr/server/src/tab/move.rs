@@ -1,6 +1,6 @@
 use rootcause::report;
 
-use crate::client_session::ClientSessionState;
+use crate::client::session::ClientSessionState;
 use crate::server::ServerConfig;
 use crate::state::SessionLayout;
 

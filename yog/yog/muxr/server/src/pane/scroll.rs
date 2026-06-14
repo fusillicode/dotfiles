@@ -3,8 +3,8 @@ use muxr_core::PaneId;
 use muxr_core::PaneScrollDirection;
 use muxr_core::ServerEvent;
 
-use crate::client_session::ClientSessionState;
-use crate::pane_runtime::PaneRuntimes;
+use crate::client::session::ClientSessionState;
+use crate::pane::runtime::PaneRuntimes;
 use crate::terminal::TerminalCursorKeyMode;
 
 const FAUX_SCROLL_LINES_PER_WHEEL_EVENT: usize = 3;

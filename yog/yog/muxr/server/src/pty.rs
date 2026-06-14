@@ -211,11 +211,11 @@ impl Drop for PtySession {
             match self::lock_mutex(&self.handle.child_killer, "pty child killer") {
                 Ok(mut killer) => {
                     let _ = killer.kill().inspect_err(|error| {
-                        crate::session_tracing::pty::shutdown_failed("kill_child", error);
+                        crate::session::tracing::pty::shutdown_failed("kill_child", error);
                     });
                 }
                 Err(error) => {
-                    crate::session_tracing::pty::shutdown_failed("lock_child_killer", &error);
+                    crate::session::tracing::pty::shutdown_failed("lock_child_killer", &error);
                 }
             }
         }
@@ -223,12 +223,12 @@ impl Drop for PtySession {
         if let Some(child_wait_handle) = self.child_wait_handle.take()
             && child_wait_handle.join().is_err()
         {
-            crate::session_tracing::pty::shutdown_failed("join_child_wait", "child wait thread panicked");
+            crate::session::tracing::pty::shutdown_failed("join_child_wait", "child wait thread panicked");
         }
         if let Some(reader_handle) = self.reader_handle.take()
             && reader_handle.join().is_err()
         {
-            crate::session_tracing::pty::shutdown_failed("join_reader", "reader thread panicked");
+            crate::session::tracing::pty::shutdown_failed("join_reader", "reader thread panicked");
         }
     }
 }
@@ -302,7 +302,7 @@ impl PtyHandle {
         region: &PaneRegionSnapshot,
         protocol: TerminalMouseProtocol,
     ) -> rootcause::Result<Option<bool>> {
-        let Some(bytes) = crate::pane_mouse::encode_pty_mouse_event(event, region, protocol)? else {
+        let Some(bytes) = crate::pane::mouse::encode_pty_mouse_event(event, region, protocol)? else {
             return Ok(None);
         };
         // Scrollback follows only events that reach the PTY, so filtered motion does not hide history.
@@ -321,7 +321,10 @@ impl PtyHandle {
         direction: PaneScrollDirection,
         cursor_key_mode: TerminalCursorKeyMode,
     ) -> rootcause::Result<bool> {
-        self.write_input(&crate::pane_scroll::faux_scroll_input_bytes(direction, cursor_key_mode))
+        self.write_input(&crate::pane::scroll::faux_scroll_input_bytes(
+            direction,
+            cursor_key_mode,
+        ))
     }
 
     pub fn write_focus_event(&self, event: TerminalFocusEvent) -> rootcause::Result<()> {
@@ -537,10 +540,10 @@ impl PtyState {
             match sink.sender.try_send(PtyEvent::Exited) {
                 Ok(()) => {}
                 Err(TrySendError::Full(_)) => {
-                    crate::session_tracing::pty::exit_wakeup_not_queued("channel_full");
+                    crate::session::tracing::pty::exit_wakeup_not_queued("channel_full");
                 }
                 Err(TrySendError::Disconnected(_)) => {
-                    crate::session_tracing::pty::exit_wakeup_not_queued("channel_disconnected");
+                    crate::session::tracing::pty::exit_wakeup_not_queued("channel_disconnected");
                     sink.output_current.store(false, Ordering::Release);
                     *active_sink = None;
                 }
@@ -714,11 +717,11 @@ fn spawn_child_wait_thread(mut child: Box<dyn Child + Send + Sync>, state: Arc<P
                     let _ = state
                         .mark_exited(PtyExitStatus::from(&exit_status))
                         .inspect_err(|error| {
-                            crate::session_tracing::pty::shutdown_failed("mark_exited", error);
+                            crate::session::tracing::pty::shutdown_failed("mark_exited", error);
                         });
                 }
                 Err(error) => {
-                    crate::session_tracing::pty::shutdown_failed("wait_child", &error);
+                    crate::session::tracing::pty::shutdown_failed("wait_child", &error);
                 }
             }
         });
@@ -746,13 +749,13 @@ fn run_reader_loop(reader: &mut dyn Read, state: &PtyState, writer: &Mutex<Box<d
                 let terminal_replies = match state.append_output(bytes) {
                     Ok(terminal_replies) => terminal_replies,
                     Err(error) => {
-                        crate::session_tracing::pty::reader_stopped_after_error("append_output", &error);
+                        crate::session::tracing::pty::reader_stopped_after_error("append_output", &error);
                         break;
                     }
                 };
                 if self::write_terminal_replies(writer, &terminal_replies)
                     .inspect_err(|error| {
-                        crate::session_tracing::pty::reader_stopped_after_error("write_terminal_replies", error);
+                        crate::session::tracing::pty::reader_stopped_after_error("write_terminal_replies", error);
                     })
                     .is_err()
                 {
@@ -879,7 +882,7 @@ mod tests {
         });
         let session = SessionName::default();
 
-        let log = crate::session_tracing::collect_test_log(&session, || {
+        let log = crate::session::tracing::collect_test_log(&session, || {
             state.mark_exited(PtyExitStatus {
                 code: 7,
                 signal: None,
@@ -1064,7 +1067,7 @@ mod tests {
         let session = SessionName::default();
         let state = Arc::new(pty_state(&terminal_size()?));
 
-        let log = crate::session_tracing::collect_test_log(&session, || {
+        let log = crate::session::tracing::collect_test_log(&session, || {
             let span = tracing::info_span!("muxr_session", session = %session);
             let _guard = span.enter();
             let mut reader = std::io::Cursor::new(b"\x1b[6n".to_vec());
@@ -1085,7 +1088,7 @@ mod tests {
         let session: SessionName = "work".parse()?;
         let state = Arc::new(pty_state(&terminal_size()?));
 
-        let log = crate::session_tracing::collect_test_log(&session, || {
+        let log = crate::session::tracing::collect_test_log(&session, || {
             let span = tracing::info_span!("muxr_session", session = %session);
             let _guard = span.enter();
             let reader_handle = self::spawn_reader_thread(

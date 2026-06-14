@@ -9,8 +9,8 @@ use muxr_core::RenderStyle;
 use muxr_core::RenderTextStyle;
 use rootcause::report;
 
-use crate::pane_layout::PanePosition;
-use crate::pane_layout::PaneRegion;
+use crate::pane::layout::PanePosition;
+use crate::pane::layout::PaneRegion;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PaneBorder {
@@ -562,10 +562,10 @@ mod tests {
     use rootcause::report;
 
     use super::*;
-    use crate::pane_layout::PaneArea;
-    use crate::pane_layout::PanePosition;
-    use crate::pane_layout::PaneRegion;
-    use crate::pane_layout::PaneSize;
+    use crate::pane::layout::PaneArea;
+    use crate::pane::layout::PanePosition;
+    use crate::pane::layout::PaneRegion;
+    use crate::pane::layout::PaneSize;
 
     fn pane_region(id: PaneId, row: u16, col: u16, rows: u16, cols: u16, focus_seq: u64) -> PaneRegion {
         PaneRegion {

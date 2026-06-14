@@ -11,8 +11,8 @@ use rootcause::prelude::ResultExt;
 use rootcause::report;
 
 use crate::history::pane_output_path;
-use crate::pane_layout::PaneRegion;
-use crate::pane_tracked_process::PaneTrackedProcessSnapshot;
+use crate::pane::layout::PaneRegion;
+use crate::pane::tracked_process::PaneTrackedProcessSnapshot;
 use crate::pty::PtyEvent;
 use crate::pty::PtyExitStatus;
 use crate::pty::PtyHandle;
@@ -20,7 +20,7 @@ use crate::pty::PtySession;
 use crate::pty::PtySinkGuard;
 use crate::pty::ShellCmd;
 use crate::server::ServerConfig;
-use crate::session_start_seed::SessionStartSeed;
+use crate::session::start_seed::SessionStartSeed;
 use crate::state::PaneSnapshotFields;
 use crate::state::SessionLayout;
 use crate::terminal::TerminalSnapshot;
@@ -380,9 +380,9 @@ mod tests {
     use rootcause::report;
 
     use super::*;
-    use crate::pane_cmd::PaneCmd;
-    use crate::pane_cmd::PaneCmdObservation;
-    use crate::pane_tracked_process::PaneTrackedProcesses;
+    use crate::pane::cmd::PaneCmd;
+    use crate::pane::cmd::PaneCmdObservation;
+    use crate::pane::tracked_process::PaneTrackedProcesses;
     use crate::pty::ShellCmd;
     use crate::server::test_helpers as server_test_helpers;
     use crate::state::SessionLayout;

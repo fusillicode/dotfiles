@@ -2,9 +2,9 @@ use std::time::Instant;
 
 use muxr_transport::ServerEventWriter;
 
-use crate::client_session::ClientSessionState;
-use crate::client_timers::ClientTimers;
-use crate::session_runtime::SessionPaneOutputMessage;
+use crate::client::session::ClientSessionState;
+use crate::client::timers::ClientTimers;
+use crate::session::runtime::SessionPaneOutputMessage;
 
 pub async fn handle_pane_output_message(
     event: Option<SessionPaneOutputMessage>,
@@ -15,7 +15,7 @@ pub async fn handle_pane_output_message(
 ) -> rootcause::Result<bool> {
     match event {
         Some(SessionPaneOutputMessage::PaneExited) => {
-            Ok(!crate::client_session::handle_reaped_panes(state, event_writer).await?)
+            Ok(!crate::client::session::handle_reaped_panes(state, event_writer).await?)
         }
         Some(SessionPaneOutputMessage::PaneOutputReady) => {
             let screen_dirty_panes = state.runtimes.take_screen_dirty_panes();
@@ -63,7 +63,7 @@ pub async fn handle_pane_output_message(
             timers.sync_tracked_process_quiet_deadline(state.pane_tracked_processes.next_quiet_deadline()?)?;
             // PTY exit status is sticky state. Detached exits wake the server loop through `pane_exit_notify`; while
             // attached, the bounded output channel is only a wakeup hint, so sweep the sticky state here.
-            if crate::client_session::handle_reaped_panes(state, event_writer).await? {
+            if crate::client::session::handle_reaped_panes(state, event_writer).await? {
                 return Ok(false);
             }
             Ok(true)

@@ -14,10 +14,10 @@ use muxr_core::TerminalSize;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
 
-use crate::pane_borders::BorderRenderMode;
-use crate::pane_layout::PaneLayout;
-use crate::pane_layout::PaneRegion;
-use crate::pane_runtime::PaneRuntimes;
+use crate::pane::borders::BorderRenderMode;
+use crate::pane::layout::PaneLayout;
+use crate::pane::layout::PaneRegion;
+use crate::pane::runtime::PaneRuntimes;
 use crate::terminal::TerminalSnapshot;
 
 struct CompositeFrame {
@@ -213,7 +213,7 @@ impl RenderComposer {
                 };
             }
         }
-        crate::pane_borders::paste_borders(
+        crate::pane::borders::paste_borders(
             &mut rows,
             pane_render.border_styles,
             pane_render.pane_attention,
@@ -282,7 +282,7 @@ fn paste_snapshot(
             .attach(format!("region_rows={}", region.area.size.rows)));
     }
 
-    let mut url_links = crate::pane_url_links::detect_visible_url_links(snapshot.rows())?
+    let mut url_links = crate::pane::url_links::detect_visible_url_links(snapshot.rows())?
         .into_iter()
         .peekable();
     for (span_index, span) in snapshot.rows().iter().enumerate() {
@@ -329,10 +329,10 @@ fn paste_snapshot(
 
 fn pane_visual_render_style(mut style: RenderStyle, visual_style: PaneVisualStyle) -> RenderStyle {
     if let Some(pane_dim) = visual_style.dim {
-        style = crate::pane_dim::apply_dim_style(style, pane_dim);
+        style = crate::pane::dim::apply_dim_style(style, pane_dim);
     }
     if let Some(bg_tint) = visual_style.attention_bg_tint {
-        style = crate::pane_attention::apply_attention_tint(style, bg_tint);
+        style = crate::pane::attention::apply_attention_tint(style, bg_tint);
     }
     style
 }
@@ -342,9 +342,9 @@ mod tests {
     use muxr_config::MuxrConfig;
 
     use super::*;
-    use crate::pane_layout::PaneArea;
-    use crate::pane_layout::PanePosition;
-    use crate::pane_layout::PaneSize;
+    use crate::pane::layout::PaneArea;
+    use crate::pane::layout::PanePosition;
+    use crate::pane::layout::PaneSize;
 
     #[rstest::rstest]
     #[case::dirty_frame(RenderDiffReason::DirtyFrame, false)]

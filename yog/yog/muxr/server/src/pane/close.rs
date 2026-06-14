@@ -1,8 +1,8 @@
 use muxr_core::PaneId;
 use rootcause::report;
 
-use crate::client_session::ClientSessionState;
-use crate::pane_runtime::PaneRuntimes;
+use crate::client::session::ClientSessionState;
+use crate::pane::runtime::PaneRuntimes;
 use crate::pty::PtyExitStatus;
 use crate::server::ServerConfig;
 use crate::state::PaneTree;
@@ -200,7 +200,7 @@ fn handle_close_pane_cmd(
 ) -> rootcause::Result<ClosePaneOutcome> {
     let exited_at = crate::server::unix_timestamp_millis()?;
     // Closing removes the runtime, so any title-derived cwd must be synced before queued PTY events disappear.
-    crate::pane_runtime::sync_layout_terminal_titles(layout, runtimes)?;
+    crate::pane::runtime::sync_layout_terminal_titles(layout, runtimes)?;
     let outcome = layout.close_active_pane(exited_at)?;
     let pane_id = match &outcome {
         ClosePaneOutcome::Final { pane_id } | ClosePaneOutcome::Removed { pane_id } => *pane_id,
@@ -212,7 +212,7 @@ fn handle_close_pane_cmd(
 
 pub fn handle_close_pane_cmd_client(state: &mut ClientSessionState<'_>) -> rootcause::Result<ClosePaneClientOutcome> {
     let previous_pane = state.layout.active_pane_id()?;
-    crate::pane_fullscreen::clear_active_tab_for_layout_mutation(state);
+    crate::pane::fullscreen::clear_active_tab_for_layout_mutation(state);
     match self::handle_close_pane_cmd(state.config, state.layout, state.runtimes)? {
         ClosePaneOutcome::Final { pane_id } => Ok(ClosePaneClientOutcome::Final { pane_id }),
         ClosePaneOutcome::Removed { pane_id } => Ok(ClosePaneClientOutcome::Removed { pane_id, previous_pane }),
@@ -233,10 +233,10 @@ mod tests {
     use rootcause::report;
 
     use super::*;
-    use crate::pane_runtime::PaneRuntimes;
-    use crate::pane_split::PaneSplitAxis;
+    use crate::pane::runtime::PaneRuntimes;
+    use crate::pane::split::PaneSplitAxis;
     use crate::server::test_helpers as server_test_helpers;
-    use crate::session_start_seed::SessionStartSeed;
+    use crate::session::start_seed::SessionStartSeed;
     use crate::state::test_helpers as state_test_helpers;
 
     const SERVER_READY_TIMEOUT: Duration = Duration::from_secs(2);

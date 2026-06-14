@@ -86,8 +86,8 @@ mod tests {
     use muxr_core::TerminalSize;
 
     use super::*;
-    use crate::pane_resize::PaneResizeDirection;
-    use crate::pane_split::PaneSplitAxis;
+    use crate::pane::resize::PaneResizeDirection;
+    use crate::pane::split::PaneSplitAxis;
     use crate::state::test_helpers as state_test_helpers;
 
     #[test]

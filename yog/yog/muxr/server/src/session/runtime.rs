@@ -9,12 +9,12 @@ use muxr_core::TerminalSize;
 use muxr_transport::ServerConnection;
 use tokio::sync::mpsc::error::TrySendError;
 
-use crate::pane_close::PaneExitOutcome;
-use crate::pane_runtime::PaneRuntimes;
+use crate::pane::close::PaneExitOutcome;
+use crate::pane::runtime::PaneRuntimes;
 use crate::pty::PtyEvent;
 use crate::server::ServerConfig;
-use crate::session_start_seed::SessionStartSeed;
-use crate::sessions_delete::DeleteSessions;
+use crate::session::delete::DeleteSessions;
+use crate::session::start_seed::SessionStartSeed;
 use crate::state::SessionLayout;
 use crate::state::SessionMetadata;
 
@@ -142,7 +142,7 @@ impl ClientSessionTaskRuntime {
         connection: ServerConnection,
         attach_request: AttachRequest,
     ) -> rootcause::Result<()> {
-        let result = crate::client_session::handle_client(
+        let result = crate::client::session::handle_client(
             config,
             connection,
             attach_request,
@@ -159,7 +159,7 @@ impl ClientSessionTaskRuntime {
             // recovery path.
             Ok(()) | Err(TrySendError::Closed(_)) => {}
             Err(TrySendError::Full(_)) => {
-                crate::session_tracing::client_session::state_handoff_failed("channel_full");
+                crate::session::tracing::client::state_handoff_failed("channel_full");
             }
         }
         result
@@ -304,7 +304,7 @@ mod tests {
     use rootcause::report;
 
     use super::*;
-    use crate::pane_runtime::test_helpers as pane_runtime_test_helpers;
+    use crate::pane::runtime::test_helpers as pane_runtime_test_helpers;
     use crate::server::test_helpers as server_test_helpers;
     use crate::state::SessionMetadata;
 
@@ -315,7 +315,7 @@ mod tests {
         let config = server_test_helpers::server_config(tempdir.path(), "work")?;
         let session = config.session.clone();
 
-        let log = crate::session_tracing::collect_test_log(&session, || {
+        let log = crate::session::tracing::collect_test_log(&session, || {
             runtime.block_on(async {
                 let terminal_size = TerminalSize::new(80, 24)?;
                 let attach_request = AttachRequest {
@@ -323,7 +323,7 @@ mod tests {
                     terminal_size,
                 };
 
-                crate::session_files::prepare_session_dirs(&config.paths)?;
+                crate::session::files::prepare_session_dirs(&config.paths)?;
                 let mut session_runtime = SessionRuntime::spawn(
                     &config,
                     &attach_request.terminal_size,

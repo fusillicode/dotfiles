@@ -3,10 +3,10 @@ use muxr_core::PaneId;
 use muxr_core::TerminalSize;
 use rootcause::report;
 
-use crate::pane_borders::PaneBorder;
-use crate::pane_borders::PaneBorderAxis;
-use crate::pane_split::PaneSplitAxis;
-use crate::pane_split::PaneSplitRatio;
+use crate::pane::borders::PaneBorder;
+use crate::pane::borders::PaneBorderAxis;
+use crate::pane::split::PaneSplitAxis;
+use crate::pane::split::PaneSplitRatio;
 use crate::state::PaneTree;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

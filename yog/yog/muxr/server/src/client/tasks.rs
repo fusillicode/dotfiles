@@ -7,9 +7,9 @@ use muxr_transport::ServerConnection;
 use rootcause::report;
 
 use crate::server::ServerConfig;
-use crate::session_runtime::ClientSessionTaskRuntime;
-use crate::session_runtime::SessionClientHandshake;
-use crate::session_runtime::SessionHandshakeMessage;
+use crate::session::runtime::ClientSessionTaskRuntime;
+use crate::session::runtime::SessionClientHandshake;
+use crate::session::runtime::SessionHandshakeMessage;
 
 const CLIENT_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(2);
 
