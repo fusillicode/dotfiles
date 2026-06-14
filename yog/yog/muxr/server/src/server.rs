@@ -816,6 +816,46 @@ mod tests {
     }
 
     #[test]
+    fn test_serve_when_kitty_key_request_arrives_for_kitty_pane_writes_csi_u_bytes() -> rootcause::Result<()> {
+        self::runtime()?.block_on(async {
+            let tempdir = tempfile::tempdir()?;
+            let (session, paths) = self::session_paths(tempdir.path(), "work")?;
+            let handle = self::spawn_test_server_with_shell(
+                &session,
+                &paths,
+                Some(1),
+                self::shell_cmd_with_args(
+                    "/bin/sh",
+                    &[
+                        "-c",
+                        "printf '\\033[>1uready\\n'; \
+                         stty raw -echo; \
+                         dd bs=1 count=7 2>/dev/null | od -An -tx1 -v; \
+                         sleep 30",
+                    ],
+                ),
+            );
+
+            self::wait_for_socket(&paths.socket)?;
+            let mut client = self::open_attached_client(&session, &paths).await?;
+            self::read_until_render_contains(&mut client, b"ready").await?;
+            client
+                .writer
+                .send_request(&ClientRequest::Key(ClientKey {
+                    code: ClientKeyCode::Enter,
+                    modifiers: ClientKeyModifiers::SHIFT,
+                    raw_bytes: b"\x1b[13;2u".to_vec(),
+                }))
+                .await?;
+
+            self::read_until_render_contains_hex_bytes(&mut client, &["1b", "5b", "31", "33", "3b", "32", "75"])
+                .await?;
+            self::detach_client(client).await?;
+            self::join_server(handle)
+        })
+    }
+
+    #[test]
     fn test_serve_when_scrollback_editor_key_arrives_opens_dump_and_restores_layout() -> rootcause::Result<()> {
         self::runtime()?.block_on(async {
             let tempdir = tempfile::tempdir()?;

@@ -239,7 +239,7 @@ async fn handle_key_request(
     match crate::keyboard_input::resolve_key(&mut state.input_mode, &key) {
         KeyResolution::Cmd(cmd) => self::handle_cmd_request(cmd, event_writer, state).await,
         KeyResolution::Raw => self::apply_pane_input_outcome(
-            crate::pane::input::handle_raw_key_bytes(&key.raw_bytes, state)?,
+            crate::pane::input::handle_client_key(&key, state)?,
             timers,
             render_dirty,
         ),

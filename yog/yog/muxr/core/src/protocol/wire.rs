@@ -199,6 +199,7 @@ mod tests {
     #[case::input(ClientRequest::Input(vec![b'a', b'b', b'\n']))]
     #[case::paste(ClientRequest::Paste(vec![b'a', b'\n', b'b', b'\n']))]
     #[case::key(ClientRequest::Key(client_key()))]
+    #[case::modified_enter_key(ClientRequest::Key(modified_enter_key()))]
     #[case::mouse(ClientRequest::Mouse(ClientMouseEvent {
             button: 0,
             phase: ClientMouseEventPhase::Press,
@@ -314,6 +315,14 @@ mod tests {
             code: ClientKeyCode::Char('E'),
             modifiers: ClientKeyModifiers::SHIFT_ALT,
             raw_bytes: vec![b'\x1b', b'E'],
+        }
+    }
+
+    fn modified_enter_key() -> ClientKey {
+        ClientKey {
+            code: ClientKeyCode::Enter,
+            modifiers: ClientKeyModifiers::SHIFT,
+            raw_bytes: b"\x1b[13;2u".to_vec(),
         }
     }
 

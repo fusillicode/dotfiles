@@ -39,6 +39,11 @@ impl ClientKeyModifiers {
         ctrl: false,
         shift: false,
     };
+    pub const SHIFT: Self = Self {
+        alt: false,
+        ctrl: false,
+        shift: true,
+    };
     pub const SHIFT_ALT: Self = Self {
         alt: true,
         ctrl: false,

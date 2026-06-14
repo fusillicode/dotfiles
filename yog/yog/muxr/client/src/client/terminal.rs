@@ -17,6 +17,8 @@ use rootcause::prelude::ResultExt;
 
 const BRACKETED_PASTE_DISABLE: &[u8] = b"\x1b[?2004l";
 const BRACKETED_PASTE_ENABLE: &[u8] = b"\x1b[?2004h";
+const KITTY_KEYBOARD_PROTOCOL_DISABLE: &[u8] = b"\x1b[<1u";
+const KITTY_KEYBOARD_PROTOCOL_ENABLE: &[u8] = b"\x1b[>1u";
 const MOUSE_BUTTON_CAPTURE_DISABLE: &[u8] = b"\x1b[?1000l";
 const MOUSE_BUTTON_CAPTURE_ENABLE: &[u8] = b"\x1b[?1000h";
 const MOUSE_BUTTON_EVENT_CAPTURE_DISABLE: &[u8] = b"\x1b[?1002l";
@@ -74,6 +76,8 @@ impl TerminalGuard {
         if entered_render_screen {
             let mut stdout = std::io::stdout();
             if let Err(error) = enter_terminal(&mut stdout) {
+                // Enter can fail after partial mode writes, so restore before returning without a guard.
+                drop(restore_terminal(&mut stdout));
                 if raw_mode_enabled {
                     drop(crossterm::terminal::disable_raw_mode());
                 }
@@ -173,6 +177,7 @@ fn terminal_size_from_env() -> rootcause::Result<Option<TerminalSize>> {
 fn enter_terminal(stdout: &mut impl Write) -> rootcause::Result<()> {
     queue_cmd(stdout, EnterAlternateScreen)?;
     queue_bytes(stdout, BRACKETED_PASTE_ENABLE)?;
+    queue_bytes(stdout, KITTY_KEYBOARD_PROTOCOL_ENABLE)?;
     // Clear stale any-motion capture; the renderer re-enables it only when a pane requests that mode.
     queue_bytes(stdout, MOUSE_ANY_EVENT_CAPTURE_DISABLE)?;
     queue_bytes(stdout, MOUSE_BUTTON_CAPTURE_ENABLE)?;
@@ -186,6 +191,7 @@ fn enter_terminal(stdout: &mut impl Write) -> rootcause::Result<()> {
 
 fn restore_terminal(stdout: &mut impl Write) -> rootcause::Result<()> {
     queue_bytes(stdout, OSC8_CLOSE)?;
+    queue_bytes(stdout, KITTY_KEYBOARD_PROTOCOL_DISABLE)?;
     queue_bytes(stdout, MOUSE_SGR_DISABLE)?;
     queue_bytes(stdout, MOUSE_ANY_EVENT_CAPTURE_DISABLE)?;
     queue_bytes(stdout, MOUSE_BUTTON_EVENT_CAPTURE_DISABLE)?;
@@ -252,6 +258,7 @@ mod tests {
         let rendered = String::from_utf8(output).context("muxr terminal test output was not utf8")?;
         assert2::assert!(rendered.contains("\x1b[?1049h"));
         assert2::assert!(rendered.contains("\x1b[?2004h"));
+        assert2::assert!(rendered.contains("\x1b[>1u"));
         assert2::assert!(rendered.contains("\x1b[?1003l"));
         assert2::assert!(rendered.contains("\x1b[?1000h"));
         assert2::assert!(rendered.contains("\x1b[?1002h"));
@@ -323,6 +330,7 @@ mod tests {
         restore_terminal(&mut output)?;
 
         let rendered = String::from_utf8(output).context("muxr terminal test output was not utf8")?;
+        assert2::assert!(rendered.contains("\x1b[<1u"));
         assert2::assert!(rendered.contains("\x1b[?1006l"));
         assert2::assert!(rendered.contains("\x1b[?1003l"));
         assert2::assert!(rendered.contains("\x1b[?1002l"));

@@ -35,6 +35,12 @@ enum SgrMouseEvent {
     Ignored,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum KittyKeyModifiers {
+    Supported(ClientKeyModifiers),
+    Unsupported,
+}
+
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct InputDecoder {
     pending: PendingInput,
@@ -147,7 +153,12 @@ fn finish_escape_sequence(bytes: Vec<u8>, input: &mut Vec<u8>, decoded: &mut Vec
     }
 
     if let Some(key) = self::key_for_csi_sequence(&bytes) {
-        self::push_key(decoded, input, key);
+        if self::is_copy_selection_key(&key) {
+            self::push_input(decoded, input);
+            decoded.push(DecodedInput::CopySelection);
+        } else {
+            self::push_key(decoded, input, key);
+        }
         return;
     }
 
@@ -186,6 +197,10 @@ fn key_for_escaped_byte(byte: u8) -> Option<ClientKey> {
 }
 
 fn key_for_csi_sequence(bytes: &[u8]) -> Option<ClientKey> {
+    if let Some(key) = self::key_for_kitty_keyboard_sequence(bytes) {
+        return Some(key);
+    }
+
     let [ESC, b'[', byte] = bytes else {
         return None;
     };
@@ -197,6 +212,67 @@ fn key_for_csi_sequence(bytes: &[u8]) -> Option<ClientKey> {
         b'D' => Some(self::key(ClientKeyCode::Left, ClientKeyModifiers::NONE, bytes)),
         _ => None,
     }
+}
+
+fn is_copy_selection_key(key: &ClientKey) -> bool {
+    matches!(key.code, ClientKeyCode::Char('C')) && key.modifiers == ClientKeyModifiers::SHIFT_ALT
+}
+
+fn key_for_kitty_keyboard_sequence(bytes: &[u8]) -> Option<ClientKey> {
+    if bytes.first() != Some(&ESC) || bytes.get(1) != Some(&b'[') || bytes.last() != Some(&b'u') {
+        return None;
+    }
+
+    let body_end = bytes.len().checked_sub(1)?;
+    let body = bytes.get(2..body_end)?;
+    let mut parts = body.split(|byte| *byte == b';');
+    let key_number = parts.next().and_then(self::parse_mouse_number)?;
+    let modifiers = match parts.next() {
+        Some(raw) => self::kitty_key_modifiers(raw)?,
+        None => KittyKeyModifiers::Supported(ClientKeyModifiers::NONE),
+    };
+    if parts.next().is_some() {
+        return None;
+    }
+    let KittyKeyModifiers::Supported(modifiers) = modifiers else {
+        // The wire type cannot represent kitty's higher modifier bits. Preserve the raw sequence as an unknown key so
+        // muxr shortcuts do not accidentally fire after dropping unsupported bits.
+        return Some(self::key(ClientKeyCode::Unknown, ClientKeyModifiers::NONE, bytes));
+    };
+
+    let code = match key_number {
+        9 => ClientKeyCode::Tab,
+        13 => ClientKeyCode::Enter,
+        27 => ClientKeyCode::Esc,
+        127 => ClientKeyCode::Backspace,
+        32..=126 => ClientKeyCode::Char(self::kitty_ascii_character(key_number, modifiers)?),
+        _ => ClientKeyCode::Unknown,
+    };
+
+    Some(self::key(code, modifiers, bytes))
+}
+
+fn kitty_ascii_character(key_number: u16, modifiers: ClientKeyModifiers) -> Option<char> {
+    let character = char::from(u8::try_from(key_number).ok()?);
+    // Kitty level 1 may report a base lowercase ASCII key plus the Shift flag. Muxr bindings historically match the
+    // shifted legacy byte, such as Alt-Shift-V -> Char('V'), so normalize letters before server shortcut resolution.
+    if modifiers.shift && character.is_ascii_lowercase() {
+        Some(character.to_ascii_uppercase())
+    } else {
+        Some(character)
+    }
+}
+
+fn kitty_key_modifiers(raw: &[u8]) -> Option<KittyKeyModifiers> {
+    let flags = self::parse_mouse_number(raw)?.checked_sub(1)?;
+    if flags & !0b111 != 0 {
+        return Some(KittyKeyModifiers::Unsupported);
+    }
+    Some(KittyKeyModifiers::Supported(ClientKeyModifiers {
+        alt: flags & 0b010 != 0,
+        ctrl: flags & 0b100 != 0,
+        shift: flags & 0b001 != 0,
+    }))
 }
 
 fn sgr_mouse_event(bytes: &[u8]) -> Option<SgrMouseEvent> {
@@ -305,6 +381,13 @@ mod tests {
         pretty_assertions::assert_eq!(decoder.decode(b"abc"), vec![DecodedInput::Input(b"abc".to_vec())]);
     }
 
+    #[test]
+    fn test_input_decoder_decode_when_bare_enter_arrives_preserves_input_bytes() {
+        let mut decoder = InputDecoder::default();
+
+        pretty_assertions::assert_eq!(decoder.decode(b"\r"), vec![DecodedInput::Input(b"\r".to_vec())]);
+    }
+
     #[rstest]
     #[case::create_tab(b"\x1bE", ClientKeyCode::Char('E'), ClientKeyModifiers::SHIFT_ALT)]
     #[case::focus_previous_tab(b"\x1bP", ClientKeyCode::Char('P'), ClientKeyModifiers::SHIFT_ALT)]
@@ -321,6 +404,9 @@ mod tests {
     #[case::close_pane(b"\x1bW", ClientKeyCode::Char('W'), ClientKeyModifiers::SHIFT_ALT)]
     #[case::enter_resize_mode(b"\x1bR", ClientKeyCode::Char('R'), ClientKeyModifiers::SHIFT_ALT)]
     #[case::open_scrollback_editor(b"\x1bS", ClientKeyCode::Char('S'), ClientKeyModifiers::SHIFT_ALT)]
+    #[case::kitty_create_tab(b"\x1b[101;4u", ClientKeyCode::Char('E'), ClientKeyModifiers::SHIFT_ALT)]
+    #[case::kitty_split_pane_vertical(b"\x1b[118;4u", ClientKeyCode::Char('V'), ClientKeyModifiers::SHIFT_ALT)]
+    #[case::kitty_move_tab_previous(b"\x1b[112;7u", ClientKeyCode::Char('p'), ClientKeyModifiers::CTRL_ALT)]
     fn test_input_decoder_decode_when_shortcut_arrives_returns_key(
         #[case] bytes: &[u8],
         #[case] code: ClientKeyCode,
@@ -334,11 +420,13 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_input_decoder_decode_when_copy_shortcut_arrives_returns_copy_selection() {
+    #[rstest]
+    #[case::legacy(b"\x1bC")]
+    #[case::kitty(b"\x1b[99;4u")]
+    fn test_input_decoder_decode_when_copy_shortcut_arrives_returns_copy_selection(#[case] bytes: &[u8]) {
         let mut decoder = InputDecoder::default();
 
-        pretty_assertions::assert_eq!(decoder.decode(b"\x1bC"), vec![DecodedInput::CopySelection]);
+        pretty_assertions::assert_eq!(decoder.decode(bytes), vec![DecodedInput::CopySelection]);
     }
 
     #[test]
@@ -447,6 +535,45 @@ mod tests {
         assert2::assert!(!decoder.needs_idle_timeout());
     }
 
+    #[rstest]
+    #[case::plain_enter(b"\x1b[13u", ClientKeyCode::Enter, ClientKeyModifiers::NONE)]
+    #[case::shift_enter(b"\x1b[13;2u", ClientKeyCode::Enter, ClientKeyModifiers::SHIFT)]
+    #[case::shift_tab(b"\x1b[9;2u", ClientKeyCode::Tab, ClientKeyModifiers::SHIFT)]
+    #[case::shift_backspace(b"\x1b[127;2u", ClientKeyCode::Backspace, ClientKeyModifiers::SHIFT)]
+    #[case::ctrl_l(b"\x1b[108;5u", ClientKeyCode::Char('l'), self::modifiers(false, false, true))]
+    #[case::ctrl_k(b"\x1b[107;5u", ClientKeyCode::Char('k'), self::modifiers(false, false, true))]
+    #[case::unknown_modified_key(b"\x1b[999;2u", ClientKeyCode::Unknown, ClientKeyModifiers::SHIFT)]
+    #[case::unsupported_modifier_bits(b"\x1b[118;12u", ClientKeyCode::Unknown, ClientKeyModifiers::NONE)]
+    fn test_input_decoder_decode_when_kitty_key_arrives_returns_key(
+        #[case] bytes: &[u8],
+        #[case] code: ClientKeyCode,
+        #[case] modifiers: ClientKeyModifiers,
+    ) {
+        let mut decoder = InputDecoder::default();
+
+        pretty_assertions::assert_eq!(
+            decoder.decode(bytes),
+            vec![DecodedInput::Key(key(code, modifiers, bytes))]
+        );
+    }
+
+    #[test]
+    fn test_input_decoder_decode_when_kitty_key_is_split_preserves_pending_prefix() {
+        let mut decoder = InputDecoder::default();
+
+        pretty_assertions::assert_eq!(decoder.decode(b"\x1b[13"), Vec::<DecodedInput>::new());
+        assert2::assert!(decoder.needs_idle_timeout());
+        pretty_assertions::assert_eq!(
+            decoder.decode(b";2u"),
+            vec![DecodedInput::Key(key(
+                ClientKeyCode::Enter,
+                ClientKeyModifiers::SHIFT,
+                b"\x1b[13;2u",
+            ))]
+        );
+        assert2::assert!(!decoder.needs_idle_timeout());
+    }
+
     #[test]
     fn test_input_decoder_decode_when_bracketed_paste_arrives_returns_single_paste() {
         let mut decoder = InputDecoder::default();
@@ -540,5 +667,9 @@ mod tests {
                 position: ClientMousePosition { row: 4, col: 9 },
             })]
         );
+    }
+
+    const fn modifiers(shift: bool, alt: bool, ctrl: bool) -> ClientKeyModifiers {
+        ClientKeyModifiers { alt, ctrl, shift }
     }
 }

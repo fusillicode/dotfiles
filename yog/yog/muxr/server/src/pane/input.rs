@@ -1,5 +1,6 @@
 use std::time::Instant;
 
+use muxr_core::ClientKey;
 use muxr_core::PaneId;
 
 use crate::client::session::ClientSessionState;
@@ -42,13 +43,28 @@ pub fn handle_client_paste(bytes: &[u8], state: &mut ClientSessionState<'_>) -> 
     )
 }
 
-pub fn handle_raw_key_bytes(bytes: &[u8], state: &mut ClientSessionState<'_>) -> rootcause::Result<PaneInputOutcome> {
-    self::handle_active_pane_bytes(
-        bytes,
-        state,
-        crate::keyboard_input::input_interaction(bytes),
-        PtyHandle::write_input,
-    )
+pub fn handle_client_key(key: &ClientKey, state: &mut ClientSessionState<'_>) -> rootcause::Result<PaneInputOutcome> {
+    let (pane_id, handle) = self::active_pane_handle_with_id(state)?;
+    let keyboard_protocol = handle.application_mode()?.keyboard_protocol;
+    let Some(bytes) = crate::keyboard_input::pane_key_input_bytes(key, keyboard_protocol) else {
+        return Ok(PaneInputOutcome::ignored());
+    };
+    if bytes.is_empty() {
+        return Ok(PaneInputOutcome::ignored());
+    }
+
+    let interaction = crate::keyboard_input::key_input_interaction(key, &bytes);
+    let render_dirty = handle.write_input(&bytes)?;
+    state
+        .pane_tracked_processes
+        .record_user_interaction(pane_id, interaction, Instant::now());
+    let cmd_handoff_pane_id =
+        (interaction == TrackedProcessUserInteraction::StartsTrackedProcessWork).then_some(pane_id);
+    Ok(PaneInputOutcome {
+        cmd_handoff_pane_id,
+        render_dirty,
+        sync_render_deadline: true,
+    })
 }
 
 fn handle_active_pane_bytes(
