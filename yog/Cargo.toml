@@ -40,11 +40,6 @@ members = [
     "yog/ytil/tui",
     "yog/ytil/wezterm",
     "yog/ytil/zellij",
-    "yog/zj/cli",
-    "yog/zj/plugins/agg",
-    "yog/zj/plugins/zcp",
-    "yog/zj/plugins/znt",
-    "yog/zj/plugins/zop",
 ]
 
 [workspace.package]

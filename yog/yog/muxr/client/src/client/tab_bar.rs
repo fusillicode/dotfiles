@@ -75,7 +75,7 @@ pub fn queue(
         if row >= rows {
             break;
         }
-        // Keep muxr tab entries aligned with the three-row agg tab-bar shape.
+        // Keep each tab entry a stable three-row block with a spacer row.
         self::queue_sidebar_row(stdout, config, row, tab.active, TrackedProcessState::None, "")?;
         row = row.saturating_add(1);
     }
