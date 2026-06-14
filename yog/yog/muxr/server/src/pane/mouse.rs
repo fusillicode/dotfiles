@@ -533,6 +533,7 @@ mod tests {
         TerminalApplicationMode {
             screen_mode,
             cursor_key_mode,
+            keyboard_protocol: crate::terminal::TerminalKeyboardProtocol::Legacy,
             focus_reporting: crate::terminal::TerminalFocusReporting::Disabled,
             mouse_protocol,
         }

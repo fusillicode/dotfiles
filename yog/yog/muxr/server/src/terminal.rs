@@ -24,6 +24,10 @@ const SCROLL_LINES_PER_WHEEL_EVENT: usize = 5;
 const BRACKETED_PASTE_END: &[u8] = b"\x1b[201~";
 const BRACKETED_PASTE_START: &[u8] = b"\x1b[200~";
 const FOCUS_REPORTING_MODE: u16 = 1004;
+const KITTY_KEYBOARD_PROTOCOL_DISABLED_REPLY: &[u8] = b"\x1b[?0u";
+const KITTY_KEYBOARD_PROTOCOL_DISAMBIGUATE_ESC_CODES_MODE: u16 = 1;
+const KITTY_KEYBOARD_PROTOCOL_ENABLED_REPLY: &[u8] = b"\x1b[?1u";
+const KITTY_KEYBOARD_PROTOCOL_SET_DIFFERENCE: u16 = 3;
 const REPLAY_ALTERNATE_SCREEN_EXIT_BYTES: &[u8] = b"\x1b[?1049l";
 const REPLAY_APPLICATION_STATE_RESET_BYTES: &[u8] =
     b"\x18\x1b>\x1b[?1l\x1b[?6l\x1b[?9l\x1b[?47l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1005l\x1b[?1006l\x1b[?2004l\x1b[?25h\x1b[r";
@@ -227,6 +231,8 @@ pub struct TerminalApplicationMode {
     pub screen_mode: TerminalScreenMode,
     /// Application cursor mode changes arrow-key escape sequences.
     pub cursor_key_mode: TerminalCursorKeyMode,
+    /// Keyboard protocol requested by the pane application.
+    pub keyboard_protocol: TerminalKeyboardProtocol,
     /// Focus reporting forwards muxr pane/tab focus changes to applications that enabled `CSI ? 1004 h`.
     pub focus_reporting: TerminalFocusReporting,
     /// Mouse reporting protocol requested by the pane application.
@@ -240,6 +246,37 @@ impl TerminalApplicationMode {
             None => PaneMouseMode::None,
         }
     }
+}
+
+/// Keyboard encoding requested by the pane application.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum TerminalKeyboardProtocol {
+    #[default]
+    Legacy,
+    KittyLevelOne,
+}
+
+impl TerminalKeyboardProtocol {
+    #[must_use]
+    const fn reply_bytes(self) -> &'static [u8] {
+        match self {
+            Self::Legacy => KITTY_KEYBOARD_PROTOCOL_DISABLED_REPLY,
+            Self::KittyLevelOne => KITTY_KEYBOARD_PROTOCOL_ENABLED_REPLY,
+        }
+    }
+}
+
+const fn keyboard_protocol_from_mode(mode: u16) -> TerminalKeyboardProtocol {
+    if mode & KITTY_KEYBOARD_PROTOCOL_DISAMBIGUATE_ESC_CODES_MODE == 0 {
+        TerminalKeyboardProtocol::Legacy
+    } else {
+        TerminalKeyboardProtocol::KittyLevelOne
+    }
+}
+
+fn keyboard_protocol_from_params(params: &[&[u16]]) -> TerminalKeyboardProtocol {
+    let mode = params.first().and_then(|param| param.first()).copied().unwrap_or(0);
+    self::keyboard_protocol_from_mode(mode)
 }
 
 /// Terminal screen buffer selected by the pane application.
@@ -330,6 +367,9 @@ impl TerminalFocusEvent {
 #[derive(Default)]
 struct TerminalCallbacks {
     focus_reporting: TerminalFocusReporting,
+    // muxr only needs the active legacy/level-one decision to downgrade keys at the pane boundary.
+    // Full kitty push/pop and set-behavior semantics stay out of this MVP until callers need them.
+    keyboard_protocol: TerminalKeyboardProtocol,
     replies: Vec<Vec<u8>>,
     title: Option<String>,
     title_changes: Vec<Option<String>>,
@@ -349,8 +389,9 @@ impl TerminalCallbacks {
         self.title_changes.clear();
     }
 
-    const fn clear_focus_reporting(&mut self) {
+    const fn clear_tracked_application_modes(&mut self) {
         self.focus_reporting = TerminalFocusReporting::Disabled;
+        self.keyboard_protocol = TerminalKeyboardProtocol::Legacy;
     }
 
     fn update_focus_reporting(&mut self, params: &[&[u16]], enabled: bool) {
@@ -361,6 +402,28 @@ impl TerminalCallbacks {
                 TerminalFocusReporting::Disabled
             };
         }
+    }
+
+    fn update_keyboard_protocol_level(&mut self, params: &[&[u16]]) {
+        self.keyboard_protocol = self::keyboard_protocol_from_params(params);
+    }
+
+    fn set_keyboard_protocol_level(&mut self, params: &[&[u16]]) {
+        let requested = self::keyboard_protocol_from_params(params);
+        let behavior = params.get(1).and_then(|param| param.first()).copied();
+        if behavior == Some(KITTY_KEYBOARD_PROTOCOL_SET_DIFFERENCE) {
+            // Do not reintroduce kitty's full stack/set model; this just prevents a one-bit opt-out from being
+            // misread as an enable and leaking CSI-u bytes after the pane removed level-one support.
+            if requested == TerminalKeyboardProtocol::KittyLevelOne {
+                self.keyboard_protocol = TerminalKeyboardProtocol::Legacy;
+            }
+        } else {
+            self.keyboard_protocol = requested;
+        }
+    }
+
+    fn push_keyboard_protocol_reply(&mut self) {
+        self.replies.push(self.keyboard_protocol.reply_bytes().to_vec());
     }
 }
 
@@ -376,6 +439,10 @@ impl vt100::Callbacks for TerminalCallbacks {
         match (first_intermediate, second_intermediate, cmd) {
             (Some(b'?'), None, 'h') => self.update_focus_reporting(params, true),
             (Some(b'?'), None, 'l') => self.update_focus_reporting(params, false),
+            (Some(b'>'), None, 'u') => self.update_keyboard_protocol_level(params),
+            (Some(b'='), None, 'u') => self.set_keyboard_protocol_level(params),
+            (Some(b'<'), None, 'u') => self.keyboard_protocol = TerminalKeyboardProtocol::Legacy,
+            (Some(b'?'), None, 'u') => self.push_keyboard_protocol_reply(),
             _ => {}
         }
 
@@ -465,7 +532,7 @@ impl TerminalState {
         // modes to shell defaults so later normal output is captured as scrollback.
         self.process_with_scrollback_capture(REPLAY_APPLICATION_STATE_RESET_BYTES);
         let _replies = self.parser.callbacks_mut().take_replies();
-        self.parser.callbacks_mut().clear_focus_reporting();
+        self.parser.callbacks_mut().clear_tracked_application_modes();
         self.scrollback.clear_replayed_application_state();
     }
 
@@ -504,6 +571,7 @@ impl TerminalState {
         TerminalApplicationMode {
             screen_mode: TerminalScreenMode::from_alternate_screen(screen.alternate_screen()),
             cursor_key_mode: TerminalCursorKeyMode::from_application_cursor(screen.application_cursor()),
+            keyboard_protocol: self.parser.callbacks().keyboard_protocol,
             focus_reporting: self.parser.callbacks().focus_reporting,
             mouse_protocol: self.mouse_protocol(),
         }
@@ -672,9 +740,9 @@ impl TerminalState {
                 if let Some(pending) = bytes.get(flush_start..index.saturating_add(1)) {
                     self.parser.process(pending);
                 }
-                // `vt100` resets its screen for RIS (`ESC c`) without invoking callbacks, so muxr-owned
-                // focus-reporting state tracked in callbacks must reset at the same byte boundary.
-                self.parser.callbacks_mut().clear_focus_reporting();
+                // `vt100` resets its screen for RIS (`ESC c`) without invoking callbacks, so muxr-owned modes tracked
+                // in callbacks must reset at the same byte boundary.
+                self.parser.callbacks_mut().clear_tracked_application_modes();
                 pending_print_width = 0;
                 flush_start = index.saturating_add(1);
             }
@@ -1570,6 +1638,7 @@ mod tests {
             TerminalApplicationMode {
                 screen_mode: TerminalScreenMode::from_alternate_screen(expected),
                 cursor_key_mode: TerminalCursorKeyMode::Normal,
+                keyboard_protocol: TerminalKeyboardProtocol::Legacy,
                 focus_reporting: TerminalFocusReporting::Disabled,
                 mouse_protocol: None,
             },
@@ -1593,6 +1662,7 @@ mod tests {
             TerminalApplicationMode {
                 screen_mode: TerminalScreenMode::Normal,
                 cursor_key_mode: TerminalCursorKeyMode::from_application_cursor(expected),
+                keyboard_protocol: TerminalKeyboardProtocol::Legacy,
                 focus_reporting: TerminalFocusReporting::Disabled,
                 mouse_protocol: None,
             },
@@ -1619,9 +1689,70 @@ mod tests {
             TerminalApplicationMode {
                 screen_mode: TerminalScreenMode::Normal,
                 cursor_key_mode: TerminalCursorKeyMode::from_application_cursor(bytes == b"\x1b[?1;1004h"),
+                keyboard_protocol: TerminalKeyboardProtocol::Legacy,
                 focus_reporting: expected,
                 mouse_protocol: None,
             },
+        );
+        Ok(())
+    }
+
+    #[rstest]
+    #[case::enabled_by_push(b"\x1b[>1u", TerminalKeyboardProtocol::KittyLevelOne)]
+    #[case::disabled_by_push_zero(b"\x1b[>1u\x1b[>0u", TerminalKeyboardProtocol::Legacy)]
+    #[case::disabled_by_pop(b"\x1b[>1u\x1b[<u", TerminalKeyboardProtocol::Legacy)]
+    #[case::enabled_by_set(b"\x1b[=1u", TerminalKeyboardProtocol::KittyLevelOne)]
+    #[case::disabled_by_set_zero(b"\x1b[=1u\x1b[=0u", TerminalKeyboardProtocol::Legacy)]
+    #[case::disabled_by_set_replace_without_disambiguate_bit(b"\x1b[=2u", TerminalKeyboardProtocol::Legacy)]
+    #[case::disabled_by_set_difference(b"\x1b[>1u\x1b[=1;3u", TerminalKeyboardProtocol::Legacy)]
+    #[case::disabled_by_terminal_reset(b"\x1b[>1u\x1bc", TerminalKeyboardProtocol::Legacy)]
+    #[case::disabled_by_terminal_reset_clears_keyboard_protocol(
+        b"\x1b[>1u\x1bc\x1b[<u",
+        TerminalKeyboardProtocol::Legacy
+    )]
+    fn test_terminal_state_application_mode_when_keyboard_protocol_changes_returns_state(
+        #[case] bytes: &[u8],
+        #[case] expected: TerminalKeyboardProtocol,
+    ) -> rootcause::Result<()> {
+        let mut terminal = self::terminal_state(&terminal_size()?);
+
+        let _ = terminal.process(bytes);
+
+        pretty_assertions::assert_eq!(terminal.application_mode().keyboard_protocol, expected,);
+        Ok(())
+    }
+
+    #[test]
+    fn test_terminal_state_process_when_keyboard_protocol_is_queried_returns_status() -> rootcause::Result<()> {
+        let mut terminal = self::terminal_state(&terminal_size()?);
+
+        pretty_assertions::assert_eq!(
+            terminal.process(b"\x1b[?u").into_replies(),
+            vec![KITTY_KEYBOARD_PROTOCOL_DISABLED_REPLY.to_vec()],
+        );
+        let _ = terminal.process(b"\x1b[>1u");
+        pretty_assertions::assert_eq!(
+            terminal.process(b"\x1b[?u").into_replies(),
+            vec![KITTY_KEYBOARD_PROTOCOL_ENABLED_REPLY.to_vec()],
+        );
+        let _ = terminal.process(b"\x1b[<u");
+        pretty_assertions::assert_eq!(
+            terminal.process(b"\x1b[?u").into_replies(),
+            vec![KITTY_KEYBOARD_PROTOCOL_DISABLED_REPLY.to_vec()],
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_terminal_state_clear_replayed_application_state_clears_keyboard_protocol() -> rootcause::Result<()> {
+        let mut terminal = self::terminal_state(&terminal_size()?);
+
+        let _ = terminal.process(b"\x1b[>1u");
+        terminal.clear_replayed_application_state();
+
+        pretty_assertions::assert_eq!(
+            terminal.application_mode().keyboard_protocol,
+            TerminalKeyboardProtocol::Legacy,
         );
         Ok(())
     }
@@ -1652,6 +1783,7 @@ mod tests {
             TerminalApplicationMode {
                 screen_mode: TerminalScreenMode::Normal,
                 cursor_key_mode: TerminalCursorKeyMode::Normal,
+                keyboard_protocol: TerminalKeyboardProtocol::Legacy,
                 focus_reporting: TerminalFocusReporting::Disabled,
                 mouse_protocol: Some(TerminalMouseProtocol {
                     mode: TerminalMouseProtocolMode::ButtonMotion,
