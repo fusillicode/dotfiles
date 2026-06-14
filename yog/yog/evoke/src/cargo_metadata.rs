@@ -5,9 +5,6 @@ use std::process::Command;
 use rootcause::prelude::ResultExt;
 use serde::Deserialize;
 
-/// Dependency that identifies a workspace package as a Zellij WASM plugin.
-const ZELLIJ_TILE_DEPENDENCY: &str = "zellij-tile";
-
 #[derive(Deserialize)]
 pub struct Metadata {
     packages: Vec<Package>,
@@ -28,7 +25,6 @@ impl Metadata {
         let mut paths = self
             .packages
             .iter()
-            .filter(|package| !package.is_zellij_plugin())
             .flat_map(|package| package.targets.iter())
             .filter(|target| target.is_default_bin())
             .map(|target| Path::new("./target/release").join(&target.name))
@@ -41,30 +37,7 @@ impl Metadata {
         let mut package_names = self
             .packages
             .iter()
-            .filter(|package| !package.is_zellij_plugin())
             .filter(|package| package.targets.iter().any(Target::is_default_bin))
-            .map(|package| package.name.as_str())
-            .collect::<Vec<_>>();
-        package_names.sort_unstable();
-        package_names
-    }
-
-    pub fn zellij_plugin_manifests(&self) -> Vec<PathBuf> {
-        let mut manifests = self
-            .packages
-            .iter()
-            .filter(|package| package.is_zellij_plugin())
-            .map(|package| package.manifest_path.clone())
-            .collect::<Vec<_>>();
-        manifests.sort();
-        manifests
-    }
-
-    pub fn zellij_plugin_package_names(&self) -> Vec<&str> {
-        let mut package_names = self
-            .packages
-            .iter()
-            .filter(|package| package.is_zellij_plugin())
             .map(|package| package.name.as_str())
             .collect::<Vec<_>>();
         package_names.sort_unstable();
@@ -77,26 +50,9 @@ impl Metadata {
 }
 
 #[derive(Deserialize)]
-struct Dependency {
-    #[serde(default)]
-    kind: Option<String>,
-    name: String,
-}
-
-#[derive(Deserialize)]
 struct Package {
-    dependencies: Vec<Dependency>,
-    manifest_path: PathBuf,
     name: String,
     targets: Vec<Target>,
-}
-
-impl Package {
-    fn is_zellij_plugin(&self) -> bool {
-        self.dependencies
-            .iter()
-            .any(|dependency| dependency.name == ZELLIJ_TILE_DEPENDENCY && dependency.kind.is_none())
-    }
 }
 
 #[derive(Deserialize)]
@@ -126,7 +82,7 @@ mod tests {
             vec![
                 PathBuf::from("./target/release/evoke"),
                 PathBuf::from("./target/release/fixture-tool"),
-                PathBuf::from("./target/release/zj"),
+                PathBuf::from("./target/release/helper-cli"),
             ]
         );
     }
@@ -135,27 +91,10 @@ mod tests {
     fn test_native_bin_package_names_uses_native_bin_targets() {
         assert2::assert!(let Ok(metadata) = Metadata::from_slice(metadata_fixture()));
 
-        pretty_assertions::assert_eq!(metadata.native_bin_package_names(), vec!["evoke", "fixture-tool", "zj"]);
-    }
-
-    #[test]
-    fn test_zellij_plugin_manifests_uses_zellij_tile_dependency() {
-        assert2::assert!(let Ok(metadata) = Metadata::from_slice(metadata_fixture()));
-
         pretty_assertions::assert_eq!(
-            metadata.zellij_plugin_manifests(),
-            vec![
-                PathBuf::from("/repo/moved/zcp/Cargo.toml"),
-                PathBuf::from("/repo/yog/zj/plugins/agg/Cargo.toml"),
-            ]
+            metadata.native_bin_package_names(),
+            vec!["evoke", "fixture-tool", "helper-cli"]
         );
-    }
-
-    #[test]
-    fn test_zellij_plugin_package_names_uses_zellij_tile_dependency() {
-        assert2::assert!(let Ok(metadata) = Metadata::from_slice(metadata_fixture()));
-
-        pretty_assertions::assert_eq!(metadata.zellij_plugin_package_names(), vec!["agg", "zellij-copy"]);
     }
 
     fn metadata_fixture() -> &'static [u8] {
@@ -173,30 +112,10 @@ mod tests {
                 },
                 {
                   "dependencies": [],
-                  "manifest_path": "/repo/yog/zj/cli/Cargo.toml",
-                  "name": "zj",
+                  "manifest_path": "/repo/yog/helper-cli/Cargo.toml",
+                  "name": "helper-cli",
                   "targets": [
-                    { "kind": ["bin"], "name": "zj" }
-                  ]
-                },
-                {
-                  "dependencies": [
-                    { "kind": null, "name": "zellij-tile" }
-                  ],
-                  "manifest_path": "/repo/yog/zj/plugins/agg/Cargo.toml",
-                  "name": "agg",
-                  "targets": [
-                    { "kind": ["bin"], "name": "agg" }
-                  ]
-                },
-                {
-                  "dependencies": [
-                    { "kind": null, "name": "zellij-tile" }
-                  ],
-                  "manifest_path": "/repo/moved/zcp/Cargo.toml",
-                  "name": "zellij-copy",
-                  "targets": [
-                    { "kind": ["bin"], "name": "zcp" }
+                    { "kind": ["bin"], "name": "helper-cli" }
                   ]
                 },
                 {
@@ -213,7 +132,7 @@ mod tests {
                 },
                 {
                   "dependencies": [
-                    { "kind": "dev", "name": "zellij-tile" }
+                    { "kind": "dev", "name": "fixture-dev-dep" }
                   ],
                   "manifest_path": "/repo/yog/fixture-tool/Cargo.toml",
                   "name": "fixture-tool",

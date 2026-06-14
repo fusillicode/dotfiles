@@ -1,6 +1,0 @@
-Usage: znt [install [--debug]]
-
-Commands:
-  install [--debug]  Build and install the ZNT plugin.
-
-ZNT is a Zellij plugin that creates a new tab immediately after the focused tab.

@@ -195,46 +195,6 @@ impl AgentEventKind {
             Self::Exit => "exit",
         }
     }
-
-    /// Parse an agent event payload kind.
-    ///
-    /// # Errors
-    /// Returns [`ParseError`] when `s` is not one of the supported event kinds.
-    pub fn parse(s: &str) -> Result<Self, ParseError> {
-        match s.trim() {
-            "start" => Ok(Self::Start),
-            "busy" => Ok(Self::Busy),
-            "idle" => Ok(Self::Idle),
-            "exit" => Ok(Self::Exit),
-            _ => Err(ParseError::Invalid {
-                field: "event kind",
-                value: format!("{s:?}"),
-            }),
-        }
-    }
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct AgentEventPayload {
-    pub pane_id: u32,
-    pub agent: Agent,
-    pub kind: AgentEventKind,
-}
-
-impl AgentEventPayload {
-    /// Parse a Zellij pipe payload into a typed agent event.
-    ///
-    /// # Errors
-    /// Returns [`ParseError`] when the pane id, agent, or event kind is invalid.
-    pub fn parse(pane_id: &str, agent: &str, payload: &str) -> Result<Self, ParseError> {
-        let pane_id = pane_id.trim().parse().map_err(|_| ParseError::Invalid {
-            field: "pane_id",
-            value: format!("{pane_id:?}"),
-        })?;
-        let agent = Agent::from_name(agent.trim())?;
-        let kind = AgentEventKind::parse(payload)?;
-        Ok(Self { pane_id, agent, kind })
-    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

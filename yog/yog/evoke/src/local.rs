@@ -7,7 +7,6 @@ use owo_colors::OwoColorize;
 /// List of binaries that should be copied after building.
 /// NOTE: if a new binary is added this list must be updated!
 const BINS: &[&str] = &[
-    "agg",
     "ags",
     "catl",
     "fkr",
@@ -26,10 +25,6 @@ const BINS: &[&str] = &[
     "vpg",
     "yghfl",
     "yhfp",
-    "zcp",
-    "zj",
-    "znt",
-    "zop",
 ];
 /// List of library files that need to be renamed after building, mapping (`source_name`, `target_name`).
 const LIBS: &[(&str, &str)] = &[("libnvrim.dylib", "nvrim.so")];
@@ -90,13 +85,6 @@ pub fn run(args: &mut Vec<String>) -> rootcause::Result<()> {
             &nvim_libs_path.join(target_lib_name),
         )?;
     }
-
-    let mut zj = Command::new(bins_path.join("zj"));
-    zj.arg("install");
-    if is_debug {
-        zj.arg("--debug");
-    }
-    zj.status()?.exit_ok()?;
 
     Command::new(bins_path.join("gbm")).arg("install").status()?.exit_ok()?;
 

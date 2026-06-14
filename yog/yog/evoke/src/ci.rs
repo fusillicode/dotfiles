@@ -7,9 +7,7 @@ use rootcause::prelude::ResultExt;
 use crate::cargo_metadata::Metadata;
 
 /// Usage summary for CI subcommands.
-const CI_USAGE: &str = "Usage: evoke ci [all | lint | test | release-native | release-wasm | audit]";
-/// Zellij plugin target triple.
-const WASM_TARGET: &str = "wasm32-wasip1";
+const CI_USAGE: &str = "Usage: evoke ci [all | lint | test | release-native | audit]";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CmdKind {
@@ -17,7 +15,6 @@ pub enum CmdKind {
     Audit,
     Lint,
     ReleaseNative,
-    ReleaseWasm,
     Test,
 }
 
@@ -30,7 +27,6 @@ impl FromStr for CmdKind {
             "audit" => Ok(Self::Audit),
             "lint" => Ok(Self::Lint),
             "release-native" => Ok(Self::ReleaseNative),
-            "release-wasm" => Ok(Self::ReleaseWasm),
             "test" => Ok(Self::Test),
             unknown => rootcause::bail!("unknown evoke ci command: {unknown}\n{CI_USAGE}"),
         }
@@ -44,7 +40,6 @@ impl CmdKind {
                 Self::Lint.run(workspace_root)?;
                 Self::Test.run(workspace_root)?;
                 Self::ReleaseNative.run(workspace_root)?;
-                Self::ReleaseWasm.run(workspace_root)?;
                 Self::Audit.run(workspace_root)
             }
             Self::Audit => run_audit(workspace_root),
@@ -53,15 +48,7 @@ impl CmdKind {
                 "cargo",
                 &["run", "--quiet", "--bin", "tec", "--", "--all"],
             ),
-            Self::ReleaseNative => {
-                let metadata = Metadata::read(workspace_root)?;
-                run_native_release_build(workspace_root, &["build"], &metadata)
-            }
-            Self::ReleaseWasm => {
-                let metadata = Metadata::read(workspace_root)?;
-                add_wasm_target(workspace_root)?;
-                build_wasm_plugins(workspace_root, &metadata)
-            }
+            Self::ReleaseNative => run_native_release_build(workspace_root, &["build"]),
             Self::Test => run_test(workspace_root),
         }
     }
@@ -86,9 +73,7 @@ pub fn cmd_from_args(args: &[String]) -> rootcause::Result<Option<CmdKind>> {
 
 fn run_audit(workspace_root: &Path) -> rootcause::Result<()> {
     let metadata = Metadata::read(workspace_root)?;
-    add_wasm_target(workspace_root)?;
     run_native_auditable_build(workspace_root, &metadata)?;
-    build_wasm_plugins(workspace_root, &metadata)?;
     audit_native_bins(workspace_root, &metadata)
 }
 
@@ -125,15 +110,12 @@ fn run_test(workspace_root: &Path) -> rootcause::Result<()> {
     run_command(&mut command)
 }
 
-fn run_native_release_build(workspace_root: &Path, cargo_args: &[&str], metadata: &Metadata) -> rootcause::Result<()> {
+fn run_native_release_build(workspace_root: &Path, cargo_args: &[&str]) -> rootcause::Result<()> {
     let mut command = ytil_cmd::silent_cmd("cargo");
     command
         .args(cargo_args)
         .args(["--release", "--workspace"])
         .current_dir(workspace_root);
-    for package_name in metadata.zellij_plugin_package_names() {
-        command.args(["--exclude", package_name]);
-    }
     run_command(&mut command)
 }
 
@@ -151,28 +133,6 @@ fn run_native_auditable_build(workspace_root: &Path, metadata: &Metadata) -> roo
         command.args(["--package", package_name]);
     }
     run_command(&mut command)
-}
-
-fn add_wasm_target(workspace_root: &Path) -> rootcause::Result<()> {
-    run_in_workspace(workspace_root, "rustup", &["target", "add", WASM_TARGET])
-}
-
-fn build_wasm_plugins(workspace_root: &Path, metadata: &Metadata) -> rootcause::Result<()> {
-    let manifests = metadata.zellij_plugin_manifests();
-    if manifests.is_empty() {
-        rootcause::bail!("no Zellij plugin manifests found through zellij-tile dependency");
-    }
-
-    for manifest in manifests {
-        let mut command = ytil_cmd::silent_cmd("cargo");
-        command
-            .args(["build", "--release", "--manifest-path"])
-            .arg(manifest)
-            .args(["--target", WASM_TARGET])
-            .current_dir(workspace_root);
-        run_command(&mut command)?;
-    }
-    Ok(())
 }
 
 fn git_root(workspace_root: &Path) -> rootcause::Result<String> {
@@ -224,7 +184,6 @@ mod tests {
     #[case::audit("audit", CmdKind::Audit)]
     #[case::lint("lint", CmdKind::Lint)]
     #[case::release_native("release-native", CmdKind::ReleaseNative)]
-    #[case::release_wasm("release-wasm", CmdKind::ReleaseWasm)]
     #[case::test("test", CmdKind::Test)]
     fn test_cmd_from_args_accepts_known_subcommands(#[case] subcommand: &str, #[case] expected: CmdKind) {
         assert!(matches!(cmd_from_args(&args(&["ci", subcommand])), Ok(Some(command)) if command == expected));

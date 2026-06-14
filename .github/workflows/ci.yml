@@ -122,29 +122,7 @@ jobs:
       - name: Setup (no extra tools)
         uses: ./.github/actions/setup
 
-      - name: Build native workspace (exclude Zellij WASM plugins)
+      - name: Build native workspace
         working-directory: yog
         run: |
           cargo run --quiet --bin evoke -- ci release-native
-
-  release_wasm_plugins:
-    name: Build release (Zellij plugins wasm)
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
-
-      - name: Rust cache
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: yog
-          shared-key: wasm-plugins
-          cache-targets: true
-
-      - name: Setup (no extra tools)
-        uses: ./.github/actions/setup
-
-      - name: Build Zellij plugins
-        working-directory: yog
-        run: |
-          cargo run --quiet --bin evoke -- ci release-wasm
