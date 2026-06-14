@@ -91,8 +91,8 @@ mod tests {
     use muxr_core::TerminalSize;
 
     use super::*;
-    use crate::pane_focus::PaneFocusDirection;
-    use crate::pane_split::PaneSplitAxis;
+    use crate::pane::focus::PaneFocusDirection;
+    use crate::pane::split::PaneSplitAxis;
     use crate::state::SessionMetadata;
 
     #[test]

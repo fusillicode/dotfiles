@@ -12,20 +12,20 @@ use muxr_core::SessionPaths;
 use muxr_core::TerminalSize;
 use muxr_transport::ServerEventWriter;
 
-use crate::client_session::ClientSessionState;
-use crate::client_timers::ClientTimers;
-use crate::pane_fullscreen::PaneFullscreen;
-use crate::pane_layout::PaneLayout;
-use crate::pane_layout::PaneRegion;
-use crate::pane_render::PaneRenderConfig;
-use crate::pane_render::PaneRenderLayout;
-use crate::pane_render::RenderComposer;
-use crate::pane_render::RenderDiffReason;
-use crate::pane_runtime::PaneRuntimeMetadata;
-use crate::pane_runtime::PaneRuntimes;
-use crate::pane_tracked_process::PaneTrackedProcessSnapshot;
-use crate::pane_tracked_process::PaneTrackedProcesses;
-use crate::pane_tracked_process::TrackedProcessAttention;
+use crate::client::session::ClientSessionState;
+use crate::client::timers::ClientTimers;
+use crate::pane::fullscreen::PaneFullscreen;
+use crate::pane::layout::PaneLayout;
+use crate::pane::layout::PaneRegion;
+use crate::pane::render::PaneRenderConfig;
+use crate::pane::render::PaneRenderLayout;
+use crate::pane::render::RenderComposer;
+use crate::pane::render::RenderDiffReason;
+use crate::pane::runtime::PaneRuntimeMetadata;
+use crate::pane::runtime::PaneRuntimes;
+use crate::pane::tracked_process::PaneTrackedProcessSnapshot;
+use crate::pane::tracked_process::PaneTrackedProcesses;
+use crate::pane::tracked_process::TrackedProcessAttention;
 use crate::server::ServerConfig;
 use crate::state::SessionLayout;
 
@@ -54,7 +54,7 @@ pub fn initial_client_render(
     let render_baseline = render_composer.render_baseline(
         PaneRenderConfig {
             border_styles: config.user_config.pane_borders,
-            mode: crate::pane_borders::BorderRenderMode::Focus,
+            mode: crate::pane::borders::BorderRenderMode::Focus,
             pane_attention: config.user_config.pane_attention,
             pane_dim: config.user_config.pane_dim,
         },
@@ -511,12 +511,12 @@ mod tests {
     use rootcause::report;
 
     use super::*;
-    use crate::pane_cmd::PaneCmd;
-    use crate::pane_cmd::PaneCmdObservation;
-    use crate::pane_runtime::test_helpers as pane_runtime_test_helpers;
-    use crate::pane_split::PaneSplitAxis;
+    use crate::pane::cmd::PaneCmd;
+    use crate::pane::cmd::PaneCmdObservation;
+    use crate::pane::runtime::test_helpers as pane_runtime_test_helpers;
+    use crate::pane::split::PaneSplitAxis;
     use crate::server::test_helpers as server_test_helpers;
-    use crate::session_start_seed::SessionStartSeed;
+    use crate::session::start_seed::SessionStartSeed;
     use crate::state::SessionMetadata;
 
     #[test]

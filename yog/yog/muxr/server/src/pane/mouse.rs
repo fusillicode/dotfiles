@@ -6,9 +6,9 @@ use muxr_core::PaneRegionSnapshot;
 use muxr_core::PaneScrollDirection;
 use rootcause::report;
 
-use crate::client_session::ClientSessionState;
-use crate::pane_focus::PaneFocusClientOutcome;
-use crate::pane_tracked_process::TrackedProcessUserInteraction;
+use crate::client::session::ClientSessionState;
+use crate::pane::focus::PaneFocusClientOutcome;
+use crate::pane::tracked_process::TrackedProcessUserInteraction;
 use crate::terminal::TerminalApplicationMode;
 use crate::terminal::TerminalCursorKeyMode;
 use crate::terminal::TerminalMouseProtocol;
@@ -77,7 +77,7 @@ pub fn handle_mouse_event_client_request(
             // Focus-reporting apps must observe the pane transition before the click bytes; only the layout render can
             // wait until after forwarding the mouse packet.
             let focus = if focus.focuses_pane() {
-                crate::pane_focus::handle_focus_pane_at_client_request(event.position, state)?
+                crate::pane::focus::handle_focus_pane_at_client_request(event.position, state)?
             } else {
                 PaneFocusClientOutcome::Unchanged
             };
@@ -117,7 +117,7 @@ pub fn handle_mouse_event_client_request(
         }
         PaneMouseAction::ScrollHistory { direction } => {
             let outcome =
-                crate::pane_scroll::handle_scroll_pane_wheel_client_request(event.position, direction, state)?;
+                crate::pane::scroll::handle_scroll_pane_wheel_client_request(event.position, direction, state)?;
             Ok(PaneMouseClientOutcome {
                 focus: PaneFocusClientOutcome::Unchanged,
                 render_dirty: outcome.render_dirty,
@@ -125,7 +125,7 @@ pub fn handle_mouse_event_client_request(
             })
         }
         PaneMouseAction::FocusPane => Ok(PaneMouseClientOutcome {
-            focus: crate::pane_focus::handle_focus_pane_at_client_request(event.position, state)?,
+            focus: crate::pane::focus::handle_focus_pane_at_client_request(event.position, state)?,
             render_dirty: false,
             sync_render_deadline: false,
         }),

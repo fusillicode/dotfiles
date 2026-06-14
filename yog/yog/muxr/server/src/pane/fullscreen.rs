@@ -4,8 +4,8 @@ use muxr_core::PaneId;
 use muxr_core::TabId;
 use muxr_core::TerminalSize;
 
-use crate::client_session::ClientSessionState;
-use crate::pane_layout::PaneLayout;
+use crate::client::session::ClientSessionState;
+use crate::pane::layout::PaneLayout;
 use crate::state::SessionLayout;
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -76,10 +76,10 @@ mod tests {
     use muxr_config::MuxrConfig;
 
     use super::*;
-    use crate::pane_layout::PaneArea;
-    use crate::pane_layout::PanePosition;
-    use crate::pane_layout::PaneRegion;
-    use crate::pane_layout::PaneSize;
+    use crate::pane::layout::PaneArea;
+    use crate::pane::layout::PanePosition;
+    use crate::pane::layout::PaneRegion;
+    use crate::pane::layout::PaneSize;
 
     #[test]
     fn test_pane_fullscreen_toggle_active_pane_when_inactive_enters_fullscreen_layout() -> rootcause::Result<()> {
@@ -87,7 +87,7 @@ mod tests {
         let pane_id = layout.split_active_pane(
             MuxrConfig::default().layout,
             crate::state::test_helpers::metadata("sh", 2),
-            crate::pane_split::PaneSplitAxis::Vertical,
+            crate::pane::split::PaneSplitAxis::Vertical,
         )?;
         let mut fullscreen = PaneFullscreen::default();
 
@@ -128,13 +128,15 @@ mod tests {
         layout.split_active_pane(
             MuxrConfig::default().layout,
             crate::state::test_helpers::metadata("sh", 2),
-            crate::pane_split::PaneSplitAxis::Vertical,
+            crate::pane::split::PaneSplitAxis::Vertical,
         )?;
         let mut fullscreen = PaneFullscreen::default();
         fullscreen.toggle_active_pane(&layout)?;
 
-        let _focused =
-            layout.focus_pane_direction(&TerminalSize::new(80, 24)?, crate::pane_focus::PaneFocusDirection::Left)?;
+        let _focused = layout.focus_pane_direction(
+            &TerminalSize::new(80, 24)?,
+            crate::pane::focus::PaneFocusDirection::Left,
+        )?;
 
         pretty_assertions::assert_eq!(fullscreen.visible_pane_id(&layout)?, None);
         Ok(())
@@ -148,7 +150,7 @@ mod tests {
         let pane_a = layout.split_active_pane(
             MuxrConfig::default().layout,
             crate::state::test_helpers::metadata("sh", 2),
-            crate::pane_split::PaneSplitAxis::Vertical,
+            crate::pane::split::PaneSplitAxis::Vertical,
         )?;
         let mut fullscreen = PaneFullscreen::default();
         fullscreen.toggle_active_pane(&layout)?;
@@ -156,7 +158,7 @@ mod tests {
         layout.split_active_pane(
             MuxrConfig::default().layout,
             crate::state::test_helpers::metadata("sh", 4),
-            crate::pane_split::PaneSplitAxis::Vertical,
+            crate::pane::split::PaneSplitAxis::Vertical,
         )?;
 
         let focused_tab_layout = fullscreen.pane_layout(&layout, &TerminalSize::new(80, 24)?)?;
@@ -177,7 +179,7 @@ mod tests {
         layout.split_active_pane(
             MuxrConfig::default().layout,
             crate::state::test_helpers::metadata("sh", 2),
-            crate::pane_split::PaneSplitAxis::Vertical,
+            crate::pane::split::PaneSplitAxis::Vertical,
         )?;
 
         let pane_layout = PaneFullscreen::default().pane_layout(&layout, &TerminalSize::new(80, 24)?)?;
@@ -195,7 +197,7 @@ mod tests {
         let pane_a = layout.split_active_pane(
             MuxrConfig::default().layout,
             crate::state::test_helpers::metadata("sh", 2),
-            crate::pane_split::PaneSplitAxis::Vertical,
+            crate::pane::split::PaneSplitAxis::Vertical,
         )?;
         let mut fullscreen = PaneFullscreen::default();
         fullscreen.toggle_active_pane(&layout)?;
@@ -217,7 +219,7 @@ mod tests {
         let visible_pane = layout.split_active_pane(
             MuxrConfig::default().layout,
             crate::state::test_helpers::metadata("sh", 2),
-            crate::pane_split::PaneSplitAxis::Vertical,
+            crate::pane::split::PaneSplitAxis::Vertical,
         )?;
         let mut fullscreen = PaneFullscreen::default();
         fullscreen.toggle_active_pane(&layout)?;

@@ -9,8 +9,8 @@ use muxr_core::TrackedProcessState;
 use rootcause::report;
 use serde::Deserialize;
 
-use crate::pane_layout::PaneLayout;
-use crate::pane_layout::PaneRegion;
+use crate::pane::layout::PaneLayout;
+use crate::pane::layout::PaneRegion;
 use crate::state::Pane;
 use crate::state::PaneAttentionState;
 use crate::state::PaneState;
@@ -242,8 +242,8 @@ pub mod test_helpers {
     use muxr_core::TerminalSize;
 
     use super::*;
-    use crate::pane_borders::PaneBorderAxis;
-    use crate::pane_split::PaneSplitRatio;
+    use crate::pane::borders::PaneBorderAxis;
+    use crate::pane::split::PaneSplitRatio;
 
     const BALANCED_TEST_SPLIT_RATIO: u16 = 500;
 

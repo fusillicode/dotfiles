@@ -1,7 +1,7 @@
 use std::time::Duration;
 
-use crate::session_tracing::ClientEventSendFailure;
-use crate::sessions_delete::DeleteSessions;
+use crate::session::delete::DeleteSessions;
+use crate::session::tracing::ClientEventSendFailure;
 
 pub fn client_should_exit(
     output_current: impl IntoIterator<Item = bool>,
@@ -26,7 +26,7 @@ pub fn client_should_exit(
 
 pub fn record_detach_ack_send_failure(reason: Option<ClientEventSendFailure>) {
     if let Some(reason) = reason {
-        crate::session_tracing::ack::detach_failed(reason);
+        crate::session::tracing::ack::detach_failed(reason);
     }
 }
 
@@ -90,7 +90,7 @@ mod tests {
     fn test_record_detach_ack_send_failure_when_reason_exists_warns() -> rootcause::Result<()> {
         let session = SessionName::default();
 
-        let log = crate::session_tracing::collect_test_log(&session, || {
+        let log = crate::session::tracing::collect_test_log(&session, || {
             let span = tracing::info_span!("muxr_session", session = %session);
             let _guard = span.enter();
             record_detach_ack_send_failure(Some(ClientEventSendFailure::SendFailed));
@@ -106,7 +106,7 @@ mod tests {
     #[test]
     fn test_record_detach_ack_send_failure_when_reason_is_none_is_silent() -> rootcause::Result<()> {
         let session = SessionName::default();
-        let log = crate::session_tracing::collect_test_log(&session, || {
+        let log = crate::session::tracing::collect_test_log(&session, || {
             let span = tracing::info_span!("muxr_session", session = %session);
             let _guard = span.enter();
             record_detach_ack_send_failure(None);

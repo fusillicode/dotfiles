@@ -4,24 +4,24 @@ use muxr_core::ServerError;
 use muxr_core::ServerEvent;
 use muxr_transport::ServerEventWriter;
 
-use crate::client_session::ClientSessionState;
-use crate::client_timers::ClientTimers;
+use crate::client::session::ClientSessionState;
+use crate::client::timers::ClientTimers;
 use crate::keyboard_input::ClientCmd;
 use crate::keyboard_input::KeyResolution;
 use crate::keyboard_input::TabCmd;
-use crate::pane_close::ClosePaneClientOutcome;
-use crate::pane_focus::PaneFocusClientOutcome;
-use crate::pane_focus::PaneFocusRender;
-use crate::pane_input::PaneInputOutcome;
-use crate::pane_mouse::PaneMouseClientOutcome;
-use crate::pane_resize::PaneResizeClientOutcome;
-use crate::pane_resize::PaneResizeRender;
-use crate::pane_scroll::PaneScrollLineRequestOutcome;
-use crate::pane_split::PaneSplitClientOutcome;
+use crate::pane::close::ClosePaneClientOutcome;
+use crate::pane::focus::PaneFocusClientOutcome;
+use crate::pane::focus::PaneFocusRender;
+use crate::pane::input::PaneInputOutcome;
+use crate::pane::mouse::PaneMouseClientOutcome;
+use crate::pane::resize::PaneResizeClientOutcome;
+use crate::pane::resize::PaneResizeRender;
+use crate::pane::scroll::PaneScrollLineRequestOutcome;
+use crate::pane::split::PaneSplitClientOutcome;
 use crate::scrollback_editor::ScrollbackEditorOpenClientOutcome;
-use crate::session_runtime::SessionClientMessage;
-use crate::tab_create::TabCreateClientOutcome;
-use crate::tab_focus::TabFocusClientOutcome;
+use crate::session::runtime::SessionClientMessage;
+use crate::tab::create::TabCreateClientOutcome;
+use crate::tab::focus::TabFocusClientOutcome;
 
 pub async fn handle_client_message(
     message: SessionClientMessage,
@@ -50,7 +50,7 @@ async fn handle_client_request(
     match request {
         ClientRequest::Detach => self::send_detached_event(event_writer, state).await,
         ClientRequest::DeleteSession => {
-            crate::sessions_delete::handle_client_delete(
+            crate::session::delete::handle_client_delete(
                 event_writer,
                 state.delete_sessions,
                 state.config.client_write_timeout,
@@ -59,19 +59,19 @@ async fn handle_client_request(
             Ok(false)
         }
         ClientRequest::Input(bytes) => self::apply_pane_input_outcome(
-            crate::pane_input::handle_client_input(&bytes, state)?,
+            crate::pane::input::handle_client_input(&bytes, state)?,
             timers,
             render_dirty,
         ),
         ClientRequest::Paste(bytes) => self::apply_pane_input_outcome(
-            crate::pane_input::handle_client_paste(&bytes, state)?,
+            crate::pane::input::handle_client_paste(&bytes, state)?,
             timers,
             render_dirty,
         ),
         ClientRequest::Key(key) => self::handle_key_request(key, event_writer, state, timers, render_dirty).await,
         ClientRequest::Mouse(event) => {
             self::apply_pane_mouse_outcome(
-                crate::pane_mouse::handle_mouse_event_client_request(event, state)?,
+                crate::pane::mouse::handle_mouse_event_client_request(event, state)?,
                 event_writer,
                 state,
                 timers,
@@ -81,7 +81,7 @@ async fn handle_client_request(
         }
         ClientRequest::ScrollPaneLineAt { position, direction } => {
             self::apply_pane_scroll_line_outcome(
-                crate::pane_scroll::handle_scroll_pane_line_client_request(position, direction, state)?,
+                crate::pane::scroll::handle_scroll_pane_line_client_request(position, direction, state)?,
                 event_writer,
                 state,
                 timers,
@@ -91,7 +91,7 @@ async fn handle_client_request(
         }
         ClientRequest::FocusPaneAt(position) => {
             self::apply_pane_focus_outcome(
-                crate::pane_focus::handle_focus_pane_at_client_request(position, state)?,
+                crate::pane::focus::handle_focus_pane_at_client_request(position, state)?,
                 event_writer,
                 state,
             )
@@ -99,7 +99,7 @@ async fn handle_client_request(
         }
         ClientRequest::FocusTab(tab_id) => {
             self::apply_tab_focus_outcome(
-                crate::tab_focus::handle_focus_tab_client_request(tab_id, state)?,
+                crate::tab::focus::handle_focus_tab_client_request(tab_id, state)?,
                 event_writer,
                 state,
             )
@@ -218,7 +218,7 @@ async fn send_detached_event(
     state: &mut ClientSessionState<'_>,
 ) -> rootcause::Result<bool> {
     self::restore_scrollback_editor_without_render(state)?;
-    crate::client_lifecycle::record_detach_ack_send_failure(
+    crate::client::lifecycle::record_detach_ack_send_failure(
         crate::event_writer::send_event_failure(
             event_writer,
             &ServerEvent::Detached,
@@ -239,7 +239,7 @@ async fn handle_key_request(
     match crate::keyboard_input::resolve_key(&mut state.input_mode, &key) {
         KeyResolution::Cmd(cmd) => self::handle_cmd_request(cmd, event_writer, state).await,
         KeyResolution::Raw => self::apply_pane_input_outcome(
-            crate::pane_input::handle_raw_key_bytes(&key.raw_bytes, state)?,
+            crate::pane::input::handle_raw_key_bytes(&key.raw_bytes, state)?,
             timers,
             render_dirty,
         ),
@@ -261,7 +261,7 @@ async fn handle_cmd_request(
             let previous_pane = state.layout.active_pane_id()?;
             crate::scrollback_editor::write_focus_lost_if_live(state.scrollback_editor.as_ref(), state.runtimes)?;
             self::restore_scrollback_editor_without_render(state)?;
-            crate::pane_focus::write_active_pane_focus_events(previous_pane, state)?;
+            crate::pane::focus::write_active_pane_focus_events(previous_pane, state)?;
             return crate::screen_render::resize_panes_and_render(event_writer, state).await;
         }
         crate::scrollback_editor::ScrollbackEditorCmdAction::Run(cmd) => cmd,
@@ -270,7 +270,7 @@ async fn handle_cmd_request(
         ClientCmd::Tab(cmd) => self::handle_tab_cmd_request(cmd, event_writer, state).await,
         ClientCmd::SplitPane(split_axis) => {
             self::apply_pane_split_outcome(
-                crate::pane_split::handle_split_pane_cmd_client(split_axis, state)?,
+                crate::pane::split::handle_split_pane_cmd_client(split_axis, state)?,
                 event_writer,
                 state,
             )
@@ -278,7 +278,7 @@ async fn handle_cmd_request(
         }
         ClientCmd::ClosePane => {
             self::apply_pane_close_outcome(
-                crate::pane_close::handle_close_pane_cmd_client(state)?,
+                crate::pane::close::handle_close_pane_cmd_client(state)?,
                 event_writer,
                 state,
             )
@@ -286,7 +286,7 @@ async fn handle_cmd_request(
         }
         ClientCmd::ResizePane(direction) => {
             self::apply_pane_resize_outcome(
-                crate::pane_resize::handle_resize_pane_cmd_client(direction, state)?,
+                crate::pane::resize::handle_resize_pane_cmd_client(direction, state)?,
                 event_writer,
                 state,
             )
@@ -305,7 +305,7 @@ async fn handle_cmd_request(
         }
         ClientCmd::FocusPane(direction) => {
             self::apply_pane_focus_outcome(
-                crate::pane_focus::handle_focus_pane_cmd_client(direction, state)?,
+                crate::pane::focus::handle_focus_pane_cmd_client(direction, state)?,
                 event_writer,
                 state,
             )
@@ -313,7 +313,7 @@ async fn handle_cmd_request(
         }
         ClientCmd::EnterResizeMode => {
             self::apply_pane_resize_outcome(
-                crate::pane_resize::handle_enter_resize_mode_cmd_client(state),
+                crate::pane::resize::handle_enter_resize_mode_cmd_client(state),
                 event_writer,
                 state,
             )
@@ -321,14 +321,14 @@ async fn handle_cmd_request(
         }
         ClientCmd::ExitMode => {
             self::apply_pane_resize_outcome(
-                crate::pane_resize::handle_exit_resize_mode_cmd_client(),
+                crate::pane::resize::handle_exit_resize_mode_cmd_client(),
                 event_writer,
                 state,
             )
             .await
         }
         ClientCmd::TogglePaneFullscreen => {
-            crate::pane_fullscreen::handle_toggle_active_pane_cmd_client(state)?;
+            crate::pane::fullscreen::handle_toggle_active_pane_cmd_client(state)?;
             // Zero-field outcomes are intentionally avoided: fullscreen exposes no shell data, and always redraws.
             crate::screen_render::resize_panes_and_render(event_writer, state).await
         }
@@ -337,7 +337,7 @@ async fn handle_cmd_request(
 
 fn restore_scrollback_editor_without_render(state: &mut ClientSessionState<'_>) -> rootcause::Result<()> {
     if let Some(editor_pane_id) = crate::scrollback_editor::restore_without_render(state)?.editor_pane_id {
-        crate::client_session::remove_pane_sink(state, editor_pane_id);
+        crate::client::session::remove_pane_sink(state, editor_pane_id);
     }
     Ok(())
 }
@@ -354,12 +354,12 @@ async fn apply_scrollback_editor_open_outcome(
             editor_pane_id,
             previous_pane,
         } => {
-            if let Err(error) = crate::client_session::attach_pane_sink_to_state(state, editor_pane_id) {
+            if let Err(error) = crate::client::session::attach_pane_sink_to_state(state, editor_pane_id) {
                 crate::scrollback_editor::rollback_open_client_request(state, editor)?;
                 return Err(error);
             }
             state.scrollback_editor = Some(editor);
-            crate::pane_focus::write_active_pane_focus_events(previous_pane, state)?;
+            crate::pane::focus::write_active_pane_focus_events(previous_pane, state)?;
             crate::screen_render::resize_panes_and_render(event_writer, state).await
         }
     }
@@ -374,8 +374,8 @@ async fn apply_pane_split_outcome(
         new_pane_id,
         previous_pane,
     } = outcome;
-    crate::client_session::attach_pane_sink_to_state(state, new_pane_id)?;
-    crate::pane_focus::write_active_pane_focus_events(previous_pane, state)?;
+    crate::client::session::attach_pane_sink_to_state(state, new_pane_id)?;
+    crate::pane::focus::write_active_pane_focus_events(previous_pane, state)?;
     crate::screen_render::resize_panes_and_render(event_writer, state).await
 }
 
@@ -387,12 +387,12 @@ async fn apply_pane_close_outcome(
     // Sink guards and detach events are client-shell resources; pane_close reports which pane disappeared.
     match outcome {
         ClosePaneClientOutcome::Final { pane_id } => {
-            crate::client_session::remove_pane_sink(state, pane_id);
+            crate::client::session::remove_pane_sink(state, pane_id);
             self::send_detached_event(event_writer, state).await
         }
         ClosePaneClientOutcome::Removed { pane_id, previous_pane } => {
-            crate::client_session::remove_pane_sink(state, pane_id);
-            crate::pane_focus::write_active_pane_focus_events(previous_pane, state)?;
+            crate::client::session::remove_pane_sink(state, pane_id);
+            crate::pane::focus::write_active_pane_focus_events(previous_pane, state)?;
             crate::screen_render::resize_panes_and_render(event_writer, state).await
         }
     }
@@ -423,7 +423,7 @@ async fn handle_tab_cmd_request(
     match cmd {
         TabCmd::Create => {
             self::apply_tab_create_outcome(
-                crate::tab_create::handle_create_tab_cmd_client(state)?,
+                crate::tab::create::handle_create_tab_cmd_client(state)?,
                 event_writer,
                 state,
             )
@@ -431,7 +431,7 @@ async fn handle_tab_cmd_request(
         }
         TabCmd::FocusPrevious => {
             self::apply_tab_focus_outcome(
-                crate::tab_focus::handle_focus_previous_tab_cmd_client(state)?,
+                crate::tab::focus::handle_focus_previous_tab_cmd_client(state)?,
                 event_writer,
                 state,
             )
@@ -439,18 +439,18 @@ async fn handle_tab_cmd_request(
         }
         TabCmd::FocusNext => {
             self::apply_tab_focus_outcome(
-                crate::tab_focus::handle_focus_next_tab_cmd_client(state)?,
+                crate::tab::focus::handle_focus_next_tab_cmd_client(state)?,
                 event_writer,
                 state,
             )
             .await
         }
         TabCmd::MovePrevious => {
-            crate::tab_move::handle_move_active_tab_previous_cmd_client(state)?;
+            crate::tab::r#move::handle_move_active_tab_previous_cmd_client(state)?;
             crate::screen_render::resize_panes_and_render(event_writer, state).await
         }
         TabCmd::MoveNext => {
-            crate::tab_move::handle_move_active_tab_next_cmd_client(state)?;
+            crate::tab::r#move::handle_move_active_tab_next_cmd_client(state)?;
             crate::screen_render::resize_panes_and_render(event_writer, state).await
         }
     }
@@ -465,8 +465,8 @@ async fn apply_tab_create_outcome(
         new_pane_id,
         previous_pane,
     } = outcome;
-    crate::client_session::attach_pane_sink_to_state(state, new_pane_id)?;
-    crate::pane_focus::write_active_pane_focus_events(previous_pane, state)?;
+    crate::client::session::attach_pane_sink_to_state(state, new_pane_id)?;
+    crate::pane::focus::write_active_pane_focus_events(previous_pane, state)?;
     crate::screen_render::resize_panes_and_render(event_writer, state).await
 }
 
@@ -477,7 +477,7 @@ async fn apply_tab_focus_outcome(
 ) -> rootcause::Result<bool> {
     match outcome {
         TabFocusClientOutcome::Render { previous_pane } => {
-            crate::pane_focus::write_active_pane_focus_events(previous_pane, state)?;
+            crate::pane::focus::write_active_pane_focus_events(previous_pane, state)?;
             crate::screen_render::resize_panes_and_render(event_writer, state).await
         }
         TabFocusClientOutcome::Unchanged => Ok(true),

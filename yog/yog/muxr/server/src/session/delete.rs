@@ -9,7 +9,7 @@ use muxr_transport::ServerConnection;
 use muxr_transport::ServerEventWriter;
 use rootcause::prelude::ResultExt;
 
-use crate::session_tracing::ClientEventSendFailure;
+use crate::session::tracing::ClientEventSendFailure;
 
 #[derive(Debug, Default)]
 pub struct DeleteSessions {
@@ -79,7 +79,7 @@ async fn send_connection_event_failure(
 
 fn record_delete_ack_send_failure(reason: Option<ClientEventSendFailure>) {
     if let Some(reason) = reason {
-        crate::session_tracing::ack::delete_failed(reason);
+        crate::session::tracing::ack::delete_failed(reason);
     }
 }
 
@@ -124,7 +124,7 @@ mod tests {
     fn test_record_delete_ack_send_failure_when_reason_exists_warns() -> rootcause::Result<()> {
         let session = SessionName::default();
 
-        let log = crate::session_tracing::collect_test_log(&session, || {
+        let log = crate::session::tracing::collect_test_log(&session, || {
             let span = tracing::info_span!("muxr_session", session = %session);
             let _guard = span.enter();
             self::record_delete_ack_send_failure(Some(ClientEventSendFailure::Timeout));
@@ -139,7 +139,7 @@ mod tests {
     #[test]
     fn test_record_delete_ack_send_failure_when_reason_is_none_is_silent() -> rootcause::Result<()> {
         let session = SessionName::default();
-        let log = crate::session_tracing::collect_test_log(&session, || {
+        let log = crate::session::tracing::collect_test_log(&session, || {
             let span = tracing::info_span!("muxr_session", session = %session);
             let _guard = span.enter();
             self::record_delete_ack_send_failure(None);

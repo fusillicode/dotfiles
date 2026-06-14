@@ -3,7 +3,7 @@ use std::time::Duration;
 use muxr_core::ServerEvent;
 use muxr_transport::ServerEventWriter;
 
-use crate::session_tracing::ClientEventSendFailure;
+use crate::session::tracing::ClientEventSendFailure;
 
 /// Send one event on an attached-client writer with the server's bounded write timeout.
 ///

@@ -2,8 +2,8 @@ use std::time::Instant;
 
 use muxr_core::PaneId;
 
-use crate::client_session::ClientSessionState;
-use crate::pane_tracked_process::TrackedProcessUserInteraction;
+use crate::client::session::ClientSessionState;
+use crate::pane::tracked_process::TrackedProcessUserInteraction;
 use crate::pty::PtyHandle;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

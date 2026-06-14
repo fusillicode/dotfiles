@@ -2,11 +2,11 @@ use muxr_core::ClientKey;
 use muxr_core::ClientKeyCode;
 use muxr_core::ClientKeyModifiers;
 
-use crate::pane_borders::BorderRenderMode;
-use crate::pane_focus::PaneFocusDirection;
-use crate::pane_resize::PaneResizeDirection;
-use crate::pane_split::PaneSplitAxis;
-use crate::pane_tracked_process::TrackedProcessUserInteraction;
+use crate::pane::borders::BorderRenderMode;
+use crate::pane::focus::PaneFocusDirection;
+use crate::pane::resize::PaneResizeDirection;
+use crate::pane::split::PaneSplitAxis;
+use crate::pane::tracked_process::TrackedProcessUserInteraction;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ClientCmd {

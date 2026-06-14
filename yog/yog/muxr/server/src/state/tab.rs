@@ -7,7 +7,7 @@ use rootcause::report;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::pane_layout::PaneLayout;
+use crate::pane::layout::PaneLayout;
 use crate::state::Pane;
 use crate::state::PaneSnapshotFields;
 use crate::state::PaneTree;

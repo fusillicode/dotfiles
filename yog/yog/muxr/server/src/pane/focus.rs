@@ -5,10 +5,10 @@ use muxr_core::PaneId;
 use muxr_core::TerminalSize;
 use rootcause::report;
 
-use crate::client_session::ClientSessionState;
-use crate::pane_layout::PaneRegion;
-use crate::pane_runtime::PaneRuntimes;
-use crate::pane_tracked_process::PaneTrackedProcesses;
+use crate::client::session::ClientSessionState;
+use crate::pane::layout::PaneRegion;
+use crate::pane::runtime::PaneRuntimes;
+use crate::pane::tracked_process::PaneTrackedProcesses;
 use crate::server::ServerConfig;
 use crate::state::SessionLayout;
 use crate::state::Tab;
@@ -219,7 +219,7 @@ pub fn handle_focus_pane_cmd_client(
         return Ok(PaneFocusClientOutcome::Unchanged);
     }
     self::write_active_pane_focus_events(previous_pane, state)?;
-    let render = if crate::pane_fullscreen::clear_active_tab_for_layout_mutation(state) {
+    let render = if crate::pane::fullscreen::clear_active_tab_for_layout_mutation(state) {
         PaneFocusRender::ResizePanesAndRender
     } else {
         PaneFocusRender::SendLayoutAndBaseline
@@ -312,7 +312,7 @@ mod tests {
     use muxr_config::MuxrConfig;
 
     use super::*;
-    use crate::pane_split::PaneSplitAxis;
+    use crate::pane::split::PaneSplitAxis;
     use crate::state::test_helpers as state_test_helpers;
 
     #[rstest::rstest]

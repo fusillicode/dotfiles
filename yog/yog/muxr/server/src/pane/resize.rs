@@ -1,8 +1,8 @@
 use muxr_config::LayoutConfig;
 
-use crate::client_session::ClientSessionState;
-use crate::pane_split::PaneSplitAxis;
-use crate::pane_split::PaneSplitResize;
+use crate::client::session::ClientSessionState;
+use crate::pane::split::PaneSplitAxis;
+use crate::pane::split::PaneSplitResize;
 use crate::server::ServerConfig;
 use crate::state::PaneTree;
 use crate::state::SessionLayout;
@@ -127,7 +127,7 @@ pub fn handle_resize_pane_cmd_client(
 }
 
 pub fn handle_enter_resize_mode_cmd_client(state: &mut ClientSessionState<'_>) -> PaneResizeClientOutcome {
-    crate::pane_fullscreen::clear_active_tab_for_layout_mutation(state);
+    crate::pane::fullscreen::clear_active_tab_for_layout_mutation(state);
     PaneResizeClientOutcome::Render {
         render: PaneResizeRender::ResizePanesAndRender,
     }

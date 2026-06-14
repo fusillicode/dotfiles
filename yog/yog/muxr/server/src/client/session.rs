@@ -13,22 +13,22 @@ use muxr_transport::ServerEventWriter;
 use muxr_transport::ServerRequestReader;
 use rootcause::report;
 
-use crate::client_timers::ClientTimers;
+use crate::client::timers::ClientTimers;
 use crate::keyboard_input::ServerInputMode;
-use crate::pane_fullscreen::PaneFullscreen;
-use crate::pane_render::RenderComposer;
-use crate::pane_runtime::PaneRuntimes;
-use crate::pane_tracked_process::PaneTrackedProcesses;
+use crate::pane::fullscreen::PaneFullscreen;
+use crate::pane::render::RenderComposer;
+use crate::pane::runtime::PaneRuntimes;
+use crate::pane::tracked_process::PaneTrackedProcesses;
 use crate::pty::PtyEvent;
 use crate::pty::PtySinkGuard;
 use crate::scrollback_editor::ScrollbackEditorState;
 use crate::server::ServerConfig;
-use crate::session_runtime::PANE_OUTPUT_EVENT_CHANNEL_LIMIT;
-use crate::session_runtime::ReapResult;
-use crate::session_runtime::SessionClientMessage;
-use crate::session_runtime::SessionPaneOutputMessage;
-use crate::session_runtime::SessionRuntimeTimerMessage;
-use crate::sessions_delete::DeleteSessions;
+use crate::session::delete::DeleteSessions;
+use crate::session::runtime::PANE_OUTPUT_EVENT_CHANNEL_LIMIT;
+use crate::session::runtime::ReapResult;
+use crate::session::runtime::SessionClientMessage;
+use crate::session::runtime::SessionPaneOutputMessage;
+use crate::session::runtime::SessionRuntimeTimerMessage;
 use crate::state::SessionLayout;
 
 struct ClientPtySink {
@@ -179,7 +179,7 @@ pub async fn handle_client(
         Ok(()) => restore_result.map(|_| ()),
         Err(error) => {
             let _ = restore_result.inspect_err(|restore_error| {
-                crate::session_tracing::scrollback::restore_failed(restore_error);
+                crate::session::tracing::scrollback::restore_failed(restore_error);
             });
             Err(error)
         }
@@ -203,7 +203,7 @@ async fn run_client_session(
     let mut request_turn = false;
 
     loop {
-        if crate::client_lifecycle::client_should_exit(
+        if crate::client::lifecycle::client_should_exit(
             state.sink_guards.iter().map(|sink| sink.guard.is_output_current()),
             state.config.client_heartbeat_timeout,
             state.delete_sessions,
@@ -407,13 +407,13 @@ pub async fn handle_reaped_panes(
         self::remove_pane_sink(state, editor_pane_id);
     }
     let previous_pane_before_reap = state.layout.active_pane_id()?;
-    match crate::session_runtime::reap_exited_panes(state.config, state.layout, state.runtimes)? {
+    match crate::session::runtime::reap_exited_panes(state.config, state.layout, state.runtimes)? {
         ReapResult::Final => Ok(true),
         ReapResult::NoExitedPanes => {
             if !restored_editor.restored() {
                 return Ok(false);
             }
-            crate::pane_focus::write_active_pane_focus_events(previous_pane_before_restore, state)?;
+            crate::pane::focus::write_active_pane_focus_events(previous_pane_before_restore, state)?;
             Ok(!crate::screen_render::send_layout_and_baseline(event_writer, state).await?)
         }
         ReapResult::Removed => {
@@ -424,7 +424,7 @@ pub async fn handle_reaped_panes(
             } else {
                 previous_pane_before_reap
             };
-            crate::pane_focus::write_active_pane_focus_events(previous_pane, state)?;
+            crate::pane::focus::write_active_pane_focus_events(previous_pane, state)?;
             Ok(!crate::screen_render::resize_panes_and_render(event_writer, state).await?)
         }
     }

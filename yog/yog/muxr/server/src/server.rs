@@ -15,17 +15,17 @@ use rootcause::prelude::ResultExt;
 use rootcause::report;
 
 use crate::pty::ShellCmd;
-use crate::session_files::ServerFilesGuard;
-use crate::session_files::prepare_session_dirs;
-use crate::session_files::secure_socket_file;
-use crate::session_runtime::CLIENT_HANDSHAKE_CHANNEL_LIMIT;
-use crate::session_runtime::ReapResult;
-use crate::session_runtime::SessionClientHandshake;
-use crate::session_runtime::SessionClientTaskMessage;
-use crate::session_runtime::SessionHandshakeOutcome;
-use crate::session_runtime::SessionRuntime;
-use crate::session_runtime::SessionRuntimeShutdownMessage;
-use crate::sessions_delete::DeleteSessions;
+use crate::session::delete::DeleteSessions;
+use crate::session::files::ServerFilesGuard;
+use crate::session::files::prepare_session_dirs;
+use crate::session::files::secure_socket_file;
+use crate::session::runtime::CLIENT_HANDSHAKE_CHANNEL_LIMIT;
+use crate::session::runtime::ReapResult;
+use crate::session::runtime::SessionClientHandshake;
+use crate::session::runtime::SessionClientTaskMessage;
+use crate::session::runtime::SessionHandshakeOutcome;
+use crate::session::runtime::SessionRuntime;
+use crate::session::runtime::SessionRuntimeShutdownMessage;
 use crate::state::SessionLayout;
 use crate::state::SessionMetadata;
 
@@ -80,18 +80,18 @@ pub fn serve_session(session: &SessionName, external_layout: Option<PathBuf>) ->
             // The public muxr CLI/client is short-lived or foreground UI; the dedicated server owns this guard so
             // non-blocking log writes flush for the full session without carrying the appender worker in CLI memory.
             let _session_tracing =
-                crate::session_tracing::SessionTracing::install_global(&config.paths, &config.session)?;
+                crate::session::tracing::SessionTracing::install_global(&config.paths, &config.session)?;
             self::serve_session_traced(&config).await
         })
 }
 
 #[tracing::instrument(name = "muxr_session", skip_all, fields(session = %config.session))]
 async fn serve_session_traced(config: &ServerConfig) -> rootcause::Result<()> {
-    crate::session_tracing::server::starting(&config.paths);
+    crate::session::tracing::server::starting(&config.paths);
     self::serve_prepared_async(config).await.inspect_err(|error| {
         // Fatal server errors are logged once at the session boundary after lower layers add context. Handled,
         // swallowed, or downgraded errors must log at their handling site because they never reach this boundary.
-        crate::session_tracing::server::error(error);
+        crate::session::tracing::server::error(error);
     })
 }
 
@@ -157,7 +157,7 @@ async fn serve_prepared_async(config: &ServerConfig) -> rootcause::Result<()> {
     let pane_exit_notify = Arc::new(tokio::sync::Notify::new());
     let mut runtime = SessionRuntime::spawn(config, &initial_size, Arc::clone(&pane_exit_notify))?;
     runtime.persist_metadata(&config.paths)?;
-    crate::session_tracing::server::ready(&config.paths);
+    crate::session::tracing::server::ready(&config.paths);
     let delete_sessions = Arc::new(DeleteSessions::default());
     let client_task_finished_notify = Arc::new(tokio::sync::Notify::new());
     let (handshake_sender, mut handshake_receiver) = tokio::sync::mpsc::channel(CLIENT_HANDSHAKE_CHANNEL_LIMIT);
@@ -186,7 +186,7 @@ async fn serve_prepared_async(config: &ServerConfig) -> rootcause::Result<()> {
             break message;
         }
 
-        crate::client_tasks::join_finished_client_tasks(&mut handles).await?;
+        crate::client::tasks::join_finished_client_tasks(&mut handles).await?;
         // A handshake task can finish between the first drain and task join; drain again before honoring the
         // accepted-connection limit so the queued handshake can spawn its attached client.
         self::drain_session_runtime_messages(
@@ -236,10 +236,10 @@ async fn serve_prepared_async(config: &ServerConfig) -> rootcause::Result<()> {
         }
     };
 
-    crate::session_tracing::server::shutdown(shutdown_message.as_str());
+    crate::session::tracing::server::shutdown(shutdown_message.as_str());
     // Shutdown cancels only pre-attach handshakes; while the loop is live they still use bounded backpressure.
     handshake_receiver.close();
-    crate::client_tasks::join_client_tasks(handles).await?;
+    crate::client::tasks::join_client_tasks(handles).await?;
     while let Ok(message) = client_task_receiver.try_recv() {
         runtime.handle_client_task_message(message);
     }
@@ -247,7 +247,7 @@ async fn serve_prepared_async(config: &ServerConfig) -> rootcause::Result<()> {
         || delete_sessions.is_requested()
     {
         drop(runtime);
-        crate::sessions_delete::remove_session_files(&config.paths)?;
+        crate::session::delete::remove_session_files(&config.paths)?;
     }
     Ok(())
 }
@@ -281,7 +281,7 @@ fn handle_accepted_connection(
     *accepted_connections = accepted_connections
         .checked_add(1)
         .ok_or_else(|| report!("muxr accepted connection count overflowed"))?;
-    crate::client_tasks::spawn_client_handshake_task(
+    crate::client::tasks::spawn_client_handshake_task(
         connection,
         handshake_sender,
         Arc::clone(client_task_finished_notify),
@@ -326,7 +326,7 @@ async fn handle_session_handshake(
         SessionHandshakeOutcome::AttachAccepted(attach_request) => {
             let client_session_task_runtime = runtime
                 .client_session_task_runtime(context.client_task_sender.clone(), Arc::clone(context.delete_sessions))?;
-            crate::client_tasks::spawn_client_session_task(
+            crate::client::tasks::spawn_client_session_task(
                 context.config,
                 client_session_task_runtime,
                 connection,
@@ -336,7 +336,7 @@ async fn handle_session_handshake(
             );
         }
         SessionHandshakeOutcome::DeleteSessionRequested => {
-            crate::sessions_delete::handle_handshake_delete(
+            crate::session::delete::handle_handshake_delete(
                 &mut connection,
                 context.delete_sessions.as_ref(),
                 context.config.client_write_timeout,
@@ -345,7 +345,7 @@ async fn handle_session_handshake(
         }
         SessionHandshakeOutcome::NoClient => {}
         SessionHandshakeOutcome::Respond(event) => {
-            let _sent = crate::client_tasks::send_connection_event_with_timeout(
+            let _sent = crate::client::tasks::send_connection_event_with_timeout(
                 &mut connection,
                 &event,
                 context.config.client_write_timeout,
@@ -447,8 +447,8 @@ mod tests {
     use super::test_helpers::shell_cmd;
     use super::test_helpers::shell_cmd_with_args;
     use super::*;
-    use crate::pane_split::PaneSplitAxis;
-    use crate::session_files::PRIVATE_SOCKET_MODE;
+    use crate::pane::split::PaneSplitAxis;
+    use crate::session::files::PRIVATE_SOCKET_MODE;
 
     const SERVER_READY_TIMEOUT: Duration = Duration::from_secs(2);
     const TEST_CLIENT_HEARTBEAT_INTERVAL: Duration = Duration::from_millis(100);
@@ -470,7 +470,7 @@ mod tests {
         let mut config = self::server_config(tempdir.path(), "work")?;
         config.max_accepted_connections = Some(0);
 
-        let log = crate::session_tracing::collect_test_log(&config.session, || {
+        let log = crate::session::tracing::collect_test_log(&config.session, || {
             tokio::runtime::Builder::new_current_thread()
                 .enable_all()
                 .build()
@@ -2350,7 +2350,7 @@ mod tests {
     }
 
     fn assert_session_state_is_private(paths: &SessionPaths) -> rootcause::Result<()> {
-        self::assert_mode(self::state_root(paths)?, crate::session_files::PRIVATE_DIR_MODE)?;
+        self::assert_mode(self::state_root(paths)?, crate::session::files::PRIVATE_DIR_MODE)?;
         self::assert_mode(&paths.socket, PRIVATE_SOCKET_MODE)?;
         Ok(())
     }

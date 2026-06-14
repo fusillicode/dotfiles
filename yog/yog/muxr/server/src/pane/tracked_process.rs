@@ -9,9 +9,9 @@ use muxr_config::TrackedProcess;
 use muxr_core::PaneId;
 use muxr_core::TrackedProcessState;
 
-use crate::pane_cmd::PaneCmdObservation;
-use crate::pane_cmd::PaneCmdSnapshot;
-use crate::pane_runtime::PaneRuntimes;
+use crate::pane::cmd::PaneCmdObservation;
+use crate::pane::cmd::PaneCmdSnapshot;
+use crate::pane::runtime::PaneRuntimes;
 use crate::state::SessionLayout;
 
 const USER_INPUT_VISIBLE_ACTIVITY_SUPPRESSION: Duration = Duration::from_millis(500);
@@ -520,9 +520,9 @@ mod tests {
     use muxr_core::SessionName;
 
     use super::*;
-    use crate::pane_cmd::PaneCmd;
-    use crate::pane_cmd::PaneCmdUnknownReason;
-    use crate::pane_split::PaneSplitAxis;
+    use crate::pane::cmd::PaneCmd;
+    use crate::pane::cmd::PaneCmdUnknownReason;
+    use crate::pane::split::PaneSplitAxis;
     use crate::state::SessionMetadata;
 
     fn tracked_process(executable: &str) -> rootcause::Result<TrackedProcess> {

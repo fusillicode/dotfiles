@@ -56,7 +56,7 @@ pub mod server {
     }
 }
 
-pub mod client_session {
+pub mod client {
     pub fn state_handoff_failed(reason: &str) {
         tracing::warn!(
             kind = "client_session_state_handoff_failed",
@@ -235,7 +235,7 @@ pub fn collect_test_log(
     let tempdir = tempfile::tempdir()?;
     let timestamp = "20260611143012".parse()?;
     let paths = SessionPaths::from_sessions_root_path(&tempdir.path().join("sessions"), session)?;
-    crate::session_files::prepare_session_dirs(&paths)?;
+    crate::session::files::prepare_session_dirs(&paths)?;
     let (session_tracing, dispatch) = SessionTracing::new(&paths, session, &timestamp, 12345)?;
     let log_path = session_tracing.log_path.clone();
 
@@ -267,7 +267,7 @@ mod tests {
     use muxr_core::SessionPaths;
 
     use super::*;
-    use crate::session_files::prepare_session_dirs;
+    use crate::session::files::prepare_session_dirs;
 
     #[test]
     fn test_session_tracing_when_initialized_uses_centralized_log_path() -> rootcause::Result<()> {
@@ -332,7 +332,7 @@ mod tests {
             server::ready(&paths);
             server::shutdown("final_pane_exited");
             server::error(&rootcause::report!("test server failure"));
-            client_session::state_handoff_failed("channel_full");
+            client::state_handoff_failed("channel_full");
             scrollback::restore_failed(&rootcause::report!("test restore failure"));
             ack::delete_failed(ClientEventSendFailure::Timeout);
             ack::detach_failed(ClientEventSendFailure::SendFailed);

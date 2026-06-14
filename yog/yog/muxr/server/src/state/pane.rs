@@ -5,8 +5,8 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use crate::cmd_label::TerminalTitle;
-use crate::pane_split::PaneSplitAxis;
-use crate::pane_split::PaneSplitRatio;
+use crate::pane::split::PaneSplitAxis;
+use crate::pane::split::PaneSplitRatio;
 use crate::pty::PtyExitStatus;
 
 // Pane splits are a tree so a new split mutates only the active pane subtree; a tab-wide axis would reflow siblings.

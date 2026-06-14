@@ -13,12 +13,12 @@ use muxr_core::TerminalSize;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
 
-use crate::client_session::ClientSessionState;
+use crate::client::session::ClientSessionState;
 use crate::history::pane_output_path;
 use crate::keyboard_input::ClientCmd;
 use crate::keyboard_input::ServerInputMode;
-use crate::pane_fullscreen::PaneFullscreen;
-use crate::pane_runtime::PaneRuntimes;
+use crate::pane::fullscreen::PaneFullscreen;
+use crate::pane::runtime::PaneRuntimes;
 use crate::pty::ShellCmd;
 use crate::server::ServerConfig;
 use crate::state::Pane;
@@ -440,7 +440,7 @@ fn remove_scrollback_dump_file_with_event(event: &str, path: &Path) {
         Ok(()) => {}
         // Temporary files may already be gone after editor/process cleanup; only other errors leave stale state.
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-        Err(error) => crate::session_tracing::scrollback::cleanup_failed(event, None, path, &error),
+        Err(error) => crate::session::tracing::scrollback::cleanup_failed(event, None, path, &error),
     }
 }
 
@@ -450,7 +450,7 @@ fn remove_editor_pane_history(config: &ServerConfig, editor_pane_id: PaneId) {
         match fs::remove_dir_all(parent) {
             Ok(()) => {}
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-            Err(error) => crate::session_tracing::scrollback::cleanup_failed(
+            Err(error) => crate::session::tracing::scrollback::cleanup_failed(
                 "remove_editor_history",
                 Some(editor_pane_id),
                 parent,
@@ -477,10 +477,10 @@ mod tests {
 
     use super::*;
     use crate::keyboard_input::TabCmd;
-    use crate::pane_focus::PaneFocusDirection;
-    use crate::pane_split::PaneSplitAxis;
+    use crate::pane::focus::PaneFocusDirection;
+    use crate::pane::split::PaneSplitAxis;
     use crate::server::test_helpers as server_test_helpers;
-    use crate::session_start_seed::SessionStartSeed;
+    use crate::session::start_seed::SessionStartSeed;
     use crate::state::test_helpers as state_test_helpers;
 
     #[rstest::rstest]
@@ -583,7 +583,7 @@ mod tests {
         let config = server_test_helpers::server_config(tempdir.path(), "work")?;
         let pane_id = PaneId::new(99)?;
 
-        let log = crate::session_tracing::collect_test_log(&config.session, || {
+        let log = crate::session::tracing::collect_test_log(&config.session, || {
             self::remove_scrollback_dump_file(&tempdir.path().join("missing.txt"));
             self::remove_editor_pane_history(&config, pane_id);
             Ok(())

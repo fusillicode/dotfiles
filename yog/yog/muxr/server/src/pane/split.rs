@@ -9,8 +9,8 @@ use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serialize;
 
-use crate::client_session::ClientSessionState;
-use crate::pane_runtime::PaneRuntimes;
+use crate::client::session::ClientSessionState;
+use crate::pane::runtime::PaneRuntimes;
 use crate::server::ServerConfig;
 use crate::state::Pane;
 use crate::state::PaneAttentionState;
@@ -186,11 +186,11 @@ fn handle_split_pane_cmd(
     runtimes: &mut PaneRuntimes,
     terminal_size: &TerminalSize,
 ) -> rootcause::Result<PaneId> {
-    crate::pane_runtime::sync_layout_terminal_titles(layout, runtimes)?;
+    crate::pane::runtime::sync_layout_terminal_titles(layout, runtimes)?;
     let metadata = crate::server::active_pane_session_metadata(config, layout)?;
     let previous_layout = layout.clone();
     let pane_id = layout.split_active_pane(config.user_config.layout, metadata, split_axis)?;
-    let pane_id = crate::pane_runtime::spawn_pane_or_restore_layout(
+    let pane_id = crate::pane::runtime::spawn_pane_or_restore_layout(
         layout,
         previous_layout,
         pane_id,
@@ -207,7 +207,7 @@ pub fn handle_split_pane_cmd_client(
     state: &mut ClientSessionState<'_>,
 ) -> rootcause::Result<PaneSplitClientOutcome> {
     let previous_pane = state.layout.active_pane_id()?;
-    crate::pane_fullscreen::clear_active_tab_for_layout_mutation(state);
+    crate::pane::fullscreen::clear_active_tab_for_layout_mutation(state);
     let new_pane_id = self::handle_split_pane_cmd(
         split_axis,
         state.config,
@@ -227,8 +227,8 @@ mod tests {
     use muxr_core::TerminalSize;
 
     use super::*;
-    use crate::pane_borders::PaneBorderAxis;
-    use crate::pane_runtime::test_helpers as pane_runtime_test_helpers;
+    use crate::pane::borders::PaneBorderAxis;
+    use crate::pane::runtime::test_helpers as pane_runtime_test_helpers;
     use crate::server::test_helpers as server_test_helpers;
     use crate::state::test_helpers as state_test_helpers;
 
