@@ -298,6 +298,13 @@ impl ClientRenderer {
         crate::client::copy_selection::copy_to_clipboard(&text)
     }
 
+    pub fn copy_selection_inline(&self) -> rootcause::Result<()> {
+        let Some(text) = self.selection.selected_inline_text() else {
+            return Ok(());
+        };
+        crate::client::copy_selection::copy_to_clipboard(&text)
+    }
+
     pub fn set_selection_edge_drag(
         &mut self,
         position: ClientMousePosition,
