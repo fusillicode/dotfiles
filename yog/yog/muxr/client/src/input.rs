@@ -15,6 +15,7 @@ const BRACKETED_PASTE_START: &[u8] = b"\x1b[200~";
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum DecodedInput {
     CopySelection,
+    CopySelectionInline,
     Input(Vec<u8>),
     Key(ClientKey),
     Mouse(ClientMouseEvent),
@@ -138,10 +139,14 @@ impl InputDecoder {
 
 fn finish_escape_sequence(bytes: Vec<u8>, input: &mut Vec<u8>, decoded: &mut Vec<DecodedInput>) {
     if let [ESC, byte] = bytes.as_slice()
-        && *byte == b'C'
+        && let Some(selection_input) = match *byte {
+            b'C' => Some(DecodedInput::CopySelection),
+            b'X' => Some(DecodedInput::CopySelectionInline),
+            _ => None,
+        }
     {
         self::push_input(decoded, input);
-        decoded.push(DecodedInput::CopySelection);
+        decoded.push(selection_input);
         return;
     }
 
@@ -153,9 +158,17 @@ fn finish_escape_sequence(bytes: Vec<u8>, input: &mut Vec<u8>, decoded: &mut Vec
     }
 
     if let Some(key) = self::key_for_csi_sequence(&bytes) {
-        if self::is_copy_selection_key(&key) {
+        let selection_input =
+            if key.modifiers == ClientKeyModifiers::SHIFT_ALT && matches!(key.code, ClientKeyCode::Char('C')) {
+                Some(DecodedInput::CopySelection)
+            } else if key.modifiers == ClientKeyModifiers::SHIFT_ALT && matches!(key.code, ClientKeyCode::Char('X')) {
+                Some(DecodedInput::CopySelectionInline)
+            } else {
+                None
+            };
+        if let Some(selection_input) = selection_input {
             self::push_input(decoded, input);
-            decoded.push(DecodedInput::CopySelection);
+            decoded.push(selection_input);
         } else {
             self::push_key(decoded, input, key);
         }
@@ -212,10 +225,6 @@ fn key_for_csi_sequence(bytes: &[u8]) -> Option<ClientKey> {
         b'D' => Some(self::key(ClientKeyCode::Left, ClientKeyModifiers::NONE, bytes)),
         _ => None,
     }
-}
-
-fn is_copy_selection_key(key: &ClientKey) -> bool {
-    matches!(key.code, ClientKeyCode::Char('C')) && key.modifiers == ClientKeyModifiers::SHIFT_ALT
 }
 
 fn key_for_kitty_keyboard_sequence(bytes: &[u8]) -> Option<ClientKey> {
@@ -429,6 +438,15 @@ mod tests {
         pretty_assertions::assert_eq!(decoder.decode(bytes), vec![DecodedInput::CopySelection]);
     }
 
+    #[rstest]
+    #[case::legacy(b"\x1bX")]
+    #[case::kitty(b"\x1b[120;4u")]
+    fn test_input_decoder_decode_when_inline_copy_shortcut_arrives_returns_inline_copy_selection(#[case] bytes: &[u8]) {
+        let mut decoder = InputDecoder::default();
+
+        pretty_assertions::assert_eq!(decoder.decode(bytes), vec![DecodedInput::CopySelectionInline]);
+    }
+
     #[test]
     fn test_input_decoder_decode_when_shortcut_is_between_input_splits_actions() {
         let mut decoder = InputDecoder::default();
@@ -444,7 +462,7 @@ mod tests {
     }
 
     #[rstest]
-    #[case::unknown_escape(b"\x1bX")]
+    #[case::unknown_escape(b"\x1bY")]
     #[case::unknown_csi(b"\x1b[1~")]
     fn test_input_decoder_decode_when_escape_is_not_muxr_cmd_preserves_bytes(#[case] bytes: &[u8]) {
         let mut decoder = InputDecoder::default();

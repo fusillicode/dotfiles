@@ -368,6 +368,12 @@ impl SelectionState {
             .filter(|text| !text.is_empty())
     }
 
+    pub fn selected_inline_text(&self) -> Option<String> {
+        self.selected_text()
+            .map(|text| self::inline_selected_text(&text))
+            .filter(|text| !text.is_empty())
+    }
+
     pub fn select_word(
         &mut self,
         position: ClientMousePosition,
@@ -625,6 +631,18 @@ struct CachedSelectionCell {
 pub fn copy_to_clipboard(text: &str) -> rootcause::Result<()> {
     let mut bytes = text.as_bytes();
     Ok(ytil_sys::file::cp_to_system_clipboard(&mut bytes).context("failed to copy muxr selection to clipboard")?)
+}
+
+// Inline copy trims each selected row before joining so terminal padding does not become duplicated spaces.
+fn inline_selected_text(text: &str) -> String {
+    let mut inlined = String::new();
+    for line in text.lines().map(str::trim).filter(|line| !line.is_empty()) {
+        if !inlined.is_empty() {
+            inlined.push(' ');
+        }
+        inlined.push_str(line);
+    }
+    inlined
 }
 
 pub fn changed_selection_rows(previous: Option<&SelectionRange>, next: Option<&SelectionRange>) -> Vec<u16> {
@@ -1186,6 +1204,14 @@ mod tests {
 
         pretty_assertions::assert_eq!(selection.selected_text(), Some("aa\nbb\ncc\ndd".to_owned()));
         Ok(())
+    }
+
+    #[test]
+    fn test_inline_selected_text_when_lines_have_padding_trims_and_joins_non_empty_lines() {
+        pretty_assertions::assert_eq!(
+            self::inline_selected_text("  let value = 1  \n      + 2  \n\n  done  "),
+            "let value = 1 + 2 done"
+        );
     }
 
     #[test]

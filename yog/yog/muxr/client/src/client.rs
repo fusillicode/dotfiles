@@ -49,6 +49,7 @@ enum StdinRead {
 #[derive(Clone, Debug, Eq, PartialEq)]
 enum ClientInputAction {
     CopySelection,
+    CopySelectionInline,
     Mouse(ClientMouseEvent),
     ServerRequest(ClientRequest),
 }
@@ -180,6 +181,10 @@ async fn handle_client_input_action(
     match action {
         ClientInputAction::CopySelection => {
             renderer.copy_selection()?;
+            Ok(true)
+        }
+        ClientInputAction::CopySelectionInline => {
+            renderer.copy_selection_inline()?;
             Ok(true)
         }
         ClientInputAction::Mouse(event) => {
@@ -355,6 +360,7 @@ fn send_decoded_input(input_sender: &tokio::sync::mpsc::Sender<ClientInputAction
     for decoded in decoded {
         let action = match decoded {
             DecodedInput::CopySelection => ClientInputAction::CopySelection,
+            DecodedInput::CopySelectionInline => ClientInputAction::CopySelectionInline,
             DecodedInput::Input(bytes) => ClientInputAction::ServerRequest(ClientRequest::Input(bytes)),
             DecodedInput::Key(key) => {
                 // Key events come from stdin; keep them on the input queue so raw-byte fallback cannot overtake earlier
@@ -738,6 +744,21 @@ mod tests {
         assert2::assert!(send_decoded_input(&input_sender, vec![DecodedInput::CopySelection]));
 
         pretty_assertions::assert_eq!(input_receiver.blocking_recv(), Some(ClientInputAction::CopySelection));
+    }
+
+    #[test]
+    fn test_send_decoded_input_when_inline_copy_selection_arrives_emits_local_action() {
+        let (input_sender, mut input_receiver) = tokio::sync::mpsc::channel(1);
+
+        assert2::assert!(send_decoded_input(
+            &input_sender,
+            vec![DecodedInput::CopySelectionInline]
+        ));
+
+        pretty_assertions::assert_eq!(
+            input_receiver.blocking_recv(),
+            Some(ClientInputAction::CopySelectionInline)
+        );
     }
 
     #[test]
