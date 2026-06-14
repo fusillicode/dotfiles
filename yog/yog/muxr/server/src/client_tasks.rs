@@ -7,7 +7,7 @@ use muxr_transport::ServerConnection;
 use rootcause::report;
 
 use crate::server::ServerConfig;
-use crate::session_runtime::AttachedClientTaskRuntime;
+use crate::session_runtime::ClientSessionTaskRuntime;
 use crate::session_runtime::SessionClientHandshake;
 use crate::session_runtime::SessionHandshakeMessage;
 
@@ -45,9 +45,9 @@ pub fn spawn_client_handshake_task(
     }));
 }
 
-pub fn spawn_attached_client_task(
+pub fn spawn_client_session_task(
     config: &ServerConfig,
-    runtime: AttachedClientTaskRuntime,
+    runtime: ClientSessionTaskRuntime,
     connection: ServerConnection,
     attach_request: AttachRequest,
     task_finished_notify: Arc<tokio::sync::Notify>,
@@ -56,7 +56,7 @@ pub fn spawn_attached_client_task(
     let config = config.clone();
     handles.push(tokio::spawn(async move {
         let _task_finished = TaskFinishedNotify(task_finished_notify);
-        runtime.run_attached_client(&config, connection, attach_request).await
+        runtime.run_client_session(&config, connection, attach_request).await
     }));
 }
 
@@ -82,7 +82,7 @@ pub async fn join_finished_client_tasks(
     Ok(())
 }
 
-pub async fn read_client_handshake(connection: &mut ServerConnection) -> rootcause::Result<SessionHandshakeMessage> {
+async fn read_client_handshake(connection: &mut ServerConnection) -> rootcause::Result<SessionHandshakeMessage> {
     match tokio::time::timeout(CLIENT_HANDSHAKE_TIMEOUT, connection.recv_request()).await {
         Ok(Ok(request)) => Ok(SessionHandshakeMessage::from_first_request(request)),
         Ok(Err(error)) => Err(error),

@@ -13,7 +13,10 @@ use muxr_core::TerminalSize;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
 
+use crate::client_session::ClientSessionState;
 use crate::history::pane_output_path;
+use crate::keyboard_input::ClientCmd;
+use crate::keyboard_input::ServerInputMode;
 use crate::pane_fullscreen::PaneFullscreen;
 use crate::pane_runtime::PaneRuntimes;
 use crate::pty::ShellCmd;
@@ -24,12 +27,13 @@ use crate::state::PaneState;
 use crate::state::PaneTree;
 use crate::state::SessionLayout;
 use crate::state::SessionMetadata;
+use crate::terminal::TerminalFocusEvent;
 
 const SCROLLBACK_EDITOR_TITLE: &str = "scrollback";
 
 #[derive(Debug)]
-pub struct OpenScrollbackEditor {
-    pub state: ScrollbackEditorState,
+struct OpenScrollbackEditor {
+    state: ScrollbackEditorState,
 }
 
 #[derive(Debug)]
@@ -41,9 +45,148 @@ pub struct ScrollbackEditorState {
 }
 
 impl ScrollbackEditorState {
-    pub const fn editor_pane_id(&self) -> PaneId {
+    const fn editor_pane_id(&self) -> PaneId {
         self.editor_pane_id
     }
+}
+
+#[derive(Debug)]
+pub enum ScrollbackEditorOpenClientOutcome {
+    AlreadyOpen,
+    Opened {
+        editor: ScrollbackEditorState,
+        editor_pane_id: PaneId,
+        previous_pane: PaneId,
+    },
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ScrollbackEditorRestoreOutcome {
+    pub editor_pane_id: Option<PaneId>,
+}
+
+impl ScrollbackEditorRestoreOutcome {
+    const fn unchanged() -> Self {
+        Self { editor_pane_id: None }
+    }
+
+    pub const fn restored(self) -> bool {
+        self.editor_pane_id.is_some()
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ScrollbackEditorCmdAction {
+    Ignore,
+    Restore,
+    Run(ClientCmd),
+}
+
+pub const fn cmd_action(cmd: ClientCmd, editor_active: bool) -> ScrollbackEditorCmdAction {
+    if !editor_active {
+        return ScrollbackEditorCmdAction::Run(cmd);
+    }
+    match cmd {
+        ClientCmd::ClosePane => ScrollbackEditorCmdAction::Restore,
+        ClientCmd::OpenScrollbackEditor
+        | ClientCmd::SplitPane(_)
+        | ClientCmd::FocusPane(_)
+        | ClientCmd::EnterResizeMode
+        | ClientCmd::ExitMode
+        | ClientCmd::ResizePane(_)
+        | ClientCmd::Tab(_)
+        | ClientCmd::TogglePaneFullscreen => ScrollbackEditorCmdAction::Ignore,
+    }
+}
+
+pub fn handle_open_client_request(
+    dump_style: ScrollbackDumpStyle,
+    state: &mut ClientSessionState<'_>,
+) -> rootcause::Result<ScrollbackEditorOpenClientOutcome> {
+    if state.scrollback_editor.is_some() {
+        return Ok(ScrollbackEditorOpenClientOutcome::AlreadyOpen);
+    }
+    let previous_pane = state.layout.active_pane_id()?;
+    state.input_mode = ServerInputMode::Normal;
+    let opened = self::open(
+        state.config,
+        state.layout,
+        state.runtimes,
+        &mut state.pane_fullscreen,
+        &state.terminal_size,
+        dump_style,
+    )?;
+    let editor_pane_id = opened.state.editor_pane_id();
+    Ok(ScrollbackEditorOpenClientOutcome::Opened {
+        editor: opened.state,
+        editor_pane_id,
+        previous_pane,
+    })
+}
+
+pub fn rollback_open_client_request(
+    state: &mut ClientSessionState<'_>,
+    editor: ScrollbackEditorState,
+) -> rootcause::Result<()> {
+    self::restore(
+        state.config,
+        state.layout,
+        state.runtimes,
+        &mut state.pane_fullscreen,
+        editor,
+    )
+}
+
+pub fn restore_before_reap_if_needed(
+    state: &mut ClientSessionState<'_>,
+) -> rootcause::Result<ScrollbackEditorRestoreOutcome> {
+    if state.scrollback_editor.is_none() {
+        return Ok(ScrollbackEditorRestoreOutcome::unchanged());
+    }
+    if state.runtimes.exited_panes()?.is_empty() {
+        return Ok(ScrollbackEditorRestoreOutcome::unchanged());
+    }
+    // Reap only against the real pane tree. The editor tree is attached-client-local; restoring first avoids
+    // persisting a temporary `nvim` pane or reaping a hidden original pane against the wrong layout.
+    self::write_focus_lost_if_live(state.scrollback_editor.as_ref(), state.runtimes)?;
+    self::restore_without_render(state)
+}
+
+pub fn restore_without_render(state: &mut ClientSessionState<'_>) -> rootcause::Result<ScrollbackEditorRestoreOutcome> {
+    let Some(editor) = state.scrollback_editor.take() else {
+        return Ok(ScrollbackEditorRestoreOutcome::unchanged());
+    };
+    let editor_pane_id = editor.editor_pane_id();
+    self::restore(
+        state.config,
+        state.layout,
+        state.runtimes,
+        &mut state.pane_fullscreen,
+        editor,
+    )?;
+    Ok(ScrollbackEditorRestoreOutcome {
+        editor_pane_id: Some(editor_pane_id),
+    })
+}
+
+pub fn write_focus_lost_if_live(
+    editor: Option<&ScrollbackEditorState>,
+    runtimes: &PaneRuntimes,
+) -> rootcause::Result<()> {
+    let Some(editor) = editor else {
+        return Ok(());
+    };
+    let editor_pane_id = editor.editor_pane_id();
+    if !runtimes.pane_ids().contains(&editor_pane_id) {
+        return Ok(());
+    }
+    let handle = runtimes.handle(editor_pane_id)?;
+    if !handle.has_exited() {
+        // The editor is about to be restored or closed while focus is active. Notify focus-reporting apps before the
+        // PTY disappears; the restored original pane receives FocusGained after restore.
+        handle.write_focus_event(TerminalFocusEvent::Lost)?;
+    }
+    Ok(())
 }
 
 impl SessionLayout {
@@ -109,7 +252,7 @@ fn create_focused_pane_dump(
     })
 }
 
-pub fn open(
+fn open(
     config: &ServerConfig,
     layout: &mut SessionLayout,
     runtimes: &mut PaneRuntimes,
@@ -169,7 +312,7 @@ pub fn open(
     })
 }
 
-pub fn restore(
+fn restore(
     config: &ServerConfig,
     layout: &mut SessionLayout,
     runtimes: &mut PaneRuntimes,
@@ -324,11 +467,99 @@ fn remove_scrollback_dump_file_after_error(path: &Path, error: impl Into<rootcau
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+    use std::thread;
+    use std::time::Duration;
+    use std::time::Instant;
+
+    use muxr_config::MuxrConfig;
+    use muxr_core::RenderCell;
+
     use super::*;
+    use crate::keyboard_input::TabCmd;
+    use crate::pane_focus::PaneFocusDirection;
     use crate::pane_split::PaneSplitAxis;
     use crate::server::test_helpers as server_test_helpers;
     use crate::session_start_seed::SessionStartSeed;
     use crate::state::test_helpers as state_test_helpers;
+
+    #[rstest::rstest]
+    #[case::inactive_runs(
+        ClientCmd::SplitPane(PaneSplitAxis::Vertical),
+        false,
+        ScrollbackEditorCmdAction::Run(ClientCmd::SplitPane(PaneSplitAxis::Vertical))
+    )]
+    #[case::active_close_restores(ClientCmd::ClosePane, true, ScrollbackEditorCmdAction::Restore)]
+    #[case::active_split_is_ignored(
+        ClientCmd::SplitPane(PaneSplitAxis::Vertical),
+        true,
+        ScrollbackEditorCmdAction::Ignore
+    )]
+    #[case::active_create_tab_is_ignored(ClientCmd::Tab(TabCmd::Create), true, ScrollbackEditorCmdAction::Ignore)]
+    #[case::active_open_scrollback_editor_is_ignored(
+        ClientCmd::OpenScrollbackEditor,
+        true,
+        ScrollbackEditorCmdAction::Ignore
+    )]
+    #[case::active_focus_pane_is_ignored(
+        ClientCmd::FocusPane(PaneFocusDirection::Right),
+        true,
+        ScrollbackEditorCmdAction::Ignore
+    )]
+    fn test_scrollback_editor_cmd_action_when_editor_mode_is_active_blocks_layout_mutations(
+        #[case] cmd: ClientCmd,
+        #[case] editor_active: bool,
+        #[case] expected: ScrollbackEditorCmdAction,
+    ) {
+        pretty_assertions::assert_eq!(self::cmd_action(cmd, editor_active), expected);
+    }
+
+    #[test]
+    fn test_write_scrollback_editor_focus_lost_if_live_when_editor_is_reporting_writes_lost() -> rootcause::Result<()> {
+        let tempdir = tempfile::tempdir()?;
+        let mut config = server_test_helpers::server_config(tempdir.path(), "work")?;
+        let mut user_config = MuxrConfig::default();
+        user_config.scrollback.editor = muxr_config::ScrollbackEditorConfig {
+            program: "/bin/sh",
+            args: &[
+                "-c",
+                "printf '\\033[?1004hready\\n'; \
+                 stty raw -echo; \
+                 dd bs=3 count=1 2>/dev/null | od -An -tx1 -v; \
+                 sleep 30",
+                "muxr-test-scrollback-editor",
+            ],
+        };
+        config.user_config = Arc::new(user_config);
+        config.shell_cmd = server_test_helpers::shell_cmd_with_args("/bin/sh", &["-c", "sleep 30"]);
+        let terminal_size = TerminalSize::new(80, 24)?;
+        let mut layout = SessionLayout::initial(&config.session, state_test_helpers::metadata("sh", 1))?;
+        let mut runtimes = PaneRuntimes::spawn_for_start_seed(
+            &config,
+            &SessionStartSeed {
+                layout: layout.clone(),
+                startup_cmds: Vec::new(),
+            },
+            &terminal_size,
+            Arc::new(tokio::sync::Notify::new()),
+        )?;
+        let mut pane_fullscreen = PaneFullscreen::default();
+        let opened = self::open(
+            &config,
+            &mut layout,
+            &mut runtimes,
+            &mut pane_fullscreen,
+            &terminal_size,
+            config.user_config.scrollback.dump_style,
+        )?;
+        let editor_pane_id = opened.state.editor_pane_id();
+        self::wait_for_runtime_snapshot_contains(&runtimes, editor_pane_id, "ready")?;
+
+        self::write_focus_lost_if_live(Some(&opened.state), &runtimes)?;
+
+        self::wait_for_runtime_snapshot_contains(&runtimes, editor_pane_id, "1b 5b 4f")?;
+        Ok(())
+    }
 
     #[test]
     fn test_write_scrollback_dump_file_when_bytes_are_exported_creates_dump_file() -> rootcause::Result<()> {
@@ -493,5 +724,39 @@ mod tests {
         assert2::assert!(!runtimes.pane_ids().contains(&editor_pane_id));
         assert2::assert!(!dump_path.exists());
         Ok(())
+    }
+
+    fn wait_for_runtime_snapshot_contains(
+        runtimes: &PaneRuntimes,
+        pane_id: PaneId,
+        needle: &str,
+    ) -> rootcause::Result<()> {
+        let started_at = Instant::now();
+        loop {
+            let snapshot = runtimes.handle(pane_id)?.render_snapshot()?;
+            let rendered = snapshot
+                .rows()
+                .iter()
+                .flat_map(|row| row.cells().iter().map(RenderCell::text))
+                .collect::<String>();
+            if self::snapshot_contains(&rendered, needle) {
+                return Ok(());
+            }
+            if started_at.elapsed() > Duration::from_secs(2) {
+                return Err(report!("timed out waiting for muxr runtime snapshot").attach(rendered));
+            }
+            thread::sleep(Duration::from_millis(10));
+        }
+    }
+
+    fn snapshot_contains(rendered: &str, needle: &str) -> bool {
+        if rendered.contains(needle) {
+            return true;
+        }
+        let needle_tokens = needle.split_whitespace().collect::<Vec<_>>();
+        let rendered_tokens = rendered.split_whitespace().collect::<Vec<_>>();
+        rendered_tokens
+            .windows(needle_tokens.len())
+            .any(|window| window == needle_tokens.as_slice())
     }
 }

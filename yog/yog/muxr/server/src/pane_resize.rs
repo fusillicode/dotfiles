@@ -1,5 +1,6 @@
 use muxr_config::LayoutConfig;
 
+use crate::client_session::ClientSessionState;
 use crate::pane_split::PaneSplitAxis;
 use crate::pane_split::PaneSplitResize;
 use crate::server::ServerConfig;
@@ -13,6 +14,18 @@ pub enum PaneResizeDirection {
     Left,
     Right,
     Up,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PaneResizeRender {
+    ResizePanesAndRender,
+    SendLayoutAndBaseline,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PaneResizeClientOutcome {
+    Render { render: PaneResizeRender },
+    Unchanged,
 }
 
 impl SessionLayout {
@@ -77,7 +90,7 @@ impl PaneTree {
 }
 
 impl PaneSplitResize {
-    pub const fn for_direction(axis: PaneSplitAxis, direction: PaneResizeDirection) -> Option<Self> {
+    const fn for_direction(axis: PaneSplitAxis, direction: PaneResizeDirection) -> Option<Self> {
         match (axis, direction) {
             (PaneSplitAxis::Horizontal, PaneResizeDirection::Up)
             | (PaneSplitAxis::Vertical, PaneResizeDirection::Left) => Some(Self::DecreaseFirst),
@@ -89,7 +102,7 @@ impl PaneSplitResize {
     }
 }
 
-pub fn handle_resize_pane_cmd(
+fn handle_resize_pane_cmd(
     direction: PaneResizeDirection,
     config: &ServerConfig,
     layout: &mut SessionLayout,
@@ -99,6 +112,31 @@ pub fn handle_resize_pane_cmd(
         crate::state::persisted::write_metadata(&config.paths, layout)?;
     }
     Ok(resized)
+}
+
+pub fn handle_resize_pane_cmd_client(
+    direction: PaneResizeDirection,
+    state: &mut ClientSessionState<'_>,
+) -> rootcause::Result<PaneResizeClientOutcome> {
+    if !self::handle_resize_pane_cmd(direction, state.config, state.layout)? {
+        return Ok(PaneResizeClientOutcome::Unchanged);
+    }
+    Ok(PaneResizeClientOutcome::Render {
+        render: PaneResizeRender::ResizePanesAndRender,
+    })
+}
+
+pub fn handle_enter_resize_mode_cmd_client(state: &mut ClientSessionState<'_>) -> PaneResizeClientOutcome {
+    crate::pane_fullscreen::clear_active_tab_for_layout_mutation(state);
+    PaneResizeClientOutcome::Render {
+        render: PaneResizeRender::ResizePanesAndRender,
+    }
+}
+
+pub const fn handle_exit_resize_mode_cmd_client() -> PaneResizeClientOutcome {
+    PaneResizeClientOutcome::Render {
+        render: PaneResizeRender::SendLayoutAndBaseline,
+    }
 }
 
 #[cfg(test)]

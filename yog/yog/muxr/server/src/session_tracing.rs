@@ -56,14 +56,14 @@ pub mod server {
     }
 }
 
-pub mod attached_client {
+pub mod client_session {
     pub fn state_handoff_failed(reason: &str) {
         tracing::warn!(
-            kind = "attached_client_state_handoff_failed",
+            kind = "client_session_state_handoff_failed",
             event = "finished_state_send",
             reason = reason,
-            summary = "muxr attached client failed to return session state",
-            "muxr attached client failed to return session state"
+            summary = "muxr client session failed to return session state",
+            "muxr client session failed to return session state"
         );
     }
 }
@@ -332,7 +332,7 @@ mod tests {
             server::ready(&paths);
             server::shutdown("final_pane_exited");
             server::error(&rootcause::report!("test server failure"));
-            attached_client::state_handoff_failed("channel_full");
+            client_session::state_handoff_failed("channel_full");
             scrollback::restore_failed(&rootcause::report!("test restore failure"));
             ack::delete_failed(ClientEventSendFailure::Timeout);
             ack::detach_failed(ClientEventSendFailure::SendFailed);
@@ -368,7 +368,7 @@ mod tests {
         assert2::assert!(log.contains("kind=\"server_error\""));
         assert2::assert!(log.contains("summary=\"muxr server stopped with error\""));
         assert2::assert!(log.contains("test server failure"));
-        assert2::assert!(log.contains("kind=\"attached_client_state_handoff_failed\""));
+        assert2::assert!(log.contains("kind=\"client_session_state_handoff_failed\""));
         assert2::assert!(log.contains("event=\"finished_state_send\""));
         assert2::assert!(log.contains("reason=\"channel_full\""));
         assert2::assert!(log.contains("kind=\"scrollback_editor_restore_failed\""));

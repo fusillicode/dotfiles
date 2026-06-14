@@ -12,7 +12,7 @@ const CMD_HANDOFF_SAMPLE_DELAY: Duration = Duration::from_millis(50);
 const RENDER_FRAME_INTERVAL: Duration = Duration::from_millis(16);
 const SLEEP_DISABLED_FOR: Duration = Duration::from_hours(24);
 
-pub struct AttachedClientTimers {
+pub struct ClientTimers {
     pub cmd_handoff_sample: Pin<Box<tokio::time::Sleep>>,
     cmd_handoff_sample_panes: BTreeSet<PaneId>,
     render_deadline: Option<tokio::time::Instant>,
@@ -22,7 +22,7 @@ pub struct AttachedClientTimers {
     pub heartbeat: tokio::time::Interval,
 }
 
-impl AttachedClientTimers {
+impl ClientTimers {
     pub fn new(config: &ServerConfig) -> rootcause::Result<Self> {
         let heartbeat_start = tokio::time::Instant::now()
             .checked_add(config.client_heartbeat_interval)
@@ -117,11 +117,11 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    async fn test_attached_client_timers_when_cmd_handoff_sample_is_taken_disables_sleep() -> rootcause::Result<()> {
+    async fn test_client_timers_when_cmd_handoff_sample_is_taken_disables_sleep() -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
         let config = crate::server::test_helpers::server_config(tempdir.path(), "work")?;
         let pane_id = PaneId::new(1)?;
-        let mut timers = AttachedClientTimers::new(&config)?;
+        let mut timers = ClientTimers::new(&config)?;
 
         timers.schedule_cmd_handoff_sample(pane_id)?;
         let scheduled_deadline = timers.cmd_handoff_sample.deadline();
@@ -134,13 +134,12 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_attached_client_timers_when_multiple_cmd_handoffs_are_pending_returns_all_panes()
-    -> rootcause::Result<()> {
+    async fn test_client_timers_when_multiple_cmd_handoffs_are_pending_returns_all_panes() -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
         let config = crate::server::test_helpers::server_config(tempdir.path(), "work")?;
         let pane_1 = PaneId::new(1)?;
         let pane_2 = PaneId::new(2)?;
-        let mut timers = AttachedClientTimers::new(&config)?;
+        let mut timers = ClientTimers::new(&config)?;
 
         timers.schedule_cmd_handoff_sample(pane_2)?;
         timers.schedule_cmd_handoff_sample(pane_1)?;
@@ -151,10 +150,10 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_attached_client_timers_when_render_is_clean_keeps_render_sleep_disabled() -> rootcause::Result<()> {
+    async fn test_client_timers_when_render_is_clean_keeps_render_sleep_disabled() -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
         let config = crate::server::test_helpers::server_config(tempdir.path(), "work")?;
-        let mut timers = AttachedClientTimers::new(&config)?;
+        let mut timers = ClientTimers::new(&config)?;
         let threshold = tokio::time::Instant::now()
             .checked_add(Duration::from_hours(23))
             .ok_or_else(|| report!("muxr test threshold overflowed"))?;
@@ -167,10 +166,10 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_attached_client_timers_when_render_becomes_dirty_schedules_frame() -> rootcause::Result<()> {
+    async fn test_client_timers_when_render_becomes_dirty_schedules_frame() -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
         let config = crate::server::test_helpers::server_config(tempdir.path(), "work")?;
-        let mut timers = AttachedClientTimers::new(&config)?;
+        let mut timers = ClientTimers::new(&config)?;
         let disabled_deadline = timers.render_sleep.deadline();
 
         let earliest_deadline = tokio::time::Instant::now()
@@ -190,10 +189,10 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_attached_client_timers_when_render_stays_dirty_keeps_existing_deadline() -> rootcause::Result<()> {
+    async fn test_client_timers_when_render_stays_dirty_keeps_existing_deadline() -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
         let config = crate::server::test_helpers::server_config(tempdir.path(), "work")?;
-        let mut timers = AttachedClientTimers::new(&config)?;
+        let mut timers = ClientTimers::new(&config)?;
 
         timers.sync_render_deadline(true)?;
         let scheduled_deadline = timers.render_sleep.deadline();
@@ -205,10 +204,10 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_attached_client_timers_when_render_flushes_disables_render_sleep() -> rootcause::Result<()> {
+    async fn test_client_timers_when_render_flushes_disables_render_sleep() -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
         let config = crate::server::test_helpers::server_config(tempdir.path(), "work")?;
-        let mut timers = AttachedClientTimers::new(&config)?;
+        let mut timers = ClientTimers::new(&config)?;
 
         timers.sync_render_deadline(true)?;
         let scheduled_deadline = timers.render_sleep.deadline();
@@ -220,11 +219,11 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_attached_client_timers_when_tracked_process_quiet_sleep_is_disabled_resets_without_deadline()
+    async fn test_client_timers_when_tracked_process_quiet_sleep_is_disabled_resets_without_deadline()
     -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
         let config = crate::server::test_helpers::server_config(tempdir.path(), "work")?;
-        let mut timers = AttachedClientTimers::new(&config)?;
+        let mut timers = ClientTimers::new(&config)?;
         let disabled_deadline = timers.tracked_process_quiet_sleep.deadline();
 
         timers.disable_tracked_process_quiet_sleep()?;

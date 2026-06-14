@@ -1,9 +1,14 @@
+use std::time::Instant;
+
 use muxr_core::ClientMouseEvent;
 use muxr_core::ClientMouseEventPhase;
 use muxr_core::PaneRegionSnapshot;
 use muxr_core::PaneScrollDirection;
 use rootcause::report;
 
+use crate::client_session::ClientSessionState;
+use crate::pane_focus::PaneFocusClientOutcome;
+use crate::pane_tracked_process::TrackedProcessUserInteraction;
 use crate::terminal::TerminalApplicationMode;
 use crate::terminal::TerminalCursorKeyMode;
 use crate::terminal::TerminalMouseProtocol;
@@ -11,7 +16,7 @@ use crate::terminal::TerminalMouseProtocolEncoding;
 use crate::terminal::TerminalScreenMode;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum PaneMouseAction {
+enum PaneMouseAction {
     ForwardToPty {
         focus: PaneMouseFocus,
         // Keep the protocol chosen during action resolution so PTY output parsed before the write cannot reclassify or
@@ -30,18 +35,105 @@ pub enum PaneMouseAction {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum PaneMouseFocus {
+enum PaneMouseFocus {
     FocusPointedPane,
     PreserveFocus,
 }
 
 impl PaneMouseFocus {
-    pub const fn focuses_pane(self) -> bool {
+    const fn focuses_pane(self) -> bool {
         matches!(self, Self::FocusPointedPane)
     }
 }
 
-pub fn resolve_pane_mouse_action(event: ClientMouseEvent, mode: TerminalApplicationMode) -> PaneMouseAction {
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct PaneMouseClientOutcome {
+    pub focus: PaneFocusClientOutcome,
+    pub render_dirty: bool,
+    pub sync_render_deadline: bool,
+}
+
+impl PaneMouseClientOutcome {
+    const fn unchanged() -> Self {
+        Self {
+            focus: PaneFocusClientOutcome::Unchanged,
+            render_dirty: false,
+            sync_render_deadline: false,
+        }
+    }
+}
+
+pub fn handle_mouse_event_client_request(
+    event: ClientMouseEvent,
+    state: &mut ClientSessionState<'_>,
+) -> rootcause::Result<PaneMouseClientOutcome> {
+    let Some(region) = crate::screen_render::visible_pane_region_snapshot_at_position(state, event.position)? else {
+        return Ok(PaneMouseClientOutcome::unchanged());
+    };
+    let handle = state.runtimes.handle(*region.id())?;
+    let action = self::resolve_pane_mouse_action(event, handle.application_mode()?);
+    match action {
+        PaneMouseAction::ForwardToPty { focus, protocol } => {
+            // Focus-reporting apps must observe the pane transition before the click bytes; only the layout render can
+            // wait until after forwarding the mouse packet.
+            let focus = if focus.focuses_pane() {
+                crate::pane_focus::handle_focus_pane_at_client_request(event.position, state)?
+            } else {
+                PaneFocusClientOutcome::Unchanged
+            };
+            let Some(scrolled_to_bottom) = handle.write_mouse_event(event, &region, protocol)? else {
+                return Ok(PaneMouseClientOutcome {
+                    focus,
+                    render_dirty: false,
+                    sync_render_deadline: false,
+                });
+            };
+            state.pane_tracked_processes.record_user_interaction(
+                *region.id(),
+                TrackedProcessUserInteraction::MayEcho,
+                Instant::now(),
+            );
+            Ok(PaneMouseClientOutcome {
+                focus,
+                render_dirty: scrolled_to_bottom,
+                sync_render_deadline: true,
+            })
+        }
+        PaneMouseAction::FauxScrollPty {
+            cursor_key_mode,
+            direction,
+        } => {
+            let render_dirty = handle.write_faux_scroll_input(direction, cursor_key_mode)?;
+            state.pane_tracked_processes.record_user_interaction(
+                *region.id(),
+                TrackedProcessUserInteraction::MayEcho,
+                Instant::now(),
+            );
+            Ok(PaneMouseClientOutcome {
+                focus: PaneFocusClientOutcome::Unchanged,
+                render_dirty,
+                sync_render_deadline: true,
+            })
+        }
+        PaneMouseAction::ScrollHistory { direction } => {
+            let outcome =
+                crate::pane_scroll::handle_scroll_pane_wheel_client_request(event.position, direction, state)?;
+            Ok(PaneMouseClientOutcome {
+                focus: PaneFocusClientOutcome::Unchanged,
+                render_dirty: outcome.render_dirty,
+                sync_render_deadline: outcome.sync_render_deadline,
+            })
+        }
+        PaneMouseAction::FocusPane => Ok(PaneMouseClientOutcome {
+            focus: crate::pane_focus::handle_focus_pane_at_client_request(event.position, state)?,
+            render_dirty: false,
+            sync_render_deadline: false,
+        }),
+        PaneMouseAction::NoAction => Ok(PaneMouseClientOutcome::unchanged()),
+    }
+}
+
+fn resolve_pane_mouse_action(event: ClientMouseEvent, mode: TerminalApplicationMode) -> PaneMouseAction {
     let focus = if self::mouse_event_focuses_pane(event) {
         PaneMouseFocus::FocusPointedPane
     } else {

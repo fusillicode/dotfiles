@@ -1,6 +1,7 @@
 use muxr_core::PaneId;
 use rootcause::report;
 
+use crate::client_session::ClientSessionState;
 use crate::pane_runtime::PaneRuntimes;
 use crate::pty::PtyExitStatus;
 use crate::server::ServerConfig;
@@ -9,9 +10,15 @@ use crate::state::SessionLayout;
 use crate::state::Tab;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub enum ClosePaneOutcome {
+enum ClosePaneOutcome {
     Final { pane_id: PaneId },
     Removed { pane_id: PaneId },
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ClosePaneClientOutcome {
+    Final { pane_id: PaneId },
+    Removed { pane_id: PaneId, previous_pane: PaneId },
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -21,7 +28,7 @@ pub enum PaneExitOutcome {
 }
 
 impl SessionLayout {
-    pub fn close_active_pane(&mut self, exited_at: u64) -> rootcause::Result<ClosePaneOutcome> {
+    fn close_active_pane(&mut self, exited_at: u64) -> rootcause::Result<ClosePaneOutcome> {
         let active_tab_index = self.active_tab_index()?;
         let final_pane = self.entries.len() == 1
             && self
@@ -113,7 +120,7 @@ impl SessionLayout {
 }
 
 impl Tab {
-    pub fn remove_pane(&mut self, pane_id: PaneId) -> rootcause::Result<PaneId> {
+    fn remove_pane(&mut self, pane_id: PaneId) -> rootcause::Result<PaneId> {
         self.pane_tree.remove_pane(pane_id)
     }
 
@@ -142,7 +149,7 @@ impl Tab {
 }
 
 impl PaneTree {
-    pub fn remove_pane(&mut self, pane_id: PaneId) -> rootcause::Result<PaneId> {
+    fn remove_pane(&mut self, pane_id: PaneId) -> rootcause::Result<PaneId> {
         let Some(fallback_pane) = self.remove_pane_from_split(pane_id)? else {
             return Err(report!("muxr pane is missing from server layout").attach(format!("pane_id={pane_id}")));
         };
@@ -186,7 +193,7 @@ impl PaneTree {
     }
 }
 
-pub fn handle_close_pane_cmd(
+fn handle_close_pane_cmd(
     config: &ServerConfig,
     layout: &mut SessionLayout,
     runtimes: &mut PaneRuntimes,
@@ -203,14 +210,36 @@ pub fn handle_close_pane_cmd(
     Ok(outcome)
 }
 
+pub fn handle_close_pane_cmd_client(state: &mut ClientSessionState<'_>) -> rootcause::Result<ClosePaneClientOutcome> {
+    let previous_pane = state.layout.active_pane_id()?;
+    crate::pane_fullscreen::clear_active_tab_for_layout_mutation(state);
+    match self::handle_close_pane_cmd(state.config, state.layout, state.runtimes)? {
+        ClosePaneOutcome::Final { pane_id } => Ok(ClosePaneClientOutcome::Final { pane_id }),
+        ClosePaneOutcome::Removed { pane_id } => Ok(ClosePaneClientOutcome::Removed { pane_id, previous_pane }),
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use std::fs;
+    use std::sync::Arc;
+    use std::thread;
+    use std::time::Duration;
+    use std::time::Instant;
+
     use muxr_config::MuxrConfig;
     use muxr_core::TerminalSize;
+    use rootcause::prelude::ResultExt;
+    use rootcause::report;
 
     use super::*;
+    use crate::pane_runtime::PaneRuntimes;
     use crate::pane_split::PaneSplitAxis;
+    use crate::server::test_helpers as server_test_helpers;
+    use crate::session_start_seed::SessionStartSeed;
     use crate::state::test_helpers as state_test_helpers;
+
+    const SERVER_READY_TIMEOUT: Duration = Duration::from_secs(2);
 
     #[test]
     fn test_layout_split_and_close_when_multiple_panes_updates_active_pane() -> rootcause::Result<()> {
@@ -277,6 +306,54 @@ mod tests {
                 ("pane-2".to_owned(), 41, 0, 39, 24),
             ],
         );
+        Ok(())
+    }
+
+    #[test]
+    fn test_handle_close_pane_cmd_when_title_cwd_is_pending_persists_synced_cwd() -> rootcause::Result<()> {
+        let tempdir = tempfile::tempdir()?;
+        let mut config = server_test_helpers::server_config(tempdir.path(), "work")?;
+        config.shell_cmd = server_test_helpers::shell_cmd("/bin/cat");
+        fs::create_dir_all(&config.paths.root).context("failed to create muxr test session root")?;
+        let mut layout = SessionLayout::initial(&config.session, state_test_helpers::metadata("sh", 1))?;
+        let terminal_size = TerminalSize::new(80, 24)?;
+        let start_seed = SessionStartSeed {
+            layout: layout.clone(),
+            startup_cmds: Vec::new(),
+        };
+        let mut runtimes = PaneRuntimes::spawn_for_start_seed(
+            &config,
+            &start_seed,
+            &terminal_size,
+            Arc::new(tokio::sync::Notify::new()),
+        )?;
+        let pane_id = PaneId::new(1)?;
+        {
+            let handle = runtimes.handle(pane_id)?;
+            let _scrolled_to_bottom = handle.write_input(b"\x1b]2;~\x07\n")?;
+        }
+
+        let started_at = Instant::now();
+        loop {
+            let title = runtimes.handle(pane_id)?.terminal_title()?;
+            if title.as_deref() == Some("~") {
+                break;
+            }
+            if started_at.elapsed() > SERVER_READY_TIMEOUT {
+                return Err(report!("timed out waiting for muxr test terminal title"));
+            }
+            thread::sleep(Duration::from_millis(10));
+        }
+
+        let outcome = self::handle_close_pane_cmd(&config, &mut layout, &mut runtimes)?;
+
+        pretty_assertions::assert_eq!(outcome, ClosePaneOutcome::Final { pane_id });
+        let persisted = crate::state::persisted::load_metadata(&config.paths, &config.session)?
+            .ok_or_else(|| report!("expected muxr layout metadata"))?;
+        let pane = persisted
+            .pane(pane_id)
+            .ok_or_else(|| report!("expected persisted muxr pane").attach(format!("pane_id={pane_id}")))?;
+        pretty_assertions::assert_eq!(pane.cwd, "~");
         Ok(())
     }
 }
