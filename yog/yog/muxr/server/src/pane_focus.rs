@@ -5,12 +5,14 @@ use muxr_core::PaneId;
 use muxr_core::TerminalSize;
 use rootcause::report;
 
+use crate::client_session::ClientSessionState;
 use crate::pane_layout::PaneRegion;
 use crate::pane_runtime::PaneRuntimes;
 use crate::pane_tracked_process::PaneTrackedProcesses;
 use crate::server::ServerConfig;
 use crate::state::SessionLayout;
 use crate::state::Tab;
+use crate::terminal::TerminalFocusEvent;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PaneFocusDirection {
@@ -18,6 +20,18 @@ pub enum PaneFocusDirection {
     Left,
     Right,
     Up,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PaneFocusRender {
+    ResizePanesAndRender,
+    SendLayoutAndBaseline,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PaneFocusClientOutcome {
+    Focused { render: PaneFocusRender },
+    Unchanged,
 }
 
 impl SessionLayout {
@@ -90,7 +104,7 @@ impl Tab {
     }
 }
 
-pub fn handle_focus_pane_cmd(
+fn handle_focus_pane_cmd(
     direction: PaneFocusDirection,
     config: &ServerConfig,
     layout: &mut SessionLayout,
@@ -103,7 +117,7 @@ pub fn handle_focus_pane_cmd(
     Ok(focused)
 }
 
-pub fn handle_focus_pane_cmd_with_tracked_process_ack(
+fn handle_focus_pane_cmd_with_tracked_process_ack(
     direction: PaneFocusDirection,
     config: &ServerConfig,
     layout: &mut SessionLayout,
@@ -124,7 +138,7 @@ pub fn handle_focus_pane_cmd_with_tracked_process_ack(
     Ok(focused)
 }
 
-pub fn handle_focus_pane_at_request(
+fn handle_focus_pane_at_request(
     position: ClientMousePosition,
     config: &ServerConfig,
     layout: &mut SessionLayout,
@@ -137,7 +151,7 @@ pub fn handle_focus_pane_at_request(
     Ok(focused)
 }
 
-pub fn handle_focus_pane_at_request_with_tracked_process_ack(
+fn handle_focus_pane_at_request_with_tracked_process_ack(
     position: ClientMousePosition,
     config: &ServerConfig,
     layout: &mut SessionLayout,
@@ -156,6 +170,98 @@ pub fn handle_focus_pane_at_request_with_tracked_process_ack(
         )?;
     }
     Ok(focused)
+}
+
+pub fn handle_focus_pane_at_client_request(
+    position: ClientMousePosition,
+    state: &mut ClientSessionState<'_>,
+) -> rootcause::Result<PaneFocusClientOutcome> {
+    // The scrollback editor layout is attached-client-local. Direct mouse focus must not mutate that temporary tree,
+    // otherwise subsequent input can move away from the editor pane before restore.
+    if state.scrollback_editor.is_some() {
+        return Ok(PaneFocusClientOutcome::Unchanged);
+    }
+    if state.pane_fullscreen.visible_pane_id(state.layout)?.is_some() {
+        return Ok(PaneFocusClientOutcome::Unchanged);
+    }
+    let previous_pane = state.layout.active_pane_id()?;
+    if !self::handle_focus_pane_at_request_with_tracked_process_ack(
+        position,
+        state.config,
+        state.layout,
+        state.runtimes,
+        &mut state.pane_tracked_processes,
+        &state.terminal_size,
+        Instant::now(),
+    )? {
+        return Ok(PaneFocusClientOutcome::Unchanged);
+    }
+    self::write_active_pane_focus_events(previous_pane, state)?;
+    Ok(PaneFocusClientOutcome::Focused {
+        render: PaneFocusRender::SendLayoutAndBaseline,
+    })
+}
+
+pub fn handle_focus_pane_cmd_client(
+    direction: PaneFocusDirection,
+    state: &mut ClientSessionState<'_>,
+) -> rootcause::Result<PaneFocusClientOutcome> {
+    let previous_pane = state.layout.active_pane_id()?;
+    if !self::handle_focus_pane_cmd_with_tracked_process_ack(
+        direction,
+        state.config,
+        state.layout,
+        state.runtimes,
+        &mut state.pane_tracked_processes,
+        &state.terminal_size,
+        Instant::now(),
+    )? {
+        return Ok(PaneFocusClientOutcome::Unchanged);
+    }
+    self::write_active_pane_focus_events(previous_pane, state)?;
+    let render = if crate::pane_fullscreen::clear_active_tab_for_layout_mutation(state) {
+        PaneFocusRender::ResizePanesAndRender
+    } else {
+        PaneFocusRender::SendLayoutAndBaseline
+    };
+    Ok(PaneFocusClientOutcome::Focused { render })
+}
+
+pub fn write_active_pane_focus_events(previous_pane: PaneId, state: &ClientSessionState<'_>) -> rootcause::Result<()> {
+    let next_pane = state.layout.active_pane_id()?;
+    self::write_pane_focus_transition(previous_pane, next_pane, state.runtimes)
+}
+
+fn write_pane_focus_transition(
+    previous_pane: PaneId,
+    next_pane: PaneId,
+    runtimes: &PaneRuntimes,
+) -> rootcause::Result<()> {
+    // Focus reporting is a pane-application opt-in (`CSI ? 1004 h`). Close/reap may remove the old pane runtime
+    // before the new pane receives focus, so skip missing runtimes while still notifying the surviving side.
+    for (pane_id, event) in self::pane_focus_events_for_live_panes(previous_pane, next_pane, &runtimes.pane_ids()) {
+        runtimes.handle(pane_id)?.write_focus_event(event)?;
+    }
+    Ok(())
+}
+
+fn pane_focus_events_for_live_panes(
+    previous_pane: PaneId,
+    next_pane: PaneId,
+    live_panes: &[PaneId],
+) -> Vec<(PaneId, TerminalFocusEvent)> {
+    if previous_pane == next_pane {
+        return Vec::new();
+    }
+
+    let mut events = Vec::with_capacity(2);
+    if live_panes.contains(&previous_pane) {
+        events.push((previous_pane, TerminalFocusEvent::Lost));
+    }
+    if live_panes.contains(&next_pane) {
+        events.push((next_pane, TerminalFocusEvent::Gained));
+    }
+    events
 }
 
 fn pane_regions_are_adjacent(region: &PaneRegion, other: &PaneRegion, direction: PaneFocusDirection) -> bool {
@@ -231,6 +337,45 @@ mod tests {
             expected_changed,
         );
         pretty_assertions::assert_eq!(layout.active_pane_id()?.to_string(), expected_active_pane);
+        Ok(())
+    }
+
+    #[test]
+    fn test_pane_focus_events_for_live_panes_when_runtime_sets_vary_returns_focus_transition() -> rootcause::Result<()>
+    {
+        let previous_pane = PaneId::new(1)?;
+        let next_pane = PaneId::new(2)?;
+
+        for (previous_pane, next_pane, live_panes, expected) in [
+            (
+                previous_pane,
+                next_pane,
+                vec![previous_pane, next_pane],
+                vec![
+                    (previous_pane, TerminalFocusEvent::Lost),
+                    (next_pane, TerminalFocusEvent::Gained),
+                ],
+            ),
+            (previous_pane, previous_pane, vec![previous_pane], Vec::new()),
+            (
+                previous_pane,
+                next_pane,
+                vec![next_pane],
+                vec![(next_pane, TerminalFocusEvent::Gained)],
+            ),
+            (
+                previous_pane,
+                next_pane,
+                vec![previous_pane],
+                vec![(previous_pane, TerminalFocusEvent::Lost)],
+            ),
+            (previous_pane, next_pane, Vec::new(), Vec::new()),
+        ] {
+            pretty_assertions::assert_eq!(
+                self::pane_focus_events_for_live_panes(previous_pane, next_pane, &live_panes),
+                expected,
+            );
+        }
         Ok(())
     }
 

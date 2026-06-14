@@ -38,14 +38,14 @@ pub async fn handle_handshake_delete(
     Ok(())
 }
 
-pub async fn handle_attached_delete(
+pub async fn handle_client_delete(
     event_writer: &mut ServerEventWriter,
     delete_sessions: &DeleteSessions,
     client_write_timeout: Duration,
 ) -> rootcause::Result<()> {
     delete_sessions.request();
     self::record_delete_ack_send_failure(
-        self::send_writer_event_failure(event_writer, &ServerEvent::Deleted, client_write_timeout).await,
+        crate::event_writer::send_event_failure(event_writer, &ServerEvent::Deleted, client_write_timeout).await,
     );
     Ok(())
 }
@@ -71,18 +71,6 @@ async fn send_connection_event_failure(
     client_write_timeout: Duration,
 ) -> Option<ClientEventSendFailure> {
     match tokio::time::timeout(client_write_timeout, connection.send_event(event)).await {
-        Ok(Ok(())) => None,
-        Ok(Err(_)) => Some(ClientEventSendFailure::SendFailed),
-        Err(_) => Some(ClientEventSendFailure::Timeout),
-    }
-}
-
-async fn send_writer_event_failure(
-    writer: &mut ServerEventWriter,
-    event: &ServerEvent,
-    client_write_timeout: Duration,
-) -> Option<ClientEventSendFailure> {
-    match tokio::time::timeout(client_write_timeout, writer.send_event(event)).await {
         Ok(Ok(())) => None,
         Ok(Err(_)) => Some(ClientEventSendFailure::SendFailed),
         Err(_) => Some(ClientEventSendFailure::Timeout),

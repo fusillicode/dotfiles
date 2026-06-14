@@ -3,13 +3,14 @@ use muxr_core::PaneId;
 use muxr_core::PaneScrollDirection;
 use muxr_core::ServerEvent;
 
+use crate::client_session::ClientSessionState;
 use crate::pane_runtime::PaneRuntimes;
 use crate::terminal::TerminalCursorKeyMode;
 
 const FAUX_SCROLL_LINES_PER_WHEEL_EVENT: usize = 3;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum PaneScrollAmount {
+enum PaneScrollAmount {
     Line,
     Wheel,
 }
@@ -19,7 +20,13 @@ pub struct PaneScrollLineRequestOutcome {
     pub render_dirty: bool,
 }
 
-pub const fn scroll_pane_line_result(
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct PaneScrollWheelRequestOutcome {
+    pub render_dirty: bool,
+    pub sync_render_deadline: bool,
+}
+
+const fn scroll_pane_line_result(
     position: ClientMousePosition,
     direction: PaneScrollDirection,
     scrolled: bool,
@@ -35,7 +42,44 @@ pub const fn scroll_pane_line_result(
     }
 }
 
-pub fn scroll_pane(
+pub fn handle_scroll_pane_line_client_request(
+    position: ClientMousePosition,
+    direction: PaneScrollDirection,
+    state: &ClientSessionState<'_>,
+) -> rootcause::Result<PaneScrollLineRequestOutcome> {
+    let scrolled = if let Some(pane_id) = crate::screen_render::visible_pane_id_at_position(state, position)? {
+        self::scroll_pane(pane_id, direction, PaneScrollAmount::Line, state.runtimes)?
+    } else {
+        false
+    };
+    Ok(self::scroll_pane_line_result(position, direction, scrolled))
+}
+
+pub fn handle_scroll_pane_wheel_client_request(
+    position: ClientMousePosition,
+    direction: PaneScrollDirection,
+    state: &ClientSessionState<'_>,
+) -> rootcause::Result<PaneScrollWheelRequestOutcome> {
+    let Some(pane_id) = crate::screen_render::visible_pane_id_at_position(state, position)? else {
+        return Ok(PaneScrollWheelRequestOutcome {
+            render_dirty: false,
+            sync_render_deadline: false,
+        });
+    };
+    if !self::scroll_pane(pane_id, direction, PaneScrollAmount::Wheel, state.runtimes)? {
+        return Ok(PaneScrollWheelRequestOutcome {
+            render_dirty: false,
+            sync_render_deadline: false,
+        });
+    }
+    // Wheel input can arrive much faster than render IO; mark dirty and let the render deadline coalesce.
+    Ok(PaneScrollWheelRequestOutcome {
+        render_dirty: true,
+        sync_render_deadline: true,
+    })
+}
+
+fn scroll_pane(
     pane_id: PaneId,
     direction: PaneScrollDirection,
     amount: PaneScrollAmount,

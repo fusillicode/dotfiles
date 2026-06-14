@@ -1,12 +1,20 @@
 use std::time::Instant;
 
+use muxr_core::PaneId;
 use muxr_core::TabId;
 use rootcause::report;
 
+use crate::client_session::ClientSessionState;
 use crate::pane_runtime::PaneRuntimes;
 use crate::pane_tracked_process::PaneTrackedProcesses;
 use crate::server::ServerConfig;
 use crate::state::SessionLayout;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TabFocusClientOutcome {
+    Render { previous_pane: PaneId },
+    Unchanged,
+}
 
 impl SessionLayout {
     pub fn focus_tab(&mut self, tab_id: TabId) -> rootcause::Result<bool> {
@@ -53,7 +61,7 @@ impl SessionLayout {
     }
 }
 
-pub fn handle_focus_tab_request(
+fn handle_focus_tab_request(
     tab_id: TabId,
     config: &ServerConfig,
     layout: &mut SessionLayout,
@@ -65,7 +73,7 @@ pub fn handle_focus_tab_request(
     Ok(changed)
 }
 
-pub fn handle_focus_tab_request_with_tracked_process_ack(
+fn handle_focus_tab_request_with_tracked_process_ack(
     tab_id: TabId,
     config: &ServerConfig,
     layout: &mut SessionLayout,
@@ -85,13 +93,13 @@ pub fn handle_focus_tab_request_with_tracked_process_ack(
     Ok(changed)
 }
 
-pub fn handle_focus_previous_tab_cmd(config: &ServerConfig, layout: &mut SessionLayout) -> rootcause::Result<()> {
+fn handle_focus_previous_tab_cmd(config: &ServerConfig, layout: &mut SessionLayout) -> rootcause::Result<()> {
     layout.focus_previous_tab()?;
     crate::state::persisted::write_metadata(&config.paths, layout)?;
     Ok(())
 }
 
-pub fn handle_focus_previous_tab_cmd_with_tracked_process_ack(
+fn handle_focus_previous_tab_cmd_with_tracked_process_ack(
     config: &ServerConfig,
     layout: &mut SessionLayout,
     runtimes: &PaneRuntimes,
@@ -104,13 +112,13 @@ pub fn handle_focus_previous_tab_cmd_with_tracked_process_ack(
     Ok(())
 }
 
-pub fn handle_focus_next_tab_cmd(config: &ServerConfig, layout: &mut SessionLayout) -> rootcause::Result<()> {
+fn handle_focus_next_tab_cmd(config: &ServerConfig, layout: &mut SessionLayout) -> rootcause::Result<()> {
     layout.focus_next_tab()?;
     crate::state::persisted::write_metadata(&config.paths, layout)?;
     Ok(())
 }
 
-pub fn handle_focus_next_tab_cmd_with_tracked_process_ack(
+fn handle_focus_next_tab_cmd_with_tracked_process_ack(
     config: &ServerConfig,
     layout: &mut SessionLayout,
     runtimes: &PaneRuntimes,
@@ -121,6 +129,55 @@ pub fn handle_focus_next_tab_cmd_with_tracked_process_ack(
     let _acknowledged =
         pane_tracked_processes.acknowledge_active_pane_attention(config.user_config.as_ref(), layout, runtimes, now)?;
     Ok(())
+}
+
+pub fn handle_focus_tab_client_request(
+    tab_id: TabId,
+    state: &mut ClientSessionState<'_>,
+) -> rootcause::Result<TabFocusClientOutcome> {
+    if state.scrollback_editor.is_some() {
+        return Ok(TabFocusClientOutcome::Unchanged);
+    }
+    let previous_pane = state.layout.active_pane_id()?;
+    if !self::handle_focus_tab_request_with_tracked_process_ack(
+        tab_id,
+        state.config,
+        state.layout,
+        state.runtimes,
+        &mut state.pane_tracked_processes,
+        Instant::now(),
+    )? {
+        return Ok(TabFocusClientOutcome::Unchanged);
+    }
+    Ok(TabFocusClientOutcome::Render { previous_pane })
+}
+
+pub fn handle_focus_previous_tab_cmd_client(
+    state: &mut ClientSessionState<'_>,
+) -> rootcause::Result<TabFocusClientOutcome> {
+    let previous_pane = state.layout.active_pane_id()?;
+    self::handle_focus_previous_tab_cmd_with_tracked_process_ack(
+        state.config,
+        state.layout,
+        state.runtimes,
+        &mut state.pane_tracked_processes,
+        Instant::now(),
+    )?;
+    Ok(TabFocusClientOutcome::Render { previous_pane })
+}
+
+pub fn handle_focus_next_tab_cmd_client(
+    state: &mut ClientSessionState<'_>,
+) -> rootcause::Result<TabFocusClientOutcome> {
+    let previous_pane = state.layout.active_pane_id()?;
+    self::handle_focus_next_tab_cmd_with_tracked_process_ack(
+        state.config,
+        state.layout,
+        state.runtimes,
+        &mut state.pane_tracked_processes,
+        Instant::now(),
+    )?;
+    Ok(TabFocusClientOutcome::Render { previous_pane })
 }
 
 #[cfg(test)]

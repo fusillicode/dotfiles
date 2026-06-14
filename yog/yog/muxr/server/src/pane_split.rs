@@ -9,6 +9,7 @@ use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serialize;
 
+use crate::client_session::ClientSessionState;
 use crate::pane_runtime::PaneRuntimes;
 use crate::server::ServerConfig;
 use crate::state::Pane;
@@ -36,6 +37,12 @@ pub struct PaneSplitRatio(u16);
 pub enum PaneSplitResize {
     DecreaseFirst,
     IncreaseFirst,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct PaneSplitClientOutcome {
+    pub new_pane_id: PaneId,
+    pub previous_pane: PaneId,
 }
 
 impl PaneSplitRatio {
@@ -172,7 +179,7 @@ impl PaneTree {
     }
 }
 
-pub fn handle_split_pane_cmd(
+fn handle_split_pane_cmd(
     split_axis: PaneSplitAxis,
     config: &ServerConfig,
     layout: &mut SessionLayout,
@@ -193,6 +200,25 @@ pub fn handle_split_pane_cmd(
     )?;
     crate::state::persisted::write_metadata(&config.paths, layout)?;
     Ok(pane_id)
+}
+
+pub fn handle_split_pane_cmd_client(
+    split_axis: PaneSplitAxis,
+    state: &mut ClientSessionState<'_>,
+) -> rootcause::Result<PaneSplitClientOutcome> {
+    let previous_pane = state.layout.active_pane_id()?;
+    crate::pane_fullscreen::clear_active_tab_for_layout_mutation(state);
+    let new_pane_id = self::handle_split_pane_cmd(
+        split_axis,
+        state.config,
+        state.layout,
+        state.runtimes,
+        &state.terminal_size,
+    )?;
+    Ok(PaneSplitClientOutcome {
+        new_pane_id,
+        previous_pane,
+    })
 }
 
 #[cfg(test)]

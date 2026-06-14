@@ -4,6 +4,7 @@ use muxr_core::PaneId;
 use muxr_core::TabId;
 use muxr_core::TerminalSize;
 
+use crate::client_session::ClientSessionState;
 use crate::pane_layout::PaneLayout;
 use crate::state::SessionLayout;
 
@@ -15,7 +16,7 @@ pub struct PaneFullscreen {
 }
 
 impl PaneFullscreen {
-    pub fn toggle_active_pane(&mut self, layout: &SessionLayout) -> rootcause::Result<()> {
+    fn toggle_active_pane(&mut self, layout: &SessionLayout) -> rootcause::Result<()> {
         let active_tab = layout.active_tab;
         let active_pane = layout.active_pane_id()?;
         if self.panes.get(&active_tab).copied() == Some(active_pane) {
@@ -26,7 +27,7 @@ impl PaneFullscreen {
         Ok(())
     }
 
-    pub fn clear_active_tab(&mut self, layout: &SessionLayout) -> bool {
+    fn clear_active_tab(&mut self, layout: &SessionLayout) -> bool {
         self.panes.remove(&layout.active_tab).is_some()
     }
 
@@ -59,6 +60,15 @@ impl PaneFullscreen {
         }
         Ok(Some(pane_id))
     }
+}
+
+pub fn clear_active_tab_for_layout_mutation(state: &mut ClientSessionState<'_>) -> bool {
+    state.pane_fullscreen.clear_active_tab(state.layout)
+}
+
+pub fn handle_toggle_active_pane_cmd_client(state: &mut ClientSessionState<'_>) -> rootcause::Result<()> {
+    state.pane_fullscreen.toggle_active_pane(state.layout)?;
+    Ok(())
 }
 
 #[cfg(test)]
@@ -197,6 +207,40 @@ mod tests {
         layout.focus_tab(tab_a)?;
 
         pretty_assertions::assert_eq!(fullscreen.visible_pane_id(&layout)?, Some(pane_a));
+        Ok(())
+    }
+
+    #[test]
+    fn test_pane_ids_include_visible_when_pane_is_hidden_by_fullscreen_returns_false() -> rootcause::Result<()> {
+        let mut layout = crate::state::test_helpers::layout("default")?;
+        let hidden_pane = PaneId::new(1)?;
+        let visible_pane = layout.split_active_pane(
+            MuxrConfig::default().layout,
+            crate::state::test_helpers::metadata("sh", 2),
+            crate::pane_split::PaneSplitAxis::Vertical,
+        )?;
+        let mut fullscreen = PaneFullscreen::default();
+        fullscreen.toggle_active_pane(&layout)?;
+        let terminal_size = TerminalSize::new(80, 24)?;
+
+        assert2::assert!(!crate::screen_render::pane_ids_include_visible(
+            &layout,
+            &fullscreen,
+            &terminal_size,
+            &[hidden_pane]
+        )?);
+        assert2::assert!(crate::screen_render::pane_ids_include_visible(
+            &layout,
+            &fullscreen,
+            &terminal_size,
+            &[visible_pane]
+        )?);
+        assert2::assert!(crate::screen_render::pane_ids_include_visible(
+            &layout,
+            &fullscreen,
+            &terminal_size,
+            &[hidden_pane, visible_pane],
+        )?);
         Ok(())
     }
 }
