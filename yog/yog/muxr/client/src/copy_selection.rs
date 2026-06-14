@@ -12,7 +12,9 @@ use muxr_core::RenderCellWidth;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
 
-use crate::render::FrameBuffer;
+use crate::frame_buffer::FrameBuffer;
+
+const DOUBLE_CLICK_THRESHOLD: std::time::Duration = std::time::Duration::from_millis(400);
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SelectionInput {
@@ -62,7 +64,7 @@ impl SelectionClickTracker {
             previous.target == target
                 && now
                     .checked_duration_since(previous.at)
-                    .is_some_and(|elapsed| elapsed <= super::DOUBLE_CLICK_THRESHOLD)
+                    .is_some_and(|elapsed| elapsed <= DOUBLE_CLICK_THRESHOLD)
         });
         self.count = if continues_previous {
             self.count.saturating_add(1)

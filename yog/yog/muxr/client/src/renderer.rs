@@ -16,16 +16,17 @@ use muxr_core::RenderUpdate;
 use muxr_core::TabId;
 use rootcause::prelude::ResultExt;
 
-use crate::client::copy_selection::SelectionClickTracker;
-use crate::client::copy_selection::SelectionEdgeScrollPending;
-use crate::client::copy_selection::SelectionEdgeScrollRequest;
-use crate::client::copy_selection::SelectionEdgeScrollState;
-use crate::client::copy_selection::SelectionInput;
-use crate::client::copy_selection::SelectionRange;
-use crate::client::copy_selection::SelectionState;
-use crate::client::terminal::SynchronizedOutput;
-use crate::render::ApplyOutcome;
-use crate::render::FrameBuffer;
+use crate::copy_selection::SelectionClickTracker;
+use crate::copy_selection::SelectionEdgeScrollPending;
+use crate::copy_selection::SelectionEdgeScrollRequest;
+use crate::copy_selection::SelectionEdgeScrollState;
+use crate::copy_selection::SelectionInput;
+use crate::copy_selection::SelectionRange;
+use crate::copy_selection::SelectionState;
+use crate::frame_buffer::ApplyOutcome;
+use crate::frame_buffer::FrameBuffer;
+use crate::frame_buffer::RenderFrameChanges;
+use crate::terminal::SynchronizedOutput;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ClientRenderOutcome {
@@ -116,7 +117,7 @@ impl ClientRenderer {
     }
 
     pub fn tab_id_at_sidebar_row(&self, row: u16) -> Option<TabId> {
-        crate::client::tab_bar::tab_id_at_row(&self.layout, row)
+        crate::tab_bar::tab_id_at_row(&self.layout, row)
     }
 
     pub fn apply_pane_regions(
@@ -151,7 +152,7 @@ impl ClientRenderer {
             return Ok(());
         }
 
-        crate::client::terminal::set_mouse_any_motion_capture(stdout, next)?;
+        crate::terminal::set_mouse_any_motion_capture(stdout, next)?;
         self.any_motion_capture_enabled = next;
         Ok(())
     }
@@ -173,16 +174,16 @@ impl ClientRenderer {
         }
     }
 
-    fn draw(&mut self, stdout: &mut impl Write, changes: &crate::render::RenderFrameChanges) -> rootcause::Result<()> {
+    fn draw(&mut self, stdout: &mut impl Write, changes: &RenderFrameChanges) -> rootcause::Result<()> {
         let render_tab_bar = self.tab_bar_dirty || changes.is_full_redraw();
         let mut frame = Vec::new();
-        crate::client::terminal::queue_synchronized_update_start(&mut frame, self.synchronized_output)?;
+        crate::terminal::queue_synchronized_update_start(&mut frame, self.synchronized_output)?;
         if changes.is_full_redraw() {
-            crate::render::queue_full_redraw_start(&mut frame)?;
+            crate::frame_buffer::queue_full_redraw_start(&mut frame)?;
         }
         if render_tab_bar {
             let rows = self.frame_buffer.size().map_or(0, muxr_core::TerminalSize::rows);
-            crate::client::tab_bar::queue(&mut frame, self.tab_bar_config, &self.layout, rows)?;
+            crate::tab_bar::queue(&mut frame, self.tab_bar_config, &self.layout, rows)?;
         }
         self.frame_buffer.queue_at_with_selection(
             &mut frame,
@@ -192,7 +193,7 @@ impl ClientRenderer {
             self.selection.range(),
             self.selection_style.bg,
         )?;
-        crate::client::terminal::queue_synchronized_update_end(&mut frame, self.synchronized_output)?;
+        crate::terminal::queue_synchronized_update_end(&mut frame, self.synchronized_output)?;
         stdout
             .write_all(&frame)
             .context("failed to write muxr client render transaction")?;
@@ -209,9 +210,9 @@ impl ClientRenderer {
             return Ok(());
         };
         let mut frame = Vec::new();
-        crate::client::terminal::queue_synchronized_update_start(&mut frame, self.synchronized_output)?;
-        crate::client::tab_bar::queue(&mut frame, self.tab_bar_config, &self.layout, size.rows())?;
-        crate::client::terminal::queue_synchronized_update_end(&mut frame, self.synchronized_output)?;
+        crate::terminal::queue_synchronized_update_start(&mut frame, self.synchronized_output)?;
+        crate::tab_bar::queue(&mut frame, self.tab_bar_config, &self.layout, size.rows())?;
+        crate::terminal::queue_synchronized_update_end(&mut frame, self.synchronized_output)?;
         stdout
             .write_all(&frame)
             .context("failed to write muxr client sidebar render transaction")?;
@@ -266,7 +267,7 @@ impl ClientRenderer {
     }
 
     pub fn mouse_request_for_event(&mut self, event: ClientMouseEvent) -> Option<ClientMouseEvent> {
-        if crate::client::pane_scroll::is_wheel_event(event) {
+        if crate::pane::scroll::is_wheel_event(event) {
             return None;
         }
 
@@ -295,14 +296,14 @@ impl ClientRenderer {
         let Some(text) = self.selection.selected_text() else {
             return Ok(());
         };
-        crate::client::copy_selection::copy_to_clipboard(&text)
+        crate::copy_selection::copy_to_clipboard(&text)
     }
 
     pub fn copy_selection_inline(&self) -> rootcause::Result<()> {
         let Some(text) = self.selection.selected_inline_text() else {
             return Ok(());
         };
-        crate::client::copy_selection::copy_to_clipboard(&text)
+        crate::copy_selection::copy_to_clipboard(&text)
     }
 
     pub fn set_selection_edge_drag(
@@ -354,7 +355,7 @@ impl ClientRenderer {
         previous: Option<&SelectionRange>,
         next: Option<&SelectionRange>,
     ) -> rootcause::Result<()> {
-        let rows = crate::client::copy_selection::changed_selection_rows(previous, next);
+        let rows = crate::copy_selection::changed_selection_rows(previous, next);
         let Some(changes) = self.frame_buffer.row_redraw_changes(&rows)? else {
             return Ok(());
         };
@@ -430,7 +431,7 @@ mod tests {
     use rootcause::report;
 
     use super::*;
-    use crate::client::renderer::test_helpers;
+    use crate::renderer::test_helpers;
 
     #[test]
     fn test_client_renderer_apply_layout_when_no_render_arrives_writes_nothing() -> rootcause::Result<()> {

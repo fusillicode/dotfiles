@@ -27,7 +27,7 @@ use muxr_core::TerminalSize;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
 
-use crate::client::copy_selection::SelectionRange;
+use crate::copy_selection::SelectionRange;
 
 const OSC8_CLOSE: &[u8] = b"\x1b]8;;\x1b\\";
 const OSC8_OPEN_PREFIX: &[u8] = b"\x1b]8;;";
@@ -450,8 +450,8 @@ mod tests {
     use rstest::rstest;
 
     use super::*;
-    use crate::client::copy_selection::SelectionInput;
-    use crate::client::copy_selection::SelectionState;
+    use crate::copy_selection::SelectionInput;
+    use crate::copy_selection::SelectionState;
 
     #[test]
     fn test_frame_buffer_apply_when_baseline_arrives_stores_frame() -> rootcause::Result<()> {

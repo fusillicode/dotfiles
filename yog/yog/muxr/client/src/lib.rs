@@ -1,12 +1,16 @@
-pub use client::start;
-pub use sessions_delete::SessionDeleteOutcome;
-pub use sessions_delete::delete_session;
-pub use sessions_list::ListedSession;
-pub use sessions_list::SessionState;
-pub use sessions_list::list_sessions;
+pub use runtime::start;
+pub use session::delete::SessionDeleteOutcome;
+pub use session::delete::delete_session;
+pub use session::list::ListedSession;
+pub use session::list::SessionState;
+pub use session::list::list_sessions;
 
-mod client;
+mod copy_selection;
+mod frame_buffer;
 mod input;
-mod render;
-mod sessions_delete;
-mod sessions_list;
+mod pane;
+mod renderer;
+mod runtime;
+mod session;
+mod tab_bar;
+mod terminal;

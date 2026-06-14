@@ -6,10 +6,10 @@ use muxr_core::ClientMouseEventPhase;
 use muxr_core::ClientMousePosition;
 use muxr_core::ClientRequest;
 
-use super::DroppableSendOutcome;
-use super::copy_selection::SelectionInput;
-use super::pane_focus::LocalMouseAction;
-use super::renderer::ClientRenderer;
+use crate::copy_selection::SelectionInput;
+use crate::pane::focus::LocalMouseAction;
+use crate::renderer::ClientRenderer;
+use crate::runtime::DroppableSendOutcome;
 
 pub async fn handle_mouse_input_action(
     muxr_config: &MuxrConfig,
@@ -36,13 +36,17 @@ pub async fn handle_mouse_input_action(
         // Local selections can also finish over the tab bar; keep update/end routed so the retained pane drag is
         // clamped and finalized instead of leaving stale drag state behind.
         let tab_bar_position = event.position;
-        match super::pane_focus::local_mouse_action(event) {
+        match crate::pane::focus::local_mouse_action(event) {
             Some(LocalMouseAction::SelectionUpdate(_)) => {
                 if let Some(position) = pane_position_for_sidebar_drag(muxr_config, tab_bar_position) {
                     let scroll_request = renderer.set_selection_outside_edge_drag(position);
                     renderer.apply_selection_input(stdout, SelectionInput::Update(position))?;
                     if let Some(request) = scroll_request {
-                        return Ok(super::send_edge_scroll_request(input_sender, renderer, request));
+                        return Ok(crate::runtime::send_edge_scroll_request(
+                            input_sender,
+                            renderer,
+                            request,
+                        ));
                     }
                 }
             }
@@ -56,14 +60,14 @@ pub async fn handle_mouse_input_action(
         return Ok(true);
     };
     let event = ClientMouseEvent { position, ..event };
-    if super::pane_scroll::is_wheel_event(event) {
+    if crate::pane::scroll::is_wheel_event(event) {
         return send_mouse_request(input_sender, event).await;
     }
     if let Some(event) = renderer.mouse_request_for_event(event) {
         return send_mouse_request(input_sender, event).await;
     }
 
-    match super::pane_focus::local_mouse_action(event) {
+    match crate::pane::focus::local_mouse_action(event) {
         Some(LocalMouseAction::FocusAndSelectionStart(position)) => {
             if input_sender.send(ClientRequest::FocusPaneAt(position)).await.is_err() {
                 return Ok(false);
@@ -75,7 +79,11 @@ pub async fn handle_mouse_input_action(
             let scroll_request = renderer.set_selection_edge_drag(position, None);
             renderer.apply_selection_input(stdout, SelectionInput::Update(position))?;
             if let Some(request) = scroll_request {
-                return Ok(super::send_edge_scroll_request(input_sender, renderer, request));
+                return Ok(crate::runtime::send_edge_scroll_request(
+                    input_sender,
+                    renderer,
+                    request,
+                ));
             }
             Ok(true)
         }
@@ -88,7 +96,7 @@ pub async fn handle_mouse_input_action(
 }
 
 pub const fn mouse_event_can_be_dropped(event: ClientMouseEvent) -> bool {
-    event.button & 32 != 0 && !super::pane_scroll::is_wheel_event(event)
+    event.button & 32 != 0 && !crate::pane::scroll::is_wheel_event(event)
 }
 
 async fn send_mouse_request(
@@ -97,7 +105,7 @@ async fn send_mouse_request(
 ) -> rootcause::Result<bool> {
     if mouse_event_can_be_dropped(event) {
         return Ok(!matches!(
-            super::send_droppable_request(input_sender, ClientRequest::Mouse(event)),
+            crate::runtime::send_droppable_request(input_sender, ClientRequest::Mouse(event)),
             DroppableSendOutcome::Closed
         ));
     }
@@ -148,10 +156,10 @@ mod tests {
     use rootcause::prelude::ResultExt;
     use rootcause::report;
 
-    use super::super::renderer::ClientRenderer;
-    use super::super::renderer::test_helpers as renderer_test_helpers;
-    use super::super::terminal::SynchronizedOutput;
     use super::*;
+    use crate::renderer::ClientRenderer;
+    use crate::renderer::test_helpers as renderer_test_helpers;
+    use crate::terminal::SynchronizedOutput;
 
     #[test]
     fn test_handle_mouse_input_action_when_plain_mouse_click_arrives_focuses_pane() -> rootcause::Result<()> {
