@@ -450,7 +450,9 @@ mod tests {
     use crate::pane::split::PaneSplitAxis;
     use crate::session::files::PRIVATE_SOCKET_MODE;
 
-    const SERVER_READY_TIMEOUT: Duration = Duration::from_secs(2);
+    // The full muxr-server suite spawns real PTYs and OS threads; on a loaded machine, server startup or a coalesced
+    // render can exceed two seconds even when the product path is healthy. Keep the harness timeout above that noise.
+    const SERVER_READY_TIMEOUT: Duration = Duration::from_secs(5);
     const TEST_CLIENT_HEARTBEAT_INTERVAL: Duration = Duration::from_millis(100);
     const TEST_CLIENT_HEARTBEAT_TIMEOUT: Duration = Duration::from_millis(500);
     const TEST_CLIENT_WRITE_TIMEOUT: Duration = Duration::from_millis(500);
@@ -1663,27 +1665,68 @@ mod tests {
                         && self::pane_region(regions, "pane-2")?.visible_top_row() > 0)
                 })
                 .await?;
-            let pane_1_before = self::pane_region(&ready_regions, "pane-1")?.visible_top_row();
-            let pane_2_before = self::pane_region(&ready_regions, "pane-2")?.visible_top_row();
+            let pane_1_position = self::pane_position(&ready_regions, "pane-1")?;
+            let pane_2_position = self::pane_position(&ready_regions, "pane-2")?;
+
+            // Mouse-wheel history scroll has no protocol ack. Bottom both panes through the acknowledged line-scroll
+            // path, then force a rendered baseline so stale setup metadata cannot satisfy the wheel assertion. The
+            // follow-up down-scroll still proves only the pointed pane's scrollback moved.
+            self::scroll_pane_line_until_noop(
+                &mut client,
+                pane_1_position,
+                PaneScrollDirection::Down,
+                "pane-1 bottomed before wheel",
+            )
+            .await?;
+            self::scroll_pane_line_until_noop(
+                &mut client,
+                pane_2_position,
+                PaneScrollDirection::Down,
+                "pane-2 bottomed before wheel",
+            )
+            .await?;
+            client.writer.send_request(&ClientRequest::RenderResync).await?;
+            drop(self::read_until_layout(&mut client).await?);
+            let bottom_regions =
+                self::read_next_pane_regions_matching(&mut client, "both panes rendered at bottom before wheel", |regions| {
+                    self::pane_region(regions, "pane-1")?;
+                    self::pane_region(regions, "pane-2")?;
+                    Ok(true)
+                })
+                .await?;
+            let pane_1_before_wheel = self::pane_region(&bottom_regions, "pane-1")?.visible_top_row();
+            let pane_2_before_wheel = self::pane_region(&bottom_regions, "pane-2")?.visible_top_row();
 
             client
                 .writer
                 .send_request(&ClientRequest::Mouse(ClientMouseEvent {
                     button: 64,
                     phase: muxr_core::ClientMouseEventPhase::Press,
-                    position: self::pane_position(&ready_regions, "pane-1")?,
+                    position: pane_1_position,
                 }))
                 .await?;
 
-            let scrolled_regions =
-                self::read_until_pane_regions_matching(&mut client, "pointed pane scrollback moved", |regions| {
-                    Ok(self::pane_region(regions, "pane-1")?.visible_top_row() < pane_1_before
-                        && self::pane_region(regions, "pane-2")?.visible_top_row() == pane_2_before)
-                })
-                .await?;
+            self::read_next_pane_regions_matching(
+                &mut client,
+                &format!(
+                    "wheel render moved only the pointed pane; expected pane-1<{pane_1_before_wheel}, pane-2={pane_2_before_wheel}"
+                ),
+                |regions| {
+                    Ok(
+                        self::pane_region(regions, "pane-1")?.visible_top_row() < pane_1_before_wheel
+                            && self::pane_region(regions, "pane-2")?.visible_top_row() == pane_2_before_wheel,
+                    )
+                },
+            )
+            .await?;
+
             pretty_assertions::assert_eq!(
-                self::pane_region(&scrolled_regions, "pane-2")?.visible_top_row(),
-                pane_2_before,
+                self::scroll_pane_line(&mut client, pane_1_position, PaneScrollDirection::Down).await?,
+                true,
+            );
+            pretty_assertions::assert_eq!(
+                self::scroll_pane_line(&mut client, pane_2_position, PaneScrollDirection::Down).await?,
+                false,
             );
             self::assert_layout_metadata_panes(&paths, &[1, 2], 2)?;
 
@@ -2489,11 +2532,28 @@ mod tests {
         if condition(&client.pane_regions)? {
             return Ok(client.pane_regions.clone());
         }
+        self::read_next_pane_regions_matching(client, description, condition).await
+    }
+
+    async fn read_next_pane_regions_matching(
+        client: &mut AttachedTestClient,
+        description: &str,
+        condition: impl Fn(&PaneRegionsSnapshot) -> rootcause::Result<bool>,
+    ) -> rootcause::Result<PaneRegionsSnapshot> {
         let started_at = Instant::now();
 
         loop {
             if started_at.elapsed() > SERVER_READY_TIMEOUT {
-                return Err(report!("timed out waiting for muxr pane regions update").attach(description.to_owned()));
+                let latest = client
+                    .pane_regions
+                    .regions()
+                    .iter()
+                    .map(|region| format!("{}={}", region.id(), region.visible_top_row()))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                return Err(report!("timed out waiting for muxr pane regions update")
+                    .attach(description.to_owned())
+                    .attach(format!("latest={latest}")));
             }
 
             let event = match tokio::time::timeout(Duration::from_millis(50), client.reader.recv_event()).await {
@@ -2559,6 +2619,39 @@ mod tests {
                 | ServerEvent::SidebarLayout(_)
                 | ServerEvent::Render(_)
                 | ServerEvent::Detached => {}
+            }
+        }
+    }
+
+    async fn scroll_pane_line(
+        client: &mut AttachedTestClient,
+        position: ClientMousePosition,
+        direction: PaneScrollDirection,
+    ) -> rootcause::Result<bool> {
+        client
+            .writer
+            .send_request(&ClientRequest::ScrollPaneLineAt { position, direction })
+            .await?;
+        let (actual_position, actual_direction, scrolled) = self::read_until_scroll_pane_line_result(client).await?;
+        pretty_assertions::assert_eq!((actual_position, actual_direction), (position, direction));
+        Ok(scrolled)
+    }
+
+    async fn scroll_pane_line_until_noop(
+        client: &mut AttachedTestClient,
+        position: ClientMousePosition,
+        direction: PaneScrollDirection,
+        description: &str,
+    ) -> rootcause::Result<()> {
+        let started_at = Instant::now();
+        loop {
+            if started_at.elapsed() > SERVER_READY_TIMEOUT {
+                return Err(report!("timed out preparing muxr scroll state").attach(description.to_owned()));
+            }
+
+            let scrolled = self::scroll_pane_line(client, position, direction).await?;
+            if !scrolled {
+                return Ok(());
             }
         }
     }

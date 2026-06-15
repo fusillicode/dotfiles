@@ -161,6 +161,16 @@ pub mod pty {
             "muxr pty reader stopped after recoverable processing error"
         );
     }
+
+    pub fn writer_stopped_after_error(event: &str, error: impl std::fmt::Display) {
+        tracing::warn!(
+            kind = "pty_writer_stopped_after_error",
+            event = event,
+            error = %error,
+            summary = "muxr pty writer stopped after recoverable processing error",
+            "muxr pty writer stopped after recoverable processing error"
+        );
+    }
 }
 
 pub struct SessionTracing {
@@ -356,6 +366,7 @@ mod tests {
             pty::shutdown_failed("kill_child", std::io::Error::other("kill busy"));
             pty::exit_wakeup_not_queued("channel_full");
             pty::reader_stopped_after_error("write_terminal_replies", rootcause::report!("reply failed"));
+            pty::writer_stopped_after_error("write_batch", rootcause::report!("write failed"));
         });
         drop(dispatch);
         drop(session_tracing);
@@ -401,6 +412,10 @@ mod tests {
         assert2::assert!(log.contains("event=\"write_terminal_replies\""));
         assert2::assert!(log.contains("summary=\"muxr pty reader stopped after recoverable processing error\""));
         assert2::assert!(log.contains("reply failed"));
+        assert2::assert!(log.contains("kind=\"pty_writer_stopped_after_error\""));
+        assert2::assert!(log.contains("event=\"write_batch\""));
+        assert2::assert!(log.contains("summary=\"muxr pty writer stopped after recoverable processing error\""));
+        assert2::assert!(log.contains("write failed"));
         Ok(())
     }
 }

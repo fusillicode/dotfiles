@@ -10,6 +10,7 @@ use crate::pty::PtyHandle;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct PaneInputOutcome {
     pub cmd_handoff_pane_id: Option<PaneId>,
+    pub interactive_render: bool,
     pub render_dirty: bool,
     pub sync_render_deadline: bool,
 }
@@ -18,6 +19,7 @@ impl PaneInputOutcome {
     const fn ignored() -> Self {
         Self {
             cmd_handoff_pane_id: None,
+            interactive_render: false,
             render_dirty: false,
             sync_render_deadline: false,
         }
@@ -29,6 +31,7 @@ pub fn handle_client_input(bytes: &[u8], state: &mut ClientSessionState<'_>) -> 
         bytes,
         state,
         crate::keyboard_input::input_interaction(bytes),
+        true,
         PtyHandle::write_input,
     )
 }
@@ -39,6 +42,7 @@ pub fn handle_client_paste(bytes: &[u8], state: &mut ClientSessionState<'_>) -> 
         bytes,
         state,
         TrackedProcessUserInteraction::MayEcho,
+        false,
         PtyHandle::write_paste,
     )
 }
@@ -62,6 +66,7 @@ pub fn handle_client_key(key: &ClientKey, state: &mut ClientSessionState<'_>) ->
         (interaction == TrackedProcessUserInteraction::StartsTrackedProcessWork).then_some(pane_id);
     Ok(PaneInputOutcome {
         cmd_handoff_pane_id,
+        interactive_render: true,
         render_dirty,
         sync_render_deadline: true,
     })
@@ -71,18 +76,20 @@ fn handle_active_pane_bytes(
     bytes: &[u8],
     state: &mut ClientSessionState<'_>,
     interaction: TrackedProcessUserInteraction,
+    interactive_render: bool,
     write: impl FnOnce(&PtyHandle, &[u8]) -> rootcause::Result<bool>,
 ) -> rootcause::Result<PaneInputOutcome> {
     if bytes.is_empty() {
         return Ok(PaneInputOutcome::ignored());
     }
 
-    self::write_active_pane_user_input(state, interaction, |handle| write(handle, bytes))
+    self::write_active_pane_user_input(state, interaction, interactive_render, |handle| write(handle, bytes))
 }
 
 fn write_active_pane_user_input(
     state: &mut ClientSessionState<'_>,
     interaction: TrackedProcessUserInteraction,
+    interactive_render: bool,
     write: impl FnOnce(&PtyHandle) -> rootcause::Result<bool>,
 ) -> rootcause::Result<PaneInputOutcome> {
     let (pane_id, handle) = self::active_pane_handle_with_id(state)?;
@@ -94,6 +101,7 @@ fn write_active_pane_user_input(
         (interaction == TrackedProcessUserInteraction::StartsTrackedProcessWork).then_some(pane_id);
     Ok(PaneInputOutcome {
         cmd_handoff_pane_id,
+        interactive_render,
         render_dirty,
         sync_render_deadline: true,
     })

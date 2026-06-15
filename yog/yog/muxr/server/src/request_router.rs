@@ -149,10 +149,14 @@ fn apply_pane_input_outcome(
 ) -> rootcause::Result<bool> {
     let PaneInputOutcome {
         cmd_handoff_pane_id,
+        interactive_render,
         render_dirty: input_render_dirty,
         sync_render_deadline,
     } = outcome;
     *render_dirty |= input_render_dirty;
+    if interactive_render {
+        timers.record_interactive_input()?;
+    }
     if let Some(pane_id) = cmd_handoff_pane_id {
         timers.schedule_cmd_handoff_sample(pane_id)?;
     }
@@ -481,5 +485,66 @@ async fn apply_tab_focus_outcome(
             crate::screen_render::resize_panes_and_render(event_writer, state).await
         }
         TabFocusClientOutcome::Unchanged => Ok(true),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test(start_paused = true)]
+    async fn test_apply_pane_input_outcome_when_input_is_interactive_shortens_pending_bulk_render_deadline()
+    -> rootcause::Result<()> {
+        let tempdir = tempfile::tempdir()?;
+        let config = crate::server::test_helpers::server_config(tempdir.path(), "work")?;
+        let mut timers = ClientTimers::new(&config)?;
+        timers.sync_render_deadline(true)?;
+        timers.complete_render_frame()?;
+        timers.sync_render_deadline(true)?;
+        let bulk_deadline = timers.render_sleep.deadline();
+        let mut render_dirty = true;
+
+        apply_pane_input_outcome(
+            PaneInputOutcome {
+                cmd_handoff_pane_id: None,
+                interactive_render: true,
+                render_dirty: false,
+                sync_render_deadline: true,
+            },
+            &mut timers,
+            &mut render_dirty,
+        )?;
+
+        assert2::assert!(timers.render_sleep.deadline() < bulk_deadline);
+        assert2::assert!(render_dirty);
+        Ok(())
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn test_apply_pane_input_outcome_when_input_is_not_interactive_keeps_pending_bulk_render_deadline()
+    -> rootcause::Result<()> {
+        let tempdir = tempfile::tempdir()?;
+        let config = crate::server::test_helpers::server_config(tempdir.path(), "work")?;
+        let mut timers = ClientTimers::new(&config)?;
+        timers.sync_render_deadline(true)?;
+        timers.complete_render_frame()?;
+        timers.sync_render_deadline(true)?;
+        let bulk_deadline = timers.render_sleep.deadline();
+        let mut render_dirty = true;
+
+        apply_pane_input_outcome(
+            PaneInputOutcome {
+                cmd_handoff_pane_id: None,
+                interactive_render: false,
+                render_dirty: false,
+                sync_render_deadline: true,
+            },
+            &mut timers,
+            &mut render_dirty,
+        )?;
+
+        pretty_assertions::assert_eq!(timers.render_sleep.deadline(), bulk_deadline);
+        assert2::assert!(render_dirty);
+        Ok(())
     }
 }
