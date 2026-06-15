@@ -557,6 +557,7 @@ mod tests {
     #[case::plain_enter(b"\x1b[13u", ClientKeyCode::Enter, ClientKeyModifiers::NONE)]
     #[case::shift_enter(b"\x1b[13;2u", ClientKeyCode::Enter, ClientKeyModifiers::SHIFT)]
     #[case::shift_tab(b"\x1b[9;2u", ClientKeyCode::Tab, ClientKeyModifiers::SHIFT)]
+    #[case::alt_backspace(b"\x1b[127;3u", ClientKeyCode::Backspace, ClientKeyModifiers::ALT)]
     #[case::shift_backspace(b"\x1b[127;2u", ClientKeyCode::Backspace, ClientKeyModifiers::SHIFT)]
     #[case::ctrl_l(b"\x1b[108;5u", ClientKeyCode::Char('l'), self::modifiers(false, false, true))]
     #[case::ctrl_k(b"\x1b[107;5u", ClientKeyCode::Char('k'), self::modifiers(false, false, true))]
