@@ -100,6 +100,9 @@ impl FrameBuffer {
         if self.cursor.as_ref() != Some(&changes.cursor) {
             return Err(report!("muxr render changes do not match current frame buffer cursor"));
         }
+        // Diffs still move the real terminal cursor while repainting dirty rows; hide it until the final pane cursor
+        // position is restored so intermediate write positions cannot flash across panes.
+        queue_cmd(stdout, Hide)?;
         reset_style(stdout)?;
         let mut active_style = RenderStyle::default();
         for row in &changes.rows {
@@ -532,6 +535,32 @@ mod tests {
         assert2::assert!(rendered.contains('a'));
         assert2::assert!(rendered.contains('d'));
         pretty_assertions::assert_eq!(output.flushes, 0);
+        Ok(())
+    }
+
+    #[test]
+    fn test_frame_buffer_queue_when_diff_arrives_hides_cursor_before_dirty_row_moves() -> rootcause::Result<()> {
+        let mut frame_buffer = applied_frame_buffer()?;
+        let ApplyOutcome::Applied(changes) = frame_buffer.apply(RenderUpdate::Diff(render_diff()?))? else {
+            return Err(report!("expected applied diff"));
+        };
+        let mut output = Vec::new();
+
+        frame_buffer.queue_at_with_selection(&mut output, &changes, 0, 0, None, MuxrConfig::default().selection.bg)?;
+
+        let rendered = String::from_utf8(output).context("muxr render test output was not utf8")?;
+        let hide_index = rendered
+            .find("\x1b[?25l")
+            .ok_or_else(|| report!("expected cursor hide"))?;
+        let dirty_row_move_index = rendered
+            .find("\x1b[2;2H")
+            .ok_or_else(|| report!("expected dirty row cursor move"))?;
+        let final_cursor_move_index = rendered
+            .rfind("\x1b[2;2H")
+            .ok_or_else(|| report!("expected final cursor move"))?;
+        assert2::assert!(hide_index < dirty_row_move_index);
+        assert2::assert!(dirty_row_move_index < final_cursor_move_index);
+        assert2::assert!(rendered.ends_with("\x1b[?25h"));
         Ok(())
     }
 
