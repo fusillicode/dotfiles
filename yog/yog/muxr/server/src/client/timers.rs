@@ -15,6 +15,7 @@ const SLEEP_DISABLED_FOR: Duration = Duration::from_hours(24);
 pub struct ClientTimers {
     pub cmd_handoff_sample: Pin<Box<tokio::time::Sleep>>,
     cmd_handoff_sample_panes: BTreeSet<PaneId>,
+    last_render_at: Option<tokio::time::Instant>,
     render_deadline: Option<tokio::time::Instant>,
     pub render_sleep: Pin<Box<tokio::time::Sleep>>,
     tracked_process_quiet_deadline: Option<Instant>,
@@ -31,6 +32,7 @@ impl ClientTimers {
         Ok(Self {
             cmd_handoff_sample: Box::pin(tokio::time::sleep_until(self::disabled_sleep_deadline()?)),
             cmd_handoff_sample_panes: BTreeSet::new(),
+            last_render_at: None,
             render_deadline: None,
             render_sleep: Box::pin(tokio::time::sleep_until(self::disabled_sleep_deadline()?)),
             tracked_process_quiet_deadline: None,
@@ -69,13 +71,37 @@ impl ClientTimers {
         Ok(())
     }
 
+    // Regression context: scheduling every dirty frame at `now + RENDER_FRAME_INTERVAL` made key echo wait a full
+    // extra frame after PTY output arrived. Keep the low-wakeup event model by rendering the first dirty frame after
+    // idle immediately, then rate-limit follow-up frames from the last render attempt. Option 3 was to give
+    // user-input dirtiness its own shorter deadline, but that would split scheduling across input and PTY-output
+    // paths while continuous output still needs the same frame cap.
     fn schedule_render_frame(&mut self) -> rootcause::Result<()> {
-        let deadline = tokio::time::Instant::now()
-            .checked_add(RENDER_FRAME_INTERVAL)
-            .ok_or_else(|| report!("muxr render frame deadline overflowed"))?;
+        let deadline = self.next_render_deadline(tokio::time::Instant::now())?;
         self.render_deadline = Some(deadline);
         self.render_sleep.as_mut().reset(deadline);
         Ok(())
+    }
+
+    fn next_render_deadline(&self, now: tokio::time::Instant) -> rootcause::Result<tokio::time::Instant> {
+        let Some(last_render_at) = self.last_render_at else {
+            return Ok(now);
+        };
+        let rate_limited_deadline = last_render_at
+            .checked_add(RENDER_FRAME_INTERVAL)
+            .ok_or_else(|| report!("muxr render frame deadline overflowed"))?;
+        Ok(if rate_limited_deadline > now {
+            rate_limited_deadline
+        } else {
+            now
+        })
+    }
+
+    pub fn complete_render_frame(&mut self) -> rootcause::Result<()> {
+        // First dirty frame after idle renders immediately; completed frames move the next deadline forward so
+        // continuous output remains capped by the normal frame interval.
+        self.last_render_at = Some(tokio::time::Instant::now());
+        self.disable_render_sleep()
     }
 
     pub fn disable_render_sleep(&mut self) -> rootcause::Result<()> {
@@ -166,19 +192,16 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_client_timers_when_render_becomes_dirty_schedules_frame() -> rootcause::Result<()> {
+    async fn test_client_timers_when_render_becomes_dirty_after_idle_schedules_immediate_frame() -> rootcause::Result<()>
+    {
         let tempdir = tempfile::tempdir()?;
         let config = crate::server::test_helpers::server_config(tempdir.path(), "work")?;
         let mut timers = ClientTimers::new(&config)?;
         let disabled_deadline = timers.render_sleep.deadline();
 
-        let earliest_deadline = tokio::time::Instant::now()
-            .checked_add(RENDER_FRAME_INTERVAL)
-            .ok_or_else(|| report!("muxr test render deadline overflowed"))?;
+        let earliest_deadline = tokio::time::Instant::now();
         timers.sync_render_deadline(true)?;
-        let latest_deadline = tokio::time::Instant::now()
-            .checked_add(RENDER_FRAME_INTERVAL)
-            .ok_or_else(|| report!("muxr test render deadline overflowed"))?;
+        let latest_deadline = tokio::time::Instant::now();
 
         let scheduled_deadline = timers.render_sleep.deadline();
         pretty_assertions::assert_eq!(timers.render_deadline, Some(scheduled_deadline));
@@ -204,6 +227,29 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_client_timers_when_render_recently_flushed_rate_limits_next_dirty_frame() -> rootcause::Result<()> {
+        let tempdir = tempfile::tempdir()?;
+        let config = crate::server::test_helpers::server_config(tempdir.path(), "work")?;
+        let mut timers = ClientTimers::new(&config)?;
+
+        timers.sync_render_deadline(true)?;
+        let earliest_deadline = tokio::time::Instant::now()
+            .checked_add(RENDER_FRAME_INTERVAL)
+            .ok_or_else(|| report!("muxr test render deadline overflowed"))?;
+        timers.complete_render_frame()?;
+        timers.sync_render_deadline(true)?;
+        let latest_deadline = tokio::time::Instant::now()
+            .checked_add(RENDER_FRAME_INTERVAL)
+            .ok_or_else(|| report!("muxr test render deadline overflowed"))?;
+
+        let scheduled_deadline = timers.render_sleep.deadline();
+        pretty_assertions::assert_eq!(timers.render_deadline, Some(scheduled_deadline));
+        assert2::assert!(scheduled_deadline >= earliest_deadline);
+        assert2::assert!(scheduled_deadline <= latest_deadline);
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn test_client_timers_when_render_flushes_disables_render_sleep() -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
         let config = crate::server::test_helpers::server_config(tempdir.path(), "work")?;
@@ -211,7 +257,7 @@ mod tests {
 
         timers.sync_render_deadline(true)?;
         let scheduled_deadline = timers.render_sleep.deadline();
-        timers.disable_render_sleep()?;
+        timers.complete_render_frame()?;
 
         pretty_assertions::assert_eq!(timers.render_deadline, None);
         assert2::assert!(timers.render_sleep.deadline() > scheduled_deadline);

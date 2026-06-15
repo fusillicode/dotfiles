@@ -362,9 +362,9 @@ async fn handle_session_runtime_timer_message(
         }
         SessionRuntimeTimerMessage::RenderDeadlineReached => {
             let keep_attached = crate::screen_render::flush_render_diff(event_writer, state, render_dirty).await?;
-            // `Sleep` stays ready after it fires. Disable the render deadline immediately so an idle attached
-            // client cannot hot-spin after consuming the one-shot render wakeup.
-            timers.disable_render_sleep()?;
+            // `Sleep` stays ready after it fires. Complete the frame immediately so the one-shot wakeup is disabled
+            // and the next dirty frame is rate-limited from this render attempt.
+            timers.complete_render_frame()?;
             Ok(keep_attached)
         }
         SessionRuntimeTimerMessage::CmdHandoffSampleReady => {
