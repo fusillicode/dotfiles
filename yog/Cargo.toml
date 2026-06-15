@@ -67,7 +67,7 @@ nomicon = { path = "./yog/nomicon" }
 nvim-oxi = { path = "../third_party/nvim-oxi", features = ["neovim-nightly", "mlua"] }
 owo-colors = { version = "4" }
 pretty_assertions = { version = "1.4" }
-rootcause = { version = "0.12" }
+rootcause = { version = "0.13" }
 rstest = { version = "0.26" }
 rusqlite = { version = "0.40", features = ["bundled"] }
 serde = { version = "1.0", features = ["derive"] }
