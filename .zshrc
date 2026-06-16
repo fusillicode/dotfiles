@@ -51,10 +51,15 @@ zle -N bracketed-paste bracketed-paste-magic
 # only expand prompt escapes for the idle cwd title.
 autoload -Uz add-zsh-hook
 function _set_title() { printf '\033]0;%s\007' "$1"; }
-function _title_precmd() {
+# ZLE widgets can change PWD without starting a new prompt cycle, so keep the
+# idle title refresh callable outside precmd.
+function _refresh_idle_title() {
   _set_title "${(%):-%~}"
   _zellij_cmd=""
   [[ -n "$ZELLIJ" ]] && zellij action rename-tab -- "${PWD/#$HOME/~}" &!
+}
+function _title_precmd() {
+  _refresh_idle_title
 }
 function _title_preexec() {
   _set_title "$1"

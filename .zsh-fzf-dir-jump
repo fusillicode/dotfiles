@@ -218,6 +218,7 @@ function _dir_jump() {
         ;;
       enter|"")
         builtin cd -- "$base" || return
+        (( $+functions[_refresh_idle_title] )) && _refresh_idle_title
         break
         ;;
       *)
