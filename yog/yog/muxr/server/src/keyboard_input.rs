@@ -149,6 +149,12 @@ fn legacy_key_input_bytes(key: &ClientKey) -> Option<Vec<u8>> {
             // Alt-Backspace has a stable legacy form used by shells and tmux for backward word deletion.
             Some(b"\x1b\x7f".to_vec())
         }
+        (ClientKeyCode::Backspace, ClientKeyModifiers::SHIFT)
+            if self::raw_bytes_are_kitty_keyboard_sequence(&key.raw_bytes) =>
+        {
+            // Legacy panes have no distinct Shift-Backspace form; degrade to DEL so character deletion still works.
+            Some(b"\x7f".to_vec())
+        }
         _ if !self::raw_bytes_are_kitty_keyboard_sequence(&key.raw_bytes) => Some(key.raw_bytes.clone()),
         // Modified kitty keys cannot be represented in legacy mode without changing semantics, such as Shift-Enter
         // becoming Enter and submitting a prompt. Drop them instead of leaking unfamiliar CSI-u bytes.
@@ -363,6 +369,11 @@ mod tests {
         TerminalKeyboardProtocol::Legacy,
         self::key(ClientKeyCode::Backspace, ClientKeyModifiers::ALT, b"\x1b[127;3u"),
         Some(b"\x1b\x7f".to_vec())
+    )]
+    #[case::legacy_shift_backspace_kitty(
+        TerminalKeyboardProtocol::Legacy,
+        self::key(ClientKeyCode::Backspace, ClientKeyModifiers::SHIFT, b"\x1b[127;2u"),
+        Some(b"\x7f".to_vec())
     )]
     #[case::legacy_ctrl_alt_a_kitty(
         TerminalKeyboardProtocol::Legacy,
