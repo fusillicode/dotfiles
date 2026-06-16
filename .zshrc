@@ -87,8 +87,6 @@ export EDITOR='nvim'
 # PATH (deduplicated, skip non-existent)
 typeset -U path
 path=(
-  ${HOME}/.local/bin(N)
-  ${HOME}/.cargo/bin(N)
   /opt/homebrew/opt/openssl/bin(N)
   $path
 )
@@ -130,6 +128,13 @@ source "$_starship_cache"
 
 # Directory jump owns Tab and must load after fzf/gcm keybindings.
 [[ -f "$HOME/.zsh-fzf-dir-jump" ]] && . "$HOME/.zsh-fzf-dir-jump"
+
+# Prefer user-installed CLI tools after startup hooks, which can reorder PATH.
+path=(
+  ${HOME}/.local/bin(N)
+  ${HOME}/.cargo/bin(N)
+  $path
+)
 
 # Exit with 0 if everything's fine
 true
