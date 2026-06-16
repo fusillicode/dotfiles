@@ -110,6 +110,7 @@ fn pane_region_snapshot(region: &PaneRegion, runtimes: &PaneRuntimes) -> rootcau
     let handle = runtimes.handle(region.id)?;
     let mouse_mode = handle.mouse_mode()?;
     let visible_top_row = handle.visible_top_row()?;
+    let wrapped_rows = handle.visible_row_wraps()?;
     PaneRegionSnapshot::new(
         region.id,
         region.area.origin.col,
@@ -119,6 +120,7 @@ fn pane_region_snapshot(region: &PaneRegion, runtimes: &PaneRuntimes) -> rootcau
         mouse_mode,
         visible_top_row,
     )
+    .and_then(|snapshot| snapshot.with_wrapped_rows(wrapped_rows))
 }
 
 fn visible_pane_region_at_position(
@@ -393,7 +395,7 @@ async fn send_pane_regions_and_render(
     render_update: Option<RenderUpdate>,
 ) -> rootcause::Result<bool> {
     // Region metadata must precede the render using it: selection/copy translate visible cells through
-    // `visible_top_row`, so tab-bar-only renders still need the same ordering as normal pane renders.
+    // `visible_top_row` and wrap flags, so tab-bar-only renders still need normal pane-render ordering.
     if pane_regions != state.pane_regions {
         if !crate::event_writer::send_event_with_timeout(
             event_writer,
