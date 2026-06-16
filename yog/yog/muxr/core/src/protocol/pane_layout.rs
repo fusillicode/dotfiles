@@ -338,6 +338,7 @@ pub struct PaneRegionSnapshot {
     mouse_mode: PaneMouseMode,
     rows: u16,
     visible_top_row: u64,
+    wrapped_rows: Vec<bool>,
 }
 
 impl PaneRegionSnapshot {
@@ -363,9 +364,20 @@ impl PaneRegionSnapshot {
             mouse_mode,
             rows,
             visible_top_row,
+            wrapped_rows: vec![false; usize::from(rows)],
         };
         region.validate()?;
         Ok(region)
+    }
+
+    /// Attach per-visible-row soft-wrap metadata from the pane terminal.
+    ///
+    /// # Errors
+    /// - The number of row flags does not match the region height.
+    pub fn with_wrapped_rows(mut self, wrapped_rows: Vec<bool>) -> rootcause::Result<Self> {
+        self.wrapped_rows = wrapped_rows;
+        self.validate()?;
+        Ok(self)
     }
 
     #[must_use]
@@ -411,6 +423,18 @@ impl PaneRegionSnapshot {
         self.visible_top_row
     }
 
+    /// Return whether the stable content row soft-wraps into the following row.
+    #[must_use]
+    pub fn content_row_wraps_next(&self, content_row: u64) -> bool {
+        let Some(local_row) = content_row.checked_sub(self.visible_top_row) else {
+            return false;
+        };
+        let Ok(local_row) = usize::try_from(local_row) else {
+            return false;
+        };
+        self.wrapped_rows.get(local_row).copied().unwrap_or(false)
+    }
+
     #[must_use]
     pub const fn contains(&self, row: u16, col: u16) -> bool {
         let Some(end_row) = self.row.checked_add(self.rows) else {
@@ -436,6 +460,12 @@ impl PaneRegionSnapshot {
         if self.row.checked_add(self.rows).is_none() {
             return Err(report!("invalid muxr pane region").attach("reason=row range overflowed"));
         }
+        if self.wrapped_rows.len() != usize::from(self.rows) {
+            return Err(report!("invalid muxr pane region")
+                .attach("reason=wrapped row count must match region height")
+                .attach(format!("expected={}", self.rows))
+                .attach(format!("actual={}", self.wrapped_rows.len())));
+        }
         Ok(())
     }
 }
@@ -453,7 +483,9 @@ where
         let rows = rkyv::Deserialize::<u16, D>::deserialize(&self.rows, deserializer)?;
         let mouse_mode = rkyv::Deserialize::<PaneMouseMode, D>::deserialize(&self.mouse_mode, deserializer)?;
         let visible_top_row = rkyv::Deserialize::<u64, D>::deserialize(&self.visible_top_row, deserializer)?;
+        let wrapped_rows = rkyv::Deserialize::<Vec<bool>, D>::deserialize(&self.wrapped_rows, deserializer)?;
         PaneRegionSnapshot::new(id, col, row, cols, rows, mouse_mode, visible_top_row)
+            .and_then(|region| region.with_wrapped_rows(wrapped_rows))
             .map_err(super::rkyv_deserialize_error::<D::Error>)
     }
 }

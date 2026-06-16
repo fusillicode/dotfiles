@@ -322,7 +322,7 @@ pub struct SelectionState {
     // Copy text is cached by stable content row so viewport scrolling moves the highlight without dropping rows that
     // have already passed off-screen during a drag selection. The final joined string is built lazily on copy so drag
     // updates do not rebuild the full selected text every mouse packet.
-    cached_rows: BTreeMap<u64, Vec<CachedSelectionCell>>,
+    cached_rows: BTreeMap<u64, CachedSelectionRow>,
     drag: Option<SelectionDrag>,
     selected: Option<SelectionRange>,
 }
@@ -371,8 +371,9 @@ impl SelectionState {
     }
 
     pub fn selected_inline_text(&self) -> Option<String> {
-        self.selected_text()
-            .map(|text| self::inline_selected_text(&text))
+        self.selected
+            .as_ref()
+            .and_then(|selection| self::selected_inline_text(&self.cached_rows, selection))
             .filter(|text| !text.is_empty())
     }
 
@@ -585,7 +586,7 @@ impl SelectionRange {
         row >= bounds.start.row && row <= bounds.end.row
     }
 
-    const fn with_region(self, region: PaneRegionSnapshot) -> Self {
+    fn with_region(self, region: PaneRegionSnapshot) -> Self {
         let last_col = region.cols().saturating_sub(1);
         Self {
             anchor: self.anchor.clamp_col(last_col),
@@ -630,21 +631,93 @@ struct CachedSelectionCell {
     width: RenderCellWidth,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum CachedSelectionRow {
+    EndsBeforeSoftWrap(Vec<CachedSelectionCell>),
+    EndsWithSoftWrap(Vec<CachedSelectionCell>),
+}
+
+impl CachedSelectionRow {
+    const fn new(cells: Vec<CachedSelectionCell>, wraps_next: bool) -> Self {
+        if wraps_next {
+            Self::EndsWithSoftWrap(cells)
+        } else {
+            Self::EndsBeforeSoftWrap(cells)
+        }
+    }
+
+    fn cells(&self) -> &[CachedSelectionCell] {
+        match self {
+            Self::EndsBeforeSoftWrap(cells) | Self::EndsWithSoftWrap(cells) => cells,
+        }
+    }
+
+    const fn wraps_next(&self) -> bool {
+        matches!(self, Self::EndsWithSoftWrap(_))
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum SelectedRowText {
+    EndsBeforeSoftWrap(String),
+    EndsWithSoftWrap(String),
+}
+
+impl SelectedRowText {
+    fn text(&self) -> &str {
+        match self {
+            Self::EndsBeforeSoftWrap(text) | Self::EndsWithSoftWrap(text) => text,
+        }
+    }
+
+    fn into_text(self) -> String {
+        match self {
+            Self::EndsBeforeSoftWrap(text) | Self::EndsWithSoftWrap(text) => text,
+        }
+    }
+
+    const fn wraps_next(&self) -> bool {
+        matches!(self, Self::EndsWithSoftWrap(_))
+    }
+}
+
 pub fn copy_to_clipboard(text: &str) -> rootcause::Result<()> {
     let mut bytes = text.as_bytes();
     Ok(ytil_sys::file::cp_to_system_clipboard(&mut bytes).context("failed to copy muxr selection to clipboard")?)
 }
 
-// Inline copy trims each selected row before joining so terminal padding does not become duplicated spaces.
-fn inline_selected_text(text: &str) -> String {
+fn selected_inline_text(cached_rows: &BTreeMap<u64, CachedSelectionRow>, selection: &SelectionRange) -> Option<String> {
+    let bounds = selection.bounds();
     let mut inlined = String::new();
-    for line in text.lines().map(str::trim).filter(|line| !line.is_empty()) {
-        if !inlined.is_empty() {
+    // Terminal wrap metadata is the only reliable boundary signal: full-width hard lines and soft-wrapped lines can
+    // have identical cells, but only soft wraps should suppress the inline separator.
+    let mut previous_row_wraps = false;
+    for content_row in bounds.start.row..=bounds.end.row {
+        let cached_row = cached_rows.get(&content_row)?;
+        let start_col = if content_row == bounds.start.row {
+            bounds.start.col
+        } else {
+            0
+        };
+        let end_col = if content_row == bounds.end.row {
+            bounds.end.col
+        } else {
+            selection.region.cols().saturating_sub(1)
+        };
+        let selected_row = self::selected_row_text(cached_row.cells(), start_col, end_col, cached_row.wraps_next());
+        let row_wraps_next = selected_row.wraps_next();
+        let line = selected_row.text().trim();
+        if line.is_empty() {
+            previous_row_wraps = false;
+            continue;
+        }
+        if !inlined.is_empty() && !previous_row_wraps {
             inlined.push(' ');
         }
         inlined.push_str(line);
+        previous_row_wraps = content_row != bounds.end.row && row_wraps_next;
     }
-    inlined
+    Some(inlined)
 }
 
 pub fn changed_selection_rows(previous: Option<&SelectionRange>, next: Option<&SelectionRange>) -> Vec<u16> {
@@ -713,11 +786,11 @@ fn click_target(
     })
 }
 
-fn selected_text(cached_rows: &BTreeMap<u64, Vec<CachedSelectionCell>>, selection: &SelectionRange) -> Option<String> {
+fn selected_text(cached_rows: &BTreeMap<u64, CachedSelectionRow>, selection: &SelectionRange) -> Option<String> {
     let bounds = selection.bounds();
     let mut lines = Vec::new();
     for content_row in bounds.start.row..=bounds.end.row {
-        let Some(cells) = cached_rows.get(&content_row) else {
+        let Some(cached_row) = cached_rows.get(&content_row) else {
             // A selected range is copyable only when every selected content row was rendered and cached; copying a
             // subset would silently drop text after skipped/coalesced edge-scroll renders.
             return None;
@@ -732,13 +805,14 @@ fn selected_text(cached_rows: &BTreeMap<u64, Vec<CachedSelectionCell>>, selectio
         } else {
             selection.region.cols().saturating_sub(1)
         };
-        lines.push(self::selected_row_text(cells, start_col, end_col));
+        lines
+            .push(self::selected_row_text(cached_row.cells(), start_col, end_col, cached_row.wraps_next()).into_text());
     }
     Some(lines.join("\n"))
 }
 
 fn cache_visible_selected_rows(
-    cached_rows: &mut BTreeMap<u64, Vec<CachedSelectionCell>>,
+    cached_rows: &mut BTreeMap<u64, CachedSelectionRow>,
     frame_buffer: &FrameBuffer,
     selection: &SelectionRange,
 ) -> rootcause::Result<()> {
@@ -757,7 +831,10 @@ fn cache_visible_selected_rows(
         };
         cached_rows.insert(
             content_row,
-            self::cached_row_cells(frame_buffer, visible_row, &selection.region)?,
+            CachedSelectionRow::new(
+                self::cached_row_cells(frame_buffer, visible_row, &selection.region)?,
+                selection.region.content_row_wraps_next(content_row),
+            ),
         );
     }
     Ok(())
@@ -789,7 +866,7 @@ fn cached_row_cells(
     Ok(cells)
 }
 
-fn selected_row_text(cells: &[CachedSelectionCell], start_col: u16, end_col: u16) -> String {
+fn selected_row_text(cells: &[CachedSelectionCell], start_col: u16, end_col: u16, wraps_next: bool) -> SelectedRowText {
     let mut line = String::new();
     for local_col in start_col..=end_col {
         let Some(cell) = cells.get(usize::from(local_col)) else {
@@ -807,7 +884,11 @@ fn selected_row_text(cells: &[CachedSelectionCell], start_col: u16, end_col: u16
     while line.ends_with(' ') {
         line.pop();
     }
-    line
+    if wraps_next {
+        SelectedRowText::EndsWithSoftWrap(line)
+    } else {
+        SelectedRowText::EndsBeforeSoftWrap(line)
+    }
 }
 
 fn word_start_col(frame_buffer: &FrameBuffer, row: u16, col: u16, region: &PaneRegionSnapshot) -> u16 {
@@ -1209,11 +1290,127 @@ mod tests {
     }
 
     #[test]
-    fn test_inline_selected_text_when_lines_have_padding_trims_and_joins_non_empty_lines() {
+    fn test_selection_state_selected_inline_text_when_rows_do_not_reach_edge_inserts_space() -> rootcause::Result<()> {
+        let mut frame_buffer = FrameBuffer::default();
+        frame_buffer.apply(RenderUpdate::Baseline(two_row_render_baseline(10, "let value", "+ 2")?))?;
+        let mut selection = SelectionState::default();
+
+        selection.apply(
+            SelectionInput::Start(ClientMousePosition { row: 0, col: 0 }),
+            &two_row_pane_regions(10)?,
+            &frame_buffer,
+        )?;
+        selection.apply(
+            SelectionInput::End(ClientMousePosition { row: 1, col: 2 }),
+            &two_row_pane_regions(10)?,
+            &frame_buffer,
+        )?;
+
+        pretty_assertions::assert_eq!(selection.selected_inline_text(), Some("let value + 2".to_owned()));
+        Ok(())
+    }
+
+    #[test]
+    fn test_selection_state_selected_inline_text_when_wrap_splits_word_continues_word() -> rootcause::Result<()> {
+        let mut frame_buffer = FrameBuffer::default();
+        frame_buffer.apply(RenderUpdate::Baseline(two_row_render_baseline(
+            8, "(reasoni", "ng 54)",
+        )?))?;
+        let mut selection = SelectionState::default();
+
+        selection.apply(
+            SelectionInput::Start(ClientMousePosition { row: 0, col: 0 }),
+            &two_row_pane_regions_with_wraps(8, [true, false])?,
+            &frame_buffer,
+        )?;
+        selection.apply(
+            SelectionInput::End(ClientMousePosition { row: 1, col: 5 }),
+            &two_row_pane_regions_with_wraps(8, [true, false])?,
+            &frame_buffer,
+        )?;
+
+        pretty_assertions::assert_eq!(selection.selected_inline_text(), Some("(reasoning 54)".to_owned()));
+        Ok(())
+    }
+
+    #[test]
+    fn test_selection_state_selected_inline_text_when_wrap_splits_number_continues_number() -> rootcause::Result<()> {
+        let mut frame_buffer = FrameBuffer::default();
+        frame_buffer.apply(RenderUpdate::Baseline(two_row_render_baseline(
+            27,
+            "output=107,820 (reasoning 5",
+            "4,014)",
+        )?))?;
+        let mut selection = SelectionState::default();
+
+        selection.apply(
+            SelectionInput::Start(ClientMousePosition { row: 0, col: 0 }),
+            &two_row_pane_regions_with_wraps(27, [true, false])?,
+            &frame_buffer,
+        )?;
+        selection.apply(
+            SelectionInput::End(ClientMousePosition { row: 1, col: 5 }),
+            &two_row_pane_regions_with_wraps(27, [true, false])?,
+            &frame_buffer,
+        )?;
+
         pretty_assertions::assert_eq!(
-            self::inline_selected_text("  let value = 1  \n      + 2  \n\n  done  "),
-            "let value = 1 + 2 done"
+            selection.selected_inline_text(),
+            Some("output=107,820 (reasoning 54,014)".to_owned())
         );
+        Ok(())
+    }
+
+    #[test]
+    fn test_selection_state_selected_inline_text_when_hard_line_reaches_edge_inserts_space() -> rootcause::Result<()> {
+        let mut frame_buffer = FrameBuffer::default();
+        frame_buffer.apply(RenderUpdate::Baseline(two_row_render_baseline(4, "WARN", "next")?))?;
+        let mut selection = SelectionState::default();
+
+        selection.apply(
+            SelectionInput::Start(ClientMousePosition { row: 0, col: 0 }),
+            &two_row_pane_regions(4)?,
+            &frame_buffer,
+        )?;
+        selection.apply(
+            SelectionInput::End(ClientMousePosition { row: 1, col: 3 }),
+            &two_row_pane_regions(4)?,
+            &frame_buffer,
+        )?;
+
+        pretty_assertions::assert_eq!(selection.selected_inline_text(), Some("WARN next".to_owned()));
+        Ok(())
+    }
+
+    #[test]
+    fn test_selection_state_selected_inline_text_when_wrap_ends_with_wide_cell_continues_word() -> rootcause::Result<()>
+    {
+        let style = RenderStyle::default();
+        let mut frame_buffer = FrameBuffer::default();
+        frame_buffer.apply(RenderUpdate::Baseline(two_row_render_baseline_cells(
+            3,
+            vec![
+                RenderCell::narrow("a", style),
+                RenderCell::wide("表", style),
+                RenderCell::wide_continuation(style),
+            ],
+            padded_render_cells(3, "b"),
+        )?))?;
+        let mut selection = SelectionState::default();
+
+        selection.apply(
+            SelectionInput::Start(ClientMousePosition { row: 0, col: 0 }),
+            &two_row_pane_regions_with_wraps(3, [true, false])?,
+            &frame_buffer,
+        )?;
+        selection.apply(
+            SelectionInput::End(ClientMousePosition { row: 1, col: 0 }),
+            &two_row_pane_regions_with_wraps(3, [true, false])?,
+            &frame_buffer,
+        )?;
+
+        pretty_assertions::assert_eq!(selection.selected_inline_text(), Some("a表b".to_owned()));
+        Ok(())
     }
 
     #[test]
@@ -1276,6 +1473,17 @@ mod tests {
         )?])
     }
 
+    fn two_row_pane_regions(cols: u16) -> rootcause::Result<PaneRegionsSnapshot> {
+        self::two_row_pane_regions_with_wraps(cols, [false, false])
+    }
+
+    fn two_row_pane_regions_with_wraps(cols: u16, wrapped_rows: [bool; 2]) -> rootcause::Result<PaneRegionsSnapshot> {
+        PaneRegionsSnapshot::new(vec![
+            PaneRegionSnapshot::new(PaneId::new(1)?, 0, 0, cols, 2, muxr_core::PaneMouseMode::None, 0)?
+                .with_wrapped_rows(wrapped_rows.to_vec())?,
+        ])
+    }
+
     fn render_baseline() -> rootcause::Result<RenderBaseline> {
         RenderBaseline::new(
             1,
@@ -1333,6 +1541,39 @@ mod tests {
                 RenderRowSpan::new(2, 0, third.chars().map(render_cell).collect())?,
             ],
         )
+    }
+
+    fn two_row_render_baseline(cols: u16, first: &str, second: &str) -> rootcause::Result<RenderBaseline> {
+        self::two_row_render_baseline_cells(
+            cols,
+            padded_render_cells(cols, first),
+            padded_render_cells(cols, second),
+        )
+    }
+
+    fn two_row_render_baseline_cells(
+        cols: u16,
+        first: Vec<RenderCell>,
+        second: Vec<RenderCell>,
+    ) -> rootcause::Result<RenderBaseline> {
+        RenderBaseline::new(
+            1,
+            TerminalSize::new(cols, 2)?,
+            RenderCursor {
+                row: 0,
+                col: 0,
+                visible: true,
+            },
+            vec![RenderRowSpan::new(0, 0, first)?, RenderRowSpan::new(1, 0, second)?],
+        )
+    }
+
+    fn padded_render_cells(cols: u16, text: &str) -> Vec<RenderCell> {
+        let mut cells = text.chars().map(render_cell).collect::<Vec<_>>();
+        while cells.len() < usize::from(cols) {
+            cells.push(render_cell(' '));
+        }
+        cells
     }
 
     fn render_cell(ch: char) -> RenderCell {

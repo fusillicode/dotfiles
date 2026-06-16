@@ -19,6 +19,7 @@ use rootcause::report;
 
 use crate::terminal_scrollback::TerminalPreParserAction;
 use crate::terminal_scrollback::TerminalScrollback;
+use crate::terminal_scrollback::TerminalVisibleRow;
 
 const SCROLL_LINES_PER_WHEEL_EVENT: usize = 5;
 const BRACKETED_PASTE_END: &[u8] = b"\x1b[201~";
@@ -562,6 +563,23 @@ impl TerminalState {
         Ok(u64::try_from(visible_top_row).context("muxr pane visible top row overflowed")?)
     }
 
+    pub fn visible_row_wraps(&self) -> Vec<bool> {
+        let (screen_rows, _screen_cols) = self.parser.screen().size();
+        let height = usize::from(screen_rows);
+        let offset = self.scrollback.viewport_offset();
+        let mut wrapped_rows = Vec::with_capacity(height);
+
+        if offset == 0 {
+            return self.live_row_wraps(height);
+        }
+
+        let captured_rows = self.scrollback.captured_row_wraps_for_view(offset, height);
+        wrapped_rows.extend(captured_rows.into_iter().take(height));
+        wrapped_rows.extend(self.live_row_wraps(height.saturating_sub(wrapped_rows.len())));
+        wrapped_rows.truncate(height);
+        wrapped_rows
+    }
+
     pub fn bracketed_paste_enabled(&self) -> bool {
         self.parser.screen().bracketed_paste()
     }
@@ -610,15 +628,15 @@ impl TerminalState {
             col: cursor_col,
             visible: cursor_visible,
         };
-        let row_cells = self.visible_row_cells(screen_rows);
-        let rows = row_cells
+        let visible_rows = self.visible_rows(screen_rows);
+        let rows = visible_rows
             .into_iter()
             .enumerate()
-            .map(|(row, cells)| {
+            .map(|(row, visible_row)| {
                 RenderRowSpan::new(
                     u16::try_from(row).context("muxr terminal snapshot row index overflowed")?,
                     0,
-                    cells,
+                    visible_row.into_cells(),
                 )
             })
             .collect::<rootcause::Result<Vec<_>>>()?;
@@ -636,7 +654,12 @@ impl TerminalState {
         {
             self::write_scrollback_dump_row(&row, style, &mut dump)?;
         }
-        self::write_scrollback_dump_rows(&self.live_row_cells(usize::from(screen_rows)), style, &mut dump)?;
+        let live_rows = self
+            .live_rows(usize::from(screen_rows))
+            .into_iter()
+            .map(TerminalVisibleRow::into_cells)
+            .collect::<Vec<_>>();
+        self::write_scrollback_dump_rows(&live_rows, style, &mut dump)?;
         Ok(dump)
     }
 
@@ -647,7 +670,7 @@ impl TerminalState {
         if self.parser.screen().alternate_screen() {
             return;
         }
-        let rows = self.live_row_cells(count);
+        let rows = self.live_rows(count);
         self.scrollback.push_rows(rows);
     }
 
@@ -752,28 +775,34 @@ impl TerminalState {
         }
     }
 
-    fn live_row_cells(&self, row_count: usize) -> Vec<Vec<RenderCell>> {
+    fn live_rows(&self, row_count: usize) -> Vec<TerminalVisibleRow> {
         let screen = self.parser.screen();
         let (rows, cols) = screen.size();
-        self::screen_row_cells(screen, rows, cols, row_count)
+        self::screen_rows(screen, rows, cols, row_count)
+    }
+
+    fn live_row_wraps(&self, row_count: usize) -> Vec<bool> {
+        let screen = self.parser.screen();
+        let (rows, _cols) = screen.size();
+        (0..rows).take(row_count).map(|row| screen.row_wrapped(row)).collect()
     }
 
     fn total_scrollback_len(&self) -> usize {
         self.scrollback.captured_len()
     }
 
-    fn visible_row_cells(&self, screen_rows: u16) -> Vec<Vec<RenderCell>> {
+    fn visible_rows(&self, screen_rows: u16) -> Vec<TerminalVisibleRow> {
         let height = usize::from(screen_rows);
         let offset = self.scrollback.viewport_offset();
         let mut rows = Vec::with_capacity(height);
 
         if offset == 0 {
-            return self.live_row_cells(height);
+            return self.live_rows(height);
         }
 
-        let captured_rows = self.scrollback.captured_row_cells_for_view(offset, height);
+        let captured_rows = self.scrollback.captured_rows_for_view(offset, height);
         rows.extend(captured_rows.into_iter().take(height));
-        rows.extend(self.live_row_cells(height.saturating_sub(rows.len())));
+        rows.extend(self.live_rows(height.saturating_sub(rows.len())));
         rows.truncate(height);
         rows
     }
@@ -805,17 +834,18 @@ fn single_csi_param(params: &[&[u16]]) -> Option<u16> {
     param.first().copied()
 }
 
-fn screen_row_cells(screen: &vt100::Screen, rows: u16, cols: u16, row_count: usize) -> Vec<Vec<RenderCell>> {
+fn screen_rows(screen: &vt100::Screen, rows: u16, cols: u16, row_count: usize) -> Vec<TerminalVisibleRow> {
     (0..rows)
         .take(row_count)
         .map(|row| {
-            (0..cols)
+            let cells = (0..cols)
                 .map(|col| {
                     screen
                         .cell(row, col)
                         .map_or_else(|| RenderCell::narrow(" ", RenderStyle::default()), render_cell)
                 })
-                .collect()
+                .collect();
+            TerminalVisibleRow::new(cells, screen.row_wrapped(row))
         })
         .collect()
 }
@@ -1585,6 +1615,16 @@ mod tests {
 
         pretty_assertions::assert_eq!(self::snapshot_text(&terminal.snapshot()?), scrolled_snapshot);
         assert2::assert!(scrolled_top_row < bottom_top_row);
+        Ok(())
+    }
+
+    #[test]
+    fn test_terminal_state_visible_row_wraps_when_live_row_wraps_reports_flag() -> rootcause::Result<()> {
+        let mut terminal = self::terminal_state(&TerminalSize::new(4, 2)?);
+
+        let _ = terminal.process(b"abcdx");
+
+        pretty_assertions::assert_eq!(terminal.visible_row_wraps(), vec![true, false]);
         Ok(())
     }
 

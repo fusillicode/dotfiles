@@ -9,6 +9,30 @@ use unicode_width::UnicodeWidthChar as _;
 use vte::Params;
 use vte::Perform;
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TerminalVisibleRow {
+    cells: Vec<RenderCell>,
+    wraps_next: bool,
+}
+
+impl TerminalVisibleRow {
+    pub const fn new(cells: Vec<RenderCell>, wraps_next: bool) -> Self {
+        Self { cells, wraps_next }
+    }
+
+    pub fn cells(&self) -> &[RenderCell] {
+        &self.cells
+    }
+
+    pub fn into_cells(self) -> Vec<RenderCell> {
+        self.cells
+    }
+
+    pub const fn wraps_next(&self) -> bool {
+        self.wraps_next
+    }
+}
+
 pub struct TerminalScrollback {
     max_rows: usize,
     // vt100 keeps normal and alternate grids separate. muxr mirrors only the scroll-region state it needs before vt100
@@ -51,9 +75,9 @@ impl TerminalScrollback {
         performer.action
     }
 
-    pub fn push_rows(&mut self, rows: impl IntoIterator<Item = Vec<RenderCell>>) {
+    pub fn push_rows(&mut self, rows: impl IntoIterator<Item = TerminalVisibleRow>) {
         for row in rows {
-            self.rows.push_back(TerminalScrollbackRow::from_cells(row));
+            self.rows.push_back(TerminalScrollbackRow::from_visible_row(row));
             while self.rows.len() > self.max_rows {
                 self.rows.pop_front();
                 self.viewport_offset = self.viewport_offset.saturating_sub(1);
@@ -65,13 +89,23 @@ impl TerminalScrollback {
         self.rows.len()
     }
 
-    pub fn captured_row_cells_for_view(&self, offset: usize, height: usize) -> Vec<Vec<RenderCell>> {
+    pub fn captured_rows_for_view(&self, offset: usize, height: usize) -> Vec<TerminalVisibleRow> {
         let start = self.rows.len().saturating_sub(offset);
         self.rows
             .iter()
             .skip(start)
             .take(height)
-            .map(TerminalScrollbackRow::cells)
+            .map(TerminalScrollbackRow::visible_row)
+            .collect()
+    }
+
+    pub fn captured_row_wraps_for_view(&self, offset: usize, height: usize) -> Vec<bool> {
+        let start = self.rows.len().saturating_sub(offset);
+        self.rows
+            .iter()
+            .skip(start)
+            .take(height)
+            .map(TerminalScrollbackRow::wraps_next)
             .collect()
     }
 
@@ -151,16 +185,22 @@ impl TerminalScrollback {
 // Terminal scrollback can reach tens of thousands of mostly padded rows. Store rows as runs only when that is smaller
 // than raw cells; dense output must not pay extra per-cell run overhead.
 enum TerminalScrollbackRow {
-    Raw(Vec<RenderCell>),
-    Runs(Vec<TerminalScrollbackRun>),
+    Raw {
+        cells: Vec<RenderCell>,
+        wraps_next: bool,
+    },
+    Runs {
+        runs: Vec<TerminalScrollbackRun>,
+        wraps_next: bool,
+    },
 }
 
 impl TerminalScrollbackRow {
-    fn from_cells(cells: Vec<RenderCell>) -> Self {
+    fn from_visible_row(row: TerminalVisibleRow) -> Self {
         let mut run_count = 0_usize;
         let mut previous = None::<&RenderCell>;
         let mut previous_len = 0_u16;
-        for cell in &cells {
+        for cell in row.cells() {
             if previous.is_some_and(|previous| previous == cell) && previous_len < u16::MAX {
                 previous_len = previous_len.saturating_add(1);
             } else {
@@ -170,10 +210,12 @@ impl TerminalScrollbackRow {
             }
         }
 
+        let wraps_next = row.wraps_next();
+        let cells = row.into_cells();
         let raw_bytes = cells.len().saturating_mul(mem::size_of::<RenderCell>());
         let run_bytes = run_count.saturating_mul(mem::size_of::<TerminalScrollbackRun>());
         if run_bytes >= raw_bytes {
-            return Self::Raw(cells);
+            return Self::Raw { cells, wraps_next };
         }
 
         let mut runs = Vec::<TerminalScrollbackRun>::with_capacity(run_count);
@@ -186,13 +228,17 @@ impl TerminalScrollbackRow {
             }
             runs.push(TerminalScrollbackRun::new(cell));
         }
-        Self::Runs(runs)
+        Self::Runs { runs, wraps_next }
+    }
+
+    fn visible_row(&self) -> TerminalVisibleRow {
+        TerminalVisibleRow::new(self.cells(), self.wraps_next())
     }
 
     fn cells(&self) -> Vec<RenderCell> {
         match self {
-            Self::Raw(cells) => cells.clone(),
-            Self::Runs(runs) => {
+            Self::Raw { cells, .. } => cells.clone(),
+            Self::Runs { runs, .. } => {
                 let len = runs
                     .iter()
                     .map(TerminalScrollbackRun::len)
@@ -203,6 +249,12 @@ impl TerminalScrollbackRow {
                 }
                 cells
             }
+        }
+    }
+
+    const fn wraps_next(&self) -> bool {
+        match self {
+            Self::Raw { wraps_next, .. } | Self::Runs { wraps_next, .. } => *wraps_next,
         }
     }
 }
@@ -524,11 +576,18 @@ mod tests {
             119,
         ));
 
-        scrollback.push_rows([row.clone()]);
+        scrollback.push_rows([TerminalVisibleRow::new(row.clone(), true)]);
 
-        assert2::assert!(let Some(TerminalScrollbackRow::Runs(stored_runs)) = scrollback.rows.front());
+        assert2::assert!(let Some(TerminalScrollbackRow::Runs {
+            runs: stored_runs,
+            wraps_next,
+        }) = scrollback.rows.front());
         assert2::assert!(stored_runs.len() < row.len() / 2);
-        pretty_assertions::assert_eq!(scrollback.captured_row_cells_for_view(1, 1), vec![row]);
+        assert2::assert!(*wraps_next);
+        pretty_assertions::assert_eq!(
+            scrollback.captured_rows_for_view(1, 1),
+            vec![TerminalVisibleRow::new(row, true)]
+        );
         Ok(())
     }
 
@@ -539,11 +598,18 @@ mod tests {
             .map(|col| RenderCell::narrow(format!("{col:03}"), RenderStyle::default()))
             .collect::<Vec<_>>();
 
-        scrollback.push_rows([row.clone()]);
+        scrollback.push_rows([TerminalVisibleRow::new(row.clone(), false)]);
 
-        assert2::assert!(let Some(TerminalScrollbackRow::Raw(stored_cells)) = scrollback.rows.front());
+        assert2::assert!(let Some(TerminalScrollbackRow::Raw {
+            cells: stored_cells,
+            wraps_next,
+        }) = scrollback.rows.front());
         pretty_assertions::assert_eq!(stored_cells, &row);
-        pretty_assertions::assert_eq!(scrollback.captured_row_cells_for_view(1, 1), vec![row]);
+        assert2::assert!(!*wraps_next);
+        pretty_assertions::assert_eq!(
+            scrollback.captured_rows_for_view(1, 1),
+            vec![TerminalVisibleRow::new(row, false)]
+        );
         Ok(())
     }
 }

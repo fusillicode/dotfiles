@@ -263,6 +263,10 @@ impl PtyHandle {
         lock_mutex(&self.state.terminal, "pty terminal")?.visible_top_row()
     }
 
+    pub fn visible_row_wraps(&self) -> rootcause::Result<Vec<bool>> {
+        Ok(lock_mutex(&self.state.terminal, "pty terminal")?.visible_row_wraps())
+    }
+
     pub fn exit_status(&self) -> rootcause::Result<Option<PtyExitStatus>> {
         Ok(lock_mutex(&self.state.exit_status, "pty exit status")?.clone())
     }
