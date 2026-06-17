@@ -25,6 +25,7 @@ pub use protocol::RenderRowSpan;
 pub use protocol::RenderStyle;
 pub use protocol::RenderTextStyle;
 pub use protocol::RenderUpdate;
+pub use protocol::RowWrap;
 pub use protocol::ServerError;
 pub use protocol::ServerEvent;
 pub use protocol::TabId;
