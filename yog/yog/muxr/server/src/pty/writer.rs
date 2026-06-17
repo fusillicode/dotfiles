@@ -7,6 +7,9 @@ use std::sync::mpsc;
 use std::sync::mpsc::TrySendError;
 use std::thread;
 
+use rootcause::Report;
+use rootcause::markers::Cloneable;
+use rootcause::markers::Dynamic;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
 
@@ -18,6 +21,8 @@ const PTY_WRITE_QUEUE_BYTE_LIMIT: usize = 1024 * 1024;
 const PTY_WRITE_BATCH_MAX_MESSAGES: usize = 64;
 const PTY_WRITE_BATCH_MAX_BYTES: usize = 64 * 1024;
 const PTY_WRITE_MAX_MESSAGE_BYTES: usize = PTY_WRITE_BATCH_MAX_BYTES;
+
+type PtyWriterError = Report<Dynamic, Cloneable>;
 
 #[derive(Clone)]
 pub struct PtyWriter {
@@ -176,8 +181,7 @@ impl PtyWriteState {
         Self {
             byte_limit,
             queue: Mutex::new(PtyWriteQueueState {
-                closed: false,
-                last_error: None,
+                status: PtyWriterStatus::Open,
                 progress_version: 0,
                 queued_bytes: 0,
             }),
@@ -187,31 +191,28 @@ impl PtyWriteState {
 
     fn close(&self) -> rootcause::Result<()> {
         let mut queue = self::lock_queue_mutex(&self.queue)?;
-        queue.closed = true;
+        queue.status.close();
         drop(queue);
         self.notify_queue_progress();
         Ok(())
     }
 
     fn is_closed(&self) -> rootcause::Result<bool> {
-        Ok(self::lock_queue_mutex(&self.queue)?.closed)
+        Ok(self::lock_queue_mutex(&self.queue)?.status.is_stopped())
     }
 
     fn ensure_open(queue: &PtyWriteQueueState) -> rootcause::Result<()> {
-        if let Some(error) = queue.last_error.as_ref() {
-            return Err(report!("muxr pty writer stopped").attach(format!("error={error}")));
+        match &queue.status {
+            PtyWriterStatus::Open => Ok(()),
+            PtyWriterStatus::Closed => Err(report!("muxr pty writer stopped").attach("reason=pty writer is closed")),
+            PtyWriterStatus::Failed(error) => Err(report!("muxr pty writer stopped").attach(error.clone())),
         }
-        if queue.closed {
-            return Err(report!("muxr pty writer stopped").attach("reason=pty writer is closed"));
-        }
-        Ok(())
     }
 
-    fn record_error(&self, error: &rootcause::Report) {
+    fn record_error(&self, error: PtyWriterError) {
         match self.queue.lock() {
             Ok(mut queue) => {
-                queue.closed = true;
-                queue.last_error = Some(error.to_string());
+                queue.status = PtyWriterStatus::Failed(error);
             }
             Err(error) => {
                 crate::session::tracing::pty::shutdown_failed("record_writer_error", error);
@@ -259,9 +260,9 @@ impl PtyWriteState {
     fn stopped_report(&self, reason: &'static str) -> rootcause::Report {
         let mut report = report!("muxr pty writer stopped").attach(reason);
         if let Ok(queue) = self.queue.lock()
-            && let Some(error) = queue.last_error.as_ref()
+            && let PtyWriterStatus::Failed(error) = &queue.status
         {
-            report = report.attach(format!("error={error}"));
+            report = report.attach(error.clone());
         }
         report
     }
@@ -273,7 +274,7 @@ impl PtyWriteState {
     ) -> rootcause::Result<MutexGuard<'a, PtyWriteQueueState>> {
         self.queue_progress
             .wait_while(guard, |queue| {
-                !queue.closed && queue.last_error.is_none() && queue.progress_version == observed_progress
+                !queue.status.is_stopped() && queue.progress_version == observed_progress
             })
             .map_err(|_| report!("poisoned muxr pty writer queue mutex"))
     }
@@ -291,9 +292,27 @@ impl PtyWriteState {
     }
 }
 
+// Closed and failed are both terminal states, but only failed carries the root write error for later enqueue reports.
+enum PtyWriterStatus {
+    Closed,
+    Failed(PtyWriterError),
+    Open,
+}
+
+impl PtyWriterStatus {
+    fn close(&mut self) {
+        if matches!(self, Self::Open) {
+            *self = Self::Closed;
+        }
+    }
+
+    const fn is_stopped(&self) -> bool {
+        !matches!(self, Self::Open)
+    }
+}
+
 struct PtyWriteQueueState {
-    closed: bool,
-    last_error: Option<String>,
+    status: PtyWriterStatus,
     progress_version: u64,
     queued_bytes: usize,
 }
@@ -362,7 +381,8 @@ fn run_writer_loop(writer: &mut dyn Write, receiver: &mpsc::Receiver<PtyWriteReq
                 let write_result = self::write_pty_batch(writer, &batch);
                 state.release_queued_bytes(batch_bytes);
                 if let Err(error) = write_result {
-                    state.record_error(&error);
+                    let error = error.into_cloneable();
+                    state.record_error(error.clone());
                     crate::session::tracing::pty::writer_stopped_after_error("write_batch", &error);
                     break;
                 }
@@ -733,6 +753,30 @@ mod tests {
             ))
             .err()
             .ok_or_else(|| report!("expected muxr pty writer enqueue to fail after writer error"))?;
+
+        assert2::assert!(error.to_string().contains("test pty writer failed"));
+        Ok(())
+    }
+
+    #[test]
+    fn test_pty_writer_shutdown_after_write_failure_preserves_error_for_later_enqueue() -> rootcause::Result<()> {
+        let (queue, receiver) = self::queued_pty_writer();
+        queue.enqueue(PtyWrite::new(
+            b"first".to_vec(),
+            "failed to write first shutdown-after-error test payload",
+            "failed to flush first shutdown-after-error test payload",
+        ))?;
+
+        self::run_writer_loop(&mut *self::failing_pty_writer(), &receiver, queue.state.as_ref());
+        queue.shutdown()?;
+        let error = queue
+            .enqueue(PtyWrite::new(
+                b"second".to_vec(),
+                "failed to write second shutdown-after-error test payload",
+                "failed to flush second shutdown-after-error test payload",
+            ))
+            .err()
+            .ok_or_else(|| report!("expected muxr pty writer enqueue to fail after writer error and shutdown"))?;
 
         assert2::assert!(error.to_string().contains("test pty writer failed"));
         Ok(())
