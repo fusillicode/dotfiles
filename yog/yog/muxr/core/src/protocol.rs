@@ -7,6 +7,7 @@ pub use pane_layout::PaneMouseMode;
 pub use pane_layout::PaneRegionSnapshot;
 pub use pane_layout::PaneRegionsSnapshot;
 pub use pane_layout::PaneSnapshot;
+pub use pane_layout::RowWrap;
 pub use pane_layout::TabId;
 pub use pane_layout::TabSnapshot;
 pub use pane_mouse::ClientMouseEvent;

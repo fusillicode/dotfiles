@@ -329,6 +329,31 @@ impl PaneMouseMode {
     }
 }
 
+/// Whether a terminal row ends normally or continues via a soft wrap.
+#[derive(
+    rkyv::Archive, Clone, Copy, Debug, Deserialize, rkyv::Deserialize, Eq, PartialEq, Serialize, rkyv::Serialize,
+)]
+pub enum RowWrap {
+    EndsBeforeSoftWrap,
+    EndsWithSoftWrap,
+}
+
+impl RowWrap {
+    #[must_use]
+    pub const fn from_wraps_next(wraps_next: bool) -> Self {
+        if wraps_next {
+            Self::EndsWithSoftWrap
+        } else {
+            Self::EndsBeforeSoftWrap
+        }
+    }
+
+    #[must_use]
+    pub const fn wraps_next(self) -> bool {
+        matches!(self, Self::EndsWithSoftWrap)
+    }
+}
+
 #[derive(rkyv::Archive, Clone, Debug, Eq, PartialEq, Serialize, rkyv::Serialize)]
 pub struct PaneRegionSnapshot {
     id: PaneId,
@@ -426,13 +451,19 @@ impl PaneRegionSnapshot {
     /// Return whether the stable content row soft-wraps into the following row.
     #[must_use]
     pub fn content_row_wraps_next(&self, content_row: u64) -> bool {
+        self.content_row_wrap(content_row).wraps_next()
+    }
+
+    /// Return the soft-wrap metadata for a stable content row in this rendered viewport.
+    #[must_use]
+    pub fn content_row_wrap(&self, content_row: u64) -> RowWrap {
         let Some(local_row) = content_row.checked_sub(self.visible_top_row) else {
-            return false;
+            return RowWrap::EndsBeforeSoftWrap;
         };
         let Ok(local_row) = usize::try_from(local_row) else {
-            return false;
+            return RowWrap::EndsBeforeSoftWrap;
         };
-        self.wrapped_rows.get(local_row).copied().unwrap_or(false)
+        RowWrap::from_wraps_next(self.wrapped_rows.get(local_row).copied().unwrap_or(false))
     }
 
     #[must_use]

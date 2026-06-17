@@ -9,6 +9,7 @@ use muxr_core::PaneRegionSnapshot;
 use muxr_core::PaneRegionsSnapshot;
 use muxr_core::PaneScrollDirection;
 use muxr_core::RenderCellWidth;
+use muxr_core::RowWrap;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
 
@@ -638,11 +639,10 @@ enum CachedSelectionRow {
 }
 
 impl CachedSelectionRow {
-    const fn new(cells: Vec<CachedSelectionCell>, wraps_next: bool) -> Self {
-        if wraps_next {
-            Self::EndsWithSoftWrap(cells)
-        } else {
-            Self::EndsBeforeSoftWrap(cells)
+    const fn new(cells: Vec<CachedSelectionCell>, row_wrap: RowWrap) -> Self {
+        match row_wrap {
+            RowWrap::EndsBeforeSoftWrap => Self::EndsBeforeSoftWrap(cells),
+            RowWrap::EndsWithSoftWrap => Self::EndsWithSoftWrap(cells),
         }
     }
 
@@ -652,8 +652,11 @@ impl CachedSelectionRow {
         }
     }
 
-    const fn wraps_next(&self) -> bool {
-        matches!(self, Self::EndsWithSoftWrap(_))
+    const fn row_wrap(&self) -> RowWrap {
+        match self {
+            Self::EndsBeforeSoftWrap(_) => RowWrap::EndsBeforeSoftWrap,
+            Self::EndsWithSoftWrap(_) => RowWrap::EndsWithSoftWrap,
+        }
     }
 }
 
@@ -676,8 +679,11 @@ impl SelectedRowText {
         }
     }
 
-    const fn wraps_next(&self) -> bool {
-        matches!(self, Self::EndsWithSoftWrap(_))
+    const fn row_wrap(&self) -> RowWrap {
+        match self {
+            Self::EndsBeforeSoftWrap(_) => RowWrap::EndsBeforeSoftWrap,
+            Self::EndsWithSoftWrap(_) => RowWrap::EndsWithSoftWrap,
+        }
     }
 }
 
@@ -691,7 +697,7 @@ fn selected_inline_text(cached_rows: &BTreeMap<u64, CachedSelectionRow>, selecti
     let mut inlined = String::new();
     // Terminal wrap metadata is the only reliable boundary signal: full-width hard lines and soft-wrapped lines can
     // have identical cells, but only soft wraps should suppress the inline separator.
-    let mut previous_row_wraps = false;
+    let mut previous_row_wrap = RowWrap::EndsBeforeSoftWrap;
     for content_row in bounds.start.row..=bounds.end.row {
         let cached_row = cached_rows.get(&content_row)?;
         let start_col = if content_row == bounds.start.row {
@@ -704,18 +710,22 @@ fn selected_inline_text(cached_rows: &BTreeMap<u64, CachedSelectionRow>, selecti
         } else {
             selection.region.cols().saturating_sub(1)
         };
-        let selected_row = self::selected_row_text(cached_row.cells(), start_col, end_col, cached_row.wraps_next());
-        let row_wraps_next = selected_row.wraps_next();
+        let selected_row = self::selected_row_text(cached_row.cells(), start_col, end_col, cached_row.row_wrap());
+        let row_wrap = selected_row.row_wrap();
         let line = selected_row.text().trim();
         if line.is_empty() {
-            previous_row_wraps = false;
+            previous_row_wrap = RowWrap::EndsBeforeSoftWrap;
             continue;
         }
-        if !inlined.is_empty() && !previous_row_wraps {
+        if !inlined.is_empty() && previous_row_wrap != RowWrap::EndsWithSoftWrap {
             inlined.push(' ');
         }
         inlined.push_str(line);
-        previous_row_wraps = content_row != bounds.end.row && row_wraps_next;
+        previous_row_wrap = if content_row == bounds.end.row {
+            RowWrap::EndsBeforeSoftWrap
+        } else {
+            row_wrap
+        };
     }
     Some(inlined)
 }
@@ -805,8 +815,7 @@ fn selected_text(cached_rows: &BTreeMap<u64, CachedSelectionRow>, selection: &Se
         } else {
             selection.region.cols().saturating_sub(1)
         };
-        lines
-            .push(self::selected_row_text(cached_row.cells(), start_col, end_col, cached_row.wraps_next()).into_text());
+        lines.push(self::selected_row_text(cached_row.cells(), start_col, end_col, cached_row.row_wrap()).into_text());
     }
     Some(lines.join("\n"))
 }
@@ -833,7 +842,7 @@ fn cache_visible_selected_rows(
             content_row,
             CachedSelectionRow::new(
                 self::cached_row_cells(frame_buffer, visible_row, &selection.region)?,
-                selection.region.content_row_wraps_next(content_row),
+                selection.region.content_row_wrap(content_row),
             ),
         );
     }
@@ -866,7 +875,12 @@ fn cached_row_cells(
     Ok(cells)
 }
 
-fn selected_row_text(cells: &[CachedSelectionCell], start_col: u16, end_col: u16, wraps_next: bool) -> SelectedRowText {
+fn selected_row_text(
+    cells: &[CachedSelectionCell],
+    start_col: u16,
+    end_col: u16,
+    row_wrap: RowWrap,
+) -> SelectedRowText {
     let mut line = String::new();
     for local_col in start_col..=end_col {
         let Some(cell) = cells.get(usize::from(local_col)) else {
@@ -884,10 +898,9 @@ fn selected_row_text(cells: &[CachedSelectionCell], start_col: u16, end_col: u16
     while line.ends_with(' ') {
         line.pop();
     }
-    if wraps_next {
-        SelectedRowText::EndsWithSoftWrap(line)
-    } else {
-        SelectedRowText::EndsBeforeSoftWrap(line)
+    match row_wrap {
+        RowWrap::EndsBeforeSoftWrap => SelectedRowText::EndsBeforeSoftWrap(line),
+        RowWrap::EndsWithSoftWrap => SelectedRowText::EndsWithSoftWrap(line),
     }
 }
 
