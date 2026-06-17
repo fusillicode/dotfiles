@@ -126,8 +126,8 @@ async fn run_interactive(
                     ServerEvent::ScrollPaneLineResult {
                         position,
                         direction,
-                        scrolled,
-                    } => renderer.apply_scroll_pane_line_result(position, direction, scrolled),
+                        movement,
+                    } => renderer.apply_scroll_pane_line_result(position, direction, movement),
                     ServerEvent::Attached(_) | ServerEvent::Pong => {}
                 }
             },

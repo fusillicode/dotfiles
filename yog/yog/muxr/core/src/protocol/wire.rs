@@ -10,6 +10,7 @@ use super::ClientMousePosition;
 use super::LayoutSnapshot;
 use super::PaneRegionsSnapshot;
 use super::PaneScrollDirection;
+use super::PaneScrollLineMove;
 use super::RenderUpdate;
 use super::TabId;
 use super::TerminalSize;
@@ -86,7 +87,7 @@ pub enum ServerEvent {
     ScrollPaneLineResult {
         position: ClientMousePosition,
         direction: PaneScrollDirection,
-        scrolled: bool,
+        movement: PaneScrollLineMove,
     },
     Error(ServerError),
     Detached,
@@ -232,7 +233,7 @@ mod tests {
     #[case::scroll_line_result(ServerEvent::ScrollPaneLineResult {
             position: ClientMousePosition { row: 2, col: 3 },
             direction: PaneScrollDirection::Down,
-            scrolled: false,
+            movement: PaneScrollLineMove::Unchanged,
         })]
     #[case::error(ServerEvent::Error(ServerError::unexpected_request(ClientRequest::Detach)))]
     #[case::detached(ServerEvent::Detached)]

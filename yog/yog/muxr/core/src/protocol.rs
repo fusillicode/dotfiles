@@ -25,6 +25,7 @@ pub use pane_render::RenderStyle;
 pub use pane_render::RenderTextStyle;
 pub use pane_render::RenderUpdate;
 pub use pane_scroll::PaneScrollDirection;
+pub use pane_scroll::PaneScrollLineMove;
 pub use session_attach::AttachAccepted;
 pub use session_attach::AttachRequest;
 pub use terminal::TerminalSize;

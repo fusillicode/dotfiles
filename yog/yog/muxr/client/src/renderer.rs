@@ -12,6 +12,7 @@ use muxr_core::PaneId;
 use muxr_core::PaneRegionSnapshot;
 use muxr_core::PaneRegionsSnapshot;
 use muxr_core::PaneScrollDirection;
+use muxr_core::PaneScrollLineMove;
 use muxr_core::RenderUpdate;
 use muxr_core::TabId;
 use rootcause::prelude::ResultExt;
@@ -343,10 +344,10 @@ impl ClientRenderer {
         &mut self,
         position: ClientMousePosition,
         direction: PaneScrollDirection,
-        scrolled: bool,
+        movement: PaneScrollLineMove,
     ) {
         self.selection_edge_scroll
-            .apply_scroll_pane_line_result(position, direction, scrolled);
+            .apply_scroll_pane_line_result(position, direction, movement);
     }
 
     fn redraw_selection(
@@ -742,7 +743,7 @@ mod tests {
 
         renderer.mark_selection_edge_scroll_sent(pending);
         pretty_assertions::assert_eq!(renderer.selection_edge_scroll_request(), None);
-        renderer.apply_scroll_pane_line_result(position, direction, false);
+        renderer.apply_scroll_pane_line_result(position, direction, PaneScrollLineMove::Unchanged);
 
         let retry = renderer
             .selection_edge_scroll_request()
@@ -776,7 +777,7 @@ mod tests {
         let (pending, _) = request.into_parts();
 
         renderer.mark_selection_edge_scroll_sent(pending);
-        renderer.apply_scroll_pane_line_result(position, direction, true);
+        renderer.apply_scroll_pane_line_result(position, direction, PaneScrollLineMove::Moved);
 
         pretty_assertions::assert_eq!(renderer.selection_edge_scroll_request(), None);
         renderer.apply_pane_regions(&mut output, three_row_pane_regions_snapshot(10)?)?;

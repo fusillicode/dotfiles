@@ -13,6 +13,7 @@ pub use protocol::PaneMouseMode;
 pub use protocol::PaneRegionSnapshot;
 pub use protocol::PaneRegionsSnapshot;
 pub use protocol::PaneScrollDirection;
+pub use protocol::PaneScrollLineMove;
 pub use protocol::PaneSnapshot;
 pub use protocol::RenderBaseline;
 pub use protocol::RenderCell;

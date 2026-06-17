@@ -1755,7 +1755,11 @@ mod tests {
 
             pretty_assertions::assert_eq!(
                 self::read_until_scroll_pane_line_result(&mut client).await?,
-                (position, PaneScrollDirection::Down, false),
+                (
+                    position,
+                    PaneScrollDirection::Down,
+                    muxr_core::PaneScrollLineMove::Unchanged,
+                ),
             );
             self::detach_client(client).await?;
             self::join_server(handle)
@@ -2587,7 +2591,7 @@ mod tests {
 
     async fn read_until_scroll_pane_line_result(
         client: &mut AttachedTestClient,
-    ) -> rootcause::Result<(ClientMousePosition, PaneScrollDirection, bool)> {
+    ) -> rootcause::Result<(ClientMousePosition, PaneScrollDirection, muxr_core::PaneScrollLineMove)> {
         let started_at = Instant::now();
 
         loop {
@@ -2605,8 +2609,8 @@ mod tests {
                 ServerEvent::ScrollPaneLineResult {
                     position,
                     direction,
-                    scrolled,
-                } => return Ok((position, direction, scrolled)),
+                    movement,
+                } => return Ok((position, direction, movement)),
                 ServerEvent::Layout(layout) => client.layout = layout,
                 ServerEvent::PaneRegions(regions) => client.pane_regions = regions,
                 ServerEvent::Error(error) => {
@@ -2632,9 +2636,9 @@ mod tests {
             .writer
             .send_request(&ClientRequest::ScrollPaneLineAt { position, direction })
             .await?;
-        let (actual_position, actual_direction, scrolled) = self::read_until_scroll_pane_line_result(client).await?;
+        let (actual_position, actual_direction, movement) = self::read_until_scroll_pane_line_result(client).await?;
         pretty_assertions::assert_eq!((actual_position, actual_direction), (position, direction));
-        Ok(scrolled)
+        Ok(movement.scrolled())
     }
 
     async fn scroll_pane_line_until_noop(

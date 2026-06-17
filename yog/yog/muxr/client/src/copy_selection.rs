@@ -8,6 +8,7 @@ use muxr_core::PaneId;
 use muxr_core::PaneRegionSnapshot;
 use muxr_core::PaneRegionsSnapshot;
 use muxr_core::PaneScrollDirection;
+use muxr_core::PaneScrollLineMove;
 use muxr_core::RenderCellWidth;
 use muxr_core::RowWrap;
 use rootcause::prelude::ResultExt;
@@ -106,11 +107,28 @@ struct TrackedClick {
     target: ClickTarget,
 }
 
+// Tracks one edge-scroll request through server ack and rendered-frame ack so retry cannot outrun viewport updates.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+enum SelectionEdgeScrollPendingState {
+    #[default]
+    Idle,
+    WaitingForViewportMove(SelectionEdgeScrollPending),
+    WaitingForRender(SelectionEdgeScrollPending),
+}
+
+impl SelectionEdgeScrollPendingState {
+    const fn pending(&self) -> Option<&SelectionEdgeScrollPending> {
+        match self {
+            Self::Idle => None,
+            Self::WaitingForRender(pending) | Self::WaitingForViewportMove(pending) => Some(pending),
+        }
+    }
+}
+
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct SelectionEdgeScrollState {
-    acknowledged: bool,
     drag: Option<SelectionEdgeDrag>,
-    pending: Option<SelectionEdgeScrollPending>,
+    pending: SelectionEdgeScrollPendingState,
 }
 
 impl SelectionEdgeScrollState {
@@ -164,24 +182,22 @@ impl SelectionEdgeScrollState {
         &mut self,
         position: ClientMousePosition,
         direction: PaneScrollDirection,
-        scrolled: bool,
+        movement: PaneScrollLineMove,
     ) {
         let matches_pending = self
             .pending
-            .as_ref()
+            .pending()
             .is_some_and(|pending| pending.position == position && pending.direction == direction);
-        if matches_pending && !scrolled {
+        if matches_pending && matches!(movement, PaneScrollLineMove::Unchanged) {
             // No-op scrolls, usually hard top/bottom scrollback bounds, do not produce a render ack. Clear only the
             // matching pending request so the held edge drag can retry without unrelated events breaking coalescing.
-            self.acknowledged = false;
-            self.pending = None;
+            self.pending = SelectionEdgeScrollPendingState::Idle;
         }
     }
 
     pub const fn clear_render_acknowledged_pending(&mut self) {
-        if self.acknowledged {
-            self.acknowledged = false;
-            self.pending = None;
+        if matches!(&self.pending, SelectionEdgeScrollPendingState::WaitingForRender(_)) {
+            self.pending = SelectionEdgeScrollPendingState::Idle;
         }
     }
 
@@ -190,14 +206,12 @@ impl SelectionEdgeScrollState {
     }
 
     pub const fn mark_sent(&mut self, pending: SelectionEdgeScrollPending) {
-        self.acknowledged = false;
-        self.pending = Some(pending);
+        self.pending = SelectionEdgeScrollPendingState::WaitingForViewportMove(pending);
     }
 
     pub const fn clear(&mut self) {
-        self.acknowledged = false;
         self.drag = None;
-        self.pending = None;
+        self.pending = SelectionEdgeScrollPendingState::Idle;
     }
 
     fn set_edge_drag_with_trigger(
@@ -208,8 +222,7 @@ impl SelectionEdgeScrollState {
         trigger: SelectionEdgeScrollTrigger,
     ) -> Option<SelectionEdgeScrollRequest> {
         let Some(region) = drag_region else {
-            self.acknowledged = false;
-            self.pending = None;
+            self.pending = SelectionEdgeScrollPendingState::Idle;
             return None;
         };
         let (direction, row) = if let Some(direction) = forced_direction {
@@ -218,17 +231,15 @@ impl SelectionEdgeScrollState {
             (direction, self::selection_edge_row(region, direction))
         } else {
             self.drag = None;
-            self.acknowledged = false;
-            self.pending = None;
+            self.pending = SelectionEdgeScrollPendingState::Idle;
             return None;
         };
         if self
             .pending
-            .as_ref()
+            .pending()
             .is_some_and(|pending| pending.direction != direction || pending.pane_id != *region.id())
         {
-            self.acknowledged = false;
-            self.pending = None;
+            self.pending = SelectionEdgeScrollPendingState::Idle;
         }
         let col = position
             .col
@@ -254,7 +265,7 @@ impl SelectionEdgeScrollState {
         previous_visible_top_row: u64,
         position: ClientMousePosition,
     ) -> Option<SelectionEdgeScrollRequest> {
-        if self.pending.is_some() {
+        if !matches!(&self.pending, SelectionEdgeScrollPendingState::Idle) {
             return None;
         }
         Some(SelectionEdgeScrollRequest {
@@ -269,18 +280,21 @@ impl SelectionEdgeScrollState {
     }
 
     fn update_pending(&mut self, regions: &PaneRegionsSnapshot) {
-        let Some(pending) = self.pending.as_ref() else {
-            self.acknowledged = false;
+        let Some(pending) = self.pending.pending().cloned() else {
             return;
         };
         let Some(region) = self::matching_region(regions, pending.pane_id) else {
-            self.acknowledged = false;
-            self.pending = None;
+            self.pending = SelectionEdgeScrollPendingState::Idle;
             return;
         };
-        self.acknowledged = match pending.direction {
+        let viewport_moved = match pending.direction {
             PaneScrollDirection::Down => region.visible_top_row() > pending.previous_visible_top_row,
             PaneScrollDirection::Up => region.visible_top_row() < pending.previous_visible_top_row,
+        };
+        self.pending = if viewport_moved {
+            SelectionEdgeScrollPendingState::WaitingForRender(pending)
+        } else {
+            SelectionEdgeScrollPendingState::WaitingForViewportMove(pending)
         };
     }
 }

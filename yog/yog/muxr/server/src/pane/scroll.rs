@@ -1,6 +1,7 @@
 use muxr_core::ClientMousePosition;
 use muxr_core::PaneId;
 use muxr_core::PaneScrollDirection;
+use muxr_core::PaneScrollLineMove;
 use muxr_core::ServerEvent;
 
 use crate::client::session::ClientSessionState;
@@ -29,16 +30,16 @@ pub struct PaneScrollWheelRequestOutcome {
 const fn scroll_pane_line_result(
     position: ClientMousePosition,
     direction: PaneScrollDirection,
-    scrolled: bool,
+    movement: PaneScrollLineMove,
 ) -> PaneScrollLineRequestOutcome {
     PaneScrollLineRequestOutcome {
         event: ServerEvent::ScrollPaneLineResult {
             position,
             direction,
-            scrolled,
+            movement,
         },
         // Edge-drag autoscroll can outpace render IO; keep viewport changes coalesced on the render deadline.
-        render_dirty: scrolled,
+        render_dirty: movement.scrolled(),
     }
 }
 
@@ -47,12 +48,17 @@ pub fn handle_scroll_pane_line_client_request(
     direction: PaneScrollDirection,
     state: &ClientSessionState<'_>,
 ) -> rootcause::Result<PaneScrollLineRequestOutcome> {
-    let scrolled = if let Some(pane_id) = crate::screen_render::visible_pane_id_at_position(state, position)? {
-        self::scroll_pane(pane_id, direction, PaneScrollAmount::Line, state.runtimes)?
+    let movement = if let Some(pane_id) = crate::screen_render::visible_pane_id_at_position(state, position)? {
+        PaneScrollLineMove::from_scrolled(self::scroll_pane(
+            pane_id,
+            direction,
+            PaneScrollAmount::Line,
+            state.runtimes,
+        )?)
     } else {
-        false
+        PaneScrollLineMove::Unchanged
     };
-    Ok(self::scroll_pane_line_result(position, direction, scrolled))
+    Ok(self::scroll_pane_line_result(position, direction, movement))
 }
 
 pub fn handle_scroll_pane_wheel_client_request(
