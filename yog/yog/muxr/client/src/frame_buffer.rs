@@ -121,6 +121,13 @@ impl FrameBuffer {
         Ok(())
     }
 
+    pub fn queue_cursor_at(&self, stdout: &mut impl Write, row_offset: u16, col_offset: u16) -> rootcause::Result<()> {
+        let Some(cursor) = self.cursor.as_ref() else {
+            return Ok(());
+        };
+        render_cursor(stdout, cursor, row_offset, col_offset)
+    }
+
     pub fn row_redraw_changes(&self, changed_rows: &[u16]) -> rootcause::Result<Option<RenderFrameChanges>> {
         let Some(cursor) = self.cursor.clone() else {
             return Ok(None);

@@ -213,6 +213,9 @@ impl ClientRenderer {
         let mut frame = Vec::new();
         crate::terminal::queue_synchronized_update_start(&mut frame, self.synchronized_output)?;
         crate::tab_bar::queue(&mut frame, self.tab_bar_config, &self.layout, size.rows())?;
+        // Sidebar-only redraws bypass pane rendering, so restore the real terminal cursor after tab-bar row moves.
+        self.frame_buffer
+            .queue_cursor_at(&mut frame, 0, self.tab_bar_config.width)?;
         crate::terminal::queue_synchronized_update_end(&mut frame, self.synchronized_output)?;
         stdout
             .write_all(&frame)
@@ -471,7 +474,17 @@ mod tests {
         assert2::assert!(terminal_output.ends_with("\x1b[?2026l"));
         assert2::assert!(terminal_output.contains("tab-1"));
         assert2::assert!(!terminal_output.contains("\x1b[2J"));
-        assert2::assert!(!terminal_output.contains("\x1b[1;25H"));
+        let hide_index = terminal_output
+            .find("\x1b[?25l")
+            .ok_or_else(|| report!("expected cursor hide before sidebar redraw"))?;
+        let tab_bar_index = terminal_output
+            .find("tab-1")
+            .ok_or_else(|| report!("expected tab bar text"))?;
+        let cursor_restore_index = terminal_output
+            .find("\x1b[1;26H\x1b[?25h")
+            .ok_or_else(|| report!("expected pane cursor restore after sidebar redraw"))?;
+        assert2::assert!(hide_index < tab_bar_index);
+        assert2::assert!(tab_bar_index < cursor_restore_index);
         pretty_assertions::assert_eq!(output.flushes, 1);
         Ok(())
     }
