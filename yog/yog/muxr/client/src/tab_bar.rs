@@ -2,6 +2,7 @@ use std::io::Write;
 
 use crossterm::Command;
 use crossterm::QueueableCommand;
+use crossterm::cursor::Hide;
 use crossterm::cursor::MoveTo;
 use crossterm::cursor::RestorePosition;
 use crossterm::cursor::SavePosition;
@@ -41,6 +42,7 @@ pub fn queue(
     layout: &LayoutSnapshot,
     rows: u16,
 ) -> rootcause::Result<()> {
+    queue_cmd(stdout, Hide)?;
     queue_cmd(stdout, SavePosition)?;
 
     let tabs = self::sidebar_tabs(layout);
