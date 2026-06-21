@@ -2,6 +2,7 @@ pub use self::pane::Pane;
 pub use self::pane::PaneAttentionState;
 pub use self::pane::PaneState;
 pub use self::pane::PaneTree;
+pub use self::session::ActivePaneId;
 pub use self::session::PaneSnapshotFields;
 pub use self::session::SessionLayout;
 pub use self::session::SessionMetadata;

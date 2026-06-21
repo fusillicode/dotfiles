@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use muxr_core::AttachRequest;
 use muxr_core::ClientRequest;
+use muxr_core::PaneId;
 use muxr_core::ServerError;
 use muxr_core::ServerEvent;
 use muxr_core::SessionPaths;
@@ -23,11 +24,11 @@ use crate::state::SessionMetadata;
 pub const PANE_OUTPUT_EVENT_CHANNEL_LIMIT: usize = 1024;
 pub const CLIENT_HANDSHAKE_CHANNEL_LIMIT: usize = 32;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ReapResult {
     Final,
     NoExitedPanes,
-    Removed,
+    Removed { pane_ids: Vec<PaneId> },
 }
 
 #[derive(Debug)]
@@ -275,22 +276,28 @@ pub fn reap_exited_panes(
     }
 
     let exited_at = crate::server::unix_timestamp_millis()?;
-    let mut result = ReapResult::Removed;
+    let mut final_pane_removed = false;
     let _ = runtimes.sync_layout_terminal_titles(layout)?;
     let mut removed_panes = Vec::new();
     for (pane_id, exit_status) in &exited_panes {
         match layout.remove_exited_pane(*pane_id, exited_at, exit_status.clone())? {
-            PaneExitOutcome::Final => result = ReapResult::Final,
+            PaneExitOutcome::Final => final_pane_removed = true,
             PaneExitOutcome::Removed => {}
         }
-        removed_panes.push(pane_id);
+        removed_panes.push(*pane_id);
     }
     crate::state::persisted::write_metadata(&config.paths, layout)?;
-    for pane_id in removed_panes {
+    for pane_id in &removed_panes {
         runtimes.remove(*pane_id);
     }
 
-    Ok(result)
+    if final_pane_removed {
+        Ok(ReapResult::Final)
+    } else {
+        Ok(ReapResult::Removed {
+            pane_ids: removed_panes,
+        })
+    }
 }
 
 #[cfg(test)]

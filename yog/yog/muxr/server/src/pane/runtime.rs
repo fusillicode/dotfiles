@@ -429,6 +429,14 @@ mod tests {
         let pane_1 = PaneId::new(1)?;
         let pane_2 = PaneId::new(2)?;
         let pane_3 = PaneId::new(3)?;
+        let layout = SessionLayout::initial(
+            &"work".parse()?,
+            SessionMetadata {
+                cmd_label: "sh".to_owned(),
+                cwd: "/tmp".to_owned(),
+                started_at: 1,
+            },
+        )?;
         let mut tracked_processes = PaneTrackedProcesses::default();
         assert2::assert!(tracked_processes.observe_pane_cmd(
             &MuxrConfig::default(),
@@ -450,7 +458,7 @@ mod tests {
                 (pane_2, Some("demo process start".to_owned())),
                 (pane_3, Some("echo seeded".to_owned())),
             ],
-            &tracked_processes.snapshot(),
+            &tracked_processes.snapshot(&layout),
         );
         let snapshot_fields = metadata.pane_snapshot_fields();
 

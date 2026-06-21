@@ -6,13 +6,16 @@ use std::time::Instant;
 use muxr_core::PaneId;
 use rootcause::report;
 
+use crate::pane::tracked_process::PaneTrackedProcesses;
 use crate::server::ServerConfig;
+use crate::state::SessionLayout;
 
 const CMD_HANDOFF_SAMPLE_DELAY: Duration = Duration::from_millis(50);
 const INTERACTIVE_RENDER_BOOST_FOR: Duration = Duration::from_millis(250);
 const INTERACTIVE_RENDER_FRAME_INTERVAL: Duration = Duration::from_millis(10);
 const RENDER_FRAME_INTERVAL: Duration = Duration::from_millis(16);
 const SLEEP_DISABLED_FOR: Duration = Duration::from_hours(24);
+const TRACKED_PROCESS_QUIET_SETTLE_DELAY: Duration = Duration::from_millis(10);
 
 pub struct ClientTimers {
     pub cmd_handoff_sample: Pin<Box<tokio::time::Sleep>>,
@@ -51,6 +54,14 @@ impl ClientTimers {
             .ok_or_else(|| report!("muxr cmd handoff sample deadline overflowed"))?;
         self.cmd_handoff_sample.as_mut().reset(deadline);
         self.cmd_handoff_sample_panes.insert(pane_id);
+        Ok(())
+    }
+
+    pub fn remove_cmd_handoff_sample_pane(&mut self, pane_id: PaneId) -> rootcause::Result<()> {
+        self.cmd_handoff_sample_panes.remove(&pane_id);
+        if self.cmd_handoff_sample_panes.is_empty() {
+            self.cmd_handoff_sample.as_mut().reset(self::disabled_sleep_deadline()?);
+        }
         Ok(())
     }
 
@@ -98,8 +109,8 @@ impl ClientTimers {
     // extra frame after PTY output arrived. Keep the low-wakeup model by rendering the first dirty frame after idle
     // immediately, then rate-limit follow-up frames from the last render attempt. The 10ms cap is limited to a short
     // post-input window so key echo can feel closer to Zellij without making bulk output render at 100fps forever.
-    // Option 3 was a separate user-input deadline path; the adaptive cap keeps one scheduler and tags only recent
-    // PTY-bound input as latency-sensitive.
+    // Avoid a separate user-input deadline path; the adaptive cap keeps one scheduler and tags only recent PTY-bound
+    // input as latency-sensitive.
     fn schedule_render_frame(&mut self) -> rootcause::Result<()> {
         let deadline = self.next_render_deadline(tokio::time::Instant::now())?;
         self.set_render_deadline(deadline);
@@ -146,17 +157,32 @@ impl ClientTimers {
         self.render_sleep.as_mut().reset(deadline);
     }
 
-    pub fn sync_tracked_process_quiet_deadline(&mut self, deadline: Option<Instant>) -> rootcause::Result<()> {
+    fn sync_tracked_process_quiet_deadline(&mut self, deadline: Option<Instant>) -> rootcause::Result<()> {
         if self.tracked_process_quiet_deadline == deadline {
             return Ok(());
         }
 
         self.tracked_process_quiet_deadline = deadline;
         let deadline = deadline.map_or_else(self::disabled_sleep_deadline, |deadline| {
+            // Socket/PTY readiness can lag one poll behind an already-ready sleep. Fire the one-shot slightly after the
+            // logical quiet deadline so boundary input/output gets a normal select turn before we clear Busy.
+            let deadline = deadline
+                .checked_add(TRACKED_PROCESS_QUIET_SETTLE_DELAY)
+                .ok_or_else(|| report!("muxr tracked-process quiet sleep deadline overflowed"))?;
             Ok(tokio::time::Instant::from_std(deadline))
         })?;
         self.tracked_process_quiet_sleep.as_mut().reset(deadline);
         Ok(())
+    }
+
+    pub fn sync_tracked_process_quiet_deadline_for_layout(
+        &mut self,
+        pane_tracked_processes: &PaneTrackedProcesses,
+        layout: &SessionLayout,
+    ) -> rootcause::Result<()> {
+        // The quiet deadline is focus-sensitive: focused input can extend Busy, while unfocused panes use only tracked
+        // output/activity. Resync after active-pane changes so the sleep cannot keep using the old focused deadline.
+        self.sync_tracked_process_quiet_deadline(pane_tracked_processes.next_quiet_deadline(layout)?)
     }
 
     pub fn disable_tracked_process_quiet_sleep(&mut self) -> rootcause::Result<()> {
@@ -165,6 +191,10 @@ impl ClientTimers {
             .as_mut()
             .reset(self::disabled_sleep_deadline()?);
         Ok(())
+    }
+
+    pub fn tracked_process_quiet_sleep_deadline_has_passed(&self) -> bool {
+        tokio::time::Instant::now() >= self.tracked_process_quiet_sleep.deadline()
     }
 }
 
@@ -207,6 +237,23 @@ mod tests {
         timers.schedule_cmd_handoff_sample(pane_1)?;
 
         pretty_assertions::assert_eq!(timers.take_cmd_handoff_sample_panes()?, vec![pane_1, pane_2]);
+        assert2::assert!(timers.cmd_handoff_sample_panes.is_empty());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_client_timers_when_pending_cmd_handoff_pane_is_removed_drops_sample() -> rootcause::Result<()> {
+        let tempdir = tempfile::tempdir()?;
+        let config = crate::server::test_helpers::server_config(tempdir.path(), "work")?;
+        let pane_1 = PaneId::new(1)?;
+        let pane_2 = PaneId::new(2)?;
+        let mut timers = ClientTimers::new(&config)?;
+
+        timers.schedule_cmd_handoff_sample(pane_1)?;
+        timers.schedule_cmd_handoff_sample(pane_2)?;
+        timers.remove_cmd_handoff_sample_pane(pane_1)?;
+
+        pretty_assertions::assert_eq!(timers.take_cmd_handoff_sample_panes()?, vec![pane_2]);
         assert2::assert!(timers.cmd_handoff_sample_panes.is_empty());
         Ok(())
     }
@@ -377,5 +424,119 @@ mod tests {
         pretty_assertions::assert_eq!(timers.tracked_process_quiet_deadline, None);
         assert2::assert!(timers.tracked_process_quiet_sleep.deadline() > disabled_deadline);
         Ok(())
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn test_client_timers_when_active_pane_removal_drops_tracked_process_quiet_deadline() -> rootcause::Result<()>
+    {
+        let tempdir = tempfile::tempdir()?;
+        let config = crate::server::test_helpers::server_config(tempdir.path(), "work")?;
+        let mut timers = ClientTimers::new(&config)?;
+        let mut layout = self::layout(&config)?;
+        let pane_id = PaneId::new(1)?;
+        let other_pane_id = PaneId::new(2)?;
+        layout.active_tab_mut()?.focus_pane(pane_id)?;
+        let mut pane_tracked_processes = PaneTrackedProcesses::default();
+        let then = Instant::now();
+        pane_tracked_processes.observe_pane_cmd(
+            config.user_config.as_ref(),
+            pane_id,
+            &self::fg_tracked_process("codex"),
+            then,
+        );
+        pane_tracked_processes.record_user_interaction(
+            &layout,
+            pane_id,
+            crate::pane::tracked_process::TrackedProcessUserInteraction::MayEcho,
+            self::instant_after(then, Duration::from_secs(2))?,
+        )?;
+
+        timers.sync_tracked_process_quiet_deadline_for_layout(&pane_tracked_processes, &layout)?;
+        pretty_assertions::assert_eq!(
+            timers.tracked_process_quiet_deadline,
+            Some(self::instant_after(then, Duration::from_secs(5))?)
+        );
+        pretty_assertions::assert_eq!(
+            timers.tracked_process_quiet_sleep.deadline(),
+            self::tracked_process_quiet_sleep_deadline(then, Duration::from_secs(5))?
+        );
+        let focused_deadline = timers.tracked_process_quiet_sleep.deadline();
+
+        layout.remove_exited_pane(pane_id, 0, self::successful_exit_status())?;
+        pretty_assertions::assert_eq!(layout.active_pane_id()?, other_pane_id);
+        timers.sync_tracked_process_quiet_deadline_for_layout(&pane_tracked_processes, &layout)?;
+
+        pretty_assertions::assert_eq!(timers.tracked_process_quiet_deadline, None);
+        assert2::assert!(timers.tracked_process_quiet_sleep.deadline() > focused_deadline);
+        Ok(())
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn test_client_timers_when_quiet_sleep_is_unpolled_reports_passed_deadline() -> rootcause::Result<()> {
+        let tempdir = tempfile::tempdir()?;
+        let config = crate::server::test_helpers::server_config(tempdir.path(), "work")?;
+        let mut timers = ClientTimers::new(&config)?;
+        timers
+            .tracked_process_quiet_sleep
+            .as_mut()
+            .reset(tokio::time::Instant::now() + Duration::from_millis(1));
+
+        assert2::assert!(!timers.tracked_process_quiet_sleep_deadline_has_passed());
+        tokio::time::advance(Duration::from_millis(1)).await;
+
+        assert2::assert!(timers.tracked_process_quiet_sleep_deadline_has_passed());
+        Ok(())
+    }
+
+    fn layout(config: &crate::server::ServerConfig) -> rootcause::Result<SessionLayout> {
+        let mut layout = SessionLayout::initial(&config.session, self::metadata("sh", 1))?;
+        layout.split_active_pane(
+            config.user_config.layout,
+            self::metadata("sh", 2),
+            crate::pane::split::PaneSplitAxis::Vertical,
+        )?;
+        Ok(layout)
+    }
+
+    fn metadata(cmd_label: &str, started_at: u64) -> crate::state::SessionMetadata {
+        crate::state::SessionMetadata {
+            cmd_label: cmd_label.to_owned(),
+            cwd: "/tmp".to_owned(),
+            started_at,
+        }
+    }
+
+    fn fg_tracked_process(executable: &str) -> crate::pane::cmd::PaneCmdObservation {
+        crate::pane::cmd::PaneCmdObservation::FgCmd {
+            cmd: crate::pane::cmd::PaneCmd {
+                executable: executable.to_owned(),
+                path: None,
+                pid: 42,
+            },
+        }
+    }
+
+    fn successful_exit_status() -> crate::pty::PtyExitStatus {
+        crate::pty::PtyExitStatus {
+            code: 0,
+            signal: None,
+            success: true,
+        }
+    }
+
+    fn instant_after(instant: Instant, duration: Duration) -> rootcause::Result<Instant> {
+        instant
+            .checked_add(duration)
+            .ok_or_else(|| rootcause::report!("test instant overflowed"))
+    }
+
+    fn tracked_process_quiet_sleep_deadline(
+        instant: Instant,
+        logical_delay: Duration,
+    ) -> rootcause::Result<tokio::time::Instant> {
+        let delay = logical_delay
+            .checked_add(TRACKED_PROCESS_QUIET_SETTLE_DELAY)
+            .ok_or_else(|| rootcause::report!("test quiet settle delay overflowed"))?;
+        Ok(tokio::time::Instant::from_std(self::instant_after(instant, delay)?))
     }
 }
