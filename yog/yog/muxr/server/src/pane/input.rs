@@ -7,7 +7,6 @@ use crate::client::session::ClientSessionState;
 use crate::pane::tracked_process::TrackedProcessClientChange;
 use crate::pane::tracked_process::TrackedProcessUserInteraction;
 use crate::pty::PtyHandle;
-use crate::state::ActivePaneId;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct PaneInputOutcome {
@@ -52,7 +51,7 @@ pub fn handle_client_paste(bytes: &[u8], state: &mut ClientSessionState<'_>) -> 
 }
 
 pub fn handle_client_key(key: &ClientKey, state: &mut ClientSessionState<'_>) -> rootcause::Result<PaneInputOutcome> {
-    let (active_pane, handle) = self::active_pane_handle_with_id(state)?;
+    let (pane_id, handle) = self::active_pane_handle_with_id(state)?;
     let keyboard_protocol = handle.application_mode()?.keyboard_protocol;
     let Some(bytes) = crate::keyboard_input::pane_key_input_bytes(key, keyboard_protocol) else {
         return Ok(PaneInputOutcome::ignored());
@@ -63,11 +62,10 @@ pub fn handle_client_key(key: &ClientKey, state: &mut ClientSessionState<'_>) ->
 
     let interaction = crate::keyboard_input::key_input_interaction(key, &bytes);
     let render_dirty = handle.write_input(&bytes)?;
-    let pane_id = active_pane.pane_id();
     let tracked_process_change =
         state
             .pane_tracked_processes
-            .record_active_pane_user_interaction(active_pane, interaction, Instant::now());
+            .record_focused_client_user_interaction(pane_id, interaction, Instant::now());
     let cmd_handoff_pane_id =
         (interaction == TrackedProcessUserInteraction::StartsTrackedProcessWork).then_some(pane_id);
     Ok(PaneInputOutcome {
@@ -99,13 +97,12 @@ fn write_active_pane_user_input(
     interactive_render: bool,
     write: impl FnOnce(&PtyHandle) -> rootcause::Result<bool>,
 ) -> rootcause::Result<PaneInputOutcome> {
-    let (active_pane, handle) = self::active_pane_handle_with_id(state)?;
+    let (pane_id, handle) = self::active_pane_handle_with_id(state)?;
     let render_dirty = write(&handle)?;
-    let pane_id = active_pane.pane_id();
     let tracked_process_change =
         state
             .pane_tracked_processes
-            .record_active_pane_user_interaction(active_pane, interaction, Instant::now());
+            .record_focused_client_user_interaction(pane_id, interaction, Instant::now());
     let cmd_handoff_pane_id =
         (interaction == TrackedProcessUserInteraction::StartsTrackedProcessWork).then_some(pane_id);
     Ok(PaneInputOutcome {
@@ -117,8 +114,10 @@ fn write_active_pane_user_input(
     })
 }
 
-fn active_pane_handle_with_id(state: &ClientSessionState<'_>) -> rootcause::Result<(ActivePaneId, PtyHandle)> {
-    let active_pane = state.layout.active_pane_token()?;
-    let handle = state.runtimes.handle(active_pane.pane_id())?;
-    Ok((active_pane, handle))
+fn active_pane_handle_with_id(state: &ClientSessionState<'_>) -> rootcause::Result<(PaneId, PtyHandle)> {
+    // The pane id is a same-turn focused-input proof. Input handlers consume it synchronously before any await or
+    // layout mutation, so tracked-process recording does not need another active-pane lookup on the per-key path.
+    let pane_id = state.layout.active_pane_id()?;
+    let handle = state.runtimes.handle(pane_id)?;
+    Ok((pane_id, handle))
 }
