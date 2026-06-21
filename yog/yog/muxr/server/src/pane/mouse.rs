@@ -8,6 +8,7 @@ use rootcause::report;
 
 use crate::client::session::ClientSessionState;
 use crate::pane::focus::PaneFocusClientOutcome;
+use crate::pane::tracked_process::TrackedProcessClientChange;
 use crate::pane::tracked_process::TrackedProcessUserInteraction;
 use crate::terminal::TerminalApplicationMode;
 use crate::terminal::TerminalCursorKeyMode;
@@ -51,6 +52,7 @@ pub struct PaneMouseClientOutcome {
     pub focus: PaneFocusClientOutcome,
     pub render_dirty: bool,
     pub sync_render_deadline: bool,
+    pub tracked_process_change: Option<TrackedProcessClientChange>,
 }
 
 impl PaneMouseClientOutcome {
@@ -59,6 +61,7 @@ impl PaneMouseClientOutcome {
             focus: PaneFocusClientOutcome::Unchanged,
             render_dirty: false,
             sync_render_deadline: false,
+            tracked_process_change: None,
         }
     }
 }
@@ -86,17 +89,20 @@ pub fn handle_mouse_event_client_request(
                     focus,
                     render_dirty: false,
                     sync_render_deadline: false,
+                    tracked_process_change: None,
                 });
             };
-            state.pane_tracked_processes.record_user_interaction(
+            let tracked_process_change = state.pane_tracked_processes.record_client_user_interaction(
+                state.layout,
                 *region.id(),
                 TrackedProcessUserInteraction::MayEcho,
                 Instant::now(),
-            );
+            )?;
             Ok(PaneMouseClientOutcome {
                 focus,
                 render_dirty: scrolled_to_bottom,
                 sync_render_deadline: true,
+                tracked_process_change,
             })
         }
         PaneMouseAction::FauxScrollPty {
@@ -104,15 +110,17 @@ pub fn handle_mouse_event_client_request(
             direction,
         } => {
             let render_dirty = handle.write_faux_scroll_input(direction, cursor_key_mode)?;
-            state.pane_tracked_processes.record_user_interaction(
+            let tracked_process_change = state.pane_tracked_processes.record_client_user_interaction(
+                state.layout,
                 *region.id(),
                 TrackedProcessUserInteraction::MayEcho,
                 Instant::now(),
-            );
+            )?;
             Ok(PaneMouseClientOutcome {
                 focus: PaneFocusClientOutcome::Unchanged,
                 render_dirty,
                 sync_render_deadline: true,
+                tracked_process_change,
             })
         }
         PaneMouseAction::ScrollHistory { direction } => {
@@ -122,12 +130,14 @@ pub fn handle_mouse_event_client_request(
                 focus: PaneFocusClientOutcome::Unchanged,
                 render_dirty: outcome.render_dirty,
                 sync_render_deadline: outcome.sync_render_deadline,
+                tracked_process_change: None,
             })
         }
         PaneMouseAction::FocusPane => Ok(PaneMouseClientOutcome {
             focus: crate::pane::focus::handle_focus_pane_at_client_request(event.position, state)?,
             render_dirty: false,
             sync_render_deadline: false,
+            tracked_process_change: None,
         }),
         PaneMouseAction::NoAction => Ok(PaneMouseClientOutcome::unchanged()),
     }

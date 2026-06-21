@@ -75,6 +75,18 @@ pub struct SessionLayout {
     pub session: SessionName,
 }
 
+/// Active pane at the instant it was read from a `SessionLayout`.
+///
+/// Use this before mutating focus/layout; it is a focused-pane proof for one input turn, not a durable pane handle.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ActivePaneId(PaneId);
+
+impl ActivePaneId {
+    pub const fn pane_id(self) -> PaneId {
+        self.0
+    }
+}
+
 impl SessionLayout {
     pub fn initial(session: &SessionName, metadata: SessionMetadata) -> rootcause::Result<Self> {
         let pane_id = PaneId::new(INITIAL_PANE_ID)?;
@@ -159,9 +171,30 @@ impl SessionLayout {
         Ok(self.active_tab()?.active_pane)
     }
 
+    /// Mint a point-in-time active-pane token for callers that must prove user input targeted the focused pane.
+    pub fn active_pane_token(&self) -> rootcause::Result<ActivePaneId> {
+        Ok(ActivePaneId(self.active_pane_id()?))
+    }
+
     /// Return panes in layout order.
     pub fn panes(&self) -> Vec<&Pane> {
         self.entries.iter().flat_map(Tab::panes).collect()
+    }
+
+    /// Return pane ids in layout order.
+    pub fn pane_ids(&self) -> Vec<PaneId> {
+        let mut ids = Vec::new();
+        for tab in &self.entries {
+            tab.pane_tree.append_pane_ids(&mut ids);
+        }
+        ids
+    }
+
+    /// Visit pane ids in layout order.
+    pub fn for_each_pane_id(&self, mut visit: impl FnMut(PaneId)) {
+        for tab in &self.entries {
+            self::for_each_pane_tree_id(&tab.pane_tree, &mut visit);
+        }
     }
 
     /// Find one pane by id.
@@ -235,6 +268,16 @@ fn next_number(ids: impl Iterator<Item = u32>, kind: &str) -> rootcause::Result<
     max_number
         .checked_add(1)
         .ok_or_else(|| report!("muxr layout id counter overflowed").attach(format!("kind={kind}")))
+}
+
+fn for_each_pane_tree_id(tree: &PaneTree, visit: &mut impl FnMut(PaneId)) {
+    match tree {
+        PaneTree::Pane(pane) => visit(pane.id),
+        PaneTree::Split { first, second, .. } => {
+            self::for_each_pane_tree_id(first, visit);
+            self::for_each_pane_tree_id(second, visit);
+        }
+    }
 }
 
 #[cfg(test)]

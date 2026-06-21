@@ -3,7 +3,9 @@ use std::time::Instant;
 use muxr_transport::ServerEventWriter;
 
 use crate::client::session::ClientSessionState;
+use crate::client::session::ReapedPanes;
 use crate::client::timers::ClientTimers;
+use crate::pane::tracked_process::TrackedProcessChanges;
 use crate::session::runtime::SessionPaneOutputMessage;
 
 pub async fn handle_pane_output_message(
@@ -15,7 +17,15 @@ pub async fn handle_pane_output_message(
 ) -> rootcause::Result<bool> {
     match event {
         Some(SessionPaneOutputMessage::PaneExited) => {
-            Ok(!crate::client::session::handle_reaped_panes(state, event_writer).await?)
+            match crate::client::session::handle_reaped_panes(state, event_writer, timers).await? {
+                ReapedPanes::Unchanged => {}
+                ReapedPanes::LayoutChanged => {
+                    timers
+                        .sync_tracked_process_quiet_deadline_for_layout(&state.pane_tracked_processes, state.layout)?;
+                }
+                ReapedPanes::Stop => return Ok(false),
+            }
+            Ok(true)
         }
         Some(SessionPaneOutputMessage::PaneOutputReady) => {
             let screen_dirty_panes = state.runtimes.take_screen_dirty_panes();
@@ -33,7 +43,7 @@ pub async fn handle_pane_output_message(
             // Start the coalescing window before bounded writer sends below; otherwise slow sends add another frame.
             timers.sync_render_deadline(*render_dirty)?;
             let now = Instant::now();
-            let tracked_process_changed = if screen_dirty {
+            let tracked_process_changes = if screen_dirty {
                 state.pane_tracked_processes.observe_runtime_visible_activity(
                     state.config.user_config.as_ref(),
                     state.runtimes,
@@ -41,14 +51,14 @@ pub async fn handle_pane_output_message(
                     now,
                 )?
             } else {
-                false
+                TrackedProcessChanges::default()
             };
             if !title_changes.is_empty()
                 && !crate::screen_render::flush_cmd_label_layout(event_writer, state, title_changes).await?
             {
                 return Ok(false);
             }
-            if tracked_process_changed
+            if tracked_process_changes.state_changed()
                 && !crate::screen_render::flush_tracked_process_runtime_layout(
                     timers,
                     event_writer,
@@ -60,11 +70,18 @@ pub async fn handle_pane_output_message(
             {
                 return Ok(false);
             }
-            timers.sync_tracked_process_quiet_deadline(state.pane_tracked_processes.next_quiet_deadline()?)?;
             // PTY exit status is sticky state. Detached exits wake the server loop through `pane_exit_notify`; while
             // attached, the bounded output channel is only a wakeup hint, so sweep the sticky state here.
-            if crate::client::session::handle_reaped_panes(state, event_writer).await? {
-                return Ok(false);
+            let reap = crate::client::session::handle_reaped_panes(state, event_writer, timers).await?;
+            let layout_changed = match reap {
+                ReapedPanes::Unchanged => false,
+                ReapedPanes::LayoutChanged => true,
+                ReapedPanes::Stop => return Ok(false),
+            };
+            if tracked_process_changes.deadline_changed() || layout_changed {
+                // Visible tracked output can move only the quiet deadline while leaving the sidebar state unchanged.
+                // Reap/restore can change the focused pane, so both cases need one sync after the output turn settles.
+                timers.sync_tracked_process_quiet_deadline_for_layout(&state.pane_tracked_processes, state.layout)?;
             }
             Ok(true)
         }

@@ -46,7 +46,7 @@ pub fn initial_client_render(
     terminal_size: &TerminalSize,
 ) -> rootcause::Result<(LayoutSnapshot, PaneRegionsSnapshot, RenderComposer, RenderUpdate)> {
     let mut render_composer = RenderComposer::default();
-    let tracked_processes = pane_tracked_processes.snapshot();
+    let tracked_processes = pane_tracked_processes.snapshot(layout);
     let layout_snapshot = self::layout_snapshot_and_persist(&config.paths, layout, runtimes, &tracked_processes)?;
     let pane_layout = PaneFullscreen::default().pane_layout(layout, terminal_size)?;
     let pane_regions = self::pane_regions_snapshot(&pane_layout, runtimes)?;
@@ -249,7 +249,7 @@ pub async fn flush_render_diff(
 fn runtime_pane_metadata(state: &ClientSessionState<'_>) -> rootcause::Result<PaneRuntimeMetadata> {
     let terminal_titles = state.runtimes.terminal_titles()?;
     let startup_cmd_labels = state.runtimes.startup_cmd_labels();
-    let tracked_processes = state.pane_tracked_processes.snapshot();
+    let tracked_processes = state.pane_tracked_processes.snapshot(state.layout);
     Ok(PaneRuntimeMetadata::from_sources(
         terminal_titles,
         startup_cmd_labels,
@@ -311,7 +311,7 @@ pub async fn handle_cmd_handoff_sample(
         &pane_ids,
         Instant::now(),
     )?;
-    timers.sync_tracked_process_quiet_deadline(state.pane_tracked_processes.next_quiet_deadline()?)?;
+    timers.sync_tracked_process_quiet_deadline_for_layout(&state.pane_tracked_processes, state.layout)?;
     if changed {
         let pane_surface_dirty =
             self::pane_ids_include_visible(state.layout, &state.pane_fullscreen, &state.terminal_size, &pane_ids)?;
@@ -426,7 +426,7 @@ pub async fn send_layout_and_baseline(
     state: &mut ClientSessionState<'_>,
 ) -> rootcause::Result<bool> {
     let (layout_snapshot, pane_regions, render_update) = {
-        let tracked_processes = state.pane_tracked_processes.snapshot();
+        let tracked_processes = state.pane_tracked_processes.snapshot(state.layout);
         let layout_snapshot = self::layout_snapshot_and_maybe_persist(
             &state.config.paths,
             state.layout,
@@ -542,8 +542,8 @@ mod tests {
             Instant::now(),
         ));
 
-        let snapshot =
-            self::layout_snapshot_and_persist(&paths, &mut layout, &runtimes, &tracked_processes.snapshot())?;
+        let tracked_snapshot = tracked_processes.snapshot(&layout);
+        let snapshot = self::layout_snapshot_and_persist(&paths, &mut layout, &runtimes, &tracked_snapshot)?;
 
         let pane = snapshot
             .tabs()

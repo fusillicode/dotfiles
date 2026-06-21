@@ -474,11 +474,16 @@ mod tests {
 
     use muxr_config::MuxrConfig;
     use muxr_core::RenderCell;
+    use muxr_core::TrackedProcessState;
 
     use super::*;
     use crate::keyboard_input::TabCmd;
+    use crate::pane::cmd::PaneCmd;
+    use crate::pane::cmd::PaneCmdObservation;
     use crate::pane::focus::PaneFocusDirection;
     use crate::pane::split::PaneSplitAxis;
+    use crate::pane::tracked_process::PaneTrackedProcesses;
+    use crate::pane::tracked_process::TrackedProcessAttention;
     use crate::server::test_helpers as server_test_helpers;
     use crate::session::start_seed::SessionStartSeed;
     use crate::state::test_helpers as state_test_helpers;
@@ -726,6 +731,58 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn test_tracked_process_quiet_sweep_when_editor_is_active_preserves_hidden_original_pane() -> rootcause::Result<()>
+    {
+        let user_config = MuxrConfig::default();
+        let mut layout = state_test_helpers::layout("work")?;
+        layout.split_active_pane(
+            user_config.layout,
+            state_test_helpers::metadata("sh", 2),
+            PaneSplitAxis::Vertical,
+        )?;
+        let original_layout = layout.clone();
+        let hidden_original_pane_id = layout.active_pane_id()?;
+        let visible_pane_id = PaneId::new(1)?;
+        let mut tracked_processes = PaneTrackedProcesses::default();
+        let then = Instant::now();
+        tracked_processes.observe_pane_cmd(&user_config, visible_pane_id, &self::fg_tracked_process("codex"), then);
+        tracked_processes.observe_pane_cmd(
+            &user_config,
+            hidden_original_pane_id,
+            &self::fg_tracked_process("codex"),
+            then,
+        );
+        layout.replace_active_pane_with_scrollback_editor(state_test_helpers::metadata(SCROLLBACK_EDITOR_TITLE, 3))?;
+
+        let attention =
+            tracked_processes.mark_quiet_deadlines(&layout, self::instant_after(then, Duration::from_secs(3))?)?;
+
+        pretty_assertions::assert_eq!(
+            attention,
+            TrackedProcessAttention::Unseen {
+                pane_ids: vec![visible_pane_id]
+            }
+        );
+        let editor_snapshot = tracked_processes.snapshot(&layout);
+        pretty_assertions::assert_eq!(
+            editor_snapshot
+                .panes()
+                .map(|(pane_id, _pane)| pane_id)
+                .collect::<Vec<_>>(),
+            vec![visible_pane_id]
+        );
+        pretty_assertions::assert_eq!(tracked_processes.next_quiet_deadline(&layout)?, None);
+        let snapshot = tracked_processes.snapshot(&original_layout);
+        let hidden_original = snapshot
+            .panes()
+            .find(|(pane_id, _pane)| *pane_id == hidden_original_pane_id)
+            .map(|(_pane_id, pane)| pane)
+            .ok_or_else(|| report!("expected hidden original pane tracked state"))?;
+        pretty_assertions::assert_eq!(hidden_original.state(), TrackedProcessState::Busy);
+        Ok(())
+    }
+
     fn wait_for_runtime_snapshot_contains(
         runtimes: &PaneRuntimes,
         pane_id: PaneId,
@@ -747,6 +804,22 @@ mod tests {
             }
             thread::sleep(Duration::from_millis(10));
         }
+    }
+
+    fn fg_tracked_process(executable: &str) -> PaneCmdObservation {
+        PaneCmdObservation::FgCmd {
+            cmd: PaneCmd {
+                executable: executable.to_owned(),
+                path: None,
+                pid: 42,
+            },
+        }
+    }
+
+    fn instant_after(instant: Instant, duration: Duration) -> rootcause::Result<Instant> {
+        instant
+            .checked_add(duration)
+            .ok_or_else(|| report!("test instant overflowed"))
     }
 
     fn snapshot_contains(rendered: &str, needle: &str) -> bool {
