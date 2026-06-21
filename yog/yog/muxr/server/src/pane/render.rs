@@ -181,6 +181,7 @@ impl RenderComposer {
         let mut cursor = RenderCursor {
             row: 0,
             col: 0,
+            shape: muxr_core::RenderCursorShape::Default,
             visible: false,
         };
 
@@ -209,6 +210,7 @@ impl RenderComposer {
                 cursor = RenderCursor {
                     row,
                     col,
+                    shape: snapshot.cursor().shape,
                     visible: true,
                 };
             }
@@ -357,6 +359,7 @@ mod tests {
         let cursor = RenderCursor {
             row: 0,
             col: 0,
+            shape: muxr_core::RenderCursorShape::Default,
             visible: false,
         };
         let rows = vec![RenderRowSpan::new(

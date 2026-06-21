@@ -10,6 +10,7 @@ use muxr_core::RenderCell;
 use muxr_core::RenderCellWidth;
 use muxr_core::RenderColor;
 use muxr_core::RenderCursor;
+use muxr_core::RenderCursorShape;
 use muxr_core::RenderRowSpan;
 use muxr_core::RenderStyle;
 use muxr_core::RenderTextStyle;
@@ -367,6 +368,9 @@ impl TerminalFocusEvent {
 
 #[derive(Default)]
 struct TerminalCallbacks {
+    // muxr consumes pane terminal escapes and redraws the outer terminal itself, so DECSCUSR cursor shape must be
+    // tracked as render state instead of being passed through.
+    cursor_shape: RenderCursorShape,
     focus_reporting: TerminalFocusReporting,
     // muxr only needs the active legacy/level-one decision to downgrade keys at the pane boundary.
     // Full kitty push/pop and set-behavior semantics stay out of this MVP until callers need them.
@@ -391,6 +395,7 @@ impl TerminalCallbacks {
     }
 
     const fn clear_tracked_application_modes(&mut self) {
+        self.cursor_shape = RenderCursorShape::Default;
         self.focus_reporting = TerminalFocusReporting::Disabled;
         self.keyboard_protocol = TerminalKeyboardProtocol::Legacy;
     }
@@ -426,6 +431,12 @@ impl TerminalCallbacks {
     fn push_keyboard_protocol_reply(&mut self) {
         self.replies.push(self.keyboard_protocol.reply_bytes().to_vec());
     }
+
+    fn update_cursor_shape(&mut self, params: &[&[u16]]) {
+        if let Some(shape) = self::cursor_shape_from_params(params) {
+            self.cursor_shape = shape;
+        }
+    }
 }
 
 impl vt100::Callbacks for TerminalCallbacks {
@@ -440,6 +451,7 @@ impl vt100::Callbacks for TerminalCallbacks {
         match (first_intermediate, second_intermediate, cmd) {
             (Some(b'?'), None, 'h') => self.update_focus_reporting(params, true),
             (Some(b'?'), None, 'l') => self.update_focus_reporting(params, false),
+            (Some(b' '), None, 'q') => self.update_cursor_shape(params),
             (Some(b'>'), None, 'u') => self.update_keyboard_protocol_level(params),
             (Some(b'='), None, 'u') => self.set_keyboard_protocol_level(params),
             (Some(b'<'), None, 'u') => self.keyboard_protocol = TerminalKeyboardProtocol::Legacy,
@@ -612,11 +624,18 @@ impl TerminalState {
     }
 
     pub fn snapshot(&self) -> rootcause::Result<TerminalSnapshot> {
-        let (screen_rows, screen_cols, cursor_row, cursor_col, hide_cursor) = {
+        let (screen_rows, screen_cols, cursor_row, cursor_col, cursor_shape, hide_cursor) = {
             let screen = self.parser.screen();
             let (rows, cols) = screen.size();
             let (cursor_row, cursor_col) = screen.cursor_position();
-            (rows, cols, cursor_row, cursor_col, screen.hide_cursor())
+            (
+                rows,
+                cols,
+                cursor_row,
+                cursor_col,
+                self.parser.callbacks().cursor_shape,
+                screen.hide_cursor(),
+            )
         };
         let size = TerminalSize::new(screen_cols, screen_rows)?;
         let cursor_visible = self.scrollback.viewport_offset() == 0
@@ -626,6 +645,7 @@ impl TerminalState {
         let cursor = RenderCursor {
             row: cursor_row,
             col: cursor_col,
+            shape: cursor_shape,
             visible: cursor_visible,
         };
         let visible_rows = self.visible_rows(screen_rows);
@@ -832,6 +852,14 @@ fn single_csi_param(params: &[&[u16]]) -> Option<u16> {
     }
 
     param.first().copied()
+}
+
+fn cursor_shape_from_params(params: &[&[u16]]) -> Option<RenderCursorShape> {
+    if params.len() > 1 {
+        return None;
+    }
+    let param = params.first().and_then(|param| param.first()).copied().unwrap_or(0);
+    RenderCursorShape::from_csi_param(param)
 }
 
 fn screen_rows(screen: &vt100::Screen, rows: u16, cols: u16, row_count: usize) -> Vec<TerminalVisibleRow> {
@@ -1051,6 +1079,26 @@ mod tests {
         pretty_assertions::assert_eq!(terminal.process(b"\x1b[2;3H").into_replies(), Vec::<Vec<u8>>::new());
 
         pretty_assertions::assert_eq!(terminal.process(b"\x1b[6n").into_replies(), vec![b"\x1b[2;3R".to_vec()]);
+        Ok(())
+    }
+
+    #[test]
+    fn test_terminal_state_snapshot_when_cursor_shape_is_set_returns_shape() -> rootcause::Result<()> {
+        let mut terminal = self::terminal_state(&terminal_size()?);
+
+        pretty_assertions::assert_eq!(terminal.process(b"\x1b[6 q").into_replies(), Vec::<Vec<u8>>::new());
+
+        pretty_assertions::assert_eq!(terminal.snapshot()?.cursor().shape, RenderCursorShape::SteadyBar);
+        Ok(())
+    }
+
+    #[test]
+    fn test_terminal_state_snapshot_when_terminal_resets_clears_cursor_shape() -> rootcause::Result<()> {
+        let mut terminal = self::terminal_state(&terminal_size()?);
+
+        pretty_assertions::assert_eq!(terminal.process(b"\x1b[6 q\x1bc").into_replies(), Vec::<Vec<u8>>::new());
+
+        pretty_assertions::assert_eq!(terminal.snapshot()?.cursor().shape, RenderCursorShape::Default);
         Ok(())
     }
 

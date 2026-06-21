@@ -213,6 +213,7 @@ where
 pub struct RenderCursor {
     pub col: u16,
     pub row: u16,
+    pub shape: RenderCursorShape,
     pub visible: bool,
 }
 
@@ -230,6 +231,36 @@ impl RenderCursor {
         }
 
         Ok(())
+    }
+}
+
+/// Visible cursor shape requested by the pane application.
+#[derive(rkyv::Archive, Clone, Copy, Debug, Default, rkyv::Deserialize, Eq, PartialEq, Serialize, rkyv::Serialize)]
+pub enum RenderCursorShape {
+    /// Terminal default cursor shape (`CSI 0 SP q`).
+    #[default]
+    Default,
+    BlinkingBlock,
+    SteadyBlock,
+    BlinkingUnderline,
+    SteadyUnderline,
+    BlinkingBar,
+    SteadyBar,
+}
+
+impl RenderCursorShape {
+    #[must_use]
+    pub const fn from_csi_param(param: u16) -> Option<Self> {
+        match param {
+            0 => Some(Self::Default),
+            1 => Some(Self::BlinkingBlock),
+            2 => Some(Self::SteadyBlock),
+            3 => Some(Self::BlinkingUnderline),
+            4 => Some(Self::SteadyUnderline),
+            5 => Some(Self::BlinkingBar),
+            6 => Some(Self::SteadyBar),
+            _ => None,
+        }
     }
 }
 
@@ -748,6 +779,7 @@ mod tests {
                 RenderCursor {
                     row: 0,
                     col: 0,
+                    shape: RenderCursorShape::Default,
                     visible: true
                 },
                 render_rows
@@ -773,6 +805,7 @@ mod tests {
                 RenderCursor {
                     row: 0,
                     col: 0,
+                    shape: RenderCursorShape::Default,
                     visible: true
                 },
                 vec![RenderRowSpan::new(0, 0, self::render_cells(1))?],
@@ -797,6 +830,7 @@ mod tests {
                 RenderCursor {
                     row: 0,
                     col: 0,
+                    shape: RenderCursorShape::Default,
                     visible: true
                 },
                 vec![row],
@@ -842,6 +876,7 @@ mod tests {
                 RenderCursor {
                     row: 0,
                     col: 0,
+                    shape: RenderCursorShape::Default,
                     visible: true
                 },
                 vec![row],
@@ -866,6 +901,7 @@ mod tests {
                 RenderCursor {
                     row: 0,
                     col: 0,
+                    shape: RenderCursorShape::Default,
                     visible: true
                 },
                 rows
@@ -893,6 +929,7 @@ mod tests {
             RenderCursor {
                 row: 0,
                 col: 0,
+                shape: RenderCursorShape::Default,
                 visible: true,
             },
             vec![row],

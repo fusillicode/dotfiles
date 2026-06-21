@@ -18,6 +18,7 @@ pub use pane_render::RenderCell;
 pub use pane_render::RenderCellWidth;
 pub use pane_render::RenderColor;
 pub use pane_render::RenderCursor;
+pub use pane_render::RenderCursorShape;
 pub use pane_render::RenderDiff;
 pub use pane_render::RenderHyperlink;
 pub use pane_render::RenderRowSpan;

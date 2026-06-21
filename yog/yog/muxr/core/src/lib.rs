@@ -20,6 +20,7 @@ pub use protocol::RenderCell;
 pub use protocol::RenderCellWidth;
 pub use protocol::RenderColor;
 pub use protocol::RenderCursor;
+pub use protocol::RenderCursorShape;
 pub use protocol::RenderDiff;
 pub use protocol::RenderHyperlink;
 pub use protocol::RenderRowSpan;

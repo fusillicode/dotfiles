@@ -875,6 +875,7 @@ mod tests {
             muxr_core::RenderCursor {
                 row: 0,
                 col: 1,
+                shape: muxr_core::RenderCursorShape::Default,
                 visible: true,
             },
             vec![muxr_core::RenderRowSpan::new(
