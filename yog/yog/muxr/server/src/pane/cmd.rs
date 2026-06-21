@@ -1,5 +1,7 @@
 use std::path::Path;
 
+use libproc::processes::ProcFilter;
+
 use crate::pty::PtyHandle;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -66,48 +68,117 @@ impl TryFrom<&PtyHandle> for PaneCmdSnapshot {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum PaneCmdObservation {
-    FgCmd { cmd: PaneCmd },
+    FgCmd(FgCmd),
     Shell,
     Unknown { reason: PaneCmdUnknownReason },
 }
 
+/// Fg command observation with a lazy same-process-group fallback.
+///
+/// Wrappers such as `ags` can stay the fg group leader while a configured agent is a child process. Consumers
+/// check the leader first and only scan the process group when the leader itself is not tracked.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct FgCmd {
+    leader_cmd: Option<PaneCmd>,
+    process_group: FgProcessGroup,
+    process_group_cmds: Option<Result<Vec<PaneCmd>, ProcessGroupLookupError>>,
+}
+
+impl FgCmd {
+    const fn live(leader_cmd: Option<PaneCmd>, process_group: u32, shell_pid: Option<u32>) -> Self {
+        Self {
+            leader_cmd,
+            process_group: FgProcessGroup {
+                pid: process_group,
+                shell_pid,
+            },
+            process_group_cmds: None,
+        }
+    }
+
+    pub const fn leader_cmd(&self) -> Option<&PaneCmd> {
+        self.leader_cmd.as_ref()
+    }
+
+    pub fn process_group_cmds(&self) -> Result<Vec<PaneCmd>, ProcessGroupLookupError> {
+        if let Some(process_group_cmds) = &self.process_group_cmds {
+            return process_group_cmds.clone();
+        }
+        self.process_group.commands()
+    }
+
+    #[cfg(test)]
+    pub const fn from_test_cmd(cmd: PaneCmd) -> Self {
+        Self::from_test_group(Some(cmd), Ok(Vec::new()))
+    }
+
+    #[cfg(test)]
+    pub const fn from_test_group(
+        leader_cmd: Option<PaneCmd>,
+        process_group_cmds: Result<Vec<PaneCmd>, ProcessGroupLookupError>,
+    ) -> Self {
+        Self {
+            leader_cmd,
+            process_group: FgProcessGroup {
+                pid: 0,
+                shell_pid: None,
+            },
+            process_group_cmds: Some(process_group_cmds),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct FgProcessGroup {
+    pid: u32,
+    shell_pid: Option<u32>,
+}
+
+impl FgProcessGroup {
+    fn commands(&self) -> Result<Vec<PaneCmd>, ProcessGroupLookupError> {
+        self::process_group_members(self.pid).map(|members| {
+            members
+                .into_iter()
+                .filter(|member| self.shell_pid != Some(member.pid))
+                .filter_map(|member| member.cmd())
+                .collect()
+        })
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ProcessGroupLookupError {
+    Failed,
+}
+
 impl From<&PaneCmdSnapshot> for PaneCmdObservation {
     fn from(snapshot: &PaneCmdSnapshot) -> Self {
-        if snapshot.fg_process_group.is_none() {
+        let Some(fg_process_group) = snapshot.fg_process_group else {
             return Self::Unknown {
                 reason: PaneCmdUnknownReason::MissingFgProcessGroup,
             };
+        };
+        if snapshot
+            .shell_pid
+            .is_some_and(|shell_pid| fg_process_group == shell_pid)
+        {
+            return Self::Shell;
         }
 
         if let Some(process) = &snapshot.fg_process_group_leader {
-            return self::observe_process(process, snapshot.shell_pid);
+            if snapshot.shell_pid.is_some_and(|shell_pid| process.pid == shell_pid) {
+                return Self::Shell;
+            }
+            return Self::FgCmd(FgCmd::live(process.cmd(), fg_process_group, snapshot.shell_pid));
         }
 
-        Self::Unknown {
-            reason: PaneCmdUnknownReason::MissingFgProcess,
-        }
+        Self::FgCmd(FgCmd::live(None, fg_process_group, snapshot.shell_pid))
     }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PaneCmdUnknownReason {
-    FgProcessHasNoExecutable,
-    MissingFgProcess,
     MissingFgProcessGroup,
-}
-
-fn observe_process(process: &PaneProcess, shell_pid: Option<u32>) -> PaneCmdObservation {
-    if shell_pid.is_some_and(|shell_pid| process.pid == shell_pid) {
-        return PaneCmdObservation::Shell;
-    }
-
-    let Some(cmd) = process.cmd() else {
-        return PaneCmdObservation::Unknown {
-            reason: PaneCmdUnknownReason::FgProcessHasNoExecutable,
-        };
-    };
-
-    PaneCmdObservation::FgCmd { cmd }
 }
 
 fn process_executable(raw: Option<&str>) -> Option<&str> {
@@ -117,6 +188,14 @@ fn process_executable(raw: Option<&str>) -> Option<&str> {
     }
 
     Path::new(raw).file_name().and_then(|name| name.to_str()).or(Some(raw))
+}
+
+fn process_group_members(process_group: u32) -> Result<Vec<PaneProcess>, ProcessGroupLookupError> {
+    let Ok(mut pids) = libproc::processes::pids_by_type(ProcFilter::ByProgramGroup { pgrpid: process_group }) else {
+        return Err(ProcessGroupLookupError::Failed);
+    };
+    pids.sort_unstable();
+    Ok(pids.into_iter().filter_map(PaneProcess::from_pid).collect())
 }
 
 #[cfg(test)]
@@ -146,25 +225,34 @@ mod tests {
             shell_pid: Some(9322),
         });
 
-        assert2::assert!(let PaneCmdObservation::FgCmd { cmd } = observation);
+        assert2::assert!(let PaneCmdObservation::FgCmd(fg_cmd) = observation);
+        let cmd = fg_cmd.leader_cmd().expect("expected leader command");
         pretty_assertions::assert_eq!(cmd.executable, "demo-aarch64-apple-darwin");
         pretty_assertions::assert_eq!(cmd.pid, 9400);
     }
 
     #[test]
-    fn test_observe_pane_cmd_when_leader_is_missing_returns_unknown() {
+    fn test_observe_pane_cmd_when_leader_is_missing_returns_fg_cmd_without_leader() {
         let observation = PaneCmdObservation::from(&PaneCmdSnapshot {
             fg_process_group: Some(9400),
             fg_process_group_leader: None,
             shell_pid: Some(9322),
         });
 
-        pretty_assertions::assert_eq!(
-            observation,
-            PaneCmdObservation::Unknown {
-                reason: PaneCmdUnknownReason::MissingFgProcess,
-            },
-        );
+        assert2::assert!(let PaneCmdObservation::FgCmd(fg_cmd) = observation);
+        assert2::assert!(fg_cmd.leader_cmd().is_none());
+    }
+
+    #[test]
+    fn test_observe_pane_cmd_when_fg_group_has_child_command_returns_group_cmd() {
+        let observation = PaneCmdObservation::FgCmd(FgCmd::from_test_group(
+            Some(self::cmd(17869, "ags")),
+            Ok(vec![self::cmd(17989, "codex")]),
+        ));
+
+        assert2::assert!(let PaneCmdObservation::FgCmd(fg_cmd) = observation);
+        pretty_assertions::assert_eq!(fg_cmd.leader_cmd().expect("expected leader command").executable, "ags");
+        pretty_assertions::assert_eq!(fg_cmd.process_group_cmds(), Ok(vec![self::cmd(17989, "codex")]));
     }
 
     #[test]
@@ -186,8 +274,8 @@ mod tests {
             shell_pid: Some(9322),
         });
 
-        assert2::assert!(let PaneCmdObservation::FgCmd { cmd } = observation);
-        pretty_assertions::assert_eq!(cmd.executable, "nvim");
+        assert2::assert!(let PaneCmdObservation::FgCmd(fg_cmd) = observation);
+        pretty_assertions::assert_eq!(fg_cmd.leader_cmd().expect("expected leader command").executable, "nvim");
     }
 
     fn process(pid: u32, name: &str) -> PaneProcess {
@@ -202,6 +290,14 @@ mod tests {
         PaneProcess {
             name: Some(name.to_owned()),
             path: Some(path.to_owned()),
+            pid,
+        }
+    }
+
+    fn cmd(pid: u32, executable: &str) -> PaneCmd {
+        PaneCmd {
+            executable: executable.to_owned(),
+            path: None,
             pid,
         }
     }

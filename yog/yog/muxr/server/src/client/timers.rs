@@ -507,13 +507,11 @@ mod tests {
     }
 
     fn fg_tracked_process(executable: &str) -> crate::pane::cmd::PaneCmdObservation {
-        crate::pane::cmd::PaneCmdObservation::FgCmd {
-            cmd: crate::pane::cmd::PaneCmd {
-                executable: executable.to_owned(),
-                path: None,
-                pid: 42,
-            },
-        }
+        crate::pane::cmd::PaneCmdObservation::FgCmd(crate::pane::cmd::FgCmd::from_test_cmd(crate::pane::cmd::PaneCmd {
+            executable: executable.to_owned(),
+            path: None,
+            pid: 42,
+        }))
     }
 
     fn successful_exit_status() -> crate::pty::PtyExitStatus {

@@ -532,13 +532,11 @@ mod tests {
         assert2::assert!(tracked_processes.observe_pane_cmd(
             &MuxrConfig::default(),
             pane_id,
-            &PaneCmdObservation::FgCmd {
-                cmd: PaneCmd {
-                    executable: "codex".to_owned(),
-                    path: None,
-                    pid: 42,
-                },
-            },
+            &PaneCmdObservation::FgCmd(crate::pane::cmd::FgCmd::from_test_cmd(PaneCmd {
+                executable: "codex".to_owned(),
+                path: None,
+                pid: 42,
+            })),
             Instant::now(),
         ));
 
