@@ -18,6 +18,7 @@ use muxr_core::RenderCell;
 use muxr_core::RenderCellWidth;
 use muxr_core::RenderColor;
 use muxr_core::RenderCursor;
+use muxr_core::RenderCursorShape;
 use muxr_core::RenderDiff;
 use muxr_core::RenderRowSpan;
 use muxr_core::RenderStyle;
@@ -407,6 +408,7 @@ fn render_cursor(
     col_offset: u16,
 ) -> rootcause::Result<()> {
     if cursor.visible {
+        queue_cursor_shape(stdout, cursor.shape)?;
         let row = cursor
             .row
             .checked_add(row_offset)
@@ -419,6 +421,22 @@ fn render_cursor(
         queue_cmd(stdout, Show)
     } else {
         queue_cmd(stdout, Hide)
+    }
+}
+
+fn queue_cursor_shape(stdout: &mut impl Write, shape: RenderCursorShape) -> rootcause::Result<()> {
+    queue_bytes(stdout, self::cursor_shape_sequence(shape))
+}
+
+const fn cursor_shape_sequence(shape: RenderCursorShape) -> &'static [u8] {
+    match shape {
+        RenderCursorShape::Default => b"\x1b[0 q",
+        RenderCursorShape::BlinkingBlock => b"\x1b[1 q",
+        RenderCursorShape::SteadyBlock => b"\x1b[2 q",
+        RenderCursorShape::BlinkingUnderline => b"\x1b[3 q",
+        RenderCursorShape::SteadyUnderline => b"\x1b[4 q",
+        RenderCursorShape::BlinkingBar => b"\x1b[5 q",
+        RenderCursorShape::SteadyBar => b"\x1b[6 q",
     }
 }
 
@@ -490,6 +508,7 @@ mod tests {
             RenderCursor {
                 row: 0,
                 col: 0,
+                shape: RenderCursorShape::Default,
                 visible: true,
             },
             vec![RenderRowSpan::new(0, 0, vec![render_cell("x")])?],
@@ -589,6 +608,24 @@ mod tests {
     }
 
     #[test]
+    fn test_frame_buffer_queue_when_cursor_shape_is_bar_emits_shape() -> rootcause::Result<()> {
+        let mut frame_buffer = FrameBuffer::default();
+        let ApplyOutcome::Applied(changes) = frame_buffer.apply(RenderUpdate::Baseline(
+            render_baseline_with_cursor_shape(RenderCursorShape::SteadyBar)?,
+        ))?
+        else {
+            return Err(report!("expected applied baseline"));
+        };
+        let mut output = Vec::new();
+
+        frame_buffer.queue_at_with_selection(&mut output, &changes, 0, 0, None, MuxrConfig::default().selection.bg)?;
+
+        let rendered = String::from_utf8(output).context("muxr render test output was not utf8")?;
+        assert2::assert!(rendered.contains("\x1b[6 q"));
+        Ok(())
+    }
+
+    #[test]
     fn test_frame_buffer_render_when_adjacent_cells_share_style_emits_one_color_transition() -> rootcause::Result<()> {
         let style = render_style(RenderColor::Indexed(1), RenderColor::Default, RenderTextStyle::empty());
         let mut frame_buffer = FrameBuffer::default();
@@ -649,6 +686,7 @@ mod tests {
             RenderCursor {
                 row: 1,
                 col: 1,
+                shape: RenderCursorShape::Default,
                 visible: true,
             },
             vec![RenderRowSpan::new(1, 1, vec![linked_render_cell("x", uri)?])?],
@@ -796,12 +834,17 @@ mod tests {
     }
 
     fn render_baseline() -> rootcause::Result<muxr_core::RenderBaseline> {
+        self::render_baseline_with_cursor_shape(RenderCursorShape::Default)
+    }
+
+    fn render_baseline_with_cursor_shape(shape: RenderCursorShape) -> rootcause::Result<muxr_core::RenderBaseline> {
         muxr_core::RenderBaseline::new(
             1,
             terminal_size()?,
             RenderCursor {
                 row: 0,
                 col: 0,
+                shape,
                 visible: true,
             },
             vec![
@@ -819,6 +862,7 @@ mod tests {
             RenderCursor {
                 row: 1,
                 col: 1,
+                shape: RenderCursorShape::Default,
                 visible: true,
             },
             vec![RenderRowSpan::new(1, 1, vec![render_cell("x")])?],
@@ -832,6 +876,7 @@ mod tests {
             RenderCursor {
                 row: 0,
                 col: 0,
+                shape: RenderCursorShape::Default,
                 visible: true,
             },
             vec![RenderRowSpan::new(
@@ -853,6 +898,7 @@ mod tests {
             RenderCursor {
                 row: 0,
                 col: 0,
+                shape: RenderCursorShape::Default,
                 visible: true,
             },
             vec![RenderRowSpan::new(

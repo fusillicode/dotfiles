@@ -180,6 +180,7 @@ mod tests {
     use super::super::pane_render::RenderBaseline;
     use super::super::pane_render::RenderCell;
     use super::super::pane_render::RenderCursor;
+    use super::super::pane_render::RenderCursorShape;
     use super::super::pane_render::RenderDiff;
     use super::super::pane_render::RenderRowSpan;
     use super::super::pane_render::RenderStyle;
@@ -385,6 +386,7 @@ mod tests {
             RenderCursor {
                 row: 1,
                 col: 2,
+                shape: RenderCursorShape::Default,
                 visible: true,
             },
             vec![
@@ -419,6 +421,7 @@ mod tests {
             RenderCursor {
                 row: 1,
                 col: 2,
+                shape: RenderCursorShape::Default,
                 visible: true,
             },
             vec![
@@ -454,6 +457,7 @@ mod tests {
             RenderCursor {
                 row: 1,
                 col: 3,
+                shape: RenderCursorShape::Default,
                 visible: true,
             },
             vec![RenderRowSpan::new(
@@ -473,6 +477,7 @@ mod tests {
                 RenderCursor {
                     row: 0,
                     col: 0,
+                    shape: RenderCursorShape::Default,
                     visible: true,
                 },
                 vec![pane_render_test_helpers::raw_render_row_span(

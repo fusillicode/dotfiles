@@ -17,6 +17,7 @@ use rootcause::prelude::ResultExt;
 
 const BRACKETED_PASTE_DISABLE: &[u8] = b"\x1b[?2004l";
 const BRACKETED_PASTE_ENABLE: &[u8] = b"\x1b[?2004h";
+const CURSOR_SHAPE_DEFAULT: &[u8] = b"\x1b[0 q";
 const KITTY_KEYBOARD_PROTOCOL_DISABLE: &[u8] = b"\x1b[<1u";
 const KITTY_KEYBOARD_PROTOCOL_ENABLE: &[u8] = b"\x1b[>1u";
 const MOUSE_BUTTON_CAPTURE_DISABLE: &[u8] = b"\x1b[?1000l";
@@ -199,6 +200,7 @@ fn restore_terminal(stdout: &mut impl Write) -> rootcause::Result<()> {
     queue_bytes(stdout, BRACKETED_PASTE_DISABLE)?;
     queue_cmd(stdout, LeaveAlternateScreen)?;
     reset_style(stdout)?;
+    queue_bytes(stdout, CURSOR_SHAPE_DEFAULT)?;
     queue_cmd(stdout, Show)?;
     stdout.flush().context("failed to flush muxr terminal restore")?;
     Ok(())
@@ -337,6 +339,7 @@ mod tests {
         assert2::assert!(rendered.contains("\x1b[?1000l"));
         assert2::assert!(rendered.contains("\x1b[?2004l"));
         assert2::assert!(rendered.contains("\x1b[?1049l"));
+        assert2::assert!(rendered.contains("\x1b[0 q"));
         assert2::assert!(rendered.contains("\x1b[?25h"));
         assert2::assert!(rendered.contains("\x1b[0m"));
         assert2::assert!(rendered.starts_with("\x1b]8;;\x1b\\"));

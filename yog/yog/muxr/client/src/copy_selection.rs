@@ -1518,6 +1518,7 @@ mod tests {
             RenderCursor {
                 row: 0,
                 col: 0,
+                shape: muxr_core::RenderCursorShape::Default,
                 visible: true,
             },
             vec![RenderRowSpan::new(
@@ -1539,6 +1540,7 @@ mod tests {
             RenderCursor {
                 row: 0,
                 col: 0,
+                shape: muxr_core::RenderCursorShape::Default,
                 visible: true,
             },
             vec![RenderRowSpan::new(
@@ -1560,6 +1562,7 @@ mod tests {
             RenderCursor {
                 row: 0,
                 col: 0,
+                shape: muxr_core::RenderCursorShape::Default,
                 visible: true,
             },
             vec![
@@ -1589,6 +1592,7 @@ mod tests {
             RenderCursor {
                 row: 0,
                 col: 0,
+                shape: muxr_core::RenderCursorShape::Default,
                 visible: true,
             },
             vec![RenderRowSpan::new(0, 0, first)?, RenderRowSpan::new(1, 0, second)?],
