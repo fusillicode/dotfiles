@@ -13,7 +13,6 @@ use crate::pane::cmd::PaneCmdObservation;
 use crate::pane::cmd::PaneCmdSnapshot;
 use crate::pane::cmd::ProcessGroupLookupError;
 use crate::pane::runtime::PaneRuntimes;
-use crate::state::ActivePaneId;
 use crate::state::SessionLayout;
 
 const USER_INPUT_VISIBLE_ACTIVITY_SUPPRESSION: Duration = Duration::from_millis(500);
@@ -604,13 +603,14 @@ impl PaneTrackedProcesses {
         Ok(TrackedProcessClientChange::from_changes(pane_id, changes))
     }
 
-    pub fn record_active_pane_user_interaction(
+    // Active-pane input resolves the focused pane handle in the same turn before calling this.
+    // Other client events must use the layout-aware API so focus cannot be asserted for an arbitrary pane.
+    pub(in crate::pane) fn record_focused_client_user_interaction(
         &mut self,
-        active_pane: ActivePaneId,
+        pane_id: PaneId,
         interaction: TrackedProcessUserInteraction,
         now: Instant,
     ) -> Option<TrackedProcessClientChange> {
-        let pane_id = active_pane.pane_id();
         let lifecycle = self.by_pane.get_mut(&pane_id)?;
         let changes = lifecycle.record_user_interaction(interaction, now, true);
         TrackedProcessClientChange::from_changes(pane_id, changes)

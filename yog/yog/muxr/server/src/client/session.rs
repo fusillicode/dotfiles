@@ -96,31 +96,22 @@ pub fn attach_pane_sink_to_state(state: &mut ClientSessionState<'_>, pane_id: Pa
     Ok(())
 }
 
-fn remove_pane_tracked_process(state: &mut ClientSessionState<'_>, pane_id: PaneId) {
+fn remove_pane_client_resources(state: &mut ClientSessionState<'_>, pane_id: PaneId) {
+    // This cleanup is used during attach/session teardown paths without live client timers.
+    state.sink_guards.retain(|sink| sink.pane_id != pane_id);
     // Pane IDs are allocated from the live layout max, so a removed high ID can be reused before the next quiet sweep.
     state.pane_tracked_processes.remove_pane(pane_id);
 }
 
-fn remove_pane_timer(timers: &mut ClientTimers, pane_id: PaneId) -> rootcause::Result<()> {
-    // Prompt-submit sampling fires after a short delay, so pane removal must clear the timer entry before the runtime
-    // disappears; otherwise the later sample can ask for a stale pane handle and tear down the client session.
-    timers.remove_cmd_handoff_sample_pane(pane_id)
-}
-
-fn remove_pane_client_resources(state: &mut ClientSessionState<'_>, pane_id: PaneId) {
-    // This cleanup is used during attach/session teardown paths without live client timers. Live pane removal must go
-    // through `remove_pane_from_client_state` so delayed command-handoff samples are also cleared.
-    state.sink_guards.retain(|sink| sink.pane_id != pane_id);
-    self::remove_pane_tracked_process(state, pane_id);
-}
-
-fn remove_pane_tracking_state(
+fn remove_live_pane_tracking(
     state: &mut ClientSessionState<'_>,
     timers: &mut ClientTimers,
     pane_id: PaneId,
 ) -> rootcause::Result<()> {
-    self::remove_pane_tracked_process(state, pane_id);
-    self::remove_pane_timer(timers, pane_id)
+    // Prompt-submit sampling fires after a short delay, so live pane removal must clear the timer entry before the
+    // runtime disappears; otherwise a later sample can ask for a stale pane handle and tear down the client session.
+    state.pane_tracked_processes.remove_pane(pane_id);
+    timers.remove_cmd_handoff_sample_pane(pane_id)
 }
 
 pub fn remove_pane_from_client_state(
@@ -128,8 +119,8 @@ pub fn remove_pane_from_client_state(
     timers: &mut ClientTimers,
     pane_id: PaneId,
 ) -> rootcause::Result<()> {
-    self::remove_pane_client_resources(state, pane_id);
-    self::remove_pane_timer(timers, pane_id)
+    state.sink_guards.retain(|sink| sink.pane_id != pane_id);
+    self::remove_live_pane_tracking(state, timers, pane_id)
 }
 
 pub async fn handle_client(
@@ -298,7 +289,7 @@ async fn run_client_session_loop(
                     request_turn = true;
                     // A full drain batch means output stayed hot. Re-arm quiet so requests get a turn before Busy can
                     // clear.
-                    quiet_turn.after_output(timers.tracked_process_quiet_sleep_deadline_has_passed());
+                    quiet_turn.defer_if_elapsed(timers.tracked_process_quiet_sleep_deadline_has_passed());
                     skip_quiet_this_turn = true;
                 }
                 OutputDrain::Detached => return Ok(()),
@@ -368,14 +359,14 @@ async fn run_client_session_loop(
                         return Ok(());
                     }
                     request_turn = false;
-                    quiet_turn.after_request(timers.tracked_process_quiet_sleep_deadline_has_passed());
+                    quiet_turn.defer_if_elapsed(timers.tracked_process_quiet_sleep_deadline_has_passed());
                 },
                 event = pty_event_receiver.recv() => {
                     request_turn = true;
                     if !crate::pty_output::handle_pane_output_message(event, event_writer, state, &mut timers, &mut render_dirty).await? {
                         return Ok(());
                     }
-                    quiet_turn.after_output(timers.tracked_process_quiet_sleep_deadline_has_passed());
+                    quiet_turn.defer_if_elapsed(timers.tracked_process_quiet_sleep_deadline_has_passed());
                 },
                 () = timers.tracked_process_quiet_sleep.as_mut() => {
                     if !self::handle_session_runtime_timer_message(
@@ -435,7 +426,7 @@ async fn run_client_session_loop(
                     if !crate::pty_output::handle_pane_output_message(event, event_writer, state, &mut timers, &mut render_dirty).await? {
                         return Ok(());
                     }
-                    quiet_turn.after_output(timers.tracked_process_quiet_sleep_deadline_has_passed());
+                    quiet_turn.defer_if_elapsed(timers.tracked_process_quiet_sleep_deadline_has_passed());
                 },
                 request = request_reader.recv_request() => {
                     let message = SessionClientMessage::from_request(request?);
@@ -443,7 +434,7 @@ async fn run_client_session_loop(
                         return Ok(());
                     }
                     request_turn = false;
-                    quiet_turn.after_request(timers.tracked_process_quiet_sleep_deadline_has_passed());
+                    quiet_turn.defer_if_elapsed(timers.tracked_process_quiet_sleep_deadline_has_passed());
                 },
                 () = timers.tracked_process_quiet_sleep.as_mut() => {
                     if !self::handle_session_runtime_timer_message(
@@ -595,12 +586,18 @@ pub async fn handle_reaped_panes(
         }
         ReapResult::Removed { pane_ids } => {
             for pane_id in &pane_ids {
-                self::remove_pane_tracking_state(state, timers, *pane_id)?;
+                self::remove_live_pane_tracking(state, timers, *pane_id)?;
             }
-            // Reap can remove multiple panes; update per-pane tracking/timers above, then sweep client sink guards
-            // against the removed ids once.
-            let removed_panes = pane_ids.iter().copied().collect::<BTreeSet<_>>();
-            state.sink_guards.retain(|sink| !removed_panes.contains(&sink.pane_id));
+            // Keep the common single-pane reap allocation-free. Batched reaps build membership once so cleanup does
+            // not become sink_guards * removed_panes work.
+            match pane_ids.as_slice() {
+                [] => {}
+                [pane_id] => state.sink_guards.retain(|sink| sink.pane_id != *pane_id),
+                pane_ids => {
+                    let pane_ids: BTreeSet<_> = pane_ids.iter().copied().collect();
+                    state.sink_guards.retain(|sink| !pane_ids.contains(&sink.pane_id));
+                }
+            }
             let previous_pane = if restored_editor.restored() {
                 previous_pane_before_restore
             } else {
@@ -968,6 +965,10 @@ mod tests {
     }
 
     #[tokio::test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "the test keeps close-pane focus, resource cleanup, and handoff timer assertions together"
+    )]
     async fn test_handle_client_message_when_close_pane_focuses_unseen_fallback_marks_seen() -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
         let mut config = crate::server::test_helpers::server_config(tempdir.path(), "work")?;
@@ -992,8 +993,16 @@ mod tests {
                 pane_ids: vec![fallback_pane_id]
             }
         );
+        pane_tracked_processes.observe_pane_cmd(
+            config.user_config.as_ref(),
+            active_pane_id,
+            &self::fg_tracked_process("codex"),
+            then,
+        );
         let mut timers = ClientTimers::new(&config)?;
         timers.sync_tracked_process_quiet_deadline_for_layout(&pane_tracked_processes, &layout)?;
+        timers.schedule_cmd_handoff_sample(active_pane_id)?;
+        timers.schedule_cmd_handoff_sample(fallback_pane_id)?;
 
         let mut runtimes = PaneRuntimes::spawn_for_start_seed(
             &config,
@@ -1016,7 +1025,7 @@ mod tests {
         let (mut event_writer, client_drain) = self::connect_client_event_drain(&config).await?;
         let delete_sessions = DeleteSessions::default();
         let (pty_event_sender, _pty_event_receiver) = mpsc::sync_channel(PANE_OUTPUT_EVENT_CHANNEL_LIMIT);
-        let mut sink_guards = Vec::new();
+        let mut sink_guards = super::attach_pane_sinks(&runtimes, &pty_event_sender)?;
         let mut state = ClientSessionState {
             pane_tracked_processes,
             config: &config,
@@ -1052,13 +1061,35 @@ mod tests {
 
         assert2::assert!(keep_attached);
         pretty_assertions::assert_eq!(state.layout.active_pane_id()?, fallback_pane_id);
+        let sink_guard_pane_ids = state.sink_guards.iter().map(|sink| sink.pane_id).collect::<Vec<_>>();
         let snapshot = state.pane_tracked_processes.snapshot(state.layout);
+        let tracked_process_pane_ids = snapshot.panes().map(|(pane_id, _pane)| pane_id).collect::<Vec<_>>();
+        let removed_tracked_process = state.pane_tracked_processes.remove_pane(active_pane_id);
         let fallback = snapshot
             .panes()
             .find(|(pane_id, _pane)| *pane_id == fallback_pane_id)
             .map(|(_pane_id, pane)| pane)
             .ok_or_else(|| rootcause::report!("expected fallback pane tracked state"))?;
-        pretty_assertions::assert_eq!(fallback.state(), TrackedProcessState::Seen);
+        pretty_assertions::assert_eq!(
+            (
+                state.layout.pane_ids(),
+                state.runtimes.pane_ids(),
+                sink_guard_pane_ids,
+                tracked_process_pane_ids,
+                removed_tracked_process,
+                fallback.state(),
+                timers.take_cmd_handoff_sample_panes()?,
+            ),
+            (
+                vec![fallback_pane_id],
+                vec![fallback_pane_id],
+                vec![fallback_pane_id],
+                vec![fallback_pane_id],
+                false,
+                TrackedProcessState::Seen,
+                vec![fallback_pane_id],
+            )
+        );
         self::abort_client_drain(client_drain).await;
         Ok(())
     }

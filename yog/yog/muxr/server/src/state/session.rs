@@ -75,18 +75,6 @@ pub struct SessionLayout {
     pub session: SessionName,
 }
 
-/// Active pane at the instant it was read from a `SessionLayout`.
-///
-/// Use this before mutating focus/layout; it is a focused-pane proof for one input turn, not a durable pane handle.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct ActivePaneId(PaneId);
-
-impl ActivePaneId {
-    pub const fn pane_id(self) -> PaneId {
-        self.0
-    }
-}
-
 impl SessionLayout {
     pub fn initial(session: &SessionName, metadata: SessionMetadata) -> rootcause::Result<Self> {
         let pane_id = PaneId::new(INITIAL_PANE_ID)?;
@@ -169,11 +157,6 @@ impl SessionLayout {
 
     pub fn active_pane_id(&self) -> rootcause::Result<PaneId> {
         Ok(self.active_tab()?.active_pane)
-    }
-
-    /// Mint a point-in-time active-pane token for callers that must prove user input targeted the focused pane.
-    pub fn active_pane_token(&self) -> rootcause::Result<ActivePaneId> {
-        Ok(ActivePaneId(self.active_pane_id()?))
     }
 
     /// Return panes in layout order.

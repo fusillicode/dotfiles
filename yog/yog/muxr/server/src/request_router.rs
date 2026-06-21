@@ -61,10 +61,12 @@ async fn handle_client_request(
             Ok(false)
         }
         ClientRequest::Input(bytes) => {
-            self::handle_input_request(&bytes, event_writer, state, timers, render_dirty).await
+            let outcome = crate::pane::input::handle_client_input(&bytes, state)?;
+            self::apply_pane_input_outcome(outcome, event_writer, state, timers, render_dirty).await
         }
         ClientRequest::Paste(bytes) => {
-            self::handle_paste_request(&bytes, event_writer, state, timers, render_dirty).await
+            let outcome = crate::pane::input::handle_client_paste(&bytes, state)?;
+            self::apply_pane_input_outcome(outcome, event_writer, state, timers, render_dirty).await
         }
         ClientRequest::Key(key) => self::handle_key_request(key, event_writer, state, timers, render_dirty).await,
         ClientRequest::Mouse(event) => {
@@ -140,40 +142,6 @@ async fn handle_client_request(
             Ok(false)
         }
     }
-}
-
-async fn handle_input_request(
-    bytes: &[u8],
-    event_writer: &mut ServerEventWriter,
-    state: &mut ClientSessionState<'_>,
-    timers: &mut ClientTimers,
-    render_dirty: &mut bool,
-) -> rootcause::Result<bool> {
-    self::apply_pane_input_outcome(
-        crate::pane::input::handle_client_input(bytes, state)?,
-        event_writer,
-        state,
-        timers,
-        render_dirty,
-    )
-    .await
-}
-
-async fn handle_paste_request(
-    bytes: &[u8],
-    event_writer: &mut ServerEventWriter,
-    state: &mut ClientSessionState<'_>,
-    timers: &mut ClientTimers,
-    render_dirty: &mut bool,
-) -> rootcause::Result<bool> {
-    self::apply_pane_input_outcome(
-        crate::pane::input::handle_client_paste(bytes, state)?,
-        event_writer,
-        state,
-        timers,
-        render_dirty,
-    )
-    .await
 }
 
 async fn apply_pane_input_outcome(
