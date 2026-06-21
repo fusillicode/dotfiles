@@ -807,13 +807,11 @@ mod tests {
     }
 
     fn fg_tracked_process(executable: &str) -> PaneCmdObservation {
-        PaneCmdObservation::FgCmd {
-            cmd: PaneCmd {
-                executable: executable.to_owned(),
-                path: None,
-                pid: 42,
-            },
-        }
+        PaneCmdObservation::FgCmd(crate::pane::cmd::FgCmd::from_test_cmd(PaneCmd {
+            executable: executable.to_owned(),
+            path: None,
+            pid: 42,
+        }))
     }
 
     fn instant_after(instant: Instant, duration: Duration) -> rootcause::Result<Instant> {

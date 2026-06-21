@@ -8,8 +8,10 @@ use muxr_config::TrackedProcess;
 use muxr_core::PaneId;
 use muxr_core::TrackedProcessState;
 
+use crate::pane::cmd::FgCmd;
 use crate::pane::cmd::PaneCmdObservation;
 use crate::pane::cmd::PaneCmdSnapshot;
+use crate::pane::cmd::ProcessGroupLookupError;
 use crate::pane::runtime::PaneRuntimes;
 use crate::state::ActivePaneId;
 use crate::state::SessionLayout;
@@ -662,23 +664,33 @@ fn tracked_process_observation_from_pane_cmd<'a>(
     observation: &PaneCmdObservation,
 ) -> TrackedProcessCmdObservation<'a> {
     match observation {
-        PaneCmdObservation::FgCmd { .. } => self::tracked_process_from_pane_cmd(config, observation).map_or(
-            TrackedProcessCmdObservation::TrustedUntracked,
-            TrackedProcessCmdObservation::Tracked,
-        ),
+        PaneCmdObservation::FgCmd(fg_cmd) => self::tracked_process_from_fg_cmd(config, fg_cmd),
         PaneCmdObservation::Shell => TrackedProcessCmdObservation::TrustedUntracked,
         PaneCmdObservation::Unknown { .. } => TrackedProcessCmdObservation::Unknown,
     }
 }
 
-fn tracked_process_from_pane_cmd<'a>(
-    config: &'a MuxrConfig,
-    observation: &PaneCmdObservation,
-) -> Option<&'a TrackedProcess> {
-    let PaneCmdObservation::FgCmd { cmd } = observation else {
-        return None;
-    };
-    config.tracked_process_for_cmd(&cmd.executable, cmd.path.as_deref())
+fn tracked_process_from_fg_cmd<'a>(config: &'a MuxrConfig, fg_cmd: &FgCmd) -> TrackedProcessCmdObservation<'a> {
+    let leader_cmd = fg_cmd.leader_cmd();
+    if let Some(cmd) = leader_cmd
+        && let Some(tracked_process) = config.tracked_process_for_cmd(&cmd.executable, cmd.path.as_deref())
+    {
+        return TrackedProcessCmdObservation::Tracked(tracked_process);
+    }
+
+    match fg_cmd.process_group_cmds() {
+        Ok(process_group_cmds) => {
+            let tracked_process = process_group_cmds
+                .iter()
+                .find_map(|cmd| config.tracked_process_for_cmd(&cmd.executable, cmd.path.as_deref()));
+            match (tracked_process, leader_cmd) {
+                (Some(tracked_process), _) => TrackedProcessCmdObservation::Tracked(tracked_process),
+                (None, Some(_)) => TrackedProcessCmdObservation::TrustedUntracked,
+                (None, None) => TrackedProcessCmdObservation::Unknown,
+            }
+        }
+        Err(ProcessGroupLookupError::Failed) => TrackedProcessCmdObservation::Unknown,
+    }
 }
 
 fn runtime_pane_cmd_observation(runtimes: &PaneRuntimes, pane_id: PaneId) -> rootcause::Result<PaneCmdObservation> {
@@ -945,6 +957,29 @@ mod tests {
             pane_tracked_process_status(&pane_tracked_processes, pane_id),
             TrackedProcessState::Busy
         );
+        let snapshot = pane_tracked_processes.snapshot(&layout);
+        let pane = self::tracked_process_snapshot_pane(&snapshot, pane_id)?;
+        pretty_assertions::assert_eq!(pane.label(), "cx");
+        pretty_assertions::assert_eq!(pane.state(), TrackedProcessState::Busy);
+        Ok(())
+    }
+
+    #[test]
+    fn test_observe_pane_cmd_when_tracked_process_is_fg_group_member_marks_busy() -> rootcause::Result<()> {
+        let layout = self::layout()?;
+        let mut pane_tracked_processes = PaneTrackedProcesses::default();
+        let pane_id = self::pane_id()?;
+
+        assert2::assert!(pane_tracked_processes.observe_pane_cmd(
+            &MuxrConfig::default(),
+            pane_id,
+            &PaneCmdObservation::FgCmd(FgCmd::from_test_group(
+                Some(self::cmd(17869, "ags")),
+                Ok(vec![self::cmd(17989, "codex")]),
+            )),
+            Instant::now(),
+        ));
+
         let snapshot = pane_tracked_processes.snapshot(&layout);
         let pane = self::tracked_process_snapshot_pane(&snapshot, pane_id)?;
         pretty_assertions::assert_eq!(pane.label(), "cx");
@@ -1505,12 +1540,14 @@ mod tests {
     }
 
     fn fg_cmd(executable: &str) -> PaneCmdObservation {
-        PaneCmdObservation::FgCmd {
-            cmd: PaneCmd {
-                executable: executable.to_owned(),
-                path: None,
-                pid: 42,
-            },
+        PaneCmdObservation::FgCmd(FgCmd::from_test_cmd(self::cmd(42, executable)))
+    }
+
+    fn cmd(pid: u32, executable: &str) -> PaneCmd {
+        PaneCmd {
+            executable: executable.to_owned(),
+            path: None,
+            pid,
         }
     }
 
@@ -1520,7 +1557,7 @@ mod tests {
 
     fn unknown() -> PaneCmdObservation {
         PaneCmdObservation::Unknown {
-            reason: PaneCmdUnknownReason::MissingFgProcess,
+            reason: PaneCmdUnknownReason::MissingFgProcessGroup,
         }
     }
 

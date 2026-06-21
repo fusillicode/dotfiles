@@ -2388,13 +2388,11 @@ mod tests {
     }
 
     fn fg_tracked_process(executable: &str) -> PaneCmdObservation {
-        PaneCmdObservation::FgCmd {
-            cmd: PaneCmd {
-                executable: executable.to_owned(),
-                path: None,
-                pid: 42,
-            },
-        }
+        PaneCmdObservation::FgCmd(crate::pane::cmd::FgCmd::from_test_cmd(PaneCmd {
+            executable: executable.to_owned(),
+            path: None,
+            pid: 42,
+        }))
     }
 
     async fn recv_test_event(reader: &mut ClientEventReader) -> rootcause::Result<Option<ServerEvent>> {
@@ -2532,8 +2530,8 @@ mod tests {
         let started_at = Instant::now();
         loop {
             let snapshot = PaneCmdSnapshot::try_from(&runtimes.handle(pane_id)?)?;
-            if let PaneCmdObservation::FgCmd { cmd } = PaneCmdObservation::from(&snapshot)
-                && cmd.executable == expected
+            if let PaneCmdObservation::FgCmd(fg_cmd) = PaneCmdObservation::from(&snapshot)
+                && fg_cmd.leader_cmd().is_some_and(|cmd| cmd.executable == expected)
             {
                 return Ok(());
             }
