@@ -12,7 +12,7 @@ use nvim_oxi::api::types::HighlightInfos;
 use rootcause::report;
 
 const GLOBAL_BG: &str = "#001300";
-const GLOBAL_FG: &str = "#c9c9c9";
+const GLOBAL_FG: &str = "#b9b9b9";
 
 const CURSOR_BG: &str = "white";
 const CURSOR_FG: &str = "black";

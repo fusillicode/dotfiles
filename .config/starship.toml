@@ -7,7 +7,7 @@ format = "$time$directory$git_branch$git_status$git_metrics$git_state${custom.gi
 [time]
 disabled = false
 format = "[$time ]($style)"
-style = "white bold"
+style = "#b9b9b9 bold"
 
 [directory]
 style = "bold #00ffff"
@@ -17,12 +17,12 @@ truncate_to_repo = false
 
 [git_branch]
 format = "[$branch ]($style)"
-style = "white"
+style = "#b9b9b9"
 
 [git_status]
 # Don't want the stashed symbol
 format = "[($conflicted$deleted$renamed$modified$typechanged$staged$untracked$ahead_behind )]($style)"
-style = "white"
+style = "#b9b9b9"
 ahead = '>${count}'
 behind = '<${count}'
 deleted = "-"
