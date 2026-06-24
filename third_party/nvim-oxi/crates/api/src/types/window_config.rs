@@ -53,8 +53,6 @@ pub struct WindowConfig {
 
     pub hide: Option<bool>,
 
-    #[cfg_attr(docsrs, doc(cfg(feature = "neovim-0-11")))]
-    #[cfg(feature = "neovim-0-11")] // On 0.11 and Nightly.
     #[serde(default)]
     pub mouse: bool,
 
@@ -280,6 +278,38 @@ impl FromObject for WindowConfig {
 
 #[derive(Clone, Default, Debug, macros::OptsBuilder)]
 #[repr(C)]
+#[cfg(not(feature = "neovim-0-12"))] // Only on 0.11
+pub struct WindowOpts {
+    #[builder(mask)]
+    mask: u64,
+    row: Float,
+    col: Float,
+    width: Integer,
+    height: Integer,
+    anchor: NvimString,
+    relative: NvimString,
+    split: NvimString,
+    win: WinHandle,
+    bufpos: Array,
+    external: Boolean,
+    focusable: Boolean,
+    mouse: Boolean,
+    vertical: Boolean,
+    zindex: Integer,
+    border: Object,
+    title: Object,
+    title_pos: NvimString,
+    footer: Object,
+    footer_pos: NvimString,
+    style: NvimString,
+    noautocmd: Boolean,
+    fixed: Boolean,
+    hide: Boolean,
+}
+
+#[derive(Clone, Default, Debug, macros::OptsBuilder)]
+#[repr(C)]
+#[cfg(feature = "neovim-0-12")] // On 0.12 and Nightly.
 pub struct WindowOpts {
     #[builder(mask)]
     mask: u64,
@@ -290,13 +320,11 @@ pub struct WindowOpts {
     footer_pos: NvimString,
     hide: Boolean,
     height: Integer,
-    #[cfg_attr(docsrs, doc(cfg(feature = "neovim-0-11")))]
-    #[cfg(feature = "neovim-0-11")] // On 0.11 and Nightly.
     mouse: Boolean,
-    noautocmd: Boolean,
     relative: NvimString,
     row: Float,
     style: NvimString,
+    noautocmd: Boolean,
     vertical: Boolean,
     win: WinHandle,
     width: Integer,
@@ -308,7 +336,6 @@ pub struct WindowOpts {
     split: NvimString,
     title: Object,
     title_pos: NvimString,
-    #[cfg(feature = "neovim-nightly")] // Only on Nightly.
     #[builder(skip)]
     _cmdline_offset: Integer,
 }
@@ -364,7 +391,6 @@ impl From<&WindowConfig> for WindowOpts {
             builder.focusable(focusable);
         }
 
-        #[cfg(feature = "neovim-0-11")] // On 0.11 and Nightly.
         builder.mouse(config.mouse);
 
         if let Some(vertical) = config.vertical {
@@ -432,7 +458,6 @@ impl TryFrom<WindowOpts> for WindowConfig {
             footer_pos,
             height,
             hide,
-            #[cfg(feature = "neovim-0-11")] // On 0.11 and Nightly.
             mouse,
             noautocmd,
             relative,
@@ -463,8 +488,8 @@ impl TryFrom<WindowOpts> for WindowConfig {
         enum WindowRelative {
             Editor,
             Win,
-            Cursor,
             Laststatus,
+            Cursor,
             Mouse,
             Tabline,
         }
@@ -478,10 +503,10 @@ impl TryFrom<WindowOpts> for WindowConfig {
                     let win = deserialize(win)?;
                     Some(WindowRelativeTo::Window(win))
                 },
-                WindowRelative::Cursor => Some(WindowRelativeTo::Cursor),
                 WindowRelative::Laststatus => {
                     Some(WindowRelativeTo::Laststatus)
                 },
+                WindowRelative::Cursor => Some(WindowRelativeTo::Cursor),
                 WindowRelative::Mouse => Some(WindowRelativeTo::Mouse),
                 WindowRelative::Tabline => Some(WindowRelativeTo::Tabline),
             },
@@ -512,7 +537,6 @@ impl TryFrom<WindowOpts> for WindowConfig {
             ))?,
             height: deserialize(height)?,
             hide: deserialize(hide)?,
-            #[cfg(feature = "neovim-0-11")] // On 0.11 and Nightly.
             mouse,
             noautocmd: deserialize(noautocmd)?,
             relative,

@@ -3,10 +3,8 @@
 use std::fmt::Debug;
 
 pub use nvim_oxi::api::opts;
+use nvim_oxi::api::opts::EchoOpts;
 pub use nvim_oxi::api::types;
-use nvim_oxi::api::types::LogLevel;
-
-use crate::dict;
 
 /// Types that can be converted to a notification message for Nvim.
 ///
@@ -42,14 +40,18 @@ impl Notifiable for &str {
 
 /// Notifies the user of an error message in Nvim.
 pub fn error<N: Notifiable>(notifiable: N) {
-    if let Err(err) = nvim_oxi::api::notify(notifiable.to_msg().as_ref(), LogLevel::Error, &dict! {}) {
+    if let Err(err) = echo(notifiable.to_msg().as_ref(), "ErrorMsg") {
         nvim_oxi::dbg!(format!("cannot notify error | msg={notifiable:?} error={err:#?}"));
     }
 }
 
 /// Notifies the user of a warning message in Nvim.
 pub fn warn<N: Notifiable>(notifiable: N) {
-    if let Err(err) = nvim_oxi::api::notify(notifiable.to_msg().as_ref(), LogLevel::Warn, &dict! {}) {
+    if let Err(err) = echo(notifiable.to_msg().as_ref(), "WarningMsg") {
         nvim_oxi::dbg!(format!("cannot notify warning | msg={notifiable:?} error={err:#?}"));
     }
+}
+
+fn echo(msg: &str, highlight: &str) -> Result<(), nvim_oxi::api::Error> {
+    nvim_oxi::api::echo([(msg, Some(highlight))], true, &EchoOpts::default()).map(drop)
 }

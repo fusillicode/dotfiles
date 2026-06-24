@@ -1,7 +1,6 @@
 use types::{Array, Integer};
 
-use crate::trait_utils::StringOrListOfStrings;
-#[cfg(feature = "neovim-0-11")] // On 0.11 and Nightly.
+use crate::SetExtmarkHlGroup;
 use crate::types::VirtLinesOverflow;
 use crate::types::{ExtmarkHlMode, ExtmarkVirtTextPosition};
 
@@ -28,20 +27,8 @@ pub struct SetExtmarkOpts {
     end_col: types::Integer,
 
     /// Name of the highlight group used to highlight this mark.
-    #[cfg(not(feature = "neovim-0-11"))] // Only on 0.10.
-    #[cfg_attr(docsrs, doc(cfg(not(feature = "neovim-0-11"))))]
     #[builder(
-        generics = "Hl: crate::HlGroup",
-        argtype = "Hl",
-        inline = r#"{ let Ok(hl_id) = {0}.to_hl_id() else { return self; }; hl_id }"#
-    )]
-    hl_group: types::HlGroupId,
-
-    /// Name of the highlight group used to highlight this mark.
-    #[cfg(feature = "neovim-0-11")] // Only on Nightly.
-    #[cfg_attr(docsrs, doc(cfg(feature = "neovim-0-11")))]
-    #[builder(
-        generics = "Hl: crate::SetExtmarkHlGroup",
+        generics = "Hl: SetExtmarkHlGroup",
         argtype = "Hl",
         inline = r#"{0}.into_object()"#
     )]
@@ -50,12 +37,12 @@ pub struct SetExtmarkOpts {
     /// Virtual text to link to this mark. Every `(text, highlights)` tuple
     /// represents a text chunk with a specified highlight. The highlights
     /// specified in `highlights` will be combined together, with the highest
-    /// priority highlight beign applied last. Each highlight group can either
+    /// priority highlight being applied last. Each highlight group can either
     /// be a string or an integer, the latter obtained using
     /// [`get_hl_id_by_name()`](crate::get_hl_id_by_name).
     #[builder(
-        generics = r#"Txt: Into<types::String>, Hl: StringOrListOfStrings, Cnk: IntoIterator<Item = (Txt, Hl)>"#,
-        argtype = "Cnk",
+        generics = r#"Text: Into<types::String>, Hl: SetExtmarkHlGroup, Chunks: IntoIterator<Item = (Text, Hl)>"#,
+        argtype = "Chunks",
         setter = "set_virt_text"
     )]
     virt_text: types::Array,
@@ -118,8 +105,8 @@ pub struct SetExtmarkOpts {
 
     /// Virtual lines to add next to the mark.
     #[builder(
-        generics = r#"Txt: Into<types::String>, Hl: StringOrListOfStrings, Cnk: IntoIterator<Item = (Txt, Hl)>, ChunkyCnk: IntoIterator<Item = Cnk>"#,
-        argtype = "ChunkyCnk",
+        generics = r#"Text: Into<types::String>, Hl: SetExtmarkHlGroup, Chunks: IntoIterator<Item = (Text, Hl)>, Lines: IntoIterator<Item = Chunks>"#,
+        argtype = "Lines",
         setter = "set_virt_lines"
     )]
     virt_lines: types::Array,
@@ -135,8 +122,6 @@ pub struct SetExtmarkOpts {
     virt_lines_leftcol: types::Boolean,
 
     /// Controls how to handle virtual lines wider than the window.
-    #[cfg_attr(docsrs, doc(cfg(feature = "neovim-0-11")))]
-    #[cfg(feature = "neovim-0-11")] // On 0.11 and Nightly.
     #[builder(argtype = "VirtLinesOverflow", inline = "{0}.into()")]
     virt_lines_overflow: types::String,
 
@@ -196,8 +181,6 @@ pub struct SetExtmarkOpts {
 
     /// When called, lines in the range are not drawn at all (according to
     /// `conceallevel`); the next unconcealed line is drawn instead.
-    #[cfg_attr(docsrs, doc(cfg(feature = "neovim-0-11")))]
-    #[cfg(feature = "neovim-0-11")] // On 0.11 and Nightly.
     #[builder(argtype = "()", inline = "{let _ = {0}; types::String::new()}")]
     conceal_lines: types::String,
 
@@ -227,41 +210,43 @@ pub struct SetExtmarkOpts {
     // the public API on nightly, even though it's still included in the opts.
     scoped: types::Boolean,
 
-    #[cfg(feature = "neovim-nightly")] // Only on Nightly.
+    #[cfg(feature = "neovim-0-12")] // On 0.12 and Nightly.
     #[builder(skip)]
-    _subpriority: Integer,
+    _subpriority: types::Integer,
 }
 
 #[inline]
-fn set_virt_lines<Txt, Hl, Cnk, ChunkyCnk>(
+fn set_virt_lines<Text, Hl, Chunks, Lines>(
     field: &mut Array,
-    virt_lines: ChunkyCnk,
+    virt_lines: Lines,
 ) where
-    ChunkyCnk: IntoIterator<Item = Cnk>,
-    Cnk: IntoIterator<Item = (Txt, Hl)>,
-    Txt: Into<types::String>,
-    Hl: StringOrListOfStrings,
+    Lines: IntoIterator<Item = Chunks>,
+    Chunks: IntoIterator<Item = (Text, Hl)>,
+    Text: Into<types::String>,
+    Hl: SetExtmarkHlGroup,
 {
     *field = virt_lines
         .into_iter()
-        .map(|chnky| {
-            Array::from_iter(chnky.into_iter().map(|(txt, hl)| {
-                Array::from_iter([txt.into().into(), hl.to_object()])
+        .map(|chunks| {
+            Array::from_iter(chunks.into_iter().map(|(text, hl)| {
+                Array::from_iter([text.into().into(), hl.into_object()])
             }))
         })
         .collect::<Array>();
 }
 
 #[inline]
-fn set_virt_text<Txt, Hl, Cnk>(field: &mut Array, virt_text: Cnk)
+fn set_virt_text<Text, Hl, Chunks>(field: &mut Array, virt_text: Chunks)
 where
-    Cnk: IntoIterator<Item = (Txt, Hl)>,
-    Txt: Into<types::String>,
-    Hl: StringOrListOfStrings,
+    Chunks: IntoIterator<Item = (Text, Hl)>,
+    Text: Into<types::String>,
+    Hl: SetExtmarkHlGroup,
 {
     *field = virt_text
         .into_iter()
-        .map(|(txt, hl)| Array::from_iter([txt.into().into(), hl.to_object()]))
+        .map(|(text, hl)| {
+            Array::from_iter([text.into().into(), hl.into_object()])
+        })
         .collect::<Array>();
 }
 

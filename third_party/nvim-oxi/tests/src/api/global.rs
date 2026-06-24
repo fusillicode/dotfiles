@@ -1,9 +1,5 @@
-use std::sync::Arc;
-
 use all_asserts::*;
 use nvim_oxi::api::{self, Buffer, Window, opts::*, types::*};
-use nvim_oxi::mlua::{Error as LuaError, IntoLuaMulti, Lua, Table};
-use nvim_oxi::{Dictionary, Object};
 
 #[nvim_oxi::test]
 fn chan_send_fail() {
@@ -39,6 +35,26 @@ fn echo() {
         &Default::default(),
     )
     .unwrap();
+}
+
+#[nvim_oxi::test]
+#[cfg(feature = "neovim-0-12")] // On 0.12 and Nightly.
+fn echo_update_message_id() {
+    let message_id = api::echo(
+        [("Hello ", None), ("World", Some("WarningMsg"))],
+        true,
+        &Default::default(),
+    )
+    .unwrap();
+
+    let new_message_id = api::echo(
+        [("Goodbye ", None), ("World", Some("WarningMsg"))],
+        true,
+        &EchoOpts::builder().id(message_id.clone()).build(),
+    )
+    .unwrap();
+
+    assert_eq!(message_id, new_message_id);
 }
 
 #[nvim_oxi::test]
@@ -97,7 +113,22 @@ fn get_context() {
 fn get_highlights() {
     let (name, _) = api::get_color_map().next().unwrap();
     let id = api::get_hl_id_by_name(&name).unwrap();
-    assert_eq!(api::get_hl_by_id(id, true), api::get_hl_by_name(&name, true));
+
+    let GetHlInfos::Single(by_id) =
+        api::get_hl(0, &GetHighlightOpts::builder().id(id).build()).unwrap()
+    else {
+        panic!("expected a single");
+    };
+
+    let GetHlInfos::Single(by_name) = api::get_hl(
+        0,
+        &GetHighlightOpts::builder().name(name.as_str()).build(),
+    )
+    .unwrap() else {
+        panic!("expected a single")
+    };
+
+    assert_eq!(by_id, by_name);
 }
 
 #[nvim_oxi::test]
@@ -127,11 +158,11 @@ fn get_options() {
 }
 
 #[nvim_oxi::test]
-fn get_option_info() {
+fn get_option_info2() {
     let opts =
         OptionOpts::builder().scope(api::opts::OptionScope::Global).build();
     api::set_option_value("number", true, &opts).unwrap();
-    assert!(api::get_option_info("number").is_ok());
+    assert!(api::get_option_info2("number", &opts).is_ok());
 }
 
 #[nvim_oxi::test]
@@ -159,10 +190,10 @@ fn hl_foreground() {
 fn hl_link() {
     let base_fg = "#579dd6";
     let base_opts = SetHighlightOpts::builder().foreground(base_fg).build();
-    nvim_oxi::api::set_hl(0, "Base", &base_opts).unwrap();
+    api::set_hl(0, "Base", &base_opts).unwrap();
 
     let linked_opts = SetHighlightOpts::builder().link("Base").build();
-    nvim_oxi::api::set_hl(0, "Linked", &linked_opts).unwrap();
+    api::set_hl(0, "Linked", &linked_opts).unwrap();
 
     let infos = get_highlight_by_name("Linked");
     assert_eq!(infos.foreground, Some(hex_to_dec(base_fg)));
@@ -205,42 +236,6 @@ fn list_wins() {
         vec![Window::from(1002), Window::from(1001), Window::from(1000)],
         wins
     );
-}
-
-#[nvim_oxi::test]
-fn notify() {
-    let opts = Dictionary::new();
-    let ret = api::notify("", LogLevel::Error, &opts).unwrap();
-    assert_eq!(ret, Object::nil());
-}
-
-#[nvim_oxi::test]
-fn notify_custom() {
-    let message = "Notifier was called!";
-
-    // Set up a custom notification provider.
-    set_notification_provider(move |lua, _msg, _level, _opts| {
-        lua.create_string(message)
-    });
-
-    let opts = Dictionary::new();
-    let ret = api::notify("", LogLevel::Error, &opts).unwrap();
-    assert_eq!(ret, message.into());
-}
-
-#[nvim_oxi::test]
-fn notify_custom_err() {
-    #[derive(Debug, thiserror::Error)]
-    #[error("")]
-    struct CustomError;
-
-    // Set up a custom notification provider.
-    set_notification_provider(move |_lua, _msg, _level, _opts| {
-        Err::<(), _>(LuaError::ExternalError(Arc::new(CustomError)))
-    });
-
-    let opts = Dictionary::new();
-    let _err = api::notify("", LogLevel::Error, &opts).unwrap_err();
 }
 
 #[nvim_oxi::test]
@@ -299,17 +294,6 @@ fn set_get_del_var() {
     assert_eq!(Ok(()), api::del_var("foo"));
 }
 
-// `api::{get,set}_option()` were deprecated on 0.11, so only test on 0.10.
-#[cfg(not(feature = "neovim-0-11"))] // Only on 0.10.
-#[nvim_oxi::test]
-fn set_get_option() {
-    api::set_option("modified", true).unwrap();
-    assert!(api::get_option::<bool>("modified").unwrap());
-
-    api::set_option("modified", false).unwrap();
-    assert!(!api::get_option::<bool>("modified").unwrap());
-}
-
 #[nvim_oxi::test]
 fn set_get_option_value() {
     let opts =
@@ -348,19 +332,4 @@ fn get_highlight_by_name(name: &str) -> HighlightInfos {
     };
 
     infos
-}
-
-fn set_notification_provider<P, R>(mut provider: P)
-where
-    P: FnMut(&Lua, String, u32, Table) -> Result<R, LuaError> + 'static,
-    R: IntoLuaMulti,
-{
-    let lua = nvim_oxi::mlua::lua();
-    let vim = lua.globals().get::<Table>("vim").unwrap();
-    let notify = lua
-        .create_function_mut(move |lua, (msg, level, opts)| {
-            provider(lua, msg, level, opts)
-        })
-        .unwrap();
-    vim.set("notify", notify).unwrap();
 }
