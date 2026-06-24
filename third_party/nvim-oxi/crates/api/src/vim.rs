@@ -111,6 +111,8 @@ pub fn del_var(name: &str) -> Result<()> {
 /// Echoes a message to the Neovim message area.
 ///
 /// [1]: https://neovim.io/doc/user/api.html#nvim_echo()
+#[cfg_attr(docsrs, doc(cfg(not(feature = "neovim-0-12"))))]
+#[cfg(not(feature = "neovim-0-12"))] // Only on 0.11.
 pub fn echo<HlGroup, Text, Chunks>(
     chunks: Chunks,
     history: bool,
@@ -136,6 +138,57 @@ where
         let _ = nvim_echo(chunks.non_owning(), history, opts, &mut err);
     };
     choose!(err, ())
+}
+
+/// Binding to [`nvim_echo()`][1].
+///
+/// Echoes a message to the Neovim message area.
+///
+/// [1]: https://neovim.io/doc/user/api.html#nvim_echo()
+#[cfg_attr(docsrs, doc(cfg(feature = "neovim-0-12")))]
+#[cfg(feature = "neovim-0-12")] // On 0.12 and Nightly.
+pub fn echo<HlGroup, Text, Chunks>(
+    chunks: Chunks,
+    history: bool,
+    opts: &EchoOpts,
+) -> Result<crate::types::EchoMessageId>
+where
+    Chunks: IntoIterator<Item = (Text, Option<HlGroup>)>,
+    Text: Into<nvim::String>,
+    HlGroup: Into<nvim::String>,
+{
+    let chunks = chunks
+        .into_iter()
+        .map(|(text, hlgroup)| {
+            Array::from_iter([
+                Object::from(text.into()),
+                Object::from(hlgroup.map(Into::into)),
+            ])
+        })
+        .collect::<Array>();
+
+    let mut err = nvim::Error::new();
+
+    let message_id =
+        unsafe { nvim_echo(chunks.non_owning(), history, opts, &mut err) };
+
+    if err.is_err() {
+        return Err(err.into());
+    }
+
+    Ok(match message_id.kind() {
+        types::ObjectKind::Integer => {
+            crate::types::EchoMessageId::Int(unsafe {
+                message_id.as_integer_unchecked()
+            })
+        },
+        types::ObjectKind::String => {
+            crate::types::EchoMessageId::String(unsafe {
+                message_id.into_string_unchecked()
+            })
+        },
+        other => panic!("Unexpected object kind: {other:?}"),
+    })
 }
 
 /// Binding to [`nvim_err_write()`][1].
@@ -487,15 +540,9 @@ pub fn input<Input>(keys: Input) -> Result<usize>
 where
     Input: Into<nvim::String>,
 {
-    unsafe {
-        nvim_input(
-            #[cfg(feature = "neovim-0-11")] // On 0.11 and Nightly.
-            LUA_INTERNAL_CALL,
-            keys.into().as_nvim_str(),
-        )
-    }
-    .try_into()
-    .map_err(From::from)
+    unsafe { nvim_input(LUA_INTERNAL_CALL, keys.into().as_nvim_str()) }
+        .try_into()
+        .map_err(From::from)
 }
 
 /// Binding to [`nvim_input_mouse()`][1].
@@ -612,28 +659,6 @@ pub fn list_wins() -> impl SuperIterator<Window> + use<> {
 pub fn load_context(ctx: EditorContext) {
     let ctx = Dictionary::from(ctx);
     let _ = unsafe { nvim_load_context(ctx.non_owning()) };
-}
-
-/// Binding to [`nvim_notify()`][1].
-///
-/// [1]: https://neovim.io/doc/user/api.html#nvim_notify()
-pub fn notify(
-    msg: &str,
-    log_level: LogLevel,
-    opts: &Dictionary,
-) -> Result<Object> {
-    let msg = nvim::String::from(msg);
-    let mut err = nvim::Error::new();
-    let obj = unsafe {
-        nvim_notify(
-            msg.as_nvim_str(),
-            log_level as Integer,
-            opts.non_owning(),
-            types::arena(),
-            &mut err,
-        )
-    };
-    choose!(err, Ok(obj))
 }
 
 /// Binding to [`nvim_open_term()`][1].

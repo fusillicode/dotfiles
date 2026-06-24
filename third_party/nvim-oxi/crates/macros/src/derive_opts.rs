@@ -280,11 +280,10 @@ impl OptsField<'_> {
         for attr in &self.attrs {
             match &attr {
                 BuilderAttribute::ArgType(arg_type) => {
-                    field_type = arg_type.as_ref().clone();
+                    field_type = *arg_type.clone();
                 },
 
                 BuilderAttribute::Generics(gens) => {
-                    let gens = gens.as_ref();
                     generics = Some(quote! { #gens });
                 },
 
@@ -443,7 +442,7 @@ enum BuilderAttribute {
     /// The `builder(generics = "<generics>")` attribute.
     ///
     /// TODO: docs
-    Generics(Box<Generics>),
+    Generics(Generics),
 
     /// The `builder(inline = "<expr>")` attribute.
     ///
@@ -555,10 +554,10 @@ impl BuilderAttribute {
         };
 
         let this = if is_argtype {
-            parse_str(&lit).map(|ty| Self::ArgType(Box::new(ty)))
+            parse_str(&lit).map(Self::ArgType)
         } else if is_generics {
             let lit = format!("<{lit}>");
-            parse_str(&lit).map(|gens| Self::Generics(Box::new(gens)))
+            parse_str(&lit).map(Self::Generics)
         } else if is_inline {
             Ok(Self::Inline(lit))
         } else if is_method {
@@ -828,22 +827,18 @@ mod tests {
     #[test]
     fn fields_order_highlight() {
         let fields = [
-            "altfont",
-            "blink",
             "bold",
-            "conceal",
-            "dim",
-            "italic",
-            "nocombine",
-            "overline",
-            "reverse",
             "standout",
             "strikethrough",
-            "undercurl",
-            "underdashed",
-            "underdotted",
-            "underdouble",
             "underline",
+            "undercurl",
+            "underdouble",
+            "underdotted",
+            "underdashed",
+            "italic",
+            "reverse",
+            "altfont",
+            "nocombine",
             "default",
             "cterm",
             "foreground",
@@ -861,9 +856,7 @@ mod tests {
             "fg_indexed",
             "bg_indexed",
             "force",
-            "update",
             "url",
-            "font",
         ];
 
         assert_eq!(
@@ -872,26 +865,20 @@ mod tests {
                 "bg",
                 "fg",
                 "sp",
-                "dim",
                 "url",
                 "bold",
-                "font",
                 "link",
                 "blend",
-                "force",
-                "blink",
                 "cterm",
+                "force",
                 "italic",
-                "update",
-                "reverse",
+                "special",
+                "ctermbg",
+                "ctermfg",
                 "default",
                 "altfont",
-                "conceal",
-                "special",
-                "ctermfg",
-                "ctermbg",
+                "reverse",
                 "fallback",
-                "overline",
                 "standout",
                 "nocombine",
                 "undercurl",

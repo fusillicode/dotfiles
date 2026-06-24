@@ -2,6 +2,14 @@ use types::*;
 
 use crate::opts::*;
 
+// Only on 0.11.
+#[cfg(not(feature = "neovim-0-12"))]
+type NvimEchoOutput = ();
+
+// On 0.12 and Nightly.
+#[cfg(feature = "neovim-0-12")]
+type NvimEchoOutput = Object;
+
 #[cfg_attr(
     all(target_os = "windows", target_env = "msvc"),
     link(name = "nvim.exe", kind = "raw-dylib", modifiers = "+verbatim")
@@ -44,7 +52,7 @@ unsafe extern "C" {
         history: bool,
         opts: *const EchoOpts,
         err: *mut Error,
-    ) -> Object;
+    ) -> NvimEchoOutput;
 
     // https://github.com/neovim/neovim/blob/v0.10.0/src/nvim/api/vim.c#L826
     pub(crate) fn nvim_err_write(str: NvimStr);
@@ -165,11 +173,7 @@ unsafe extern "C" {
     ) -> Object;
 
     // https://github.com/neovim/neovim/blob/v0.10.0/src/nvim/api/vim.c#L360
-    pub(crate) fn nvim_input(
-        #[cfg(feature = "neovim-0-11")] // On 0.11 and Nightly.
-        channel_id: u64,
-        keys: NvimStr,
-    ) -> Integer;
+    pub(crate) fn nvim_input(channel_id: u64, keys: NvimStr) -> Integer;
 
     // https://github.com/neovim/neovim/blob/v0.10.0/src/nvim/api/vim.c#L390
     pub(crate) fn nvim_input_mouse(
@@ -205,15 +209,6 @@ unsafe extern "C" {
 
     // https://github.com/neovim/neovim/blob/v0.10.0/src/nvim/api/vim.c#L1455
     pub(crate) fn nvim_load_context(dict: NonOwning<Dictionary>) -> Object;
-
-    // https://github.com/neovim/neovim/blob/v0.10.0/src/nvim/api/vim.c#L527
-    pub(crate) fn nvim_notify(
-        msg: NvimStr,
-        log_level: Integer,
-        opts: NonOwning<Dictionary>,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> Object;
 
     // https://github.com/neovim/neovim/blob/v0.10.0/src/nvim/api/vim.c#L1060
     pub(crate) fn nvim_open_term(
