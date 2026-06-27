@@ -17,6 +17,7 @@ use rootcause::report;
 use crate::copy_selection::SelectionEdgeScrollRequest;
 use crate::input::DecodedInput;
 use crate::input::InputDecoder;
+use crate::input::InputIdleTimeout;
 use crate::renderer::ClientRenderOutcome;
 use crate::renderer::ClientRenderer;
 use crate::session::attach::AttachedSession;
@@ -41,6 +42,12 @@ enum ClientInputAction {
     CopySelectionInline,
     Mouse(ClientMouseEvent),
     ServerRequest(ClientRequest),
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ClientInputSend {
+    Accepted,
+    Closed,
 }
 
 /// Start or attach to a muxr session and run an interactive client.
@@ -136,12 +143,12 @@ async fn run_interactive(
                     input_actions_closed = true;
                     continue;
                 };
-                if !self::handle_client_input_action(action, muxr_config, &input_request_sender, &mut renderer, &mut stdout).await? {
+                if self::handle_client_input_action(action, muxr_config, &input_request_sender, &mut renderer, &mut stdout).await? == ClientInputSend::Closed {
                     break;
                 }
             },
-            _ = edge_scroll_tick.tick(), if renderer.selection_edge_drag_active() => {
-                if !self::send_selection_edge_scroll_request(&input_request_sender, &mut renderer) {
+            _ = edge_scroll_tick.tick(), if renderer.selection_edge_drag() == crate::renderer::SelectionEdgeDrag::Active => {
+                if self::send_selection_edge_scroll_request(&input_request_sender, &mut renderer) == ClientInputSend::Closed {
                     break;
                 }
             },
@@ -166,24 +173,24 @@ async fn handle_client_input_action(
     input_sender: &tokio::sync::mpsc::Sender<ClientRequest>,
     renderer: &mut ClientRenderer,
     stdout: &mut impl Write,
-) -> rootcause::Result<bool> {
+) -> rootcause::Result<ClientInputSend> {
     match action {
         ClientInputAction::CopySelection => {
             renderer.copy_selection()?;
-            Ok(true)
+            Ok(ClientInputSend::Accepted)
         }
         ClientInputAction::CopySelectionInline => {
             renderer.copy_selection_inline()?;
-            Ok(true)
+            Ok(ClientInputSend::Accepted)
         }
         ClientInputAction::Mouse(event) => {
             crate::pane::mouse::handle_mouse_input_action(muxr_config, event, input_sender, renderer, stdout).await
         }
         ClientInputAction::ServerRequest(request) => {
             if input_sender.send(request).await.is_err() {
-                return Ok(false);
+                return Ok(ClientInputSend::Closed);
             }
-            Ok(true)
+            Ok(ClientInputSend::Accepted)
         }
     }
 }
@@ -216,26 +223,26 @@ pub fn send_edge_scroll_request(
     input_sender: &tokio::sync::mpsc::Sender<ClientRequest>,
     renderer: &mut ClientRenderer,
     request: SelectionEdgeScrollRequest,
-) -> bool {
+) -> ClientInputSend {
     let (pending, request) = request.into_parts();
     match self::send_droppable_request(input_sender, request) {
         DroppableSendOutcome::Sent => {
             // One queued edge-scroll request must be paired with one moved viewport and its render before another
             // request is queued; otherwise coalesced renders can skip selected content rows.
             renderer.mark_selection_edge_scroll_sent(pending);
-            true
+            ClientInputSend::Accepted
         }
-        DroppableSendOutcome::Dropped => true,
-        DroppableSendOutcome::Closed => false,
+        DroppableSendOutcome::Dropped => ClientInputSend::Accepted,
+        DroppableSendOutcome::Closed => ClientInputSend::Closed,
     }
 }
 
 fn send_selection_edge_scroll_request(
     input_sender: &tokio::sync::mpsc::Sender<ClientRequest>,
     renderer: &mut ClientRenderer,
-) -> bool {
+) -> ClientInputSend {
     let Some(request) = renderer.selection_edge_scroll_request() else {
-        return true;
+        return ClientInputSend::Accepted;
     };
     self::send_edge_scroll_request(input_sender, renderer, request)
 }
@@ -286,11 +293,11 @@ fn spawn_stdin_forwarder(input_sender: tokio::sync::mpsc::Sender<ClientInputActi
         loop {
             // Ambiguous escape prefixes need an idle timeout for bare Esc. Bracketed paste waits for its terminator so
             // slow multi-chunk paste cannot leak raw paste markers into the PTY.
-            let read = if decoder.needs_idle_timeout() {
+            let read = if decoder.idle_timeout() == InputIdleTimeout::Needed {
                 match read_receiver.recv_timeout(AMBIGUOUS_INPUT_TIMEOUT) {
                     Ok(read) => read,
                     Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
-                        if !self::send_decoded_input(&input_sender, decoder.finalize()) {
+                        if self::send_decoded_input(&input_sender, decoder.finalize()) == ClientInputSend::Closed {
                             break;
                         }
                         continue;
@@ -303,12 +310,12 @@ fn spawn_stdin_forwarder(input_sender: tokio::sync::mpsc::Sender<ClientInputActi
 
             match read {
                 StdinRead::Bytes(bytes) => {
-                    if !self::send_decoded_input(&input_sender, decoder.decode(&bytes)) {
+                    if self::send_decoded_input(&input_sender, decoder.decode(&bytes)) == ClientInputSend::Closed {
                         break;
                     }
                 }
                 StdinRead::Eof => {
-                    if !self::send_decoded_input(&input_sender, decoder.finalize()) {
+                    if self::send_decoded_input(&input_sender, decoder.finalize()) == ClientInputSend::Closed {
                         break;
                     }
                     // EOF detach follows any queued stdin bytes so piped cmds like `exit\n` reach the shell first.
@@ -345,7 +352,10 @@ fn spawn_stdin_reader(sender: std::sync::mpsc::Sender<StdinRead>) -> thread::Joi
     })
 }
 
-fn send_decoded_input(input_sender: &tokio::sync::mpsc::Sender<ClientInputAction>, decoded: Vec<DecodedInput>) -> bool {
+fn send_decoded_input(
+    input_sender: &tokio::sync::mpsc::Sender<ClientInputAction>,
+    decoded: Vec<DecodedInput>,
+) -> ClientInputSend {
     for decoded in decoded {
         let action = match decoded {
             DecodedInput::CopySelection => ClientInputAction::CopySelection,
@@ -356,9 +366,13 @@ fn send_decoded_input(input_sender: &tokio::sync::mpsc::Sender<ClientInputAction
                 // PTY bytes.
                 ClientInputAction::ServerRequest(ClientRequest::Key(key))
             }
-            DecodedInput::Mouse(event) if crate::pane::mouse::mouse_event_can_be_dropped(event) => {
-                if !self::send_droppable_input_action(input_sender, ClientInputAction::Mouse(event)) {
-                    return false;
+            DecodedInput::Mouse(event)
+                if crate::pane::mouse::MouseEventDrop::from(event) == crate::pane::mouse::MouseEventDrop::Droppable =>
+            {
+                if self::send_droppable_input_action(input_sender, ClientInputAction::Mouse(event))
+                    == ClientInputSend::Closed
+                {
+                    return ClientInputSend::Closed;
                 }
                 continue;
             }
@@ -366,26 +380,26 @@ fn send_decoded_input(input_sender: &tokio::sync::mpsc::Sender<ClientInputAction
             DecodedInput::Paste(bytes) => ClientInputAction::ServerRequest(ClientRequest::Paste(bytes)),
         };
         if input_sender.blocking_send(action).is_err() {
-            return false;
+            return ClientInputSend::Closed;
         }
     }
 
-    true
+    ClientInputSend::Accepted
 }
 
 fn send_droppable_input_action(
     input_sender: &tokio::sync::mpsc::Sender<ClientInputAction>,
     action: ClientInputAction,
-) -> bool {
+) -> ClientInputSend {
     match input_sender.try_send(action) {
-        Ok(()) => true,
+        Ok(()) => ClientInputSend::Accepted,
         Err(tokio::sync::mpsc::error::TrySendError::Full(action)) => {
             drop(action);
-            true
+            ClientInputSend::Accepted
         }
         Err(tokio::sync::mpsc::error::TrySendError::Closed(action)) => {
             drop(action);
-            false
+            ClientInputSend::Closed
         }
     }
 }
@@ -597,14 +611,17 @@ mod tests {
             raw_bytes: b"\x1bE".to_vec(),
         };
 
-        assert2::assert!(send_decoded_input(
-            &input_sender,
-            vec![
-                DecodedInput::Input(b"a".to_vec()),
-                DecodedInput::Key(key.clone()),
-                DecodedInput::Input(b"b".to_vec()),
-            ],
-        ));
+        pretty_assertions::assert_eq!(
+            send_decoded_input(
+                &input_sender,
+                vec![
+                    DecodedInput::Input(b"a".to_vec()),
+                    DecodedInput::Key(key.clone()),
+                    DecodedInput::Input(b"b".to_vec()),
+                ],
+            ),
+            ClientInputSend::Accepted,
+        );
 
         pretty_assertions::assert_eq!(
             input_receiver.blocking_recv(),
@@ -629,7 +646,10 @@ mod tests {
             raw_bytes: b"\x1bS".to_vec(),
         };
 
-        assert2::assert!(send_decoded_input(&input_sender, vec![DecodedInput::Key(key.clone())]));
+        pretty_assertions::assert_eq!(
+            send_decoded_input(&input_sender, vec![DecodedInput::Key(key.clone())]),
+            ClientInputSend::Accepted,
+        );
 
         pretty_assertions::assert_eq!(
             input_receiver.blocking_recv(),
@@ -641,10 +661,10 @@ mod tests {
     fn test_send_decoded_input_when_paste_arrives_uses_input_queue() {
         let (input_sender, mut input_receiver) = tokio::sync::mpsc::channel(1);
 
-        assert2::assert!(send_decoded_input(
-            &input_sender,
-            vec![DecodedInput::Paste(b"one\ntwo\n".to_vec())],
-        ));
+        pretty_assertions::assert_eq!(
+            send_decoded_input(&input_sender, vec![DecodedInput::Paste(b"one\ntwo\n".to_vec())],),
+            ClientInputSend::Accepted,
+        );
 
         pretty_assertions::assert_eq!(
             input_receiver.blocking_recv(),
@@ -663,7 +683,10 @@ mod tests {
             position: muxr_core::ClientMousePosition { row: 4, col: 9 },
         };
 
-        assert2::assert!(send_decoded_input(&input_sender, vec![DecodedInput::Mouse(event)]));
+        pretty_assertions::assert_eq!(
+            send_decoded_input(&input_sender, vec![DecodedInput::Mouse(event)]),
+            ClientInputSend::Accepted,
+        );
 
         pretty_assertions::assert_eq!(input_receiver.blocking_recv(), Some(ClientInputAction::Mouse(event)),);
     }
@@ -693,7 +716,7 @@ mod tests {
             }
         };
 
-        assert2::assert!(result);
+        pretty_assertions::assert_eq!(result, ClientInputSend::Accepted);
         pretty_assertions::assert_eq!(input_receiver.try_recv(), Ok(ClientInputAction::CopySelection));
         assert2::assert!(input_receiver.try_recv().is_err());
         handle
@@ -718,7 +741,10 @@ mod tests {
 
         assert2::assert!(result_receiver.recv_timeout(Duration::from_millis(50)).is_err());
         pretty_assertions::assert_eq!(input_receiver.blocking_recv(), Some(ClientInputAction::CopySelection));
-        pretty_assertions::assert_eq!(result_receiver.recv_timeout(Duration::from_secs(1)), Ok(true));
+        pretty_assertions::assert_eq!(
+            result_receiver.recv_timeout(Duration::from_secs(1)),
+            Ok(ClientInputSend::Accepted),
+        );
         pretty_assertions::assert_eq!(input_receiver.blocking_recv(), Some(ClientInputAction::Mouse(event)));
         handle
             .join()
@@ -730,7 +756,10 @@ mod tests {
     fn test_send_decoded_input_when_copy_selection_arrives_emits_local_action() {
         let (input_sender, mut input_receiver) = tokio::sync::mpsc::channel(1);
 
-        assert2::assert!(send_decoded_input(&input_sender, vec![DecodedInput::CopySelection]));
+        pretty_assertions::assert_eq!(
+            send_decoded_input(&input_sender, vec![DecodedInput::CopySelection]),
+            ClientInputSend::Accepted,
+        );
 
         pretty_assertions::assert_eq!(input_receiver.blocking_recv(), Some(ClientInputAction::CopySelection));
     }
@@ -739,10 +768,10 @@ mod tests {
     fn test_send_decoded_input_when_inline_copy_selection_arrives_emits_local_action() {
         let (input_sender, mut input_receiver) = tokio::sync::mpsc::channel(1);
 
-        assert2::assert!(send_decoded_input(
-            &input_sender,
-            vec![DecodedInput::CopySelectionInline]
-        ));
+        pretty_assertions::assert_eq!(
+            send_decoded_input(&input_sender, vec![DecodedInput::CopySelectionInline]),
+            ClientInputSend::Accepted,
+        );
 
         pretty_assertions::assert_eq!(
             input_receiver.blocking_recv(),
@@ -772,9 +801,15 @@ mod tests {
             position: ClientMousePosition { row: 0, col: 1 },
         };
         pretty_assertions::assert_eq!(copy_selection_test_helpers::edge_scroll_request(&initial), &expected);
-        assert2::assert!(send_edge_scroll_request(&input_sender, &mut renderer, initial));
+        pretty_assertions::assert_eq!(
+            send_edge_scroll_request(&input_sender, &mut renderer, initial),
+            ClientInputSend::Accepted,
+        );
         pretty_assertions::assert_eq!(input_receiver.blocking_recv(), Some(expected.clone()));
-        assert2::assert!(send_selection_edge_scroll_request(&input_sender, &mut renderer));
+        pretty_assertions::assert_eq!(
+            send_selection_edge_scroll_request(&input_sender, &mut renderer),
+            ClientInputSend::Accepted,
+        );
         assert2::assert!(matches!(
             input_receiver.try_recv(),
             Err(tokio::sync::mpsc::error::TryRecvError::Empty)
@@ -782,7 +817,10 @@ mod tests {
 
         renderer.apply_pane_regions(&mut output, pane_regions_snapshot_with_visible_top_row(1)?)?;
         renderer.apply_render(&mut output, muxr_core::RenderUpdate::Baseline(render_baseline()?))?;
-        assert2::assert!(send_selection_edge_scroll_request(&input_sender, &mut renderer));
+        pretty_assertions::assert_eq!(
+            send_selection_edge_scroll_request(&input_sender, &mut renderer),
+            ClientInputSend::Accepted,
+        );
 
         pretty_assertions::assert_eq!(input_receiver.blocking_recv(), Some(expected));
         Ok(())
@@ -807,9 +845,15 @@ mod tests {
             .set_selection_edge_drag(ClientMousePosition { row: 2, col: 1 }, None)
             .ok_or_else(|| report!("expected muxr edge scroll request"))?;
 
-        assert2::assert!(send_edge_scroll_request(&input_sender, &mut renderer, request));
+        pretty_assertions::assert_eq!(
+            send_edge_scroll_request(&input_sender, &mut renderer, request),
+            ClientInputSend::Accepted,
+        );
         pretty_assertions::assert_eq!(input_receiver.try_recv(), Ok(ClientRequest::Pong));
-        assert2::assert!(send_selection_edge_scroll_request(&input_sender, &mut renderer));
+        pretty_assertions::assert_eq!(
+            send_selection_edge_scroll_request(&input_sender, &mut renderer),
+            ClientInputSend::Accepted,
+        );
 
         pretty_assertions::assert_eq!(
             input_receiver.blocking_recv(),
@@ -876,7 +920,7 @@ mod tests {
                 row: 0,
                 col: 1,
                 shape: muxr_core::RenderCursorShape::Default,
-                visible: true,
+                visibility: muxr_core::RenderCursorVisibility::Visible,
             },
             vec![muxr_core::RenderRowSpan::new(
                 0,

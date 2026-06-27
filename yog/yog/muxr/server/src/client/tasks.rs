@@ -93,16 +93,22 @@ async fn read_client_handshake(connection: &mut ServerConnection) -> rootcause::
 /// Send one event on a pre-attach connection with the server's bounded write timeout.
 ///
 /// # Errors
-/// This function currently returns `Ok(false)` for send failures and timeouts instead of an error.
+/// This function reports send failures and timeouts as an outcome instead of an error.
 pub async fn send_connection_event_with_timeout(
     connection: &mut ServerConnection,
     event: &ServerEvent,
     client_write_timeout: Duration,
-) -> rootcause::Result<bool> {
+) -> rootcause::Result<ConnectionEventSend> {
     match tokio::time::timeout(client_write_timeout, connection.send_event(event)).await {
-        Ok(Ok(())) => Ok(true),
-        Ok(Err(_)) | Err(_) => Ok(false),
+        Ok(Ok(())) => Ok(ConnectionEventSend::Sent),
+        Ok(Err(_)) | Err(_) => Ok(ConnectionEventSend::Failed),
     }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ConnectionEventSend {
+    Failed,
+    Sent,
 }
 
 async fn join_client_task(handle: tokio::task::JoinHandle<rootcause::Result<()>>) -> rootcause::Result<()> {

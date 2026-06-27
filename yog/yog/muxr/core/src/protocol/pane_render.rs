@@ -214,12 +214,12 @@ pub struct RenderCursor {
     pub col: u16,
     pub row: u16,
     pub shape: RenderCursorShape,
-    pub visible: bool,
+    pub visibility: RenderCursorVisibility,
 }
 
 impl RenderCursor {
     fn validate(&self, rows: u16, cols: u16) -> rootcause::Result<()> {
-        if !self.visible {
+        if self.visibility != RenderCursorVisibility::Visible {
             return Ok(());
         }
         if self.row >= rows || self.col >= cols {
@@ -232,6 +232,26 @@ impl RenderCursor {
 
         Ok(())
     }
+}
+
+/// Whether the pane cursor should be rendered.
+#[derive(
+    rkyv::Archive,
+    Clone,
+    Copy,
+    Debug,
+    Default,
+    Deserialize,
+    rkyv::Deserialize,
+    Eq,
+    PartialEq,
+    Serialize,
+    rkyv::Serialize,
+)]
+pub enum RenderCursorVisibility {
+    #[default]
+    Hidden,
+    Visible,
 }
 
 /// Visible cursor shape requested by the pane application.
@@ -780,7 +800,7 @@ mod tests {
                     row: 0,
                     col: 0,
                     shape: RenderCursorShape::Default,
-                    visible: true
+                    visibility: RenderCursorVisibility::Visible
                 },
                 render_rows
             )
@@ -806,7 +826,7 @@ mod tests {
                     row: 0,
                     col: 0,
                     shape: RenderCursorShape::Default,
-                    visible: true
+                    visibility: RenderCursorVisibility::Visible
                 },
                 vec![RenderRowSpan::new(0, 0, self::render_cells(1))?],
             )
@@ -831,7 +851,7 @@ mod tests {
                     row: 0,
                     col: 0,
                     shape: RenderCursorShape::Default,
-                    visible: true
+                    visibility: RenderCursorVisibility::Visible
                 },
                 vec![row],
             )
@@ -877,7 +897,7 @@ mod tests {
                     row: 0,
                     col: 0,
                     shape: RenderCursorShape::Default,
-                    visible: true
+                    visibility: RenderCursorVisibility::Visible
                 },
                 vec![row],
             )
@@ -902,7 +922,7 @@ mod tests {
                     row: 0,
                     col: 0,
                     shape: RenderCursorShape::Default,
-                    visible: true
+                    visibility: RenderCursorVisibility::Visible
                 },
                 rows
             )
@@ -930,7 +950,7 @@ mod tests {
                 row: 0,
                 col: 0,
                 shape: RenderCursorShape::Default,
-                visible: true,
+                visibility: RenderCursorVisibility::Visible,
             },
             vec![row],
         )?;

@@ -20,6 +20,10 @@ use crate::pane::scroll::PaneScrollLineRequestOutcome;
 use crate::pane::split::PaneSplitClientOutcome;
 use crate::pane::tracked_process::TrackedProcessChanges;
 use crate::pane::tracked_process::TrackedProcessClientChange;
+use crate::render_state::ClientRenderDmg;
+use crate::render_state::ClientSessionFlow;
+use crate::render_state::PaneInputRenderPriority;
+use crate::render_state::PaneRenderDeadlineSync;
 use crate::scrollback_editor::ScrollbackEditorOpenClientOutcome;
 use crate::session::runtime::SessionClientMessage;
 use crate::tab::create::TabCreateClientOutcome;
@@ -31,12 +35,12 @@ pub async fn handle_client_message(
     state: &mut ClientSessionState<'_>,
     timers: &mut ClientTimers,
     heartbeat_started_at: &mut Option<tokio::time::Instant>,
-    render_dirty: &mut bool,
-) -> rootcause::Result<bool> {
+    render_dmg: &mut ClientRenderDmg,
+) -> rootcause::Result<ClientSessionFlow> {
     match message {
-        SessionClientMessage::ClientDisconnected => Ok(false),
+        SessionClientMessage::ClientDisconnected => Ok(ClientSessionFlow::Disconnect),
         SessionClientMessage::Request(request) => {
-            self::handle_client_request(request, event_writer, state, timers, heartbeat_started_at, render_dirty).await
+            self::handle_client_request(request, event_writer, state, timers, heartbeat_started_at, render_dmg).await
         }
     }
 }
@@ -47,8 +51,8 @@ async fn handle_client_request(
     state: &mut ClientSessionState<'_>,
     timers: &mut ClientTimers,
     heartbeat_started_at: &mut Option<tokio::time::Instant>,
-    render_dirty: &mut bool,
-) -> rootcause::Result<bool> {
+    render_dmg: &mut ClientRenderDmg,
+) -> rootcause::Result<ClientSessionFlow> {
     match request {
         ClientRequest::Detach => self::send_detached_event(event_writer, state, timers).await,
         ClientRequest::DeleteSession => {
@@ -58,24 +62,24 @@ async fn handle_client_request(
                 state.config.client_write_timeout,
             )
             .await?;
-            Ok(false)
+            Ok(ClientSessionFlow::Disconnect)
         }
         ClientRequest::Input(bytes) => {
             let outcome = crate::pane::input::handle_client_input(&bytes, state)?;
-            self::apply_pane_input_outcome(outcome, event_writer, state, timers, render_dirty).await
+            self::apply_pane_input_outcome(outcome, event_writer, state, timers, render_dmg).await
         }
         ClientRequest::Paste(bytes) => {
             let outcome = crate::pane::input::handle_client_paste(&bytes, state)?;
-            self::apply_pane_input_outcome(outcome, event_writer, state, timers, render_dirty).await
+            self::apply_pane_input_outcome(outcome, event_writer, state, timers, render_dmg).await
         }
-        ClientRequest::Key(key) => self::handle_key_request(key, event_writer, state, timers, render_dirty).await,
+        ClientRequest::Key(key) => self::handle_key_request(key, event_writer, state, timers, render_dmg).await,
         ClientRequest::Mouse(event) => {
             self::apply_pane_mouse_outcome(
                 crate::pane::mouse::handle_mouse_event_client_request(event, state)?,
                 event_writer,
                 state,
                 timers,
-                render_dirty,
+                render_dmg,
             )
             .await
         }
@@ -85,7 +89,7 @@ async fn handle_client_request(
                 event_writer,
                 state,
                 timers,
-                render_dirty,
+                render_dmg,
             )
             .await
         }
@@ -109,28 +113,19 @@ async fn handle_client_request(
         }
         ClientRequest::Resize(size) => {
             state.terminal_size = size;
-            if !crate::screen_render::resize_panes_and_render(event_writer, state).await? {
-                return Ok(false);
-            }
-            Ok(true)
+            crate::screen_render::resize_panes_and_render(event_writer, state).await
         }
-        ClientRequest::RenderResync => {
-            if !crate::screen_render::send_layout_and_baseline(event_writer, state).await? {
-                return Ok(false);
-            }
-            Ok(true)
-        }
-        ClientRequest::Ping => {
-            crate::event_writer::send_event_with_timeout(
-                event_writer,
-                &ServerEvent::Pong,
-                state.config.client_write_timeout,
-            )
-            .await
-        }
+        ClientRequest::RenderResync => crate::screen_render::send_layout_and_baseline(event_writer, state).await,
+        ClientRequest::Ping => crate::event_writer::send_event_with_timeout(
+            event_writer,
+            &ServerEvent::Pong,
+            state.config.client_write_timeout,
+        )
+        .await
+        .map(|outcome| outcome.session_flow()),
         ClientRequest::Pong => {
             *heartbeat_started_at = None;
-            Ok(true)
+            Ok(ClientSessionFlow::Continue)
         }
         request @ ClientRequest::Attach(_) => {
             let _sent = crate::event_writer::send_event_with_timeout(
@@ -139,7 +134,7 @@ async fn handle_client_request(
                 state.config.client_write_timeout,
             )
             .await?;
-            Ok(false)
+            Ok(ClientSessionFlow::Disconnect)
         }
     }
 }
@@ -149,32 +144,33 @@ async fn apply_pane_input_outcome(
     event_writer: &mut ServerEventWriter,
     state: &mut ClientSessionState<'_>,
     timers: &mut ClientTimers,
-    render_dirty: &mut bool,
-) -> rootcause::Result<bool> {
-    self::apply_pane_input_timers(&outcome, timers, render_dirty)?;
+    render_dmg: &mut ClientRenderDmg,
+) -> rootcause::Result<ClientSessionFlow> {
+    self::apply_pane_input_timers(&outcome, timers, render_dmg)?;
     if let Some(tracked_process_change) = outcome.tracked_process_change
-        && !self::apply_tracked_process_client_change(tracked_process_change, event_writer, state, timers, render_dirty)
+        && self::apply_tracked_process_client_change(tracked_process_change, event_writer, state, timers, render_dmg)
             .await?
+            == ClientSessionFlow::Disconnect
     {
-        return Ok(false);
+        return Ok(ClientSessionFlow::Disconnect);
     }
-    Ok(true)
+    Ok(ClientSessionFlow::Continue)
 }
 
 fn apply_pane_input_timers(
     outcome: &PaneInputOutcome,
     timers: &mut ClientTimers,
-    render_dirty: &mut bool,
+    render_dmg: &mut ClientRenderDmg,
 ) -> rootcause::Result<()> {
-    *render_dirty |= outcome.render_dirty;
-    if outcome.interactive_render {
+    render_dmg.include_signal(outcome.render_signal);
+    if outcome.render_priority == PaneInputRenderPriority::Interactive {
         timers.record_interactive_input()?;
     }
     if let Some(pane_id) = outcome.cmd_handoff_pane_id {
         timers.schedule_cmd_handoff_sample(pane_id)?;
     }
-    if outcome.sync_render_deadline {
-        timers.sync_render_deadline(*render_dirty)?;
+    if outcome.render_signal.deadline_sync() == crate::render_state::PaneRenderDeadlineSync::Sync {
+        timers.sync_render_deadline(*render_dmg)?;
     }
     Ok(())
 }
@@ -184,15 +180,14 @@ async fn apply_pane_scroll_line_outcome(
     event_writer: &mut ServerEventWriter,
     state: &ClientSessionState<'_>,
     timers: &mut ClientTimers,
-    render_dirty: &mut bool,
-) -> rootcause::Result<bool> {
-    let PaneScrollLineRequestOutcome {
-        event,
-        render_dirty: scroll_render_dirty,
-    } = outcome;
-    *render_dirty |= scroll_render_dirty;
-    timers.sync_render_deadline(*render_dirty)?;
-    crate::event_writer::send_event_with_timeout(event_writer, &event, state.config.client_write_timeout).await
+    render_dmg: &mut ClientRenderDmg,
+) -> rootcause::Result<ClientSessionFlow> {
+    let PaneScrollLineRequestOutcome { event, render_signal } = outcome;
+    render_dmg.include_signal(render_signal);
+    timers.sync_render_deadline(*render_dmg)?;
+    crate::event_writer::send_event_with_timeout(event_writer, &event, state.config.client_write_timeout)
+        .await
+        .map(|outcome| outcome.session_flow())
 }
 
 async fn apply_pane_mouse_outcome(
@@ -200,23 +195,23 @@ async fn apply_pane_mouse_outcome(
     event_writer: &mut ServerEventWriter,
     state: &mut ClientSessionState<'_>,
     timers: &mut ClientTimers,
-    render_dirty: &mut bool,
-) -> rootcause::Result<bool> {
+    render_dmg: &mut ClientRenderDmg,
+) -> rootcause::Result<ClientSessionFlow> {
     let PaneMouseClientOutcome {
         focus,
-        render_dirty: mouse_render_dirty,
-        sync_render_deadline,
+        render_signal,
         tracked_process_change,
     } = outcome;
-    *render_dirty |= mouse_render_dirty;
-    if sync_render_deadline {
-        timers.sync_render_deadline(*render_dirty)?;
+    render_dmg.include_signal(render_signal);
+    if render_signal.deadline_sync() == crate::render_state::PaneRenderDeadlineSync::Sync {
+        timers.sync_render_deadline(*render_dmg)?;
     }
     if let Some(tracked_process_change) = tracked_process_change
-        && !self::apply_tracked_process_client_change(tracked_process_change, event_writer, state, timers, render_dirty)
+        && self::apply_tracked_process_client_change(tracked_process_change, event_writer, state, timers, render_dmg)
             .await?
+            == ClientSessionFlow::Disconnect
     {
-        return Ok(false);
+        return Ok(ClientSessionFlow::Disconnect);
     }
     self::apply_pane_focus_outcome(focus, event_writer, state, timers).await
 }
@@ -226,18 +221,18 @@ async fn apply_tracked_process_client_change(
     event_writer: &mut ServerEventWriter,
     state: &mut ClientSessionState<'_>,
     timers: &mut ClientTimers,
-    render_dirty: &mut bool,
-) -> rootcause::Result<bool> {
+    render_dmg: &mut ClientRenderDmg,
+) -> rootcause::Result<ClientSessionFlow> {
     let changes = tracked_process_change.changes();
-    if self::tracked_process_change_needs_deadline_sync(changes, timers) {
+    if self::tracked_process_change_deadline_sync(changes, timers) == PaneRenderDeadlineSync::Sync {
         timers.sync_tracked_process_quiet_deadline_for_layout(&state.pane_tracked_processes, state.layout)?;
     }
-    if !changes.state_changed() {
-        return Ok(true);
+    if changes.state_change() == crate::pane::tracked_process::TrackedProcessStateChange::Unchanged {
+        return Ok(ClientSessionFlow::Continue);
     }
 
     let pane_id = tracked_process_change.pane_id();
-    let pane_surface_dirty = crate::screen_render::pane_ids_include_visible(
+    let pane_surface_dirty = crate::screen_render::pane_ids_visible_render_dmg(
         state.layout,
         &state.pane_fullscreen,
         &state.terminal_size,
@@ -247,16 +242,26 @@ async fn apply_tracked_process_client_change(
         timers,
         event_writer,
         state,
-        render_dirty,
+        render_dmg,
         pane_surface_dirty,
     )
     .await
 }
 
-fn tracked_process_change_needs_deadline_sync(changes: TrackedProcessChanges, timers: &ClientTimers) -> bool {
+fn tracked_process_change_deadline_sync(
+    changes: TrackedProcessChanges,
+    timers: &ClientTimers,
+) -> PaneRenderDeadlineSync {
     // Deadline-only local echo can wait for the existing sleep to re-check; sync immediately only when that sleep is
     // already ready, or when a sidebar state change must publish a new Busy/Seen/Unseen snapshot.
-    changes.state_changed() || (changes.deadline_changed() && timers.tracked_process_quiet_sleep_deadline_has_passed())
+    if changes.state_change() == crate::pane::tracked_process::TrackedProcessStateChange::Changed
+        || (changes.deadline_change() == crate::pane::tracked_process::TrackedProcessDeadlineChange::Changed
+            && timers.tracked_process_quiet_deadline() == crate::client::timers::QuietDeadline::Elapsed)
+    {
+        PaneRenderDeadlineSync::Sync
+    } else {
+        PaneRenderDeadlineSync::Skip
+    }
 }
 
 async fn apply_pane_focus_outcome(
@@ -264,9 +269,9 @@ async fn apply_pane_focus_outcome(
     event_writer: &mut ServerEventWriter,
     state: &mut ClientSessionState<'_>,
     timers: &mut ClientTimers,
-) -> rootcause::Result<bool> {
+) -> rootcause::Result<ClientSessionFlow> {
     let PaneFocusClientOutcome::Focused { render } = outcome else {
-        return Ok(true);
+        return Ok(ClientSessionFlow::Continue);
     };
     timers.sync_tracked_process_quiet_deadline_for_layout(&state.pane_tracked_processes, state.layout)?;
     match render {
@@ -283,7 +288,7 @@ async fn send_detached_event(
     event_writer: &mut ServerEventWriter,
     state: &mut ClientSessionState<'_>,
     timers: &mut ClientTimers,
-) -> rootcause::Result<bool> {
+) -> rootcause::Result<ClientSessionFlow> {
     self::restore_scrollback_editor_without_render(state, timers)?;
     crate::client::lifecycle::record_detach_ack_send_failure(
         crate::event_writer::send_event_failure(
@@ -293,7 +298,7 @@ async fn send_detached_event(
         )
         .await,
     );
-    Ok(false)
+    Ok(ClientSessionFlow::Disconnect)
 }
 
 async fn handle_key_request(
@@ -301,8 +306,8 @@ async fn handle_key_request(
     event_writer: &mut ServerEventWriter,
     state: &mut ClientSessionState<'_>,
     timers: &mut ClientTimers,
-    render_dirty: &mut bool,
-) -> rootcause::Result<bool> {
+    render_dmg: &mut ClientRenderDmg,
+) -> rootcause::Result<ClientSessionFlow> {
     match crate::keyboard_input::resolve_key(&mut state.input_mode, &key) {
         KeyResolution::Cmd(cmd) => self::handle_cmd_request(cmd, event_writer, state, timers).await,
         KeyResolution::Raw => {
@@ -311,7 +316,7 @@ async fn handle_key_request(
                 event_writer,
                 state,
                 timers,
-                render_dirty,
+                render_dmg,
             )
             .await
         }
@@ -323,12 +328,17 @@ async fn handle_cmd_request(
     event_writer: &mut ServerEventWriter,
     state: &mut ClientSessionState<'_>,
     timers: &mut ClientTimers,
-) -> rootcause::Result<bool> {
-    let cmd = match crate::scrollback_editor::cmd_action(cmd, state.scrollback_editor.is_some()) {
+) -> rootcause::Result<ClientSessionFlow> {
+    let editor_activity = if state.scrollback_editor.is_some() {
+        crate::scrollback_editor::ScrollbackEditorActivity::Active
+    } else {
+        crate::scrollback_editor::ScrollbackEditorActivity::Inactive
+    };
+    let cmd = match crate::scrollback_editor::ScrollbackEditorCmdAction::from_cmd(cmd, editor_activity) {
         crate::scrollback_editor::ScrollbackEditorCmdAction::Ignore => {
             // The editor pane is attached-client-local. Muxr layout shortcuts are blocked while it is active so they
             // cannot create temporary panes/runtimes that disappear from the restored real layout.
-            return Ok(true);
+            return Ok(ClientSessionFlow::Continue);
         }
         crate::scrollback_editor::ScrollbackEditorCmdAction::Restore => {
             let previous_pane = state.layout.active_pane_id()?;
@@ -428,9 +438,9 @@ async fn apply_scrollback_editor_open_outcome(
     event_writer: &mut ServerEventWriter,
     state: &mut ClientSessionState<'_>,
     timers: &mut ClientTimers,
-) -> rootcause::Result<bool> {
+) -> rootcause::Result<ClientSessionFlow> {
     match outcome {
-        ScrollbackEditorOpenClientOutcome::AlreadyOpen => Ok(true),
+        ScrollbackEditorOpenClientOutcome::AlreadyOpen => Ok(ClientSessionFlow::Continue),
         ScrollbackEditorOpenClientOutcome::Opened {
             editor,
             editor_pane_id,
@@ -453,7 +463,7 @@ async fn apply_pane_split_outcome(
     event_writer: &mut ServerEventWriter,
     state: &mut ClientSessionState<'_>,
     timers: &mut ClientTimers,
-) -> rootcause::Result<bool> {
+) -> rootcause::Result<ClientSessionFlow> {
     let PaneSplitClientOutcome {
         new_pane_id,
         previous_pane,
@@ -469,7 +479,7 @@ async fn apply_pane_close_outcome(
     event_writer: &mut ServerEventWriter,
     state: &mut ClientSessionState<'_>,
     timers: &mut ClientTimers,
-) -> rootcause::Result<bool> {
+) -> rootcause::Result<ClientSessionFlow> {
     // `remove_pane_from_client_state` is the client cleanup boundary for sink guards, tracked state, and handoff
     // timers. pane_close reports which pane disappeared; this layer owns the attached-client resources.
     match outcome {
@@ -491,7 +501,7 @@ async fn apply_pane_resize_outcome(
     outcome: PaneResizeClientOutcome,
     event_writer: &mut ServerEventWriter,
     state: &mut ClientSessionState<'_>,
-) -> rootcause::Result<bool> {
+) -> rootcause::Result<ClientSessionFlow> {
     match outcome {
         PaneResizeClientOutcome::Render {
             render: PaneResizeRender::ResizePanesAndRender,
@@ -499,7 +509,7 @@ async fn apply_pane_resize_outcome(
         PaneResizeClientOutcome::Render {
             render: PaneResizeRender::SendLayoutAndBaseline,
         } => crate::screen_render::send_layout_and_baseline(event_writer, state).await,
-        PaneResizeClientOutcome::Unchanged => Ok(true),
+        PaneResizeClientOutcome::Unchanged => Ok(ClientSessionFlow::Continue),
     }
 }
 
@@ -508,7 +518,7 @@ async fn handle_tab_cmd_request(
     event_writer: &mut ServerEventWriter,
     state: &mut ClientSessionState<'_>,
     timers: &mut ClientTimers,
-) -> rootcause::Result<bool> {
+) -> rootcause::Result<ClientSessionFlow> {
     // Tab moves only reorder and redraw. Create/focus carry pane ids for sinks, focus events, and timer sync.
     match cmd {
         TabCmd::Create => {
@@ -554,7 +564,7 @@ async fn apply_tab_create_outcome(
     event_writer: &mut ServerEventWriter,
     state: &mut ClientSessionState<'_>,
     timers: &mut ClientTimers,
-) -> rootcause::Result<bool> {
+) -> rootcause::Result<ClientSessionFlow> {
     let TabCreateClientOutcome {
         new_pane_id,
         previous_pane,
@@ -570,14 +580,14 @@ async fn apply_tab_focus_outcome(
     event_writer: &mut ServerEventWriter,
     state: &mut ClientSessionState<'_>,
     timers: &mut ClientTimers,
-) -> rootcause::Result<bool> {
+) -> rootcause::Result<ClientSessionFlow> {
     match outcome {
         TabFocusClientOutcome::Render { previous_pane } => {
             crate::pane::focus::write_active_pane_focus_events(previous_pane, state)?;
             timers.sync_tracked_process_quiet_deadline_for_layout(&state.pane_tracked_processes, state.layout)?;
             crate::screen_render::resize_panes_and_render(event_writer, state).await
         }
-        TabFocusClientOutcome::Unchanged => Ok(true),
+        TabFocusClientOutcome::Unchanged => Ok(ClientSessionFlow::Continue),
     }
 }
 
@@ -594,6 +604,7 @@ mod tests {
     use crate::pane::split::PaneSplitAxis;
     use crate::pane::tracked_process::PaneTrackedProcesses;
     use crate::pane::tracked_process::TrackedProcessUserInteraction;
+    use crate::render_state::PaneRenderSignal;
     use crate::state::SessionLayout;
     use crate::state::SessionMetadata;
 
@@ -638,26 +649,25 @@ mod tests {
         let tempdir = tempfile::tempdir()?;
         let config = crate::server::test_helpers::server_config(tempdir.path(), "work")?;
         let mut timers = ClientTimers::new(&config)?;
-        timers.sync_render_deadline(true)?;
+        timers.sync_render_deadline(ClientRenderDmg::Dirty)?;
         timers.complete_render_frame()?;
-        timers.sync_render_deadline(true)?;
+        timers.sync_render_deadline(ClientRenderDmg::Dirty)?;
         let bulk_deadline = timers.render_sleep.deadline();
-        let mut render_dirty = true;
+        let mut render_dmg = ClientRenderDmg::Dirty;
 
         apply_pane_input_timers(
             &PaneInputOutcome {
                 cmd_handoff_pane_id: None,
-                interactive_render: true,
-                render_dirty: false,
-                sync_render_deadline: true,
+                render_priority: PaneInputRenderPriority::Interactive,
+                render_signal: PaneRenderSignal::DeadlineOnly,
                 tracked_process_change: None,
             },
             &mut timers,
-            &mut render_dirty,
+            &mut render_dmg,
         )?;
 
         assert2::assert!(timers.render_sleep.deadline() < bulk_deadline);
-        assert2::assert!(render_dirty);
+        pretty_assertions::assert_eq!(render_dmg, ClientRenderDmg::Dirty);
         Ok(())
     }
 
@@ -685,13 +695,19 @@ mod tests {
         )?;
         let mut timers = ClientTimers::new(&config)?;
 
-        assert2::assert!(!self::tracked_process_change_needs_deadline_sync(changes, &timers));
+        pretty_assertions::assert_eq!(
+            self::tracked_process_change_deadline_sync(changes, &timers),
+            PaneRenderDeadlineSync::Skip
+        );
 
         timers
             .tracked_process_quiet_sleep
             .as_mut()
             .reset(tokio::time::Instant::now());
-        assert2::assert!(self::tracked_process_change_needs_deadline_sync(changes, &timers));
+        pretty_assertions::assert_eq!(
+            self::tracked_process_change_deadline_sync(changes, &timers),
+            PaneRenderDeadlineSync::Sync
+        );
         Ok(())
     }
 
@@ -701,26 +717,25 @@ mod tests {
         let tempdir = tempfile::tempdir()?;
         let config = crate::server::test_helpers::server_config(tempdir.path(), "work")?;
         let mut timers = ClientTimers::new(&config)?;
-        timers.sync_render_deadline(true)?;
+        timers.sync_render_deadline(ClientRenderDmg::Dirty)?;
         timers.complete_render_frame()?;
-        timers.sync_render_deadline(true)?;
+        timers.sync_render_deadline(ClientRenderDmg::Dirty)?;
         let bulk_deadline = timers.render_sleep.deadline();
-        let mut render_dirty = true;
+        let mut render_dmg = ClientRenderDmg::Dirty;
 
         apply_pane_input_timers(
             &PaneInputOutcome {
                 cmd_handoff_pane_id: None,
-                interactive_render: false,
-                render_dirty: false,
-                sync_render_deadline: true,
+                render_priority: PaneInputRenderPriority::Bulk,
+                render_signal: PaneRenderSignal::DeadlineOnly,
                 tracked_process_change: None,
             },
             &mut timers,
-            &mut render_dirty,
+            &mut render_dmg,
         )?;
 
         pretty_assertions::assert_eq!(timers.render_sleep.deadline(), bulk_deadline);
-        assert2::assert!(render_dirty);
+        pretty_assertions::assert_eq!(render_dmg, ClientRenderDmg::Dirty);
         Ok(())
     }
 

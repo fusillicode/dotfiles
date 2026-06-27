@@ -44,7 +44,7 @@ impl Tab {
             .pane_layout(size)?
             .regions()
             .iter()
-            .find(|region| region.contains(position.into()))
+            .find(|region| region.containment(position.into()) == crate::pane::layout::PaneAreaContainment::Inside)
             .map(|region| region.id))
     }
 

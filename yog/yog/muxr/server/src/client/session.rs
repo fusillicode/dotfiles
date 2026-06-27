@@ -17,6 +17,7 @@ use tokio::sync::mpsc::error::TryRecvError;
 
 use super::quiet::QuietTurn;
 use crate::client::timers::ClientTimers;
+use crate::client::timers::QuietDeadline;
 use crate::keyboard_input::ServerInputMode;
 use crate::pane::fullscreen::PaneFullscreen;
 use crate::pane::render::RenderComposer;
@@ -24,6 +25,10 @@ use crate::pane::runtime::PaneRuntimes;
 use crate::pane::tracked_process::PaneTrackedProcesses;
 use crate::pty::PtyEvent;
 use crate::pty::PtySinkGuard;
+use crate::render_state::ClientLifecycleAction;
+use crate::render_state::ClientRenderDmg;
+use crate::render_state::ClientSessionFlow;
+use crate::render_state::ClientSessionSelectBias;
 use crate::scrollback_editor::ScrollbackEditorState;
 use crate::server::ServerConfig;
 use crate::session::delete::DeleteSessions;
@@ -152,7 +157,7 @@ pub async fn handle_client(
         )?;
     let last_layout_snapshot = layout_snapshot.clone();
     let initial_pane_regions = pane_regions.clone();
-    if !crate::screen_render::send_attach_response_and_baseline(
+    if crate::screen_render::send_attach_response_and_baseline(
         &mut event_writer,
         layout_snapshot,
         pane_regions,
@@ -160,6 +165,7 @@ pub async fn handle_client(
         config.client_write_timeout,
     )
     .await?
+        == ClientSessionFlow::Disconnect
     {
         return Ok(());
     }
@@ -229,7 +235,14 @@ async fn run_client_session(
     state: &mut ClientSessionState<'_>,
     pty_event_receiver: &mut tokio::sync::mpsc::Receiver<SessionPaneOutputMessage>,
 ) -> rootcause::Result<()> {
-    self::run_client_session_loop(request_reader, event_writer, state, pty_event_receiver, false).await
+    self::run_client_session_loop(
+        request_reader,
+        event_writer,
+        state,
+        pty_event_receiver,
+        ClientSessionSelectBias::Output,
+    )
+    .await
 }
 
 #[cfg(test)]
@@ -241,7 +254,14 @@ async fn run_client_session_after_output_turn(
 ) -> rootcause::Result<()> {
     // An output turn flips the loop to request-priority before the next select. Seeding that state lets tests cover
     // request-deferred quiet handling without racing a real timer against a client request.
-    self::run_client_session_loop(request_reader, event_writer, state, pty_event_receiver, true).await
+    self::run_client_session_loop(
+        request_reader,
+        event_writer,
+        state,
+        pty_event_receiver,
+        ClientSessionSelectBias::Request,
+    )
+    .await
 }
 
 #[expect(
@@ -253,130 +273,132 @@ async fn run_client_session_loop(
     event_writer: &mut ServerEventWriter,
     state: &mut ClientSessionState<'_>,
     pty_event_receiver: &mut tokio::sync::mpsc::Receiver<SessionPaneOutputMessage>,
-    mut request_turn: bool,
+    mut select_bias: ClientSessionSelectBias,
 ) -> rootcause::Result<()> {
     let mut timers = ClientTimers::new(state.config)?;
     timers.sync_tracked_process_quiet_deadline_for_layout(&state.pane_tracked_processes, state.layout)?;
     let mut heartbeat_started_at: Option<tokio::time::Instant> = None;
-    let mut render_dirty = false;
+    let mut render_dmg = ClientRenderDmg::Clean;
     let mut quiet_turn = QuietTurn::default();
 
     loop {
         if crate::client::lifecycle::client_should_exit(
-            state.sink_guards.iter().map(|sink| sink.guard.is_output_current()),
+            state.sink_guards.iter().map(|sink| sink.guard.output_freshness()),
             state.config.client_heartbeat_timeout,
             state.delete_sessions,
             heartbeat_started_at,
-        ) {
+        ) == ClientLifecycleAction::Exit
+        {
             return Ok(());
         }
-        timers.sync_render_deadline(render_dirty)?;
-        let ready_quiet = quiet_turn.take_ready(timers.tracked_process_quiet_sleep_deadline_has_passed());
+        timers.sync_render_deadline(render_dmg)?;
+        let ready_quiet = quiet_turn.take_ready(timers.tracked_process_quiet_deadline());
         let mut skip_quiet_this_turn = false;
-        if ready_quiet.drains_before_clear() {
+        if ready_quiet == QuietTurn::DrainBeforeClear {
             match self::drain_queued_output_before_quiet(
                 pty_event_receiver,
                 event_writer,
                 state,
                 &mut timers,
-                &mut render_dirty,
+                &mut render_dmg,
             )
             .await?
             {
                 OutputDrain::NoOutput => {}
-                OutputDrain::Output => request_turn = true,
+                OutputDrain::Output => select_bias = ClientSessionSelectBias::Request,
                 OutputDrain::BatchLimitReached => {
-                    request_turn = true;
+                    select_bias = ClientSessionSelectBias::Request;
                     // A full drain batch means output stayed hot. Re-arm quiet so requests get a turn before Busy can
                     // clear.
-                    quiet_turn.defer_if_elapsed(timers.tracked_process_quiet_sleep_deadline_has_passed());
+                    quiet_turn.defer_if_elapsed(timers.tracked_process_quiet_deadline());
                     skip_quiet_this_turn = true;
                 }
                 OutputDrain::Detached => return Ok(()),
             }
         }
         if !skip_quiet_this_turn
-            && ready_quiet.drains_before_clear()
-            && timers.tracked_process_quiet_sleep_deadline_has_passed()
+            && ready_quiet == QuietTurn::DrainBeforeClear
+            && timers.tracked_process_quiet_deadline() == crate::client::timers::QuietDeadline::Elapsed
         {
-            if !self::handle_session_runtime_timer_message(
+            if self::handle_session_runtime_timer_message(
                 SessionRuntimeTimerMessage::TrackedProcessQuietDeadlineReached,
                 event_writer,
                 state,
                 &mut timers,
                 &mut heartbeat_started_at,
-                &mut render_dirty,
+                &mut render_dmg,
             )
             .await?
+                == ClientSessionFlow::Disconnect
             {
                 return Ok(());
             }
             continue;
         }
 
-        if request_turn {
+        if select_bias == ClientSessionSelectBias::Request {
             tokio::select! {
                 biased;
                 _ = timers.heartbeat.tick() => {
-                    if !self::handle_session_runtime_timer_message(
+                    if self::handle_session_runtime_timer_message(
                         SessionRuntimeTimerMessage::HeartbeatTick,
                         event_writer,
                         state,
                         &mut timers,
                         &mut heartbeat_started_at,
-                        &mut render_dirty,
-                    ).await? {
+                        &mut render_dmg,
+                    ).await? == ClientSessionFlow::Disconnect {
                         return Ok(());
                     }
                 },
                 () = timers.render_sleep.as_mut() => {
-                    if !self::handle_session_runtime_timer_message(
+                    if self::handle_session_runtime_timer_message(
                         SessionRuntimeTimerMessage::RenderDeadlineReached,
                         event_writer,
                         state,
                         &mut timers,
                         &mut heartbeat_started_at,
-                        &mut render_dirty,
-                    ).await? {
+                        &mut render_dmg,
+                    ).await? == ClientSessionFlow::Disconnect {
                         return Ok(());
                     }
                 },
                 () = timers.cmd_handoff_sample.as_mut() => {
-                    if !self::handle_session_runtime_timer_message(
+                    if self::handle_session_runtime_timer_message(
                         SessionRuntimeTimerMessage::CmdHandoffSampleReady,
                         event_writer,
                         state,
                         &mut timers,
                         &mut heartbeat_started_at,
-                        &mut render_dirty,
-                    ).await? {
+                        &mut render_dmg,
+                    ).await? == ClientSessionFlow::Disconnect {
                         return Ok(());
                     }
                 },
                 request = request_reader.recv_request() => {
                     let message = SessionClientMessage::from_request(request?);
-                    if !crate::request_router::handle_client_message(message, event_writer, state, &mut timers, &mut heartbeat_started_at, &mut render_dirty).await? {
+                    if crate::request_router::handle_client_message(message, event_writer, state, &mut timers, &mut heartbeat_started_at, &mut render_dmg).await? == ClientSessionFlow::Disconnect {
                         return Ok(());
                     }
-                    request_turn = false;
-                    quiet_turn.defer_if_elapsed(timers.tracked_process_quiet_sleep_deadline_has_passed());
+                    select_bias = ClientSessionSelectBias::Output;
+                    quiet_turn.defer_if_elapsed(timers.tracked_process_quiet_deadline());
                 },
                 event = pty_event_receiver.recv() => {
-                    request_turn = true;
-                    if !crate::pty_output::handle_pane_output_message(event, event_writer, state, &mut timers, &mut render_dirty).await? {
+                    select_bias = ClientSessionSelectBias::Request;
+                    if crate::pty_output::handle_pane_output_message(event, event_writer, state, &mut timers, &mut render_dmg).await? == ClientSessionFlow::Disconnect {
                         return Ok(());
                     }
-                    quiet_turn.defer_if_elapsed(timers.tracked_process_quiet_sleep_deadline_has_passed());
+                    quiet_turn.defer_if_elapsed(timers.tracked_process_quiet_deadline());
                 },
                 () = timers.tracked_process_quiet_sleep.as_mut() => {
-                    if !self::handle_session_runtime_timer_message(
+                    if self::handle_session_runtime_timer_message(
                         SessionRuntimeTimerMessage::TrackedProcessQuietDeadlineReached,
                         event_writer,
                         state,
                         &mut timers,
                         &mut heartbeat_started_at,
-                        &mut render_dirty,
-                    ).await? {
+                        &mut render_dmg,
+                    ).await? == ClientSessionFlow::Disconnect {
                         return Ok(());
                     }
                 },
@@ -385,66 +407,66 @@ async fn run_client_session_loop(
             tokio::select! {
                 biased;
                 _ = timers.heartbeat.tick() => {
-                    if !self::handle_session_runtime_timer_message(
+                    if self::handle_session_runtime_timer_message(
                         SessionRuntimeTimerMessage::HeartbeatTick,
                         event_writer,
                         state,
                         &mut timers,
                         &mut heartbeat_started_at,
-                        &mut render_dirty,
-                    ).await? {
+                        &mut render_dmg,
+                    ).await? == ClientSessionFlow::Disconnect {
                         return Ok(());
                     }
                 },
                 () = timers.render_sleep.as_mut() => {
-                    if !self::handle_session_runtime_timer_message(
+                    if self::handle_session_runtime_timer_message(
                         SessionRuntimeTimerMessage::RenderDeadlineReached,
                         event_writer,
                         state,
                         &mut timers,
                         &mut heartbeat_started_at,
-                        &mut render_dirty,
-                    ).await? {
+                        &mut render_dmg,
+                    ).await? == ClientSessionFlow::Disconnect {
                         return Ok(());
                     }
                 },
                 () = timers.cmd_handoff_sample.as_mut() => {
-                    if !self::handle_session_runtime_timer_message(
+                    if self::handle_session_runtime_timer_message(
                         SessionRuntimeTimerMessage::CmdHandoffSampleReady,
                         event_writer,
                         state,
                         &mut timers,
                         &mut heartbeat_started_at,
-                        &mut render_dirty,
-                    ).await? {
+                        &mut render_dmg,
+                    ).await? == ClientSessionFlow::Disconnect {
                         return Ok(());
                     }
                 },
                 event = pty_event_receiver.recv() => {
                     // Output gets one turn, then client requests get first chance so detach/pong cannot starve.
-                    request_turn = true;
-                    if !crate::pty_output::handle_pane_output_message(event, event_writer, state, &mut timers, &mut render_dirty).await? {
+                    select_bias = ClientSessionSelectBias::Request;
+                    if crate::pty_output::handle_pane_output_message(event, event_writer, state, &mut timers, &mut render_dmg).await? == ClientSessionFlow::Disconnect {
                         return Ok(());
                     }
-                    quiet_turn.defer_if_elapsed(timers.tracked_process_quiet_sleep_deadline_has_passed());
+                    quiet_turn.defer_if_elapsed(timers.tracked_process_quiet_deadline());
                 },
                 request = request_reader.recv_request() => {
                     let message = SessionClientMessage::from_request(request?);
-                    if !crate::request_router::handle_client_message(message, event_writer, state, &mut timers, &mut heartbeat_started_at, &mut render_dirty).await? {
+                    if crate::request_router::handle_client_message(message, event_writer, state, &mut timers, &mut heartbeat_started_at, &mut render_dmg).await? == ClientSessionFlow::Disconnect {
                         return Ok(());
                     }
-                    request_turn = false;
-                    quiet_turn.defer_if_elapsed(timers.tracked_process_quiet_sleep_deadline_has_passed());
+                    select_bias = ClientSessionSelectBias::Output;
+                    quiet_turn.defer_if_elapsed(timers.tracked_process_quiet_deadline());
                 },
                 () = timers.tracked_process_quiet_sleep.as_mut() => {
-                    if !self::handle_session_runtime_timer_message(
+                    if self::handle_session_runtime_timer_message(
                         SessionRuntimeTimerMessage::TrackedProcessQuietDeadlineReached,
                         event_writer,
                         state,
                         &mut timers,
                         &mut heartbeat_started_at,
-                        &mut render_dirty,
-                    ).await? {
+                        &mut render_dmg,
+                    ).await? == ClientSessionFlow::Disconnect {
                         return Ok(());
                     }
                 },
@@ -466,7 +488,7 @@ async fn drain_queued_output_before_quiet(
     event_writer: &mut ServerEventWriter,
     state: &mut ClientSessionState<'_>,
     timers: &mut ClientTimers,
-    render_dirty: &mut bool,
+    render_dmg: &mut ClientRenderDmg,
 ) -> rootcause::Result<OutputDrain> {
     let mut pane_exited = false;
     let mut pane_output_ready = false;
@@ -479,8 +501,9 @@ async fn drain_queued_output_before_quiet(
             Err(TryRecvError::Empty) => break,
             Err(TryRecvError::Disconnected) => {
                 if !pane_exited && !pane_output_ready {
-                    if crate::pty_output::handle_pane_output_message(None, event_writer, state, timers, render_dirty)
+                    if crate::pty_output::handle_pane_output_message(None, event_writer, state, timers, render_dmg)
                         .await?
+                        == ClientSessionFlow::Continue
                     {
                         return Ok(OutputDrain::NoOutput);
                     }
@@ -501,10 +524,12 @@ async fn drain_queued_output_before_quiet(
         return Ok(OutputDrain::NoOutput);
     };
 
-    if !crate::pty_output::handle_pane_output_message(event, event_writer, state, timers, render_dirty).await? {
+    if crate::pty_output::handle_pane_output_message(event, event_writer, state, timers, render_dmg).await?
+        == ClientSessionFlow::Disconnect
+    {
         return Ok(OutputDrain::Detached);
     }
-    if batch_limit_reached && timers.tracked_process_quiet_sleep_deadline_has_passed() {
+    if batch_limit_reached && timers.tracked_process_quiet_deadline() == QuietDeadline::Elapsed {
         return Ok(OutputDrain::BatchLimitReached);
     }
     Ok(OutputDrain::Output)
@@ -516,29 +541,31 @@ async fn handle_session_runtime_timer_message(
     state: &mut ClientSessionState<'_>,
     timers: &mut ClientTimers,
     heartbeat_started_at: &mut Option<tokio::time::Instant>,
-    render_dirty: &mut bool,
-) -> rootcause::Result<bool> {
+    render_dmg: &mut ClientRenderDmg,
+) -> rootcause::Result<ClientSessionFlow> {
     match message {
         SessionRuntimeTimerMessage::HeartbeatTick => {
             self::send_heartbeat_if_idle(event_writer, state.config.client_write_timeout, heartbeat_started_at).await
         }
         SessionRuntimeTimerMessage::RenderDeadlineReached => {
-            let keep_attached = crate::screen_render::flush_render_diff(event_writer, state, render_dirty).await?;
+            let flow = crate::screen_render::flush_render_diff(event_writer, state, render_dmg).await?;
             // `Sleep` stays ready after it fires. Complete the frame immediately so the one-shot wakeup is disabled
             // and the next dirty frame is rate-limited from this render attempt.
             timers.complete_render_frame()?;
-            Ok(keep_attached)
+            Ok(flow)
         }
         SessionRuntimeTimerMessage::CmdHandoffSampleReady => {
-            crate::screen_render::handle_cmd_handoff_sample(timers, event_writer, state, render_dirty).await
+            crate::screen_render::handle_cmd_handoff_sample(timers, event_writer, state, render_dmg).await
         }
         SessionRuntimeTimerMessage::TrackedProcessQuietDeadlineReached => {
             timers.disable_tracked_process_quiet_sleep()?;
-            if !crate::screen_render::flush_pane_attention(timers, event_writer, state, render_dirty).await? {
-                return Ok(false);
+            if crate::screen_render::flush_pane_attention(timers, event_writer, state, render_dmg).await?
+                == ClientSessionFlow::Disconnect
+            {
+                return Ok(ClientSessionFlow::Disconnect);
             }
             timers.sync_tracked_process_quiet_deadline_for_layout(&state.pane_tracked_processes, state.layout)?;
-            Ok(true)
+            Ok(ClientSessionFlow::Continue)
         }
     }
 }
@@ -547,16 +574,20 @@ async fn send_heartbeat_if_idle(
     event_writer: &mut ServerEventWriter,
     client_write_timeout: Duration,
     heartbeat_started_at: &mut Option<tokio::time::Instant>,
-) -> rootcause::Result<bool> {
+) -> rootcause::Result<ClientSessionFlow> {
     if heartbeat_started_at.is_some() {
-        return Ok(true);
+        return Ok(ClientSessionFlow::Continue);
     }
 
-    if !crate::event_writer::send_event_with_timeout(event_writer, &ServerEvent::Ping, client_write_timeout).await? {
-        return Ok(false);
+    if crate::event_writer::send_event_with_timeout(event_writer, &ServerEvent::Ping, client_write_timeout)
+        .await?
+        .session_flow()
+        == ClientSessionFlow::Disconnect
+    {
+        return Ok(ClientSessionFlow::Disconnect);
     }
     *heartbeat_started_at = Some(tokio::time::Instant::now());
-    Ok(true)
+    Ok(ClientSessionFlow::Continue)
 }
 
 pub async fn handle_reaped_panes(
@@ -573,15 +604,14 @@ pub async fn handle_reaped_panes(
     match crate::session::runtime::reap_exited_panes(state.config, state.layout, state.runtimes)? {
         ReapResult::Final => Ok(ReapedPanes::Stop),
         ReapResult::NoExitedPanes => {
-            if !restored_editor.restored() {
+            if restored_editor.status() == crate::scrollback_editor::ScrollbackEditorRestoreStatus::Unchanged {
                 return Ok(ReapedPanes::Unchanged);
             }
             crate::pane::focus::write_active_pane_focus_events(previous_pane_before_restore, state)?;
             self::acknowledge_active_tracked_process(state)?;
-            if crate::screen_render::send_layout_and_baseline(event_writer, state).await? {
-                Ok(ReapedPanes::LayoutChanged)
-            } else {
-                Ok(ReapedPanes::Stop)
+            match crate::screen_render::send_layout_and_baseline(event_writer, state).await? {
+                ClientSessionFlow::Continue => Ok(ReapedPanes::LayoutChanged),
+                ClientSessionFlow::Disconnect => Ok(ReapedPanes::Stop),
             }
         }
         ReapResult::Removed { pane_ids } => {
@@ -598,23 +628,25 @@ pub async fn handle_reaped_panes(
                     state.sink_guards.retain(|sink| !pane_ids.contains(&sink.pane_id));
                 }
             }
-            let previous_pane = if restored_editor.restored() {
-                previous_pane_before_restore
-            } else {
-                previous_pane_before_reap
-            };
+            let previous_pane =
+                if restored_editor.status() == crate::scrollback_editor::ScrollbackEditorRestoreStatus::Restored {
+                    previous_pane_before_restore
+                } else {
+                    previous_pane_before_reap
+                };
             crate::pane::focus::write_active_pane_focus_events(previous_pane, state)?;
             self::acknowledge_active_tracked_process(state)?;
-            if crate::screen_render::resize_panes_and_render(event_writer, state).await? {
-                Ok(ReapedPanes::LayoutChanged)
-            } else {
-                Ok(ReapedPanes::Stop)
+            match crate::screen_render::resize_panes_and_render(event_writer, state).await? {
+                ClientSessionFlow::Continue => Ok(ReapedPanes::LayoutChanged),
+                ClientSessionFlow::Disconnect => Ok(ReapedPanes::Stop),
             }
         }
     }
 }
 
-pub fn acknowledge_active_tracked_process(state: &mut ClientSessionState<'_>) -> rootcause::Result<bool> {
+pub fn acknowledge_active_tracked_process(
+    state: &mut ClientSessionState<'_>,
+) -> rootcause::Result<crate::pane::tracked_process::TrackedProcessChanges> {
     let active_pane = state.layout.active_pane_id()?;
     // Close/reap fallback focus is not a runtime sample. Only acknowledge already-known attention here; command
     // observation stays with output and explicit focus paths so a transient shell sample cannot clear unrelated work.
@@ -653,6 +685,7 @@ mod tests {
     use crate::pane::cmd::PaneCmdObservation;
     use crate::pane::cmd::PaneCmdSnapshot;
     use crate::pane::split::PaneSplitAxis;
+    use crate::pane::tracked_process::TrackedProcessChanges;
     use crate::pane::tracked_process::TrackedProcessUserInteraction;
     use crate::pty::ShellCmd;
     use crate::session::start_seed::SessionStartSeed;
@@ -730,18 +763,18 @@ mod tests {
             sink_guards: &mut sink_guards,
             terminal_size,
         };
-        let mut render_dirty = false;
+        let mut render_dmg = ClientRenderDmg::Clean;
 
         let keep_attached = crate::pty_output::handle_pane_output_message(
             Some(SessionPaneOutputMessage::PaneExited),
             &mut event_writer,
             &mut state,
             &mut timers,
-            &mut render_dirty,
+            &mut render_dmg,
         )
         .await?;
 
-        assert2::assert!(keep_attached);
+        pretty_assertions::assert_eq!(keep_attached, ClientSessionFlow::Continue);
         pretty_assertions::assert_eq!(state.layout.active_pane_id()?, other_pane_id);
         pretty_assertions::assert_eq!(
             state.pane_tracked_processes.attention_pane_ids(state.layout),
@@ -830,14 +863,14 @@ mod tests {
             sink_guards: &mut sink_guards,
             terminal_size,
         };
-        let mut render_dirty = false;
+        let mut render_dmg = ClientRenderDmg::Clean;
 
         let keep_attached = crate::pty_output::handle_pane_output_message(
             Some(SessionPaneOutputMessage::PaneExited),
             &mut event_writer,
             &mut state,
             &mut timers,
-            &mut render_dirty,
+            &mut render_dmg,
         )
         .await?;
 
@@ -861,12 +894,12 @@ mod tests {
                 timers.take_cmd_handoff_sample_panes()?,
             ),
             (
-                true,
+                ClientSessionFlow::Continue,
                 vec![surviving_pane],
                 vec![surviving_pane],
                 vec![surviving_pane],
                 vec![surviving_pane],
-                (false, false),
+                (TrackedProcessChanges::default(), TrackedProcessChanges::default()),
                 TrackedProcessState::Busy,
                 vec![surviving_pane],
             )
@@ -945,7 +978,7 @@ mod tests {
             terminal_size,
         };
         let mut heartbeat_started_at = None;
-        let mut render_dirty = false;
+        let mut render_dmg = ClientRenderDmg::Clean;
 
         let keep_attached = crate::request_router::handle_client_message(
             SessionClientMessage::Request(ClientRequest::FocusPaneAt(target_position)),
@@ -953,11 +986,11 @@ mod tests {
             &mut state,
             &mut timers,
             &mut heartbeat_started_at,
-            &mut render_dirty,
+            &mut render_dmg,
         )
         .await?;
 
-        assert2::assert!(keep_attached);
+        pretty_assertions::assert_eq!(keep_attached, ClientSessionFlow::Continue);
         pretty_assertions::assert_eq!(state.layout.active_pane_id()?, other_pane_id);
         assert2::assert!(timers.tracked_process_quiet_sleep.deadline() < focused_deadline);
         self::abort_client_drain(client_drain).await;
@@ -1043,7 +1076,7 @@ mod tests {
             terminal_size,
         };
         let mut heartbeat_started_at = None;
-        let mut render_dirty = false;
+        let mut render_dmg = ClientRenderDmg::Clean;
 
         let keep_attached = crate::request_router::handle_client_message(
             SessionClientMessage::Request(ClientRequest::Key(ClientKey {
@@ -1055,11 +1088,11 @@ mod tests {
             &mut state,
             &mut timers,
             &mut heartbeat_started_at,
-            &mut render_dirty,
+            &mut render_dmg,
         )
         .await?;
 
-        assert2::assert!(keep_attached);
+        pretty_assertions::assert_eq!(keep_attached, ClientSessionFlow::Continue);
         pretty_assertions::assert_eq!(state.layout.active_pane_id()?, fallback_pane_id);
         let sink_guard_pane_ids = state.sink_guards.iter().map(|sink| sink.pane_id).collect::<Vec<_>>();
         let snapshot = state.pane_tracked_processes.snapshot(state.layout);
@@ -1085,7 +1118,7 @@ mod tests {
                 vec![fallback_pane_id],
                 vec![fallback_pane_id],
                 vec![fallback_pane_id],
-                false,
+                TrackedProcessChanges::default(),
                 TrackedProcessState::Seen,
                 vec![fallback_pane_id],
             )
@@ -1181,7 +1214,7 @@ mod tests {
             terminal_size,
         };
         let mut heartbeat_started_at = None;
-        let mut render_dirty = false;
+        let mut render_dmg = ClientRenderDmg::Clean;
 
         let keep_attached = crate::request_router::handle_client_message(
             SessionClientMessage::Request(request),
@@ -1189,11 +1222,11 @@ mod tests {
             &mut state,
             &mut timers,
             &mut heartbeat_started_at,
-            &mut render_dirty,
+            &mut render_dmg,
         )
         .await?;
 
-        assert2::assert!(keep_attached);
+        pretty_assertions::assert_eq!(keep_attached, ClientSessionFlow::Continue);
         let Some(ServerEvent::SidebarLayout(layout_snapshot)) = self::recv_test_event(&mut client_reader).await? else {
             return Err(rootcause::report!(
                 "expected muxr prompt submit tracked-process layout update"
@@ -1203,7 +1236,7 @@ mod tests {
             self::tracked_process_state(&layout_snapshot, pane_id)?,
             TrackedProcessState::Busy
         );
-        assert2::assert!(!timers.tracked_process_quiet_sleep_deadline_has_passed());
+        pretty_assertions::assert_eq!(timers.tracked_process_quiet_deadline(), QuietDeadline::Pending);
         Ok(())
     }
 
@@ -1275,7 +1308,7 @@ mod tests {
         );
         let mut timers = ClientTimers::new(&config)?;
         timers.sync_tracked_process_quiet_deadline_for_layout(&pane_tracked_processes, &layout)?;
-        assert2::assert!(timers.tracked_process_quiet_sleep_deadline_has_passed());
+        pretty_assertions::assert_eq!(timers.tracked_process_quiet_deadline(), QuietDeadline::Elapsed);
         let (layout_snapshot, pane_regions, mut render_composer, _render_baseline) =
             crate::screen_render::initial_client_render(
                 &config,
@@ -1305,7 +1338,7 @@ mod tests {
             terminal_size,
         };
         let mut heartbeat_started_at = None;
-        let mut render_dirty = false;
+        let mut render_dmg = ClientRenderDmg::Clean;
 
         let keep_attached = crate::request_router::handle_client_message(
             SessionClientMessage::Request(request),
@@ -1313,16 +1346,16 @@ mod tests {
             &mut state,
             &mut timers,
             &mut heartbeat_started_at,
-            &mut render_dirty,
+            &mut render_dmg,
         )
         .await?;
 
-        assert2::assert!(keep_attached);
+        pretty_assertions::assert_eq!(keep_attached, ClientSessionFlow::Continue);
         pretty_assertions::assert_eq!(
             self::tracked_process_snapshot_state(&state.pane_tracked_processes.snapshot(state.layout), pane_id)?,
             TrackedProcessState::Busy
         );
-        assert2::assert!(!timers.tracked_process_quiet_sleep_deadline_has_passed());
+        pretty_assertions::assert_eq!(timers.tracked_process_quiet_deadline(), QuietDeadline::Pending);
 
         tokio::time::sleep(Duration::from_millis(45)).await;
         let keep_attached = self::handle_session_runtime_timer_message(
@@ -1331,10 +1364,10 @@ mod tests {
             &mut state,
             &mut timers,
             &mut heartbeat_started_at,
-            &mut render_dirty,
+            &mut render_dmg,
         )
         .await?;
-        assert2::assert!(keep_attached);
+        pretty_assertions::assert_eq!(keep_attached, ClientSessionFlow::Continue);
         pretty_assertions::assert_eq!(
             self::tracked_process_snapshot_state(&state.pane_tracked_processes.snapshot(state.layout), pane_id)?,
             TrackedProcessState::Seen
@@ -1399,7 +1432,10 @@ mod tests {
             let tracked_pane = PaneId::new(1)?;
             layout.active_tab_mut()?.focus_pane(tracked_pane)?;
             let target_pane = layout.create_tab(self::metadata("sh", 3))?;
-            assert2::assert!(layout.focus_tab(TabId::new(1)?)?);
+            pretty_assertions::assert_eq!(
+                layout.focus_tab(TabId::new(1)?)?,
+                crate::tab::focus::TabFocusChange::Changed,
+            );
             Ok((
                 layout,
                 tracked_pane,
@@ -1491,7 +1527,7 @@ mod tests {
             terminal_size,
         };
         let mut heartbeat_started_at = None;
-        let mut render_dirty = false;
+        let mut render_dmg = ClientRenderDmg::Clean;
 
         let keep_attached = crate::request_router::handle_client_message(
             SessionClientMessage::Request(self::shift_alt_key_request('S')),
@@ -1499,11 +1535,11 @@ mod tests {
             &mut state,
             &mut timers,
             &mut heartbeat_started_at,
-            &mut render_dirty,
+            &mut render_dmg,
         )
         .await?;
 
-        assert2::assert!(keep_attached);
+        pretty_assertions::assert_eq!(keep_attached, ClientSessionFlow::Continue);
         assert2::assert!(state.scrollback_editor.is_some());
         assert2::assert!(timers.tracked_process_quiet_sleep.deadline() > focused_deadline);
         let disabled_deadline = timers.tracked_process_quiet_sleep.deadline();
@@ -1514,15 +1550,15 @@ mod tests {
             &mut state,
             &mut timers,
             &mut heartbeat_started_at,
-            &mut render_dirty,
+            &mut render_dmg,
         )
         .await?;
 
-        assert2::assert!(keep_attached);
+        pretty_assertions::assert_eq!(keep_attached, ClientSessionFlow::Continue);
         assert2::assert!(state.scrollback_editor.is_none());
         pretty_assertions::assert_eq!(state.layout.active_pane_id()?, tracked_pane);
         assert2::assert!(timers.tracked_process_quiet_sleep.deadline() < disabled_deadline);
-        assert2::assert!(!timers.tracked_process_quiet_sleep_deadline_has_passed());
+        pretty_assertions::assert_eq!(timers.tracked_process_quiet_deadline(), QuietDeadline::Pending);
         self::abort_client_drain(client_drain).await;
         Ok(())
     }
@@ -1987,7 +2023,7 @@ mod tests {
         );
         let mut timers = ClientTimers::new(&config)?;
         timers.sync_tracked_process_quiet_deadline_for_layout(&pane_tracked_processes, &layout)?;
-        assert2::assert!(timers.tracked_process_quiet_sleep_deadline_has_passed());
+        pretty_assertions::assert_eq!(timers.tracked_process_quiet_deadline(), QuietDeadline::Elapsed);
         let mut runtimes = PaneRuntimes::spawn_for_start_seed(
             &config,
             &SessionStartSeed {
@@ -2047,7 +2083,7 @@ mod tests {
             sink_guards: &mut sink_guards,
             terminal_size,
         };
-        let mut render_dirty = false;
+        let mut render_dmg = ClientRenderDmg::Clean;
 
         pretty_assertions::assert_eq!(
             self::drain_queued_output_before_quiet(
@@ -2055,12 +2091,12 @@ mod tests {
                 &mut event_writer,
                 &mut state,
                 &mut timers,
-                &mut render_dirty,
+                &mut render_dmg,
             )
             .await?,
             OutputDrain::BatchLimitReached
         );
-        assert2::assert!(timers.tracked_process_quiet_sleep_deadline_has_passed());
+        pretty_assertions::assert_eq!(timers.tracked_process_quiet_deadline(), QuietDeadline::Elapsed);
 
         pretty_assertions::assert_eq!(
             self::drain_queued_output_before_quiet(
@@ -2068,7 +2104,7 @@ mod tests {
                 &mut event_writer,
                 &mut state,
                 &mut timers,
-                &mut render_dirty,
+                &mut render_dmg,
             )
             .await?,
             OutputDrain::Output
@@ -2078,7 +2114,7 @@ mod tests {
             self::tracked_process_snapshot_state(&state.pane_tracked_processes.snapshot(state.layout), pane_id)?,
             TrackedProcessState::Busy
         );
-        assert2::assert!(!timers.tracked_process_quiet_sleep_deadline_has_passed());
+        pretty_assertions::assert_eq!(timers.tracked_process_quiet_deadline(), QuietDeadline::Pending);
         assert2::assert!(matches!(async_pty_receiver.try_recv(), Err(TryRecvError::Empty)));
         self::abort_client_drain(client_drain).await;
         Ok(())
@@ -2114,7 +2150,7 @@ mod tests {
         );
         let mut timers = ClientTimers::new(&config)?;
         timers.sync_tracked_process_quiet_deadline_for_layout(&pane_tracked_processes, &layout)?;
-        assert2::assert!(timers.tracked_process_quiet_sleep_deadline_has_passed());
+        pretty_assertions::assert_eq!(timers.tracked_process_quiet_deadline(), QuietDeadline::Elapsed);
 
         let mut runtimes = PaneRuntimes::spawn_for_start_seed(
             &config,
@@ -2158,23 +2194,23 @@ mod tests {
             sink_guards: &mut sink_guards,
             terminal_size,
         };
-        let mut render_dirty = false;
+        let mut render_dmg = ClientRenderDmg::Clean;
 
         let keep_attached = crate::pty_output::handle_pane_output_message(
             Some(SessionPaneOutputMessage::PaneOutputReady),
             &mut event_writer,
             &mut state,
             &mut timers,
-            &mut render_dirty,
+            &mut render_dmg,
         )
         .await?;
 
-        assert2::assert!(keep_attached);
+        pretty_assertions::assert_eq!(keep_attached, ClientSessionFlow::Continue);
         pretty_assertions::assert_eq!(
             self::tracked_process_snapshot_state(&state.pane_tracked_processes.snapshot(state.layout), pane_id)?,
             TrackedProcessState::Busy
         );
-        assert2::assert!(!timers.tracked_process_quiet_sleep_deadline_has_passed());
+        pretty_assertions::assert_eq!(timers.tracked_process_quiet_deadline(), QuietDeadline::Pending);
         pretty_assertions::assert_eq!(
             state.pane_tracked_processes.mark_quiet_deadlines(
                 state.layout,
@@ -2230,7 +2266,7 @@ mod tests {
         );
         let mut timers = ClientTimers::new(&config)?;
         timers.sync_tracked_process_quiet_deadline_for_layout(&pane_tracked_processes, &layout)?;
-        assert2::assert!(timers.tracked_process_quiet_sleep_deadline_has_passed());
+        pretty_assertions::assert_eq!(timers.tracked_process_quiet_deadline(), QuietDeadline::Elapsed);
         let (layout_snapshot, pane_regions, mut render_composer, _render_baseline) =
             crate::screen_render::initial_client_render(
                 &config,
@@ -2264,7 +2300,7 @@ mod tests {
             terminal_size,
         };
         let mut heartbeat_started_at = None;
-        let mut render_dirty = false;
+        let mut render_dmg = ClientRenderDmg::Clean;
 
         let keep_attached = crate::request_router::handle_client_message(
             SessionClientMessage::Request(ClientRequest::Mouse(ClientMouseEvent {
@@ -2276,16 +2312,16 @@ mod tests {
             &mut state,
             &mut timers,
             &mut heartbeat_started_at,
-            &mut render_dirty,
+            &mut render_dmg,
         )
         .await?;
 
-        assert2::assert!(keep_attached);
+        pretty_assertions::assert_eq!(keep_attached, ClientSessionFlow::Continue);
         pretty_assertions::assert_eq!(
             self::tracked_process_snapshot_state(&state.pane_tracked_processes.snapshot(state.layout), pane_id)?,
             TrackedProcessState::Busy
         );
-        assert2::assert!(!timers.tracked_process_quiet_sleep_deadline_has_passed());
+        pretty_assertions::assert_eq!(timers.tracked_process_quiet_deadline(), QuietDeadline::Pending);
         Ok(())
     }
 
@@ -2355,7 +2391,7 @@ mod tests {
             terminal_size,
         };
         let mut heartbeat_started_at = None;
-        let mut render_dirty = false;
+        let mut render_dmg = ClientRenderDmg::Clean;
 
         let keep_attached = crate::request_router::handle_client_message(
             SessionClientMessage::Request(request),
@@ -2363,11 +2399,11 @@ mod tests {
             &mut state,
             &mut timers,
             &mut heartbeat_started_at,
-            &mut render_dirty,
+            &mut render_dmg,
         )
         .await?;
 
-        assert2::assert!(keep_attached);
+        pretty_assertions::assert_eq!(keep_attached, ClientSessionFlow::Continue);
         pretty_assertions::assert_eq!(state.layout.active_pane_id()?, expected_active_pane);
         assert2::assert!(timers.tracked_process_quiet_sleep.deadline() < focused_deadline);
         self::abort_client_drain(client_drain).await;
@@ -2547,7 +2583,7 @@ mod tests {
 
     fn wait_for_pane_exit(runtimes: &PaneRuntimes, pane_id: PaneId) -> rootcause::Result<()> {
         let started_at = Instant::now();
-        while !runtimes.handle(pane_id)?.has_exited() {
+        while runtimes.handle(pane_id)?.exit_state() == crate::pty::PtyExitState::Running {
             if started_at.elapsed() > Duration::from_secs(2) {
                 return Err(rootcause::report!("timed out waiting for muxr test pane exit")
                     .attach(format!("pane_id={pane_id}")));

@@ -57,7 +57,7 @@ impl FrameBuffer {
                 self.size = Some(size);
                 Ok(ApplyOutcome::Applied(RenderFrameChanges {
                     cursor,
-                    full_redraw: true,
+                    scope: RenderFrameScope::Full,
                     rows: spans,
                 }))
             }
@@ -84,7 +84,7 @@ impl FrameBuffer {
         self.size = Some(size);
         Ok(ApplyOutcome::Applied(RenderFrameChanges {
             cursor,
-            full_redraw: false,
+            scope: RenderFrameScope::Partial,
             rows: spans,
         }))
     }
@@ -150,7 +150,7 @@ impl FrameBuffer {
 
         Ok(Some(RenderFrameChanges {
             cursor,
-            full_redraw: false,
+            scope: RenderFrameScope::Partial,
             rows,
         }))
     }
@@ -180,15 +180,21 @@ pub enum ApplyOutcome {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RenderFrameChanges {
     cursor: RenderCursor,
-    full_redraw: bool,
+    scope: RenderFrameScope,
     rows: Vec<RenderRowSpan>,
 }
 
 impl RenderFrameChanges {
     #[must_use]
-    pub const fn is_full_redraw(&self) -> bool {
-        self.full_redraw
+    pub const fn scope(&self) -> RenderFrameScope {
+        self.scope
     }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum RenderFrameScope {
+    Full,
+    Partial,
 }
 
 fn apply_span_to_rows(rows: &mut [Vec<RenderCell>], span: &RenderRowSpan) -> rootcause::Result<()> {
@@ -279,15 +285,7 @@ fn selected_style(
     col: u16,
     selection_bg: RenderColor,
 ) -> RenderStyle {
-    self::selection_visual_for_cell(selection, row, col).apply(style, selection_bg)
-}
-
-fn selection_visual_for_cell(selection: Option<&SelectionRange>, row: u16, col: u16) -> SelectionVisual {
-    if selection.is_some_and(|selection| selection.contains(row, col)) {
-        SelectionVisual::Selected
-    } else {
-        SelectionVisual::Unselected
-    }
+    SelectionVisual::for_cell(selection, row, col).apply(style, selection_bg)
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -297,6 +295,14 @@ enum SelectionVisual {
 }
 
 impl SelectionVisual {
+    fn for_cell(selection: Option<&SelectionRange>, row: u16, col: u16) -> Self {
+        if selection.is_some_and(|selection| selection.contains(row, col)) {
+            Self::Selected
+        } else {
+            Self::Unselected
+        }
+    }
+
     const fn apply(self, mut style: RenderStyle, selection_bg: RenderColor) -> RenderStyle {
         match self {
             Self::Selected => {
@@ -407,7 +413,7 @@ fn render_cursor(
     row_offset: u16,
     col_offset: u16,
 ) -> rootcause::Result<()> {
-    if cursor.visible {
+    if cursor.visibility == muxr_core::RenderCursorVisibility::Visible {
         queue_cursor_shape(stdout, cursor.shape)?;
         let row = cursor
             .row
@@ -489,7 +495,7 @@ mod tests {
             return Err(report!("expected applied baseline"));
         };
 
-        assert2::assert!(changes.full_redraw);
+        pretty_assertions::assert_eq!(changes.scope, RenderFrameScope::Full);
         pretty_assertions::assert_eq!(changes.rows.len(), 2);
         pretty_assertions::assert_eq!(frame_buffer.seq, Some(1));
         Ok(())
@@ -509,7 +515,7 @@ mod tests {
                 row: 0,
                 col: 0,
                 shape: RenderCursorShape::Default,
-                visible: true,
+                visibility: muxr_core::RenderCursorVisibility::Visible,
             },
             vec![RenderRowSpan::new(0, 0, vec![render_cell("x")])?],
         )?))?;
@@ -526,7 +532,7 @@ mod tests {
             return Err(report!("expected applied diff"));
         };
 
-        assert2::assert!(!changes.full_redraw);
+        pretty_assertions::assert_eq!(changes.scope, RenderFrameScope::Partial);
         pretty_assertions::assert_eq!(changes.rows.len(), 1);
         pretty_assertions::assert_eq!(frame_buffer.seq, Some(2));
         Ok(())
@@ -541,7 +547,7 @@ mod tests {
             .row_redraw_changes(&[1])?
             .ok_or_else(|| report!("expected row redraw changes"))?;
 
-        assert2::assert!(!changes.full_redraw);
+        pretty_assertions::assert_eq!(changes.scope, RenderFrameScope::Partial);
         pretty_assertions::assert_eq!(changes.rows.len(), 1);
         pretty_assertions::assert_eq!(changes.rows[0].row(), 1);
         Ok(())
@@ -687,7 +693,7 @@ mod tests {
                 row: 1,
                 col: 1,
                 shape: RenderCursorShape::Default,
-                visible: true,
+                visibility: muxr_core::RenderCursorVisibility::Visible,
             },
             vec![RenderRowSpan::new(1, 1, vec![linked_render_cell("x", uri)?])?],
         )?;
@@ -735,19 +741,19 @@ mod tests {
         let selection_bg = MuxrConfig::default().selection.bg;
 
         pretty_assertions::assert_eq!(
-            self::selection_visual_for_cell(Some(&selection), 0, 0),
+            SelectionVisual::for_cell(Some(&selection), 0, 0),
             SelectionVisual::Selected
         );
         pretty_assertions::assert_eq!(
-            self::selection_visual_for_cell(Some(&selection), 0, 2),
+            SelectionVisual::for_cell(Some(&selection), 0, 2),
             SelectionVisual::Unselected
         );
-        pretty_assertions::assert_eq!(self::selection_visual_for_cell(None, 0, 0), SelectionVisual::Unselected);
+        pretty_assertions::assert_eq!(SelectionVisual::for_cell(None, 0, 0), SelectionVisual::Unselected);
         let selected_style = self::selected_style(unselected_style, Some(&selection), 0, 0, selection_bg);
 
         // Selection colors are tunable; this only gates the invariant that selected cells stay visibly distinct.
         assert2::assert!(selected_style.bg != unselected_style.bg);
-        assert2::assert!(!selected_style.attrs.inverse());
+        pretty_assertions::assert_eq!(selected_style.attrs.inverse(), false);
         pretty_assertions::assert_eq!(
             self::selected_style(unselected_style, Some(&selection), 0, 2, selection_bg),
             unselected_style
@@ -765,7 +771,11 @@ mod tests {
         ExpectedEscape::Background(RenderColor::Indexed(2))
     )]
     #[case::bold(
-        render_style(RenderColor::Default, RenderColor::Default, RenderTextStyle::empty().set_bold(true)),
+        render_style(
+            RenderColor::Default,
+            RenderColor::Default,
+            RenderTextStyle::empty().set_bold(true),
+        ),
         ExpectedEscape::Attribute(Attribute::Bold)
     )]
     fn test_frame_buffer_render_when_style_changes_emits_expected_transition(
@@ -845,7 +855,7 @@ mod tests {
                 row: 0,
                 col: 0,
                 shape,
-                visible: true,
+                visibility: muxr_core::RenderCursorVisibility::Visible,
             },
             vec![
                 RenderRowSpan::new(0, 0, vec![render_cell("a"), render_cell("b")])?,
@@ -863,7 +873,7 @@ mod tests {
                 row: 1,
                 col: 1,
                 shape: RenderCursorShape::Default,
-                visible: true,
+                visibility: muxr_core::RenderCursorVisibility::Visible,
             },
             vec![RenderRowSpan::new(1, 1, vec![render_cell("x")])?],
         )
@@ -877,7 +887,7 @@ mod tests {
                 row: 0,
                 col: 0,
                 shape: RenderCursorShape::Default,
-                visible: true,
+                visibility: muxr_core::RenderCursorVisibility::Visible,
             },
             vec![RenderRowSpan::new(
                 0,
@@ -899,7 +909,7 @@ mod tests {
                 row: 0,
                 col: 0,
                 shape: RenderCursorShape::Default,
-                visible: true,
+                visibility: muxr_core::RenderCursorVisibility::Visible,
             },
             vec![RenderRowSpan::new(
                 0,

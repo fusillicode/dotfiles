@@ -60,6 +60,16 @@ enum PaneVisualRole {
 }
 
 impl PaneVisualRole {
+    fn for_pane(pane_id: PaneId, active_pane: PaneId, attention_panes: &[PaneId]) -> Self {
+        if pane_id == active_pane {
+            return Self::Normal;
+        }
+        if attention_panes.contains(&pane_id) {
+            return Self::Attention;
+        }
+        Self::Unfocused
+    }
+
     const fn style(self, pane_dim: PaneDimConfig, pane_attention: PaneAttentionConfig) -> PaneVisualStyle {
         let dim = match self {
             Self::Unfocused | Self::Attention if pane_dim.unfocused => Some(pane_dim),
@@ -182,19 +192,21 @@ impl RenderComposer {
             row: 0,
             col: 0,
             shape: muxr_core::RenderCursorShape::Default,
-            visible: false,
+            visibility: muxr_core::RenderCursorVisibility::Hidden,
         };
 
         for region in pane_layout.pane_layout.regions() {
             let snapshot = runtimes.snapshot(region.id)?;
-            let visual_role = self::pane_visual_role(region.id, pane_layout.active_pane, attention_panes);
+            let visual_role = PaneVisualRole::for_pane(region.id, pane_layout.active_pane, attention_panes);
             paste_snapshot(
                 &mut rows,
                 region,
                 &snapshot,
                 visual_role.style(pane_render.pane_dim, pane_render.pane_attention),
             )?;
-            if visual_role == PaneVisualRole::Normal && snapshot.cursor().visible {
+            if visual_role == PaneVisualRole::Normal
+                && snapshot.cursor().visibility == muxr_core::RenderCursorVisibility::Visible
+            {
                 let row = region
                     .area
                     .origin
@@ -211,7 +223,7 @@ impl RenderComposer {
                     row,
                     col,
                     shape: snapshot.cursor().shape,
-                    visible: true,
+                    visibility: muxr_core::RenderCursorVisibility::Visible,
                 };
             }
         }
@@ -257,16 +269,6 @@ fn empty_render_rows(size: &TerminalSize) -> Vec<Vec<RenderCell>> {
     (0..size.rows())
         .map(|_| vec![blank.clone(); usize::from(size.cols())])
         .collect()
-}
-
-fn pane_visual_role(pane_id: PaneId, active_pane: PaneId, attention_panes: &[PaneId]) -> PaneVisualRole {
-    if pane_id == active_pane {
-        return PaneVisualRole::Normal;
-    }
-    if attention_panes.contains(&pane_id) {
-        return PaneVisualRole::Attention;
-    }
-    PaneVisualRole::Unfocused
 }
 
 fn paste_snapshot(
@@ -349,18 +351,18 @@ mod tests {
     use crate::pane::layout::PaneSize;
 
     #[rstest::rstest]
-    #[case::dirty_frame(RenderDiffReason::DirtyFrame, false)]
-    #[case::region_changed(RenderDiffReason::RegionChanged, true)]
+    #[case::dirty_frame(RenderDiffReason::DirtyFrame, ExpectedRenderDiff::None)]
+    #[case::region_changed(RenderDiffReason::RegionChanged, ExpectedRenderDiff::Diff)]
     fn test_render_composer_render_frame_diff_when_pixels_are_unchanged_respects_reason(
         #[case] reason: RenderDiffReason,
-        #[case] expected_diff: bool,
+        #[case] expected_diff: ExpectedRenderDiff,
     ) -> rootcause::Result<()> {
         let size = TerminalSize::new(2, 1)?;
         let cursor = RenderCursor {
             row: 0,
             col: 0,
             shape: muxr_core::RenderCursorShape::Default,
-            visible: false,
+            visibility: muxr_core::RenderCursorVisibility::Hidden,
         };
         let rows = vec![RenderRowSpan::new(
             0,
@@ -389,7 +391,7 @@ mod tests {
 
         let update = composer.render_frame_diff(current, reason)?;
 
-        if !expected_diff {
+        if expected_diff == ExpectedRenderDiff::None {
             pretty_assertions::assert_eq!(update, None);
             pretty_assertions::assert_eq!(composer.next_seq, 2);
             return Ok(());
@@ -402,6 +404,12 @@ mod tests {
         pretty_assertions::assert_eq!(diff.seq(), 2);
         assert2::assert!(diff.rows().is_empty());
         Ok(())
+    }
+
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    enum ExpectedRenderDiff {
+        Diff,
+        None,
     }
 
     #[rstest::rstest]
@@ -420,7 +428,7 @@ mod tests {
             .collect::<rootcause::Result<Vec<_>>>()?;
 
         pretty_assertions::assert_eq!(
-            self::pane_visual_role(PaneId::new(pane_id)?, PaneId::new(1)?, &attention_panes),
+            PaneVisualRole::for_pane(PaneId::new(pane_id)?, PaneId::new(1)?, &attention_panes),
             expected
         );
         Ok(())
@@ -464,8 +472,8 @@ mod tests {
             },
         );
 
-        assert2::assert!(updated.attrs.italic());
-        assert2::assert!(!updated.attrs.dim());
+        pretty_assertions::assert_eq!(updated.attrs.italic(), true);
+        pretty_assertions::assert_eq!(updated.attrs.dim(), false);
         assert2::assert!(updated.bg != style.bg);
         assert2::assert!(updated.fg != style.fg);
     }
@@ -504,7 +512,7 @@ mod tests {
         let linked_text = linked_cells.iter().map(|cell| cell.text()).collect::<String>();
         pretty_assertions::assert_eq!(linked_text, "https://example.com");
         for cell in linked_cells {
-            assert2::assert!(cell.style().attrs.dim());
+            pretty_assertions::assert_eq!(cell.style().attrs.dim(), true);
             pretty_assertions::assert_eq!(
                 cell.hyperlink().map(muxr_core::RenderHyperlink::uri),
                 Some("https://example.com")

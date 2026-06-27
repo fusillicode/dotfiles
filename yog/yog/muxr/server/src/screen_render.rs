@@ -26,8 +26,16 @@ use crate::pane::runtime::PaneRuntimes;
 use crate::pane::tracked_process::PaneTrackedProcessSnapshot;
 use crate::pane::tracked_process::PaneTrackedProcesses;
 use crate::pane::tracked_process::TrackedProcessAttention;
+use crate::render_state::ClientRenderDmg;
+use crate::render_state::ClientSessionFlow;
 use crate::server::ServerConfig;
 use crate::state::SessionLayout;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum LayoutPersistence {
+    Persist,
+    SnapshotOnly,
+}
 
 pub fn resize_panes_to_layout(
     layout: &SessionLayout,
@@ -75,7 +83,7 @@ fn layout_snapshot_and_persist(
     runtimes: &PaneRuntimes,
     tracked_processes: &PaneTrackedProcessSnapshot,
 ) -> rootcause::Result<LayoutSnapshot> {
-    self::layout_snapshot_and_maybe_persist(paths, layout, runtimes, tracked_processes, true)
+    self::layout_snapshot_and_maybe_persist(paths, layout, runtimes, tracked_processes, LayoutPersistence::Persist)
 }
 
 fn layout_snapshot_and_maybe_persist(
@@ -83,10 +91,10 @@ fn layout_snapshot_and_maybe_persist(
     layout: &mut SessionLayout,
     runtimes: &PaneRuntimes,
     tracked_processes: &PaneTrackedProcessSnapshot,
-    persist_layout: bool,
+    persistence: LayoutPersistence,
 ) -> rootcause::Result<LayoutSnapshot> {
     let synced = runtimes.sync_layout_terminal_titles(layout)?;
-    if persist_layout && synced.layout_changed() {
+    if persistence == LayoutPersistence::Persist && synced.metadata_sync() == crate::state::PaneMetadataSync::Changed {
         crate::state::persisted::write_metadata(paths, layout)?;
     }
     let runtime_metadata = PaneRuntimeMetadata::from_sources(
@@ -130,7 +138,7 @@ fn visible_pane_region_at_position(
     Ok(self::visible_pane_layout(state)?
         .regions()
         .iter()
-        .find(|region| region.contains(position.into()))
+        .find(|region| region.containment(position.into()) == crate::pane::layout::PaneAreaContainment::Inside)
         .cloned())
 }
 
@@ -167,15 +175,17 @@ pub async fn send_attach_response_and_baseline(
     pane_regions: PaneRegionsSnapshot,
     render_baseline: RenderUpdate,
     client_write_timeout: std::time::Duration,
-) -> rootcause::Result<bool> {
-    if !crate::event_writer::send_event_with_timeout(
+) -> rootcause::Result<ClientSessionFlow> {
+    if crate::event_writer::send_event_with_timeout(
         event_writer,
         &ServerEvent::Attached(AttachAccepted { layout, pane_regions }),
         client_write_timeout,
     )
     .await?
+    .session_flow()
+        == ClientSessionFlow::Disconnect
     {
-        return Ok(false);
+        return Ok(ClientSessionFlow::Disconnect);
     }
     crate::event_writer::send_event_with_timeout(
         event_writer,
@@ -183,31 +193,37 @@ pub async fn send_attach_response_and_baseline(
         client_write_timeout,
     )
     .await
+    .map(|outcome| outcome.session_flow())
 }
 
-pub fn pane_ids_include_visible(
+pub fn pane_ids_visible_render_dmg(
     layout: &SessionLayout,
     pane_fullscreen: &PaneFullscreen,
     terminal_size: &TerminalSize,
     pane_ids: &[PaneId],
-) -> rootcause::Result<bool> {
+) -> rootcause::Result<ClientRenderDmg> {
     if pane_ids.is_empty() {
-        return Ok(false);
+        return Ok(ClientRenderDmg::Clean);
     }
-    Ok(pane_fullscreen
+    if pane_fullscreen
         .pane_layout(layout, terminal_size)?
         .regions()
         .iter()
-        .any(|region| pane_ids.contains(&region.id)))
+        .any(|region| pane_ids.contains(&region.id))
+    {
+        Ok(ClientRenderDmg::Dirty)
+    } else {
+        Ok(ClientRenderDmg::Clean)
+    }
 }
 
 pub async fn flush_render_diff(
     event_writer: &mut ServerEventWriter,
     state: &mut ClientSessionState<'_>,
-    render_dirty: &mut bool,
-) -> rootcause::Result<bool> {
-    if !*render_dirty {
-        return Ok(true);
+    render_dmg: &mut ClientRenderDmg,
+) -> rootcause::Result<ClientSessionFlow> {
+    if *render_dmg != ClientRenderDmg::Dirty {
+        return Ok(ClientSessionFlow::Continue);
     }
 
     let (pane_regions, render_update) = {
@@ -224,7 +240,7 @@ pub async fn flush_render_diff(
         let update = state.render_composer.render_diff(
             PaneRenderConfig {
                 border_styles: state.config.user_config.pane_borders,
-                mode: crate::keyboard_input::border_render_mode(state.input_mode),
+                mode: crate::pane::borders::BorderRenderMode::from(state.input_mode),
                 pane_attention: state.config.user_config.pane_attention,
                 pane_dim: state.config.user_config.pane_dim,
             },
@@ -239,11 +255,13 @@ pub async fn flush_render_diff(
         )?;
         (pane_regions, update)
     };
-    if !self::send_pane_regions_and_render(event_writer, state, pane_regions, render_update).await? {
-        return Ok(false);
+    if self::send_pane_regions_and_render(event_writer, state, pane_regions, render_update).await?
+        == ClientSessionFlow::Disconnect
+    {
+        return Ok(ClientSessionFlow::Disconnect);
     }
-    *render_dirty = false;
-    Ok(true)
+    render_dmg.clear();
+    Ok(ClientSessionFlow::Continue)
 }
 
 fn runtime_pane_metadata(state: &ClientSessionState<'_>) -> rootcause::Result<PaneRuntimeMetadata> {
@@ -261,14 +279,14 @@ pub async fn flush_cmd_label_layout(
     event_writer: &mut ServerEventWriter,
     state: &mut ClientSessionState<'_>,
     title_changes: Vec<(PaneId, Option<String>)>,
-) -> rootcause::Result<bool> {
+) -> rootcause::Result<ClientSessionFlow> {
     let runtime_metadata = self::runtime_pane_metadata(state)?;
     let changes = {
         let mut last_layout_snapshot = state.last_layout_snapshot.clone();
-        let mut layout_changed = false;
+        let mut metadata_sync = crate::state::PaneMetadataSync::Unchanged;
         let mut changes = Vec::new();
         for (pane_id, title) in title_changes {
-            layout_changed |= state.layout.sync_terminal_titles(&[(pane_id, title.clone())]);
+            metadata_sync = metadata_sync.merge(state.layout.sync_terminal_titles(&[(pane_id, title.clone())]));
             let runtime_metadata = runtime_metadata.with_terminal_title_override(pane_id, title);
             let layout_snapshot = state
                 .layout
@@ -279,7 +297,7 @@ pub async fn flush_cmd_label_layout(
             last_layout_snapshot = layout_snapshot.clone();
             changes.push(layout_snapshot);
         }
-        if layout_changed && state.scrollback_editor.is_none() {
+        if metadata_sync == crate::state::PaneMetadataSync::Changed && state.scrollback_editor.is_none() {
             crate::state::persisted::write_metadata(&state.config.paths, state.layout)?;
         }
         changes
@@ -287,59 +305,55 @@ pub async fn flush_cmd_label_layout(
 
     for layout_snapshot in changes {
         // Terminal-title changes affect only sidebar metadata; avoid rebuilding the pane frame for cmd/cwd churn.
-        if !self::send_sidebar_layout_if_changed(event_writer, state, layout_snapshot).await? {
-            return Ok(false);
+        if self::send_sidebar_layout_if_changed(event_writer, state, layout_snapshot).await?
+            == ClientSessionFlow::Disconnect
+        {
+            return Ok(ClientSessionFlow::Disconnect);
         }
     }
-    Ok(true)
+    Ok(ClientSessionFlow::Continue)
 }
 
 pub async fn handle_cmd_handoff_sample(
     timers: &mut ClientTimers,
     event_writer: &mut ServerEventWriter,
     state: &mut ClientSessionState<'_>,
-    render_dirty: &mut bool,
-) -> rootcause::Result<bool> {
+    render_dmg: &mut ClientRenderDmg,
+) -> rootcause::Result<ClientSessionFlow> {
     let pane_ids = timers.take_cmd_handoff_sample_panes()?;
     if pane_ids.is_empty() {
-        return Ok(true);
+        return Ok(ClientSessionFlow::Continue);
     }
 
-    let changed = state.pane_tracked_processes.observe_runtime_pane_cmds(
+    let changes = state.pane_tracked_processes.observe_runtime_pane_cmds(
         state.config.user_config.as_ref(),
         state.runtimes,
         &pane_ids,
         Instant::now(),
     )?;
     timers.sync_tracked_process_quiet_deadline_for_layout(&state.pane_tracked_processes, state.layout)?;
-    if changed {
+    if changes.state_change() == crate::pane::tracked_process::TrackedProcessStateChange::Changed {
         let pane_surface_dirty =
-            self::pane_ids_include_visible(state.layout, &state.pane_fullscreen, &state.terminal_size, &pane_ids)?;
-        return self::flush_tracked_process_runtime_layout(
-            timers,
-            event_writer,
-            state,
-            render_dirty,
-            pane_surface_dirty,
-        )
-        .await;
+            self::pane_ids_visible_render_dmg(state.layout, &state.pane_fullscreen, &state.terminal_size, &pane_ids)?;
+        return self::flush_tracked_process_runtime_layout(timers, event_writer, state, render_dmg, pane_surface_dirty)
+            .await;
     }
-    Ok(true)
+    Ok(ClientSessionFlow::Continue)
 }
 
 pub async fn flush_tracked_process_runtime_layout(
     timers: &mut ClientTimers,
     event_writer: &mut ServerEventWriter,
     state: &mut ClientSessionState<'_>,
-    render_dirty: &mut bool,
-    pane_surface_dirty: bool,
-) -> rootcause::Result<bool> {
+    render_dmg: &mut ClientRenderDmg,
+    pane_surface_dirty: ClientRenderDmg,
+) -> rootcause::Result<ClientSessionFlow> {
     let runtime_metadata = self::runtime_pane_metadata(state)?;
     let layout_snapshot = state
         .layout
         .snapshot_with_runtime_metadata(&runtime_metadata.pane_snapshot_fields())?;
-    *render_dirty |= pane_surface_dirty;
-    timers.sync_render_deadline(*render_dirty)?;
+    render_dmg.include_dmg(pane_surface_dirty);
+    timers.sync_render_deadline(*render_dmg)?;
     self::send_sidebar_layout_if_changed(event_writer, state, layout_snapshot).await
 }
 
@@ -347,18 +361,18 @@ pub async fn flush_pane_attention(
     timers: &mut ClientTimers,
     event_writer: &mut ServerEventWriter,
     state: &mut ClientSessionState<'_>,
-    render_dirty: &mut bool,
-) -> rootcause::Result<bool> {
+    render_dmg: &mut ClientRenderDmg,
+) -> rootcause::Result<ClientSessionFlow> {
     let now = Instant::now();
     let pane_surface_dirty = match state.pane_tracked_processes.mark_quiet_deadlines(state.layout, now)? {
-        TrackedProcessAttention::Seen => false,
+        TrackedProcessAttention::Seen => ClientRenderDmg::Clean,
         TrackedProcessAttention::Unseen { pane_ids } => {
-            self::pane_ids_include_visible(state.layout, &state.pane_fullscreen, &state.terminal_size, &pane_ids)?
+            self::pane_ids_visible_render_dmg(state.layout, &state.pane_fullscreen, &state.terminal_size, &pane_ids)?
         }
-        TrackedProcessAttention::Unchanged => return Ok(true),
+        TrackedProcessAttention::Unchanged => return Ok(ClientSessionFlow::Continue),
     };
-    *render_dirty |= pane_surface_dirty;
-    timers.sync_render_deadline(*render_dirty)?;
+    render_dmg.include_dmg(pane_surface_dirty);
+    timers.sync_render_deadline(*render_dmg)?;
     let runtime_metadata = self::runtime_pane_metadata(state)?;
     let layout_snapshot = state
         .layout
@@ -371,21 +385,23 @@ async fn send_sidebar_layout_if_changed(
     event_writer: &mut ServerEventWriter,
     state: &mut ClientSessionState<'_>,
     layout_snapshot: LayoutSnapshot,
-) -> rootcause::Result<bool> {
+) -> rootcause::Result<ClientSessionFlow> {
     if layout_snapshot == state.last_layout_snapshot {
-        return Ok(true);
+        return Ok(ClientSessionFlow::Continue);
     }
-    if !crate::event_writer::send_event_with_timeout(
+    if crate::event_writer::send_event_with_timeout(
         event_writer,
         &ServerEvent::SidebarLayout(layout_snapshot.clone()),
         state.config.client_write_timeout,
     )
     .await?
+    .session_flow()
+        == ClientSessionFlow::Disconnect
     {
-        return Ok(false);
+        return Ok(ClientSessionFlow::Disconnect);
     }
     state.last_layout_snapshot = layout_snapshot;
-    Ok(true)
+    Ok(ClientSessionFlow::Continue)
 }
 
 async fn send_pane_regions_and_render(
@@ -393,38 +409,42 @@ async fn send_pane_regions_and_render(
     state: &mut ClientSessionState<'_>,
     pane_regions: PaneRegionsSnapshot,
     render_update: Option<RenderUpdate>,
-) -> rootcause::Result<bool> {
+) -> rootcause::Result<ClientSessionFlow> {
     // Region metadata must precede the render using it: selection/copy translate visible cells through
     // `visible_top_row` and wrap flags, so tab-bar-only renders still need normal pane-render ordering.
     if pane_regions != state.pane_regions {
-        if !crate::event_writer::send_event_with_timeout(
+        if crate::event_writer::send_event_with_timeout(
             event_writer,
             &ServerEvent::PaneRegions(pane_regions.clone()),
             state.config.client_write_timeout,
         )
         .await?
+        .session_flow()
+            == ClientSessionFlow::Disconnect
         {
-            return Ok(false);
+            return Ok(ClientSessionFlow::Disconnect);
         }
         state.pane_regions = pane_regions;
     }
     if let Some(render_update) = render_update
-        && !crate::event_writer::send_event_with_timeout(
+        && crate::event_writer::send_event_with_timeout(
             event_writer,
             &ServerEvent::Render(render_update),
             state.config.client_write_timeout,
         )
         .await?
+        .session_flow()
+            == ClientSessionFlow::Disconnect
     {
-        return Ok(false);
+        return Ok(ClientSessionFlow::Disconnect);
     }
-    Ok(true)
+    Ok(ClientSessionFlow::Continue)
 }
 
 pub async fn send_layout_and_baseline(
     event_writer: &mut ServerEventWriter,
     state: &mut ClientSessionState<'_>,
-) -> rootcause::Result<bool> {
+) -> rootcause::Result<ClientSessionFlow> {
     let (layout_snapshot, pane_regions, render_update) = {
         let tracked_processes = state.pane_tracked_processes.snapshot(state.layout);
         let layout_snapshot = self::layout_snapshot_and_maybe_persist(
@@ -432,7 +452,11 @@ pub async fn send_layout_and_baseline(
             state.layout,
             state.runtimes,
             &tracked_processes,
-            state.scrollback_editor.is_none(),
+            if state.scrollback_editor.is_none() {
+                LayoutPersistence::Persist
+            } else {
+                LayoutPersistence::SnapshotOnly
+            },
         )?;
         let pane_layout = self::visible_pane_layout(state)?;
         let pane_regions = self::pane_regions_snapshot(&pane_layout, state.runtimes)?;
@@ -440,7 +464,7 @@ pub async fn send_layout_and_baseline(
         let render_update = state.render_composer.render_baseline(
             PaneRenderConfig {
                 border_styles: state.config.user_config.pane_borders,
-                mode: crate::keyboard_input::border_render_mode(state.input_mode),
+                mode: crate::pane::borders::BorderRenderMode::from(state.input_mode),
                 pane_attention: state.config.user_config.pane_attention,
                 pane_dim: state.config.user_config.pane_dim,
             },
@@ -454,42 +478,48 @@ pub async fn send_layout_and_baseline(
         )?;
         (layout_snapshot, pane_regions, render_update)
     };
-    if !crate::event_writer::send_event_with_timeout(
+    if crate::event_writer::send_event_with_timeout(
         event_writer,
         &ServerEvent::Layout(layout_snapshot.clone()),
         state.config.client_write_timeout,
     )
     .await?
+    .session_flow()
+        == ClientSessionFlow::Disconnect
     {
-        return Ok(false);
+        return Ok(ClientSessionFlow::Disconnect);
     }
-    if !crate::event_writer::send_event_with_timeout(
+    if crate::event_writer::send_event_with_timeout(
         event_writer,
         &ServerEvent::PaneRegions(pane_regions.clone()),
         state.config.client_write_timeout,
     )
     .await?
+    .session_flow()
+        == ClientSessionFlow::Disconnect
     {
-        return Ok(false);
+        return Ok(ClientSessionFlow::Disconnect);
     }
     state.pane_regions = pane_regions;
-    if !crate::event_writer::send_event_with_timeout(
+    if crate::event_writer::send_event_with_timeout(
         event_writer,
         &ServerEvent::Render(render_update),
         state.config.client_write_timeout,
     )
     .await?
+    .session_flow()
+        == ClientSessionFlow::Disconnect
     {
-        return Ok(false);
+        return Ok(ClientSessionFlow::Disconnect);
     }
     state.last_layout_snapshot = layout_snapshot;
-    Ok(true)
+    Ok(ClientSessionFlow::Continue)
 }
 
 pub async fn resize_panes_and_render(
     event_writer: &mut ServerEventWriter,
     state: &mut ClientSessionState<'_>,
-) -> rootcause::Result<bool> {
+) -> rootcause::Result<ClientSessionFlow> {
     let pane_layout = self::visible_pane_layout(state)?;
     state.runtimes.resize_panes(pane_layout.regions())?;
     self::send_layout_and_baseline(event_writer, state).await
@@ -529,16 +559,21 @@ mod tests {
         let runtimes = pane_runtime_test_helpers::empty_runtimes();
         let pane_id = PaneId::new(1)?;
         let mut tracked_processes = PaneTrackedProcesses::default();
-        assert2::assert!(tracked_processes.observe_pane_cmd(
-            &MuxrConfig::default(),
-            pane_id,
-            &PaneCmdObservation::FgCmd(crate::pane::cmd::FgCmd::from_test_cmd(PaneCmd {
-                executable: "codex".to_owned(),
-                path: None,
-                pid: 42,
-            })),
-            Instant::now(),
-        ));
+        assert2::assert!(
+            tracked_processes
+                .observe_pane_cmd(
+                    &MuxrConfig::default(),
+                    pane_id,
+                    &PaneCmdObservation::FgCmd(crate::pane::cmd::FgCmd::from_test_cmd(PaneCmd {
+                        executable: "codex".to_owned(),
+                        path: None,
+                        pid: 42,
+                    })),
+                    Instant::now(),
+                )
+                .state_change()
+                == crate::pane::tracked_process::TrackedProcessStateChange::Changed
+        );
 
         let tracked_snapshot = tracked_processes.snapshot(&layout);
         let snapshot = self::layout_snapshot_and_persist(&paths, &mut layout, &runtimes, &tracked_snapshot)?;
@@ -600,30 +635,22 @@ mod tests {
         let fullscreen = PaneFullscreen::default();
         let terminal_size = TerminalSize::new(80, 24)?;
 
-        assert2::assert!(!self::pane_ids_include_visible(
-            &layout,
-            &fullscreen,
-            &terminal_size,
-            &[inactive_pane]
-        )?);
-        assert2::assert!(self::pane_ids_include_visible(
-            &layout,
-            &fullscreen,
-            &terminal_size,
-            &[active_pane]
-        )?);
-        assert2::assert!(self::pane_ids_include_visible(
-            &layout,
-            &fullscreen,
-            &terminal_size,
-            &[inactive_pane, active_pane],
-        )?);
-        assert2::assert!(!self::pane_ids_include_visible(
-            &layout,
-            &fullscreen,
-            &terminal_size,
-            &[]
-        )?);
+        pretty_assertions::assert_eq!(
+            self::pane_ids_visible_render_dmg(&layout, &fullscreen, &terminal_size, &[inactive_pane])?,
+            ClientRenderDmg::Clean
+        );
+        pretty_assertions::assert_eq!(
+            self::pane_ids_visible_render_dmg(&layout, &fullscreen, &terminal_size, &[active_pane])?,
+            ClientRenderDmg::Dirty
+        );
+        pretty_assertions::assert_eq!(
+            self::pane_ids_visible_render_dmg(&layout, &fullscreen, &terminal_size, &[inactive_pane, active_pane],)?,
+            ClientRenderDmg::Dirty
+        );
+        pretty_assertions::assert_eq!(
+            self::pane_ids_visible_render_dmg(&layout, &fullscreen, &terminal_size, &[])?,
+            ClientRenderDmg::Clean
+        );
         Ok(())
     }
 

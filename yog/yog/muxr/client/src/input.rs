@@ -36,10 +36,50 @@ enum SgrMouseEvent {
     Ignored,
 }
 
+impl SgrMouseEvent {
+    fn from_bytes(bytes: &[u8]) -> Option<Self> {
+        if bytes.first() != Some(&ESC) || bytes.get(1) != Some(&b'[') || bytes.get(2) != Some(&b'<') {
+            return None;
+        }
+        let release = match bytes.last() {
+            Some(b'M') => false,
+            Some(b'm') => true,
+            Some(_) | None => return Some(Self::Ignored),
+        };
+        let phase = if release {
+            ClientMouseEventPhase::Release
+        } else {
+            ClientMouseEventPhase::Press
+        };
+        let Some((button, position)) = self::sgr_mouse_button_and_position(bytes) else {
+            return Some(Self::Ignored);
+        };
+        Some(Self::Event(ClientMouseEvent {
+            button,
+            phase,
+            position,
+        }))
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum KittyKeyModifiers {
     Supported(ClientKeyModifiers),
     Unsupported,
+}
+
+impl KittyKeyModifiers {
+    fn from_raw(raw: &[u8]) -> Option<Self> {
+        let flags = self::parse_mouse_number(raw)?.checked_sub(1)?;
+        if flags & !0b111 != 0 {
+            return Some(Self::Unsupported);
+        }
+        Some(Self::Supported(ClientKeyModifiers {
+            alt: flags & 0b010 != 0,
+            ctrl: flags & 0b100 != 0,
+            shift: flags & 0b001 != 0,
+        }))
+    }
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -87,8 +127,11 @@ impl InputDecoder {
     }
 
     #[must_use]
-    pub const fn needs_idle_timeout(&self) -> bool {
-        matches!(self.pending, PendingInput::EscapeSequence(_))
+    pub const fn idle_timeout(&self) -> InputIdleTimeout {
+        match self.pending {
+            PendingInput::EscapeSequence(_) => InputIdleTimeout::Needed,
+            PendingInput::None | PendingInput::Paste(_) => InputIdleTimeout::NotNeeded,
+        }
     }
 
     fn push_byte(&mut self, byte: u8, input: &mut Vec<u8>, decoded: &mut Vec<DecodedInput>) {
@@ -107,7 +150,7 @@ impl InputDecoder {
 
         if let PendingInput::EscapeSequence(bytes) = &mut self.pending {
             bytes.push(byte);
-            if !self::is_pending_escape_complete(bytes) {
+            if PendingEscapeStatus::from(bytes.as_slice()) == PendingEscapeStatus::Incomplete {
                 return;
             }
 
@@ -175,7 +218,7 @@ fn finish_escape_sequence(bytes: Vec<u8>, input: &mut Vec<u8>, decoded: &mut Vec
         return;
     }
 
-    if let Some(event) = self::sgr_mouse_event(&bytes) {
+    if let Some(event) = SgrMouseEvent::from_bytes(&bytes) {
         self::push_input(decoded, input);
         match event {
             SgrMouseEvent::Ignored => {}
@@ -237,7 +280,7 @@ fn key_for_kitty_keyboard_sequence(bytes: &[u8]) -> Option<ClientKey> {
     let mut parts = body.split(|byte| *byte == b';');
     let key_number = parts.next().and_then(self::parse_mouse_number)?;
     let modifiers = match parts.next() {
-        Some(raw) => self::kitty_key_modifiers(raw)?,
+        Some(raw) => KittyKeyModifiers::from_raw(raw)?,
         None => KittyKeyModifiers::Supported(ClientKeyModifiers::NONE),
     };
     if parts.next().is_some() {
@@ -270,42 +313,6 @@ fn kitty_ascii_character(key_number: u16, modifiers: ClientKeyModifiers) -> Opti
     } else {
         Some(character)
     }
-}
-
-fn kitty_key_modifiers(raw: &[u8]) -> Option<KittyKeyModifiers> {
-    let flags = self::parse_mouse_number(raw)?.checked_sub(1)?;
-    if flags & !0b111 != 0 {
-        return Some(KittyKeyModifiers::Unsupported);
-    }
-    Some(KittyKeyModifiers::Supported(ClientKeyModifiers {
-        alt: flags & 0b010 != 0,
-        ctrl: flags & 0b100 != 0,
-        shift: flags & 0b001 != 0,
-    }))
-}
-
-fn sgr_mouse_event(bytes: &[u8]) -> Option<SgrMouseEvent> {
-    if bytes.first() != Some(&ESC) || bytes.get(1) != Some(&b'[') || bytes.get(2) != Some(&b'<') {
-        return None;
-    }
-    let release = match bytes.last() {
-        Some(b'M') => false,
-        Some(b'm') => true,
-        Some(_) | None => return Some(SgrMouseEvent::Ignored),
-    };
-    let phase = if release {
-        ClientMouseEventPhase::Release
-    } else {
-        ClientMouseEventPhase::Press
-    };
-    let Some((button, position)) = self::sgr_mouse_button_and_position(bytes) else {
-        return Some(SgrMouseEvent::Ignored);
-    };
-    Some(SgrMouseEvent::Event(ClientMouseEvent {
-        button,
-        phase,
-        position,
-    }))
 }
 
 fn sgr_mouse_button_and_position(bytes: &[u8]) -> Option<(u16, ClientMousePosition)> {
@@ -349,15 +356,30 @@ fn push_key(decoded: &mut Vec<DecodedInput>, input: &mut Vec<u8>, key: ClientKey
     decoded.push(DecodedInput::Key(key));
 }
 
-fn is_pending_escape_complete(bytes: &[u8]) -> bool {
-    if bytes.len() > MAX_PENDING_ESCAPE_BYTES {
-        return true;
-    }
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum InputIdleTimeout {
+    Needed,
+    NotNeeded,
+}
 
-    match bytes {
-        [ESC] | [ESC, b'['] | [ESC, b'[', b'<'] => false,
-        [ESC, b'[', rest @ ..] => rest.last().is_some_and(|byte| (0x40..=0x7e).contains(byte)),
-        _ => true,
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum PendingEscapeStatus {
+    Complete,
+    Incomplete,
+}
+
+impl From<&[u8]> for PendingEscapeStatus {
+    fn from(bytes: &[u8]) -> Self {
+        if bytes.len() > MAX_PENDING_ESCAPE_BYTES {
+            return Self::Complete;
+        }
+
+        let complete = match bytes {
+            [ESC] | [ESC, b'['] | [ESC, b'[', b'<'] => return Self::Incomplete,
+            [ESC, b'[', rest @ ..] => rest.last().is_some_and(|byte| (0x40..=0x7e).contains(byte)),
+            _ => true,
+        };
+        if complete { Self::Complete } else { Self::Incomplete }
     }
 }
 
@@ -475,7 +497,7 @@ mod tests {
         let mut decoder = InputDecoder::default();
 
         pretty_assertions::assert_eq!(decoder.decode(b"\x1b"), Vec::<DecodedInput>::new());
-        assert2::assert!(decoder.needs_idle_timeout());
+        pretty_assertions::assert_eq!(decoder.idle_timeout(), InputIdleTimeout::Needed);
         pretty_assertions::assert_eq!(
             decoder.decode(b"E"),
             vec![DecodedInput::Key(key(
@@ -484,7 +506,7 @@ mod tests {
                 b"\x1bE",
             ))]
         );
-        assert2::assert!(!decoder.needs_idle_timeout());
+        pretty_assertions::assert_eq!(decoder.idle_timeout(), InputIdleTimeout::NotNeeded);
     }
 
     #[test]
@@ -492,7 +514,7 @@ mod tests {
         let mut decoder = InputDecoder::default();
 
         pretty_assertions::assert_eq!(decoder.decode(b"\x1b"), Vec::<DecodedInput>::new());
-        assert2::assert!(decoder.needs_idle_timeout());
+        pretty_assertions::assert_eq!(decoder.idle_timeout(), InputIdleTimeout::Needed);
         pretty_assertions::assert_eq!(
             decoder.finalize(),
             vec![DecodedInput::Key(key(
@@ -501,7 +523,7 @@ mod tests {
                 b"\x1b",
             ))]
         );
-        assert2::assert!(!decoder.needs_idle_timeout());
+        pretty_assertions::assert_eq!(decoder.idle_timeout(), InputIdleTimeout::NotNeeded);
     }
 
     #[test]
@@ -510,9 +532,9 @@ mod tests {
         let bytes = b"\x1b[1";
 
         pretty_assertions::assert_eq!(decoder.decode(bytes), Vec::<DecodedInput>::new());
-        assert2::assert!(decoder.needs_idle_timeout());
+        pretty_assertions::assert_eq!(decoder.idle_timeout(), InputIdleTimeout::Needed);
         pretty_assertions::assert_eq!(decoder.finalize(), vec![DecodedInput::Input(bytes.to_vec())]);
-        assert2::assert!(!decoder.needs_idle_timeout());
+        pretty_assertions::assert_eq!(decoder.idle_timeout(), InputIdleTimeout::NotNeeded);
     }
 
     #[rstest]
@@ -541,7 +563,7 @@ mod tests {
         let mut decoder = InputDecoder::default();
 
         pretty_assertions::assert_eq!(decoder.decode(b"\x1b["), Vec::<DecodedInput>::new());
-        assert2::assert!(decoder.needs_idle_timeout());
+        pretty_assertions::assert_eq!(decoder.idle_timeout(), InputIdleTimeout::Needed);
         pretty_assertions::assert_eq!(
             decoder.decode(b"D"),
             vec![DecodedInput::Key(key(
@@ -550,7 +572,7 @@ mod tests {
                 b"\x1b[D",
             ))]
         );
-        assert2::assert!(!decoder.needs_idle_timeout());
+        pretty_assertions::assert_eq!(decoder.idle_timeout(), InputIdleTimeout::NotNeeded);
     }
 
     #[rstest]
@@ -581,7 +603,7 @@ mod tests {
         let mut decoder = InputDecoder::default();
 
         pretty_assertions::assert_eq!(decoder.decode(b"\x1b[13"), Vec::<DecodedInput>::new());
-        assert2::assert!(decoder.needs_idle_timeout());
+        pretty_assertions::assert_eq!(decoder.idle_timeout(), InputIdleTimeout::Needed);
         pretty_assertions::assert_eq!(
             decoder.decode(b";2u"),
             vec![DecodedInput::Key(key(
@@ -590,7 +612,7 @@ mod tests {
                 b"\x1b[13;2u",
             ))]
         );
-        assert2::assert!(!decoder.needs_idle_timeout());
+        pretty_assertions::assert_eq!(decoder.idle_timeout(), InputIdleTimeout::NotNeeded);
     }
 
     #[test]
@@ -608,12 +630,12 @@ mod tests {
         let mut decoder = InputDecoder::default();
 
         pretty_assertions::assert_eq!(decoder.decode(b"\x1b[200~echo"), Vec::<DecodedInput>::new());
-        assert2::assert!(!decoder.needs_idle_timeout());
+        pretty_assertions::assert_eq!(decoder.idle_timeout(), InputIdleTimeout::NotNeeded);
         pretty_assertions::assert_eq!(
             decoder.decode(b" hi\n\x1b[201~"),
             vec![DecodedInput::Paste(b"echo hi\n".to_vec())]
         );
-        assert2::assert!(!decoder.needs_idle_timeout());
+        pretty_assertions::assert_eq!(decoder.idle_timeout(), InputIdleTimeout::NotNeeded);
     }
 
     #[rstest]
@@ -624,7 +646,7 @@ mod tests {
 
         pretty_assertions::assert_eq!(decoder.decode(bytes), Vec::<DecodedInput>::new());
 
-        assert2::assert!(decoder.needs_idle_timeout());
+        pretty_assertions::assert_eq!(decoder.idle_timeout(), InputIdleTimeout::Needed);
     }
 
     #[rstest]

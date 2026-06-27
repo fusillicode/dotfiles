@@ -138,9 +138,10 @@ impl Tab {
         new_pane: &Pane,
         split_axis: PaneSplitAxis,
     ) -> rootcause::Result<()> {
-        if !self
+        if self
             .pane_tree
             .split_pane(layout_config, self.active_pane, new_pane, split_axis)?
+            == PaneSplit::Missing
         {
             return Err(report!("muxr active pane is missing from server layout")
                 .attach(format!("active_pane={}", self.active_pane)));
@@ -156,7 +157,7 @@ impl PaneTree {
         pane_id: PaneId,
         new_pane: &Pane,
         split_axis: PaneSplitAxis,
-    ) -> rootcause::Result<bool> {
+    ) -> rootcause::Result<PaneSplit> {
         match self {
             Self::Pane(pane) if pane.id == pane_id => {
                 let old_pane = pane.clone();
@@ -166,17 +167,23 @@ impl PaneTree {
                     first: Box::new(Self::Pane(old_pane)),
                     second: Box::new(Self::Pane(new_pane.clone())),
                 };
-                Ok(true)
+                Ok(PaneSplit::Split)
             }
-            Self::Pane(_) => Ok(false),
+            Self::Pane(_) => Ok(PaneSplit::Missing),
             Self::Split { first, second, .. } => {
-                if first.split_pane(layout_config, pane_id, new_pane, split_axis)? {
-                    return Ok(true);
+                if first.split_pane(layout_config, pane_id, new_pane, split_axis)? == PaneSplit::Split {
+                    return Ok(PaneSplit::Split);
                 }
                 second.split_pane(layout_config, pane_id, new_pane, split_axis)
             }
         }
     }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PaneSplit {
+    Missing,
+    Split,
 }
 
 fn handle_split_pane_cmd(
@@ -336,7 +343,7 @@ mod tests {
         );
 
         pretty_assertions::assert_eq!(layout, initial_layout);
-        assert2::assert!(runtimes.is_empty());
+        pretty_assertions::assert_eq!(runtimes.set_status(), crate::pane::runtime::PaneRuntimeSetStatus::Empty);
         assert2::assert!(!config.paths.layout.exists());
         Ok(())
     }

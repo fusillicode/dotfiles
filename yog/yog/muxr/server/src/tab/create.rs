@@ -114,7 +114,7 @@ mod tests {
         assert2::assert!(create_result.is_err());
 
         pretty_assertions::assert_eq!(layout, initial_layout);
-        assert2::assert!(runtimes.is_empty());
+        pretty_assertions::assert_eq!(runtimes.set_status(), crate::pane::runtime::PaneRuntimeSetStatus::Empty);
         assert2::assert!(!config.paths.layout.exists());
         Ok(())
     }

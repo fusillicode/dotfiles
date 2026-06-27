@@ -12,15 +12,3 @@ pub enum PaneScrollLineMove {
     Moved,
     Unchanged,
 }
-
-impl PaneScrollLineMove {
-    #[must_use]
-    pub const fn from_scrolled(scrolled: bool) -> Self {
-        if scrolled { Self::Moved } else { Self::Unchanged }
-    }
-
-    #[must_use]
-    pub const fn scrolled(self) -> bool {
-        matches!(self, Self::Moved)
-    }
-}

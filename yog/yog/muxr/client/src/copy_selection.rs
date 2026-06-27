@@ -5,6 +5,7 @@ use std::time::Instant;
 use muxr_core::ClientMousePosition;
 use muxr_core::ClientRequest;
 use muxr_core::PaneId;
+use muxr_core::PaneRegionContainment;
 use muxr_core::PaneRegionSnapshot;
 use muxr_core::PaneRegionsSnapshot;
 use muxr_core::PaneScrollDirection;
@@ -25,6 +26,28 @@ pub enum SelectionInput {
     End(ClientMousePosition),
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SelectionClickOutcome {
+    Double,
+    Single,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SelectionChange {
+    Changed,
+    Unchanged,
+}
+
+impl SelectionChange {
+    fn between(next: Option<&SelectionRange>, previous: Option<&SelectionRange>) -> Self {
+        if next == previous {
+            Self::Unchanged
+        } else {
+            Self::Changed
+        }
+    }
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct SelectionClickTracker {
     count: u8,
@@ -38,10 +61,10 @@ impl SelectionClickTracker {
         regions: &PaneRegionsSnapshot,
         frame_buffer: &FrameBuffer,
         now: Instant,
-    ) -> bool {
+    ) -> SelectionClickOutcome {
         let Some(target) = self::click_target(position, regions, frame_buffer) else {
             self.reset();
-            return false;
+            return SelectionClickOutcome::Single;
         };
         self.record_target(target, now)
     }
@@ -50,7 +73,7 @@ impl SelectionClickTracker {
         let keep_previous = self
             .previous
             .as_ref()
-            .is_some_and(|previous| previous.target.remains_in_regions(regions));
+            .is_some_and(|previous| previous.target.region_state(regions) == ClickTargetRegion::Present);
         if !keep_previous {
             self.reset();
         }
@@ -61,7 +84,7 @@ impl SelectionClickTracker {
         self.previous = None;
     }
 
-    fn record_target(&mut self, target: ClickTarget, now: Instant) -> bool {
+    fn record_target(&mut self, target: ClickTarget, now: Instant) -> SelectionClickOutcome {
         let continues_previous = self.previous.as_ref().is_some_and(|previous| {
             previous.target == target
                 && now
@@ -74,7 +97,11 @@ impl SelectionClickTracker {
             1
         };
         self.previous = Some(TrackedClick { at: now, target });
-        self.count == 2
+        if self.count == 2 {
+            SelectionClickOutcome::Double
+        } else {
+            SelectionClickOutcome::Single
+        }
     }
 }
 
@@ -92,13 +119,33 @@ enum ClickTarget {
 }
 
 impl ClickTarget {
-    fn remains_in_regions(&self, regions: &PaneRegionsSnapshot) -> bool {
+    fn region_state(&self, regions: &PaneRegionsSnapshot) -> ClickTargetRegion {
         match self {
-            Self::Cell { pane_id, position } => regions.pane_at(*position).is_some_and(|region| region.id() == pane_id),
-            Self::Word { end, pane_id, start } => self::matching_region(regions, *pane_id)
-                .is_some_and(|region| region.contains(start.row, start.col) && region.contains(end.row, end.col)),
+            Self::Cell { pane_id, position } => {
+                if regions.pane_at(*position).is_some_and(|region| region.id() == pane_id) {
+                    ClickTargetRegion::Present
+                } else {
+                    ClickTargetRegion::Missing
+                }
+            }
+            Self::Word { end, pane_id, start } => {
+                if self::matching_region(regions, *pane_id).is_some_and(|region| {
+                    region.containment(start.row, start.col) == PaneRegionContainment::Inside
+                        && region.containment(end.row, end.col) == PaneRegionContainment::Inside
+                }) {
+                    ClickTargetRegion::Present
+                } else {
+                    ClickTargetRegion::Missing
+                }
+            }
         }
     }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ClickTargetRegion {
+    Missing,
+    Present,
 }
 
 #[derive(Clone, Debug)]
@@ -201,8 +248,11 @@ impl SelectionEdgeScrollState {
         }
     }
 
-    pub const fn active(&self) -> bool {
-        self.drag.is_some()
+    pub const fn active_state(&self) -> SelectionEdgeScrollActive {
+        match self.drag {
+            Some(_) => SelectionEdgeScrollActive::Active,
+            None => SelectionEdgeScrollActive::Inactive,
+        }
     }
 
     pub const fn mark_sent(&mut self, pending: SelectionEdgeScrollPending) {
@@ -299,6 +349,12 @@ impl SelectionEdgeScrollState {
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SelectionEdgeScrollActive {
+    Active,
+    Inactive,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct SelectionEdgeDrag {
     col: u16,
@@ -348,17 +404,17 @@ impl SelectionState {
         input: SelectionInput,
         regions: &PaneRegionsSnapshot,
         frame_buffer: &FrameBuffer,
-    ) -> rootcause::Result<bool> {
+    ) -> rootcause::Result<SelectionChange> {
         let previous = self.selected.clone();
         match input {
             SelectionInput::Start(position) => self.start(position, regions, frame_buffer),
             SelectionInput::Update(position) => self.update(position, frame_buffer)?,
             SelectionInput::End(position) => self.end(position, frame_buffer)?,
         }
-        Ok(self.selected != previous)
+        Ok(SelectionChange::between(self.selected.as_ref(), previous.as_ref()))
     }
 
-    pub fn clear_if_regions_changed(&mut self, regions: &PaneRegionsSnapshot) -> bool {
+    pub fn clear_if_regions_changed(&mut self, regions: &PaneRegionsSnapshot) -> SelectionChange {
         let previous = self.selected.clone();
         self.drag = self.drag.take().and_then(|drag| {
             self::matching_region(regions, *drag.region.id()).map(|region| SelectionDrag {
@@ -375,7 +431,7 @@ impl SelectionState {
         } else {
             self.retain_cached_rows();
         }
-        self.selected != previous
+        SelectionChange::between(self.selected.as_ref(), previous.as_ref())
     }
 
     pub fn selected_text(&self) -> Option<String> {
@@ -397,11 +453,11 @@ impl SelectionState {
         position: ClientMousePosition,
         regions: &PaneRegionsSnapshot,
         frame_buffer: &FrameBuffer,
-    ) -> rootcause::Result<bool> {
+    ) -> rootcause::Result<SelectionChange> {
         let previous = self.selected.clone();
         self.drag = None;
         self.set_selected(self::word_selection_at(position, regions, frame_buffer), frame_buffer)?;
-        Ok(self.selected != previous)
+        Ok(SelectionChange::between(self.selected.as_ref(), previous.as_ref()))
     }
 
     #[must_use]
@@ -527,7 +583,7 @@ pub struct SelectionRange {
 impl SelectionRange {
     #[must_use]
     pub fn contains(&self, row: u16, col: u16) -> bool {
-        if !self.region.contains(row, col) {
+        if self.region.containment(row, col) == PaneRegionContainment::Outside {
             return false;
         }
         let Some(position) = self::content_position(ClientMousePosition { row, col }, &self.region) else {
@@ -763,7 +819,7 @@ fn word_selection_at(
 ) -> Option<SelectionRange> {
     let region = regions.pane_at(position)?.clone();
     let position = self::clamp_to_region(position, &region);
-    if !self::is_word_cell(frame_buffer, position.row, position.col, &region) {
+    if WordCell::at(frame_buffer, position.row, position.col, &region) == WordCell::No {
         return None;
     }
 
@@ -922,7 +978,7 @@ fn word_start_col(frame_buffer: &FrameBuffer, row: u16, col: u16, region: &PaneR
     let mut start_col = col;
     while start_col > region.col() {
         let previous_col = start_col.saturating_sub(1);
-        if !self::is_word_cell(frame_buffer, row, previous_col, region) {
+        if WordCell::at(frame_buffer, row, previous_col, region) == WordCell::No {
             break;
         }
         start_col = previous_col;
@@ -935,7 +991,7 @@ fn word_end_col(frame_buffer: &FrameBuffer, row: u16, col: u16, region: &PaneReg
     let last_col = self::last_region_col_saturating(region);
     while end_col < last_col {
         let next_col = end_col.saturating_add(1);
-        if !self::is_word_cell(frame_buffer, row, next_col, region) {
+        if WordCell::at(frame_buffer, row, next_col, region) == WordCell::No {
             break;
         }
         end_col = next_col;
@@ -943,33 +999,62 @@ fn word_end_col(frame_buffer: &FrameBuffer, row: u16, col: u16, region: &PaneReg
     end_col
 }
 
-fn is_word_cell(frame_buffer: &FrameBuffer, row: u16, col: u16, region: &PaneRegionSnapshot) -> bool {
-    if !region.contains(row, col) {
-        return false;
-    }
-    let Some(cell) = frame_buffer.cell(row, col) else {
-        return false;
-    };
-
-    if matches!(cell.width(), RenderCellWidth::WideContinuation) {
-        let Some(previous_col) = col.checked_sub(1) else {
-            return false;
-        };
-        if !region.contains(row, previous_col) {
-            return false;
-        }
-        let Some(previous_cell) = frame_buffer.cell(row, previous_col) else {
-            return false;
-        };
-        return matches!(previous_cell.width(), RenderCellWidth::Wide)
-            && !self::cell_text_is_whitespace(previous_cell.text());
-    }
-
-    !self::cell_text_is_whitespace(cell.text())
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum WordCell {
+    No,
+    Yes,
 }
 
-fn cell_text_is_whitespace(text: &str) -> bool {
-    text.is_empty() || text.chars().all(char::is_whitespace)
+impl WordCell {
+    fn at(frame_buffer: &FrameBuffer, row: u16, col: u16, region: &PaneRegionSnapshot) -> Self {
+        if region.containment(row, col) == PaneRegionContainment::Outside {
+            return Self::No;
+        }
+        let Some(cell) = frame_buffer.cell(row, col) else {
+            return Self::No;
+        };
+
+        if matches!(cell.width(), RenderCellWidth::WideContinuation) {
+            let Some(previous_col) = col.checked_sub(1) else {
+                return Self::No;
+            };
+            if region.containment(row, previous_col) == PaneRegionContainment::Outside {
+                return Self::No;
+            }
+            let Some(previous_cell) = frame_buffer.cell(row, previous_col) else {
+                return Self::No;
+            };
+            return if matches!(previous_cell.width(), RenderCellWidth::Wide)
+                && CellWhitespace::from(previous_cell.text()) == CellWhitespace::NonWhitespace
+            {
+                Self::Yes
+            } else {
+                Self::No
+            };
+        }
+
+        if CellWhitespace::from(cell.text()) == CellWhitespace::NonWhitespace {
+            Self::Yes
+        } else {
+            Self::No
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum CellWhitespace {
+    NonWhitespace,
+    Whitespace,
+}
+
+impl From<&str> for CellWhitespace {
+    fn from(text: &str) -> Self {
+        if text.is_empty() || text.chars().all(char::is_whitespace) {
+            Self::Whitespace
+        } else {
+            Self::NonWhitespace
+        }
+    }
 }
 
 fn matching_region(regions: &PaneRegionsSnapshot, pane_id: PaneId) -> Option<PaneRegionSnapshot> {
@@ -977,7 +1062,7 @@ fn matching_region(regions: &PaneRegionsSnapshot, pane_id: PaneId) -> Option<Pan
 }
 
 fn content_position(position: ClientMousePosition, region: &PaneRegionSnapshot) -> Option<SelectionContentPosition> {
-    if !region.contains(position.row, position.col) {
+    if region.containment(position.row, position.col) == PaneRegionContainment::Outside {
         return None;
     }
     let row = region
@@ -1024,7 +1109,7 @@ fn selectable_position(
     let Some(previous_col) = position.col.checked_sub(1) else {
         return position;
     };
-    if !region.contains(position.row, previous_col) {
+    if region.containment(position.row, previous_col) == PaneRegionContainment::Outside {
         return position;
     }
     let Some(previous_cell) = frame_buffer.cell(position.row, previous_col) else {
@@ -1112,32 +1197,30 @@ mod tests {
     use super::*;
 
     #[rstest::rstest]
-    #[case::same_cell_within_threshold(0, 0, 399, true)]
-    #[case::same_cell_after_threshold(0, 0, 401, false)]
-    #[case::different_cell_within_threshold(0, 1, 100, false)]
+    #[case::same_cell_within_threshold(0, 0, 399, SelectionClickOutcome::Double)]
+    #[case::same_cell_after_threshold(0, 0, 401, SelectionClickOutcome::Single)]
+    #[case::different_cell_within_threshold(0, 1, 100, SelectionClickOutcome::Single)]
     fn test_selection_click_tracker_record_selection_start_when_clicks_are_repeated_detects_double_click(
         #[case] row: u16,
         #[case] col: u16,
         #[case] elapsed_ms: u64,
-        #[case] expected_double: bool,
+        #[case] expected_outcome: SelectionClickOutcome,
     ) -> rootcause::Result<()> {
         let mut clicks = SelectionClickTracker::default();
         let frame_buffer = FrameBuffer::default();
         let regions = pane_regions()?;
         let now = Instant::now();
-        assert2::assert!(!clicks.record_selection_start(
-            ClientMousePosition { row: 0, col: 0 },
-            &regions,
-            &frame_buffer,
-            now,
-        ));
+        pretty_assertions::assert_eq!(
+            clicks.record_selection_start(ClientMousePosition { row: 0, col: 0 }, &regions, &frame_buffer, now),
+            SelectionClickOutcome::Single,
+        );
 
         let next_click_at = now
             .checked_add(Duration::from_millis(elapsed_ms))
             .ok_or_else(|| report!("muxr click tracker test instant overflowed"))?;
         pretty_assertions::assert_eq!(
             clicks.record_selection_start(ClientMousePosition { row, col }, &regions, &frame_buffer, next_click_at),
-            expected_double,
+            expected_outcome,
         );
         Ok(())
     }
@@ -1147,23 +1230,29 @@ mod tests {
         let mut selection = SelectionState::default();
         let frame_buffer = FrameBuffer::default();
 
-        assert2::assert!(!selection.apply(
-            SelectionInput::Start(ClientMousePosition { row: 0, col: 2 }),
-            &pane_regions()?,
-            &frame_buffer,
-        )?);
-        assert2::assert!(selection.apply(
-            SelectionInput::Update(ClientMousePosition { row: 0, col: 8 }),
-            &pane_regions()?,
-            &frame_buffer,
-        )?);
+        pretty_assertions::assert_eq!(
+            selection.apply(
+                SelectionInput::Start(ClientMousePosition { row: 0, col: 2 }),
+                &pane_regions()?,
+                &frame_buffer,
+            )?,
+            SelectionChange::Unchanged,
+        );
+        pretty_assertions::assert_eq!(
+            selection.apply(
+                SelectionInput::Update(ClientMousePosition { row: 0, col: 8 }),
+                &pane_regions()?,
+                &frame_buffer,
+            )?,
+            SelectionChange::Changed,
+        );
 
         let range = selection
             .range()
             .ok_or_else(|| report!("expected muxr selection range"))?;
-        assert2::assert!(range.contains(0, 4));
-        assert2::assert!(!range.contains(0, 5));
-        assert2::assert!(!range.contains(0, 6));
+        pretty_assertions::assert_eq!(range.contains(0, 4), true);
+        pretty_assertions::assert_eq!(range.contains(0, 5), false);
+        pretty_assertions::assert_eq!(range.contains(0, 6), false);
         Ok(())
     }
 
@@ -1210,8 +1299,8 @@ mod tests {
         let range = selection
             .range()
             .ok_or_else(|| report!("expected muxr wide-cell drag selection range"))?;
-        assert2::assert!(range.contains(0, 0));
-        assert2::assert!(range.contains(0, 1));
+        pretty_assertions::assert_eq!(range.contains(0, 0), true);
+        pretty_assertions::assert_eq!(range.contains(0, 1), true);
         pretty_assertions::assert_eq!(selection.selected_text(), Some("表".to_owned()));
         Ok(())
     }
@@ -1223,11 +1312,10 @@ mod tests {
         frame_buffer.apply(RenderUpdate::Baseline(render_baseline()?))?;
         let mut selection = SelectionState::default();
 
-        assert2::assert!(selection.select_word(
-            ClientMousePosition { row: 0, col: 8 },
-            &pane_regions()?,
-            &frame_buffer,
-        )?);
+        pretty_assertions::assert_eq!(
+            selection.select_word(ClientMousePosition { row: 0, col: 8 }, &pane_regions()?, &frame_buffer,)?,
+            SelectionChange::Changed,
+        );
 
         pretty_assertions::assert_eq!(selection.selected_text(), Some("right".to_owned()));
         Ok(())
@@ -1243,17 +1331,20 @@ mod tests {
         frame_buffer.apply(RenderUpdate::Baseline(wide_render_baseline()?))?;
         let mut selection = SelectionState::default();
 
-        assert2::assert!(selection.select_word(
-            ClientMousePosition { row: 0, col },
-            &wide_pane_regions()?,
-            &frame_buffer,
-        )?);
+        pretty_assertions::assert_eq!(
+            selection.select_word(
+                ClientMousePosition { row: 0, col },
+                &wide_pane_regions()?,
+                &frame_buffer,
+            )?,
+            SelectionChange::Changed,
+        );
 
         let range = selection
             .range()
             .ok_or_else(|| report!("expected muxr wide-cell selection range"))?;
-        assert2::assert!(range.contains(0, 0));
-        assert2::assert!(range.contains(0, 1));
+        pretty_assertions::assert_eq!(range.contains(0, 0), true);
+        pretty_assertions::assert_eq!(range.contains(0, 1), true);
         pretty_assertions::assert_eq!(selection.selected_text(), Some("表".to_owned()));
         Ok(())
     }
@@ -1276,13 +1367,16 @@ mod tests {
         )?;
         frame_buffer.apply(RenderUpdate::Baseline(three_row_render_baseline("zz", "aa", "bb")?))?;
 
-        assert2::assert!(selection.clear_if_regions_changed(&three_row_pane_regions(9)?));
+        pretty_assertions::assert_eq!(
+            selection.clear_if_regions_changed(&three_row_pane_regions(9)?),
+            SelectionChange::Changed,
+        );
 
         let range = selection
             .range()
             .ok_or_else(|| report!("expected muxr scrolled selection range"))?;
-        assert2::assert!(range.contains(2, 0));
-        assert2::assert!(!range.contains(1, 0));
+        pretty_assertions::assert_eq!(range.contains(2, 0), true);
+        pretty_assertions::assert_eq!(range.contains(1, 0), false);
         pretty_assertions::assert_eq!(selection.selected_text(), Some("bb".to_owned()));
         Ok(())
     }
@@ -1304,7 +1398,10 @@ mod tests {
             &frame_buffer,
         )?;
         frame_buffer.apply(RenderUpdate::Baseline(three_row_render_baseline("bb", "cc", "dd")?))?;
-        assert2::assert!(selection.clear_if_regions_changed(&three_row_pane_regions(10)?));
+        pretty_assertions::assert_eq!(
+            selection.clear_if_regions_changed(&three_row_pane_regions(10)?),
+            SelectionChange::Changed,
+        );
         selection.refresh_visible_rows(&frame_buffer)?;
         selection.apply(
             SelectionInput::Update(ClientMousePosition { row: 2, col: 1 }),
@@ -1347,12 +1444,12 @@ mod tests {
 
         selection.apply(
             SelectionInput::Start(ClientMousePosition { row: 0, col: 0 }),
-            &two_row_pane_regions_with_wraps(8, [true, false])?,
+            &two_row_pane_regions_with_wraps(8, [RowWrap::EndsWithSoftWrap, RowWrap::EndsBeforeSoftWrap])?,
             &frame_buffer,
         )?;
         selection.apply(
             SelectionInput::End(ClientMousePosition { row: 1, col: 5 }),
-            &two_row_pane_regions_with_wraps(8, [true, false])?,
+            &two_row_pane_regions_with_wraps(8, [RowWrap::EndsWithSoftWrap, RowWrap::EndsBeforeSoftWrap])?,
             &frame_buffer,
         )?;
 
@@ -1372,12 +1469,12 @@ mod tests {
 
         selection.apply(
             SelectionInput::Start(ClientMousePosition { row: 0, col: 0 }),
-            &two_row_pane_regions_with_wraps(27, [true, false])?,
+            &two_row_pane_regions_with_wraps(27, [RowWrap::EndsWithSoftWrap, RowWrap::EndsBeforeSoftWrap])?,
             &frame_buffer,
         )?;
         selection.apply(
             SelectionInput::End(ClientMousePosition { row: 1, col: 5 }),
-            &two_row_pane_regions_with_wraps(27, [true, false])?,
+            &two_row_pane_regions_with_wraps(27, [RowWrap::EndsWithSoftWrap, RowWrap::EndsBeforeSoftWrap])?,
             &frame_buffer,
         )?;
 
@@ -1427,12 +1524,12 @@ mod tests {
 
         selection.apply(
             SelectionInput::Start(ClientMousePosition { row: 0, col: 0 }),
-            &two_row_pane_regions_with_wraps(3, [true, false])?,
+            &two_row_pane_regions_with_wraps(3, [RowWrap::EndsWithSoftWrap, RowWrap::EndsBeforeSoftWrap])?,
             &frame_buffer,
         )?;
         selection.apply(
             SelectionInput::End(ClientMousePosition { row: 1, col: 0 }),
-            &two_row_pane_regions_with_wraps(3, [true, false])?,
+            &two_row_pane_regions_with_wraps(3, [RowWrap::EndsWithSoftWrap, RowWrap::EndsBeforeSoftWrap])?,
             &frame_buffer,
         )?;
 
@@ -1457,7 +1554,10 @@ mod tests {
             &frame_buffer,
         )?;
         frame_buffer.apply(RenderUpdate::Baseline(three_row_render_baseline("ee", "ff", "gg")?))?;
-        assert2::assert!(selection.clear_if_regions_changed(&three_row_pane_regions(13)?));
+        pretty_assertions::assert_eq!(
+            selection.clear_if_regions_changed(&three_row_pane_regions(13)?),
+            SelectionChange::Changed,
+        );
         selection.refresh_visible_rows(&frame_buffer)?;
         selection.apply(
             SelectionInput::Update(ClientMousePosition { row: 2, col: 1 }),
@@ -1501,10 +1601,13 @@ mod tests {
     }
 
     fn two_row_pane_regions(cols: u16) -> rootcause::Result<PaneRegionsSnapshot> {
-        self::two_row_pane_regions_with_wraps(cols, [false, false])
+        self::two_row_pane_regions_with_wraps(cols, [RowWrap::EndsBeforeSoftWrap, RowWrap::EndsBeforeSoftWrap])
     }
 
-    fn two_row_pane_regions_with_wraps(cols: u16, wrapped_rows: [bool; 2]) -> rootcause::Result<PaneRegionsSnapshot> {
+    fn two_row_pane_regions_with_wraps(
+        cols: u16,
+        wrapped_rows: [RowWrap; 2],
+    ) -> rootcause::Result<PaneRegionsSnapshot> {
         PaneRegionsSnapshot::new(vec![
             PaneRegionSnapshot::new(PaneId::new(1)?, 0, 0, cols, 2, muxr_core::PaneMouseMode::None, 0)?
                 .with_wrapped_rows(wrapped_rows.to_vec())?,
@@ -1519,7 +1622,7 @@ mod tests {
                 row: 0,
                 col: 0,
                 shape: muxr_core::RenderCursorShape::Default,
-                visible: true,
+                visibility: muxr_core::RenderCursorVisibility::Visible,
             },
             vec![RenderRowSpan::new(
                 0,
@@ -1541,7 +1644,7 @@ mod tests {
                 row: 0,
                 col: 0,
                 shape: muxr_core::RenderCursorShape::Default,
-                visible: true,
+                visibility: muxr_core::RenderCursorVisibility::Visible,
             },
             vec![RenderRowSpan::new(
                 0,
@@ -1563,7 +1666,7 @@ mod tests {
                 row: 0,
                 col: 0,
                 shape: muxr_core::RenderCursorShape::Default,
-                visible: true,
+                visibility: muxr_core::RenderCursorVisibility::Visible,
             },
             vec![
                 RenderRowSpan::new(0, 0, first.chars().map(render_cell).collect())?,
@@ -1593,7 +1696,7 @@ mod tests {
                 row: 0,
                 col: 0,
                 shape: muxr_core::RenderCursorShape::Default,
-                visible: true,
+                visibility: muxr_core::RenderCursorVisibility::Visible,
             },
             vec![RenderRowSpan::new(0, 0, first)?, RenderRowSpan::new(1, 0, second)?],
         )

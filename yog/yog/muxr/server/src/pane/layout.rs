@@ -37,14 +37,19 @@ pub struct PaneArea {
 }
 
 impl PaneArea {
-    pub fn contains(self, position: PanePosition) -> bool {
+    pub fn containment(self, position: PanePosition) -> PaneAreaContainment {
         let row = u32::from(position.row);
         let col = u32::from(position.col);
 
-        row >= u32::from(self.origin.row)
+        if row >= u32::from(self.origin.row)
             && row < self.end_row_exclusive()
             && col >= u32::from(self.origin.col)
             && col < self.end_col_exclusive()
+        {
+            PaneAreaContainment::Inside
+        } else {
+            PaneAreaContainment::Outside
+        }
     }
 
     pub const fn end_col(self) -> Option<u16> {
@@ -62,6 +67,12 @@ impl PaneArea {
     pub fn end_row_exclusive(self) -> u32 {
         u32::from(self.origin.row).saturating_add(u32::from(self.size.rows))
     }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PaneAreaContainment {
+    Inside,
+    Outside,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -300,8 +311,8 @@ pub struct PaneRegion {
 }
 
 impl PaneRegion {
-    pub fn contains(&self, position: PanePosition) -> bool {
-        self.area.contains(position)
+    pub fn containment(&self, position: PanePosition) -> PaneAreaContainment {
+        self.area.containment(position)
     }
 }
 
@@ -363,11 +374,26 @@ mod tests {
                 (border.axis(), border.col(), border.row(), border.len()) == (PaneBorderAxis::Vertical, 40, 0, 24)
             })
             .ok_or_else(|| report!("expected nested vertical split border"))?;
-        assert2::assert!(horizontal_border.is_owned_by(PanePosition { row: 12, col: 41 }, PaneId::new(2)?));
-        assert2::assert!(horizontal_border.is_owned_by(PanePosition { row: 12, col: 41 }, PaneId::new(3)?));
-        assert2::assert!(vertical_border.is_owned_by(PanePosition { row: 12, col: 40 }, PaneId::new(1)?));
-        assert2::assert!(vertical_border.is_owned_by(PanePosition { row: 12, col: 40 }, PaneId::new(2)?));
-        assert2::assert!(vertical_border.is_owned_by(PanePosition { row: 13, col: 40 }, PaneId::new(3)?));
+        pretty_assertions::assert_eq!(
+            horizontal_border.ownership(PanePosition { row: 12, col: 41 }, PaneId::new(2)?),
+            crate::pane::borders::BorderCellOwner::Owned
+        );
+        pretty_assertions::assert_eq!(
+            horizontal_border.ownership(PanePosition { row: 12, col: 41 }, PaneId::new(3)?),
+            crate::pane::borders::BorderCellOwner::Owned
+        );
+        pretty_assertions::assert_eq!(
+            vertical_border.ownership(PanePosition { row: 12, col: 40 }, PaneId::new(1)?),
+            crate::pane::borders::BorderCellOwner::Owned
+        );
+        pretty_assertions::assert_eq!(
+            vertical_border.ownership(PanePosition { row: 12, col: 40 }, PaneId::new(2)?),
+            crate::pane::borders::BorderCellOwner::Owned
+        );
+        pretty_assertions::assert_eq!(
+            vertical_border.ownership(PanePosition { row: 13, col: 40 }, PaneId::new(3)?),
+            crate::pane::borders::BorderCellOwner::Owned
+        );
         Ok(())
     }
 

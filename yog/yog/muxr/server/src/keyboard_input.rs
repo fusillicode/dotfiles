@@ -44,13 +44,6 @@ pub enum KeyResolution {
     Raw,
 }
 
-pub const fn border_render_mode(input_mode: ServerInputMode) -> BorderRenderMode {
-    match input_mode {
-        ServerInputMode::Normal => BorderRenderMode::Focus,
-        ServerInputMode::Resize => BorderRenderMode::Resize,
-    }
-}
-
 pub const fn resolve_key(input_mode: &mut ServerInputMode, key: &ClientKey) -> KeyResolution {
     match input_mode {
         ServerInputMode::Normal => self::resolve_normal_key(input_mode, key),
@@ -58,19 +51,32 @@ pub const fn resolve_key(input_mode: &mut ServerInputMode, key: &ClientKey) -> K
     }
 }
 
-pub fn input_interaction(bytes: &[u8]) -> TrackedProcessUserInteraction {
-    if bytes.contains(&b'\r') || bytes.contains(&b'\n') {
-        TrackedProcessUserInteraction::StartsTrackedProcessWork
-    } else {
-        TrackedProcessUserInteraction::MayEcho
+impl From<ServerInputMode> for BorderRenderMode {
+    fn from(input_mode: ServerInputMode) -> Self {
+        match input_mode {
+            ServerInputMode::Normal => Self::Focus,
+            ServerInputMode::Resize => Self::Resize,
+        }
     }
 }
 
-pub fn key_input_interaction(key: &ClientKey, bytes: &[u8]) -> TrackedProcessUserInteraction {
-    if matches!(key.code, ClientKeyCode::Enter) && key.modifiers == ClientKeyModifiers::NONE {
-        TrackedProcessUserInteraction::StartsTrackedProcessWork
-    } else {
-        self::input_interaction(bytes)
+impl From<&[u8]> for TrackedProcessUserInteraction {
+    fn from(bytes: &[u8]) -> Self {
+        if bytes.contains(&b'\r') || bytes.contains(&b'\n') {
+            Self::StartsTrackedProcessWork
+        } else {
+            Self::MayEcho
+        }
+    }
+}
+
+impl TrackedProcessUserInteraction {
+    pub fn from_key_input(key: &ClientKey, bytes: &[u8]) -> Self {
+        if matches!(key.code, ClientKeyCode::Enter) && key.modifiers == ClientKeyModifiers::NONE {
+            Self::StartsTrackedProcessWork
+        } else {
+            Self::from(bytes)
+        }
     }
 }
 
@@ -140,22 +146,26 @@ fn legacy_key_input_bytes(key: &ClientKey) -> Option<Vec<u8>> {
         (ClientKeyCode::Tab, ClientKeyModifiers::NONE) => Some(b"\t".to_vec()),
         (ClientKeyCode::Tab, ClientKeyModifiers::SHIFT) => Some(b"\x1b[Z".to_vec()),
         (ClientKeyCode::Up, ClientKeyModifiers::NONE) => Some(b"\x1b[A".to_vec()),
-        (ClientKeyCode::Char(character), _) if self::raw_bytes_are_kitty_keyboard_sequence(&key.raw_bytes) => {
+        (ClientKeyCode::Char(character), _)
+            if KittyKeyboardSequence::from_raw_bytes(&key.raw_bytes) == KittyKeyboardSequence::Kitty =>
+        {
             self::legacy_kitty_char_input_bytes(character, key.modifiers)
         }
         (ClientKeyCode::Backspace, ClientKeyModifiers::ALT)
-            if self::raw_bytes_are_kitty_keyboard_sequence(&key.raw_bytes) =>
+            if KittyKeyboardSequence::from_raw_bytes(&key.raw_bytes) == KittyKeyboardSequence::Kitty =>
         {
             // Alt-Backspace has a stable legacy form used by shells and tmux for backward word deletion.
             Some(b"\x1b\x7f".to_vec())
         }
         (ClientKeyCode::Backspace, ClientKeyModifiers::SHIFT)
-            if self::raw_bytes_are_kitty_keyboard_sequence(&key.raw_bytes) =>
+            if KittyKeyboardSequence::from_raw_bytes(&key.raw_bytes) == KittyKeyboardSequence::Kitty =>
         {
             // Legacy panes have no distinct Shift-Backspace form; degrade to DEL so character deletion still works.
             Some(b"\x7f".to_vec())
         }
-        _ if !self::raw_bytes_are_kitty_keyboard_sequence(&key.raw_bytes) => Some(key.raw_bytes.clone()),
+        _ if KittyKeyboardSequence::from_raw_bytes(&key.raw_bytes) == KittyKeyboardSequence::Other => {
+            Some(key.raw_bytes.clone())
+        }
         // Modified kitty keys cannot be represented in legacy mode without changing semantics, such as Shift-Enter
         // becoming Enter and submitting a prompt. Drop them instead of leaking unfamiliar CSI-u bytes.
         _ => None,
@@ -193,7 +203,7 @@ fn legacy_control_byte(character: char) -> Option<u8> {
 }
 
 fn kitty_key_input_bytes(key: &ClientKey) -> Option<Vec<u8>> {
-    if self::raw_bytes_are_kitty_keyboard_sequence(&key.raw_bytes) {
+    if KittyKeyboardSequence::from_raw_bytes(&key.raw_bytes) == KittyKeyboardSequence::Kitty {
         return Some(key.raw_bytes.clone());
     }
 
@@ -239,25 +249,33 @@ const fn kitty_modifier_number(modifiers: ClientKeyModifiers) -> u8 {
     }
 }
 
-fn raw_bytes_are_kitty_keyboard_sequence(bytes: &[u8]) -> bool {
-    if bytes.first() != Some(&b'\x1b') || bytes.get(1) != Some(&b'[') || bytes.last() != Some(&b'u') {
-        return false;
-    }
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum KittyKeyboardSequence {
+    Kitty,
+    Other,
+}
 
-    let Some(body_end) = bytes.len().checked_sub(1) else {
-        return false;
-    };
-    let Some(body) = bytes.get(2..body_end) else {
-        return false;
-    };
-    let mut parts = body.split(|byte| *byte == b';');
-    if parts.next().and_then(self::parse_ascii_u16).is_none() {
-        return false;
-    }
-    match (parts.next(), parts.next()) {
-        (None, None) => true,
-        (Some(modifier), None) => self::parse_ascii_u16(modifier).is_some(),
-        (None | Some(_), Some(_)) => false,
+impl KittyKeyboardSequence {
+    fn from_raw_bytes(bytes: &[u8]) -> Self {
+        if bytes.first() != Some(&b'\x1b') || bytes.get(1) != Some(&b'[') || bytes.last() != Some(&b'u') {
+            return Self::Other;
+        }
+
+        let Some(body_end) = bytes.len().checked_sub(1) else {
+            return Self::Other;
+        };
+        let Some(body) = bytes.get(2..body_end) else {
+            return Self::Other;
+        };
+        let mut parts = body.split(|byte| *byte == b';');
+        if parts.next().and_then(self::parse_ascii_u16).is_none() {
+            return Self::Other;
+        }
+        match (parts.next(), parts.next()) {
+            (None, None) => Self::Kitty,
+            (Some(modifier), None) if self::parse_ascii_u16(modifier).is_some() => Self::Kitty,
+            (Some(_), None) | (None | Some(_), Some(_)) => Self::Other,
+        }
     }
 }
 
@@ -311,7 +329,7 @@ mod tests {
         #[case] bytes: &[u8],
         #[case] expected: TrackedProcessUserInteraction,
     ) {
-        pretty_assertions::assert_eq!(self::input_interaction(bytes), expected);
+        pretty_assertions::assert_eq!(TrackedProcessUserInteraction::from(bytes), expected);
     }
 
     #[rstest::rstest]
@@ -439,7 +457,7 @@ mod tests {
         #[case] bytes: &[u8],
         #[case] expected: TrackedProcessUserInteraction,
     ) {
-        pretty_assertions::assert_eq!(self::key_input_interaction(&key, bytes), expected);
+        pretty_assertions::assert_eq!(TrackedProcessUserInteraction::from_key_input(&key, bytes), expected);
     }
 
     #[rstest::rstest]

@@ -6,26 +6,29 @@ use crate::state::Pane;
 use crate::state::PaneAttentionState;
 use crate::state::SessionLayout;
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum PaneAttentionChange {
+    Changed,
+    #[default]
+    Unchanged,
+}
+
 impl Pane {
-    pub const fn acknowledge_attention(&mut self) -> bool {
+    pub const fn acknowledge_attention(&mut self) -> PaneAttentionChange {
         self.clear_attention()
     }
 
-    pub const fn clear_attention(&mut self) -> bool {
-        if !self.attention_state.needs_attention() {
-            return false;
+    pub const fn clear_attention(&mut self) -> PaneAttentionChange {
+        if !matches!(self.attention_state, PaneAttentionState::NeedsAttention) {
+            return PaneAttentionChange::Unchanged;
         }
         self.attention_state = PaneAttentionState::Idle;
-        true
-    }
-
-    pub const fn needs_attention(&self) -> bool {
-        self.attention_state.needs_attention()
+        PaneAttentionChange::Changed
     }
 }
 
 impl SessionLayout {
-    pub fn acknowledge_active_pane_attention(&mut self) -> rootcause::Result<bool> {
+    pub fn acknowledge_active_pane_attention(&mut self) -> rootcause::Result<PaneAttentionChange> {
         let active_pane = self.active_pane_id()?;
         let Some(pane) = self.pane_mut(active_pane) else {
             return Err(
@@ -40,7 +43,7 @@ impl SessionLayout {
         // splits, and shell prompts would otherwise paint unfocused panes as needing attention.
         self.panes()
             .into_iter()
-            .filter(|pane| pane.needs_attention())
+            .filter(|pane| pane.attention_state == PaneAttentionState::NeedsAttention)
             .map(|pane| pane.id)
             .collect()
     }
@@ -117,7 +120,10 @@ mod tests {
         };
         pane.attention_state = PaneAttentionState::NeedsAttention;
 
-        assert2::assert!(layout.focus_pane_direction(&TerminalSize::new(80, 24)?, PaneFocusDirection::Left)?);
+        pretty_assertions::assert_eq!(
+            layout.focus_pane_direction(&TerminalSize::new(80, 24)?, PaneFocusDirection::Left)?,
+            crate::pane::focus::PaneFocusChange::Changed,
+        );
 
         pretty_assertions::assert_eq!(layout.attention_pane_ids(), Vec::<PaneId>::new());
         Ok(())
@@ -133,8 +139,8 @@ mod tests {
 
         let updated = apply_attention_tint(style, RenderColor::Rgb { r: 80, g: 0, b: 0 });
 
-        assert2::assert!(updated.attrs.italic());
-        assert2::assert!(!updated.attrs.dim());
+        pretty_assertions::assert_eq!(updated.attrs.italic(), true);
+        pretty_assertions::assert_eq!(updated.attrs.dim(), false);
         assert2::assert!(updated.bg != style.bg);
         pretty_assertions::assert_eq!(updated.fg, style.fg);
     }

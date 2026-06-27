@@ -138,7 +138,10 @@ mod tests {
             PaneSplitAxis::Vertical,
         )?;
         state_test_helpers::force_balanced_test_split_ratio(&mut layout)?;
-        assert2::assert!(layout.resize_active_pane(MuxrConfig::default().layout, PaneResizeDirection::Left)?);
+        pretty_assertions::assert_eq!(
+            layout.resize_active_pane(MuxrConfig::default().layout, PaneResizeDirection::Left)?,
+            crate::pane::resize::PaneResizeChange::Changed,
+        );
         self::write_metadata(&paths, &layout)?;
 
         let loaded =
