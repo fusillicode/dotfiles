@@ -49,12 +49,12 @@ pub fn detect_visible_url_links(rows: &[RenderRowSpan]) -> rootcause::Result<Vec
     let mut links = Vec::new();
     let mut linked_cells = rows
         .iter()
-        .map(|row| vec![false; row.cells().len()])
+        .map(|row| vec![LinkCellState::Unlinked; row.cells().len()])
         .collect::<Vec<_>>();
     for (row, span) in rows.iter().enumerate() {
         for cell in 0..span.cells().len() {
             let position = CellPosition { cell, row };
-            if self::cell_is_linked(&linked_cells, position) {
+            if LinkCellState::at(&linked_cells, position) == LinkCellState::Linked {
                 continue;
             }
             let Some(candidate) = self::url_candidate_at(rows, position) else {
@@ -77,22 +77,30 @@ pub fn detect_visible_url_links(rows: &[RenderRowSpan]) -> rootcause::Result<Vec
     Ok(links)
 }
 
-fn cell_is_linked(linked_cells: &[Vec<bool>], position: CellPosition) -> bool {
-    linked_cells
-        .get(position.row)
-        .and_then(|row| row.get(position.cell))
-        .copied()
-        .unwrap_or(false)
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum LinkCellState {
+    Linked,
+    Unlinked,
 }
 
-fn mark_cell_linked(linked_cells: &mut [Vec<bool>], position: CellPosition) -> rootcause::Result<()> {
+impl LinkCellState {
+    fn at(linked_cells: &[Vec<Self>], position: CellPosition) -> Self {
+        linked_cells
+            .get(position.row)
+            .and_then(|row| row.get(position.cell))
+            .copied()
+            .unwrap_or(Self::Unlinked)
+    }
+}
+
+fn mark_cell_linked(linked_cells: &mut [Vec<LinkCellState>], position: CellPosition) -> rootcause::Result<()> {
     let Some(cell) = linked_cells
         .get_mut(position.row)
         .and_then(|row| row.get_mut(position.cell))
     else {
         return Err(report!("muxr pane url link position is outside visible rows"));
     };
-    *cell = true;
+    *cell = LinkCellState::Linked;
     Ok(())
 }
 
@@ -108,7 +116,7 @@ fn url_candidate_at(rows: &[RenderRowSpan], position: CellPosition) -> Option<Ur
         let Some(ch) = self::cell_ascii_char(rows, position) else {
             break UrlCandidateEnd::Delimiter;
         };
-        if !self::is_url_char(ch) {
+        if UrlChar::from_char(ch) == UrlChar::Delimiter {
             break UrlCandidateEnd::Delimiter;
         }
         positions.push(position);
@@ -126,70 +134,126 @@ fn url_candidate_at(rows: &[RenderRowSpan], position: CellPosition) -> Option<Ur
 fn scheme_len_at(rows: &[RenderRowSpan], position: CellPosition) -> Option<usize> {
     [HTTPS_SCHEME, HTTP_SCHEME]
         .into_iter()
-        .find(|scheme| self::matches_scheme_at(rows, position, scheme))
+        .find(|scheme| UrlSchemeMatch::at(rows, position, scheme) == UrlSchemeMatch::Matched)
         .map(str::len)
 }
 
-fn matches_scheme_at(rows: &[RenderRowSpan], position: CellPosition, scheme: &str) -> bool {
-    let mut current = Some(position);
-    for expected in scheme.chars() {
-        let Some(position) = current else {
-            return false;
-        };
-        if self::cell_ascii_char(rows, position) != Some(expected) {
-            return false;
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum UrlSchemeMatch {
+    Matched,
+    Missing,
+}
+
+impl UrlSchemeMatch {
+    fn at(rows: &[RenderRowSpan], position: CellPosition, scheme: &str) -> Self {
+        let mut current = Some(position);
+        for expected in scheme.chars() {
+            let Some(position) = current else {
+                return Self::Missing;
+            };
+            if self::cell_ascii_char(rows, position) != Some(expected) {
+                return Self::Missing;
+            }
+            current = self::next_position(rows, position);
         }
-        current = self::next_position(rows, position);
+        Self::Matched
     }
-    true
 }
 
 fn valid_url_prefix(candidate: &UrlCandidate) -> Option<String> {
-    let trimmed = candidate.text.trim_end_matches(self::is_trailing_punctuation);
+    let trimmed = candidate
+        .text
+        .trim_end_matches(|ch| TrailingPunctuation::from_char(ch) == TrailingPunctuation::Yes);
     let url = Url::parse(trimmed).ok()?;
     if !matches!(url.scheme(), "http" | "https") {
         return None;
     }
-    if self::ambiguous_visible_edge_fragment(candidate, trimmed, &url) {
+    if VisibleEdgeFragment::from_candidate(candidate, trimmed, &url) == VisibleEdgeFragment::Ambiguous {
         return None;
     }
     Some(trimmed.to_owned())
 }
 
-fn ambiguous_visible_edge_fragment(candidate: &UrlCandidate, text: &str, url: &Url) -> bool {
-    if candidate.end != UrlCandidateEnd::VisibleEdge {
-        return false;
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum VisibleEdgeFragment {
+    Ambiguous,
+    Complete,
+}
+
+impl VisibleEdgeFragment {
+    fn from_candidate(candidate: &UrlCandidate, text: &str, url: &Url) -> Self {
+        if candidate.end != UrlCandidateEnd::VisibleEdge {
+            return Self::Complete;
+        }
+        // `url` accepts bare single-label hosts such as `https://exam`; at the visible edge those are often just the
+        // first row of a wrapped URL, so reject only that ambiguous bare-authority case.
+        if HostBoundarySignal::from_url(url) == HostBoundarySignal::Present
+            || UrlAuthorityShape::from_url_text(text, url) != UrlAuthorityShape::Bare
+        {
+            return Self::Complete;
+        }
+        Self::Ambiguous
     }
-    // `url` accepts bare single-label hosts such as `https://exam`; at the visible edge those are often just the
-    // first row of a wrapped URL, so reject only that ambiguous bare-authority case.
-    if self::url_has_host_boundary_signal(url) || !self::url_text_is_bare_authority(text, url) {
-        return false;
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum UrlAuthorityShape {
+    Bare,
+    NotBare,
+}
+
+impl UrlAuthorityShape {
+    fn from_url_text(text: &str, url: &Url) -> Self {
+        let Some(authority_start) = url.scheme().len().checked_add("://".len()) else {
+            return Self::NotBare;
+        };
+        let Some(after_scheme) = text.get(authority_start..) else {
+            return Self::NotBare;
+        };
+        let Some(host) = url.host_str() else {
+            return Self::Bare;
+        };
+        if after_scheme == host {
+            Self::Bare
+        } else {
+            Self::NotBare
+        }
     }
-    true
 }
 
-fn url_text_is_bare_authority(text: &str, url: &Url) -> bool {
-    let Some(authority_start) = url.scheme().len().checked_add("://".len()) else {
-        return false;
-    };
-    let Some(after_scheme) = text.get(authority_start..) else {
-        return false;
-    };
-    let Some(host) = url.host_str() else {
-        return true;
-    };
-    after_scheme == host
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum HostBoundarySignal {
+    Missing,
+    Present,
 }
 
-fn url_has_host_boundary_signal(url: &Url) -> bool {
-    let Some(host) = url.host_str() else {
-        return false;
-    };
-    host == "localhost" || host.contains('.') || url.port().is_some()
+impl HostBoundarySignal {
+    fn from_url(url: &Url) -> Self {
+        let Some(host) = url.host_str() else {
+            return Self::Missing;
+        };
+        if host == "localhost" || host.contains('.') || url.port().is_some() {
+            Self::Present
+        } else {
+            Self::Missing
+        }
+    }
 }
 
-const fn is_trailing_punctuation(ch: char) -> bool {
-    matches!(ch, '.' | ',' | ';' | '!' | '?')
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum TrailingPunctuation {
+    No,
+    Yes,
+}
+
+impl TrailingPunctuation {
+    const fn from_char(ch: char) -> Self {
+        if matches!(ch, '.' | ',' | ';' | '!' | '?') {
+            Self::Yes
+        } else {
+            Self::No
+        }
+    }
 }
 
 fn next_position(rows: &[RenderRowSpan], position: CellPosition) -> Option<CellPosition> {
@@ -213,31 +277,44 @@ fn cell_ascii_char(rows: &[RenderRowSpan], position: CellPosition) -> Option<cha
     (chars.next().is_none() && ch.is_ascii()).then_some(ch)
 }
 
-const fn is_url_char(ch: char) -> bool {
-    ch.is_ascii_alphanumeric()
-        || matches!(
-            ch,
-            '-' | '.'
-                | '_'
-                | '~'
-                | ':'
-                | '/'
-                | '?'
-                | '#'
-                | '@'
-                | '!'
-                | '$'
-                | '&'
-                | '\''
-                | '('
-                | ')'
-                | '*'
-                | '+'
-                | ','
-                | ';'
-                | '='
-                | '%'
-        )
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum UrlChar {
+    Delimiter,
+    Url,
+}
+
+impl UrlChar {
+    const fn from_char(ch: char) -> Self {
+        if ch.is_ascii_alphanumeric()
+            || matches!(
+                ch,
+                '-' | '.'
+                    | '_'
+                    | '~'
+                    | ':'
+                    | '/'
+                    | '?'
+                    | '#'
+                    | '@'
+                    | '!'
+                    | '$'
+                    | '&'
+                    | '\''
+                    | '('
+                    | ')'
+                    | '*'
+                    | '+'
+                    | ','
+                    | ';'
+                    | '='
+                    | '%'
+            )
+        {
+            Self::Url
+        } else {
+            Self::Delimiter
+        }
+    }
 }
 
 #[cfg(test)]

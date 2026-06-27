@@ -11,6 +11,7 @@ use muxr_transport::ServerConnection;
 use tokio::sync::mpsc::error::TrySendError;
 
 use crate::pane::close::PaneExitOutcome;
+use crate::pane::runtime::PaneRuntimeSetStatus;
 use crate::pane::runtime::PaneRuntimes;
 use crate::pty::PtyEvent;
 use crate::server::ServerConfig;
@@ -235,8 +236,13 @@ impl SessionRuntime {
         self::reap_exited_panes(config, &mut state.layout, &mut state.pane_runtimes)
     }
 
-    pub fn pane_runtime_set_empty(&self) -> bool {
-        self.state.as_ref().is_some_and(|state| state.pane_runtimes.is_empty())
+    pub fn pane_runtime_set_status(&self) -> PaneRuntimeSetStatus {
+        match &self.state {
+            Some(state) if state.pane_runtimes.set_status() == PaneRuntimeSetStatus::Empty => {
+                PaneRuntimeSetStatus::Empty
+            }
+            Some(_) | None => PaneRuntimeSetStatus::HasPanes,
+        }
     }
 
     fn take_state_for_attach(&mut self) -> rootcause::Result<SessionRuntimeState> {

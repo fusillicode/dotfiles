@@ -9,6 +9,7 @@ use muxr_core::ClientMouseEventPhase;
 use muxr_core::ClientMousePosition;
 use muxr_core::LayoutSnapshot;
 use muxr_core::PaneId;
+use muxr_core::PaneMouseMode;
 use muxr_core::PaneRegionSnapshot;
 use muxr_core::PaneRegionsSnapshot;
 use muxr_core::PaneScrollDirection;
@@ -17,6 +18,8 @@ use muxr_core::RenderUpdate;
 use muxr_core::TabId;
 use rootcause::prelude::ResultExt;
 
+use crate::copy_selection::SelectionChange;
+use crate::copy_selection::SelectionClickOutcome;
 use crate::copy_selection::SelectionClickTracker;
 use crate::copy_selection::SelectionEdgeScrollPending;
 use crate::copy_selection::SelectionEdgeScrollRequest;
@@ -27,6 +30,8 @@ use crate::copy_selection::SelectionState;
 use crate::frame_buffer::ApplyOutcome;
 use crate::frame_buffer::FrameBuffer;
 use crate::frame_buffer::RenderFrameChanges;
+use crate::frame_buffer::RenderFrameScope;
+use crate::terminal::MouseAnyMotionCapture;
 use crate::terminal::SynchronizedOutput;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -48,9 +53,15 @@ impl MouseCapture {
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum TabBarDmg {
+    Clean,
+    Dirty,
+}
+
 pub struct ClientRenderer {
-    any_motion_capture_enabled: bool,
-    tab_bar_dirty: bool,
+    any_motion_capture: MouseAnyMotionCapture,
+    tab_bar_dmg: TabBarDmg,
     selection_style: SelectionStyle,
     tab_bar_config: TabBarConfig,
     clicks: SelectionClickTracker,
@@ -90,8 +101,8 @@ impl ClientRenderer {
         synchronized_output: SynchronizedOutput,
     ) -> Self {
         Self {
-            any_motion_capture_enabled: false,
-            tab_bar_dirty: true,
+            any_motion_capture: MouseAnyMotionCapture::Disabled,
+            tab_bar_dmg: TabBarDmg::Dirty,
             selection_style: config.selection,
             tab_bar_config: config.tab_bar,
             clicks: SelectionClickTracker::default(),
@@ -109,7 +120,7 @@ impl ClientRenderer {
         // Layout events precede their matching render baseline; defer tab bar writes so the user never sees new tab
         // state over an old pane frame.
         self.layout = layout;
-        self.tab_bar_dirty = true;
+        self.tab_bar_dmg = TabBarDmg::Dirty;
     }
 
     pub fn apply_sidebar_layout(&mut self, stdout: &mut impl Write, layout: LayoutSnapshot) -> rootcause::Result<()> {
@@ -134,9 +145,9 @@ impl ClientRenderer {
             .take()
             .and_then(|capture| capture.retain_for_regions(&self.pane_regions));
         self.selection_edge_scroll.retain_for_regions(&self.pane_regions);
-        let selection_changed = self.selection.clear_if_regions_changed(&self.pane_regions);
+        let selection_change = self.selection.clear_if_regions_changed(&self.pane_regions);
         self.sync_mouse_capture(stdout)?;
-        if selection_changed {
+        if selection_change == SelectionChange::Changed {
             let next_selection = self.selection.range().cloned();
             self.redraw_selection(stdout, previous_selection.as_ref(), next_selection.as_ref())?;
         }
@@ -144,17 +155,22 @@ impl ClientRenderer {
     }
 
     pub fn sync_mouse_capture(&mut self, stdout: &mut impl Write) -> rootcause::Result<()> {
-        let next = self
+        let next = if self
             .pane_regions
             .regions()
             .iter()
-            .any(|region| region.mouse_mode().needs_any_motion_capture());
-        if self.any_motion_capture_enabled == next {
+            .any(|region| region.mouse_mode() == PaneMouseMode::AnyMotion)
+        {
+            MouseAnyMotionCapture::Enabled
+        } else {
+            MouseAnyMotionCapture::Disabled
+        };
+        if self.any_motion_capture == next {
             return Ok(());
         }
 
         crate::terminal::set_mouse_any_motion_capture(stdout, next)?;
-        self.any_motion_capture_enabled = next;
+        self.any_motion_capture = next;
         Ok(())
     }
 
@@ -176,10 +192,10 @@ impl ClientRenderer {
     }
 
     fn draw(&mut self, stdout: &mut impl Write, changes: &RenderFrameChanges) -> rootcause::Result<()> {
-        let render_tab_bar = self.tab_bar_dirty || changes.is_full_redraw();
+        let render_tab_bar = self.tab_bar_dmg == TabBarDmg::Dirty || changes.scope() == RenderFrameScope::Full;
         let mut frame = Vec::new();
         crate::terminal::queue_synchronized_update_start(&mut frame, self.synchronized_output)?;
-        if changes.is_full_redraw() {
+        if changes.scope() == RenderFrameScope::Full {
             crate::frame_buffer::queue_full_redraw_start(&mut frame)?;
         }
         if render_tab_bar {
@@ -201,13 +217,13 @@ impl ClientRenderer {
         stdout
             .flush()
             .context("failed to flush muxr client render transaction")?;
-        self.tab_bar_dirty = false;
+        self.tab_bar_dmg = TabBarDmg::Clean;
         Ok(())
     }
 
     fn draw_sidebar(&mut self, stdout: &mut impl Write) -> rootcause::Result<()> {
         let Some(size) = self.frame_buffer.size() else {
-            self.tab_bar_dirty = true;
+            self.tab_bar_dmg = TabBarDmg::Dirty;
             return Ok(());
         };
         let mut frame = Vec::new();
@@ -223,7 +239,7 @@ impl ClientRenderer {
         stdout
             .flush()
             .context("failed to flush muxr client sidebar render transaction")?;
-        self.tab_bar_dirty = false;
+        self.tab_bar_dmg = TabBarDmg::Clean;
         Ok(())
     }
 
@@ -241,11 +257,12 @@ impl ClientRenderer {
         if matches!(input, SelectionInput::Start(_) | SelectionInput::End(_)) {
             self.selection_edge_scroll.clear();
         }
-        let changed = match input {
+        let change = match input {
             SelectionInput::Start(position)
                 if self
                     .clicks
-                    .record_selection_start(position, &self.pane_regions, &self.frame_buffer, now) =>
+                    .record_selection_start(position, &self.pane_regions, &self.frame_buffer, now)
+                    == SelectionClickOutcome::Double =>
             {
                 self.selection
                     .select_word(position, &self.pane_regions, &self.frame_buffer)?
@@ -263,7 +280,7 @@ impl ClientRenderer {
                     .apply(SelectionInput::End(position), &self.pane_regions, &self.frame_buffer)?
             }
         };
-        if changed {
+        if change == SelectionChange::Changed {
             let next_selection = self.selection.range().cloned();
             self.redraw_selection(stdout, previous_selection.as_ref(), next_selection.as_ref())?;
         }
@@ -271,7 +288,7 @@ impl ClientRenderer {
     }
 
     pub fn mouse_request_for_event(&mut self, event: ClientMouseEvent) -> Option<ClientMouseEvent> {
-        if crate::pane::scroll::is_wheel_event(event) {
+        if crate::pane::scroll::MouseWheelEvent::from(event) == crate::pane::scroll::MouseWheelEvent::Wheel {
             return None;
         }
 
@@ -287,10 +304,10 @@ impl ClientRenderer {
         }
 
         let region = self.pane_regions.pane_at(event.position)?;
-        if !region.mouse_tracking_enabled() {
+        if region.mouse_mode() == PaneMouseMode::None {
             return None;
         }
-        if self::mouse_event_starts_capture(event) {
+        if MouseCaptureStart::from(event) == MouseCaptureStart::Start {
             self.mouse_capture = Some(MouseCapture { region: region.clone() });
         }
         Some(event)
@@ -366,12 +383,18 @@ impl ClientRenderer {
         self.draw(stdout, &changes)
     }
 
-    pub const fn has_mouse_capture(&self) -> bool {
-        self.mouse_capture.is_some()
+    pub const fn mouse_capture_state(&self) -> MouseCaptureState {
+        match self.mouse_capture {
+            Some(_) => MouseCaptureState::Captured,
+            None => MouseCaptureState::None,
+        }
     }
 
-    pub const fn selection_edge_drag_active(&self) -> bool {
-        self.selection_edge_scroll.active()
+    pub const fn selection_edge_drag(&self) -> SelectionEdgeDrag {
+        match self.selection_edge_scroll.active_state() {
+            crate::copy_selection::SelectionEdgeScrollActive::Active => SelectionEdgeDrag::Active,
+            crate::copy_selection::SelectionEdgeScrollActive::Inactive => SelectionEdgeDrag::Inactive,
+        }
     }
 
     pub const fn mark_selection_edge_scroll_sent(&mut self, pending: SelectionEdgeScrollPending) {
@@ -402,8 +425,32 @@ const fn last_region_row_saturating(region: &PaneRegionSnapshot) -> u16 {
     region.row().saturating_add(region.rows().saturating_sub(1))
 }
 
-fn mouse_event_starts_capture(event: ClientMouseEvent) -> bool {
-    event.phase == ClientMouseEventPhase::Press && event.button & (32 | 64) == 0 && event.button & 0b11 != 0b11
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum MouseCaptureState {
+    Captured,
+    None,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SelectionEdgeDrag {
+    Active,
+    Inactive,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum MouseCaptureStart {
+    Ignore,
+    Start,
+}
+
+impl From<ClientMouseEvent> for MouseCaptureStart {
+    fn from(event: ClientMouseEvent) -> Self {
+        if event.phase == ClientMouseEventPhase::Press && event.button & (32 | 64) == 0 && event.button & 0b11 != 0b11 {
+            Self::Start
+        } else {
+            Self::Ignore
+        }
+    }
 }
 
 #[cfg(test)]
@@ -613,8 +660,8 @@ mod tests {
             SelectionInput::Update(muxr_core::ClientMousePosition { row: 0, col: 1 }),
         )?;
 
-        assert2::assert!(test_helpers::selection_contains(&renderer, 0, 0));
-        assert2::assert!(test_helpers::selection_contains(&renderer, 0, 1));
+        pretty_assertions::assert_eq!(test_helpers::selection_contains(&renderer, 0, 0), true);
+        pretty_assertions::assert_eq!(test_helpers::selection_contains(&renderer, 0, 1), true);
         let selection_output = output.rendered_string()?;
         assert2::assert!(!selection_output.contains("\x1b[7m"));
         pretty_assertions::assert_eq!(output.flushes, 1);
@@ -696,7 +743,7 @@ mod tests {
             test_helpers::selected_text(&renderer),
             Some("aa\nbb\ncc\ndd".to_owned()),
         );
-        assert2::assert!(test_helpers::selection_contains(&renderer, 2, 0));
+        pretty_assertions::assert_eq!(test_helpers::selection_contains(&renderer, 2, 0), true);
         Ok(())
     }
 
@@ -981,7 +1028,7 @@ mod tests {
                 row: 0,
                 col: 1,
                 shape: muxr_core::RenderCursorShape::Default,
-                visible: true,
+                visibility: muxr_core::RenderCursorVisibility::Visible,
             },
             vec![muxr_core::RenderRowSpan::new(
                 0,
@@ -999,7 +1046,7 @@ mod tests {
                 row: 0,
                 col: 1,
                 shape: muxr_core::RenderCursorShape::Default,
-                visible: true,
+                visibility: muxr_core::RenderCursorVisibility::Visible,
             },
             vec![muxr_core::RenderRowSpan::new(
                 0,
@@ -1021,7 +1068,7 @@ mod tests {
                 row: 0,
                 col: 1,
                 shape: muxr_core::RenderCursorShape::Default,
-                visible: true,
+                visibility: muxr_core::RenderCursorVisibility::Visible,
             },
             vec![
                 muxr_core::RenderRowSpan::new(0, 0, first.chars().map(|ch| render_cell(&ch.to_string())).collect())?,
@@ -1040,7 +1087,7 @@ mod tests {
                 row: 0,
                 col: 1,
                 shape: muxr_core::RenderCursorShape::Default,
-                visible: true,
+                visibility: muxr_core::RenderCursorVisibility::Visible,
             },
             vec![muxr_core::RenderRowSpan::new(0, 0, vec![render_cell("x")])?],
         )

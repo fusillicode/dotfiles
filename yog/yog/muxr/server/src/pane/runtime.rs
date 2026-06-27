@@ -21,6 +21,7 @@ use crate::pty::PtySinkGuard;
 use crate::pty::ShellCmd;
 use crate::server::ServerConfig;
 use crate::session::start_seed::SessionStartSeed;
+use crate::state::PaneMetadataSync;
 use crate::state::PaneSnapshotFields;
 use crate::state::SessionLayout;
 use crate::terminal::TerminalSnapshot;
@@ -33,14 +34,13 @@ struct PaneRuntime {
 
 /// Terminal-title sync result for layout metadata derived from live pane runtimes.
 pub struct SyncedTerminalTitles {
-    layout_changed: bool,
+    metadata_sync: PaneMetadataSync,
     titles: Vec<(PaneId, Option<String>)>,
 }
 
 impl SyncedTerminalTitles {
-    /// Return whether applying the runtime titles changed persisted layout metadata.
-    pub const fn layout_changed(&self) -> bool {
-        self.layout_changed
+    pub const fn metadata_sync(&self) -> PaneMetadataSync {
+        self.metadata_sync
     }
 
     /// Return the runtime terminal titles that were applied to the layout.
@@ -118,6 +118,12 @@ fn runtime_cmd_label(pane: &PaneRuntimeMetadataEntry) -> Option<String> {
 pub struct PaneRuntimes {
     pane_exit_notify: Arc<tokio::sync::Notify>,
     panes: Vec<PaneRuntime>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PaneRuntimeSetStatus {
+    Empty,
+    HasPanes,
 }
 
 impl PaneRuntimes {
@@ -243,15 +249,19 @@ impl PaneRuntimes {
         self.panes.retain(|pane| pane.id != pane_id);
     }
 
-    pub const fn is_empty(&self) -> bool {
-        self.panes.is_empty()
+    pub const fn set_status(&self) -> PaneRuntimeSetStatus {
+        if self.panes.is_empty() {
+            PaneRuntimeSetStatus::Empty
+        } else {
+            PaneRuntimeSetStatus::HasPanes
+        }
     }
 
     pub fn exited_panes(&self) -> rootcause::Result<Vec<(PaneId, PtyExitStatus)>> {
         let mut exited_panes = Vec::new();
         for pane in &self.panes {
             let handle = pane.session.handle();
-            if handle.has_exited() {
+            if handle.exit_state() == crate::pty::PtyExitState::Exited {
                 let Some(exit_status) = handle.exit_status()? else {
                     return Err(
                         report!("muxr exited pane is missing exit status").attach(format!("pane_id={}", pane.id))
@@ -300,9 +310,9 @@ impl PaneRuntimes {
         let terminal_titles = self.terminal_titles()?;
         // Shell prompts report cwd through OSC title updates. Keep layout metadata in sync before layout mutations so
         // new panes inherit the live cwd instead of the server startup directory.
-        let layout_changed = layout.sync_terminal_titles(&terminal_titles);
+        let metadata_sync = layout.sync_terminal_titles(&terminal_titles);
         Ok(SyncedTerminalTitles {
-            layout_changed,
+            metadata_sync,
             titles: terminal_titles,
         })
     }
@@ -320,7 +330,7 @@ impl PaneRuntimes {
     pub fn take_screen_dirty_panes(&self) -> Vec<PaneId> {
         let mut screen_dirty_panes = Vec::new();
         for pane in &self.panes {
-            if pane.session.handle().take_screen_dirty() {
+            if pane.session.handle().take_screen_dirty() == crate::pty::PtyScreenDmg::Dirty {
                 screen_dirty_panes.push(pane.id);
             }
         }
@@ -438,16 +448,21 @@ mod tests {
             },
         )?;
         let mut tracked_processes = PaneTrackedProcesses::default();
-        assert2::assert!(tracked_processes.observe_pane_cmd(
-            &MuxrConfig::default(),
-            pane_1,
-            &PaneCmdObservation::FgCmd(crate::pane::cmd::FgCmd::from_test_cmd(PaneCmd {
-                executable: "codex".to_owned(),
-                path: None,
-                pid: 42,
-            })),
-            Instant::now(),
-        ));
+        assert2::assert!(
+            tracked_processes
+                .observe_pane_cmd(
+                    &MuxrConfig::default(),
+                    pane_1,
+                    &PaneCmdObservation::FgCmd(crate::pane::cmd::FgCmd::from_test_cmd(PaneCmd {
+                        executable: "codex".to_owned(),
+                        path: None,
+                        pid: 42,
+                    })),
+                    Instant::now(),
+                )
+                .state_change()
+                == crate::pane::tracked_process::TrackedProcessStateChange::Changed
+        );
 
         let metadata = PaneRuntimeMetadata::from_sources(
             vec![(pane_2, Some("~/work".to_owned()))],

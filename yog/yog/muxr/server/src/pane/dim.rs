@@ -109,8 +109,8 @@ mod tests {
             },
         );
 
-        assert2::assert!(updated.attrs.bold());
-        assert2::assert!(updated.attrs.dim());
+        pretty_assertions::assert_eq!(updated.attrs.bold(), true);
+        pretty_assertions::assert_eq!(updated.attrs.dim(), true);
         pretty_assertions::assert_eq!(updated.bg, style.bg);
         pretty_assertions::assert_eq!(updated.fg, style.fg);
     }
@@ -131,8 +131,8 @@ mod tests {
             },
         );
 
-        assert2::assert!(updated.attrs.bold());
-        assert2::assert!(!updated.attrs.dim());
+        pretty_assertions::assert_eq!(updated.attrs.bold(), true);
+        pretty_assertions::assert_eq!(updated.attrs.dim(), false);
         pretty_assertions::assert_eq!(updated.bg, style.bg);
         assert2::assert!(updated.fg != style.fg);
     }

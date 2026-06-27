@@ -9,6 +9,7 @@ use muxr_core::ClientRequest;
 use crate::copy_selection::SelectionInput;
 use crate::pane::focus::LocalMouseAction;
 use crate::renderer::ClientRenderer;
+use crate::runtime::ClientInputSend;
 use crate::runtime::DroppableSendOutcome;
 
 pub async fn handle_mouse_input_action(
@@ -17,17 +18,17 @@ pub async fn handle_mouse_input_action(
     input_sender: &tokio::sync::mpsc::Sender<ClientRequest>,
     renderer: &mut ClientRenderer,
     stdout: &mut impl Write,
-) -> rootcause::Result<bool> {
+) -> rootcause::Result<ClientInputSend> {
     let Some(position) = pane_position(muxr_config, event.position) else {
         if let Some(request) = tab_focus_request_for_sidebar_click(event, renderer) {
             if input_sender.send(request).await.is_err() {
-                return Ok(false);
+                return Ok(ClientInputSend::Closed);
             }
-            return Ok(true);
+            return Ok(ClientInputSend::Accepted);
         }
         // Captured app drags can finish over the tab bar; forward them clamped to the captured pane before dropping
         // ordinary tab bar mouse packets.
-        if renderer.has_mouse_capture()
+        if renderer.mouse_capture_state() == crate::renderer::MouseCaptureState::Captured
             && let Some(position) = pane_position_for_sidebar_drag(muxr_config, event.position)
             && let Some(event) = renderer.mouse_request_for_event(ClientMouseEvent { position, ..event })
         {
@@ -36,7 +37,7 @@ pub async fn handle_mouse_input_action(
         // Local selections can also finish over the tab bar; keep update/end routed so the retained pane drag is
         // clamped and finalized instead of leaving stale drag state behind.
         let tab_bar_position = event.position;
-        match crate::pane::focus::local_mouse_action(event) {
+        match crate::pane::focus::LocalMouseAction::from_event(event) {
             Some(LocalMouseAction::SelectionUpdate(_)) => {
                 if let Some(position) = pane_position_for_sidebar_drag(muxr_config, tab_bar_position) {
                     let scroll_request = renderer.set_selection_outside_edge_drag(position);
@@ -57,23 +58,23 @@ pub async fn handle_mouse_input_action(
             }
             Some(LocalMouseAction::FocusAndSelectionStart(_)) | None => {}
         }
-        return Ok(true);
+        return Ok(ClientInputSend::Accepted);
     };
     let event = ClientMouseEvent { position, ..event };
-    if crate::pane::scroll::is_wheel_event(event) {
+    if crate::pane::scroll::MouseWheelEvent::from(event) == crate::pane::scroll::MouseWheelEvent::Wheel {
         return send_mouse_request(input_sender, event).await;
     }
     if let Some(event) = renderer.mouse_request_for_event(event) {
         return send_mouse_request(input_sender, event).await;
     }
 
-    match crate::pane::focus::local_mouse_action(event) {
+    match crate::pane::focus::LocalMouseAction::from_event(event) {
         Some(LocalMouseAction::FocusAndSelectionStart(position)) => {
             if input_sender.send(ClientRequest::FocusPaneAt(position)).await.is_err() {
-                return Ok(false);
+                return Ok(ClientInputSend::Closed);
             }
             renderer.apply_selection_input(stdout, SelectionInput::Start(position))?;
-            Ok(true)
+            Ok(ClientInputSend::Accepted)
         }
         Some(LocalMouseAction::SelectionUpdate(position)) => {
             let scroll_request = renderer.set_selection_edge_drag(position, None);
@@ -85,34 +86,53 @@ pub async fn handle_mouse_input_action(
                     request,
                 ));
             }
-            Ok(true)
+            Ok(ClientInputSend::Accepted)
         }
         Some(LocalMouseAction::SelectionEnd(position)) => {
             renderer.apply_selection_input(stdout, SelectionInput::End(position))?;
-            Ok(true)
+            Ok(ClientInputSend::Accepted)
         }
-        None => Ok(true),
+        None => Ok(ClientInputSend::Accepted),
     }
 }
 
-pub const fn mouse_event_can_be_dropped(event: ClientMouseEvent) -> bool {
-    event.button & 32 != 0 && !crate::pane::scroll::is_wheel_event(event)
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum MouseEventDrop {
+    Droppable,
+    Required,
+}
+
+impl From<ClientMouseEvent> for MouseEventDrop {
+    fn from(event: ClientMouseEvent) -> Self {
+        if event.button & 32 != 0
+            && !matches!(
+                crate::pane::scroll::MouseWheelEvent::from(event),
+                crate::pane::scroll::MouseWheelEvent::Wheel
+            )
+        {
+            Self::Droppable
+        } else {
+            Self::Required
+        }
+    }
 }
 
 async fn send_mouse_request(
     input_sender: &tokio::sync::mpsc::Sender<ClientRequest>,
     event: ClientMouseEvent,
-) -> rootcause::Result<bool> {
-    if mouse_event_can_be_dropped(event) {
-        return Ok(!matches!(
-            crate::runtime::send_droppable_request(input_sender, ClientRequest::Mouse(event)),
-            DroppableSendOutcome::Closed
-        ));
+) -> rootcause::Result<ClientInputSend> {
+    if MouseEventDrop::from(event) == MouseEventDrop::Droppable {
+        return Ok(
+            match crate::runtime::send_droppable_request(input_sender, ClientRequest::Mouse(event)) {
+                DroppableSendOutcome::Closed => ClientInputSend::Closed,
+                DroppableSendOutcome::Dropped | DroppableSendOutcome::Sent => ClientInputSend::Accepted,
+            },
+        );
     }
     if input_sender.send(ClientRequest::Mouse(event)).await.is_err() {
-        return Ok(false);
+        return Ok(ClientInputSend::Closed);
     }
-    Ok(true)
+    Ok(ClientInputSend::Accepted)
 }
 
 fn tab_focus_request_for_sidebar_click(event: ClientMouseEvent, renderer: &ClientRenderer) -> Option<ClientRequest> {
@@ -173,7 +193,7 @@ mod tests {
             );
             let mut output = CountingWriter::default();
 
-            assert2::assert!(
+            pretty_assertions::assert_eq!(
                 handle_mouse_input_action(
                     &config,
                     ClientMouseEvent {
@@ -188,7 +208,8 @@ mod tests {
                     &mut renderer,
                     &mut output,
                 )
-                .await?
+                .await?,
+                ClientInputSend::Accepted,
             );
 
             pretty_assertions::assert_eq!(
@@ -211,7 +232,7 @@ mod tests {
             );
             let mut output = CountingWriter::default();
 
-            assert2::assert!(
+            pretty_assertions::assert_eq!(
                 handle_mouse_input_action(
                     &config,
                     ClientMouseEvent {
@@ -223,7 +244,8 @@ mod tests {
                     &mut renderer,
                     &mut output,
                 )
-                .await?
+                .await?,
+                ClientInputSend::Accepted,
             );
 
             pretty_assertions::assert_eq!(
@@ -253,7 +275,7 @@ mod tests {
             )?;
             let mut output = CountingWriter::default();
 
-            assert2::assert!(
+            pretty_assertions::assert_eq!(
                 handle_mouse_input_action(
                     &config,
                     ClientMouseEvent {
@@ -268,9 +290,10 @@ mod tests {
                     &mut renderer,
                     &mut output,
                 )
-                .await?
+                .await?,
+                ClientInputSend::Accepted,
             );
-            assert2::assert!(
+            pretty_assertions::assert_eq!(
                 handle_mouse_input_action(
                     &config,
                     ClientMouseEvent {
@@ -282,7 +305,8 @@ mod tests {
                     &mut renderer,
                     &mut output,
                 )
-                .await?
+                .await?,
+                ClientInputSend::Accepted,
             );
 
             pretty_assertions::assert_eq!(
@@ -312,7 +336,7 @@ mod tests {
             )?;
             let mut output = CountingWriter::default();
 
-            assert2::assert!(
+            pretty_assertions::assert_eq!(
                 handle_mouse_input_action(
                     &config,
                     ClientMouseEvent {
@@ -327,9 +351,10 @@ mod tests {
                     &mut renderer,
                     &mut output,
                 )
-                .await?
+                .await?,
+                ClientInputSend::Accepted,
             );
-            assert2::assert!(
+            pretty_assertions::assert_eq!(
                 handle_mouse_input_action(
                     &config,
                     ClientMouseEvent {
@@ -341,7 +366,8 @@ mod tests {
                     &mut renderer,
                     &mut output,
                 )
-                .await?
+                .await?,
+                ClientInputSend::Accepted,
             );
 
             pretty_assertions::assert_eq!(
@@ -369,7 +395,7 @@ mod tests {
             );
             let mut output = CountingWriter::default();
 
-            assert2::assert!(
+            pretty_assertions::assert_eq!(
                 handle_mouse_input_action(
                     &config,
                     ClientMouseEvent {
@@ -384,7 +410,8 @@ mod tests {
                     &mut renderer,
                     &mut output,
                 )
-                .await?
+                .await?,
+                ClientInputSend::Accepted,
             );
 
             pretty_assertions::assert_eq!(
@@ -420,8 +447,9 @@ mod tests {
                 },
             };
 
-            assert2::assert!(
-                handle_mouse_input_action(&config, event, &input_sender, &mut renderer, &mut output).await?
+            pretty_assertions::assert_eq!(
+                handle_mouse_input_action(&config, event, &input_sender, &mut renderer, &mut output).await?,
+                ClientInputSend::Accepted,
             );
 
             pretty_assertions::assert_eq!(
@@ -468,7 +496,7 @@ mod tests {
             }
 
             pretty_assertions::assert_eq!(input_receiver.recv().await, Some(ClientRequest::Pong));
-            assert2::assert!(handle.await?);
+            pretty_assertions::assert_eq!(handle.await?, ClientInputSend::Accepted);
             pretty_assertions::assert_eq!(
                 input_receiver.recv().await,
                 Some(ClientRequest::Mouse(ClientMouseEvent {
@@ -525,8 +553,9 @@ mod tests {
                 },
             ];
             for event in events {
-                assert2::assert!(
-                    handle_mouse_input_action(&config, event, &input_sender, &mut renderer, &mut output).await?
+                pretty_assertions::assert_eq!(
+                    handle_mouse_input_action(&config, event, &input_sender, &mut renderer, &mut output).await?,
+                    ClientInputSend::Accepted,
                 );
             }
 
@@ -676,7 +705,7 @@ mod tests {
                 row: 0,
                 col: 1,
                 shape: muxr_core::RenderCursorShape::Default,
-                visible: true,
+                visibility: muxr_core::RenderCursorVisibility::Visible,
             },
             vec![muxr_core::RenderRowSpan::new(
                 0,

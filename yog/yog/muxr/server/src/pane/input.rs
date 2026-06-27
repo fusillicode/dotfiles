@@ -7,13 +7,15 @@ use crate::client::session::ClientSessionState;
 use crate::pane::tracked_process::TrackedProcessClientChange;
 use crate::pane::tracked_process::TrackedProcessUserInteraction;
 use crate::pty::PtyHandle;
+use crate::pty::PtyViewportMove;
+use crate::render_state::PaneInputRenderPriority;
+use crate::render_state::PaneRenderSignal;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct PaneInputOutcome {
     pub cmd_handoff_pane_id: Option<PaneId>,
-    pub interactive_render: bool,
-    pub render_dirty: bool,
-    pub sync_render_deadline: bool,
+    pub render_priority: PaneInputRenderPriority,
+    pub render_signal: PaneRenderSignal,
     pub tracked_process_change: Option<TrackedProcessClientChange>,
 }
 
@@ -21,9 +23,8 @@ impl PaneInputOutcome {
     const fn ignored() -> Self {
         Self {
             cmd_handoff_pane_id: None,
-            interactive_render: false,
-            render_dirty: false,
-            sync_render_deadline: false,
+            render_priority: PaneInputRenderPriority::Bulk,
+            render_signal: PaneRenderSignal::Unchanged,
             tracked_process_change: None,
         }
     }
@@ -33,8 +34,8 @@ pub fn handle_client_input(bytes: &[u8], state: &mut ClientSessionState<'_>) -> 
     self::handle_active_pane_bytes(
         bytes,
         state,
-        crate::keyboard_input::input_interaction(bytes),
-        true,
+        TrackedProcessUserInteraction::from(bytes),
+        PaneInputRenderPriority::Interactive,
         PtyHandle::write_input,
     )
 }
@@ -45,7 +46,7 @@ pub fn handle_client_paste(bytes: &[u8], state: &mut ClientSessionState<'_>) -> 
         bytes,
         state,
         TrackedProcessUserInteraction::MayEcho,
-        false,
+        PaneInputRenderPriority::Bulk,
         PtyHandle::write_paste,
     )
 }
@@ -60,8 +61,8 @@ pub fn handle_client_key(key: &ClientKey, state: &mut ClientSessionState<'_>) ->
         return Ok(PaneInputOutcome::ignored());
     }
 
-    let interaction = crate::keyboard_input::key_input_interaction(key, &bytes);
-    let render_dirty = handle.write_input(&bytes)?;
+    let interaction = TrackedProcessUserInteraction::from_key_input(key, &bytes);
+    let viewport_move = handle.write_input(&bytes)?;
     let tracked_process_change =
         state
             .pane_tracked_processes
@@ -70,9 +71,15 @@ pub fn handle_client_key(key: &ClientKey, state: &mut ClientSessionState<'_>) ->
         (interaction == TrackedProcessUserInteraction::StartsTrackedProcessWork).then_some(pane_id);
     Ok(PaneInputOutcome {
         cmd_handoff_pane_id,
-        interactive_render: true,
-        render_dirty,
-        sync_render_deadline: true,
+        render_priority: PaneInputRenderPriority::Interactive,
+        render_signal: PaneRenderSignal::from_dmg_and_deadline(
+            if viewport_move == crate::pty::PtyViewportMove::MovedToBottom {
+                crate::render_state::ClientRenderDmg::Dirty
+            } else {
+                crate::render_state::ClientRenderDmg::Clean
+            },
+            crate::render_state::PaneRenderDeadlineSync::Sync,
+        ),
         tracked_process_change,
     })
 }
@@ -81,24 +88,24 @@ fn handle_active_pane_bytes(
     bytes: &[u8],
     state: &mut ClientSessionState<'_>,
     interaction: TrackedProcessUserInteraction,
-    interactive_render: bool,
-    write: impl FnOnce(&PtyHandle, &[u8]) -> rootcause::Result<bool>,
+    render_priority: PaneInputRenderPriority,
+    write: impl FnOnce(&PtyHandle, &[u8]) -> rootcause::Result<PtyViewportMove>,
 ) -> rootcause::Result<PaneInputOutcome> {
     if bytes.is_empty() {
         return Ok(PaneInputOutcome::ignored());
     }
 
-    self::write_active_pane_user_input(state, interaction, interactive_render, |handle| write(handle, bytes))
+    self::write_active_pane_user_input(state, interaction, render_priority, |handle| write(handle, bytes))
 }
 
 fn write_active_pane_user_input(
     state: &mut ClientSessionState<'_>,
     interaction: TrackedProcessUserInteraction,
-    interactive_render: bool,
-    write: impl FnOnce(&PtyHandle) -> rootcause::Result<bool>,
+    render_priority: PaneInputRenderPriority,
+    write: impl FnOnce(&PtyHandle) -> rootcause::Result<PtyViewportMove>,
 ) -> rootcause::Result<PaneInputOutcome> {
     let (pane_id, handle) = self::active_pane_handle_with_id(state)?;
-    let render_dirty = write(&handle)?;
+    let viewport_move = write(&handle)?;
     let tracked_process_change =
         state
             .pane_tracked_processes
@@ -107,9 +114,15 @@ fn write_active_pane_user_input(
         (interaction == TrackedProcessUserInteraction::StartsTrackedProcessWork).then_some(pane_id);
     Ok(PaneInputOutcome {
         cmd_handoff_pane_id,
-        interactive_render,
-        render_dirty,
-        sync_render_deadline: true,
+        render_priority,
+        render_signal: PaneRenderSignal::from_dmg_and_deadline(
+            if viewport_move == crate::pty::PtyViewportMove::MovedToBottom {
+                crate::render_state::ClientRenderDmg::Dirty
+            } else {
+                crate::render_state::ClientRenderDmg::Clean
+            },
+            crate::render_state::PaneRenderDeadlineSync::Sync,
+        ),
         tracked_process_change,
     })
 }

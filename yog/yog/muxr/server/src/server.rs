@@ -14,7 +14,9 @@ use muxr_transport::ServerListener;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
 
+use crate::pane::runtime::PaneRuntimeSetStatus;
 use crate::pty::ShellCmd;
+use crate::session::delete::DeleteSessionRequest;
 use crate::session::delete::DeleteSessions;
 use crate::session::files::ServerFilesGuard;
 use crate::session::files::prepare_session_dirs;
@@ -32,6 +34,12 @@ use crate::state::SessionMetadata;
 const CLIENT_HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
 const CLIENT_HEARTBEAT_TIMEOUT: Duration = Duration::from_secs(15);
 const CLIENT_WRITE_TIMEOUT: Duration = Duration::from_secs(2);
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ConnectionAccepting {
+    Accepting,
+    Draining,
+}
 
 struct SessionHandshakeContext<'a> {
     client_task_sender: &'a tokio::sync::mpsc::Sender<SessionClientTaskMessage>,
@@ -169,7 +177,7 @@ async fn serve_prepared_async(config: &ServerConfig) -> rootcause::Result<()> {
         delete_sessions: &delete_sessions,
     };
     let mut accepted_connections = 0_usize;
-    let mut accepting_connections = true;
+    let mut accepting_connections = ConnectionAccepting::Accepting;
     let mut handles = Vec::new();
 
     let shutdown_message = loop {
@@ -197,7 +205,7 @@ async fn serve_prepared_async(config: &ServerConfig) -> rootcause::Result<()> {
             &mut handles,
         )
         .await?;
-        if !accepting_connections && handles.is_empty() {
+        if accepting_connections == ConnectionAccepting::Draining && handles.is_empty() {
             break SessionRuntimeShutdownMessage::AcceptedConnectionLimitReached;
         }
 
@@ -218,7 +226,7 @@ async fn serve_prepared_async(config: &ServerConfig) -> rootcause::Result<()> {
                     ).await?;
                 }
             }
-            accepted = listener.accept(), if accepting_connections => {
+            accepted = listener.accept(), if accepting_connections == ConnectionAccepting::Accepting => {
                 self::handle_accepted_connection(
                     config,
                     accepted?,
@@ -244,7 +252,7 @@ async fn serve_prepared_async(config: &ServerConfig) -> rootcause::Result<()> {
         runtime.handle_client_task_message(message);
     }
     if matches!(shutdown_message, SessionRuntimeShutdownMessage::DeleteSessionRequested)
-        || delete_sessions.is_requested()
+        || delete_sessions.request_state() == DeleteSessionRequest::Requested
     {
         drop(runtime);
         crate::session::delete::remove_session_files(&config.paths)?;
@@ -257,13 +265,13 @@ fn runtime_shutdown_message(
     config: &ServerConfig,
     delete_sessions: &DeleteSessions,
 ) -> rootcause::Result<Option<SessionRuntimeShutdownMessage>> {
-    if delete_sessions.is_requested() {
+    if delete_sessions.request_state() == DeleteSessionRequest::Requested {
         return Ok(Some(SessionRuntimeShutdownMessage::DeleteSessionRequested));
     }
     if matches!(runtime.reap_exited_panes(config)?, ReapResult::Final) {
         return Ok(Some(SessionRuntimeShutdownMessage::FinalPaneExited));
     }
-    if runtime.pane_runtime_set_empty() {
+    if runtime.pane_runtime_set_status() == PaneRuntimeSetStatus::Empty {
         return Ok(Some(SessionRuntimeShutdownMessage::PaneRuntimeSetEmpty));
     }
     Ok(None)
@@ -275,7 +283,7 @@ fn handle_accepted_connection(
     handshake_sender: &tokio::sync::mpsc::Sender<SessionClientHandshake>,
     client_task_finished_notify: &Arc<tokio::sync::Notify>,
     accepted_connections: &mut usize,
-    accepting_connections: &mut bool,
+    accepting_connections: &mut ConnectionAccepting,
     handles: &mut Vec<tokio::task::JoinHandle<rootcause::Result<()>>>,
 ) -> rootcause::Result<()> {
     *accepted_connections = accepted_connections
@@ -291,7 +299,7 @@ fn handle_accepted_connection(
     if let Some(max_accepted_connections) = config.max_accepted_connections
         && *accepted_connections >= max_accepted_connections
     {
-        *accepting_connections = false;
+        *accepting_connections = ConnectionAccepting::Draining;
     }
     Ok(())
 }
@@ -1053,14 +1061,19 @@ mod tests {
             self::read_until_render_contains(&mut client, b"before-editor").await?;
             let editor_regions =
                 self::read_until_pane_regions_matching(&mut client, "editor layout includes sibling pane", |regions| {
-                    Ok(regions
+                    if regions
                         .regions()
                         .iter()
                         .any(|region| region.id().to_string() == "pane-1")
                         && regions
                             .regions()
                             .iter()
-                            .any(|region| region.id().to_string() == "pane-3"))
+                            .any(|region| region.id().to_string() == "pane-3")
+                    {
+                        Ok(PaneRegionsMatch::Matched)
+                    } else {
+                        Ok(PaneRegionsMatch::Waiting)
+                    }
                 })
                 .await?;
 
@@ -1661,8 +1674,7 @@ mod tests {
             self::read_until_render_contains(&mut client, b"line-79").await?;
             let ready_regions =
                 self::read_until_pane_regions_matching(&mut client, "both panes have scrollback", |regions| {
-                    Ok(self::pane_region(regions, "pane-1")?.visible_top_row() > 0
-                        && self::pane_region(regions, "pane-2")?.visible_top_row() > 0)
+                    self::both_panes_have_scrollback(regions)
                 })
                 .await?;
             let pane_1_position = self::pane_position(&ready_regions, "pane-1")?;
@@ -1691,7 +1703,7 @@ mod tests {
                 self::read_next_pane_regions_matching(&mut client, "both panes rendered at bottom before wheel", |regions| {
                     self::pane_region(regions, "pane-1")?;
                     self::pane_region(regions, "pane-2")?;
-                    Ok(true)
+                    Ok(PaneRegionsMatch::Matched)
                 })
                 .await?;
             let pane_1_before_wheel = self::pane_region(&bottom_regions, "pane-1")?.visible_top_row();
@@ -1712,21 +1724,18 @@ mod tests {
                     "wheel render moved only the pointed pane; expected pane-1<{pane_1_before_wheel}, pane-2={pane_2_before_wheel}"
                 ),
                 |regions| {
-                    Ok(
-                        self::pane_region(regions, "pane-1")?.visible_top_row() < pane_1_before_wheel
-                            && self::pane_region(regions, "pane-2")?.visible_top_row() == pane_2_before_wheel,
-                    )
+                    self::pointed_pane_wheel_moved_only(regions, pane_1_before_wheel, pane_2_before_wheel)
                 },
             )
             .await?;
 
             pretty_assertions::assert_eq!(
                 self::scroll_pane_line(&mut client, pane_1_position, PaneScrollDirection::Down).await?,
-                true,
+                PaneScrollLineStep::Moved,
             );
             pretty_assertions::assert_eq!(
                 self::scroll_pane_line(&mut client, pane_2_position, PaneScrollDirection::Down).await?,
-                false,
+                PaneScrollLineStep::Noop,
             );
             self::assert_layout_metadata_panes(&paths, &[1, 2], 2)?;
 
@@ -1791,7 +1800,11 @@ mod tests {
             let mut client = self::open_attached_client(&session, &paths).await?;
             self::read_until_render_contains(&mut client, b"ready").await?;
             let regions = self::read_until_pane_regions_matching(&mut client, "app mouse mode enabled", |regions| {
-                Ok(self::pane_region(regions, "pane-1")?.mouse_mode() == muxr_core::PaneMouseMode::ButtonMotion)
+                if self::pane_region(regions, "pane-1")?.mouse_mode() == muxr_core::PaneMouseMode::ButtonMotion {
+                    Ok(PaneRegionsMatch::Matched)
+                } else {
+                    Ok(PaneRegionsMatch::Waiting)
+                }
             })
             .await?;
 
@@ -2148,7 +2161,7 @@ mod tests {
 
         assert2::assert!(!paths.socket.exists());
         assert2::assert!(!paths.pid.exists());
-        self::assert_final_layout_metadata(&paths, 0, true)?;
+        self::assert_final_layout_metadata(&paths, 0, "succeeded")?;
         Ok(())
     }
 
@@ -2200,7 +2213,7 @@ mod tests {
         self::join_server_with_timeout(handle)?;
         assert2::assert!(!paths.socket.exists());
         assert2::assert!(!paths.pid.exists());
-        self::assert_final_layout_metadata(&paths, 7, false)?;
+        self::assert_final_layout_metadata(&paths, 7, "failed")?;
         Ok(())
     }
 
@@ -2217,7 +2230,7 @@ mod tests {
 
         self::join_server_with_timeout(handle)?;
 
-        self::assert_final_layout_metadata(&paths, 7, false)?;
+        self::assert_final_layout_metadata(&paths, 7, "failed")?;
         Ok(())
     }
 
@@ -2531,9 +2544,9 @@ mod tests {
     async fn read_until_pane_regions_matching(
         client: &mut AttachedTestClient,
         description: &str,
-        condition: impl Fn(&PaneRegionsSnapshot) -> rootcause::Result<bool>,
+        condition: impl Fn(&PaneRegionsSnapshot) -> rootcause::Result<PaneRegionsMatch>,
     ) -> rootcause::Result<PaneRegionsSnapshot> {
-        if condition(&client.pane_regions)? {
+        if condition(&client.pane_regions)? == PaneRegionsMatch::Matched {
             return Ok(client.pane_regions.clone());
         }
         self::read_next_pane_regions_matching(client, description, condition).await
@@ -2542,7 +2555,7 @@ mod tests {
     async fn read_next_pane_regions_matching(
         client: &mut AttachedTestClient,
         description: &str,
-        condition: impl Fn(&PaneRegionsSnapshot) -> rootcause::Result<bool>,
+        condition: impl Fn(&PaneRegionsSnapshot) -> rootcause::Result<PaneRegionsMatch>,
     ) -> rootcause::Result<PaneRegionsSnapshot> {
         let started_at = Instant::now();
 
@@ -2569,7 +2582,7 @@ mod tests {
             match event {
                 ServerEvent::PaneRegions(regions) => {
                     client.pane_regions = regions.clone();
-                    if condition(&regions)? {
+                    if condition(&regions)? == PaneRegionsMatch::Matched {
                         return Ok(regions);
                     }
                 }
@@ -2631,14 +2644,18 @@ mod tests {
         client: &mut AttachedTestClient,
         position: ClientMousePosition,
         direction: PaneScrollDirection,
-    ) -> rootcause::Result<bool> {
+    ) -> rootcause::Result<PaneScrollLineStep> {
         client
             .writer
             .send_request(&ClientRequest::ScrollPaneLineAt { position, direction })
             .await?;
         let (actual_position, actual_direction, movement) = self::read_until_scroll_pane_line_result(client).await?;
         pretty_assertions::assert_eq!((actual_position, actual_direction), (position, direction));
-        Ok(movement.scrolled())
+        if matches!(movement, muxr_core::PaneScrollLineMove::Moved) {
+            Ok(PaneScrollLineStep::Moved)
+        } else {
+            Ok(PaneScrollLineStep::Noop)
+        }
     }
 
     async fn scroll_pane_line_until_noop(
@@ -2654,10 +2671,50 @@ mod tests {
             }
 
             let scrolled = self::scroll_pane_line(client, position, direction).await?;
-            if !scrolled {
+            if scrolled == PaneScrollLineStep::Noop {
                 return Ok(());
             }
         }
+    }
+
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    enum PaneRegionsMatch {
+        Matched,
+        Waiting,
+    }
+
+    fn both_panes_have_scrollback(regions: &PaneRegionsSnapshot) -> rootcause::Result<PaneRegionsMatch> {
+        Ok(
+            if self::pane_region(regions, "pane-1")?.visible_top_row() > 0
+                && self::pane_region(regions, "pane-2")?.visible_top_row() > 0
+            {
+                PaneRegionsMatch::Matched
+            } else {
+                PaneRegionsMatch::Waiting
+            },
+        )
+    }
+
+    fn pointed_pane_wheel_moved_only(
+        regions: &PaneRegionsSnapshot,
+        pane_1_before_wheel: u64,
+        pane_2_before_wheel: u64,
+    ) -> rootcause::Result<PaneRegionsMatch> {
+        Ok(
+            if self::pane_region(regions, "pane-1")?.visible_top_row() < pane_1_before_wheel
+                && self::pane_region(regions, "pane-2")?.visible_top_row() == pane_2_before_wheel
+            {
+                PaneRegionsMatch::Matched
+            } else {
+                PaneRegionsMatch::Waiting
+            },
+        )
+    }
+
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    enum PaneScrollLineStep {
+        Moved,
+        Noop,
     }
 
     async fn read_until_sidebar_layout(client: &mut AttachedTestClient) -> rootcause::Result<LayoutSnapshot> {
@@ -2923,7 +2980,7 @@ mod tests {
     fn assert_final_layout_metadata(
         paths: &SessionPaths,
         expected_code: u64,
-        expected_success: bool,
+        expected_result: &str,
     ) -> rootcause::Result<()> {
         let layout: serde_json::Value =
             serde_json::from_slice(&fs::read(&paths.layout).context("failed to read muxr test layout metadata")?)
@@ -2940,7 +2997,7 @@ mod tests {
         pretty_assertions::assert_eq!(pane["state"]["kind"].as_str(), Some("process_exited"));
         assert2::assert!(pane["state"]["at"].as_u64().is_some());
         pretty_assertions::assert_eq!(pane["state"]["status"]["code"].as_u64(), Some(expected_code));
-        pretty_assertions::assert_eq!(pane["state"]["status"]["success"].as_bool(), Some(expected_success));
+        pretty_assertions::assert_eq!(pane["state"]["status"]["result"].as_str(), Some(expected_result));
         Ok(())
     }
 

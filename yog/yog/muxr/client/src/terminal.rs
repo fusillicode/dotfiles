@@ -63,43 +63,53 @@ impl SynchronizedOutput {
 }
 
 pub struct TerminalGuard {
-    entered_render_screen: bool,
-    raw_mode_enabled: bool,
+    render_screen: TerminalGuardMode,
+    raw_mode: TerminalGuardMode,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum TerminalGuardMode {
+    Disabled,
+    Enabled,
 }
 
 impl TerminalGuard {
     pub fn enable_if_terminal() -> rootcause::Result<Self> {
-        let raw_mode_enabled = std::io::stdin().is_terminal();
-        if raw_mode_enabled {
+        let raw_mode = if std::io::stdin().is_terminal() {
             crossterm::terminal::enable_raw_mode().context("failed to enable muxr client raw mode")?;
-        }
-        let entered_render_screen = std::io::stdout().is_terminal();
-        if entered_render_screen {
+            TerminalGuardMode::Enabled
+        } else {
+            TerminalGuardMode::Disabled
+        };
+        let render_screen = if std::io::stdout().is_terminal() {
             let mut stdout = std::io::stdout();
             if let Err(error) = enter_terminal(&mut stdout) {
                 // Enter can fail after partial mode writes, so restore before returning without a guard.
                 drop(restore_terminal(&mut stdout));
-                if raw_mode_enabled {
+                if raw_mode == TerminalGuardMode::Enabled {
                     drop(crossterm::terminal::disable_raw_mode());
                 }
                 return Err(error).context("failed to enter muxr client terminal screen")?;
             }
-        }
+            TerminalGuardMode::Enabled
+        } else {
+            TerminalGuardMode::Disabled
+        };
 
         Ok(Self {
-            entered_render_screen,
-            raw_mode_enabled,
+            render_screen,
+            raw_mode,
         })
     }
 }
 
 impl Drop for TerminalGuard {
     fn drop(&mut self) {
-        if self.entered_render_screen {
+        if self.render_screen == TerminalGuardMode::Enabled {
             let mut stdout = std::io::stdout();
             drop(restore_terminal(&mut stdout));
         }
-        if self.raw_mode_enabled {
+        if self.raw_mode == TerminalGuardMode::Enabled {
             drop(crossterm::terminal::disable_raw_mode());
         }
     }
@@ -138,6 +148,12 @@ pub fn queue_synchronized_update_end(stdout: &mut impl Write, mode: Synchronized
     Ok(())
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum MouseAnyMotionCapture {
+    Disabled,
+    Enabled,
+}
+
 /// Enable or disable outer-terminal any-motion mouse capture.
 ///
 /// Pane applications request this mode dynamically. Button-event capture remains enabled, so disabling any-motion
@@ -145,16 +161,20 @@ pub fn queue_synchronized_update_end(stdout: &mut impl Write, mode: Synchronized
 ///
 /// # Errors
 /// - The terminal mode sequence cannot be written or flushed.
-pub fn set_mouse_any_motion_capture(stdout: &mut impl Write, enabled: bool) -> rootcause::Result<()> {
-    if enabled {
-        queue_bytes(stdout, MOUSE_ANY_EVENT_CAPTURE_ENABLE)?;
-    } else {
-        // Some terminals treat mode churn around any-motion capture as a broader mouse-reporting reset. Reassert the
-        // button modes muxr owns so pane selection and wheel routing keep working after an app leaves any-motion mode.
-        queue_bytes(stdout, MOUSE_ANY_EVENT_CAPTURE_DISABLE)?;
-        queue_bytes(stdout, MOUSE_BUTTON_CAPTURE_ENABLE)?;
-        queue_bytes(stdout, MOUSE_BUTTON_EVENT_CAPTURE_ENABLE)?;
-        queue_bytes(stdout, MOUSE_SGR_ENABLE)?;
+pub fn set_mouse_any_motion_capture(stdout: &mut impl Write, capture: MouseAnyMotionCapture) -> rootcause::Result<()> {
+    match capture {
+        MouseAnyMotionCapture::Enabled => {
+            queue_bytes(stdout, MOUSE_ANY_EVENT_CAPTURE_ENABLE)?;
+        }
+        MouseAnyMotionCapture::Disabled => {
+            // Some terminals treat mode churn around any-motion capture as a broader mouse-reporting reset. Reassert
+            // the button modes muxr owns so pane selection and wheel routing keep working after an app leaves
+            // any-motion mode.
+            queue_bytes(stdout, MOUSE_ANY_EVENT_CAPTURE_DISABLE)?;
+            queue_bytes(stdout, MOUSE_BUTTON_CAPTURE_ENABLE)?;
+            queue_bytes(stdout, MOUSE_BUTTON_EVENT_CAPTURE_ENABLE)?;
+            queue_bytes(stdout, MOUSE_SGR_ENABLE)?;
+        }
     }
     stdout
         .flush()
@@ -275,7 +295,7 @@ mod tests {
     fn test_set_mouse_any_motion_capture_when_enabled_writes_any_motion_sequence() -> rootcause::Result<()> {
         let mut output = CountingWriter::default();
 
-        set_mouse_any_motion_capture(&mut output, true)?;
+        set_mouse_any_motion_capture(&mut output, MouseAnyMotionCapture::Enabled)?;
 
         pretty_assertions::assert_eq!(output.rendered_string()?, "\x1b[?1003h");
         pretty_assertions::assert_eq!(output.flushes, 1);
@@ -286,7 +306,7 @@ mod tests {
     fn test_set_mouse_any_motion_capture_when_disabled_reasserts_button_capture() -> rootcause::Result<()> {
         let mut output = CountingWriter::default();
 
-        set_mouse_any_motion_capture(&mut output, false)?;
+        set_mouse_any_motion_capture(&mut output, MouseAnyMotionCapture::Disabled)?;
 
         pretty_assertions::assert_eq!(
             output.rendered_string()?,

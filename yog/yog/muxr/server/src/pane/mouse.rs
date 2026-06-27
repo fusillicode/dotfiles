@@ -2,6 +2,7 @@ use std::time::Instant;
 
 use muxr_core::ClientMouseEvent;
 use muxr_core::ClientMouseEventPhase;
+use muxr_core::PaneRegionContainment;
 use muxr_core::PaneRegionSnapshot;
 use muxr_core::PaneScrollDirection;
 use rootcause::report;
@@ -10,8 +11,11 @@ use crate::client::session::ClientSessionState;
 use crate::pane::focus::PaneFocusClientOutcome;
 use crate::pane::tracked_process::TrackedProcessClientChange;
 use crate::pane::tracked_process::TrackedProcessUserInteraction;
+use crate::pty::PtyMouseWrite;
+use crate::render_state::PaneRenderSignal;
 use crate::terminal::TerminalApplicationMode;
 use crate::terminal::TerminalCursorKeyMode;
+use crate::terminal::TerminalMouseEventReport;
 use crate::terminal::TerminalMouseProtocol;
 use crate::terminal::TerminalMouseProtocolEncoding;
 use crate::terminal::TerminalScreenMode;
@@ -35,23 +39,62 @@ enum PaneMouseAction {
     },
 }
 
+impl PaneMouseAction {
+    fn from_event(event: ClientMouseEvent, mode: TerminalApplicationMode) -> Self {
+        let focus = PaneMouseFocus::from(event);
+
+        if let Some(direction) = self::wheel_direction(event) {
+            if let Some(protocol) = mode.mouse_protocol
+                && protocol.event_report(event) == TerminalMouseEventReport::Report
+            {
+                return Self::ForwardToPty {
+                    focus: PaneMouseFocus::PreserveFocus,
+                    protocol,
+                };
+            }
+            if mode.screen_mode == TerminalScreenMode::Alternate {
+                return Self::FauxScrollPty {
+                    cursor_key_mode: mode.cursor_key_mode,
+                    direction,
+                };
+            }
+            return Self::ScrollHistory { direction };
+        }
+
+        if let Some(protocol) = mode.mouse_protocol
+            && protocol.event_report(event) == TerminalMouseEventReport::Report
+        {
+            return Self::ForwardToPty { focus, protocol };
+        }
+
+        if focus == PaneMouseFocus::FocusPointedPane {
+            return Self::FocusPane;
+        }
+
+        Self::NoAction
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum PaneMouseFocus {
     FocusPointedPane,
     PreserveFocus,
 }
 
-impl PaneMouseFocus {
-    const fn focuses_pane(self) -> bool {
-        matches!(self, Self::FocusPointedPane)
+impl From<ClientMouseEvent> for PaneMouseFocus {
+    fn from(event: ClientMouseEvent) -> Self {
+        if event.phase == ClientMouseEventPhase::Press && event.button & (32 | 64) == 0 && event.button & 0b11 != 0b11 {
+            Self::FocusPointedPane
+        } else {
+            Self::PreserveFocus
+        }
     }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct PaneMouseClientOutcome {
     pub focus: PaneFocusClientOutcome,
-    pub render_dirty: bool,
-    pub sync_render_deadline: bool,
+    pub render_signal: PaneRenderSignal,
     pub tracked_process_change: Option<TrackedProcessClientChange>,
 }
 
@@ -59,8 +102,7 @@ impl PaneMouseClientOutcome {
     const fn unchanged() -> Self {
         Self {
             focus: PaneFocusClientOutcome::Unchanged,
-            render_dirty: false,
-            sync_render_deadline: false,
+            render_signal: PaneRenderSignal::Unchanged,
             tracked_process_change: None,
         }
     }
@@ -74,23 +116,25 @@ pub fn handle_mouse_event_client_request(
         return Ok(PaneMouseClientOutcome::unchanged());
     };
     let handle = state.runtimes.handle(*region.id())?;
-    let action = self::resolve_pane_mouse_action(event, handle.application_mode()?);
+    let action = PaneMouseAction::from_event(event, handle.application_mode()?);
     match action {
         PaneMouseAction::ForwardToPty { focus, protocol } => {
             // Focus-reporting apps must observe the pane transition before the click bytes; only the layout render can
             // wait until after forwarding the mouse packet.
-            let focus = if focus.focuses_pane() {
+            let focus = if focus == PaneMouseFocus::FocusPointedPane {
                 crate::pane::focus::handle_focus_pane_at_client_request(event.position, state)?
             } else {
                 PaneFocusClientOutcome::Unchanged
             };
-            let Some(scrolled_to_bottom) = handle.write_mouse_event(event, &region, protocol)? else {
-                return Ok(PaneMouseClientOutcome {
-                    focus,
-                    render_dirty: false,
-                    sync_render_deadline: false,
-                    tracked_process_change: None,
-                });
+            let viewport_move = match handle.write_mouse_event(event, &region, protocol)? {
+                PtyMouseWrite::Ignored => {
+                    return Ok(PaneMouseClientOutcome {
+                        focus,
+                        render_signal: PaneRenderSignal::Unchanged,
+                        tracked_process_change: None,
+                    });
+                }
+                PtyMouseWrite::Sent(viewport_move) => viewport_move,
             };
             let tracked_process_change = state.pane_tracked_processes.record_client_user_interaction(
                 state.layout,
@@ -100,8 +144,14 @@ pub fn handle_mouse_event_client_request(
             )?;
             Ok(PaneMouseClientOutcome {
                 focus,
-                render_dirty: scrolled_to_bottom,
-                sync_render_deadline: true,
+                render_signal: PaneRenderSignal::from_dmg_and_deadline(
+                    if viewport_move == crate::pty::PtyViewportMove::MovedToBottom {
+                        crate::render_state::ClientRenderDmg::Dirty
+                    } else {
+                        crate::render_state::ClientRenderDmg::Clean
+                    },
+                    crate::render_state::PaneRenderDeadlineSync::Sync,
+                ),
                 tracked_process_change,
             })
         }
@@ -109,7 +159,7 @@ pub fn handle_mouse_event_client_request(
             cursor_key_mode,
             direction,
         } => {
-            let render_dirty = handle.write_faux_scroll_input(direction, cursor_key_mode)?;
+            let viewport_move = handle.write_faux_scroll_input(direction, cursor_key_mode)?;
             let tracked_process_change = state.pane_tracked_processes.record_client_user_interaction(
                 state.layout,
                 *region.id(),
@@ -118,8 +168,14 @@ pub fn handle_mouse_event_client_request(
             )?;
             Ok(PaneMouseClientOutcome {
                 focus: PaneFocusClientOutcome::Unchanged,
-                render_dirty,
-                sync_render_deadline: true,
+                render_signal: PaneRenderSignal::from_dmg_and_deadline(
+                    if viewport_move == crate::pty::PtyViewportMove::MovedToBottom {
+                        crate::render_state::ClientRenderDmg::Dirty
+                    } else {
+                        crate::render_state::ClientRenderDmg::Clean
+                    },
+                    crate::render_state::PaneRenderDeadlineSync::Sync,
+                ),
                 tracked_process_change,
             })
         }
@@ -128,57 +184,17 @@ pub fn handle_mouse_event_client_request(
                 crate::pane::scroll::handle_scroll_pane_wheel_client_request(event.position, direction, state)?;
             Ok(PaneMouseClientOutcome {
                 focus: PaneFocusClientOutcome::Unchanged,
-                render_dirty: outcome.render_dirty,
-                sync_render_deadline: outcome.sync_render_deadline,
+                render_signal: outcome.render_signal,
                 tracked_process_change: None,
             })
         }
         PaneMouseAction::FocusPane => Ok(PaneMouseClientOutcome {
             focus: crate::pane::focus::handle_focus_pane_at_client_request(event.position, state)?,
-            render_dirty: false,
-            sync_render_deadline: false,
+            render_signal: PaneRenderSignal::Unchanged,
             tracked_process_change: None,
         }),
         PaneMouseAction::NoAction => Ok(PaneMouseClientOutcome::unchanged()),
     }
-}
-
-fn resolve_pane_mouse_action(event: ClientMouseEvent, mode: TerminalApplicationMode) -> PaneMouseAction {
-    let focus = if self::mouse_event_focuses_pane(event) {
-        PaneMouseFocus::FocusPointedPane
-    } else {
-        PaneMouseFocus::PreserveFocus
-    };
-
-    if let Some(direction) = self::wheel_direction(event) {
-        if let Some(protocol) = mode.mouse_protocol
-            && protocol.reports_event(event)
-        {
-            return PaneMouseAction::ForwardToPty {
-                focus: PaneMouseFocus::PreserveFocus,
-                protocol,
-            };
-        }
-        if mode.screen_mode == TerminalScreenMode::Alternate {
-            return PaneMouseAction::FauxScrollPty {
-                cursor_key_mode: mode.cursor_key_mode,
-                direction,
-            };
-        }
-        return PaneMouseAction::ScrollHistory { direction };
-    }
-
-    if let Some(protocol) = mode.mouse_protocol
-        && protocol.reports_event(event)
-    {
-        return PaneMouseAction::ForwardToPty { focus, protocol };
-    }
-
-    if focus.focuses_pane() {
-        return PaneMouseAction::FocusPane;
-    }
-
-    PaneMouseAction::NoAction
 }
 
 pub fn encode_pty_mouse_event(
@@ -186,7 +202,7 @@ pub fn encode_pty_mouse_event(
     region: &PaneRegionSnapshot,
     protocol: TerminalMouseProtocol,
 ) -> rootcause::Result<Option<Vec<u8>>> {
-    if !protocol.reports_event(event) {
+    if protocol.event_report(event) == TerminalMouseEventReport::Drop {
         return Ok(None);
     }
 
@@ -205,10 +221,6 @@ pub fn encode_pty_mouse_event(
     }
 }
 
-fn mouse_event_focuses_pane(event: ClientMouseEvent) -> bool {
-    event.phase == ClientMouseEventPhase::Press && event.button & (32 | 64) == 0 && event.button & 0b11 != 0b11
-}
-
 const fn wheel_direction(event: ClientMouseEvent) -> Option<PaneScrollDirection> {
     if event.button & 64 == 0 {
         return None;
@@ -225,7 +237,7 @@ fn pane_local_mouse_position(
     position: muxr_core::ClientMousePosition,
     region: &PaneRegionSnapshot,
 ) -> Option<(u16, u16)> {
-    if !region.contains(position.row, position.col) {
+    if region.containment(position.row, position.col) == PaneRegionContainment::Outside {
         return None;
     }
     Some((
@@ -418,7 +430,7 @@ mod tests {
         );
 
         pretty_assertions::assert_eq!(
-            resolve_pane_mouse_action(event, mode),
+            PaneMouseAction::from_event(event, mode),
             PaneMouseAction::ForwardToPty {
                 focus: PaneMouseFocus::PreserveFocus,
                 protocol,
@@ -436,7 +448,7 @@ mod tests {
         let event = self::mouse_press(button);
 
         pretty_assertions::assert_eq!(
-            resolve_pane_mouse_action(
+            PaneMouseAction::from_event(
                 event,
                 self::application_mode(TerminalScreenMode::Alternate, TerminalCursorKeyMode::Application, None),
             ),
@@ -457,7 +469,7 @@ mod tests {
         let event = self::mouse_press(button);
 
         pretty_assertions::assert_eq!(
-            resolve_pane_mouse_action(
+            PaneMouseAction::from_event(
                 event,
                 self::application_mode(TerminalScreenMode::Normal, TerminalCursorKeyMode::Normal, None),
             ),
@@ -479,7 +491,7 @@ mod tests {
         );
 
         pretty_assertions::assert_eq!(
-            resolve_pane_mouse_action(event, mode),
+            PaneMouseAction::from_event(event, mode),
             PaneMouseAction::ForwardToPty {
                 focus: PaneMouseFocus::FocusPointedPane,
                 protocol,
@@ -492,7 +504,7 @@ mod tests {
         let event = self::mouse_press(0);
 
         pretty_assertions::assert_eq!(
-            resolve_pane_mouse_action(
+            PaneMouseAction::from_event(
                 event,
                 self::application_mode(TerminalScreenMode::Normal, TerminalCursorKeyMode::Normal, None),
             ),
@@ -505,7 +517,7 @@ mod tests {
         let event = self::mouse_press(32);
 
         pretty_assertions::assert_eq!(
-            resolve_pane_mouse_action(
+            PaneMouseAction::from_event(
                 event,
                 self::application_mode(TerminalScreenMode::Normal, TerminalCursorKeyMode::Normal, None),
             ),
@@ -527,7 +539,7 @@ mod tests {
         );
 
         pretty_assertions::assert_eq!(
-            resolve_pane_mouse_action(event, mode),
+            PaneMouseAction::from_event(event, mode),
             PaneMouseAction::ForwardToPty {
                 focus: PaneMouseFocus::PreserveFocus,
                 protocol,

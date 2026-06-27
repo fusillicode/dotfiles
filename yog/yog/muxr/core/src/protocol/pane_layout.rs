@@ -315,20 +315,6 @@ pub enum PaneMouseMode {
     PressRelease,
 }
 
-impl PaneMouseMode {
-    /// Return whether the pane application requested any terminal mouse tracking mode.
-    #[must_use]
-    pub const fn tracking_enabled(self) -> bool {
-        !matches!(self, Self::None)
-    }
-
-    /// Return whether the outer terminal must report motion even when no button is pressed.
-    #[must_use]
-    pub const fn needs_any_motion_capture(self) -> bool {
-        matches!(self, Self::AnyMotion)
-    }
-}
-
 /// Whether a terminal row ends normally or continues via a soft wrap.
 #[derive(
     rkyv::Archive, Clone, Copy, Debug, Deserialize, rkyv::Deserialize, Eq, PartialEq, Serialize, rkyv::Serialize,
@@ -336,22 +322,6 @@ impl PaneMouseMode {
 pub enum RowWrap {
     EndsBeforeSoftWrap,
     EndsWithSoftWrap,
-}
-
-impl RowWrap {
-    #[must_use]
-    pub const fn from_wraps_next(wraps_next: bool) -> Self {
-        if wraps_next {
-            Self::EndsWithSoftWrap
-        } else {
-            Self::EndsBeforeSoftWrap
-        }
-    }
-
-    #[must_use]
-    pub const fn wraps_next(self) -> bool {
-        matches!(self, Self::EndsWithSoftWrap)
-    }
 }
 
 #[derive(rkyv::Archive, Clone, Debug, Eq, PartialEq, Serialize, rkyv::Serialize)]
@@ -363,7 +333,7 @@ pub struct PaneRegionSnapshot {
     mouse_mode: PaneMouseMode,
     rows: u16,
     visible_top_row: u64,
-    wrapped_rows: Vec<bool>,
+    wrapped_rows: Vec<RowWrap>,
 }
 
 impl PaneRegionSnapshot {
@@ -389,7 +359,7 @@ impl PaneRegionSnapshot {
             mouse_mode,
             rows,
             visible_top_row,
-            wrapped_rows: vec![false; usize::from(rows)],
+            wrapped_rows: vec![RowWrap::EndsBeforeSoftWrap; usize::from(rows)],
         };
         region.validate()?;
         Ok(region)
@@ -399,7 +369,7 @@ impl PaneRegionSnapshot {
     ///
     /// # Errors
     /// - The number of row flags does not match the region height.
-    pub fn with_wrapped_rows(mut self, wrapped_rows: Vec<bool>) -> rootcause::Result<Self> {
+    pub fn with_wrapped_rows(mut self, wrapped_rows: Vec<RowWrap>) -> rootcause::Result<Self> {
         self.wrapped_rows = wrapped_rows;
         self.validate()?;
         Ok(self)
@@ -426,12 +396,6 @@ impl PaneRegionSnapshot {
         self.mouse_mode
     }
 
-    /// Return whether the pane application requested terminal mouse tracking.
-    #[must_use]
-    pub const fn mouse_tracking_enabled(&self) -> bool {
-        self.mouse_mode.tracking_enabled()
-    }
-
     #[must_use]
     pub const fn row(&self) -> u16 {
         self.row
@@ -448,12 +412,6 @@ impl PaneRegionSnapshot {
         self.visible_top_row
     }
 
-    /// Return whether the stable content row soft-wraps into the following row.
-    #[must_use]
-    pub fn content_row_wraps_next(&self, content_row: u64) -> bool {
-        self.content_row_wrap(content_row).wraps_next()
-    }
-
     /// Return the soft-wrap metadata for a stable content row in this rendered viewport.
     #[must_use]
     pub fn content_row_wrap(&self, content_row: u64) -> RowWrap {
@@ -463,19 +421,26 @@ impl PaneRegionSnapshot {
         let Ok(local_row) = usize::try_from(local_row) else {
             return RowWrap::EndsBeforeSoftWrap;
         };
-        RowWrap::from_wraps_next(self.wrapped_rows.get(local_row).copied().unwrap_or(false))
+        self.wrapped_rows
+            .get(local_row)
+            .copied()
+            .unwrap_or(RowWrap::EndsBeforeSoftWrap)
     }
 
     #[must_use]
-    pub const fn contains(&self, row: u16, col: u16) -> bool {
+    pub const fn containment(&self, row: u16, col: u16) -> PaneRegionContainment {
         let Some(end_row) = self.row.checked_add(self.rows) else {
-            return false;
+            return PaneRegionContainment::Outside;
         };
         let Some(end_col) = self.col.checked_add(self.cols) else {
-            return false;
+            return PaneRegionContainment::Outside;
         };
 
-        row >= self.row && row < end_row && col >= self.col && col < end_col
+        if row >= self.row && row < end_row && col >= self.col && col < end_col {
+            PaneRegionContainment::Inside
+        } else {
+            PaneRegionContainment::Outside
+        }
     }
 
     fn validate(&self) -> rootcause::Result<()> {
@@ -514,7 +479,7 @@ where
         let rows = rkyv::Deserialize::<u16, D>::deserialize(&self.rows, deserializer)?;
         let mouse_mode = rkyv::Deserialize::<PaneMouseMode, D>::deserialize(&self.mouse_mode, deserializer)?;
         let visible_top_row = rkyv::Deserialize::<u64, D>::deserialize(&self.visible_top_row, deserializer)?;
-        let wrapped_rows = rkyv::Deserialize::<Vec<bool>, D>::deserialize(&self.wrapped_rows, deserializer)?;
+        let wrapped_rows = rkyv::Deserialize::<Vec<RowWrap>, D>::deserialize(&self.wrapped_rows, deserializer)?;
         PaneRegionSnapshot::new(id, col, row, cols, rows, mouse_mode, visible_top_row)
             .and_then(|region| region.with_wrapped_rows(wrapped_rows))
             .map_err(super::rkyv_deserialize_error::<D::Error>)
@@ -548,7 +513,7 @@ impl PaneRegionsSnapshot {
     pub fn pane_at(&self, position: ClientMousePosition) -> Option<&PaneRegionSnapshot> {
         self.regions()
             .iter()
-            .find(|region| region.contains(position.row, position.col))
+            .find(|region| region.containment(position.row, position.col) == PaneRegionContainment::Inside)
     }
 
     fn validate(&self) -> rootcause::Result<()> {
@@ -568,6 +533,12 @@ impl PaneRegionsSnapshot {
 
         Ok(())
     }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PaneRegionContainment {
+    Inside,
+    Outside,
 }
 
 impl<D> rkyv::Deserialize<PaneRegionsSnapshot, D> for ArchivedPaneRegionsSnapshot

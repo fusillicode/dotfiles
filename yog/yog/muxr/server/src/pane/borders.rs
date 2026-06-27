@@ -49,7 +49,9 @@ impl PaneBorder {
             let pane_ids = first_regions
                 .iter()
                 .chain(second_regions)
-                .filter(|region| self::pane_region_owns_border_cell(region, axis, cell_position))
+                .filter(|region| {
+                    BorderCellOwner::from_region_border_cell(region, axis, cell_position) == BorderCellOwner::Owned
+                })
                 .map(|region| region.id)
                 .collect::<Vec<_>>();
             if !pane_ids.is_empty() {
@@ -81,14 +83,20 @@ impl PaneBorder {
         self.position.row
     }
 
-    pub fn is_owned_by(&self, position: PanePosition, pane_id: PaneId) -> bool {
+    pub fn ownership(&self, position: PanePosition, pane_id: PaneId) -> BorderCellOwner {
         let Some(offset) = self.cell_offset(position) else {
-            return false;
+            return BorderCellOwner::Unowned;
         };
 
-        self.owner_cells
+        if self
+            .owner_cells
             .iter()
             .any(|cell| cell.offset == offset && cell.pane_ids.contains(&pane_id))
+        {
+            BorderCellOwner::Owned
+        } else {
+            BorderCellOwner::Unowned
+        }
     }
 
     fn cell_offset(&self, position: PanePosition) -> Option<u16> {
@@ -146,27 +154,43 @@ pub fn paste_borders(
     Ok(())
 }
 
-fn pane_region_owns_border_cell(region: &PaneRegion, axis: PaneBorderAxis, position: PanePosition) -> bool {
-    match axis {
-        PaneBorderAxis::Horizontal => {
-            // Pane regions exclude separator cells; extending the perpendicular span by exactly one cell
-            // gives split junctions to the pane corner without coloring unrelated diagonal border cells.
-            let col = u32::from(position.col);
-            let start_col = u32::from(region.area.origin.col).saturating_sub(1);
-            let end_col = region.area.end_col_exclusive();
-            let contains_col = col >= start_col && col <= end_col;
-            let touches_top = position.row.checked_add(1) == Some(region.area.origin.row) && contains_col;
-            let touches_bottom = region.area.end_row() == Some(position.row) && contains_col;
-            touches_top || touches_bottom
-        }
-        PaneBorderAxis::Vertical => {
-            let row = u32::from(position.row);
-            let start_row = u32::from(region.area.origin.row).saturating_sub(1);
-            let end_row = region.area.end_row_exclusive();
-            let contains_row = row >= start_row && row <= end_row;
-            let touches_left = position.col.checked_add(1) == Some(region.area.origin.col) && contains_row;
-            let touches_right = region.area.end_col() == Some(position.col) && contains_row;
-            touches_left || touches_right
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum BorderCellOwner {
+    Owned,
+    Unowned,
+}
+
+impl BorderCellOwner {
+    fn from_region_border_cell(region: &PaneRegion, axis: PaneBorderAxis, position: PanePosition) -> Self {
+        match axis {
+            PaneBorderAxis::Horizontal => {
+                // Pane regions exclude separator cells; extending the perpendicular span by exactly one cell
+                // gives split junctions to the pane corner without coloring unrelated diagonal border cells.
+                let col = u32::from(position.col);
+                let start_col = u32::from(region.area.origin.col).saturating_sub(1);
+                let end_col = region.area.end_col_exclusive();
+                let contains_col = col >= start_col && col <= end_col;
+                let touches_top = position.row.checked_add(1) == Some(region.area.origin.row) && contains_col;
+                let touches_bottom = region.area.end_row() == Some(position.row) && contains_col;
+                if touches_top || touches_bottom {
+                    Self::Owned
+                } else {
+                    Self::Unowned
+                }
+            }
+            PaneBorderAxis::Vertical => {
+                let row = u32::from(position.row);
+                let start_row = u32::from(region.area.origin.row).saturating_sub(1);
+                let end_row = region.area.end_row_exclusive();
+                let contains_row = row >= start_row && row <= end_row;
+                let touches_left = position.col.checked_add(1) == Some(region.area.origin.col) && contains_row;
+                let touches_right = region.area.end_col() == Some(position.col) && contains_row;
+                if touches_left || touches_right {
+                    Self::Owned
+                } else {
+                    Self::Unowned
+                }
+            }
         }
     }
 }
@@ -244,34 +268,34 @@ fn add_adjacent_border_junctions(cells: &mut BTreeMap<(u16, u16), BorderCell>) {
     // neighbor edges so the rendered frame uses connected junction glyphs instead of detached line segments.
     let base_cells = cells.clone();
     for ((row, col), cell) in &base_cells {
-        if cell.shape.has_horizontal() {
+        if cell.shape.horizontal_state() == BorderAxisEdgeState::Present {
             if let Some(left_col) = col.checked_sub(1)
                 && base_cells
                     .get(&(*row, left_col))
-                    .is_some_and(|neighbor| neighbor.shape.has_vertical())
+                    .is_some_and(|neighbor| neighbor.shape.vertical_state() == BorderAxisEdgeState::Present)
             {
                 self::merge_border_edge(cells, (*row, left_col), BorderCellEdge::Right, cell.visual);
             }
             if let Some(right_col) = col.checked_add(1)
                 && base_cells
                     .get(&(*row, right_col))
-                    .is_some_and(|neighbor| neighbor.shape.has_vertical())
+                    .is_some_and(|neighbor| neighbor.shape.vertical_state() == BorderAxisEdgeState::Present)
             {
                 self::merge_border_edge(cells, (*row, right_col), BorderCellEdge::Left, cell.visual);
             }
         }
-        if cell.shape.has_vertical() {
+        if cell.shape.vertical_state() == BorderAxisEdgeState::Present {
             if let Some(up_row) = row.checked_sub(1)
                 && base_cells
                     .get(&(up_row, *col))
-                    .is_some_and(|neighbor| neighbor.shape.has_horizontal())
+                    .is_some_and(|neighbor| neighbor.shape.horizontal_state() == BorderAxisEdgeState::Present)
             {
                 self::merge_border_edge(cells, (up_row, *col), BorderCellEdge::Down, cell.visual);
             }
             if let Some(down_row) = row.checked_add(1)
                 && base_cells
                     .get(&(down_row, *col))
-                    .is_some_and(|neighbor| neighbor.shape.has_horizontal())
+                    .is_some_and(|neighbor| neighbor.shape.horizontal_state() == BorderAxisEdgeState::Present)
             {
                 self::merge_border_edge(cells, (down_row, *col), BorderCellEdge::Up, cell.visual);
             }
@@ -300,10 +324,11 @@ fn border_visual_for_cell(
     border_mode: BorderRenderMode,
 ) -> BorderVisual {
     let position = PanePosition { row, col };
-    let owned_by_active_pane = active_pane.is_some_and(|pane_id| border.is_owned_by(position, *pane_id));
+    let owned_by_active_pane =
+        active_pane.is_some_and(|pane_id| border.ownership(position, *pane_id) == BorderCellOwner::Owned);
     let owned_by_attention_pane = attention_panes
         .iter()
-        .any(|pane_id| active_pane != Some(pane_id) && border.is_owned_by(position, *pane_id));
+        .any(|pane_id| active_pane != Some(pane_id) && border.ownership(position, *pane_id) == BorderCellOwner::Owned);
 
     if owned_by_active_pane {
         return match border_mode {
@@ -358,26 +383,48 @@ impl BorderCellShape {
 
     const fn with_axis(self, axis: PaneBorderAxis) -> Self {
         match axis {
-            PaneBorderAxis::Horizontal => Self::from_edges((self.up(), self.down(), true, true)),
-            PaneBorderAxis::Vertical => Self::from_edges((true, true, self.left(), self.right())),
+            PaneBorderAxis::Horizontal => Self::from_edges((
+                self.up(),
+                self.down(),
+                BorderEdgeState::Present,
+                BorderEdgeState::Present,
+            )),
+            PaneBorderAxis::Vertical => Self::from_edges((
+                BorderEdgeState::Present,
+                BorderEdgeState::Present,
+                self.left(),
+                self.right(),
+            )),
         }
     }
 
     const fn with_edge(self, edge: BorderCellEdge) -> Self {
         match edge {
-            BorderCellEdge::Down => Self::from_edges((self.up(), true, self.left(), self.right())),
-            BorderCellEdge::Left => Self::from_edges((self.up(), self.down(), true, self.right())),
-            BorderCellEdge::Right => Self::from_edges((self.up(), self.down(), self.left(), true)),
-            BorderCellEdge::Up => Self::from_edges((true, self.down(), self.left(), self.right())),
+            BorderCellEdge::Down => Self::from_edges((self.up(), BorderEdgeState::Present, self.left(), self.right())),
+            BorderCellEdge::Left => Self::from_edges((self.up(), self.down(), BorderEdgeState::Present, self.right())),
+            BorderCellEdge::Right => Self::from_edges((self.up(), self.down(), self.left(), BorderEdgeState::Present)),
+            BorderCellEdge::Up => Self::from_edges((BorderEdgeState::Present, self.down(), self.left(), self.right())),
         }
     }
 
-    const fn has_horizontal(self) -> bool {
-        self.left() || self.right()
+    const fn horizontal_state(self) -> BorderAxisEdgeState {
+        match self.left() {
+            BorderEdgeState::Present => BorderAxisEdgeState::Present,
+            BorderEdgeState::Absent => match self.right() {
+                BorderEdgeState::Present => BorderAxisEdgeState::Present,
+                BorderEdgeState::Absent => BorderAxisEdgeState::Absent,
+            },
+        }
     }
 
-    const fn has_vertical(self) -> bool {
-        self.up() || self.down()
+    const fn vertical_state(self) -> BorderAxisEdgeState {
+        match self.up() {
+            BorderEdgeState::Present => BorderAxisEdgeState::Present,
+            BorderEdgeState::Absent => match self.down() {
+                BorderEdgeState::Present => BorderAxisEdgeState::Present,
+                BorderEdgeState::Absent => BorderAxisEdgeState::Absent,
+            },
+        }
     }
 
     const fn glyph(self) -> &'static str {
@@ -397,28 +444,30 @@ impl BorderCellShape {
         }
     }
 
-    const fn from_edges(edges: (bool, bool, bool, bool)) -> Self {
+    const fn from_edges(edges: (BorderEdgeState, BorderEdgeState, BorderEdgeState, BorderEdgeState)) -> Self {
+        use BorderEdgeState::Absent as A;
+        use BorderEdgeState::Present as P;
         match edges {
-            (false, false, false, false) => Self::Empty,
-            (true, false, false, false) => Self::Up,
-            (false, true, false, false) => Self::Down,
-            (false, false, true, false) => Self::Left,
-            (false, false, false, true) => Self::Right,
-            (true, true, false, false) => Self::Vertical,
-            (false, false, true, true) => Self::Horizontal,
-            (true, false, true, false) => Self::UpLeft,
-            (true, false, false, true) => Self::UpRight,
-            (false, true, true, false) => Self::DownLeft,
-            (false, true, false, true) => Self::DownRight,
-            (true, true, true, false) => Self::UpDownLeft,
-            (true, true, false, true) => Self::UpDownRight,
-            (true, false, true, true) => Self::UpLeftRight,
-            (false, true, true, true) => Self::DownLeftRight,
-            (true, true, true, true) => Self::All,
+            (A, A, A, A) => Self::Empty,
+            (P, A, A, A) => Self::Up,
+            (A, P, A, A) => Self::Down,
+            (A, A, P, A) => Self::Left,
+            (A, A, A, P) => Self::Right,
+            (P, P, A, A) => Self::Vertical,
+            (A, A, P, P) => Self::Horizontal,
+            (P, A, P, A) => Self::UpLeft,
+            (P, A, A, P) => Self::UpRight,
+            (A, P, P, A) => Self::DownLeft,
+            (A, P, A, P) => Self::DownRight,
+            (P, P, P, A) => Self::UpDownLeft,
+            (P, P, A, P) => Self::UpDownRight,
+            (P, A, P, P) => Self::UpLeftRight,
+            (A, P, P, P) => Self::DownLeftRight,
+            (P, P, P, P) => Self::All,
         }
     }
 
-    const fn up(self) -> bool {
+    const fn up(self) -> BorderEdgeState {
         match self {
             Self::All
             | Self::Up
@@ -427,7 +476,7 @@ impl BorderCellShape {
             | Self::UpLeft
             | Self::UpLeftRight
             | Self::UpRight
-            | Self::Vertical => true,
+            | Self::Vertical => BorderEdgeState::Present,
             Self::Down
             | Self::DownLeft
             | Self::DownLeftRight
@@ -435,11 +484,11 @@ impl BorderCellShape {
             | Self::Empty
             | Self::Horizontal
             | Self::Left
-            | Self::Right => false,
+            | Self::Right => BorderEdgeState::Absent,
         }
     }
 
-    const fn down(self) -> bool {
+    const fn down(self) -> BorderEdgeState {
         match self {
             Self::All
             | Self::Down
@@ -448,7 +497,7 @@ impl BorderCellShape {
             | Self::DownRight
             | Self::UpDownLeft
             | Self::UpDownRight
-            | Self::Vertical => true,
+            | Self::Vertical => BorderEdgeState::Present,
             Self::Empty
             | Self::Horizontal
             | Self::Left
@@ -456,11 +505,11 @@ impl BorderCellShape {
             | Self::Up
             | Self::UpLeft
             | Self::UpLeftRight
-            | Self::UpRight => false,
+            | Self::UpRight => BorderEdgeState::Absent,
         }
     }
 
-    const fn left(self) -> bool {
+    const fn left(self) -> BorderEdgeState {
         match self {
             Self::All
             | Self::DownLeft
@@ -469,7 +518,7 @@ impl BorderCellShape {
             | Self::Left
             | Self::UpDownLeft
             | Self::UpLeft
-            | Self::UpLeftRight => true,
+            | Self::UpLeftRight => BorderEdgeState::Present,
             Self::Down
             | Self::DownRight
             | Self::Empty
@@ -477,11 +526,11 @@ impl BorderCellShape {
             | Self::Up
             | Self::UpDownRight
             | Self::UpRight
-            | Self::Vertical => false,
+            | Self::Vertical => BorderEdgeState::Absent,
         }
     }
 
-    const fn right(self) -> bool {
+    const fn right(self) -> BorderEdgeState {
         match self {
             Self::All
             | Self::DownLeftRight
@@ -490,7 +539,7 @@ impl BorderCellShape {
             | Self::Right
             | Self::UpDownRight
             | Self::UpLeftRight
-            | Self::UpRight => true,
+            | Self::UpRight => BorderEdgeState::Present,
             Self::Down
             | Self::DownLeft
             | Self::Empty
@@ -498,9 +547,21 @@ impl BorderCellShape {
             | Self::Up
             | Self::UpDownLeft
             | Self::UpLeft
-            | Self::Vertical => false,
+            | Self::Vertical => BorderEdgeState::Absent,
         }
     }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum BorderEdgeState {
+    Absent,
+    Present,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum BorderAxisEdgeState {
+    Absent,
+    Present,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -654,13 +715,16 @@ mod tests {
             std::slice::from_ref(&active_region),
         )?;
 
-        assert2::assert!(border.is_owned_by(
-            PanePosition {
-                row: cell_row,
-                col: cell_col
-            },
-            active_pane
-        ));
+        pretty_assertions::assert_eq!(
+            border.ownership(
+                PanePosition {
+                    row: cell_row,
+                    col: cell_col
+                },
+                active_pane
+            ),
+            BorderCellOwner::Owned
+        );
         Ok(())
     }
 
@@ -688,13 +752,16 @@ mod tests {
             std::slice::from_ref(&active_region),
         )?;
 
-        assert2::assert!(!border.is_owned_by(
-            PanePosition {
-                row: cell_row,
-                col: cell_col
-            },
-            active_pane
-        ));
+        pretty_assertions::assert_eq!(
+            border.ownership(
+                PanePosition {
+                    row: cell_row,
+                    col: cell_col
+                },
+                active_pane
+            ),
+            BorderCellOwner::Unowned
+        );
         Ok(())
     }
 

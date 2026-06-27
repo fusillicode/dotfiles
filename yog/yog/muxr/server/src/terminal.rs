@@ -14,12 +14,16 @@ use muxr_core::RenderCursorShape;
 use muxr_core::RenderRowSpan;
 use muxr_core::RenderStyle;
 use muxr_core::RenderTextStyle;
+use muxr_core::RowWrap;
 use muxr_core::TerminalSize;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
 
 use crate::terminal_scrollback::TerminalPreParserAction;
 use crate::terminal_scrollback::TerminalScrollback;
+use crate::terminal_scrollback::TerminalScrollbackCapture;
+use crate::terminal_scrollback::TerminalScrollbackMove;
+use crate::terminal_scrollback::TerminalScrollbackScreenMode;
 use crate::terminal_scrollback::TerminalVisibleRow;
 
 const SCROLL_LINES_PER_WHEEL_EVENT: usize = 5;
@@ -67,45 +71,120 @@ pub struct TerminalState {
 
 #[derive(Default)]
 struct TerminalResetDetector {
-    pending_escape: bool,
+    state: TerminalResetDetectorState,
 }
 
 impl TerminalResetDetector {
-    const fn observe_byte(&mut self, byte: u8) -> bool {
-        if self.pending_escape {
-            if byte == b'c' {
-                self.pending_escape = false;
-                return true;
+    const fn observe_byte(&mut self, byte: u8) -> TerminalResetDetection {
+        match self.state {
+            TerminalResetDetectorState::Ground => {
+                if byte == 0x1b {
+                    self.state = TerminalResetDetectorState::Escape;
+                }
+                TerminalResetDetection::NotDetected
             }
-            self.pending_escape = byte == 0x1b;
-        } else if byte == 0x1b {
-            self.pending_escape = true;
+            TerminalResetDetectorState::Escape => {
+                if byte == b'c' {
+                    self.state = TerminalResetDetectorState::Ground;
+                    TerminalResetDetection::Detected
+                } else {
+                    self.state = if byte == 0x1b {
+                        TerminalResetDetectorState::Escape
+                    } else {
+                        TerminalResetDetectorState::Ground
+                    };
+                    TerminalResetDetection::NotDetected
+                }
+            }
         }
-        false
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+enum TerminalResetDetectorState {
+    #[default]
+    Ground,
+    Escape,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum TerminalResetDetection {
+    Detected,
+    NotDetected,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum TerminalScreenDmg {
+    #[default]
+    Clean,
+    Dirty,
+}
+
+impl TerminalScreenDmg {
+    const fn include(&mut self, other: Self) {
+        if matches!(other, Self::Dirty) {
+            *self = Self::Dirty;
+        }
     }
 }
 
 /// Result of feeding PTY bytes into the terminal parser.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct TerminalProcessOutcome {
-    replies: Vec<Vec<u8>>,
-    screen_dirty: bool,
+pub enum TerminalProcessOutcome {
+    Clean { replies: Vec<Vec<u8>> },
+    Dirty { replies: Vec<Vec<u8>> },
 }
 
 impl TerminalProcessOutcome {
-    const fn new(replies: Vec<Vec<u8>>, screen_dirty: bool) -> Self {
-        Self { replies, screen_dirty }
+    const fn new(replies: Vec<Vec<u8>>, screen_dmg: TerminalScreenDmg) -> Self {
+        match screen_dmg {
+            TerminalScreenDmg::Clean => Self::Clean { replies },
+            TerminalScreenDmg::Dirty => Self::Dirty { replies },
+        }
     }
 
     #[must_use]
     pub fn into_replies(self) -> Vec<Vec<u8>> {
-        self.replies
+        match self {
+            Self::Clean { replies } | Self::Dirty { replies } => replies,
+        }
     }
 
     #[must_use]
-    pub const fn screen_dirty(&self) -> bool {
-        self.screen_dirty
+    pub const fn screen_dmg(&self) -> TerminalScreenDmg {
+        match self {
+            Self::Clean { .. } => TerminalScreenDmg::Clean,
+            Self::Dirty { .. } => TerminalScreenDmg::Dirty,
+        }
     }
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum TerminalScrollMove {
+    #[default]
+    Unchanged,
+    Moved,
+}
+
+impl TerminalScrollMove {
+    pub const fn from_scrollback(move_result: TerminalScrollbackMove) -> Self {
+        match move_result {
+            TerminalScrollbackMove::Unchanged => Self::Unchanged,
+            TerminalScrollbackMove::Moved => Self::Moved,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TerminalPasteMode {
+    Plain,
+    Bracketed,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TerminalPrivateModeAction {
+    Set,
+    Reset,
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -125,66 +204,70 @@ struct TerminalScreenDirtyDetector {
 }
 
 impl TerminalScreenDirtyDetector {
-    fn process(&mut self, bytes: &[u8]) -> bool {
-        let mut screen_dirty = false;
+    fn process(&mut self, bytes: &[u8]) -> TerminalScreenDmg {
+        let mut screen_dmg = TerminalScreenDmg::Clean;
         for byte in bytes {
-            screen_dirty |= self.process_byte(*byte);
+            screen_dmg.include(self.process_byte(*byte));
         }
-        screen_dirty
+        screen_dmg
     }
 
-    const fn process_byte(&mut self, byte: u8) -> bool {
+    const fn process_byte(&mut self, byte: u8) -> TerminalScreenDmg {
         match self.state {
             TerminalScreenDirtyState::Ground => match byte {
                 b'\x1b' => {
                     self.state = TerminalScreenDirtyState::Escape;
-                    false
+                    TerminalScreenDmg::Clean
                 }
-                _ => true,
+                _ => TerminalScreenDmg::Dirty,
             },
             TerminalScreenDirtyState::Escape => {
                 if byte == b']' {
                     self.state = TerminalScreenDirtyState::OscTitleCmd;
-                    false
+                    TerminalScreenDmg::Clean
                 } else {
                     self.state = TerminalScreenDirtyState::Ground;
-                    true
+                    TerminalScreenDmg::Dirty
                 }
             }
             TerminalScreenDirtyState::OscTitleCmd => match byte {
                 b'0' | b'1' | b'2' => {
                     self.state = TerminalScreenDirtyState::OscTitleSeparator;
-                    false
+                    TerminalScreenDmg::Clean
                 }
                 _ => {
                     self.state = TerminalScreenDirtyState::Ground;
-                    true
+                    TerminalScreenDmg::Dirty
                 }
             },
             TerminalScreenDirtyState::OscTitleSeparator => {
                 if byte == b';' {
                     self.state = TerminalScreenDirtyState::TitleBody;
-                    false
+                    TerminalScreenDmg::Clean
                 } else {
                     self.state = TerminalScreenDirtyState::Ground;
-                    true
+                    TerminalScreenDmg::Dirty
                 }
             }
             TerminalScreenDirtyState::TitleBody => match byte {
                 // BEL terminates OSC; `vte` cancels OSC on CAN/SUB so following bytes classify from ground.
                 b'\x07' | b'\x18' | b'\x1a' => {
                     self.state = TerminalScreenDirtyState::Ground;
-                    false
+                    TerminalScreenDmg::Clean
                 }
                 b'\x1b' => {
                     self.state = TerminalScreenDirtyState::TitleBodyEscape;
-                    false
+                    TerminalScreenDmg::Clean
                 }
-                _ => false,
+                _ => TerminalScreenDmg::Clean,
             },
             TerminalScreenDirtyState::TitleBodyEscape => {
                 self.state = TerminalScreenDirtyState::Ground;
-                byte != b'\\'
+                if byte == b'\\' {
+                    TerminalScreenDmg::Clean
+                } else {
+                    TerminalScreenDmg::Dirty
+                }
             }
         }
     }
@@ -200,15 +283,20 @@ pub struct TerminalMouseProtocol {
 }
 
 impl TerminalMouseProtocol {
-    pub const fn reports_event(self, event: ClientMouseEvent) -> bool {
+    pub const fn event_report(self, event: ClientMouseEvent) -> TerminalMouseEventReport {
         let is_motion = event.button & 32 != 0;
         let is_release = matches!(event.phase, ClientMouseEventPhase::Release);
-        match self.mode {
+        let report = match self.mode {
             TerminalMouseProtocolMode::Press => !is_release && !is_motion,
             TerminalMouseProtocolMode::PressRelease => !is_motion,
             // `?1002` button-motion panes must not receive `?1003` hover packets from the outer terminal.
-            TerminalMouseProtocolMode::ButtonMotion => !Self::mouse_event_is_no_button_motion(event),
+            TerminalMouseProtocolMode::ButtonMotion => !(event.button & 32 != 0 && event.button & 0b11 == 0b11),
             TerminalMouseProtocolMode::AnyMotion => true,
+        };
+        if report {
+            TerminalMouseEventReport::Report
+        } else {
+            TerminalMouseEventReport::Drop
         }
     }
 
@@ -220,10 +308,12 @@ impl TerminalMouseProtocol {
             TerminalMouseProtocolMode::PressRelease => PaneMouseMode::PressRelease,
         }
     }
+}
 
-    const fn mouse_event_is_no_button_motion(event: ClientMouseEvent) -> bool {
-        event.button & 32 != 0 && event.button & 0b11 == 0b11
-    }
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TerminalMouseEventReport {
+    Drop,
+    Report,
 }
 
 /// Terminal modes requested by the application running in a pane.
@@ -258,7 +348,22 @@ pub enum TerminalKeyboardProtocol {
     KittyLevelOne,
 }
 
+impl From<u16> for TerminalKeyboardProtocol {
+    fn from(mode: u16) -> Self {
+        if mode & KITTY_KEYBOARD_PROTOCOL_DISAMBIGUATE_ESC_CODES_MODE == 0 {
+            Self::Legacy
+        } else {
+            Self::KittyLevelOne
+        }
+    }
+}
+
 impl TerminalKeyboardProtocol {
+    fn from_params(params: &[&[u16]]) -> Self {
+        let mode = params.first().and_then(|param| param.first()).copied().unwrap_or(0);
+        Self::from(mode)
+    }
+
     #[must_use]
     const fn reply_bytes(self) -> &'static [u8] {
         match self {
@@ -268,19 +373,6 @@ impl TerminalKeyboardProtocol {
     }
 }
 
-const fn keyboard_protocol_from_mode(mode: u16) -> TerminalKeyboardProtocol {
-    if mode & KITTY_KEYBOARD_PROTOCOL_DISAMBIGUATE_ESC_CODES_MODE == 0 {
-        TerminalKeyboardProtocol::Legacy
-    } else {
-        TerminalKeyboardProtocol::KittyLevelOne
-    }
-}
-
-fn keyboard_protocol_from_params(params: &[&[u16]]) -> TerminalKeyboardProtocol {
-    let mode = params.first().and_then(|param| param.first()).copied().unwrap_or(0);
-    self::keyboard_protocol_from_mode(mode)
-}
-
 /// Terminal screen buffer selected by the pane application.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TerminalScreenMode {
@@ -288,33 +380,11 @@ pub enum TerminalScreenMode {
     Normal,
 }
 
-impl TerminalScreenMode {
-    #[must_use]
-    const fn from_alternate_screen(alternate_screen: bool) -> Self {
-        if alternate_screen {
-            Self::Alternate
-        } else {
-            Self::Normal
-        }
-    }
-}
-
 /// Cursor-key escape sequence mode selected by the pane application.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TerminalCursorKeyMode {
     Application,
     Normal,
-}
-
-impl TerminalCursorKeyMode {
-    #[must_use]
-    const fn from_application_cursor(application_cursor: bool) -> Self {
-        if application_cursor {
-            Self::Application
-        } else {
-            Self::Normal
-        }
-    }
 }
 
 /// Focus reporting mode selected by the pane application.
@@ -400,22 +470,21 @@ impl TerminalCallbacks {
         self.keyboard_protocol = TerminalKeyboardProtocol::Legacy;
     }
 
-    fn update_focus_reporting(&mut self, params: &[&[u16]], enabled: bool) {
+    fn update_focus_reporting(&mut self, params: &[&[u16]], action: TerminalPrivateModeAction) {
         if params.iter().any(|param| *param == [FOCUS_REPORTING_MODE]) {
-            self.focus_reporting = if enabled {
-                TerminalFocusReporting::Enabled
-            } else {
-                TerminalFocusReporting::Disabled
+            self.focus_reporting = match action {
+                TerminalPrivateModeAction::Set => TerminalFocusReporting::Enabled,
+                TerminalPrivateModeAction::Reset => TerminalFocusReporting::Disabled,
             };
         }
     }
 
     fn update_keyboard_protocol_level(&mut self, params: &[&[u16]]) {
-        self.keyboard_protocol = self::keyboard_protocol_from_params(params);
+        self.keyboard_protocol = TerminalKeyboardProtocol::from_params(params);
     }
 
     fn set_keyboard_protocol_level(&mut self, params: &[&[u16]]) {
-        let requested = self::keyboard_protocol_from_params(params);
+        let requested = TerminalKeyboardProtocol::from_params(params);
         let behavior = params.get(1).and_then(|param| param.first()).copied();
         if behavior == Some(KITTY_KEYBOARD_PROTOCOL_SET_DIFFERENCE) {
             // Do not reintroduce kitty's full stack/set model; this just prevents a one-bit opt-out from being
@@ -449,8 +518,8 @@ impl vt100::Callbacks for TerminalCallbacks {
         cmd: char,
     ) {
         match (first_intermediate, second_intermediate, cmd) {
-            (Some(b'?'), None, 'h') => self.update_focus_reporting(params, true),
-            (Some(b'?'), None, 'l') => self.update_focus_reporting(params, false),
+            (Some(b'?'), None, 'h') => self.update_focus_reporting(params, TerminalPrivateModeAction::Set),
+            (Some(b'?'), None, 'l') => self.update_focus_reporting(params, TerminalPrivateModeAction::Reset),
             (Some(b' '), None, 'q') => self.update_cursor_shape(params),
             (Some(b'>'), None, 'u') => self.update_keyboard_protocol_level(params),
             (Some(b'='), None, 'u') => self.set_keyboard_protocol_level(params),
@@ -501,10 +570,10 @@ impl TerminalState {
 
     pub fn process(&mut self, bytes: &[u8]) -> TerminalProcessOutcome {
         if bytes.is_empty() {
-            return TerminalProcessOutcome::new(Vec::new(), false);
+            return TerminalProcessOutcome::new(Vec::new(), TerminalScreenDmg::Clean);
         }
 
-        let screen_dirty = self.screen_dirty_detector.process(bytes);
+        let screen_dmg = self.screen_dirty_detector.process(bytes);
         let before_scrollback_len = (self.scrollback.viewport_offset() > 0).then(|| self.total_scrollback_len());
         // Applications running inside the PTY expect terminal DSR/CPR replies on stdin.
         // `vt100` owns escape parsing, so callbacks preserve split-sequence behavior.
@@ -515,7 +584,7 @@ impl TerminalState {
             self.scrollback
                 .scroll_to(self.scrollback.viewport_offset().saturating_add(added_rows));
         }
-        TerminalProcessOutcome::new(self.parser.callbacks_mut().take_replies(), screen_dirty)
+        TerminalProcessOutcome::new(self.parser.callbacks_mut().take_replies(), screen_dmg)
     }
 
     pub fn resize(&mut self, size: &TerminalSize) {
@@ -549,22 +618,26 @@ impl TerminalState {
         self.scrollback.clear_replayed_application_state();
     }
 
-    pub fn scroll(&mut self, direction: PaneScrollDirection) -> bool {
+    pub fn scroll(&mut self, direction: PaneScrollDirection) -> TerminalScrollMove {
         self.scroll_lines(direction, SCROLL_LINES_PER_WHEEL_EVENT)
     }
 
-    pub fn scroll_one_line(&mut self, direction: PaneScrollDirection) -> bool {
+    pub fn scroll_one_line(&mut self, direction: PaneScrollDirection) -> TerminalScrollMove {
         self.scroll_lines(direction, 1)
     }
 
-    fn scroll_lines(&mut self, direction: PaneScrollDirection, lines: usize) -> bool {
-        self.scrollback.scroll_by(direction, lines)
+    fn scroll_lines(&mut self, direction: PaneScrollDirection, lines: usize) -> TerminalScrollMove {
+        TerminalScrollMove::from_scrollback(self.scrollback.scroll_by(direction, lines))
     }
 
-    pub fn scroll_to_bottom(&mut self) -> bool {
+    pub fn scroll_to_bottom(&mut self) -> TerminalScrollMove {
         let before = self.scrollback.viewport_offset();
         self.scrollback.scroll_to(0);
-        self.scrollback.viewport_offset() != before
+        if self.scrollback.viewport_offset() == before {
+            TerminalScrollMove::Unchanged
+        } else {
+            TerminalScrollMove::Moved
+        }
     }
 
     pub fn visible_top_row(&self) -> rootcause::Result<u64> {
@@ -575,7 +648,7 @@ impl TerminalState {
         Ok(u64::try_from(visible_top_row).context("muxr pane visible top row overflowed")?)
     }
 
-    pub fn visible_row_wraps(&self) -> Vec<bool> {
+    pub fn visible_row_wraps(&self) -> Vec<RowWrap> {
         let (screen_rows, _screen_cols) = self.parser.screen().size();
         let height = usize::from(screen_rows);
         let offset = self.scrollback.viewport_offset();
@@ -592,15 +665,27 @@ impl TerminalState {
         wrapped_rows
     }
 
-    pub fn bracketed_paste_enabled(&self) -> bool {
-        self.parser.screen().bracketed_paste()
+    pub fn paste_mode(&self) -> TerminalPasteMode {
+        if self.parser.screen().bracketed_paste() {
+            TerminalPasteMode::Bracketed
+        } else {
+            TerminalPasteMode::Plain
+        }
     }
 
     pub fn application_mode(&self) -> TerminalApplicationMode {
         let screen = self.parser.screen();
         TerminalApplicationMode {
-            screen_mode: TerminalScreenMode::from_alternate_screen(screen.alternate_screen()),
-            cursor_key_mode: TerminalCursorKeyMode::from_application_cursor(screen.application_cursor()),
+            screen_mode: if screen.alternate_screen() {
+                TerminalScreenMode::Alternate
+            } else {
+                TerminalScreenMode::Normal
+            },
+            cursor_key_mode: if screen.application_cursor() {
+                TerminalCursorKeyMode::Application
+            } else {
+                TerminalCursorKeyMode::Normal
+            },
             keyboard_protocol: self.parser.callbacks().keyboard_protocol,
             focus_reporting: self.parser.callbacks().focus_reporting,
             mouse_protocol: self.mouse_protocol(),
@@ -646,7 +731,11 @@ impl TerminalState {
             row: cursor_row,
             col: cursor_col,
             shape: cursor_shape,
-            visible: cursor_visible,
+            visibility: if cursor_visible {
+                muxr_core::RenderCursorVisibility::Visible
+            } else {
+                muxr_core::RenderCursorVisibility::Hidden
+            },
         };
         let visible_rows = self.visible_rows(screen_rows);
         let rows = visible_rows
@@ -701,7 +790,12 @@ impl TerminalState {
             if matches!(*byte, b'\n' | 0x0b | 0x0c)
                 && self
                     .scrollback
-                    .should_capture_linefeed(self.parser.screen().alternate_screen())
+                    .should_capture_linefeed(if self.parser.screen().alternate_screen() {
+                        TerminalScrollbackScreenMode::Alternate
+                    } else {
+                        TerminalScrollbackScreenMode::Normal
+                    })
+                    == TerminalScrollbackCapture::Capture
             {
                 // Top-starting scroll regions can also drop rows through LF at the bottom
                 // boundary. Flush first so vt100's cursor is current before capturing.
@@ -715,7 +809,7 @@ impl TerminalState {
                     self.capture_top_rows(count);
                 }
             }
-            let reset_here = self.reset_detector.observe_byte(*byte);
+            let reset_detection = self.reset_detector.observe_byte(*byte);
             if let Some(action) = self.scrollback.observe_byte(*byte) {
                 match action {
                     TerminalPreParserAction::Printable { width } => {
@@ -725,7 +819,8 @@ impl TerminalState {
                             cursor_col,
                             pending_print_width,
                             width,
-                        ) {
+                        ) == TerminalScrollbackCapture::Capture
+                        {
                             if let Some(pending) = bytes.get(flush_start..index) {
                                 self.parser.process(pending);
                             }
@@ -779,7 +874,7 @@ impl TerminalState {
                     }
                 }
             }
-            if reset_here {
+            if reset_detection == TerminalResetDetection::Detected {
                 if let Some(pending) = bytes.get(flush_start..index.saturating_add(1)) {
                     self.parser.process(pending);
                 }
@@ -801,10 +896,19 @@ impl TerminalState {
         self::screen_rows(screen, rows, cols, row_count)
     }
 
-    fn live_row_wraps(&self, row_count: usize) -> Vec<bool> {
+    fn live_row_wraps(&self, row_count: usize) -> Vec<RowWrap> {
         let screen = self.parser.screen();
         let (rows, _cols) = screen.size();
-        (0..rows).take(row_count).map(|row| screen.row_wrapped(row)).collect()
+        (0..rows)
+            .take(row_count)
+            .map(|row| {
+                if screen.row_wrapped(row) {
+                    RowWrap::EndsWithSoftWrap
+                } else {
+                    RowWrap::EndsBeforeSoftWrap
+                }
+            })
+            .collect()
     }
 
     fn total_scrollback_len(&self) -> usize {
@@ -828,21 +932,22 @@ impl TerminalState {
     }
 }
 
-pub fn paste_input_bytes(bytes: &[u8], bracketed_paste_enabled: bool) -> Vec<u8> {
-    if !bracketed_paste_enabled {
-        return bytes.to_vec();
+pub fn paste_input_bytes(bytes: &[u8], paste_mode: TerminalPasteMode) -> Vec<u8> {
+    match paste_mode {
+        TerminalPasteMode::Plain => bytes.to_vec(),
+        TerminalPasteMode::Bracketed => {
+            let mut framed = Vec::with_capacity(
+                BRACKETED_PASTE_START
+                    .len()
+                    .saturating_add(bytes.len())
+                    .saturating_add(BRACKETED_PASTE_END.len()),
+            );
+            framed.extend_from_slice(BRACKETED_PASTE_START);
+            framed.extend_from_slice(bytes);
+            framed.extend_from_slice(BRACKETED_PASTE_END);
+            framed
+        }
     }
-
-    let mut framed = Vec::with_capacity(
-        BRACKETED_PASTE_START
-            .len()
-            .saturating_add(bytes.len())
-            .saturating_add(BRACKETED_PASTE_END.len()),
-    );
-    framed.extend_from_slice(BRACKETED_PASTE_START);
-    framed.extend_from_slice(bytes);
-    framed.extend_from_slice(BRACKETED_PASTE_END);
-    framed
 }
 
 fn single_csi_param(params: &[&[u16]]) -> Option<u16> {
@@ -873,7 +978,14 @@ fn screen_rows(screen: &vt100::Screen, rows: u16, cols: u16, row_count: usize) -
                         .map_or_else(|| RenderCell::narrow(" ", RenderStyle::default()), render_cell)
                 })
                 .collect();
-            TerminalVisibleRow::new(cells, screen.row_wrapped(row))
+            TerminalVisibleRow::new(
+                cells,
+                if screen.row_wrapped(row) {
+                    RowWrap::EndsWithSoftWrap
+                } else {
+                    RowWrap::EndsBeforeSoftWrap
+                },
+            )
         })
         .collect()
 }
@@ -1033,14 +1145,17 @@ mod tests {
     #[test]
     fn test_paste_input_bytes_when_bracketed_paste_is_enabled_wraps_payload() {
         pretty_assertions::assert_eq!(
-            paste_input_bytes(b"one\ntwo\n", true),
+            paste_input_bytes(b"one\ntwo\n", TerminalPasteMode::Bracketed),
             b"\x1b[200~one\ntwo\n\x1b[201~".to_vec(),
         );
     }
 
     #[test]
     fn test_paste_input_bytes_when_bracketed_paste_is_disabled_preserves_payload() {
-        pretty_assertions::assert_eq!(paste_input_bytes(b"one\ntwo\n", false), b"one\ntwo\n".to_vec());
+        pretty_assertions::assert_eq!(
+            paste_input_bytes(b"one\ntwo\n", TerminalPasteMode::Plain),
+            b"one\ntwo\n".to_vec()
+        );
     }
 
     #[test]
@@ -1206,7 +1321,7 @@ mod tests {
 
         let outcome = terminal.process(bytes);
 
-        assert2::assert!(!outcome.screen_dirty());
+        pretty_assertions::assert_eq!(outcome.screen_dmg(), TerminalScreenDmg::Clean);
         pretty_assertions::assert_eq!(outcome.into_replies(), Vec::<Vec<u8>>::new());
         Ok(())
     }
@@ -1218,9 +1333,9 @@ mod tests {
         let first = terminal.process(b"\x1b]2;");
         let second = terminal.process(b"gst\x07");
 
-        assert2::assert!(!first.screen_dirty());
+        pretty_assertions::assert_eq!(first.screen_dmg(), TerminalScreenDmg::Clean);
         pretty_assertions::assert_eq!(first.into_replies(), Vec::<Vec<u8>>::new());
-        assert2::assert!(!second.screen_dirty());
+        pretty_assertions::assert_eq!(second.screen_dmg(), TerminalScreenDmg::Clean);
         pretty_assertions::assert_eq!(second.into_replies(), Vec::<Vec<u8>>::new());
         pretty_assertions::assert_eq!(terminal.title(), Some("gst".to_owned()));
         Ok(())
@@ -1236,7 +1351,7 @@ mod tests {
     ) -> rootcause::Result<()> {
         let mut terminal = self::terminal_state(&terminal_size()?);
 
-        assert2::assert!(terminal.process(bytes).screen_dirty());
+        pretty_assertions::assert_eq!(terminal.process(bytes).screen_dmg(), TerminalScreenDmg::Dirty);
         Ok(())
     }
 
@@ -1246,7 +1361,7 @@ mod tests {
 
         let _ = terminal.process(b"one\ntwo\nthree");
 
-        assert2::assert!(terminal.scroll(PaneScrollDirection::Up));
+        pretty_assertions::assert_eq!(terminal.scroll(PaneScrollDirection::Up), TerminalScrollMove::Moved);
         let rendered = self::snapshot_text(&terminal.snapshot()?);
         assert2::assert!(rendered.contains("one"));
         Ok(())
@@ -1264,7 +1379,10 @@ mod tests {
 
         let _ = terminal.process(output.as_bytes());
 
-        assert2::assert!(terminal.scroll_one_line(PaneScrollDirection::Up));
+        pretty_assertions::assert_eq!(
+            terminal.scroll_one_line(PaneScrollDirection::Up),
+            TerminalScrollMove::Moved,
+        );
         let rendered = self::snapshot_text(&terminal.snapshot()?);
 
         assert2::assert!(rendered.contains("row-16"));
@@ -1283,7 +1401,7 @@ mod tests {
 
         let _ = terminal.process(output.as_bytes());
         for _ in 0..20 {
-            terminal.scroll_one_line(PaneScrollDirection::Up);
+            let _movement = terminal.scroll_one_line(PaneScrollDirection::Up);
         }
         let rendered = self::snapshot_text(&terminal.snapshot()?);
 
@@ -1301,7 +1419,10 @@ mod tests {
         terminal.clear_replayed_application_state();
         let _ = terminal.process(b"one\r\ntwo\r\nthree");
 
-        assert2::assert!(terminal.scroll_one_line(PaneScrollDirection::Up));
+        pretty_assertions::assert_eq!(
+            terminal.scroll_one_line(PaneScrollDirection::Up),
+            TerminalScrollMove::Moved,
+        );
         let rendered = self::snapshot_text(&terminal.snapshot()?);
 
         assert2::assert!(rendered.contains("one"));
@@ -1317,7 +1438,7 @@ mod tests {
 
         let mut rendered = Vec::new();
         rendered.push(self::snapshot_text(&terminal.snapshot()?));
-        while terminal.scroll_one_line(PaneScrollDirection::Up) {
+        while terminal.scroll_one_line(PaneScrollDirection::Up) == TerminalScrollMove::Moved {
             rendered.push(self::snapshot_text(&terminal.snapshot()?));
         }
         let rendered = rendered.join("\n");
@@ -1337,11 +1458,17 @@ mod tests {
         let _ = terminal.process(b"top\r\nabc");
         let _ = terminal.process(b"d");
 
-        assert2::assert!(!terminal.scroll_one_line(PaneScrollDirection::Up));
+        pretty_assertions::assert_eq!(
+            terminal.scroll_one_line(PaneScrollDirection::Up),
+            TerminalScrollMove::Unchanged,
+        );
 
         let _ = terminal.process(b"e");
 
-        assert2::assert!(terminal.scroll_one_line(PaneScrollDirection::Up));
+        pretty_assertions::assert_eq!(
+            terminal.scroll_one_line(PaneScrollDirection::Up),
+            TerminalScrollMove::Moved,
+        );
         let rendered = self::snapshot_text(&terminal.snapshot()?);
         assert2::assert!(rendered.contains("top"));
         Ok(())
@@ -1354,7 +1481,10 @@ mod tests {
         let _ = terminal.process(b"top\r\nabc");
         let _ = terminal.process("字".as_bytes());
 
-        assert2::assert!(terminal.scroll_one_line(PaneScrollDirection::Up));
+        pretty_assertions::assert_eq!(
+            terminal.scroll_one_line(PaneScrollDirection::Up),
+            TerminalScrollMove::Moved,
+        );
         let rendered = self::snapshot_text(&terminal.snapshot()?);
         assert2::assert!(rendered.contains("top"));
         Ok(())
@@ -1368,7 +1498,10 @@ mod tests {
         let _ = terminal.process(b"\x1b[?1049h\x1b[2;3r\x1b[?1049l");
         let _ = terminal.process(b"one\r\ntwo\r\nthree\r\nfour");
 
-        assert2::assert!(terminal.scroll_one_line(PaneScrollDirection::Up));
+        pretty_assertions::assert_eq!(
+            terminal.scroll_one_line(PaneScrollDirection::Up),
+            TerminalScrollMove::Moved,
+        );
         let rendered = self::snapshot_text(&terminal.snapshot()?);
         assert2::assert!(rendered.contains("one"));
         Ok(())
@@ -1411,7 +1544,7 @@ mod tests {
     fn test_terminal_state_scrollback_dump_when_viewport_is_scrolled_preserves_viewport() -> rootcause::Result<()> {
         let mut terminal = self::terminal_state(&TerminalSize::new(8, 2)?);
         let _ = terminal.process(b"one\r\ntwo\r\nthree");
-        assert2::assert!(terminal.scroll(PaneScrollDirection::Up));
+        pretty_assertions::assert_eq!(terminal.scroll(PaneScrollDirection::Up), TerminalScrollMove::Moved);
         let before = terminal.snapshot()?;
 
         let _dump = self::test_scrollback_dump(&terminal, ScrollbackDumpStyle::PlainText)?;
@@ -1455,13 +1588,13 @@ mod tests {
         let mut terminal = self::terminal_state(&TerminalSize::new(8, 2)?);
 
         let _ = terminal.process(b"one\ntwo\nthree");
-        assert2::assert!(terminal.scroll(PaneScrollDirection::Up));
+        pretty_assertions::assert_eq!(terminal.scroll(PaneScrollDirection::Up), TerminalScrollMove::Moved);
 
-        assert2::assert!(terminal.scroll_to_bottom());
+        pretty_assertions::assert_eq!(terminal.scroll_to_bottom(), TerminalScrollMove::Moved);
         let rendered = self::snapshot_text(&terminal.snapshot()?);
 
         assert2::assert!(rendered.contains("three"));
-        assert2::assert!(!terminal.scroll_to_bottom());
+        pretty_assertions::assert_eq!(terminal.scroll_to_bottom(), TerminalScrollMove::Unchanged);
         Ok(())
     }
 
@@ -1473,7 +1606,7 @@ mod tests {
         let _ = terminal.process(b"\x1b[1;1Hone\x1b[2;1Htwo\x1b[3;1Hthree\x1b[4;1Hprompt");
         let _ = terminal.process(b"\x1b[1;3r\x1b[2S\x1b[r");
 
-        assert2::assert!(terminal.scroll(PaneScrollDirection::Up));
+        pretty_assertions::assert_eq!(terminal.scroll(PaneScrollDirection::Up), TerminalScrollMove::Moved);
         let rendered = self::snapshot_text(&terminal.snapshot()?);
 
         assert2::assert!(rendered.contains("one"));
@@ -1516,7 +1649,7 @@ mod tests {
         let _ = terminal.process(b"\x1b[1;3r\x1b[");
         let _ = terminal.process(b"2S\x1b[r");
 
-        assert2::assert!(terminal.scroll(PaneScrollDirection::Up));
+        pretty_assertions::assert_eq!(terminal.scroll(PaneScrollDirection::Up), TerminalScrollMove::Moved);
         let rendered = self::snapshot_text(&terminal.snapshot()?);
 
         assert2::assert!(rendered.contains("one"));
@@ -1533,7 +1666,10 @@ mod tests {
         let _ = terminal.process(b"\x1b[1;1Hcod-0\x1b[2;1Hcod-1\x1b[3;1Hcod-2\x1b[4;1Hprompt");
         let _ = terminal.process(b"\x1b[1;3r\x1b[3;1H\n\x1b[r");
 
-        assert2::assert!(terminal.scroll_one_line(PaneScrollDirection::Up));
+        pretty_assertions::assert_eq!(
+            terminal.scroll_one_line(PaneScrollDirection::Up),
+            TerminalScrollMove::Moved,
+        );
         let rendered = self::snapshot_text(&terminal.snapshot()?);
 
         assert2::assert!(rendered.contains("cod-0"));
@@ -1549,7 +1685,7 @@ mod tests {
         let _ = terminal.process(b"\x1b[?1049h\x1b[1;1Hone\x1b[2;1Htwo\x1b[3;1Hthree\x1b[4;1Hprompt");
         let _ = terminal.process(b"\x1b[1;3r\x1b[3;1H\n\x1b[r");
 
-        assert2::assert!(!terminal.scroll(PaneScrollDirection::Up));
+        pretty_assertions::assert_eq!(terminal.scroll(PaneScrollDirection::Up), TerminalScrollMove::Unchanged);
         Ok(())
     }
 
@@ -1561,7 +1697,7 @@ mod tests {
         let _ = terminal.process(b"\x1b[1;1Hone\x1b[2;1Htwo\x1b[3;1Hthree\x1b[4;1Hprompt");
         let _ = terminal.process(b"\x1b[1;3r\x1b[1;1H\x1b[2M\x1b[r");
 
-        assert2::assert!(terminal.scroll(PaneScrollDirection::Up));
+        pretty_assertions::assert_eq!(terminal.scroll(PaneScrollDirection::Up), TerminalScrollMove::Moved);
         let rendered = self::snapshot_text(&terminal.snapshot()?);
 
         assert2::assert!(rendered.contains("one"));
@@ -1577,7 +1713,7 @@ mod tests {
         let _ = terminal.process(b"\x1b[1;1Hone\x1b[2;1Htwo\x1b[3;1Hthree\x1b[4;1Hprompt");
         let _ = terminal.process(b"\x1b[1;4r\x1b[1;1H\x1b[2M\x1b[r");
 
-        assert2::assert!(terminal.scroll(PaneScrollDirection::Up));
+        pretty_assertions::assert_eq!(terminal.scroll(PaneScrollDirection::Up), TerminalScrollMove::Moved);
         let rendered = self::snapshot_text(&terminal.snapshot()?);
 
         assert2::assert!(rendered.contains("one"));
@@ -1593,7 +1729,7 @@ mod tests {
         let _ = terminal.process(b"\x1b[1;1Hone\x1b[2;1Htwo\x1b[3;1Hthree\x1b[4;1Hprompt");
         let _ = terminal.process(b"\x1b[1;3r\x1b[2;1H\x1b[2M\x1b[r");
 
-        assert2::assert!(!terminal.scroll(PaneScrollDirection::Up));
+        pretty_assertions::assert_eq!(terminal.scroll(PaneScrollDirection::Up), TerminalScrollMove::Unchanged);
         Ok(())
     }
 
@@ -1605,7 +1741,7 @@ mod tests {
         let _ = terminal.process(b"\x1b[?1049h\x1b[1;1Hone\x1b[2;1Htwo\x1b[3;1Hthree\x1b[4;1Hprompt");
         let _ = terminal.process(b"\x1b[1;4r\x1b[1;1H\x1b[2M\x1b[r");
 
-        assert2::assert!(!terminal.scroll(PaneScrollDirection::Up));
+        pretty_assertions::assert_eq!(terminal.scroll(PaneScrollDirection::Up), TerminalScrollMove::Unchanged);
         Ok(())
     }
 
@@ -1617,7 +1753,7 @@ mod tests {
         let _ = terminal.process(b"\x1b[?1049h\x1b[1;1Hone\x1b[2;1Htwo\x1b[3;1Hthree\x1b[4;1Hprompt");
         let _ = terminal.process(b"\x1b[1;3r\x1b[2S\x1b[r");
 
-        assert2::assert!(!terminal.scroll(PaneScrollDirection::Up));
+        pretty_assertions::assert_eq!(terminal.scroll(PaneScrollDirection::Up), TerminalScrollMove::Unchanged);
         Ok(())
     }
 
@@ -1629,7 +1765,7 @@ mod tests {
         let _ = terminal.process(b"\x1b[?1049h\x1b[1;1Hone\x1b[2;1Htwo\x1b[3;1Hthree\x1b[4;1Hprompt");
         let _ = terminal.process(b"\x1b[1;4r\x1b[2S\x1b[r");
 
-        assert2::assert!(!terminal.scroll(PaneScrollDirection::Up));
+        pretty_assertions::assert_eq!(terminal.scroll(PaneScrollDirection::Up), TerminalScrollMove::Unchanged);
         Ok(())
     }
 
@@ -1642,7 +1778,7 @@ mod tests {
         let _ = terminal.process(b"\x1b[1;4r\x1b[2S\x1b[r");
 
         pretty_assertions::assert_eq!(terminal.total_scrollback_len(), 2);
-        assert2::assert!(terminal.scroll(PaneScrollDirection::Up));
+        pretty_assertions::assert_eq!(terminal.scroll(PaneScrollDirection::Up), TerminalScrollMove::Moved);
         let rendered = self::snapshot_text(&terminal.snapshot()?);
 
         assert2::assert!(rendered.contains("one"));
@@ -1656,7 +1792,7 @@ mod tests {
 
         let _ = terminal.process(b"one\ntwo\nthree");
         let bottom_top_row = terminal.visible_top_row()?;
-        assert2::assert!(terminal.scroll(PaneScrollDirection::Up));
+        pretty_assertions::assert_eq!(terminal.scroll(PaneScrollDirection::Up), TerminalScrollMove::Moved);
         let scrolled_snapshot = self::snapshot_text(&terminal.snapshot()?);
 
         let scrolled_top_row = terminal.visible_top_row()?;
@@ -1672,7 +1808,10 @@ mod tests {
 
         let _ = terminal.process(b"abcdx");
 
-        pretty_assertions::assert_eq!(terminal.visible_row_wraps(), vec![true, false]);
+        pretty_assertions::assert_eq!(
+            terminal.visible_row_wraps(),
+            vec![RowWrap::EndsWithSoftWrap, RowWrap::EndsBeforeSoftWrap]
+        );
         Ok(())
     }
 
@@ -1682,7 +1821,7 @@ mod tests {
 
         let _ = terminal.process(b"\x1b[?2004h");
 
-        assert2::assert!(terminal.bracketed_paste_enabled());
+        assert2::assert!(terminal.paste_mode() == TerminalPasteMode::Bracketed);
         Ok(())
     }
 
@@ -1704,18 +1843,21 @@ mod tests {
             terminal.application_mode().pane_mouse_mode(),
             PaneMouseMode::ButtonMotion
         );
-        assert2::assert!(terminal.application_mode().pane_mouse_mode().tracking_enabled());
+        pretty_assertions::assert_eq!(
+            terminal.application_mode().pane_mouse_mode(),
+            PaneMouseMode::ButtonMotion
+        );
         Ok(())
     }
 
     #[rstest]
-    #[case::alternate_47_enabled(b"\x1b[?47h", true)]
-    #[case::alternate_1049_enabled(b"\x1b[?1049h", true)]
-    #[case::alternate_47_disabled(b"\x1b[?47h\x1b[?47l", false)]
-    #[case::alternate_1049_disabled(b"\x1b[?1049h\x1b[?1049l", false)]
+    #[case::alternate_47_enabled(b"\x1b[?47h", TerminalScreenMode::Alternate)]
+    #[case::alternate_1049_enabled(b"\x1b[?1049h", TerminalScreenMode::Alternate)]
+    #[case::alternate_47_disabled(b"\x1b[?47h\x1b[?47l", TerminalScreenMode::Normal)]
+    #[case::alternate_1049_disabled(b"\x1b[?1049h\x1b[?1049l", TerminalScreenMode::Normal)]
     fn test_terminal_state_application_mode_when_alternate_screen_changes_returns_state(
         #[case] bytes: &[u8],
-        #[case] expected: bool,
+        #[case] expected: TerminalScreenMode,
     ) -> rootcause::Result<()> {
         let mut terminal = self::terminal_state(&terminal_size()?);
 
@@ -1724,7 +1866,7 @@ mod tests {
         pretty_assertions::assert_eq!(
             terminal.application_mode(),
             TerminalApplicationMode {
-                screen_mode: TerminalScreenMode::from_alternate_screen(expected),
+                screen_mode: expected,
                 cursor_key_mode: TerminalCursorKeyMode::Normal,
                 keyboard_protocol: TerminalKeyboardProtocol::Legacy,
                 focus_reporting: TerminalFocusReporting::Disabled,
@@ -1735,11 +1877,11 @@ mod tests {
     }
 
     #[rstest]
-    #[case::application_cursor_enabled(b"\x1b[?1h", true)]
-    #[case::application_cursor_disabled(b"\x1b[?1h\x1b[?1l", false)]
+    #[case::application_cursor_enabled(b"\x1b[?1h", TerminalCursorKeyMode::Application)]
+    #[case::application_cursor_disabled(b"\x1b[?1h\x1b[?1l", TerminalCursorKeyMode::Normal)]
     fn test_terminal_state_application_mode_when_application_cursor_changes_returns_state(
         #[case] bytes: &[u8],
-        #[case] expected: bool,
+        #[case] expected: TerminalCursorKeyMode,
     ) -> rootcause::Result<()> {
         let mut terminal = self::terminal_state(&terminal_size()?);
 
@@ -1749,7 +1891,7 @@ mod tests {
             terminal.application_mode(),
             TerminalApplicationMode {
                 screen_mode: TerminalScreenMode::Normal,
-                cursor_key_mode: TerminalCursorKeyMode::from_application_cursor(expected),
+                cursor_key_mode: expected,
                 keyboard_protocol: TerminalKeyboardProtocol::Legacy,
                 focus_reporting: TerminalFocusReporting::Disabled,
                 mouse_protocol: None,
@@ -1776,7 +1918,11 @@ mod tests {
             terminal.application_mode(),
             TerminalApplicationMode {
                 screen_mode: TerminalScreenMode::Normal,
-                cursor_key_mode: TerminalCursorKeyMode::from_application_cursor(bytes == b"\x1b[?1;1004h"),
+                cursor_key_mode: if bytes == b"\x1b[?1;1004h" {
+                    TerminalCursorKeyMode::Application
+                } else {
+                    TerminalCursorKeyMode::Normal
+                },
                 keyboard_protocol: TerminalKeyboardProtocol::Legacy,
                 focus_reporting: expected,
                 mouse_protocol: None,

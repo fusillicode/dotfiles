@@ -70,9 +70,18 @@ impl ScrollbackEditorRestoreOutcome {
         Self { editor_pane_id: None }
     }
 
-    pub const fn restored(self) -> bool {
-        self.editor_pane_id.is_some()
+    pub const fn status(self) -> ScrollbackEditorRestoreStatus {
+        match self.editor_pane_id {
+            Some(_) => ScrollbackEditorRestoreStatus::Restored,
+            None => ScrollbackEditorRestoreStatus::Unchanged,
+        }
     }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ScrollbackEditorRestoreStatus {
+    Restored,
+    Unchanged,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -82,21 +91,29 @@ pub enum ScrollbackEditorCmdAction {
     Run(ClientCmd),
 }
 
-pub const fn cmd_action(cmd: ClientCmd, editor_active: bool) -> ScrollbackEditorCmdAction {
-    if !editor_active {
-        return ScrollbackEditorCmdAction::Run(cmd);
+impl ScrollbackEditorCmdAction {
+    pub const fn from_cmd(cmd: ClientCmd, editor_activity: ScrollbackEditorActivity) -> Self {
+        if matches!(editor_activity, ScrollbackEditorActivity::Inactive) {
+            return Self::Run(cmd);
+        }
+        match cmd {
+            ClientCmd::ClosePane => Self::Restore,
+            ClientCmd::OpenScrollbackEditor
+            | ClientCmd::SplitPane(_)
+            | ClientCmd::FocusPane(_)
+            | ClientCmd::EnterResizeMode
+            | ClientCmd::ExitMode
+            | ClientCmd::ResizePane(_)
+            | ClientCmd::Tab(_)
+            | ClientCmd::TogglePaneFullscreen => Self::Ignore,
+        }
     }
-    match cmd {
-        ClientCmd::ClosePane => ScrollbackEditorCmdAction::Restore,
-        ClientCmd::OpenScrollbackEditor
-        | ClientCmd::SplitPane(_)
-        | ClientCmd::FocusPane(_)
-        | ClientCmd::EnterResizeMode
-        | ClientCmd::ExitMode
-        | ClientCmd::ResizePane(_)
-        | ClientCmd::Tab(_)
-        | ClientCmd::TogglePaneFullscreen => ScrollbackEditorCmdAction::Ignore,
-    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ScrollbackEditorActivity {
+    Active,
+    Inactive,
 }
 
 pub fn handle_open_client_request(
@@ -181,7 +198,7 @@ pub fn write_focus_lost_if_live(
         return Ok(());
     }
     let handle = runtimes.handle(editor_pane_id)?;
-    if !handle.has_exited() {
+    if handle.exit_state() == crate::pty::PtyExitState::Running {
         // The editor is about to be restored or closed while focus is active. Notify focus-reporting apps before the
         // PTY disappears; the restored original pane receives FocusGained after restore.
         handle.write_focus_event(TerminalFocusEvent::Lost)?;
@@ -212,7 +229,7 @@ impl SessionLayout {
             title: metadata.cmd_label,
         };
 
-        if !tab.pane_tree.replace_pane(active_pane, editor_pane)? {
+        if tab.pane_tree.replace_pane(active_pane, editor_pane)? == PaneReplacement::Missing {
             return Err(
                 report!("muxr active pane is missing from server layout").attach(format!("pane_id={active_pane}"))
             );
@@ -223,21 +240,27 @@ impl SessionLayout {
 }
 
 impl PaneTree {
-    fn replace_pane(&mut self, pane_id: PaneId, new_pane: Pane) -> rootcause::Result<bool> {
+    fn replace_pane(&mut self, pane_id: PaneId, new_pane: Pane) -> rootcause::Result<PaneReplacement> {
         match self {
             Self::Pane(pane) if pane.id == pane_id => {
                 *pane = new_pane;
-                Ok(true)
+                Ok(PaneReplacement::Replaced)
             }
-            Self::Pane(_) => Ok(false),
+            Self::Pane(_) => Ok(PaneReplacement::Missing),
             Self::Split { first, second, .. } => {
-                if first.replace_pane(pane_id, new_pane.clone())? {
-                    return Ok(true);
+                if first.replace_pane(pane_id, new_pane.clone())? == PaneReplacement::Replaced {
+                    return Ok(PaneReplacement::Replaced);
                 }
                 second.replace_pane(pane_id, new_pane)
             }
         }
     }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum PaneReplacement {
+    Missing,
+    Replaced,
 }
 
 fn create_focused_pane_dump(
@@ -491,32 +514,40 @@ mod tests {
     #[rstest::rstest]
     #[case::inactive_runs(
         ClientCmd::SplitPane(PaneSplitAxis::Vertical),
-        false,
+        ScrollbackEditorActivity::Inactive,
         ScrollbackEditorCmdAction::Run(ClientCmd::SplitPane(PaneSplitAxis::Vertical))
     )]
-    #[case::active_close_restores(ClientCmd::ClosePane, true, ScrollbackEditorCmdAction::Restore)]
+    #[case::active_close_restores(
+        ClientCmd::ClosePane,
+        ScrollbackEditorActivity::Active,
+        ScrollbackEditorCmdAction::Restore
+    )]
     #[case::active_split_is_ignored(
         ClientCmd::SplitPane(PaneSplitAxis::Vertical),
-        true,
+        ScrollbackEditorActivity::Active,
         ScrollbackEditorCmdAction::Ignore
     )]
-    #[case::active_create_tab_is_ignored(ClientCmd::Tab(TabCmd::Create), true, ScrollbackEditorCmdAction::Ignore)]
+    #[case::active_create_tab_is_ignored(
+        ClientCmd::Tab(TabCmd::Create),
+        ScrollbackEditorActivity::Active,
+        ScrollbackEditorCmdAction::Ignore
+    )]
     #[case::active_open_scrollback_editor_is_ignored(
         ClientCmd::OpenScrollbackEditor,
-        true,
+        ScrollbackEditorActivity::Active,
         ScrollbackEditorCmdAction::Ignore
     )]
     #[case::active_focus_pane_is_ignored(
         ClientCmd::FocusPane(PaneFocusDirection::Right),
-        true,
+        ScrollbackEditorActivity::Active,
         ScrollbackEditorCmdAction::Ignore
     )]
     fn test_scrollback_editor_cmd_action_when_editor_mode_is_active_blocks_layout_mutations(
         #[case] cmd: ClientCmd,
-        #[case] editor_active: bool,
+        #[case] editor_activity: ScrollbackEditorActivity,
         #[case] expected: ScrollbackEditorCmdAction,
     ) {
-        pretty_assertions::assert_eq!(self::cmd_action(cmd, editor_active), expected);
+        pretty_assertions::assert_eq!(ScrollbackEditorCmdAction::from_cmd(cmd, editor_activity), expected);
     }
 
     #[test]
@@ -796,7 +827,7 @@ mod tests {
                 .iter()
                 .flat_map(|row| row.cells().iter().map(RenderCell::text))
                 .collect::<String>();
-            if self::snapshot_contains(&rendered, needle) {
+            if SnapshotMatch::from_rendered(&rendered, needle) == SnapshotMatch::Contains {
                 return Ok(());
             }
             if started_at.elapsed() > Duration::from_secs(2) {
@@ -820,14 +851,27 @@ mod tests {
             .ok_or_else(|| report!("test instant overflowed"))
     }
 
-    fn snapshot_contains(rendered: &str, needle: &str) -> bool {
-        if rendered.contains(needle) {
-            return true;
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    enum SnapshotMatch {
+        Contains,
+        Missing,
+    }
+
+    impl SnapshotMatch {
+        fn from_rendered(rendered: &str, needle: &str) -> Self {
+            if rendered.contains(needle) {
+                return Self::Contains;
+            }
+            let needle_tokens = needle.split_whitespace().collect::<Vec<_>>();
+            let rendered_tokens = rendered.split_whitespace().collect::<Vec<_>>();
+            if rendered_tokens
+                .windows(needle_tokens.len())
+                .any(|window| window == needle_tokens.as_slice())
+            {
+                Self::Contains
+            } else {
+                Self::Missing
+            }
         }
-        let needle_tokens = needle.split_whitespace().collect::<Vec<_>>();
-        let rendered_tokens = rendered.split_whitespace().collect::<Vec<_>>();
-        rendered_tokens
-            .windows(needle_tokens.len())
-            .any(|window| window == needle_tokens.as_slice())
     }
 }

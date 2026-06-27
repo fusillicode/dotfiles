@@ -16,9 +16,19 @@ pub struct DeleteSessions {
     requested: AtomicBool,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum DeleteSessionRequest {
+    NotRequested,
+    Requested,
+}
+
 impl DeleteSessions {
-    pub fn is_requested(&self) -> bool {
-        self.requested.load(Ordering::Acquire)
+    pub fn request_state(&self) -> DeleteSessionRequest {
+        if self.requested.load(Ordering::Acquire) {
+            DeleteSessionRequest::Requested
+        } else {
+            DeleteSessionRequest::NotRequested
+        }
     }
 
     pub fn request(&self) {

@@ -88,10 +88,13 @@ impl PtyWriter {
                 drop(queue_guard);
                 return Err(error);
             }
-            if !self.state.reserve_write_bytes(&mut queue_guard, write_len)? {
-                let observed_progress = queue_guard.progress_version;
-                queue_guard = self.state.wait_for_queue_progress(queue_guard, observed_progress)?;
-                continue;
+            match self.state.reserve_write_bytes(&mut queue_guard, write_len)? {
+                PtyWriteReservation::Reserved => {}
+                PtyWriteReservation::WouldBlock => {
+                    let observed_progress = queue_guard.progress_version;
+                    queue_guard = self.state.wait_for_queue_progress(queue_guard, observed_progress)?;
+                    continue;
+                }
             }
             match self.sender.try_send(PtyWriteRequest::Write(write)) {
                 Ok(()) => {
@@ -197,8 +200,8 @@ impl PtyWriteState {
         Ok(())
     }
 
-    fn is_closed(&self) -> rootcause::Result<bool> {
-        Ok(self::lock_queue_mutex(&self.queue)?.status.is_stopped())
+    fn stop_state(&self) -> rootcause::Result<PtyWriterStopState> {
+        Ok(self::lock_queue_mutex(&self.queue)?.status.stop_state())
     }
 
     fn ensure_open(queue: &PtyWriteQueueState) -> rootcause::Result<()> {
@@ -221,7 +224,11 @@ impl PtyWriteState {
         self.notify_queue_progress();
     }
 
-    fn reserve_write_bytes(&self, queue: &mut PtyWriteQueueState, write_len: usize) -> rootcause::Result<bool> {
+    fn reserve_write_bytes(
+        &self,
+        queue: &mut PtyWriteQueueState,
+        write_len: usize,
+    ) -> rootcause::Result<PtyWriteReservation> {
         if write_len > self.byte_limit {
             return Err(report!("muxr pty write exceeded queue byte limit")
                 .attach(format!("write_len={write_len}"))
@@ -233,13 +240,13 @@ impl PtyWriteState {
                 .attach(format!("byte_limit={}", self.byte_limit)));
         };
         if write_len > remaining {
-            return Ok(false);
+            return Ok(PtyWriteReservation::WouldBlock);
         }
         queue.queued_bytes = queue
             .queued_bytes
             .checked_add(write_len)
             .ok_or_else(|| report!("muxr pty write queue byte accounting overflowed"))?;
-        Ok(true)
+        Ok(PtyWriteReservation::Reserved)
     }
 
     const fn release_reserved_write_bytes(queue: &mut PtyWriteQueueState, write_len: usize) {
@@ -274,7 +281,7 @@ impl PtyWriteState {
     ) -> rootcause::Result<MutexGuard<'a, PtyWriteQueueState>> {
         self.queue_progress
             .wait_while(guard, |queue| {
-                !queue.status.is_stopped() && queue.progress_version == observed_progress
+                queue.status.stop_state() == PtyWriterStopState::Open && queue.progress_version == observed_progress
             })
             .map_err(|_| report!("poisoned muxr pty writer queue mutex"))
     }
@@ -306,15 +313,30 @@ impl PtyWriterStatus {
         }
     }
 
-    const fn is_stopped(&self) -> bool {
-        !matches!(self, Self::Open)
+    const fn stop_state(&self) -> PtyWriterStopState {
+        match self {
+            Self::Open => PtyWriterStopState::Open,
+            Self::Closed | Self::Failed(_) => PtyWriterStopState::Stopped,
+        }
     }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum PtyWriterStopState {
+    Open,
+    Stopped,
 }
 
 struct PtyWriteQueueState {
     status: PtyWriterStatus,
     progress_version: u64,
     queued_bytes: usize,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum PtyWriteReservation {
+    Reserved,
+    WouldBlock,
 }
 
 const fn advance_queue_progress(queue: &mut PtyWriteQueueState) {
@@ -359,12 +381,12 @@ fn queue_pty_write(
 fn run_writer_loop(writer: &mut dyn Write, receiver: &mpsc::Receiver<PtyWriteRequest>, state: &PtyWriteState) {
     let mut batch = Vec::new();
     loop {
-        let request = match state.is_closed() {
-            Ok(true) => match receiver.try_recv() {
+        let request = match state.stop_state() {
+            Ok(PtyWriterStopState::Stopped) => match receiver.try_recv() {
                 Ok(request) => request,
                 Err(mpsc::TryRecvError::Empty | mpsc::TryRecvError::Disconnected) => break,
             },
-            Ok(false) => match receiver.recv() {
+            Ok(PtyWriterStopState::Open) => match receiver.recv() {
                 Ok(request) => request,
                 Err(_) => break,
             },
@@ -377,7 +399,7 @@ fn run_writer_loop(writer: &mut dyn Write, receiver: &mpsc::Receiver<PtyWriteReq
             PtyWriteRequest::Write(write) => {
                 let mut batch_bytes = write.bytes.len();
                 batch.push(write);
-                let shutdown = self::drain_pending_writes(receiver, &mut batch, &mut batch_bytes);
+                let drain_outcome = self::drain_pending_writes(receiver, &mut batch, &mut batch_bytes);
                 let write_result = self::write_pty_batch(writer, &batch);
                 state.release_queued_bytes(batch_bytes);
                 if let Err(error) = write_result {
@@ -387,7 +409,7 @@ fn run_writer_loop(writer: &mut dyn Write, receiver: &mpsc::Receiver<PtyWriteReq
                     break;
                 }
                 batch.clear();
-                if shutdown {
+                if drain_outcome == PtyWriteDrainOutcome::Shutdown {
                     break;
                 }
             }
@@ -400,20 +422,28 @@ fn drain_pending_writes(
     receiver: &mpsc::Receiver<PtyWriteRequest>,
     batch: &mut Vec<PtyWrite>,
     batch_bytes: &mut usize,
-) -> bool {
+) -> PtyWriteDrainOutcome {
     loop {
         if batch.len() >= PTY_WRITE_BATCH_MAX_MESSAGES || *batch_bytes >= PTY_WRITE_BATCH_MAX_BYTES {
-            return false;
+            return PtyWriteDrainOutcome::Continue;
         }
         match receiver.try_recv() {
             Ok(PtyWriteRequest::Write(write)) => {
                 *batch_bytes = batch_bytes.saturating_add(write.bytes.len());
                 batch.push(write);
             }
-            Ok(PtyWriteRequest::Shutdown) | Err(mpsc::TryRecvError::Disconnected) => return true,
-            Err(mpsc::TryRecvError::Empty) => return false,
+            Ok(PtyWriteRequest::Shutdown) | Err(mpsc::TryRecvError::Disconnected) => {
+                return PtyWriteDrainOutcome::Shutdown;
+            }
+            Err(mpsc::TryRecvError::Empty) => return PtyWriteDrainOutcome::Continue,
         }
     }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum PtyWriteDrainOutcome {
+    Continue,
+    Shutdown,
 }
 
 fn write_pty_batch(writer: &mut dyn Write, batch: &[PtyWrite]) -> rootcause::Result<()> {

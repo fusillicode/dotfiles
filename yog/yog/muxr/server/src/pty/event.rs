@@ -12,7 +12,14 @@ pub enum PtyEvent {
 pub struct PtyExitStatus {
     pub code: u32,
     pub signal: Option<String>,
-    pub success: bool,
+    pub result: PtyExitResult,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PtyExitResult {
+    Failed,
+    Succeeded,
 }
 
 impl From<&ExitStatus> for PtyExitStatus {
@@ -20,7 +27,11 @@ impl From<&ExitStatus> for PtyExitStatus {
         Self {
             code: status.exit_code(),
             signal: status.signal().map(ToOwned::to_owned),
-            success: status.success(),
+            result: if status.success() {
+                PtyExitResult::Succeeded
+            } else {
+                PtyExitResult::Failed
+            },
         }
     }
 }

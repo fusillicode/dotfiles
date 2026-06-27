@@ -16,48 +16,63 @@ pub enum TabFocusClientOutcome {
     Unchanged,
 }
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum TabFocusChange {
+    Changed,
+    #[default]
+    Unchanged,
+}
+
 impl SessionLayout {
-    pub fn focus_tab(&mut self, tab_id: TabId) -> rootcause::Result<bool> {
+    pub fn focus_tab(&mut self, tab_id: TabId) -> rootcause::Result<TabFocusChange> {
         if self.active_tab == tab_id {
-            return Ok(false);
+            return Ok(TabFocusChange::Unchanged);
         }
         if !self.entries.iter().any(|tab| tab.id == tab_id) {
-            return Ok(false);
+            return Ok(TabFocusChange::Unchanged);
         }
         self.active_tab = tab_id;
         let _acknowledged = self.acknowledge_active_pane_attention()?;
-        Ok(true)
+        Ok(TabFocusChange::Changed)
     }
 
-    pub fn focus_previous_tab(&mut self) -> rootcause::Result<()> {
+    pub fn focus_previous_tab(&mut self) -> rootcause::Result<TabFocusChange> {
         let tab_index = self.active_tab_index()?;
         let previous_index = if tab_index == 0 {
             self.entries.len().saturating_sub(1)
         } else {
             tab_index.saturating_sub(1)
         };
-        self.active_tab = self
+        let previous_tab = self
             .entries
             .get(previous_index)
             .ok_or_else(|| report!("muxr previous tab is missing from server layout"))?
             .id;
+        if self.active_tab == previous_tab {
+            return Ok(TabFocusChange::Unchanged);
+        }
+        self.active_tab = previous_tab;
         let _acknowledged = self.acknowledge_active_pane_attention()?;
-        Ok(())
+        Ok(TabFocusChange::Changed)
     }
 
-    pub fn focus_next_tab(&mut self) -> rootcause::Result<()> {
+    pub fn focus_next_tab(&mut self) -> rootcause::Result<TabFocusChange> {
         let tab_index = self.active_tab_index()?;
         let next_index = tab_index
             .checked_add(1)
             .filter(|index| *index < self.entries.len())
             .unwrap_or(0);
-        self.active_tab = self
+        let next_tab = self
             .entries
             .get(next_index)
             .ok_or_else(|| report!("muxr next tab is missing from server layout"))?
             .id;
+        if self.active_tab == next_tab {
+            return Ok(TabFocusChange::Unchanged);
+        }
+        self.active_tab = next_tab;
         let _acknowledged = self.acknowledge_active_pane_attention()?;
-        Ok(())
+        Ok(TabFocusChange::Changed)
     }
 }
 
@@ -65,12 +80,12 @@ fn handle_focus_tab_request(
     tab_id: TabId,
     config: &ServerConfig,
     layout: &mut SessionLayout,
-) -> rootcause::Result<bool> {
-    let changed = layout.focus_tab(tab_id)?;
-    if changed {
+) -> rootcause::Result<TabFocusChange> {
+    let tab_focus = layout.focus_tab(tab_id)?;
+    if tab_focus == TabFocusChange::Changed {
         crate::state::persisted::write_metadata(&config.paths, layout)?;
     }
-    Ok(changed)
+    Ok(tab_focus)
 }
 
 fn handle_focus_tab_request_with_tracked_process_ack(
@@ -80,9 +95,9 @@ fn handle_focus_tab_request_with_tracked_process_ack(
     runtimes: &PaneRuntimes,
     pane_tracked_processes: &mut PaneTrackedProcesses,
     now: Instant,
-) -> rootcause::Result<bool> {
-    let changed = self::handle_focus_tab_request(tab_id, config, layout)?;
-    if changed {
+) -> rootcause::Result<TabFocusChange> {
+    let tab_focus = self::handle_focus_tab_request(tab_id, config, layout)?;
+    if tab_focus == TabFocusChange::Changed {
         let _acknowledged = pane_tracked_processes.acknowledge_active_pane_attention(
             config.user_config.as_ref(),
             layout,
@@ -90,12 +105,13 @@ fn handle_focus_tab_request_with_tracked_process_ack(
             now,
         )?;
     }
-    Ok(changed)
+    Ok(tab_focus)
 }
 
 fn handle_focus_previous_tab_cmd(config: &ServerConfig, layout: &mut SessionLayout) -> rootcause::Result<()> {
-    layout.focus_previous_tab()?;
-    crate::state::persisted::write_metadata(&config.paths, layout)?;
+    if layout.focus_previous_tab()? == TabFocusChange::Changed {
+        crate::state::persisted::write_metadata(&config.paths, layout)?;
+    }
     Ok(())
 }
 
@@ -113,8 +129,9 @@ fn handle_focus_previous_tab_cmd_with_tracked_process_ack(
 }
 
 fn handle_focus_next_tab_cmd(config: &ServerConfig, layout: &mut SessionLayout) -> rootcause::Result<()> {
-    layout.focus_next_tab()?;
-    crate::state::persisted::write_metadata(&config.paths, layout)?;
+    if layout.focus_next_tab()? == TabFocusChange::Changed {
+        crate::state::persisted::write_metadata(&config.paths, layout)?;
+    }
     Ok(())
 }
 
@@ -139,14 +156,15 @@ pub fn handle_focus_tab_client_request(
         return Ok(TabFocusClientOutcome::Unchanged);
     }
     let previous_pane = state.layout.active_pane_id()?;
-    if !self::handle_focus_tab_request_with_tracked_process_ack(
+    if self::handle_focus_tab_request_with_tracked_process_ack(
         tab_id,
         state.config,
         state.layout,
         state.runtimes,
         &mut state.pane_tracked_processes,
         Instant::now(),
-    )? {
+    )? != TabFocusChange::Changed
+    {
         return Ok(TabFocusClientOutcome::Unchanged);
     }
     Ok(TabFocusClientOutcome::Render { previous_pane })
@@ -197,7 +215,7 @@ mod tests {
     fn test_focus_tab_when_tab_exists_updates_active_tab() -> rootcause::Result<()> {
         let mut layout = self::layout()?;
 
-        assert2::assert!(layout.focus_tab(TabId::new(2)?)?);
+        pretty_assertions::assert_eq!(layout.focus_tab(TabId::new(2)?)?, TabFocusChange::Changed);
 
         pretty_assertions::assert_eq!(layout.active_tab.get(), 2);
         Ok(())
@@ -207,7 +225,7 @@ mod tests {
     fn test_focus_tab_when_tab_is_missing_keeps_active_tab() -> rootcause::Result<()> {
         let mut layout = self::layout()?;
 
-        assert2::assert!(!layout.focus_tab(TabId::new(3)?)?);
+        pretty_assertions::assert_eq!(layout.focus_tab(TabId::new(3)?)?, TabFocusChange::Unchanged);
 
         pretty_assertions::assert_eq!(layout.active_tab.get(), 1);
         Ok(())

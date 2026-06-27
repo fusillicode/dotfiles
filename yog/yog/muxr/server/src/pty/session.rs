@@ -31,10 +31,12 @@ use super::event::PtyExitStatus;
 use super::writer;
 use super::writer::PtyWriter;
 use crate::history::PaneHistory;
+use crate::render_state::OutputFreshness;
 use crate::terminal::TerminalApplicationMode;
 use crate::terminal::TerminalCursorKeyMode;
 use crate::terminal::TerminalFocusEvent;
 use crate::terminal::TerminalMouseProtocol;
+use crate::terminal::TerminalScrollMove;
 use crate::terminal::TerminalSnapshot;
 use crate::terminal::TerminalState;
 
@@ -156,13 +158,52 @@ pub struct PtyHandle {
     writer: PtyWriter,
 }
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum PtyViewportMove {
+    MovedToBottom,
+    #[default]
+    Unchanged,
+}
+
+impl From<TerminalScrollMove> for PtyViewportMove {
+    fn from(value: TerminalScrollMove) -> Self {
+        match value {
+            TerminalScrollMove::Moved => Self::MovedToBottom,
+            TerminalScrollMove::Unchanged => Self::Unchanged,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PtyMouseWrite {
+    Ignored,
+    Sent(PtyViewportMove),
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum PtyScreenDmg {
+    Dirty,
+    #[default]
+    Clean,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PtyExitState {
+    Exited,
+    Running,
+}
+
 impl PtyHandle {
     pub fn attach_sink(&self, sender: mpsc::SyncSender<PtyEvent>) -> rootcause::Result<PtySinkGuard> {
         self.state.attach_sink(sender)
     }
 
-    pub fn has_exited(&self) -> bool {
-        self.state.exited.load(Ordering::Acquire)
+    pub fn exit_state(&self) -> PtyExitState {
+        if self.state.exited.load(Ordering::Acquire) {
+            PtyExitState::Exited
+        } else {
+            PtyExitState::Running
+        }
     }
 
     pub fn resize(&self, size: &TerminalSize) -> rootcause::Result<()> {
@@ -173,39 +214,39 @@ impl PtyHandle {
         Ok(())
     }
 
-    pub fn write_input(&self, bytes: &[u8]) -> rootcause::Result<bool> {
+    pub fn write_input(&self, bytes: &[u8]) -> rootcause::Result<PtyViewportMove> {
         if bytes.is_empty() {
-            return Ok(false);
+            return Ok(PtyViewportMove::Unchanged);
         }
 
         // PTY-bound input should reveal the live viewport before an app echoes typed bytes; some apps do not echo, so
         // callers need the changed flag to redraw immediately after resetting scrollback.
-        let scrolled_to_bottom = lock_mutex(&self.state.terminal, "pty terminal")?.scroll_to_bottom();
+        let viewport_move = PtyViewportMove::from(lock_mutex(&self.state.terminal, "pty terminal")?.scroll_to_bottom());
         self.writer.write_bytes(
             bytes,
             "failed to write client input to muxr shell pty",
             "failed to flush muxr shell pty input",
         )?;
-        Ok(scrolled_to_bottom)
+        Ok(viewport_move)
     }
 
-    pub fn write_paste(&self, bytes: &[u8]) -> rootcause::Result<bool> {
+    pub fn write_paste(&self, bytes: &[u8]) -> rootcause::Result<PtyViewportMove> {
         if bytes.is_empty() {
-            return Ok(false);
+            return Ok(PtyViewportMove::Unchanged);
         }
 
-        let (scrolled_to_bottom, bracketed_paste_enabled) = {
+        let (viewport_move, paste_mode) = {
             let mut terminal = lock_mutex(&self.state.terminal, "pty terminal")?;
-            let scrolled_to_bottom = terminal.scroll_to_bottom();
-            (scrolled_to_bottom, terminal.bracketed_paste_enabled())
+            let viewport_move = PtyViewportMove::from(terminal.scroll_to_bottom());
+            (viewport_move, terminal.paste_mode())
         };
-        let framed = crate::terminal::paste_input_bytes(bytes, bracketed_paste_enabled);
+        let framed = crate::terminal::paste_input_bytes(bytes, paste_mode);
         self.writer.write_bytes(
             &framed,
             "failed to write client paste to muxr shell pty",
             "failed to flush muxr shell pty paste",
         )?;
-        Ok(scrolled_to_bottom)
+        Ok(viewport_move)
     }
 
     pub fn write_mouse_event(
@@ -213,25 +254,25 @@ impl PtyHandle {
         event: ClientMouseEvent,
         region: &PaneRegionSnapshot,
         protocol: TerminalMouseProtocol,
-    ) -> rootcause::Result<Option<bool>> {
+    ) -> rootcause::Result<PtyMouseWrite> {
         let Some(bytes) = crate::pane::mouse::encode_pty_mouse_event(event, region, protocol)? else {
-            return Ok(None);
+            return Ok(PtyMouseWrite::Ignored);
         };
         // Scrollback follows only events that reach the PTY, so filtered motion does not hide history.
-        let scrolled_to_bottom = lock_mutex(&self.state.terminal, "pty terminal")?.scroll_to_bottom();
+        let viewport_move = PtyViewportMove::from(lock_mutex(&self.state.terminal, "pty terminal")?.scroll_to_bottom());
         self.writer.write_bytes(
             &bytes,
             "failed to write client mouse event to muxr shell pty",
             "failed to flush muxr shell pty mouse event",
         )?;
-        Ok(Some(scrolled_to_bottom))
+        Ok(PtyMouseWrite::Sent(viewport_move))
     }
 
     pub fn write_faux_scroll_input(
         &self,
         direction: PaneScrollDirection,
         cursor_key_mode: TerminalCursorKeyMode,
-    ) -> rootcause::Result<bool> {
+    ) -> rootcause::Result<PtyViewportMove> {
         self.write_input(&crate::pane::scroll::faux_scroll_input_bytes(
             direction,
             cursor_key_mode,
@@ -251,11 +292,11 @@ impl PtyHandle {
         Ok(lock_mutex(&self.state.terminal, "pty terminal")?.application_mode())
     }
 
-    pub fn scroll(&self, direction: PaneScrollDirection) -> rootcause::Result<bool> {
+    pub fn scroll(&self, direction: PaneScrollDirection) -> rootcause::Result<TerminalScrollMove> {
         Ok(lock_mutex(&self.state.terminal, "pty terminal")?.scroll(direction))
     }
 
-    pub fn scroll_one_line(&self, direction: PaneScrollDirection) -> rootcause::Result<bool> {
+    pub fn scroll_one_line(&self, direction: PaneScrollDirection) -> rootcause::Result<TerminalScrollMove> {
         Ok(lock_mutex(&self.state.terminal, "pty terminal")?.scroll_one_line(direction))
     }
 
@@ -263,7 +304,7 @@ impl PtyHandle {
         lock_mutex(&self.state.terminal, "pty terminal")?.visible_top_row()
     }
 
-    pub fn visible_row_wraps(&self) -> rootcause::Result<Vec<bool>> {
+    pub fn visible_row_wraps(&self) -> rootcause::Result<Vec<muxr_core::RowWrap>> {
         Ok(lock_mutex(&self.state.terminal, "pty terminal")?.visible_row_wraps())
     }
 
@@ -290,7 +331,7 @@ impl PtyHandle {
         self.state.take_title_changes()
     }
 
-    pub fn take_screen_dirty(&self) -> bool {
+    pub fn take_screen_dirty(&self) -> PtyScreenDmg {
         self.state.take_screen_dirty()
     }
 
@@ -314,9 +355,13 @@ pub struct PtySinkGuard {
 }
 
 impl PtySinkGuard {
-    /// Return false after the live output sink overflows or disconnects.
-    pub fn is_output_current(&self) -> bool {
-        self.output_current.load(Ordering::Acquire)
+    /// Return stale after the live output sink overflows or disconnects.
+    pub fn output_freshness(&self) -> OutputFreshness {
+        if self.output_current.load(Ordering::Acquire) {
+            OutputFreshness::Current
+        } else {
+            OutputFreshness::Stale
+        }
     }
 }
 
@@ -394,7 +439,7 @@ impl PtyState {
         let terminal_replies = {
             let mut terminal = lock_mutex(&self.terminal, "pty terminal")?;
             let process_outcome = terminal.process(bytes);
-            if process_outcome.screen_dirty() {
+            if process_outcome.screen_dmg() == crate::terminal::TerminalScreenDmg::Dirty {
                 // Output events are coalesced, so the visible-screen dirty bit must be sticky until the server consumes
                 // it.
                 self.screen_dirty.store(true, Ordering::Release);
@@ -435,8 +480,12 @@ impl PtyState {
         Ok(std::mem::take(&mut *title_changes))
     }
 
-    fn take_screen_dirty(&self) -> bool {
-        self.screen_dirty.swap(false, Ordering::AcqRel)
+    fn take_screen_dirty(&self) -> PtyScreenDmg {
+        if self.screen_dirty.swap(false, Ordering::AcqRel) {
+            PtyScreenDmg::Dirty
+        } else {
+            PtyScreenDmg::Clean
+        }
     }
 
     fn mark_exited(&self, exit_status: PtyExitStatus) -> rootcause::Result<()> {
@@ -568,6 +617,7 @@ mod tests {
     use muxr_config::MuxrConfig;
     use muxr_core::SessionName;
 
+    use super::super::event::PtyExitResult;
     use super::*;
     use crate::terminal::TerminalFocusReporting;
 
@@ -637,7 +687,7 @@ mod tests {
             Some(PtyExitStatus {
                 code: 7,
                 signal: None,
-                success: false,
+                result: PtyExitResult::Failed,
             })
         );
         drop(session);
@@ -660,7 +710,7 @@ mod tests {
             state.mark_exited(PtyExitStatus {
                 code: 7,
                 signal: None,
-                success: false,
+                result: PtyExitResult::Failed,
             })
         })?;
 
@@ -672,7 +722,7 @@ mod tests {
             Some(PtyExitStatus {
                 code: 7,
                 signal: None,
-                success: false,
+                result: PtyExitResult::Failed,
             })
         );
         assert2::assert!(log.contains("kind=\"pty_exit_wakeup_not_queued\""));
@@ -697,13 +747,13 @@ mod tests {
     fn test_attach_sink_when_output_arrived_before_attach_clears_screen_dirty() -> rootcause::Result<()> {
         let state = Arc::new(pty_state(&terminal_size()?));
         pretty_assertions::assert_eq!(state.append_output(b"before")?, Vec::<Vec<u8>>::new());
-        assert2::assert!(state.take_screen_dirty());
+        pretty_assertions::assert_eq!(state.take_screen_dirty(), PtyScreenDmg::Dirty);
         pretty_assertions::assert_eq!(state.append_output(b"before again")?, Vec::<Vec<u8>>::new());
         let (sender, _receiver) = mpsc::sync_channel(1);
 
         let _guard = state.attach_sink(sender)?;
 
-        assert2::assert!(!state.take_screen_dirty());
+        pretty_assertions::assert_eq!(state.take_screen_dirty(), PtyScreenDmg::Clean);
         Ok(())
     }
 
@@ -715,7 +765,7 @@ mod tests {
 
         pretty_assertions::assert_eq!(state.append_output(b"\x1b]2;~\x07")?, Vec::<Vec<u8>>::new());
 
-        assert2::assert!(!state.take_screen_dirty());
+        pretty_assertions::assert_eq!(state.take_screen_dirty(), PtyScreenDmg::Clean);
         pretty_assertions::assert_eq!(state.take_title_changes()?, vec![Some("~".to_owned())]);
         assert2::assert!(matches!(receiver.recv(), Ok(PtyEvent::OutputReady)));
         Ok(())
@@ -727,8 +777,8 @@ mod tests {
 
         pretty_assertions::assert_eq!(state.append_output(b"visible")?, Vec::<Vec<u8>>::new());
 
-        assert2::assert!(state.take_screen_dirty());
-        assert2::assert!(!state.take_screen_dirty());
+        pretty_assertions::assert_eq!(state.take_screen_dirty(), PtyScreenDmg::Dirty);
+        pretty_assertions::assert_eq!(state.take_screen_dirty(), PtyScreenDmg::Clean);
         Ok(())
     }
 
@@ -793,8 +843,8 @@ mod tests {
 
         assert2::assert!(lock_mutex(&state.active_sink, "pty active sink")?.is_some());
         assert2::assert!(output_current.load(Ordering::Acquire));
-        assert2::assert!(state.take_screen_dirty());
-        assert2::assert!(!state.take_screen_dirty());
+        pretty_assertions::assert_eq!(state.take_screen_dirty(), PtyScreenDmg::Dirty);
+        pretty_assertions::assert_eq!(state.take_screen_dirty(), PtyScreenDmg::Clean);
         assert2::assert!(matches!(receiver.recv(), Ok(PtyEvent::OutputReady)));
         Ok(())
     }

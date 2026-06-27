@@ -4,20 +4,23 @@ use std::num::NonZeroU16;
 
 use muxr_core::PaneScrollDirection;
 use muxr_core::RenderCell;
+use muxr_core::RowWrap;
 use muxr_core::TerminalSize;
 use unicode_width::UnicodeWidthChar as _;
 use vte::Params;
 use vte::Perform;
 
+use crate::terminal::TerminalPrivateModeAction;
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TerminalVisibleRow {
     cells: Vec<RenderCell>,
-    wraps_next: bool,
+    row_wrap: RowWrap,
 }
 
 impl TerminalVisibleRow {
-    pub const fn new(cells: Vec<RenderCell>, wraps_next: bool) -> Self {
-        Self { cells, wraps_next }
+    pub const fn new(cells: Vec<RenderCell>, row_wrap: RowWrap) -> Self {
+        Self { cells, row_wrap }
     }
 
     pub fn cells(&self) -> &[RenderCell] {
@@ -28,8 +31,8 @@ impl TerminalVisibleRow {
         self.cells
     }
 
-    pub const fn wraps_next(&self) -> bool {
-        self.wraps_next
+    pub const fn row_wrap(&self) -> RowWrap {
+        self.row_wrap
     }
 }
 
@@ -44,6 +47,25 @@ pub struct TerminalScrollback {
     rows: VecDeque<TerminalScrollbackRow>,
     size: TerminalSize,
     viewport_offset: usize,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum TerminalScrollbackMove {
+    #[default]
+    Unchanged,
+    Moved,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TerminalScrollbackCapture {
+    Capture,
+    Skip,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TerminalScrollbackScreenMode {
+    Alternate,
+    Normal,
 }
 
 impl TerminalScrollback {
@@ -99,13 +121,13 @@ impl TerminalScrollback {
             .collect()
     }
 
-    pub fn captured_row_wraps_for_view(&self, offset: usize, height: usize) -> Vec<bool> {
+    pub fn captured_row_wraps_for_view(&self, offset: usize, height: usize) -> Vec<RowWrap> {
         let start = self.rows.len().saturating_sub(offset);
         self.rows
             .iter()
             .skip(start)
             .take(height)
-            .map(TerminalScrollbackRow::wraps_next)
+            .map(TerminalScrollbackRow::row_wrap)
             .collect()
     }
 
@@ -133,9 +155,9 @@ impl TerminalScrollback {
         cursor_col: u16,
         pending_print_width: usize,
         next_print_width: u16,
-    ) -> bool {
+    ) -> TerminalScrollbackCapture {
         if self.active_screen != TerminalScreen::Normal {
-            return false;
+            return TerminalScrollbackCapture::Skip;
         }
         self.normal_scroll_region.autowrap_capture_possible_after_prints(
             cursor_row,
@@ -146,8 +168,15 @@ impl TerminalScrollback {
         )
     }
 
-    pub fn should_capture_linefeed(&self, alternate_screen: bool) -> bool {
-        !alternate_screen && self.active_screen == TerminalScreen::Normal && self.normal_scroll_region.should_capture()
+    pub fn should_capture_linefeed(&self, screen_mode: TerminalScrollbackScreenMode) -> TerminalScrollbackCapture {
+        if screen_mode == TerminalScrollbackScreenMode::Normal
+            && self.active_screen == TerminalScreen::Normal
+            && self.normal_scroll_region.should_capture() == TerminalScrollbackCapture::Capture
+        {
+            TerminalScrollbackCapture::Capture
+        } else {
+            TerminalScrollbackCapture::Skip
+        }
     }
 
     pub fn clear_replayed_application_state(&mut self) {
@@ -172,13 +201,17 @@ impl TerminalScrollback {
         self.viewport_offset = offset.min(self.rows.len());
     }
 
-    pub fn scroll_by(&mut self, direction: PaneScrollDirection, lines: usize) -> bool {
+    pub fn scroll_by(&mut self, direction: PaneScrollDirection, lines: usize) -> TerminalScrollbackMove {
         let before = self.viewport_offset;
         self.viewport_offset = match direction {
             PaneScrollDirection::Down => self.viewport_offset.saturating_sub(lines),
             PaneScrollDirection::Up => self.viewport_offset.saturating_add(lines).min(self.rows.len()),
         };
-        self.viewport_offset != before
+        if self.viewport_offset == before {
+            TerminalScrollbackMove::Unchanged
+        } else {
+            TerminalScrollbackMove::Moved
+        }
     }
 }
 
@@ -187,11 +220,11 @@ impl TerminalScrollback {
 enum TerminalScrollbackRow {
     Raw {
         cells: Vec<RenderCell>,
-        wraps_next: bool,
+        row_wrap: RowWrap,
     },
     Runs {
         runs: Vec<TerminalScrollbackRun>,
-        wraps_next: bool,
+        row_wrap: RowWrap,
     },
 }
 
@@ -210,29 +243,29 @@ impl TerminalScrollbackRow {
             }
         }
 
-        let wraps_next = row.wraps_next();
+        let row_wrap = row.row_wrap();
         let cells = row.into_cells();
         let raw_bytes = cells.len().saturating_mul(mem::size_of::<RenderCell>());
         let run_bytes = run_count.saturating_mul(mem::size_of::<TerminalScrollbackRun>());
         if run_bytes >= raw_bytes {
-            return Self::Raw { cells, wraps_next };
+            return Self::Raw { cells, row_wrap };
         }
 
         let mut runs = Vec::<TerminalScrollbackRun>::with_capacity(run_count);
         for cell in cells {
             if let Some(run) = runs.last_mut()
                 && run.cell == cell
-                && run.push_cell()
+                && run.push_cell() == TerminalScrollbackRunPush::Pushed
             {
                 continue;
             }
             runs.push(TerminalScrollbackRun::new(cell));
         }
-        Self::Runs { runs, wraps_next }
+        Self::Runs { runs, row_wrap }
     }
 
     fn visible_row(&self) -> TerminalVisibleRow {
-        TerminalVisibleRow::new(self.cells(), self.wraps_next())
+        TerminalVisibleRow::new(self.cells(), self.row_wrap())
     }
 
     fn cells(&self) -> Vec<RenderCell> {
@@ -252,9 +285,9 @@ impl TerminalScrollbackRow {
         }
     }
 
-    const fn wraps_next(&self) -> bool {
+    const fn row_wrap(&self) -> RowWrap {
         match self {
-            Self::Raw { wraps_next, .. } | Self::Runs { wraps_next, .. } => *wraps_next,
+            Self::Raw { row_wrap, .. } | Self::Runs { row_wrap, .. } => *row_wrap,
         }
     }
 }
@@ -276,13 +309,19 @@ impl TerminalScrollbackRun {
         usize::from(self.len.get())
     }
 
-    fn push_cell(&mut self) -> bool {
+    fn push_cell(&mut self) -> TerminalScrollbackRunPush {
         let Some(len) = self.len.get().checked_add(1).and_then(NonZeroU16::new) else {
-            return false;
+            return TerminalScrollbackRunPush::Full;
         };
         self.len = len;
-        true
+        TerminalScrollbackRunPush::Pushed
     }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum TerminalScrollbackRunPush {
+    Full,
+    Pushed,
 }
 
 struct TerminalScrollbackParser<'a> {
@@ -350,11 +389,11 @@ impl Perform for TerminalScrollbackParser<'_> {
                 self.action = Some(TerminalPreParserAction::SyncParser);
             }
             ([b'?'], 'h') => {
-                self.apply_private_mode(params, true);
+                self.apply_private_mode(params, TerminalPrivateModeAction::Set);
                 self.action = Some(TerminalPreParserAction::SyncParser);
             }
             ([b'?'], 'l') => {
-                self.apply_private_mode(params, false);
+                self.apply_private_mode(params, TerminalPrivateModeAction::Reset);
                 self.action = Some(TerminalPreParserAction::SyncParser);
             }
             _ => {
@@ -372,15 +411,15 @@ impl TerminalScrollbackParser<'_> {
         }
     }
 
-    fn apply_private_mode(&mut self, params: &Params, enabled: bool) {
+    fn apply_private_mode(&mut self, params: &Params, action: TerminalPrivateModeAction) {
         for param in self::primary_csi_params(params) {
-            match (enabled, param) {
-                (true, 47) => self.active_screen = TerminalScreen::Alternate,
-                (true, 1049) => {
+            match (action, param) {
+                (TerminalPrivateModeAction::Set, 47) => self.active_screen = TerminalScreen::Alternate,
+                (TerminalPrivateModeAction::Set, 1049) => {
                     self.active_screen = TerminalScreen::Alternate;
                     self.alternate_scroll_region = TerminalScrollRegion::full(self.size);
                 }
-                (false, 47 | 1049) => self.active_screen = TerminalScreen::Normal,
+                (TerminalPrivateModeAction::Reset, 47 | 1049) => self.active_screen = TerminalScreen::Normal,
                 _ => {}
             }
         }
@@ -507,9 +546,9 @@ impl TerminalScrollRegion {
         pending_print_width: usize,
         next_print_width: u16,
         size: &TerminalSize,
-    ) -> bool {
+    ) -> TerminalScrollbackCapture {
         if self.top != 0 || cursor_row > self.bottom {
-            return false;
+            return TerminalScrollbackCapture::Skip;
         }
         let rows_to_bottom = usize::from(self.bottom.saturating_sub(cursor_row));
         let cols = usize::from(size.cols());
@@ -520,11 +559,19 @@ impl TerminalScrollRegion {
         let cells_until_scroll_candidate = rows_to_bottom
             .saturating_mul(cols)
             .saturating_add(next_scroll_col.saturating_sub(usize::from(cursor_col)));
-        pending_print_width >= cells_until_scroll_candidate
+        if pending_print_width >= cells_until_scroll_candidate {
+            TerminalScrollbackCapture::Capture
+        } else {
+            TerminalScrollbackCapture::Skip
+        }
     }
 
-    const fn should_capture(self) -> bool {
-        self.top == 0
+    const fn should_capture(self) -> TerminalScrollbackCapture {
+        if self.top == 0 {
+            TerminalScrollbackCapture::Capture
+        } else {
+            TerminalScrollbackCapture::Skip
+        }
     }
 
     fn resized_from(self, previous_size: &TerminalSize, size: &TerminalSize) -> Self {
@@ -576,17 +623,17 @@ mod tests {
             119,
         ));
 
-        scrollback.push_rows([TerminalVisibleRow::new(row.clone(), true)]);
+        scrollback.push_rows([TerminalVisibleRow::new(row.clone(), RowWrap::EndsWithSoftWrap)]);
 
         assert2::assert!(let Some(TerminalScrollbackRow::Runs {
             runs: stored_runs,
-            wraps_next,
+            row_wrap,
         }) = scrollback.rows.front());
         assert2::assert!(stored_runs.len() < row.len() / 2);
-        assert2::assert!(*wraps_next);
+        pretty_assertions::assert_eq!(*row_wrap, RowWrap::EndsWithSoftWrap);
         pretty_assertions::assert_eq!(
             scrollback.captured_rows_for_view(1, 1),
-            vec![TerminalVisibleRow::new(row, true)]
+            vec![TerminalVisibleRow::new(row, RowWrap::EndsWithSoftWrap)]
         );
         Ok(())
     }
@@ -598,17 +645,17 @@ mod tests {
             .map(|col| RenderCell::narrow(format!("{col:03}"), RenderStyle::default()))
             .collect::<Vec<_>>();
 
-        scrollback.push_rows([TerminalVisibleRow::new(row.clone(), false)]);
+        scrollback.push_rows([TerminalVisibleRow::new(row.clone(), RowWrap::EndsBeforeSoftWrap)]);
 
         assert2::assert!(let Some(TerminalScrollbackRow::Raw {
             cells: stored_cells,
-            wraps_next,
+            row_wrap,
         }) = scrollback.rows.front());
         pretty_assertions::assert_eq!(stored_cells, &row);
-        assert2::assert!(!*wraps_next);
+        pretty_assertions::assert_eq!(*row_wrap, RowWrap::EndsBeforeSoftWrap);
         pretty_assertions::assert_eq!(
             scrollback.captured_rows_for_view(1, 1),
-            vec![TerminalVisibleRow::new(row, false)]
+            vec![TerminalVisibleRow::new(row, RowWrap::EndsBeforeSoftWrap)]
         );
         Ok(())
     }

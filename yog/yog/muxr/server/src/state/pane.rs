@@ -8,6 +8,7 @@ use crate::cmd_label::TerminalTitle;
 use crate::pane::split::PaneSplitAxis;
 use crate::pane::split::PaneSplitRatio;
 use crate::pty::PtyExitStatus;
+use crate::state::session::PaneMetadataSync;
 
 // Pane splits are a tree so a new split mutates only the active pane subtree; a tab-wide axis would reflow siblings.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -73,12 +74,6 @@ pub enum PaneAttentionState {
     NeedsAttention,
 }
 
-impl PaneAttentionState {
-    pub const fn needs_attention(self) -> bool {
-        matches!(self, Self::NeedsAttention)
-    }
-}
-
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct Pane {
     #[serde(default, skip_serializing)]
@@ -106,15 +101,15 @@ impl Pane {
     }
 
     /// Refresh pane cwd metadata from path-like shell title updates.
-    pub fn sync_terminal_title(&mut self, terminal_title: Option<&str>) -> bool {
+    pub fn sync_terminal_title(&mut self, terminal_title: Option<&str>) -> PaneMetadataSync {
         if let Some(cwd) = TerminalTitle::classify(terminal_title, &self.cwd).cwd {
             if self.cwd == cwd {
-                return false;
+                return PaneMetadataSync::Unchanged;
             }
             self.cwd = cwd;
-            return true;
+            return PaneMetadataSync::Changed;
         }
-        false
+        PaneMetadataSync::Unchanged
     }
 
     /// Build a client snapshot with live runtime cmd metadata overriding decorative terminal titles.
@@ -200,7 +195,7 @@ mod tests {
     fn test_sync_terminal_title_when_title_is_cwd_updates_pane_cwd() -> rootcause::Result<()> {
         let mut pane = self::pane()?;
 
-        assert2::assert!(pane.sync_terminal_title(Some("~")));
+        pretty_assertions::assert_eq!(pane.sync_terminal_title(Some("~")), PaneMetadataSync::Changed);
 
         pretty_assertions::assert_eq!(pane.cwd, "~");
         Ok(())
@@ -210,7 +205,10 @@ mod tests {
     fn test_sync_terminal_title_when_title_is_same_cwd_returns_false() -> rootcause::Result<()> {
         let mut pane = self::pane()?;
 
-        assert2::assert!(!pane.sync_terminal_title(Some("/old/project")));
+        pretty_assertions::assert_eq!(
+            pane.sync_terminal_title(Some("/old/project")),
+            PaneMetadataSync::Unchanged,
+        );
 
         pretty_assertions::assert_eq!(pane.cwd, "/old/project");
         Ok(())
@@ -220,7 +218,10 @@ mod tests {
     fn test_sync_terminal_title_when_title_is_cmd_returns_false() -> rootcause::Result<()> {
         let mut pane = self::pane()?;
 
-        assert2::assert!(!pane.sync_terminal_title(Some("cargo test")));
+        pretty_assertions::assert_eq!(
+            pane.sync_terminal_title(Some("cargo test")),
+            PaneMetadataSync::Unchanged,
+        );
 
         pretty_assertions::assert_eq!(pane.cwd, "/old/project");
         Ok(())

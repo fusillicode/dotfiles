@@ -3,20 +3,22 @@ use std::time::Duration;
 use muxr_core::ServerEvent;
 use muxr_transport::ServerEventWriter;
 
+use crate::render_state::ClientEventSendOutcome;
 use crate::session::tracing::ClientEventSendFailure;
 
 /// Send one event on an attached-client writer with the server's bounded write timeout.
 ///
 /// # Errors
-/// This function currently returns `Ok(false)` for send failures and timeouts instead of an error.
+/// Transport errors and write timeouts are represented as `ClientEventSendOutcome::Failed` so attached-client loop
+/// callers handle expected disconnects separately from local processing errors.
 pub async fn send_event_with_timeout(
     writer: &mut ServerEventWriter,
     event: &ServerEvent,
     client_write_timeout: Duration,
-) -> rootcause::Result<bool> {
+) -> rootcause::Result<ClientEventSendOutcome> {
     Ok(self::send_event_failure(writer, event, client_write_timeout)
         .await
-        .is_none())
+        .map_or(ClientEventSendOutcome::Sent, ClientEventSendOutcome::Failed))
 }
 
 pub async fn send_event_failure(

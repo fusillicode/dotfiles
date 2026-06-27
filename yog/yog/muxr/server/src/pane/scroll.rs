@@ -6,6 +6,7 @@ use muxr_core::ServerEvent;
 
 use crate::client::session::ClientSessionState;
 use crate::pane::runtime::PaneRuntimes;
+use crate::render_state::PaneRenderSignal;
 use crate::terminal::TerminalCursorKeyMode;
 
 const FAUX_SCROLL_LINES_PER_WHEEL_EVENT: usize = 3;
@@ -18,13 +19,12 @@ enum PaneScrollAmount {
 
 pub struct PaneScrollLineRequestOutcome {
     pub event: ServerEvent,
-    pub render_dirty: bool,
+    pub render_signal: PaneRenderSignal,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct PaneScrollWheelRequestOutcome {
-    pub render_dirty: bool,
-    pub sync_render_deadline: bool,
+    pub render_signal: PaneRenderSignal,
 }
 
 const fn scroll_pane_line_result(
@@ -39,7 +39,10 @@ const fn scroll_pane_line_result(
             movement,
         },
         // Edge-drag autoscroll can outpace render IO; keep viewport changes coalesced on the render deadline.
-        render_dirty: movement.scrolled(),
+        render_signal: match movement {
+            PaneScrollLineMove::Moved => PaneRenderSignal::DirtyAndDeadline,
+            PaneScrollLineMove::Unchanged => PaneRenderSignal::DeadlineOnly,
+        },
     }
 }
 
@@ -49,12 +52,10 @@ pub fn handle_scroll_pane_line_client_request(
     state: &ClientSessionState<'_>,
 ) -> rootcause::Result<PaneScrollLineRequestOutcome> {
     let movement = if let Some(pane_id) = crate::screen_render::visible_pane_id_at_position(state, position)? {
-        PaneScrollLineMove::from_scrolled(self::scroll_pane(
-            pane_id,
-            direction,
-            PaneScrollAmount::Line,
-            state.runtimes,
-        )?)
+        match self::scroll_pane(pane_id, direction, PaneScrollAmount::Line, state.runtimes)? {
+            crate::terminal::TerminalScrollMove::Moved => PaneScrollLineMove::Moved,
+            crate::terminal::TerminalScrollMove::Unchanged => PaneScrollLineMove::Unchanged,
+        }
     } else {
         PaneScrollLineMove::Unchanged
     };
@@ -68,20 +69,19 @@ pub fn handle_scroll_pane_wheel_client_request(
 ) -> rootcause::Result<PaneScrollWheelRequestOutcome> {
     let Some(pane_id) = crate::screen_render::visible_pane_id_at_position(state, position)? else {
         return Ok(PaneScrollWheelRequestOutcome {
-            render_dirty: false,
-            sync_render_deadline: false,
+            render_signal: PaneRenderSignal::Unchanged,
         });
     };
-    if !self::scroll_pane(pane_id, direction, PaneScrollAmount::Wheel, state.runtimes)? {
+    if self::scroll_pane(pane_id, direction, PaneScrollAmount::Wheel, state.runtimes)?
+        != crate::terminal::TerminalScrollMove::Moved
+    {
         return Ok(PaneScrollWheelRequestOutcome {
-            render_dirty: false,
-            sync_render_deadline: false,
+            render_signal: PaneRenderSignal::Unchanged,
         });
     }
     // Wheel input can arrive much faster than render IO; mark dirty and let the render deadline coalesce.
     Ok(PaneScrollWheelRequestOutcome {
-        render_dirty: true,
-        sync_render_deadline: true,
+        render_signal: PaneRenderSignal::DirtyAndDeadline,
     })
 }
 
@@ -90,7 +90,7 @@ fn scroll_pane(
     direction: PaneScrollDirection,
     amount: PaneScrollAmount,
     runtimes: &PaneRuntimes,
-) -> rootcause::Result<bool> {
+) -> rootcause::Result<crate::terminal::TerminalScrollMove> {
     match amount {
         PaneScrollAmount::Line => runtimes.handle(pane_id)?.scroll_one_line(direction),
         PaneScrollAmount::Wheel => runtimes.handle(pane_id)?.scroll(direction),

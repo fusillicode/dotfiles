@@ -24,9 +24,15 @@ use rootcause::prelude::ResultExt;
 const ROWS_PER_TAB: u16 = 3;
 const SEPARATOR: &str = "\u{2502}";
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum TabBarItemState {
+    Active,
+    Inactive,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct SidebarTab {
-    active: bool,
+    state: TabBarItemState,
     tracked_process_state: TrackedProcessState,
     cmd_label: Option<String>,
     path_label: String,
@@ -55,7 +61,7 @@ pub fn queue(
             stdout,
             config,
             row,
-            tab.active,
+            tab.state,
             TrackedProcessState::None,
             &tab.path_label,
         )?;
@@ -68,7 +74,7 @@ pub fn queue(
             stdout,
             config,
             row,
-            tab.active,
+            tab.state,
             tab.tracked_process_state,
             tab.cmd_label.as_deref().unwrap_or(""),
         )?;
@@ -78,12 +84,19 @@ pub fn queue(
             break;
         }
         // Keep each tab entry a stable three-row block with a spacer row.
-        self::queue_sidebar_row(stdout, config, row, tab.active, TrackedProcessState::None, "")?;
+        self::queue_sidebar_row(stdout, config, row, tab.state, TrackedProcessState::None, "")?;
         row = row.saturating_add(1);
     }
 
     while row < rows {
-        self::queue_sidebar_row(stdout, config, row, false, TrackedProcessState::None, "")?;
+        self::queue_sidebar_row(
+            stdout,
+            config,
+            row,
+            TabBarItemState::Inactive,
+            TrackedProcessState::None,
+            "",
+        )?;
         row = row.saturating_add(1);
     }
 
@@ -103,7 +116,7 @@ fn queue_sidebar_row(
     stdout: &mut impl Write,
     config: TabBarConfig,
     row: u16,
-    active: bool,
+    state: TabBarItemState,
     tracked_process_state: TrackedProcessState,
     text: &str,
 ) -> rootcause::Result<()> {
@@ -115,14 +128,14 @@ fn queue_sidebar_row(
     )?;
     queue_cmd(
         stdout,
-        SetForegroundColor(if active {
+        SetForegroundColor(if state == TabBarItemState::Active {
             crate::frame_buffer::crossterm_color(config.rail.active_fg)
         } else {
             crate::frame_buffer::crossterm_color(config.rail.inactive_fg)
         }),
     )?;
     queue_cmd(stdout, Print("\u{258e}"))?;
-    self::queue_sidebar_text_style(stdout, config, active)?;
+    self::queue_sidebar_text_style(stdout, config, state)?;
     // Keep normal labels flush after the rail; marker rows prefix the dot and one space.
     let marker_width = if self::tracked_process_state_dot_color(config, tracked_process_state).is_some() {
         2
@@ -134,9 +147,9 @@ fn queue_sidebar_row(
         .take(content_width.saturating_sub(marker_width))
         .collect::<String>();
     let used_width = label.chars().count().saturating_add(marker_width);
-    self::queue_tracked_process_state_marker(stdout, config, active, tracked_process_state)?;
+    self::queue_tracked_process_state_marker(stdout, config, state, tracked_process_state)?;
     queue_cmd(stdout, Print(&label))?;
-    self::queue_sidebar_text_style(stdout, config, active)?;
+    self::queue_sidebar_text_style(stdout, config, state)?;
     let trailing_width = content_width.saturating_sub(used_width);
     if trailing_width > 0 {
         queue_cmd(stdout, Print(pad("", trailing_width)))?;
@@ -154,7 +167,11 @@ fn queue_sidebar_row(
     Ok(())
 }
 
-fn queue_sidebar_text_style(stdout: &mut impl Write, config: TabBarConfig, active: bool) -> rootcause::Result<()> {
+fn queue_sidebar_text_style(
+    stdout: &mut impl Write,
+    config: TabBarConfig,
+    state: TabBarItemState,
+) -> rootcause::Result<()> {
     queue_cmd(stdout, SetAttribute(Attribute::Reset))?;
     queue_cmd(
         stdout,
@@ -162,13 +179,13 @@ fn queue_sidebar_text_style(stdout: &mut impl Write, config: TabBarConfig, activ
     )?;
     queue_cmd(
         stdout,
-        SetForegroundColor(if active {
+        SetForegroundColor(if state == TabBarItemState::Active {
             crate::frame_buffer::crossterm_color(config.active_fg)
         } else {
             crate::frame_buffer::crossterm_color(config.inactive_fg)
         }),
     )?;
-    if active {
+    if state == TabBarItemState::Active {
         queue_cmd(stdout, SetAttribute(Attribute::Bold))?;
     }
     Ok(())
@@ -177,7 +194,7 @@ fn queue_sidebar_text_style(stdout: &mut impl Write, config: TabBarConfig, activ
 fn queue_tracked_process_state_marker(
     stdout: &mut impl Write,
     config: TabBarConfig,
-    active: bool,
+    state: TabBarItemState,
     tracked_process_state: TrackedProcessState,
 ) -> rootcause::Result<()> {
     let Some(color) = self::tracked_process_state_dot_color(config, tracked_process_state) else {
@@ -187,7 +204,7 @@ fn queue_tracked_process_state_marker(
     queue_cmd(stdout, SetAttribute(Attribute::Bold))?;
     queue_cmd(stdout, SetForegroundColor(crate::frame_buffer::crossterm_color(color)))?;
     queue_cmd(stdout, Print("\u{2022}"))?;
-    self::queue_sidebar_text_style(stdout, config, active)?;
+    self::queue_sidebar_text_style(stdout, config, state)?;
     queue_cmd(stdout, Print(" "))?;
     Ok(())
 }
@@ -213,10 +230,14 @@ fn sidebar_tabs_with_home(layout: &LayoutSnapshot, home: Option<&str>) -> Vec<Si
         .tabs()
         .iter()
         .map(|tab| {
-            let active = tab.id() == layout.active_tab();
-            let display_pane = self::display_pane(tab, active);
+            let state = if tab.id() == layout.active_tab() {
+                TabBarItemState::Active
+            } else {
+                TabBarItemState::Inactive
+            };
+            let display_pane = self::display_pane(tab, state);
             SidebarTab {
-                active,
+                state,
                 tracked_process_state: display_pane.map(|pane| pane.tracked_process_state).unwrap_or_default(),
                 cmd_label: self::cmd_label(display_pane),
                 path_label: self::path_label(tab, display_pane, home),
@@ -225,8 +246,8 @@ fn sidebar_tabs_with_home(layout: &LayoutSnapshot, home: Option<&str>) -> Vec<Si
         .collect()
 }
 
-fn display_pane(tab: &TabSnapshot, active: bool) -> Option<&PaneSnapshot> {
-    if active && tab.panes().len() > 1 {
+fn display_pane(tab: &TabSnapshot, state: TabBarItemState) -> Option<&PaneSnapshot> {
+    if state == TabBarItemState::Active && tab.panes().len() > 1 {
         return self::unfocused_unseen_tracked_process_pane(tab).or_else(|| self::active_pane(tab));
     }
 
@@ -385,13 +406,13 @@ mod tests {
             sidebar_tabs_with_home(&layout, Some("/Users/me")),
             vec![
                 SidebarTab {
-                    active: false,
+                    state: TabBarItemState::Inactive,
                     tracked_process_state: TrackedProcessState::None,
                     cmd_label: None,
                     path_label: "~/w/default".to_owned(),
                 },
                 SidebarTab {
-                    active: true,
+                    state: TabBarItemState::Active,
                     tracked_process_state: TrackedProcessState::None,
                     cmd_label: Some("nvim".to_owned()),
                     path_label: "~/s/muxr".to_owned(),
@@ -429,13 +450,13 @@ mod tests {
             sidebar_tabs_with_home(&layout, None),
             vec![
                 SidebarTab {
-                    active: true,
+                    state: TabBarItemState::Active,
                     tracked_process_state: TrackedProcessState::None,
                     cmd_label: None,
                     path_label: "/t/active".to_owned(),
                 },
                 SidebarTab {
-                    active: false,
+                    state: TabBarItemState::Inactive,
                     tracked_process_state: TrackedProcessState::Unseen,
                     cmd_label: Some("codex".to_owned()),
                     path_label: "/t/codex".to_owned(),
@@ -516,7 +537,7 @@ mod tests {
         pretty_assertions::assert_eq!(
             tabs[1],
             SidebarTab {
-                active: false,
+                state: TabBarItemState::Inactive,
                 tracked_process_state,
                 cmd_label: Some(expected_cmd_label.to_owned()),
                 path_label: expected_path_label.to_owned(),
@@ -554,7 +575,7 @@ mod tests {
         pretty_assertions::assert_eq!(
             tabs[1],
             SidebarTab {
-                active: false,
+                state: TabBarItemState::Inactive,
                 tracked_process_state: TrackedProcessState::Seen,
                 cmd_label: Some("codex".to_owned()),
                 path_label: "/t/codex".to_owned(),
@@ -582,7 +603,7 @@ mod tests {
         pretty_assertions::assert_eq!(
             sidebar_tabs_with_home(&layout, None),
             vec![SidebarTab {
-                active: true,
+                state: TabBarItemState::Active,
                 tracked_process_state: TrackedProcessState::Unseen,
                 cmd_label: Some("codex".to_owned()),
                 path_label: "/t/codex".to_owned(),

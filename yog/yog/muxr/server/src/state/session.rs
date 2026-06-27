@@ -191,14 +191,14 @@ impl SessionLayout {
     }
 
     /// Apply path-like terminal titles to pane cwd metadata.
-    pub fn sync_terminal_titles(&mut self, terminal_titles: &[(PaneId, Option<String>)]) -> bool {
-        let mut changed = false;
+    pub fn sync_terminal_titles(&mut self, terminal_titles: &[(PaneId, Option<String>)]) -> PaneMetadataSync {
+        let mut sync = PaneMetadataSync::Unchanged;
         for (pane_id, title) in terminal_titles {
             if let Some(pane) = self.pane_mut(*pane_id) {
-                changed |= pane.sync_terminal_title(title.as_deref());
+                sync = sync.merge(pane.sync_terminal_title(title.as_deref()));
             }
         }
-        changed
+        sync
     }
 
     pub fn pane_regions(&self, size: &TerminalSize) -> rootcause::Result<Vec<PaneRegion>> {
@@ -242,6 +242,22 @@ impl SessionLayout {
 
     pub fn next_pane_number(&self) -> rootcause::Result<u32> {
         self::next_number(self.entries.iter().flat_map(Tab::pane_ids).map(PaneId::get), "pane")
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum PaneMetadataSync {
+    Changed,
+    #[default]
+    Unchanged,
+}
+
+impl PaneMetadataSync {
+    pub const fn merge(self, other: Self) -> Self {
+        match (self, other) {
+            (Self::Changed, _) | (_, Self::Changed) => Self::Changed,
+            (Self::Unchanged, Self::Unchanged) => Self::Unchanged,
+        }
     }
 }
 

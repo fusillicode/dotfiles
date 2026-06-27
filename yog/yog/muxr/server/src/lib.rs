@@ -8,6 +8,7 @@ mod keyboard_input;
 mod pane;
 mod pty;
 mod pty_output;
+mod render_state;
 mod request_router;
 mod screen_render;
 mod scrollback_editor;

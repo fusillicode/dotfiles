@@ -7,6 +7,7 @@ use muxr_core::PaneId;
 use rootcause::report;
 
 use crate::pane::tracked_process::PaneTrackedProcesses;
+use crate::render_state::ClientRenderDmg;
 use crate::server::ServerConfig;
 use crate::state::SessionLayout;
 
@@ -73,8 +74,8 @@ impl ClientTimers {
         Ok(pane_ids)
     }
 
-    pub fn sync_render_deadline(&mut self, render_dirty: bool) -> rootcause::Result<()> {
-        if !render_dirty {
+    pub fn sync_render_deadline(&mut self, render_dmg: ClientRenderDmg) -> rootcause::Result<()> {
+        if render_dmg != crate::render_state::ClientRenderDmg::Dirty {
             if self.render_deadline.is_some() {
                 self.disable_render_sleep()?;
             }
@@ -193,9 +194,19 @@ impl ClientTimers {
         Ok(())
     }
 
-    pub fn tracked_process_quiet_sleep_deadline_has_passed(&self) -> bool {
-        tokio::time::Instant::now() >= self.tracked_process_quiet_sleep.deadline()
+    pub fn tracked_process_quiet_deadline(&self) -> QuietDeadline {
+        if tokio::time::Instant::now() >= self.tracked_process_quiet_sleep.deadline() {
+            QuietDeadline::Elapsed
+        } else {
+            QuietDeadline::Pending
+        }
     }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum QuietDeadline {
+    Elapsed,
+    Pending,
 }
 
 fn disabled_sleep_deadline() -> rootcause::Result<tokio::time::Instant> {
@@ -267,7 +278,7 @@ mod tests {
             .checked_add(Duration::from_hours(23))
             .ok_or_else(|| report!("muxr test threshold overflowed"))?;
 
-        timers.sync_render_deadline(false)?;
+        timers.sync_render_deadline(ClientRenderDmg::Clean)?;
 
         pretty_assertions::assert_eq!(timers.render_deadline, None);
         assert2::assert!(timers.render_sleep.deadline() > threshold);
@@ -283,7 +294,7 @@ mod tests {
         let disabled_deadline = timers.render_sleep.deadline();
 
         let earliest_deadline = tokio::time::Instant::now();
-        timers.sync_render_deadline(true)?;
+        timers.sync_render_deadline(ClientRenderDmg::Dirty)?;
         let latest_deadline = tokio::time::Instant::now();
 
         let scheduled_deadline = timers.render_sleep.deadline();
@@ -300,9 +311,9 @@ mod tests {
         let config = crate::server::test_helpers::server_config(tempdir.path(), "work")?;
         let mut timers = ClientTimers::new(&config)?;
 
-        timers.sync_render_deadline(true)?;
+        timers.sync_render_deadline(ClientRenderDmg::Dirty)?;
         let scheduled_deadline = timers.render_sleep.deadline();
-        timers.sync_render_deadline(true)?;
+        timers.sync_render_deadline(ClientRenderDmg::Dirty)?;
 
         pretty_assertions::assert_eq!(timers.render_sleep.deadline(), scheduled_deadline);
         pretty_assertions::assert_eq!(timers.render_deadline, Some(scheduled_deadline));
@@ -315,12 +326,12 @@ mod tests {
         let config = crate::server::test_helpers::server_config(tempdir.path(), "work")?;
         let mut timers = ClientTimers::new(&config)?;
 
-        timers.sync_render_deadline(true)?;
+        timers.sync_render_deadline(ClientRenderDmg::Dirty)?;
         let earliest_deadline = tokio::time::Instant::now()
             .checked_add(RENDER_FRAME_INTERVAL)
             .ok_or_else(|| report!("muxr test render deadline overflowed"))?;
         timers.complete_render_frame()?;
-        timers.sync_render_deadline(true)?;
+        timers.sync_render_deadline(ClientRenderDmg::Dirty)?;
         let latest_deadline = tokio::time::Instant::now()
             .checked_add(RENDER_FRAME_INTERVAL)
             .ok_or_else(|| report!("muxr test render deadline overflowed"))?;
@@ -339,13 +350,13 @@ mod tests {
         let config = crate::server::test_helpers::server_config(tempdir.path(), "work")?;
         let mut timers = ClientTimers::new(&config)?;
 
-        timers.sync_render_deadline(true)?;
+        timers.sync_render_deadline(ClientRenderDmg::Dirty)?;
         let earliest_deadline = tokio::time::Instant::now()
             .checked_add(INTERACTIVE_RENDER_FRAME_INTERVAL)
             .ok_or_else(|| report!("muxr test interactive render deadline overflowed"))?;
         timers.complete_render_frame()?;
         timers.record_interactive_input()?;
-        timers.sync_render_deadline(true)?;
+        timers.sync_render_deadline(ClientRenderDmg::Dirty)?;
         let latest_deadline = tokio::time::Instant::now()
             .checked_add(INTERACTIVE_RENDER_FRAME_INTERVAL)
             .ok_or_else(|| report!("muxr test interactive render deadline overflowed"))?;
@@ -385,10 +396,10 @@ mod tests {
         let mut timers = ClientTimers::new(&config)?;
         timers.last_render_at = Some(tokio::time::Instant::now());
 
-        timers.sync_render_deadline(true)?;
+        timers.sync_render_deadline(ClientRenderDmg::Dirty)?;
         let bulk_deadline = timers.render_sleep.deadline();
         timers.record_interactive_input()?;
-        timers.sync_render_deadline(true)?;
+        timers.sync_render_deadline(ClientRenderDmg::Dirty)?;
 
         let interactive_deadline = timers.render_sleep.deadline();
         pretty_assertions::assert_eq!(timers.render_deadline, Some(interactive_deadline));
@@ -402,7 +413,7 @@ mod tests {
         let config = crate::server::test_helpers::server_config(tempdir.path(), "work")?;
         let mut timers = ClientTimers::new(&config)?;
 
-        timers.sync_render_deadline(true)?;
+        timers.sync_render_deadline(ClientRenderDmg::Dirty)?;
         let scheduled_deadline = timers.render_sleep.deadline();
         timers.complete_render_frame()?;
 
@@ -481,10 +492,10 @@ mod tests {
             .as_mut()
             .reset(tokio::time::Instant::now() + Duration::from_millis(1));
 
-        assert2::assert!(!timers.tracked_process_quiet_sleep_deadline_has_passed());
+        pretty_assertions::assert_eq!(timers.tracked_process_quiet_deadline(), QuietDeadline::Pending);
         tokio::time::advance(Duration::from_millis(1)).await;
 
-        assert2::assert!(timers.tracked_process_quiet_sleep_deadline_has_passed());
+        pretty_assertions::assert_eq!(timers.tracked_process_quiet_deadline(), QuietDeadline::Elapsed);
         Ok(())
     }
 
@@ -518,7 +529,7 @@ mod tests {
         crate::pty::PtyExitStatus {
             code: 0,
             signal: None,
-            success: true,
+            result: crate::pty::PtyExitResult::Succeeded,
         }
     }
 

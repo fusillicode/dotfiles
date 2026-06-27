@@ -24,7 +24,10 @@ impl TerminalTitle {
             };
         };
         let title_cwd = self::cwd_from_title(title, cwd, home);
-        if self::is_shell_title(title) || title_cwd.is_some() || self::is_ignored_title(title) {
+        if ShellTitle::from_title(title) == ShellTitle::Shell
+            || title_cwd.is_some()
+            || IgnoredTitle::from_title(title) == IgnoredTitle::Ignored
+        {
             return Self {
                 cmd_label: None,
                 cwd: title_cwd,
@@ -40,12 +43,23 @@ impl TerminalTitle {
     }
 }
 
-fn is_shell_title(title: &str) -> bool {
-    let Some(first_word) = title.split_whitespace().next() else {
-        return true;
-    };
-    let cmd = first_word.rsplit('/').next().unwrap_or(first_word);
-    matches!(cmd, "bash" | "fish" | "sh" | "zsh")
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ShellTitle {
+    Other,
+    Shell,
+}
+
+impl ShellTitle {
+    fn from_title(title: &str) -> Self {
+        let Some(first_word) = title.split_whitespace().next() else {
+            return Self::Shell;
+        };
+        let cmd = first_word.rsplit('/').next().unwrap_or(first_word);
+        match cmd {
+            "bash" | "fish" | "sh" | "zsh" => Self::Shell,
+            _ => Self::Other,
+        }
+    }
 }
 
 fn cwd_from_title(title: &str, cwd: &str, home: Option<&str>) -> Option<String> {
@@ -56,39 +70,48 @@ fn cwd_from_title(title: &str, cwd: &str, home: Option<&str>) -> Option<String> 
     if title == "~" {
         return Some(title.to_owned());
     }
-    if self::title_is_current_cwd_basename(title, cwd) {
-        return Some(cwd.to_owned());
+    if let Some(cwd) = self::cwd_from_matching_basename(title, cwd) {
+        return Some(cwd);
     }
-    if self::home_abbreviated_title_is_dir(title, home) || self::absolute_title_is_dir(title) {
+    if self::home_abbreviated_dir_title(title, home).is_some() || self::absolute_dir_title(title).is_some() {
         return Some(title.to_owned());
     }
     None
 }
 
-fn title_is_current_cwd_basename(title: &str, cwd: &str) -> bool {
+fn cwd_from_matching_basename(title: &str, cwd: &str) -> Option<String> {
     Path::new(cwd)
         .file_name()
         .and_then(|basename| basename.to_str())
-        .is_some_and(|basename| title == basename)
+        .filter(|basename| title == *basename)?;
+    Some(cwd.to_owned())
 }
 
-fn home_abbreviated_title_is_dir(title: &str, home: Option<&str>) -> bool {
-    let Some(rest) = title.strip_prefix("~/").filter(|rest| !rest.is_empty()) else {
-        return false;
-    };
-    let Some(home) = home.map(str::trim).filter(|home| !home.is_empty()) else {
-        return false;
-    };
-    Path::new(home).join(rest).is_dir()
+fn home_abbreviated_dir_title(title: &str, home: Option<&str>) -> Option<()> {
+    let rest = title.strip_prefix("~/").filter(|rest| !rest.is_empty())?;
+    let home = home.map(str::trim).filter(|home| !home.is_empty())?;
+    Path::new(home).join(rest).is_dir().then_some(())
 }
 
-fn absolute_title_is_dir(title: &str) -> bool {
+fn absolute_dir_title(title: &str) -> Option<()> {
     let path = Path::new(title);
-    path.is_absolute() && path.is_dir()
+    (path.is_absolute() && path.is_dir()).then_some(())
 }
 
-fn is_ignored_title(title: &str) -> bool {
-    title == "Pane" || title.starts_with("Pane ")
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum IgnoredTitle {
+    Ignored,
+    Other,
+}
+
+impl IgnoredTitle {
+    fn from_title(title: &str) -> Self {
+        if title == "Pane" || title.starts_with("Pane ") {
+            Self::Ignored
+        } else {
+            Self::Other
+        }
+    }
 }
 
 fn cmd_title_label(title: &str) -> String {
