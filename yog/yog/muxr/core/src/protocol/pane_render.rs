@@ -1,3 +1,4 @@
+use compact_str::CompactString;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
 use serde::Deserialize;
@@ -466,33 +467,27 @@ where
     }
 }
 
+/// One terminal render cell.
+///
+/// Cell text is stored compactly because most terminal cells are blank or one glyph; callers stay insulated from that
+/// storage choice through text constructors and [`Self::text`].
 #[derive(rkyv::Archive, Clone, Debug, Eq, PartialEq, Serialize, rkyv::Serialize)]
 pub struct RenderCell {
     hyperlink: Option<RenderHyperlink>,
     style: RenderStyle,
-    text: String,
+    text: CompactString,
     width: RenderCellWidth,
 }
 
 impl RenderCell {
     #[must_use]
-    pub fn narrow(text: impl Into<String>, style: RenderStyle) -> Self {
-        Self {
-            hyperlink: None,
-            style,
-            text: text.into(),
-            width: RenderCellWidth::Narrow,
-        }
+    pub fn narrow(text: impl AsRef<str>, style: RenderStyle) -> Self {
+        Self::new(CompactString::new(text.as_ref()), style, RenderCellWidth::Narrow)
     }
 
     #[must_use]
-    pub fn wide(text: impl Into<String>, style: RenderStyle) -> Self {
-        Self {
-            hyperlink: None,
-            style,
-            text: text.into(),
-            width: RenderCellWidth::Wide,
-        }
+    pub fn wide(text: impl AsRef<str>, style: RenderStyle) -> Self {
+        Self::new(CompactString::new(text.as_ref()), style, RenderCellWidth::Wide)
     }
 
     #[must_use]
@@ -500,7 +495,7 @@ impl RenderCell {
         Self {
             hyperlink: None,
             style,
-            text: String::new(),
+            text: CompactString::const_new(""),
             width: RenderCellWidth::WideContinuation,
         }
     }
@@ -549,6 +544,15 @@ impl RenderCell {
         self.hyperlink = hyperlink;
         self
     }
+
+    const fn new(text: CompactString, style: RenderStyle, width: RenderCellWidth) -> Self {
+        Self {
+            hyperlink: None,
+            style,
+            text,
+            width,
+        }
+    }
 }
 
 impl<D> rkyv::Deserialize<RenderCell, D> for ArchivedRenderCell
@@ -559,11 +563,15 @@ where
     fn deserialize(&self, deserializer: &mut D) -> Result<RenderCell, D::Error> {
         let hyperlink = rkyv::Deserialize::<Option<RenderHyperlink>, D>::deserialize(&self.hyperlink, deserializer)?;
         let style = rkyv::Deserialize::<RenderStyle, D>::deserialize(&self.style, deserializer)?;
-        let text = rkyv::Deserialize::<String, D>::deserialize(&self.text, deserializer)?;
+        let text = rkyv::Deserialize::<CompactString, D>::deserialize(&self.text, deserializer)?;
         let width = rkyv::Deserialize::<RenderCellWidth, D>::deserialize(&self.width, deserializer)?;
         match width {
-            RenderCellWidth::Narrow => Ok(RenderCell::narrow(text, style).with_optional_hyperlink(hyperlink)),
-            RenderCellWidth::Wide => Ok(RenderCell::wide(text, style).with_optional_hyperlink(hyperlink)),
+            RenderCellWidth::Narrow => {
+                Ok(RenderCell::new(text, style, RenderCellWidth::Narrow).with_optional_hyperlink(hyperlink))
+            }
+            RenderCellWidth::Wide => {
+                Ok(RenderCell::new(text, style, RenderCellWidth::Wide).with_optional_hyperlink(hyperlink))
+            }
             RenderCellWidth::WideContinuation => {
                 if !text.is_empty() {
                     return Err(super::rkyv_deserialize_error::<D::Error>(
@@ -690,13 +698,13 @@ pub mod test_helpers {
     pub fn raw_render_cell(
         hyperlink: Option<RenderHyperlink>,
         style: RenderStyle,
-        text: impl Into<String>,
+        text: impl AsRef<str>,
         width: RenderCellWidth,
     ) -> RenderCell {
         RenderCell {
             hyperlink,
             style,
-            text: text.into(),
+            text: CompactString::new(text.as_ref()),
             width,
         }
     }
@@ -763,6 +771,30 @@ mod tests {
             updated.hyperlink().map(RenderHyperlink::uri),
             Some("https://example.com")
         );
+        Ok(())
+    }
+
+    #[test]
+    fn test_render_cell_text_when_serialized_preserves_public_string_shape() -> rootcause::Result<()> {
+        let text = "heap-backed render cell text that is longer than compact inline capacity";
+        let cell = RenderCell::narrow(text, RenderStyle::default());
+
+        let serialized = serde_json::to_value(&cell)?;
+
+        pretty_assertions::assert_eq!(serialized["text"], serde_json::json!(text));
+        Ok(())
+    }
+
+    #[test]
+    fn test_render_cell_rkyv_deserialize_when_text_is_heap_backed_preserves_cell() -> rootcause::Result<()> {
+        let text = "heap-backed render cell text that is longer than compact inline capacity";
+        let cell = RenderCell::wide(text, RenderStyle::default()).with_hyperlink_uri("https://example.com")?;
+        let bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&cell)?;
+        let archived = rkyv::access::<rkyv::Archived<RenderCell>, rkyv::rancor::Error>(&bytes)?;
+
+        let deserialized = rkyv::deserialize::<RenderCell, rkyv::rancor::Error>(archived)?;
+
+        pretty_assertions::assert_eq!(deserialized, cell);
         Ok(())
     }
 

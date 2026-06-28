@@ -797,8 +797,10 @@ dependencies = [
  "castaway",
  "cfg-if",
  "itoa",
+ "rkyv",
  "rustversion",
  "ryu",
+ "serde",
  "static_assertions",
 ]
 
@@ -2769,6 +2771,8 @@ name = "muxr-core"
 version = "0.1.0"
 dependencies = [
  "assert2",
+ "bytes",
+ "compact_str",
  "pretty_assertions",
  "rkyv",
  "rootcause",
@@ -2793,6 +2797,7 @@ dependencies = [
  "rstest",
  "serde",
  "serde_json",
+ "smallvec",
  "tempfile",
  "tokio",
  "tracing",
