@@ -12,6 +12,7 @@ categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
 chrono = { workspace = true }
+kanal = { workspace = true }
 libproc = { version = "0.14.11" }
 muxr_config = { workspace = true }
 muxr_core = { workspace = true }

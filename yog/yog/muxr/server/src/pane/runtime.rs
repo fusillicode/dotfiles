@@ -1,8 +1,8 @@
 use std::collections::BTreeMap;
 use std::io::Write;
 use std::sync::Arc;
-use std::sync::mpsc;
 
+use kanal::Sender;
 use muxr_config::ScrollbackDumpStyle;
 use muxr_core::PaneId;
 use muxr_core::TerminalSize;
@@ -223,7 +223,7 @@ impl PaneRuntimes {
             .ok_or_else(|| report!("muxr pane runtime is missing").attach(format!("pane_id={pane_id}")))
     }
 
-    pub fn attach_sinks(&self, sender: &mpsc::SyncSender<PtyEvent>) -> rootcause::Result<Vec<(PaneId, PtySinkGuard)>> {
+    pub fn attach_sinks(&self, sender: &Sender<PtyEvent>) -> rootcause::Result<Vec<(PaneId, PtySinkGuard)>> {
         self.panes
             .iter()
             .map(|pane| Ok((pane.id, pane.session.handle().attach_sink(sender.clone())?)))

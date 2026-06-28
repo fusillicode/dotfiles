@@ -2,7 +2,7 @@ use portable_pty::ExitStatus;
 use serde::Deserialize;
 use serde::Serialize;
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PtyEvent {
     Exited,
     OutputReady,

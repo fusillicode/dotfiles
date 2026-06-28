@@ -6,10 +6,10 @@ use std::sync::Mutex;
 use std::sync::MutexGuard;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
-use std::sync::mpsc;
-use std::sync::mpsc::TrySendError;
 use std::thread;
 
+use kanal::SendError;
+use kanal::Sender;
 use muxr_config::ScrollbackConfig;
 use muxr_config::ScrollbackDumpStyle;
 use muxr_core::ClientMouseEvent;
@@ -195,7 +195,7 @@ pub enum PtyExitState {
 }
 
 impl PtyHandle {
-    pub fn attach_sink(&self, sender: mpsc::SyncSender<PtyEvent>) -> rootcause::Result<PtySinkGuard> {
+    pub fn attach_sink(&self, sender: Sender<PtyEvent>) -> rootcause::Result<PtySinkGuard> {
         self.state.attach_sink(sender)
     }
 
@@ -356,7 +356,7 @@ pub struct PtySinkGuard {
 }
 
 impl PtySinkGuard {
-    /// Return stale after the live output sink overflows or disconnects.
+    /// Return current while full `OutputReady` events are coalesced, and stale after the live sink disconnects.
     pub fn output_freshness(&self) -> OutputFreshness {
         if self.output_current.load(Ordering::Acquire) {
             OutputFreshness::Current
@@ -376,7 +376,7 @@ impl Drop for PtySinkGuard {
 
 struct ActivePtySink {
     output_current: Arc<AtomicBool>,
-    sender: mpsc::SyncSender<PtyEvent>,
+    sender: Sender<PtyEvent>,
 }
 
 struct PtyState {
@@ -417,7 +417,7 @@ impl PtyState {
         })
     }
 
-    fn attach_sink(self: &Arc<Self>, sender: mpsc::SyncSender<PtyEvent>) -> rootcause::Result<PtySinkGuard> {
+    fn attach_sink(self: &Arc<Self>, sender: Sender<PtyEvent>) -> rootcause::Result<PtySinkGuard> {
         let output_current = Arc::new(AtomicBool::new(true));
         lock_mutex(&self.title_changes, "pty title changes")?.clear();
         // Attach sends a fresh baseline; discard dirty state accumulated before the client could observe output events.
@@ -460,13 +460,13 @@ impl PtyState {
 
         let mut active_sink = lock_mutex(&self.active_sink, "pty active sink")?;
         if let Some(sink) = active_sink.as_ref() {
-            match sink.sender.try_send(PtyEvent::OutputReady) {
-                Ok(()) | Err(TrySendError::Full(PtyEvent::OutputReady)) => {}
-                Err(TrySendError::Disconnected(PtyEvent::OutputReady)) => {
+            match self::try_send_pty_event(&sink.sender, PtyEvent::OutputReady)? {
+                PtyEventSendOutcome::Sent | PtyEventSendOutcome::Full(PtyEvent::OutputReady) => {}
+                PtyEventSendOutcome::Disconnected(PtyEvent::OutputReady) => {
                     sink.output_current.store(false, Ordering::Release);
                     *active_sink = None;
                 }
-                Err(TrySendError::Full(PtyEvent::Exited) | TrySendError::Disconnected(PtyEvent::Exited)) => {
+                PtyEventSendOutcome::Full(PtyEvent::Exited) | PtyEventSendOutcome::Disconnected(PtyEvent::Exited) => {
                     return Err(report!("unexpected muxr pty exit event while sending output"));
                 }
             }
@@ -502,12 +502,12 @@ impl PtyState {
 
         let mut active_sink = lock_mutex(&self.active_sink, "pty active sink")?;
         if let Some(sink) = active_sink.as_ref() {
-            match sink.sender.try_send(PtyEvent::Exited) {
-                Ok(()) => {}
-                Err(TrySendError::Full(_)) => {
+            match self::try_send_pty_event(&sink.sender, PtyEvent::Exited)? {
+                PtyEventSendOutcome::Sent => {}
+                PtyEventSendOutcome::Full(_) => {
                     crate::session::tracing::pty::exit_wakeup_not_queued("channel_full");
                 }
-                Err(TrySendError::Disconnected(_)) => {
+                PtyEventSendOutcome::Disconnected(_) => {
                     crate::session::tracing::pty::exit_wakeup_not_queued("channel_disconnected");
                     sink.output_current.store(false, Ordering::Release);
                     *active_sink = None;
@@ -518,6 +518,29 @@ impl PtyState {
 
         Ok(())
     }
+}
+
+enum PtyEventSendOutcome {
+    Disconnected(PtyEvent),
+    Full(PtyEvent),
+    Sent,
+}
+
+// `kanal::try_send` reports a full queue as `Ok(false)` and drops the event. Keep the event explicit so
+// `OutputReady` coalescing and `Exited` best-effort wakeups remain auditable at muxr's PTY boundary.
+fn try_send_pty_event(sender: &Sender<PtyEvent>, event: PtyEvent) -> rootcause::Result<PtyEventSendOutcome> {
+    let mut pending = Some(event);
+    match sender.try_send_option(&mut pending) {
+        Ok(true) => Ok(PtyEventSendOutcome::Sent),
+        Ok(false) => Ok(PtyEventSendOutcome::Full(self::pending_pty_event(pending)?)),
+        Err(SendError::Closed | SendError::ReceiveClosed) => {
+            Ok(PtyEventSendOutcome::Disconnected(self::pending_pty_event(pending)?))
+        }
+    }
+}
+
+fn pending_pty_event(pending: Option<PtyEvent>) -> rootcause::Result<PtyEvent> {
+    pending.ok_or_else(|| report!("kanal dropped muxr pty event during failed send"))
 }
 
 fn lock_mutex<'a, T>(mutex: &'a Mutex<T>, name: &str) -> rootcause::Result<MutexGuard<'a, T>> {
@@ -680,7 +703,7 @@ mod tests {
             Arc::new(tokio::sync::Notify::new()),
         )?;
         let handle = session.handle();
-        let (sender, receiver) = mpsc::sync_channel(1);
+        let (sender, receiver) = kanal::bounded(1);
         let _guard = handle.attach_sink(sender)?;
 
         assert2::assert!(matches!(
@@ -704,7 +727,7 @@ mod tests {
     -> rootcause::Result<()> {
         let state = pty_state(&terminal_size()?);
         let output_current = Arc::new(AtomicBool::new(true));
-        let (sender, _receiver) = mpsc::sync_channel(0);
+        let (sender, _receiver) = kanal::bounded(0);
         *lock_mutex(&state.active_sink, "pty active sink")? = Some(ActivePtySink {
             output_current: Arc::clone(&output_current),
             sender,
@@ -736,10 +759,46 @@ mod tests {
     }
 
     #[test]
+    fn test_pty_state_mark_exited_when_sink_receiver_is_dropped_clears_active_sink() -> rootcause::Result<()> {
+        let state = pty_state(&terminal_size()?);
+        let output_current = Arc::new(AtomicBool::new(true));
+        let (sender, receiver) = kanal::bounded(1);
+        *lock_mutex(&state.active_sink, "pty active sink")? = Some(ActivePtySink {
+            output_current: Arc::clone(&output_current),
+            sender,
+        });
+        drop(receiver);
+        let session = SessionName::default();
+
+        let log = crate::session::tracing::collect_test_log(&session, || {
+            state.mark_exited(PtyExitStatus {
+                code: 7,
+                signal: None,
+                result: PtyExitResult::Failed,
+            })
+        })?;
+
+        assert2::assert!(state.exited.load(Ordering::Acquire));
+        assert2::assert!(lock_mutex(&state.active_sink, "pty active sink")?.is_none());
+        assert2::assert!(!output_current.load(Ordering::Acquire));
+        pretty_assertions::assert_eq!(
+            *lock_mutex(&state.exit_status, "pty exit status")?,
+            Some(PtyExitStatus {
+                code: 7,
+                signal: None,
+                result: PtyExitResult::Failed,
+            })
+        );
+        assert2::assert!(log.contains("kind=\"pty_exit_wakeup_not_queued\""));
+        assert2::assert!(log.contains("reason=\"channel_disconnected\""));
+        Ok(())
+    }
+
+    #[test]
     fn test_attach_sink_when_output_arrives_after_attach_delivers_live_event() -> rootcause::Result<()> {
         let state = Arc::new(pty_state(&terminal_size()?));
         self::assert_replies_eq(&(state.append_output(b"before")?), &[]);
-        let (sender, receiver) = mpsc::sync_channel(1);
+        let (sender, receiver) = kanal::bounded(1);
 
         let _guard = state.attach_sink(sender)?;
         self::assert_replies_eq(&(state.append_output(b"after")?), &[]);
@@ -749,12 +808,30 @@ mod tests {
     }
 
     #[test]
+    fn test_append_output_when_sink_receiver_is_dropped_clears_active_sink() -> rootcause::Result<()> {
+        let state = pty_state(&terminal_size()?);
+        let output_current = Arc::new(AtomicBool::new(true));
+        let (sender, receiver) = kanal::bounded(1);
+        *lock_mutex(&state.active_sink, "pty active sink")? = Some(ActivePtySink {
+            output_current: Arc::clone(&output_current),
+            sender,
+        });
+        drop(receiver);
+
+        self::assert_replies_eq(&(state.append_output(b"lost client")?), &[]);
+
+        assert2::assert!(lock_mutex(&state.active_sink, "pty active sink")?.is_none());
+        assert2::assert!(!output_current.load(Ordering::Acquire));
+        Ok(())
+    }
+
+    #[test]
     fn test_attach_sink_when_output_arrived_before_attach_clears_screen_dirty() -> rootcause::Result<()> {
         let state = Arc::new(pty_state(&terminal_size()?));
         self::assert_replies_eq(&(state.append_output(b"before")?), &[]);
         pretty_assertions::assert_eq!(state.take_screen_dirty(), PtyScreenDmg::Dirty);
         self::assert_replies_eq(&(state.append_output(b"before again")?), &[]);
-        let (sender, _receiver) = mpsc::sync_channel(1);
+        let (sender, _receiver) = kanal::bounded(1);
 
         let _guard = state.attach_sink(sender)?;
 
@@ -765,7 +842,7 @@ mod tests {
     #[test]
     fn test_append_output_when_title_only_changes_does_not_mark_screen_dirty() -> rootcause::Result<()> {
         let state = Arc::new(pty_state(&terminal_size()?));
-        let (sender, receiver) = mpsc::sync_channel(1);
+        let (sender, receiver) = kanal::bounded(1);
         let _guard = state.attach_sink(sender)?;
 
         self::assert_replies_eq(&(state.append_output(b"\x1b]2;~\x07")?), &[]);
@@ -836,7 +913,7 @@ mod tests {
     #[test]
     fn test_append_output_when_sink_is_full_coalesces_without_blocking() -> rootcause::Result<()> {
         let state = pty_state(&terminal_size()?);
-        let (sender, receiver) = mpsc::sync_channel(1);
+        let (sender, receiver) = kanal::bounded(1);
         let output_current = Arc::new(AtomicBool::new(true));
         *lock_mutex(&state.active_sink, "pty active sink")? = Some(ActivePtySink {
             output_current: Arc::clone(&output_current),
@@ -857,7 +934,7 @@ mod tests {
     #[test]
     fn test_append_output_when_sink_is_full_and_title_changes_preserves_title_changes() -> rootcause::Result<()> {
         let state = pty_state(&terminal_size()?);
-        let (sender, receiver) = mpsc::sync_channel(1);
+        let (sender, receiver) = kanal::bounded(1);
         let output_current = Arc::new(AtomicBool::new(true));
         *lock_mutex(&state.active_sink, "pty active sink")? = Some(ActivePtySink {
             output_current: Arc::clone(&output_current),

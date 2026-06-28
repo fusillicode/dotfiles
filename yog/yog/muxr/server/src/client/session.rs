@@ -1,8 +1,9 @@
 use std::collections::BTreeSet;
-use std::sync::mpsc;
 use std::time::Duration;
 use std::time::Instant;
 
+use kanal::Receiver;
+use kanal::Sender;
 use muxr_core::AttachRequest;
 use muxr_core::LayoutSnapshot;
 use muxr_core::PaneId;
@@ -57,7 +58,7 @@ pub struct ClientSessionState<'a> {
     pub layout: &'a mut SessionLayout,
     pub pane_fullscreen: PaneFullscreen,
     pub pane_regions: PaneRegionsSnapshot,
-    pty_event_sender: &'a mpsc::SyncSender<PtyEvent>,
+    pty_event_sender: &'a Sender<PtyEvent>,
     pub render_composer: &'a mut RenderComposer,
     pub runtimes: &'a mut PaneRuntimes,
     pub scrollback_editor: Option<ScrollbackEditorState>,
@@ -72,10 +73,7 @@ pub enum ReapedPanes {
     Stop,
 }
 
-fn attach_pane_sinks(
-    runtimes: &PaneRuntimes,
-    sender: &mpsc::SyncSender<PtyEvent>,
-) -> rootcause::Result<Vec<ClientPtySink>> {
+fn attach_pane_sinks(runtimes: &PaneRuntimes, sender: &Sender<PtyEvent>) -> rootcause::Result<Vec<ClientPtySink>> {
     Ok(runtimes
         .attach_sinks(sender)?
         .into_iter()
@@ -85,7 +83,7 @@ fn attach_pane_sinks(
 
 fn attach_pane_sink(
     runtimes: &PaneRuntimes,
-    sender: &mpsc::SyncSender<PtyEvent>,
+    sender: &Sender<PtyEvent>,
     pane_id: PaneId,
 ) -> rootcause::Result<ClientPtySink> {
     Ok(ClientPtySink {
@@ -137,7 +135,7 @@ pub async fn handle_client(
     runtimes: &mut PaneRuntimes,
 ) -> rootcause::Result<()> {
     crate::screen_render::resize_panes_to_layout(layout, runtimes, &attach_request.terminal_size)?;
-    let (pty_event_sender, pty_event_receiver) = mpsc::sync_channel(PANE_OUTPUT_EVENT_CHANNEL_LIMIT);
+    let (pty_event_sender, pty_event_receiver) = kanal::bounded(PANE_OUTPUT_EVENT_CHANNEL_LIMIT);
     let mut sink_guards = self::attach_pane_sinks(runtimes, &pty_event_sender)?;
     let (mut request_reader, mut event_writer) = connection.split();
     let mut pane_tracked_processes = PaneTrackedProcesses::default();
@@ -170,17 +168,7 @@ pub async fn handle_client(
         return Ok(());
     }
 
-    let (async_pty_sender, mut async_pty_receiver) = tokio::sync::mpsc::channel(PANE_OUTPUT_EVENT_CHANNEL_LIMIT);
-    let bridge_handle = tokio::task::spawn_blocking(move || {
-        while let Ok(event) = pty_event_receiver.recv() {
-            if async_pty_sender
-                .blocking_send(SessionPaneOutputMessage::from(event))
-                .is_err()
-            {
-                break;
-            }
-        }
-    });
+    let (mut async_pty_receiver, bridge_handle) = self::spawn_pty_event_bridge(pty_event_receiver);
     let mut client_state = ClientSessionState {
         pane_tracked_processes,
         config,
@@ -227,6 +215,39 @@ pub async fn handle_client(
             Err(error)
         }
     }
+}
+
+fn spawn_pty_event_bridge(
+    pty_event_receiver: Receiver<PtyEvent>,
+) -> (
+    tokio::sync::mpsc::Receiver<SessionPaneOutputMessage>,
+    tokio::task::JoinHandle<()>,
+) {
+    let (async_pty_sender, async_pty_receiver) = tokio::sync::mpsc::channel(PANE_OUTPUT_EVENT_CHANNEL_LIMIT);
+    // kanal 0.1.1 documents async receives as unsuitable for `tokio::select!` cancellation. Keep this bridge so the
+    // client loop can select PTY output against requests and timers without risking a lost output wakeup.
+    let bridge_handle =
+        tokio::task::spawn_blocking(move || self::forward_pty_events_to_async(&pty_event_receiver, &async_pty_sender));
+    (async_pty_receiver, bridge_handle)
+}
+
+fn forward_pty_events_to_async(
+    pty_event_receiver: &Receiver<PtyEvent>,
+    async_pty_sender: &tokio::sync::mpsc::Sender<SessionPaneOutputMessage>,
+) {
+    while let Ok(event) = pty_event_receiver.recv() {
+        if async_pty_sender
+            .blocking_send(SessionPaneOutputMessage::from(event))
+            .is_err()
+        {
+            break;
+        }
+    }
+}
+
+#[cfg(test)]
+fn pty_event_channel() -> (Sender<PtyEvent>, Receiver<PtyEvent>) {
+    kanal::bounded(PANE_OUTPUT_EVENT_CHANNEL_LIMIT)
 }
 
 async fn run_client_session(
@@ -657,6 +678,7 @@ pub fn acknowledge_active_tracked_process(
 mod tests {
     use std::sync::Arc;
     use std::sync::mpsc;
+    use std::thread;
     use std::time::Duration;
     use std::time::Instant;
 
@@ -694,6 +716,66 @@ mod tests {
     use crate::terminal::TerminalScreenMode;
     use crate::terminal::TerminalSnapshot;
 
+    #[tokio::test]
+    async fn test_pty_event_bridge_forwards_events_in_order_and_stops_when_async_receiver_drops()
+    -> rootcause::Result<()> {
+        let (pty_event_sender, pty_event_receiver) = self::pty_event_channel();
+        let (async_pty_sender, mut async_pty_receiver) = tokio::sync::mpsc::channel(PANE_OUTPUT_EVENT_CHANNEL_LIMIT);
+        let (bridge_done_sender, bridge_done_receiver) = mpsc::channel();
+        let bridge_handle = thread::spawn(move || {
+            self::forward_pty_events_to_async(&pty_event_receiver, &async_pty_sender);
+            let _sent = bridge_done_sender.send(());
+        });
+
+        assert2::assert!(
+            pty_event_sender
+                .send_timeout(PtyEvent::OutputReady, Duration::from_secs(1))
+                .is_ok()
+        );
+        assert2::assert!(
+            pty_event_sender
+                .send_timeout(PtyEvent::Exited, Duration::from_secs(1))
+                .is_ok()
+        );
+
+        pretty_assertions::assert_eq!(
+            self::recv_pty_bridge_event(&mut async_pty_receiver, "output ready").await?,
+            SessionPaneOutputMessage::PaneOutputReady
+        );
+        pretty_assertions::assert_eq!(
+            self::recv_pty_bridge_event(&mut async_pty_receiver, "exited").await?,
+            SessionPaneOutputMessage::PaneExited
+        );
+
+        drop(async_pty_receiver);
+        assert2::assert!(
+            pty_event_sender
+                .send_timeout(PtyEvent::OutputReady, Duration::from_secs(1))
+                .is_ok()
+        );
+        bridge_done_receiver
+            .recv_timeout(Duration::from_secs(1))
+            .map_err(|error| report!("muxr pty event bridge did not stop after async receiver drop").attach(error))?;
+        bridge_handle
+            .join()
+            .map_err(|_| report!("muxr pty event bridge test thread panicked"))?;
+        Ok(())
+    }
+
+    async fn recv_pty_bridge_event(
+        async_pty_receiver: &mut tokio::sync::mpsc::Receiver<SessionPaneOutputMessage>,
+        label: &str,
+    ) -> rootcause::Result<SessionPaneOutputMessage> {
+        // Bridge regressions should fail this test instead of leaving CI parked on an unbounded receive.
+        tokio::time::timeout(Duration::from_secs(1), async_pty_receiver.recv())
+            .await
+            .map_err(|error| {
+                report!("timed out waiting for muxr pty bridge event")
+                    .attach(error)
+                    .attach(label.to_owned())
+            })?
+            .ok_or_else(|| report!("muxr pty event bridge closed before receiving event").attach(label.to_owned()))
+    }
     #[tokio::test]
     async fn test_handle_pane_output_message_when_active_pane_exits_drops_quiet_deadline_after_reap()
     -> rootcause::Result<()> {
@@ -745,7 +827,7 @@ mod tests {
         self::wait_for_pane_exit(&runtimes, pane_id)?;
         let (mut event_writer, client_drain) = self::connect_client_event_drain(&config).await?;
         let delete_sessions = DeleteSessions::default();
-        let (pty_event_sender, _pty_event_receiver) = mpsc::sync_channel(PANE_OUTPUT_EVENT_CHANNEL_LIMIT);
+        let (pty_event_sender, _pty_event_receiver) = self::pty_event_channel();
         let mut sink_guards = Vec::new();
         let mut state = ClientSessionState {
             pane_tracked_processes,
@@ -841,7 +923,7 @@ mod tests {
             )?;
         let (mut event_writer, client_drain) = self::connect_client_event_drain(&config).await?;
         let delete_sessions = DeleteSessions::default();
-        let (pty_event_sender, _pty_event_receiver) = mpsc::sync_channel(PANE_OUTPUT_EVENT_CHANNEL_LIMIT);
+        let (pty_event_sender, _pty_event_receiver) = self::pty_event_channel();
         let mut sink_guards = super::attach_pane_sinks(&runtimes, &pty_event_sender)?;
         runtimes.handle(first_exited_pane)?.write_input(b"exit\n")?;
         runtimes.handle(second_exited_pane)?.write_input(b"exit\n")?;
@@ -959,7 +1041,7 @@ mod tests {
             )?;
         let (mut event_writer, client_drain) = self::connect_client_event_drain(&config).await?;
         let delete_sessions = DeleteSessions::default();
-        let (pty_event_sender, _pty_event_receiver) = mpsc::sync_channel(PANE_OUTPUT_EVENT_CHANNEL_LIMIT);
+        let (pty_event_sender, _pty_event_receiver) = self::pty_event_channel();
         let mut sink_guards = Vec::new();
         let mut state = ClientSessionState {
             pane_tracked_processes,
@@ -1057,7 +1139,7 @@ mod tests {
             )?;
         let (mut event_writer, client_drain) = self::connect_client_event_drain(&config).await?;
         let delete_sessions = DeleteSessions::default();
-        let (pty_event_sender, _pty_event_receiver) = mpsc::sync_channel(PANE_OUTPUT_EVENT_CHANNEL_LIMIT);
+        let (pty_event_sender, _pty_event_receiver) = self::pty_event_channel();
         let mut sink_guards = super::attach_pane_sinks(&runtimes, &pty_event_sender)?;
         let mut state = ClientSessionState {
             pane_tracked_processes,
@@ -1195,7 +1277,7 @@ mod tests {
         let (mut client_reader, _client_writer) = client_connection.split();
         let (_request_reader, mut event_writer) = server_connection.split();
         let delete_sessions = DeleteSessions::default();
-        let (pty_event_sender, _pty_event_receiver) = mpsc::sync_channel(PANE_OUTPUT_EVENT_CHANNEL_LIMIT);
+        let (pty_event_sender, _pty_event_receiver) = self::pty_event_channel();
         let mut sink_guards = Vec::new();
         let mut state = ClientSessionState {
             pane_tracked_processes,
@@ -1319,7 +1401,7 @@ mod tests {
             )?;
         let (mut event_writer, client_drain) = self::connect_client_event_drain(&config).await?;
         let delete_sessions = DeleteSessions::default();
-        let (pty_event_sender, _pty_event_receiver) = mpsc::sync_channel(PANE_OUTPUT_EVENT_CHANNEL_LIMIT);
+        let (pty_event_sender, _pty_event_receiver) = self::pty_event_channel();
         let mut sink_guards = Vec::new();
         let mut state = ClientSessionState {
             pane_tracked_processes,
@@ -1508,7 +1590,7 @@ mod tests {
             )?;
         let (mut event_writer, client_drain) = self::connect_client_event_drain(&config).await?;
         let delete_sessions = DeleteSessions::default();
-        let (pty_event_sender, _pty_event_receiver) = mpsc::sync_channel(PANE_OUTPUT_EVENT_CHANNEL_LIMIT);
+        let (pty_event_sender, _pty_event_receiver) = self::pty_event_channel();
         let mut sink_guards = Vec::new();
         let mut state = ClientSessionState {
             pane_tracked_processes,
@@ -1609,7 +1691,7 @@ mod tests {
         let (mut request_reader, mut event_writer) = server_connection.split();
         client_writer.send_request(&ClientRequest::Ping).await?;
         let delete_sessions = DeleteSessions::default();
-        let (pty_event_sender, _pty_event_receiver) = mpsc::sync_channel(PANE_OUTPUT_EVENT_CHANNEL_LIMIT);
+        let (pty_event_sender, _pty_event_receiver) = self::pty_event_channel();
         let (_async_pty_sender, mut async_pty_receiver) = tokio::sync::mpsc::channel(PANE_OUTPUT_EVENT_CHANNEL_LIMIT);
         let mut sink_guards = Vec::new();
         let mut state = ClientSessionState {
@@ -1706,7 +1788,7 @@ mod tests {
         let (mut request_reader, mut event_writer) = server_connection.split();
         client_writer.send_request(&ClientRequest::Detach).await?;
         let delete_sessions = DeleteSessions::default();
-        let (pty_event_sender, _pty_event_receiver) = mpsc::sync_channel(PANE_OUTPUT_EVENT_CHANNEL_LIMIT);
+        let (pty_event_sender, _pty_event_receiver) = self::pty_event_channel();
         let (async_pty_sender, mut async_pty_receiver) = tokio::sync::mpsc::channel(PANE_OUTPUT_EVENT_CHANNEL_LIMIT);
         async_pty_sender
             .send(SessionPaneOutputMessage::PaneOutputReady)
@@ -1811,7 +1893,7 @@ mod tests {
         let (mut request_reader, mut event_writer) = server_connection.split();
         client_writer.send_request(&ClientRequest::Ping).await?;
         let delete_sessions = DeleteSessions::default();
-        let (pty_event_sender, _pty_event_receiver) = mpsc::sync_channel(PANE_OUTPUT_EVENT_CHANNEL_LIMIT);
+        let (pty_event_sender, _pty_event_receiver) = self::pty_event_channel();
         let (async_pty_sender, mut async_pty_receiver) = tokio::sync::mpsc::channel(PANE_OUTPUT_EVENT_CHANNEL_LIMIT);
         async_pty_sender
             .send(SessionPaneOutputMessage::PaneOutputReady)
@@ -1934,7 +2016,7 @@ mod tests {
         let (mut request_reader, mut event_writer) = server_connection.split();
         client_writer.send_request(&ClientRequest::Detach).await?;
         let delete_sessions = DeleteSessions::default();
-        let (pty_event_sender, _pty_event_receiver) = mpsc::sync_channel(PANE_OUTPUT_EVENT_CHANNEL_LIMIT);
+        let (pty_event_sender, _pty_event_receiver) = self::pty_event_channel();
         let (async_pty_sender, mut async_pty_receiver) = tokio::sync::mpsc::channel(PANE_OUTPUT_EVENT_CHANNEL_LIMIT);
         for _ in 0..QUIET_OUTPUT_DRAIN_BATCH_LIMIT {
             async_pty_sender
@@ -2048,7 +2130,7 @@ mod tests {
         self::wait_for_runtime_snapshot_contains(&runtimes, pane_id, "muxr-queued-boundary")?;
         let (mut event_writer, client_drain) = self::connect_client_event_drain(&config).await?;
         let delete_sessions = DeleteSessions::default();
-        let (pty_event_sender, _pty_event_receiver) = mpsc::sync_channel(PANE_OUTPUT_EVENT_CHANNEL_LIMIT);
+        let (pty_event_sender, _pty_event_receiver) = self::pty_event_channel();
         let (async_pty_sender, mut async_pty_receiver) = tokio::sync::mpsc::channel(PANE_OUTPUT_EVENT_CHANNEL_LIMIT);
         for _ in 0..QUIET_OUTPUT_DRAIN_BATCH_LIMIT {
             async_pty_sender
@@ -2176,7 +2258,7 @@ mod tests {
         self::wait_for_runtime_snapshot_contains(&runtimes, pane_id, "muxr-boundary")?;
         let (mut event_writer, client_drain) = self::connect_client_event_drain(&config).await?;
         let delete_sessions = DeleteSessions::default();
-        let (pty_event_sender, _pty_event_receiver) = mpsc::sync_channel(PANE_OUTPUT_EVENT_CHANNEL_LIMIT);
+        let (pty_event_sender, _pty_event_receiver) = self::pty_event_channel();
         let mut sink_guards = Vec::new();
         let mut state = ClientSessionState {
             pane_tracked_processes,
@@ -2281,7 +2363,7 @@ mod tests {
             tokio::try_join!(ClientConnection::connect(&config.paths.socket), listener.accept())?;
         let (_request_reader, mut event_writer) = server_connection.split();
         let delete_sessions = DeleteSessions::default();
-        let (pty_event_sender, _pty_event_receiver) = mpsc::sync_channel(PANE_OUTPUT_EVENT_CHANNEL_LIMIT);
+        let (pty_event_sender, _pty_event_receiver) = self::pty_event_channel();
         let mut sink_guards = Vec::new();
         let mut state = ClientSessionState {
             pane_tracked_processes,
@@ -2372,7 +2454,7 @@ mod tests {
             )?;
         let (mut event_writer, client_drain) = self::connect_client_event_drain(&config).await?;
         let delete_sessions = DeleteSessions::default();
-        let (pty_event_sender, _pty_event_receiver) = mpsc::sync_channel(PANE_OUTPUT_EVENT_CHANNEL_LIMIT);
+        let (pty_event_sender, _pty_event_receiver) = self::pty_event_channel();
         let mut sink_guards = Vec::new();
         let mut state = ClientSessionState {
             pane_tracked_processes,
