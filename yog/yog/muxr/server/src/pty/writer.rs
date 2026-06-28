@@ -3,10 +3,12 @@ use std::sync::Arc;
 use std::sync::Condvar;
 use std::sync::Mutex;
 use std::sync::MutexGuard;
-use std::sync::mpsc;
-use std::sync::mpsc::TrySendError;
 use std::thread;
 
+use kanal::ReceiveError;
+use kanal::Receiver;
+use kanal::SendError;
+use kanal::Sender;
 use rootcause::Report;
 use rootcause::markers::Cloneable;
 use rootcause::markers::Dynamic;
@@ -26,7 +28,7 @@ type PtyWriterError = Report<Dynamic, Cloneable>;
 
 #[derive(Clone)]
 pub struct PtyWriter {
-    sender: mpsc::SyncSender<PtyWriteRequest>,
+    sender: Sender<PtyWriteRequest>,
     state: Arc<PtyWriteState>,
 }
 
@@ -96,26 +98,24 @@ impl PtyWriter {
                     continue;
                 }
             }
-            match self.sender.try_send(PtyWriteRequest::Write(write)) {
-                Ok(()) => {
+            match self::try_send_pty_write_request(&self.sender, PtyWriteRequest::Write(write))? {
+                PtyWriteSendOutcome::Sent => {
                     drop(queue_guard);
                     return Ok(());
                 }
-                Err(TrySendError::Full(PtyWriteRequest::Write(returned))) => {
+                PtyWriteSendOutcome::Full(PtyWriteRequest::Write(returned)) => {
                     write = returned;
                     PtyWriteState::release_reserved_write_bytes(&mut queue_guard, write_len);
                     let observed_progress = queue_guard.progress_version;
                     queue_guard = self.state.wait_for_queue_progress(queue_guard, observed_progress)?;
                 }
-                Err(TrySendError::Disconnected(PtyWriteRequest::Write(_))) => {
+                PtyWriteSendOutcome::Disconnected(PtyWriteRequest::Write(_)) => {
                     PtyWriteState::release_reserved_write_bytes(&mut queue_guard, write_len);
                     drop(queue_guard);
                     return Err(self.state.stopped_report("reason=pty writer channel disconnected"));
                 }
-                Err(
-                    TrySendError::Full(PtyWriteRequest::Shutdown)
-                    | TrySendError::Disconnected(PtyWriteRequest::Shutdown),
-                ) => {
+                PtyWriteSendOutcome::Full(PtyWriteRequest::Shutdown)
+                | PtyWriteSendOutcome::Disconnected(PtyWriteRequest::Shutdown) => {
                     drop(queue_guard);
                     return Err(report!("unexpected muxr pty writer enqueue send result"));
                 }
@@ -125,14 +125,15 @@ impl PtyWriter {
 
     pub fn shutdown(&self) -> rootcause::Result<()> {
         self.state.close()?;
-        match self.sender.try_send(PtyWriteRequest::Shutdown) {
-            Ok(()) | Err(TrySendError::Full(PtyWriteRequest::Shutdown)) => Ok(()),
-            Err(TrySendError::Disconnected(PtyWriteRequest::Shutdown)) => {
+        match self::try_send_pty_write_request(&self.sender, PtyWriteRequest::Shutdown)? {
+            PtyWriteSendOutcome::Sent | PtyWriteSendOutcome::Full(PtyWriteRequest::Shutdown) => Ok(()),
+            PtyWriteSendOutcome::Disconnected(PtyWriteRequest::Shutdown) => {
                 Err(self.state.stopped_report("reason=pty writer channel disconnected"))
             }
-            Err(
-                TrySendError::Full(PtyWriteRequest::Write(_)) | TrySendError::Disconnected(PtyWriteRequest::Write(_)),
-            ) => Err(report!("unexpected muxr pty writer shutdown send result")),
+            PtyWriteSendOutcome::Full(PtyWriteRequest::Write(_))
+            | PtyWriteSendOutcome::Disconnected(PtyWriteRequest::Write(_)) => {
+                Err(report!("unexpected muxr pty writer shutdown send result"))
+            }
         }
     }
 }
@@ -144,6 +145,12 @@ impl PtyWriter {
 enum PtyWriteRequest {
     Write(PtyWrite),
     Shutdown,
+}
+
+enum PtyWriteSendOutcome {
+    Disconnected(PtyWriteRequest),
+    Full(PtyWriteRequest),
+    Sent,
 }
 
 struct PtyWrite {
@@ -344,7 +351,7 @@ const fn advance_queue_progress(queue: &mut PtyWriteQueueState) {
 }
 
 pub fn spawn(mut writer: Box<dyn Write + Send>) -> (PtyWriter, thread::JoinHandle<()>) {
-    let (sender, receiver) = mpsc::sync_channel(PTY_WRITE_QUEUE_LIMIT);
+    let (sender, receiver) = kanal::bounded(PTY_WRITE_QUEUE_LIMIT);
     let state = Arc::new(PtyWriteState::new());
     let queue = PtyWriter {
         sender,
@@ -378,13 +385,13 @@ fn queue_pty_write(
     Ok(())
 }
 
-fn run_writer_loop(writer: &mut dyn Write, receiver: &mpsc::Receiver<PtyWriteRequest>, state: &PtyWriteState) {
+fn run_writer_loop(writer: &mut dyn Write, receiver: &Receiver<PtyWriteRequest>, state: &PtyWriteState) {
     let mut batch = Vec::new();
     loop {
         let request = match state.stop_state() {
             Ok(PtyWriterStopState::Stopped) => match receiver.try_recv() {
-                Ok(request) => request,
-                Err(mpsc::TryRecvError::Empty | mpsc::TryRecvError::Disconnected) => break,
+                Ok(Some(request)) => request,
+                Ok(None) | Err(ReceiveError::Closed | ReceiveError::SendClosed) => break,
             },
             Ok(PtyWriterStopState::Open) => match receiver.recv() {
                 Ok(request) => request,
@@ -419,7 +426,7 @@ fn run_writer_loop(writer: &mut dyn Write, receiver: &mpsc::Receiver<PtyWriteReq
 }
 
 fn drain_pending_writes(
-    receiver: &mpsc::Receiver<PtyWriteRequest>,
+    receiver: &Receiver<PtyWriteRequest>,
     batch: &mut Vec<PtyWrite>,
     batch_bytes: &mut usize,
 ) -> PtyWriteDrainOutcome {
@@ -428,14 +435,14 @@ fn drain_pending_writes(
             return PtyWriteDrainOutcome::Continue;
         }
         match receiver.try_recv() {
-            Ok(PtyWriteRequest::Write(write)) => {
+            Ok(Some(PtyWriteRequest::Write(write))) => {
                 *batch_bytes = batch_bytes.saturating_add(write.bytes.len());
                 batch.push(write);
             }
-            Ok(PtyWriteRequest::Shutdown) | Err(mpsc::TryRecvError::Disconnected) => {
+            Ok(Some(PtyWriteRequest::Shutdown)) | Err(ReceiveError::Closed | ReceiveError::SendClosed) => {
                 return PtyWriteDrainOutcome::Shutdown;
             }
-            Err(mpsc::TryRecvError::Empty) => return PtyWriteDrainOutcome::Continue,
+            Ok(None) => return PtyWriteDrainOutcome::Continue,
         }
     }
 }
@@ -468,9 +475,30 @@ fn lock_queue_mutex<T>(mutex: &Mutex<T>) -> rootcause::Result<MutexGuard<'_, T>>
         .map_err(|_| report!("poisoned muxr pty writer queue mutex"))
 }
 
+// `kanal::try_send` drops the request when a bounded queue is full. Use the option API so muxr can keep the write
+// request and release byte accounting exactly like the old `SyncSender::try_send` full/disconnected error paths.
+fn try_send_pty_write_request(
+    sender: &Sender<PtyWriteRequest>,
+    request: PtyWriteRequest,
+) -> rootcause::Result<PtyWriteSendOutcome> {
+    let mut pending = Some(request);
+    match sender.try_send_option(&mut pending) {
+        Ok(true) => Ok(PtyWriteSendOutcome::Sent),
+        Ok(false) => Ok(PtyWriteSendOutcome::Full(self::pending_pty_write_request(pending)?)),
+        Err(SendError::Closed | SendError::ReceiveClosed) => Ok(PtyWriteSendOutcome::Disconnected(
+            self::pending_pty_write_request(pending)?,
+        )),
+    }
+}
+
+fn pending_pty_write_request(pending: Option<PtyWriteRequest>) -> rootcause::Result<PtyWriteRequest> {
+    pending.ok_or_else(|| report!("kanal dropped muxr pty write request during failed send"))
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::Mutex;
+    use std::sync::mpsc;
     use std::time::Duration;
 
     use muxr_core::SessionName;
@@ -528,14 +556,51 @@ mod tests {
             "failed to flush first bounded test payload",
         ))?;
 
-        assert2::assert!(matches!(
-            queue.sender.try_send(PtyWriteRequest::Write(PtyWrite::new(
+        let PtyWriteSendOutcome::Full(PtyWriteRequest::Write(returned_write)) = self::try_send_pty_write_request(
+            &queue.sender,
+            PtyWriteRequest::Write(PtyWrite::new(
                 b"two".to_vec(),
                 "failed to write second bounded test payload",
                 "failed to flush second bounded test payload",
-            ))),
-            Err(mpsc::TrySendError::Full(PtyWriteRequest::Write(_)))
-        ));
+            )),
+        )?
+        else {
+            return Err(report!("expected muxr pty writer backpressure to return pending write"));
+        };
+
+        pretty_assertions::assert_eq!(returned_write.bytes, b"two".to_vec());
+        Ok(())
+    }
+
+    #[test]
+    fn test_pty_writer_when_receiver_is_dropped_releases_reserved_bytes() -> rootcause::Result<()> {
+        let (queue, receiver) = self::queued_pty_writer();
+        drop(receiver);
+
+        let error = queue
+            .enqueue(PtyWrite::new(
+                b"lost".to_vec(),
+                "failed to write dropped receiver test payload",
+                "failed to flush dropped receiver test payload",
+            ))
+            .err()
+            .ok_or_else(|| report!("expected muxr pty write enqueue to fail after receiver drop"))?;
+
+        assert2::assert!(error.to_string().contains("pty writer channel disconnected"));
+        pretty_assertions::assert_eq!(super::lock_queue_mutex(&queue.state.queue)?.queued_bytes, 0);
+        Ok(())
+    }
+
+    #[test]
+    fn test_pty_writer_shutdown_when_receiver_is_dropped_reports_disconnected() -> rootcause::Result<()> {
+        let (queue, receiver) = self::queued_pty_writer();
+        drop(receiver);
+
+        let Err(error) = queue.shutdown() else {
+            return Err(report!("expected muxr pty writer shutdown to fail after receiver drop"));
+        };
+
+        assert2::assert!(error.to_string().contains("pty writer channel disconnected"));
         Ok(())
     }
 
@@ -862,19 +927,19 @@ mod tests {
         Ok(())
     }
 
-    fn queued_pty_writer() -> (PtyWriter, mpsc::Receiver<PtyWriteRequest>) {
+    fn queued_pty_writer() -> (PtyWriter, Receiver<PtyWriteRequest>) {
         self::queued_pty_writer_with_limit(PTY_WRITE_QUEUE_LIMIT)
     }
 
-    fn queued_pty_writer_with_limit(limit: usize) -> (PtyWriter, mpsc::Receiver<PtyWriteRequest>) {
+    fn queued_pty_writer_with_limit(limit: usize) -> (PtyWriter, Receiver<PtyWriteRequest>) {
         self::queued_pty_writer_with_limits(limit, PTY_WRITE_QUEUE_BYTE_LIMIT)
     }
 
     fn queued_pty_writer_with_limits(
         message_limit: usize,
         byte_limit: usize,
-    ) -> (PtyWriter, mpsc::Receiver<PtyWriteRequest>) {
-        let (sender, receiver) = mpsc::sync_channel(message_limit);
+    ) -> (PtyWriter, Receiver<PtyWriteRequest>) {
+        let (sender, receiver) = kanal::bounded(message_limit);
         (
             PtyWriter {
                 sender,
@@ -886,7 +951,7 @@ mod tests {
 
     fn drain_queued_writes(
         queue: &PtyWriter,
-        receiver: &mpsc::Receiver<PtyWriteRequest>,
+        receiver: &Receiver<PtyWriteRequest>,
         mut writer: Box<dyn Write + Send>,
     ) -> rootcause::Result<()> {
         queue.shutdown()?;
