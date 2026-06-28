@@ -36,6 +36,7 @@ use crate::terminal::TerminalApplicationMode;
 use crate::terminal::TerminalCursorKeyMode;
 use crate::terminal::TerminalFocusEvent;
 use crate::terminal::TerminalMouseProtocol;
+use crate::terminal::TerminalReplies;
 use crate::terminal::TerminalScrollMove;
 use crate::terminal::TerminalSnapshot;
 use crate::terminal::TerminalState;
@@ -432,7 +433,7 @@ impl PtyState {
         })
     }
 
-    fn append_output(&self, bytes: &[u8]) -> rootcause::Result<Vec<Vec<u8>>> {
+    fn append_output(&self, bytes: &[u8]) -> rootcause::Result<TerminalReplies> {
         if let Some(history) = lock_mutex(&self.history, "pty history")?.as_mut() {
             history.append(bytes)?;
         }
@@ -597,7 +598,7 @@ fn run_reader_loop(reader: &mut dyn Read, state: &PtyState, writer: &PtyWriter) 
                     }
                 };
                 if writer
-                    .write_terminal_replies(&terminal_replies)
+                    .write_terminal_replies(terminal_replies.as_slice())
                     .inspect_err(|error| {
                         crate::session::tracing::pty::reader_stopped_after_error("write_terminal_replies", error);
                     })
@@ -620,6 +621,10 @@ mod tests {
     use super::super::event::PtyExitResult;
     use super::*;
     use crate::terminal::TerminalFocusReporting;
+
+    fn assert_replies_eq(replies: &TerminalReplies, expected: &[Vec<u8>]) {
+        pretty_assertions::assert_eq!(replies.as_slice(), expected);
+    }
 
     fn pty_state(size: &TerminalSize) -> PtyState {
         PtyState {
@@ -733,11 +738,11 @@ mod tests {
     #[test]
     fn test_attach_sink_when_output_arrives_after_attach_delivers_live_event() -> rootcause::Result<()> {
         let state = Arc::new(pty_state(&terminal_size()?));
-        pretty_assertions::assert_eq!(state.append_output(b"before")?, Vec::<Vec<u8>>::new());
+        self::assert_replies_eq(&(state.append_output(b"before")?), &[]);
         let (sender, receiver) = mpsc::sync_channel(1);
 
         let _guard = state.attach_sink(sender)?;
-        pretty_assertions::assert_eq!(state.append_output(b"after")?, Vec::<Vec<u8>>::new());
+        self::assert_replies_eq(&(state.append_output(b"after")?), &[]);
 
         assert2::assert!(matches!(receiver.recv(), Ok(PtyEvent::OutputReady)));
         Ok(())
@@ -746,9 +751,9 @@ mod tests {
     #[test]
     fn test_attach_sink_when_output_arrived_before_attach_clears_screen_dirty() -> rootcause::Result<()> {
         let state = Arc::new(pty_state(&terminal_size()?));
-        pretty_assertions::assert_eq!(state.append_output(b"before")?, Vec::<Vec<u8>>::new());
+        self::assert_replies_eq(&(state.append_output(b"before")?), &[]);
         pretty_assertions::assert_eq!(state.take_screen_dirty(), PtyScreenDmg::Dirty);
-        pretty_assertions::assert_eq!(state.append_output(b"before again")?, Vec::<Vec<u8>>::new());
+        self::assert_replies_eq(&(state.append_output(b"before again")?), &[]);
         let (sender, _receiver) = mpsc::sync_channel(1);
 
         let _guard = state.attach_sink(sender)?;
@@ -763,7 +768,7 @@ mod tests {
         let (sender, receiver) = mpsc::sync_channel(1);
         let _guard = state.attach_sink(sender)?;
 
-        pretty_assertions::assert_eq!(state.append_output(b"\x1b]2;~\x07")?, Vec::<Vec<u8>>::new());
+        self::assert_replies_eq(&(state.append_output(b"\x1b]2;~\x07")?), &[]);
 
         pretty_assertions::assert_eq!(state.take_screen_dirty(), PtyScreenDmg::Clean);
         pretty_assertions::assert_eq!(state.take_title_changes()?, vec![Some("~".to_owned())]);
@@ -775,7 +780,7 @@ mod tests {
     fn test_append_output_when_visible_output_arrives_marks_screen_dirty_until_taken() -> rootcause::Result<()> {
         let state = pty_state(&terminal_size()?);
 
-        pretty_assertions::assert_eq!(state.append_output(b"visible")?, Vec::<Vec<u8>>::new());
+        self::assert_replies_eq(&(state.append_output(b"visible")?), &[]);
 
         pretty_assertions::assert_eq!(state.take_screen_dirty(), PtyScreenDmg::Dirty);
         pretty_assertions::assert_eq!(state.take_screen_dirty(), PtyScreenDmg::Clean);
@@ -838,8 +843,8 @@ mod tests {
             sender,
         });
 
-        pretty_assertions::assert_eq!(state.append_output(b"first")?, Vec::<Vec<u8>>::new());
-        pretty_assertions::assert_eq!(state.append_output(b"second")?, Vec::<Vec<u8>>::new());
+        self::assert_replies_eq(&(state.append_output(b"first")?), &[]);
+        self::assert_replies_eq(&(state.append_output(b"second")?), &[]);
 
         assert2::assert!(lock_mutex(&state.active_sink, "pty active sink")?.is_some());
         assert2::assert!(output_current.load(Ordering::Acquire));
@@ -859,11 +864,8 @@ mod tests {
             sender,
         });
 
-        pretty_assertions::assert_eq!(state.append_output(b"first")?, Vec::<Vec<u8>>::new());
-        pretty_assertions::assert_eq!(
-            state.append_output(b"\x1b]2;cargo test\x07\x1b]2;~\x07")?,
-            Vec::<Vec<u8>>::new()
-        );
+        self::assert_replies_eq(&(state.append_output(b"first")?), &[]);
+        self::assert_replies_eq(&(state.append_output(b"\x1b]2;cargo test\x07\x1b]2;~\x07")?), &[]);
 
         pretty_assertions::assert_eq!(
             state.take_title_changes()?,

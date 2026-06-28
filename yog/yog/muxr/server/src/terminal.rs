@@ -18,6 +18,7 @@ use muxr_core::RowWrap;
 use muxr_core::TerminalSize;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
+use smallvec::SmallVec;
 
 use crate::terminal_scrollback::TerminalPreParserAction;
 use crate::terminal_scrollback::TerminalScrollback;
@@ -37,6 +38,31 @@ const KITTY_KEYBOARD_PROTOCOL_SET_DIFFERENCE: u16 = 3;
 const REPLAY_ALTERNATE_SCREEN_EXIT_BYTES: &[u8] = b"\x1b[?1049l";
 const REPLAY_APPLICATION_STATE_RESET_BYTES: &[u8] =
     b"\x18\x1b>\x1b[?1l\x1b[?6l\x1b[?9l\x1b[?47l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1005l\x1b[?1006l\x1b[?2004l\x1b[?25h\x1b[r";
+
+/// Terminal replies generated while parsing PTY output.
+///
+/// Reply batches are normally empty or a single terminal-generated response, such as DSR/CPR or keyboard protocol
+/// status, so the outer buffer stays inline while callers use [`Self::as_slice`] or [`AsRef`] at writer boundaries that
+/// still accept `&[Vec<u8>]`.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct TerminalReplies(SmallVec<[Vec<u8>; 2]>);
+
+impl TerminalReplies {
+    #[must_use]
+    pub fn as_slice(&self) -> &[Vec<u8>] {
+        self.0.as_slice()
+    }
+
+    fn push(&mut self, reply: Vec<u8>) {
+        self.0.push(reply);
+    }
+}
+
+impl AsRef<[Vec<u8>]> for TerminalReplies {
+    fn as_ref(&self) -> &[Vec<u8>] {
+        self.as_slice()
+    }
+}
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TerminalSnapshot {
@@ -131,12 +157,12 @@ impl TerminalScreenDmg {
 /// Result of feeding PTY bytes into the terminal parser.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum TerminalProcessOutcome {
-    Clean { replies: Vec<Vec<u8>> },
-    Dirty { replies: Vec<Vec<u8>> },
+    Clean { replies: TerminalReplies },
+    Dirty { replies: TerminalReplies },
 }
 
 impl TerminalProcessOutcome {
-    const fn new(replies: Vec<Vec<u8>>, screen_dmg: TerminalScreenDmg) -> Self {
+    const fn new(replies: TerminalReplies, screen_dmg: TerminalScreenDmg) -> Self {
         match screen_dmg {
             TerminalScreenDmg::Clean => Self::Clean { replies },
             TerminalScreenDmg::Dirty => Self::Dirty { replies },
@@ -144,7 +170,7 @@ impl TerminalProcessOutcome {
     }
 
     #[must_use]
-    pub fn into_replies(self) -> Vec<Vec<u8>> {
+    pub fn into_replies(self) -> TerminalReplies {
         match self {
             Self::Clean { replies } | Self::Dirty { replies } => replies,
         }
@@ -445,13 +471,15 @@ struct TerminalCallbacks {
     // muxr only needs the active legacy/level-one decision to downgrade keys at the pane boundary.
     // Full kitty push/pop and set-behavior semantics stay out of this MVP until callers need them.
     keyboard_protocol: TerminalKeyboardProtocol,
-    replies: Vec<Vec<u8>>,
+    // Terminal replies are normally empty or a single terminal-generated response such as DSR/CPR
+    // or keyboard protocol status, so keep the outer buffer inline.
+    replies: TerminalReplies,
     title: Option<String>,
     title_changes: Vec<Option<String>>,
 }
 
 impl TerminalCallbacks {
-    fn take_replies(&mut self) -> Vec<Vec<u8>> {
+    fn take_replies(&mut self) -> TerminalReplies {
         std::mem::take(&mut self.replies)
     }
 
@@ -570,7 +598,7 @@ impl TerminalState {
 
     pub fn process(&mut self, bytes: &[u8]) -> TerminalProcessOutcome {
         if bytes.is_empty() {
-            return TerminalProcessOutcome::new(Vec::new(), TerminalScreenDmg::Clean);
+            return TerminalProcessOutcome::new(TerminalReplies::default(), TerminalScreenDmg::Clean);
         }
 
         let screen_dmg = self.screen_dirty_detector.process(bytes);
@@ -1142,6 +1170,10 @@ mod tests {
 
     use super::*;
 
+    fn assert_replies_eq(replies: &TerminalReplies, expected: &[Vec<u8>]) {
+        pretty_assertions::assert_eq!(replies.as_slice(), expected);
+    }
+
     #[test]
     fn test_paste_input_bytes_when_bracketed_paste_is_enabled_wraps_payload() {
         pretty_assertions::assert_eq!(
@@ -1163,7 +1195,7 @@ mod tests {
         let mut terminal = self::terminal_state(&terminal_size()?);
 
         let outcome = terminal.process(b"hi");
-        pretty_assertions::assert_eq!(outcome.into_replies(), Vec::<Vec<u8>>::new());
+        self::assert_replies_eq(&outcome.into_replies(), &[]);
         let snapshot = terminal.snapshot()?;
         let Some(row) = snapshot.rows().first() else {
             return Err(report!("expected first render row"));
@@ -1183,7 +1215,7 @@ mod tests {
     ) -> rootcause::Result<()> {
         let mut terminal = self::terminal_state(&terminal_size()?);
 
-        pretty_assertions::assert_eq!(terminal.process(bytes).into_replies(), vec![expected.to_vec()]);
+        self::assert_replies_eq(&terminal.process(bytes).into_replies(), &[expected.to_vec()]);
         Ok(())
     }
 
@@ -1191,9 +1223,9 @@ mod tests {
     fn test_terminal_state_process_when_cursor_report_requested_returns_current_cursor() -> rootcause::Result<()> {
         let mut terminal = self::terminal_state(&terminal_size()?);
 
-        pretty_assertions::assert_eq!(terminal.process(b"\x1b[2;3H").into_replies(), Vec::<Vec<u8>>::new());
+        self::assert_replies_eq(&terminal.process(b"\x1b[2;3H").into_replies(), &[]);
 
-        pretty_assertions::assert_eq!(terminal.process(b"\x1b[6n").into_replies(), vec![b"\x1b[2;3R".to_vec()]);
+        self::assert_replies_eq(&terminal.process(b"\x1b[6n").into_replies(), &[b"\x1b[2;3R".to_vec()]);
         Ok(())
     }
 
@@ -1201,7 +1233,7 @@ mod tests {
     fn test_terminal_state_snapshot_when_cursor_shape_is_set_returns_shape() -> rootcause::Result<()> {
         let mut terminal = self::terminal_state(&terminal_size()?);
 
-        pretty_assertions::assert_eq!(terminal.process(b"\x1b[6 q").into_replies(), Vec::<Vec<u8>>::new());
+        self::assert_replies_eq(&terminal.process(b"\x1b[6 q").into_replies(), &[]);
 
         pretty_assertions::assert_eq!(terminal.snapshot()?.cursor().shape, RenderCursorShape::SteadyBar);
         Ok(())
@@ -1211,7 +1243,7 @@ mod tests {
     fn test_terminal_state_snapshot_when_terminal_resets_clears_cursor_shape() -> rootcause::Result<()> {
         let mut terminal = self::terminal_state(&terminal_size()?);
 
-        pretty_assertions::assert_eq!(terminal.process(b"\x1b[6 q\x1bc").into_replies(), Vec::<Vec<u8>>::new());
+        self::assert_replies_eq(&terminal.process(b"\x1b[6 q\x1bc").into_replies(), &[]);
 
         pretty_assertions::assert_eq!(terminal.snapshot()?.cursor().shape, RenderCursorShape::Default);
         Ok(())
@@ -1221,9 +1253,9 @@ mod tests {
     fn test_terminal_state_process_when_report_sequence_is_split_returns_one_reply() -> rootcause::Result<()> {
         let mut terminal = self::terminal_state(&terminal_size()?);
 
-        pretty_assertions::assert_eq!(terminal.process(b"\x1b[").into_replies(), Vec::<Vec<u8>>::new());
+        self::assert_replies_eq(&terminal.process(b"\x1b[").into_replies(), &[]);
 
-        pretty_assertions::assert_eq!(terminal.process(b"6n").into_replies(), vec![b"\x1b[1;1R".to_vec()]);
+        self::assert_replies_eq(&terminal.process(b"6n").into_replies(), &[b"\x1b[1;1R".to_vec()]);
         Ok(())
     }
 
@@ -1233,7 +1265,7 @@ mod tests {
     fn test_terminal_state_title_when_window_title_is_set_returns_title(#[case] bytes: &[u8]) -> rootcause::Result<()> {
         let mut terminal = self::terminal_state(&terminal_size()?);
 
-        pretty_assertions::assert_eq!(terminal.process(bytes).into_replies(), Vec::<Vec<u8>>::new());
+        self::assert_replies_eq(&terminal.process(bytes).into_replies(), &[]);
 
         pretty_assertions::assert_eq!(terminal.title(), Some("cargo test".to_owned()));
         Ok(())
@@ -1243,10 +1275,7 @@ mod tests {
     fn test_terminal_state_take_title_changes_when_window_title_changes_returns_once() -> rootcause::Result<()> {
         let mut terminal = self::terminal_state(&terminal_size()?);
 
-        pretty_assertions::assert_eq!(
-            terminal.process(b"\x1b]2;cargo test\x07").into_replies(),
-            Vec::<Vec<u8>>::new()
-        );
+        self::assert_replies_eq(&terminal.process(b"\x1b]2;cargo test\x07").into_replies(), &[]);
 
         pretty_assertions::assert_eq!(terminal.take_title_changes(), vec![Some("cargo test".to_owned())]);
         pretty_assertions::assert_eq!(terminal.take_title_changes(), Vec::<Option<String>>::new());
@@ -1257,15 +1286,9 @@ mod tests {
     fn test_terminal_state_take_title_changes_when_window_title_repeats_returns_empty() -> rootcause::Result<()> {
         let mut terminal = self::terminal_state(&terminal_size()?);
 
-        pretty_assertions::assert_eq!(
-            terminal.process(b"\x1b]2;cargo test\x07").into_replies(),
-            Vec::<Vec<u8>>::new()
-        );
+        self::assert_replies_eq(&terminal.process(b"\x1b]2;cargo test\x07").into_replies(), &[]);
         pretty_assertions::assert_eq!(terminal.take_title_changes(), vec![Some("cargo test".to_owned())]);
-        pretty_assertions::assert_eq!(
-            terminal.process(b"\x1b]2;cargo test\x07").into_replies(),
-            Vec::<Vec<u8>>::new()
-        );
+        self::assert_replies_eq(&terminal.process(b"\x1b]2;cargo test\x07").into_replies(), &[]);
 
         pretty_assertions::assert_eq!(terminal.take_title_changes(), Vec::<Option<String>>::new());
         Ok(())
@@ -1276,10 +1299,7 @@ mod tests {
     {
         let mut terminal = self::terminal_state(&terminal_size()?);
 
-        pretty_assertions::assert_eq!(
-            terminal.process(b"\x1b]2;gst\x07\x1b]2;~\x07").into_replies(),
-            Vec::<Vec<u8>>::new()
-        );
+        self::assert_replies_eq(&terminal.process(b"\x1b]2;gst\x07\x1b]2;~\x07").into_replies(), &[]);
 
         pretty_assertions::assert_eq!(
             terminal.take_title_changes(),
@@ -1292,8 +1312,8 @@ mod tests {
     fn test_terminal_state_title_when_window_title_sequence_is_split_returns_title() -> rootcause::Result<()> {
         let mut terminal = self::terminal_state(&terminal_size()?);
 
-        pretty_assertions::assert_eq!(terminal.process(b"\x1b]2;").into_replies(), Vec::<Vec<u8>>::new());
-        pretty_assertions::assert_eq!(terminal.process(b"gst\x07").into_replies(), Vec::<Vec<u8>>::new());
+        self::assert_replies_eq(&terminal.process(b"\x1b]2;").into_replies(), &[]);
+        self::assert_replies_eq(&terminal.process(b"gst\x07").into_replies(), &[]);
 
         pretty_assertions::assert_eq!(terminal.title(), Some("gst".to_owned()));
         Ok(())
@@ -1322,7 +1342,7 @@ mod tests {
         let outcome = terminal.process(bytes);
 
         pretty_assertions::assert_eq!(outcome.screen_dmg(), TerminalScreenDmg::Clean);
-        pretty_assertions::assert_eq!(outcome.into_replies(), Vec::<Vec<u8>>::new());
+        self::assert_replies_eq(&outcome.into_replies(), &[]);
         Ok(())
     }
 
@@ -1334,9 +1354,9 @@ mod tests {
         let second = terminal.process(b"gst\x07");
 
         pretty_assertions::assert_eq!(first.screen_dmg(), TerminalScreenDmg::Clean);
-        pretty_assertions::assert_eq!(first.into_replies(), Vec::<Vec<u8>>::new());
+        self::assert_replies_eq(&first.into_replies(), &[]);
         pretty_assertions::assert_eq!(second.screen_dmg(), TerminalScreenDmg::Clean);
-        pretty_assertions::assert_eq!(second.into_replies(), Vec::<Vec<u8>>::new());
+        self::assert_replies_eq(&second.into_replies(), &[]);
         pretty_assertions::assert_eq!(terminal.title(), Some("gst".to_owned()));
         Ok(())
     }
@@ -1960,19 +1980,19 @@ mod tests {
     fn test_terminal_state_process_when_keyboard_protocol_is_queried_returns_status() -> rootcause::Result<()> {
         let mut terminal = self::terminal_state(&terminal_size()?);
 
-        pretty_assertions::assert_eq!(
-            terminal.process(b"\x1b[?u").into_replies(),
-            vec![KITTY_KEYBOARD_PROTOCOL_DISABLED_REPLY.to_vec()],
+        self::assert_replies_eq(
+            &terminal.process(b"\x1b[?u").into_replies(),
+            &[KITTY_KEYBOARD_PROTOCOL_DISABLED_REPLY.to_vec()],
         );
         let _ = terminal.process(b"\x1b[>1u");
-        pretty_assertions::assert_eq!(
-            terminal.process(b"\x1b[?u").into_replies(),
-            vec![KITTY_KEYBOARD_PROTOCOL_ENABLED_REPLY.to_vec()],
+        self::assert_replies_eq(
+            &terminal.process(b"\x1b[?u").into_replies(),
+            &[KITTY_KEYBOARD_PROTOCOL_ENABLED_REPLY.to_vec()],
         );
         let _ = terminal.process(b"\x1b[<u");
-        pretty_assertions::assert_eq!(
-            terminal.process(b"\x1b[?u").into_replies(),
-            vec![KITTY_KEYBOARD_PROTOCOL_DISABLED_REPLY.to_vec()],
+        self::assert_replies_eq(
+            &terminal.process(b"\x1b[?u").into_replies(),
+            &[KITTY_KEYBOARD_PROTOCOL_DISABLED_REPLY.to_vec()],
         );
         Ok(())
     }
@@ -2037,7 +2057,7 @@ mod tests {
     ) -> rootcause::Result<()> {
         let mut terminal = self::terminal_state(&terminal_size()?);
 
-        pretty_assertions::assert_eq!(terminal.process(bytes).into_replies(), Vec::<Vec<u8>>::new());
+        self::assert_replies_eq(&terminal.process(bytes).into_replies(), &[]);
         Ok(())
     }
 

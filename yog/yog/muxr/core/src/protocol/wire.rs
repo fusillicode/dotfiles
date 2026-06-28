@@ -1,3 +1,5 @@
+use bytes::Bytes;
+use bytes::BytesMut;
 use rkyv::util::AlignedVec;
 use rootcause::report;
 use serde::Serialize;
@@ -17,6 +19,61 @@ use super::TerminalSize;
 use crate::SessionName;
 
 const PROTOCOL_FRAME_MAGIC: &[u8; 9] = b"MUXR-RKYV";
+
+/// Owned muxr protocol frame bytes.
+///
+/// This intentionally wraps [`Bytes`] instead of exposing it directly from the encoder API: muxr keeps a domain-owned
+/// protocol type at the core boundary, while transports can still take the `Bytes` buffer without copying the payload.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProtocolFrame(Bytes);
+
+impl ProtocolFrame {
+    #[must_use]
+    pub fn as_bytes(&self) -> &[u8] {
+        &self.0
+    }
+
+    #[must_use]
+    pub fn into_bytes(self) -> Bytes {
+        self.0
+    }
+}
+
+impl AsRef<[u8]> for ProtocolFrame {
+    fn as_ref(&self) -> &[u8] {
+        self.as_bytes()
+    }
+}
+
+/// Frames raw rkyv payload bytes by prepending muxr's protocol magic.
+impl From<&[u8]> for ProtocolFrame {
+    fn from(payload: &[u8]) -> Self {
+        let mut frame = BytesMut::with_capacity(PROTOCOL_FRAME_MAGIC.len().saturating_add(payload.len()));
+        frame.extend_from_slice(PROTOCOL_FRAME_MAGIC);
+        frame.extend_from_slice(payload);
+        Self(frame.freeze())
+    }
+}
+
+impl TryFrom<&ClientRequest> for ProtocolFrame {
+    type Error = rootcause::Report;
+
+    fn try_from(request: &ClientRequest) -> Result<Self, Self::Error> {
+        let payload = rkyv::to_bytes::<rkyv::rancor::Error>(request)
+            .map_err(|error| report!("failed to serialize muxr protocol frame").attach(format!("{error:?}")))?;
+        Ok(Self::from(payload.as_slice()))
+    }
+}
+
+impl TryFrom<&ServerEvent> for ProtocolFrame {
+    type Error = rootcause::Report;
+
+    fn try_from(event: &ServerEvent) -> Result<Self, Self::Error> {
+        let payload = rkyv::to_bytes::<rkyv::rancor::Error>(event)
+            .map_err(|error| report!("failed to serialize muxr protocol frame").attach(format!("{error:?}")))?;
+        Ok(Self::from(payload.as_slice()))
+    }
+}
 
 #[derive(rkyv::Archive, Clone, Debug, rkyv::Deserialize, Eq, PartialEq, Serialize, rkyv::Serialize)]
 #[serde(tag = "code", content = "msg", rename_all = "snake_case")]
@@ -93,20 +150,18 @@ pub enum ServerEvent {
     Detached,
 }
 
-/// Encode a client request as a rkyv protocol payload.
+/// Encode a client request as a muxr protocol frame containing a rkyv payload.
 ///
 /// # Errors
 /// - The request cannot be serialized.
-pub fn encode_client_request(request: &ClientRequest) -> rootcause::Result<Vec<u8>> {
-    let payload = rkyv::to_bytes::<rkyv::rancor::Error>(request)
-        .map_err(|error| report!("failed to serialize muxr protocol frame").attach(format!("{error:?}")))?;
-    Ok(self::encode_protocol_frame(payload.as_slice()))
+pub fn encode_client_request(request: &ClientRequest) -> rootcause::Result<ProtocolFrame> {
+    ProtocolFrame::try_from(request)
 }
 
-/// Decode a client request from one rkyv protocol payload.
+/// Decode a client request from one muxr protocol frame containing a rkyv payload.
 ///
 /// # Errors
-/// - The frame is empty or not a valid client request payload.
+/// - The frame is empty or not a valid client request frame.
 /// - The decoded request cannot be deserialized into valid domain values.
 pub fn decode_client_request(line: &[u8]) -> rootcause::Result<ClientRequest> {
     let payload = self::decode_protocol_payload(line)?;
@@ -116,20 +171,18 @@ pub fn decode_client_request(line: &[u8]) -> rootcause::Result<ClientRequest> {
         .map_err(|error| report!("failed to deserialize muxr protocol frame").attach(format!("{error:?}")))
 }
 
-/// Encode a server event as a rkyv protocol payload.
+/// Encode a server event as a muxr protocol frame containing a rkyv payload.
 ///
 /// # Errors
 /// - The event cannot be serialized.
-pub fn encode_server_event(event: &ServerEvent) -> rootcause::Result<Vec<u8>> {
-    let payload = rkyv::to_bytes::<rkyv::rancor::Error>(event)
-        .map_err(|error| report!("failed to serialize muxr protocol frame").attach(format!("{error:?}")))?;
-    Ok(self::encode_protocol_frame(payload.as_slice()))
+pub fn encode_server_event(event: &ServerEvent) -> rootcause::Result<ProtocolFrame> {
+    ProtocolFrame::try_from(event)
 }
 
-/// Decode a server event from one rkyv protocol payload.
+/// Decode a server event from one muxr protocol frame containing a rkyv payload.
 ///
 /// # Errors
-/// - The frame is empty or not a valid server event payload.
+/// - The frame is empty or not a valid server event frame.
 /// - The decoded event cannot be deserialized into valid domain values.
 pub fn decode_server_event(line: &[u8]) -> rootcause::Result<ServerEvent> {
     let payload = self::decode_protocol_payload(line)?;
@@ -137,12 +190,6 @@ pub fn decode_server_event(line: &[u8]) -> rootcause::Result<ServerEvent> {
         .map_err(|error| report!("failed to validate muxr protocol frame").attach(format!("{error:?}")))?;
     rkyv::deserialize::<ServerEvent, rkyv::rancor::Error>(archived)
         .map_err(|error| report!("failed to deserialize muxr protocol frame").attach(format!("{error:?}")))
-}
-
-fn encode_protocol_frame(payload: &[u8]) -> Vec<u8> {
-    let mut frame = PROTOCOL_FRAME_MAGIC.to_vec();
-    frame.extend_from_slice(payload);
-    frame
 }
 
 fn decode_protocol_payload(frame: &[u8]) -> rootcause::Result<AlignedVec> {
@@ -191,6 +238,16 @@ mod tests {
     use super::super::tracked_process::TrackedProcessState;
     use super::*;
 
+    #[test]
+    fn test_protocol_frame_from_when_payload_is_raw_frames_with_magic() {
+        let frame = ProtocolFrame::from(b"payload".as_slice());
+        let expected = b"MUXR-RKYVpayload";
+
+        pretty_assertions::assert_eq!(frame.as_bytes(), expected);
+        pretty_assertions::assert_eq!(AsRef::<[u8]>::as_ref(&frame), expected);
+        pretty_assertions::assert_eq!(frame.into_bytes().as_ref(), expected);
+    }
+
     #[rstest]
     #[case::attach(ClientRequest::Attach(client_attach_request()?))]
     #[case::delete_session(ClientRequest::DeleteSession)]
@@ -217,7 +274,10 @@ mod tests {
     fn test_client_request_codec_when_frame_round_trips_returns_original(
         #[case] request: ClientRequest,
     ) -> rootcause::Result<()> {
-        pretty_assertions::assert_eq!(decode_client_request(&encode_client_request(&request)?)?, request);
+        pretty_assertions::assert_eq!(
+            decode_client_request(encode_client_request(&request)?.as_bytes())?,
+            request
+        );
         Ok(())
     }
 
@@ -242,7 +302,7 @@ mod tests {
     fn test_server_event_codec_when_frame_round_trips_returns_original(
         #[case] event: ServerEvent,
     ) -> rootcause::Result<()> {
-        pretty_assertions::assert_eq!(decode_server_event(&encode_server_event(&event)?)?, event);
+        pretty_assertions::assert_eq!(decode_server_event(encode_server_event(&event)?.as_bytes())?, event);
         Ok(())
     }
 
@@ -251,7 +311,7 @@ mod tests {
         let event = self::invalid_render_event()?;
         let encoded = encode_server_event(&event)?;
 
-        assert2::assert!(decode_server_event(&encoded).is_err());
+        assert2::assert!(decode_server_event(encoded.as_bytes()).is_err());
         Ok(())
     }
 
@@ -271,7 +331,7 @@ mod tests {
         });
         let encoded = encode_server_event(&event)?;
 
-        assert2::assert!(decode_server_event(&encoded).is_err());
+        assert2::assert!(decode_server_event(encoded.as_bytes()).is_err());
         Ok(())
     }
 
@@ -288,7 +348,7 @@ mod tests {
         ));
         let encoded = encode_server_event(&event)?;
 
-        assert2::assert!(decode_server_event(&encoded).is_err());
+        assert2::assert!(decode_server_event(encoded.as_bytes()).is_err());
         Ok(())
     }
 

@@ -34,6 +34,7 @@ pub use session_attach::AttachRequest;
 pub use terminal::TerminalSize;
 pub use tracked_process::TrackedProcessState;
 pub use wire::ClientRequest;
+pub use wire::ProtocolFrame;
 pub use wire::ServerError;
 pub use wire::ServerEvent;
 pub use wire::decode_client_request;

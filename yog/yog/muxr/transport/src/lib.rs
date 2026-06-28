@@ -275,7 +275,7 @@ async fn send_client_request_frame<T>(
 where
     T: AsyncRead + AsyncWrite + Send + Unpin,
 {
-    send_frame(writer, encode_client_request(request)?).await
+    send_frame(writer, encode_client_request(request)?.into_bytes()).await
 }
 
 async fn send_server_event_frame<T>(
@@ -285,18 +285,18 @@ async fn send_server_event_frame<T>(
 where
     T: AsyncRead + AsyncWrite + Send + Unpin,
 {
-    send_frame(writer, encode_server_event(event)?).await
+    send_frame(writer, encode_server_event(event)?.into_bytes()).await
 }
 
 async fn send_frame<T>(
     writer: &mut SplitSink<Framed<T, LengthDelimitedCodec>, Bytes>,
-    frame: Vec<u8>,
+    frame: Bytes,
 ) -> rootcause::Result<()>
 where
     T: AsyncRead + AsyncWrite + Send + Unpin,
 {
     writer
-        .send(Bytes::from(frame))
+        .send(frame)
         .await
         .context("failed to write muxr transport frame")?;
     Ok(())
@@ -378,7 +378,7 @@ mod tests {
             let (mut client_writer, _client_reader) = Framed::new(client, LengthDelimitedCodec::new()).split();
             let (_server_writer, mut server_reader) = Framed::new(server, LengthDelimitedCodec::new()).split();
 
-            send_frame(&mut client_writer, b"MUXR-BINV".to_vec()).await?;
+            send_frame(&mut client_writer, Bytes::from_static(b"MUXR-BINV")).await?;
 
             assert2::assert!(recv_client_request_frame(&mut server_reader).await.is_err());
             Ok(())
@@ -394,7 +394,7 @@ mod tests {
             let (mut client_writer, _client_reader) = Framed::new(client, LengthDelimitedCodec::new()).split();
             let (_server_writer, mut server_reader) = Framed::new(server, LengthDelimitedCodec::new()).split();
 
-            send_frame(&mut client_writer, b"MUXR-RKYV".to_vec()).await?;
+            send_frame(&mut client_writer, Bytes::from_static(b"MUXR-RKYV")).await?;
 
             assert2::assert!(recv_client_request_frame(&mut server_reader).await.is_err());
             Ok(())

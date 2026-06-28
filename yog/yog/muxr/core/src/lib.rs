@@ -16,6 +16,7 @@ pub use protocol::PaneRegionsSnapshot;
 pub use protocol::PaneScrollDirection;
 pub use protocol::PaneScrollLineMove;
 pub use protocol::PaneSnapshot;
+pub use protocol::ProtocolFrame;
 pub use protocol::RenderBaseline;
 pub use protocol::RenderCell;
 pub use protocol::RenderCellWidth;
