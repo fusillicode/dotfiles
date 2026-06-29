@@ -88,12 +88,16 @@ where
 {
     let name = nvim::String::from(name);
     let mut err = nvim::Error::new();
-    unsafe {
+    // Nightly returns the old value and takes an arena before `err`; keeping
+    // this call ABI-aligned prevents Neovim from reading the error pointer as
+    // another argument.
+    let _ = unsafe {
         nvim_set_option_value(
             crate::LUA_INTERNAL_CALL,
             name.as_nvim_str(),
             value.to_object()?.non_owning(),
             opts,
+            types::arena(),
             &mut err,
         )
     };
