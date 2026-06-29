@@ -34,6 +34,7 @@ unsafe extern "C" {
         name: NvimStr,
         value: NonOwning<Object>,
         opts: *const OptionOpts,
+        arena: *mut Arena,
         err: *mut Error,
-    );
+    ) -> Object;
 }
