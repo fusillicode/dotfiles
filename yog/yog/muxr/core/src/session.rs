@@ -297,6 +297,7 @@ mod tests {
     use std::path::Path;
 
     use rstest::rstest;
+    use test_that::prelude::*;
 
     use super::*;
 
@@ -308,7 +309,7 @@ mod tests {
     #[case::dot("a.b")]
     #[case::alphanumeric("abc123")]
     fn test_session_name_from_str_when_name_is_valid_returns_session_name(#[case] raw: &str) -> rootcause::Result<()> {
-        pretty_assertions::assert_eq!(raw.parse::<SessionName>()?.as_ref(), raw);
+        assert_that!(raw.parse::<SessionName>()?.as_ref(), eq(raw));
         Ok(())
     }
 
@@ -325,10 +326,10 @@ mod tests {
     #[case::shell_metacharacters("$(x)")]
     #[case::punctuation("name!")]
     fn test_session_name_from_str_when_name_is_invalid_returns_error(#[case] raw: &str) {
-        assert2::assert!(matches!(
+        assert_that!(
             raw.parse::<SessionName>(),
-            Err(ref err) if err.to_string().contains(&format!("{raw:?}"))
-        ));
+            err(displays_as(contains_substring(format!("{raw:?}"))))
+        );
     }
 
     #[test]
@@ -336,13 +337,16 @@ mod tests {
         let bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&SessionName("../x".to_owned()))?;
         let archived = rkyv::access::<rkyv::Archived<SessionName>, rkyv::rancor::Error>(&bytes)?;
 
-        assert2::assert!(rkyv::deserialize::<SessionName, rkyv::rancor::Error>(archived).is_err());
+        assert_that!(
+            rkyv::deserialize::<SessionName, rkyv::rancor::Error>(archived),
+            err(anything())
+        );
         Ok(())
     }
 
     #[test]
     fn test_session_name_default_returns_default_session() {
-        pretty_assertions::assert_eq!(SessionName::default().as_ref(), DEFAULT_SESSION_NAME);
+        assert_that!(SessionName::default().as_ref(), eq(DEFAULT_SESSION_NAME));
     }
 
     #[rstest]
@@ -351,7 +355,7 @@ mod tests {
     fn test_server_log_timestamp_from_str_when_timestamp_is_valid_returns_timestamp(
         #[case] raw: &str,
     ) -> rootcause::Result<()> {
-        pretty_assertions::assert_eq!(raw.parse::<ServerLogTimestamp>()?.as_ref(), raw);
+        assert_that!(raw.parse::<ServerLogTimestamp>()?.as_ref(), eq(raw));
         Ok(())
     }
 
@@ -362,7 +366,7 @@ mod tests {
     #[case::slash("20260611/143012")]
     #[case::letters("20260611abcdef")]
     fn test_server_log_timestamp_from_str_when_timestamp_is_invalid_returns_error(#[case] raw: &str) {
-        assert2::assert!(raw.parse::<ServerLogTimestamp>().is_err());
+        assert_that!(raw.parse::<ServerLogTimestamp>(), err(anything()));
     }
 
     #[test]
@@ -374,17 +378,20 @@ mod tests {
 
         let paths = SessionPaths::from_home_path(home.to_path_buf(), &session)?;
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             paths,
-            SessionPaths {
+            eq(SessionPaths {
                 socket: state_root.join("s").join(self::socket_file_name(&session)),
                 pid: root.join("server.pid"),
                 layout: root.join("layout.json"),
                 panes: root.join("panes"),
                 root,
-            },
+            })
         );
-        assert2::assert!(paths.socket.as_os_str().as_encoded_bytes().len() <= SOCKET_PATH_MAX_BYTES);
+        assert_that!(
+            paths.socket.as_os_str().as_encoded_bytes().len(),
+            le(SOCKET_PATH_MAX_BYTES)
+        );
         Ok(())
     }
 
@@ -393,13 +400,13 @@ mod tests {
         let session = "work".parse()?;
         let paths = SessionPaths::from_home_path(Path::new("/foo/bar").to_path_buf(), &session)?;
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             paths.logs_root()?,
-            Path::new("/foo/bar")
+            eq(Path::new("/foo/bar")
                 .join(".local")
                 .join("state")
                 .join("muxr")
-                .join("logs"),
+                .join("logs"))
         );
         Ok(())
     }
@@ -410,14 +417,14 @@ mod tests {
         let timestamp = "20260611143012".parse()?;
         let paths = SessionPaths::from_home_path(Path::new("/foo/bar").to_path_buf(), &session)?;
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             paths.server_log_path(&session, &timestamp, 12345)?,
-            Path::new("/foo/bar")
+            eq(Path::new("/foo/bar")
                 .join(".local")
                 .join("state")
                 .join("muxr")
                 .join("logs")
-                .join("work.review-1-20260611143012-12345.log"),
+                .join("work.review-1-20260611143012-12345.log"))
         );
         Ok(())
     }
@@ -426,9 +433,9 @@ mod tests {
     fn test_session_paths_server_log_file_pattern_returns_pid_scoped_pattern() -> rootcause::Result<()> {
         let session = "work.review-1".parse()?;
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             SessionPaths::server_log_file_pattern(&session, 12345),
-            "work.review-1-*-12345.log",
+            eq("work.review-1-*-12345.log")
         );
         Ok(())
     }
@@ -439,9 +446,9 @@ mod tests {
         let timestamp = "20260611143012".parse()?;
         let paths = SessionPaths::from_home_path(Path::new("/foo/bar").to_path_buf(), &session)?;
 
-        assert2::assert!(
-            paths.server_log_path(&session, &timestamp, 12345)?
-                != paths.server_log_path(&session, &timestamp, 12346)?
+        assert_that!(
+            paths.server_log_path(&session, &timestamp, 12345)?,
+            not(eq(paths.server_log_path(&session, &timestamp, 12346)?))
         );
         Ok(())
     }
@@ -451,16 +458,19 @@ mod tests {
         let session = "a".repeat(64).parse()?;
         let paths = SessionPaths::from_home_path(Path::new("/foo/bar").to_path_buf(), &session)?;
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             paths.root,
-            Path::new("/foo/bar")
+            eq(Path::new("/foo/bar")
                 .join(".local")
                 .join("state")
                 .join("muxr")
                 .join("sessions")
-                .join(session.as_ref()),
+                .join(session.as_ref()))
         );
-        assert2::assert!(paths.socket.as_os_str().as_encoded_bytes().len() <= SOCKET_PATH_MAX_BYTES);
+        assert_that!(
+            paths.socket.as_os_str().as_encoded_bytes().len(),
+            le(SOCKET_PATH_MAX_BYTES)
+        );
         Ok(())
     }
 
@@ -471,7 +481,7 @@ mod tests {
 
         let error = SessionPaths::from_home_path(home, &session).expect_err("expected socket path length error");
 
-        assert2::assert!(error.to_string().contains("muxr socket path is too long"));
+        assert_that!(error.to_string(), contains_substring("muxr socket path is too long"));
         Ok(())
     }
 
@@ -479,6 +489,6 @@ mod tests {
     fn test_validate_socket_path_when_path_is_too_long_returns_error() {
         let path = Path::new("/").join("x".repeat(SOCKET_PATH_MAX_BYTES.saturating_add(1)));
 
-        assert2::assert!(self::validate_socket_path(&path).is_err());
+        assert_that!(self::validate_socket_path(&path), err(anything()));
     }
 }

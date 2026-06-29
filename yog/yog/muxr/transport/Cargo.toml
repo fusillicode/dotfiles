@@ -20,9 +20,8 @@ tokio = { workspace = true }
 tokio-util = { version = "0.7", default-features = false, features = ["codec"] }
 
 [dev-dependencies]
-assert2 = { workspace = true }
-pretty_assertions = { workspace = true }
 rstest = { workspace = true }
+test-that = { workspace = true }
 
 [lints]
 workspace = true

@@ -84,6 +84,7 @@ mod tests {
 
     use muxr_config::MuxrConfig;
     use muxr_core::TerminalSize;
+    use test_that::prelude::*;
 
     use super::*;
     use crate::pane::resize::PaneResizeDirection;
@@ -113,14 +114,14 @@ mod tests {
         let loaded =
             self::load_metadata(&paths, &session)?.ok_or_else(|| report!("expected muxr layout metadata to load"))?;
 
-        pretty_assertions::assert_eq!(loaded.active_pane_id()?.to_string(), "pane-3");
-        pretty_assertions::assert_eq!(
+        assert_that!(loaded.active_pane_id()?.to_string(), eq("pane-3"));
+        assert_that!(
             state_test_helpers::layout_active_tab_pane_regions(&loaded, &TerminalSize::new(80, 24)?)?,
-            vec![
+            eq(vec![
                 ("pane-1".to_owned(), 0, 0, 40, 24),
                 ("pane-2".to_owned(), 41, 0, 39, 12),
                 ("pane-3".to_owned(), 41, 13, 39, 11),
-            ],
+            ])
         );
         Ok(())
     }
@@ -138,21 +139,21 @@ mod tests {
             PaneSplitAxis::Vertical,
         )?;
         state_test_helpers::force_balanced_test_split_ratio(&mut layout)?;
-        pretty_assertions::assert_eq!(
+        assert_that!(
             layout.resize_active_pane(MuxrConfig::default().layout, PaneResizeDirection::Left)?,
-            crate::pane::resize::PaneResizeChange::Changed,
+            eq(crate::pane::resize::PaneResizeChange::Changed)
         );
         self::write_metadata(&paths, &layout)?;
 
         let loaded =
             self::load_metadata(&paths, &session)?.ok_or_else(|| report!("expected muxr layout metadata to load"))?;
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             state_test_helpers::layout_active_tab_pane_regions(&loaded, &TerminalSize::new(80, 24)?)?,
-            vec![
+            eq(vec![
                 ("pane-1".to_owned(), 0, 0, 36, 24),
                 ("pane-2".to_owned(), 37, 0, 43, 24),
-            ],
+            ])
         );
         Ok(())
     }

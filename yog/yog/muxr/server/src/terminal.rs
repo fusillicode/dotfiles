@@ -1167,26 +1167,27 @@ mod tests {
     use muxr_config::MuxrConfig;
     use rootcause::report;
     use rstest::rstest;
+    use test_that::prelude::*;
 
     use super::*;
 
     fn assert_replies_eq(replies: &TerminalReplies, expected: &[Vec<u8>]) {
-        pretty_assertions::assert_eq!(replies.as_slice(), expected);
+        assert_that!(replies.as_slice(), eq(expected));
     }
 
     #[test]
     fn test_paste_input_bytes_when_bracketed_paste_is_enabled_wraps_payload() {
-        pretty_assertions::assert_eq!(
+        assert_that!(
             paste_input_bytes(b"one\ntwo\n", TerminalPasteMode::Bracketed),
-            b"\x1b[200~one\ntwo\n\x1b[201~".to_vec(),
+            eq(b"\x1b[200~one\ntwo\n\x1b[201~".to_vec())
         );
     }
 
     #[test]
     fn test_paste_input_bytes_when_bracketed_paste_is_disabled_preserves_payload() {
-        pretty_assertions::assert_eq!(
+        assert_that!(
             paste_input_bytes(b"one\ntwo\n", TerminalPasteMode::Plain),
-            b"one\ntwo\n".to_vec()
+            eq(b"one\ntwo\n".to_vec())
         );
     }
 
@@ -1202,7 +1203,7 @@ mod tests {
         };
         let rendered = row.cells().iter().take(2).map(RenderCell::text).collect::<String>();
 
-        pretty_assertions::assert_eq!(rendered, "hi");
+        assert_that!(rendered, eq("hi"));
         Ok(())
     }
 
@@ -1235,7 +1236,7 @@ mod tests {
 
         self::assert_replies_eq(&terminal.process(b"\x1b[6 q").into_replies(), &[]);
 
-        pretty_assertions::assert_eq!(terminal.snapshot()?.cursor().shape, RenderCursorShape::SteadyBar);
+        assert_that!(terminal.snapshot()?.cursor().shape, eq(RenderCursorShape::SteadyBar));
         Ok(())
     }
 
@@ -1245,7 +1246,7 @@ mod tests {
 
         self::assert_replies_eq(&terminal.process(b"\x1b[6 q\x1bc").into_replies(), &[]);
 
-        pretty_assertions::assert_eq!(terminal.snapshot()?.cursor().shape, RenderCursorShape::Default);
+        assert_that!(terminal.snapshot()?.cursor().shape, eq(RenderCursorShape::Default));
         Ok(())
     }
 
@@ -1267,7 +1268,7 @@ mod tests {
 
         self::assert_replies_eq(&terminal.process(bytes).into_replies(), &[]);
 
-        pretty_assertions::assert_eq!(terminal.title(), Some("cargo test".to_owned()));
+        assert_that!(terminal.title(), eq(Some("cargo test".to_owned())));
         Ok(())
     }
 
@@ -1277,8 +1278,8 @@ mod tests {
 
         self::assert_replies_eq(&terminal.process(b"\x1b]2;cargo test\x07").into_replies(), &[]);
 
-        pretty_assertions::assert_eq!(terminal.take_title_changes(), vec![Some("cargo test".to_owned())]);
-        pretty_assertions::assert_eq!(terminal.take_title_changes(), Vec::<Option<String>>::new());
+        assert_that!(terminal.take_title_changes(), eq(vec![Some("cargo test".to_owned())]));
+        assert_that!(terminal.take_title_changes(), eq(Vec::<Option<String>>::new()));
         Ok(())
     }
 
@@ -1287,10 +1288,10 @@ mod tests {
         let mut terminal = self::terminal_state(&terminal_size()?);
 
         self::assert_replies_eq(&terminal.process(b"\x1b]2;cargo test\x07").into_replies(), &[]);
-        pretty_assertions::assert_eq!(terminal.take_title_changes(), vec![Some("cargo test".to_owned())]);
+        assert_that!(terminal.take_title_changes(), eq(vec![Some("cargo test".to_owned())]));
         self::assert_replies_eq(&terminal.process(b"\x1b]2;cargo test\x07").into_replies(), &[]);
 
-        pretty_assertions::assert_eq!(terminal.take_title_changes(), Vec::<Option<String>>::new());
+        assert_that!(terminal.take_title_changes(), eq(Vec::<Option<String>>::new()));
         Ok(())
     }
 
@@ -1301,9 +1302,9 @@ mod tests {
 
         self::assert_replies_eq(&terminal.process(b"\x1b]2;gst\x07\x1b]2;~\x07").into_replies(), &[]);
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             terminal.take_title_changes(),
-            vec![Some("gst".to_owned()), Some("~".to_owned())],
+            eq(vec![Some("gst".to_owned()), Some("~".to_owned())])
         );
         Ok(())
     }
@@ -1315,7 +1316,7 @@ mod tests {
         self::assert_replies_eq(&terminal.process(b"\x1b]2;").into_replies(), &[]);
         self::assert_replies_eq(&terminal.process(b"gst\x07").into_replies(), &[]);
 
-        pretty_assertions::assert_eq!(terminal.title(), Some("gst".to_owned()));
+        assert_that!(terminal.title(), eq(Some("gst".to_owned())));
         Ok(())
     }
 
@@ -1326,7 +1327,7 @@ mod tests {
         let _ = terminal.process(b"\x1b]2;cargo test\x07");
         let _ = terminal.process(b"\x1b]2;  \x07");
 
-        pretty_assertions::assert_eq!(terminal.title(), None);
+        assert_that!(terminal.title(), eq(None));
         Ok(())
     }
 
@@ -1341,7 +1342,7 @@ mod tests {
 
         let outcome = terminal.process(bytes);
 
-        pretty_assertions::assert_eq!(outcome.screen_dmg(), TerminalScreenDmg::Clean);
+        assert_that!(outcome.screen_dmg(), eq(TerminalScreenDmg::Clean));
         self::assert_replies_eq(&outcome.into_replies(), &[]);
         Ok(())
     }
@@ -1353,11 +1354,11 @@ mod tests {
         let first = terminal.process(b"\x1b]2;");
         let second = terminal.process(b"gst\x07");
 
-        pretty_assertions::assert_eq!(first.screen_dmg(), TerminalScreenDmg::Clean);
+        assert_that!(first.screen_dmg(), eq(TerminalScreenDmg::Clean));
         self::assert_replies_eq(&first.into_replies(), &[]);
-        pretty_assertions::assert_eq!(second.screen_dmg(), TerminalScreenDmg::Clean);
+        assert_that!(second.screen_dmg(), eq(TerminalScreenDmg::Clean));
         self::assert_replies_eq(&second.into_replies(), &[]);
-        pretty_assertions::assert_eq!(terminal.title(), Some("gst".to_owned()));
+        assert_that!(terminal.title(), eq(Some("gst".to_owned())));
         Ok(())
     }
 
@@ -1371,7 +1372,7 @@ mod tests {
     ) -> rootcause::Result<()> {
         let mut terminal = self::terminal_state(&terminal_size()?);
 
-        pretty_assertions::assert_eq!(terminal.process(bytes).screen_dmg(), TerminalScreenDmg::Dirty);
+        assert_that!(terminal.process(bytes).screen_dmg(), eq(TerminalScreenDmg::Dirty));
         Ok(())
     }
 
@@ -1381,9 +1382,9 @@ mod tests {
 
         let _ = terminal.process(b"one\ntwo\nthree");
 
-        pretty_assertions::assert_eq!(terminal.scroll(PaneScrollDirection::Up), TerminalScrollMove::Moved);
+        assert_that!(terminal.scroll(PaneScrollDirection::Up), eq(TerminalScrollMove::Moved));
         let rendered = self::snapshot_text(&terminal.snapshot()?);
-        assert2::assert!(rendered.contains("one"));
+        assert_that!(rendered, contains_substring("one"));
         Ok(())
     }
 
@@ -1399,13 +1400,13 @@ mod tests {
 
         let _ = terminal.process(output.as_bytes());
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             terminal.scroll_one_line(PaneScrollDirection::Up),
-            TerminalScrollMove::Moved,
+            eq(TerminalScrollMove::Moved)
         );
         let rendered = self::snapshot_text(&terminal.snapshot()?);
 
-        assert2::assert!(rendered.contains("row-16"));
+        assert_that!(rendered, contains_substring("row-16"));
         Ok(())
     }
 
@@ -1425,8 +1426,8 @@ mod tests {
         }
         let rendered = self::snapshot_text(&terminal.snapshot()?);
 
-        assert2::assert!(rendered.contains("row-00"));
-        assert2::assert!(rendered.contains("row-03"));
+        assert_that!(rendered, contains_substring("row-00"));
+        assert_that!(rendered, contains_substring("row-03"));
         Ok(())
     }
 
@@ -1439,13 +1440,13 @@ mod tests {
         terminal.clear_replayed_application_state();
         let _ = terminal.process(b"one\r\ntwo\r\nthree");
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             terminal.scroll_one_line(PaneScrollDirection::Up),
-            TerminalScrollMove::Moved,
+            eq(TerminalScrollMove::Moved)
         );
         let rendered = self::snapshot_text(&terminal.snapshot()?);
 
-        assert2::assert!(rendered.contains("one"));
+        assert_that!(rendered, contains_substring("one"));
         Ok(())
     }
 
@@ -1463,10 +1464,10 @@ mod tests {
         }
         let rendered = rendered.join("\n");
 
-        assert2::assert!(rendered.contains("|abcdefg"));
-        assert2::assert!(rendered.contains("hij|"));
-        assert2::assert!(rendered.contains("|klmnopq"));
-        assert2::assert!(rendered.contains("rst|"));
+        assert_that!(rendered, contains_substring("|abcdefg"));
+        assert_that!(rendered, contains_substring("hij|"));
+        assert_that!(rendered, contains_substring("|klmnopq"));
+        assert_that!(rendered, contains_substring("rst|"));
         Ok(())
     }
 
@@ -1478,19 +1479,19 @@ mod tests {
         let _ = terminal.process(b"top\r\nabc");
         let _ = terminal.process(b"d");
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             terminal.scroll_one_line(PaneScrollDirection::Up),
-            TerminalScrollMove::Unchanged,
+            eq(TerminalScrollMove::Unchanged)
         );
 
         let _ = terminal.process(b"e");
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             terminal.scroll_one_line(PaneScrollDirection::Up),
-            TerminalScrollMove::Moved,
+            eq(TerminalScrollMove::Moved)
         );
         let rendered = self::snapshot_text(&terminal.snapshot()?);
-        assert2::assert!(rendered.contains("top"));
+        assert_that!(rendered, contains_substring("top"));
         Ok(())
     }
 
@@ -1501,12 +1502,12 @@ mod tests {
         let _ = terminal.process(b"top\r\nabc");
         let _ = terminal.process("字".as_bytes());
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             terminal.scroll_one_line(PaneScrollDirection::Up),
-            TerminalScrollMove::Moved,
+            eq(TerminalScrollMove::Moved)
         );
         let rendered = self::snapshot_text(&terminal.snapshot()?);
-        assert2::assert!(rendered.contains("top"));
+        assert_that!(rendered, contains_substring("top"));
         Ok(())
     }
 
@@ -1518,12 +1519,12 @@ mod tests {
         let _ = terminal.process(b"\x1b[?1049h\x1b[2;3r\x1b[?1049l");
         let _ = terminal.process(b"one\r\ntwo\r\nthree\r\nfour");
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             terminal.scroll_one_line(PaneScrollDirection::Up),
-            TerminalScrollMove::Moved,
+            eq(TerminalScrollMove::Moved)
         );
         let rendered = self::snapshot_text(&terminal.snapshot()?);
-        assert2::assert!(rendered.contains("one"));
+        assert_that!(rendered, contains_substring("one"));
         Ok(())
     }
 
@@ -1538,10 +1539,12 @@ mod tests {
 
         let dump = String::from_utf8(self::test_scrollback_dump(&terminal, ScrollbackDumpStyle::PlainText)?)?;
 
-        assert2::assert!(
-            let Some(partial_index) = dump.find("partial-old")
-                && let Some(normal_index) = dump.find("normal-new-1")
-                && partial_index < normal_index
+        assert_that!(
+            dump.find("partial-old").is_some_and(|partial_index| {
+                dump.find("normal-new-1")
+                    .is_some_and(|normal_index| partial_index < normal_index)
+            }),
+            eq(true)
         );
         Ok(())
     }
@@ -1553,9 +1556,9 @@ mod tests {
 
         let _ = terminal.process(b"one\r\ntwo\r\nthree");
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             String::from_utf8(self::test_scrollback_dump(&terminal, ScrollbackDumpStyle::PlainText)?)?,
-            "one\ntwo\nthree\n",
+            eq("one\ntwo\nthree\n")
         );
         Ok(())
     }
@@ -1564,13 +1567,13 @@ mod tests {
     fn test_terminal_state_scrollback_dump_when_viewport_is_scrolled_preserves_viewport() -> rootcause::Result<()> {
         let mut terminal = self::terminal_state(&TerminalSize::new(8, 2)?);
         let _ = terminal.process(b"one\r\ntwo\r\nthree");
-        pretty_assertions::assert_eq!(terminal.scroll(PaneScrollDirection::Up), TerminalScrollMove::Moved);
+        assert_that!(terminal.scroll(PaneScrollDirection::Up), eq(TerminalScrollMove::Moved));
         let before = terminal.snapshot()?;
 
         let _dump = self::test_scrollback_dump(&terminal, ScrollbackDumpStyle::PlainText)?;
         let after = terminal.snapshot()?;
 
-        pretty_assertions::assert_eq!(after, before);
+        assert_that!(after, eq(before));
         Ok(())
     }
 
@@ -1582,9 +1585,9 @@ mod tests {
         let _ = terminal.process(b"\x1b[1;1Hone\x1b[2;1Htwo\x1b[3;1Hthree\x1b[4;1Hprompt");
         let _ = terminal.process(b"\x1b[1;3r\x1b[2S\x1b[r");
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             String::from_utf8(self::test_scrollback_dump(&terminal, ScrollbackDumpStyle::PlainText)?)?,
-            "one\ntwo\nthree\n\n\nprompt\n",
+            eq("one\ntwo\nthree\n\n\nprompt\n")
         );
         Ok(())
     }
@@ -1596,9 +1599,9 @@ mod tests {
 
         let _ = terminal.process(b"\x1b[31mred\x1b[0m");
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             String::from_utf8(self::test_scrollback_dump(&terminal, ScrollbackDumpStyle::Ansi)?)?,
-            "\x1b[0;38;5;1mred\x1b[0m\n\n",
+            eq("\x1b[0;38;5;1mred\x1b[0m\n\n")
         );
         Ok(())
     }
@@ -1608,13 +1611,13 @@ mod tests {
         let mut terminal = self::terminal_state(&TerminalSize::new(8, 2)?);
 
         let _ = terminal.process(b"one\ntwo\nthree");
-        pretty_assertions::assert_eq!(terminal.scroll(PaneScrollDirection::Up), TerminalScrollMove::Moved);
+        assert_that!(terminal.scroll(PaneScrollDirection::Up), eq(TerminalScrollMove::Moved));
 
-        pretty_assertions::assert_eq!(terminal.scroll_to_bottom(), TerminalScrollMove::Moved);
+        assert_that!(terminal.scroll_to_bottom(), eq(TerminalScrollMove::Moved));
         let rendered = self::snapshot_text(&terminal.snapshot()?);
 
-        assert2::assert!(rendered.contains("three"));
-        pretty_assertions::assert_eq!(terminal.scroll_to_bottom(), TerminalScrollMove::Unchanged);
+        assert_that!(rendered, contains_substring("three"));
+        assert_that!(terminal.scroll_to_bottom(), eq(TerminalScrollMove::Unchanged));
         Ok(())
     }
 
@@ -1626,11 +1629,11 @@ mod tests {
         let _ = terminal.process(b"\x1b[1;1Hone\x1b[2;1Htwo\x1b[3;1Hthree\x1b[4;1Hprompt");
         let _ = terminal.process(b"\x1b[1;3r\x1b[2S\x1b[r");
 
-        pretty_assertions::assert_eq!(terminal.scroll(PaneScrollDirection::Up), TerminalScrollMove::Moved);
+        assert_that!(terminal.scroll(PaneScrollDirection::Up), eq(TerminalScrollMove::Moved));
         let rendered = self::snapshot_text(&terminal.snapshot()?);
 
-        assert2::assert!(rendered.contains("one"));
-        assert2::assert!(rendered.contains("two"));
+        assert_that!(rendered, contains_substring("one"));
+        assert_that!(rendered, contains_substring("two"));
         Ok(())
     }
 
@@ -1645,19 +1648,18 @@ mod tests {
             let _ = terminal.process(b"\x1b[1;3r\x1b[1S\x1b[r");
         }
 
-        pretty_assertions::assert_eq!(terminal.scrollback.captured_len(), 2);
+        assert_that!(terminal.scrollback.captured_len(), eq(2));
         let retained_text = terminal
             .scrollback
             .captured_oldest_row_cells_iter(2)
             .map(|row| row.iter().map(RenderCell::text).collect::<String>())
             .collect::<Vec<_>>();
-        assert2::assert!(
-            retained_text
-                .iter()
-                .all(|row| !row.starts_with("row-0") && !row.starts_with("row-1"))
+        assert_that!(
+            retained_text,
+            each(all!(not(starts_with("row-0")), not(starts_with("row-1"))))
         );
-        assert2::assert!(retained_text.first().is_some_and(|row| row.starts_with("row-2")));
-        assert2::assert!(retained_text.get(1).is_some_and(|row| row.starts_with("row-3")));
+        assert_that!(retained_text.first(), some(points_to(starts_with("row-2"))));
+        assert_that!(retained_text.get(1), some(points_to(starts_with("row-3"))));
         Ok(())
     }
 
@@ -1669,11 +1671,11 @@ mod tests {
         let _ = terminal.process(b"\x1b[1;3r\x1b[");
         let _ = terminal.process(b"2S\x1b[r");
 
-        pretty_assertions::assert_eq!(terminal.scroll(PaneScrollDirection::Up), TerminalScrollMove::Moved);
+        assert_that!(terminal.scroll(PaneScrollDirection::Up), eq(TerminalScrollMove::Moved));
         let rendered = self::snapshot_text(&terminal.snapshot()?);
 
-        assert2::assert!(rendered.contains("one"));
-        assert2::assert!(rendered.contains("two"));
+        assert_that!(rendered, contains_substring("one"));
+        assert_that!(rendered, contains_substring("two"));
         Ok(())
     }
 
@@ -1686,14 +1688,14 @@ mod tests {
         let _ = terminal.process(b"\x1b[1;1Hcod-0\x1b[2;1Hcod-1\x1b[3;1Hcod-2\x1b[4;1Hprompt");
         let _ = terminal.process(b"\x1b[1;3r\x1b[3;1H\n\x1b[r");
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             terminal.scroll_one_line(PaneScrollDirection::Up),
-            TerminalScrollMove::Moved,
+            eq(TerminalScrollMove::Moved)
         );
         let rendered = self::snapshot_text(&terminal.snapshot()?);
 
-        assert2::assert!(rendered.contains("cod-0"));
-        assert2::assert!(!rendered.contains("old-"));
+        assert_that!(rendered, contains_substring("cod-0"));
+        assert_that!(rendered, not(contains_substring("old-")));
         Ok(())
     }
 
@@ -1705,7 +1707,10 @@ mod tests {
         let _ = terminal.process(b"\x1b[?1049h\x1b[1;1Hone\x1b[2;1Htwo\x1b[3;1Hthree\x1b[4;1Hprompt");
         let _ = terminal.process(b"\x1b[1;3r\x1b[3;1H\n\x1b[r");
 
-        pretty_assertions::assert_eq!(terminal.scroll(PaneScrollDirection::Up), TerminalScrollMove::Unchanged);
+        assert_that!(
+            terminal.scroll(PaneScrollDirection::Up),
+            eq(TerminalScrollMove::Unchanged)
+        );
         Ok(())
     }
 
@@ -1717,11 +1722,11 @@ mod tests {
         let _ = terminal.process(b"\x1b[1;1Hone\x1b[2;1Htwo\x1b[3;1Hthree\x1b[4;1Hprompt");
         let _ = terminal.process(b"\x1b[1;3r\x1b[1;1H\x1b[2M\x1b[r");
 
-        pretty_assertions::assert_eq!(terminal.scroll(PaneScrollDirection::Up), TerminalScrollMove::Moved);
+        assert_that!(terminal.scroll(PaneScrollDirection::Up), eq(TerminalScrollMove::Moved));
         let rendered = self::snapshot_text(&terminal.snapshot()?);
 
-        assert2::assert!(rendered.contains("one"));
-        assert2::assert!(rendered.contains("two"));
+        assert_that!(rendered, contains_substring("one"));
+        assert_that!(rendered, contains_substring("two"));
         Ok(())
     }
 
@@ -1733,11 +1738,11 @@ mod tests {
         let _ = terminal.process(b"\x1b[1;1Hone\x1b[2;1Htwo\x1b[3;1Hthree\x1b[4;1Hprompt");
         let _ = terminal.process(b"\x1b[1;4r\x1b[1;1H\x1b[2M\x1b[r");
 
-        pretty_assertions::assert_eq!(terminal.scroll(PaneScrollDirection::Up), TerminalScrollMove::Moved);
+        assert_that!(terminal.scroll(PaneScrollDirection::Up), eq(TerminalScrollMove::Moved));
         let rendered = self::snapshot_text(&terminal.snapshot()?);
 
-        assert2::assert!(rendered.contains("one"));
-        assert2::assert!(rendered.contains("two"));
+        assert_that!(rendered, contains_substring("one"));
+        assert_that!(rendered, contains_substring("two"));
         Ok(())
     }
 
@@ -1749,7 +1754,10 @@ mod tests {
         let _ = terminal.process(b"\x1b[1;1Hone\x1b[2;1Htwo\x1b[3;1Hthree\x1b[4;1Hprompt");
         let _ = terminal.process(b"\x1b[1;3r\x1b[2;1H\x1b[2M\x1b[r");
 
-        pretty_assertions::assert_eq!(terminal.scroll(PaneScrollDirection::Up), TerminalScrollMove::Unchanged);
+        assert_that!(
+            terminal.scroll(PaneScrollDirection::Up),
+            eq(TerminalScrollMove::Unchanged)
+        );
         Ok(())
     }
 
@@ -1761,7 +1769,10 @@ mod tests {
         let _ = terminal.process(b"\x1b[?1049h\x1b[1;1Hone\x1b[2;1Htwo\x1b[3;1Hthree\x1b[4;1Hprompt");
         let _ = terminal.process(b"\x1b[1;4r\x1b[1;1H\x1b[2M\x1b[r");
 
-        pretty_assertions::assert_eq!(terminal.scroll(PaneScrollDirection::Up), TerminalScrollMove::Unchanged);
+        assert_that!(
+            terminal.scroll(PaneScrollDirection::Up),
+            eq(TerminalScrollMove::Unchanged)
+        );
         Ok(())
     }
 
@@ -1773,7 +1784,10 @@ mod tests {
         let _ = terminal.process(b"\x1b[?1049h\x1b[1;1Hone\x1b[2;1Htwo\x1b[3;1Hthree\x1b[4;1Hprompt");
         let _ = terminal.process(b"\x1b[1;3r\x1b[2S\x1b[r");
 
-        pretty_assertions::assert_eq!(terminal.scroll(PaneScrollDirection::Up), TerminalScrollMove::Unchanged);
+        assert_that!(
+            terminal.scroll(PaneScrollDirection::Up),
+            eq(TerminalScrollMove::Unchanged)
+        );
         Ok(())
     }
 
@@ -1785,7 +1799,10 @@ mod tests {
         let _ = terminal.process(b"\x1b[?1049h\x1b[1;1Hone\x1b[2;1Htwo\x1b[3;1Hthree\x1b[4;1Hprompt");
         let _ = terminal.process(b"\x1b[1;4r\x1b[2S\x1b[r");
 
-        pretty_assertions::assert_eq!(terminal.scroll(PaneScrollDirection::Up), TerminalScrollMove::Unchanged);
+        assert_that!(
+            terminal.scroll(PaneScrollDirection::Up),
+            eq(TerminalScrollMove::Unchanged)
+        );
         Ok(())
     }
 
@@ -1797,12 +1814,12 @@ mod tests {
         let _ = terminal.process(b"\x1b[1;1Hone\x1b[2;1Htwo\x1b[3;1Hthree\x1b[4;1Hprompt");
         let _ = terminal.process(b"\x1b[1;4r\x1b[2S\x1b[r");
 
-        pretty_assertions::assert_eq!(terminal.total_scrollback_len(), 2);
-        pretty_assertions::assert_eq!(terminal.scroll(PaneScrollDirection::Up), TerminalScrollMove::Moved);
+        assert_that!(terminal.total_scrollback_len(), eq(2));
+        assert_that!(terminal.scroll(PaneScrollDirection::Up), eq(TerminalScrollMove::Moved));
         let rendered = self::snapshot_text(&terminal.snapshot()?);
 
-        assert2::assert!(rendered.contains("one"));
-        assert2::assert!(rendered.contains("two"));
+        assert_that!(rendered, contains_substring("one"));
+        assert_that!(rendered, contains_substring("two"));
         Ok(())
     }
 
@@ -1812,13 +1829,13 @@ mod tests {
 
         let _ = terminal.process(b"one\ntwo\nthree");
         let bottom_top_row = terminal.visible_top_row()?;
-        pretty_assertions::assert_eq!(terminal.scroll(PaneScrollDirection::Up), TerminalScrollMove::Moved);
+        assert_that!(terminal.scroll(PaneScrollDirection::Up), eq(TerminalScrollMove::Moved));
         let scrolled_snapshot = self::snapshot_text(&terminal.snapshot()?);
 
         let scrolled_top_row = terminal.visible_top_row()?;
 
-        pretty_assertions::assert_eq!(self::snapshot_text(&terminal.snapshot()?), scrolled_snapshot);
-        assert2::assert!(scrolled_top_row < bottom_top_row);
+        assert_that!(self::snapshot_text(&terminal.snapshot()?), eq(scrolled_snapshot));
+        assert_that!(scrolled_top_row, lt(bottom_top_row));
         Ok(())
     }
 
@@ -1828,9 +1845,9 @@ mod tests {
 
         let _ = terminal.process(b"abcdx");
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             terminal.visible_row_wraps(),
-            vec![RowWrap::EndsWithSoftWrap, RowWrap::EndsBeforeSoftWrap]
+            eq(vec![RowWrap::EndsWithSoftWrap, RowWrap::EndsBeforeSoftWrap])
         );
         Ok(())
     }
@@ -1841,7 +1858,7 @@ mod tests {
 
         let _ = terminal.process(b"\x1b[?2004h");
 
-        assert2::assert!(terminal.paste_mode() == TerminalPasteMode::Bracketed);
+        assert_that!(terminal.paste_mode(), eq(TerminalPasteMode::Bracketed));
         Ok(())
     }
 
@@ -1852,20 +1869,20 @@ mod tests {
 
         let _ = terminal.process(b"\x1b[?1002h\x1b[?1006h");
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             terminal.mouse_protocol(),
-            Some(TerminalMouseProtocol {
+            eq(Some(TerminalMouseProtocol {
                 mode: TerminalMouseProtocolMode::ButtonMotion,
                 encoding: TerminalMouseProtocolEncoding::Sgr
-            }),
+            }))
         );
-        pretty_assertions::assert_eq!(
+        assert_that!(
             terminal.application_mode().pane_mouse_mode(),
-            PaneMouseMode::ButtonMotion
+            eq(PaneMouseMode::ButtonMotion)
         );
-        pretty_assertions::assert_eq!(
+        assert_that!(
             terminal.application_mode().pane_mouse_mode(),
-            PaneMouseMode::ButtonMotion
+            eq(PaneMouseMode::ButtonMotion)
         );
         Ok(())
     }
@@ -1883,15 +1900,15 @@ mod tests {
 
         let _ = terminal.process(bytes);
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             terminal.application_mode(),
-            TerminalApplicationMode {
+            eq(TerminalApplicationMode {
                 screen_mode: expected,
                 cursor_key_mode: TerminalCursorKeyMode::Normal,
                 keyboard_protocol: TerminalKeyboardProtocol::Legacy,
                 focus_reporting: TerminalFocusReporting::Disabled,
                 mouse_protocol: None,
-            },
+            })
         );
         Ok(())
     }
@@ -1907,15 +1924,15 @@ mod tests {
 
         let _ = terminal.process(bytes);
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             terminal.application_mode(),
-            TerminalApplicationMode {
+            eq(TerminalApplicationMode {
                 screen_mode: TerminalScreenMode::Normal,
                 cursor_key_mode: expected,
                 keyboard_protocol: TerminalKeyboardProtocol::Legacy,
                 focus_reporting: TerminalFocusReporting::Disabled,
                 mouse_protocol: None,
-            },
+            })
         );
         Ok(())
     }
@@ -1934,9 +1951,9 @@ mod tests {
 
         let _ = terminal.process(bytes);
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             terminal.application_mode(),
-            TerminalApplicationMode {
+            eq(TerminalApplicationMode {
                 screen_mode: TerminalScreenMode::Normal,
                 cursor_key_mode: if bytes == b"\x1b[?1;1004h" {
                     TerminalCursorKeyMode::Application
@@ -1946,7 +1963,7 @@ mod tests {
                 keyboard_protocol: TerminalKeyboardProtocol::Legacy,
                 focus_reporting: expected,
                 mouse_protocol: None,
-            },
+            })
         );
         Ok(())
     }
@@ -1972,7 +1989,7 @@ mod tests {
 
         let _ = terminal.process(bytes);
 
-        pretty_assertions::assert_eq!(terminal.application_mode().keyboard_protocol, expected,);
+        assert_that!(terminal.application_mode().keyboard_protocol, eq(expected));
         Ok(())
     }
 
@@ -2004,9 +2021,9 @@ mod tests {
         let _ = terminal.process(b"\x1b[>1u");
         terminal.clear_replayed_application_state();
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             terminal.application_mode().keyboard_protocol,
-            TerminalKeyboardProtocol::Legacy,
+            eq(TerminalKeyboardProtocol::Legacy)
         );
         Ok(())
     }
@@ -2019,9 +2036,9 @@ mod tests {
         let _ = terminal.process(b"\x1b[?1004h\x1b");
         let _ = terminal.process(b"c");
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             terminal.application_mode().focus_reporting,
-            TerminalFocusReporting::Disabled,
+            eq(TerminalFocusReporting::Disabled)
         );
         Ok(())
     }
@@ -2032,9 +2049,9 @@ mod tests {
 
         let _ = terminal.process(b"\x1b[?1002h\x1b[?1006h");
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             terminal.application_mode(),
-            TerminalApplicationMode {
+            eq(TerminalApplicationMode {
                 screen_mode: TerminalScreenMode::Normal,
                 cursor_key_mode: TerminalCursorKeyMode::Normal,
                 keyboard_protocol: TerminalKeyboardProtocol::Legacy,
@@ -2043,7 +2060,7 @@ mod tests {
                     mode: TerminalMouseProtocolMode::ButtonMotion,
                     encoding: TerminalMouseProtocolEncoding::Sgr,
                 }),
-            },
+            })
         );
         Ok(())
     }

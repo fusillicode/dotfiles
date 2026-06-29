@@ -197,36 +197,44 @@ pub fn save_new_pgpass_file(
 
 #[cfg(test)]
 mod tests {
+    use test_that::prelude::*;
+
     use super::*;
 
     #[test]
     fn test_creds_try_from_returns_the_expected_creds() {
-        assert2::assert!(let Ok(actual) = ConnectionParams::try_from((42, "host:5432:db:user:pwd")));
-        assert_eq!(
-            actual,
-            ConnectionParams {
+        assert_that!(
+            ConnectionParams::try_from((42, "host:5432:db:user:pwd")),
+            ok(eq(ConnectionParams {
                 idx: 42,
                 host: "host".into(),
                 port: 5432,
                 db: "db".into(),
                 user: "user".into(),
                 pwd: "pwd".into(),
-            }
+            }))
         );
     }
 
     #[test]
     fn test_creds_try_from_returns_an_error_if_port_is_not_a_number() {
-        assert2::assert!(let Err(err) = ConnectionParams::try_from((42, "host:foo:db:user:pwd")));
-        assert_eq!(err.format_current_context().to_string(), "unexpected port");
+        assert_that!(
+            (ConnectionParams::try_from((42, "host:foo:db:user:pwd"))).map(|_| ()),
+            err(result_of!(
+                |err: &rootcause::Report| err.format_current_context().to_string(),
+                eq("unexpected port")
+            ))
+        );
     }
 
     #[test]
     fn test_creds_try_from_returns_an_error_if_str_is_malformed() {
-        assert2::assert!(let Err(err) = ConnectionParams::try_from((42, "host:5432:db:user")));
-        assert_eq!(
-            err.format_current_context().to_string(),
-            "malformed pgpass connection line"
+        assert_that!(
+            (ConnectionParams::try_from((42, "host:5432:db:user"))).map(|_| ()),
+            err(result_of!(
+                |err: &rootcause::Report| err.format_current_context().to_string(),
+                eq("malformed pgpass connection line")
+            ))
         );
     }
 

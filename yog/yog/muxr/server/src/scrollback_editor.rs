@@ -498,6 +498,7 @@ mod tests {
     use muxr_config::MuxrConfig;
     use muxr_core::RenderCell;
     use muxr_core::TrackedProcessState;
+    use test_that::prelude::*;
 
     use super::*;
     use crate::keyboard_input::TabCmd;
@@ -547,7 +548,7 @@ mod tests {
         #[case] editor_activity: ScrollbackEditorActivity,
         #[case] expected: ScrollbackEditorCmdAction,
     ) {
-        pretty_assertions::assert_eq!(ScrollbackEditorCmdAction::from_cmd(cmd, editor_activity), expected);
+        assert_that!(ScrollbackEditorCmdAction::from_cmd(cmd, editor_activity), eq(expected));
     }
 
     #[test]
@@ -608,8 +609,11 @@ mod tests {
                 .context("failed to write test scrollback dump")?)
         })?;
 
-        pretty_assertions::assert_eq!(fs::read(&path)?, b"one\ntwo\n".to_vec());
-        pretty_assertions::assert_eq!(path.extension().and_then(|extension| extension.to_str()), Some("txt"));
+        assert_that!(fs::read(&path)?, eq(b"one\ntwo\n".to_vec()));
+        assert_that!(
+            path.extension().and_then(|extension| extension.to_str()),
+            eq(Some("txt"))
+        );
         Ok(())
     }
 
@@ -625,7 +629,7 @@ mod tests {
             Ok(())
         })?;
 
-        assert2::assert!(!log.contains("kind=\"scrollback_cleanup_failed\""));
+        assert_that!(log, not(contains_substring("kind=\"scrollback_cleanup_failed\"")));
         Ok(())
     }
 
@@ -650,7 +654,7 @@ mod tests {
     ) -> rootcause::Result<()> {
         let cmd = self::editor_cmd(config, Path::new("muxr-scrollback.txt"))?;
 
-        pretty_assertions::assert_eq!(cmd.label_with_args(), expected);
+        assert_that!(cmd.label_with_args(), eq(expected));
         Ok(())
     }
 
@@ -669,16 +673,16 @@ mod tests {
         let editor_pane_id = layout
             .replace_active_pane_with_scrollback_editor(state_test_helpers::metadata(SCROLLBACK_EDITOR_TITLE, 3))?;
 
-        pretty_assertions::assert_eq!(original_pane_id.to_string(), "pane-2");
-        pretty_assertions::assert_eq!(editor_pane_id.to_string(), "pane-3");
-        pretty_assertions::assert_eq!(layout.active_pane_id()?, editor_pane_id);
-        pretty_assertions::assert_eq!(
+        assert_that!(original_pane_id.to_string(), eq("pane-2"));
+        assert_that!(editor_pane_id.to_string(), eq("pane-3"));
+        assert_that!(layout.active_pane_id()?, eq(editor_pane_id));
+        assert_that!(
             state_test_helpers::layout_active_tab_pane_ids(&layout)?,
-            vec!["pane-1", "pane-3"]
+            eq(vec!["pane-1", "pane-3"])
         );
-        pretty_assertions::assert_eq!(
+        assert_that!(
             state_test_helpers::layout_active_tab_pane_regions(&layout, &TerminalSize::new(80, 24)?)?,
-            vec![
+            eq(vec![
                 original_regions[0].clone(),
                 (
                     "pane-3".to_owned(),
@@ -687,7 +691,7 @@ mod tests {
                     original_regions[1].3,
                     original_regions[1].4,
                 ),
-            ],
+            ])
         );
         Ok(())
     }
@@ -752,13 +756,13 @@ mod tests {
 
         self::restore(&config, &mut layout, &mut runtimes, &mut fullscreen, state)?;
 
-        pretty_assertions::assert_eq!(layout.active_pane_id()?, original_layout.active_pane_id()?);
-        pretty_assertions::assert_eq!(
+        assert_that!(layout.active_pane_id()?, eq(original_layout.active_pane_id()?));
+        assert_that!(
             state_test_helpers::layout_active_tab_pane_ids(&layout)?,
-            state_test_helpers::layout_active_tab_pane_ids(&original_layout)?,
+            eq(state_test_helpers::layout_active_tab_pane_ids(&original_layout)?)
         );
-        assert2::assert!(!runtimes.pane_ids().contains(&editor_pane_id));
-        assert2::assert!(!dump_path.exists());
+        assert_that!(runtimes.pane_ids(), not(contains(eq(editor_pane_id))));
+        assert_that!(dump_path.exists(), eq(false));
         Ok(())
     }
 
@@ -789,28 +793,28 @@ mod tests {
         let attention =
             tracked_processes.mark_quiet_deadlines(&layout, self::instant_after(then, Duration::from_secs(3))?)?;
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             attention,
-            TrackedProcessAttention::Unseen {
+            eq(TrackedProcessAttention::Unseen {
                 pane_ids: vec![visible_pane_id]
-            }
+            })
         );
         let editor_snapshot = tracked_processes.snapshot(&layout);
-        pretty_assertions::assert_eq!(
+        assert_that!(
             editor_snapshot
                 .panes()
                 .map(|(pane_id, _pane)| pane_id)
                 .collect::<Vec<_>>(),
-            vec![visible_pane_id]
+            eq(vec![visible_pane_id])
         );
-        pretty_assertions::assert_eq!(tracked_processes.next_quiet_deadline(&layout)?, None);
+        assert_that!(tracked_processes.next_quiet_deadline(&layout)?, eq(None));
         let snapshot = tracked_processes.snapshot(&original_layout);
         let hidden_original = snapshot
             .panes()
             .find(|(pane_id, _pane)| *pane_id == hidden_original_pane_id)
             .map(|(_pane_id, pane)| pane)
             .ok_or_else(|| report!("expected hidden original pane tracked state"))?;
-        pretty_assertions::assert_eq!(hidden_original.state(), TrackedProcessState::Busy);
+        assert_that!(hidden_original.state(), eq(TrackedProcessState::Busy));
         Ok(())
     }
 

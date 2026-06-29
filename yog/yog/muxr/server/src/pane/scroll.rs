@@ -117,29 +117,31 @@ const fn faux_scroll_sequence(direction: PaneScrollDirection, cursor_key_mode: T
 
 #[cfg(test)]
 mod tests {
+    use test_that::prelude::*;
+
     use super::*;
 
     #[test]
     fn test_faux_scroll_input_bytes_when_application_cursor_mode_is_disabled_uses_csi_arrows() {
-        pretty_assertions::assert_eq!(
+        assert_that!(
             faux_scroll_input_bytes(PaneScrollDirection::Up, TerminalCursorKeyMode::Normal),
-            b"\x1b[A\x1b[A\x1b[A".to_vec(),
+            eq(b"\x1b[A\x1b[A\x1b[A".to_vec())
         );
-        pretty_assertions::assert_eq!(
+        assert_that!(
             faux_scroll_input_bytes(PaneScrollDirection::Down, TerminalCursorKeyMode::Normal),
-            b"\x1b[B\x1b[B\x1b[B".to_vec(),
+            eq(b"\x1b[B\x1b[B\x1b[B".to_vec())
         );
     }
 
     #[test]
     fn test_faux_scroll_input_bytes_when_application_cursor_mode_is_enabled_uses_ss3_arrows() {
-        pretty_assertions::assert_eq!(
+        assert_that!(
             faux_scroll_input_bytes(PaneScrollDirection::Up, TerminalCursorKeyMode::Application),
-            b"\x1bOA\x1bOA\x1bOA".to_vec(),
+            eq(b"\x1bOA\x1bOA\x1bOA".to_vec())
         );
-        pretty_assertions::assert_eq!(
+        assert_that!(
             faux_scroll_input_bytes(PaneScrollDirection::Down, TerminalCursorKeyMode::Application),
-            b"\x1bOB\x1bOB\x1bOB".to_vec(),
+            eq(b"\x1bOB\x1bOB\x1bOB".to_vec())
         );
     }
 }

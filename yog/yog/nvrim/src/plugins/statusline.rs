@@ -231,6 +231,7 @@ fn draw_diagnostics((severity, diags_count): (DiagnosticSeverity, u16)) -> Strin
 #[cfg(test)]
 mod tests {
     use rstest::rstest;
+    use test_that::prelude::*;
 
     use super::*;
 
@@ -260,7 +261,7 @@ mod tests {
         cursor_position: Some(CursorPosition { row: 42, col: 7 }),
     })]
     fn statusline_draw_when_all_diagnostics_absent_or_zero_renders_plain_statusline(#[case] statusline: Statusline) {
-        pretty_assertions::assert_eq!(statusline.draw(), "%#StatusLine# foo 42:8 %#StatusLine#");
+        assert_that!(statusline.draw(), eq("%#StatusLine# foo 42:8 %#StatusLine#"));
     }
 
     #[test]
@@ -273,9 +274,9 @@ mod tests {
             workspace_diags: std::iter::once((DiagnosticSeverity::Info, 0)).collect(),
             cursor_position: Some(CursorPosition { row: 42, col: 7 }),
         };
-        pretty_assertions::assert_eq!(
+        assert_that!(
             statusline.draw(),
-            "%#StatusLine# foo 42:8 %#DiagnosticStatusLineError#3 %#DiagnosticStatusLineInfo#1 %#StatusLine#",
+            eq("%#StatusLine# foo 42:8 %#DiagnosticStatusLineError#3 %#DiagnosticStatusLineInfo#1 %#StatusLine#")
         );
     }
 
@@ -289,9 +290,9 @@ mod tests {
                 .collect(),
             cursor_position: Some(CursorPosition { row: 42, col: 7 }),
         };
-        pretty_assertions::assert_eq!(
+        assert_that!(
             statusline.draw(),
-            "%#DiagnosticStatusLineError#3 %#DiagnosticStatusLineInfo#1%#StatusLine# foo 42:8 %#StatusLine#",
+            eq("%#DiagnosticStatusLineError#3 %#DiagnosticStatusLineInfo#1%#StatusLine# foo 42:8 %#StatusLine#")
         );
     }
 
@@ -307,9 +308,11 @@ mod tests {
                 .collect(), // unchanged (multi-element)
             cursor_position: Some(CursorPosition { row: 42, col: 7 }),
         };
-        pretty_assertions::assert_eq!(
+        assert_that!(
             statusline.draw(),
-            "%#DiagnosticStatusLineError#3 %#DiagnosticStatusLineInfo#1%#StatusLine# foo 42:8 %#DiagnosticStatusLineWarn#2 %#DiagnosticStatusLineHint#3 %#StatusLine#",
+            eq(
+                "%#DiagnosticStatusLineError#3 %#DiagnosticStatusLineInfo#1%#StatusLine# foo 42:8 %#DiagnosticStatusLineWarn#2 %#DiagnosticStatusLineHint#3 %#StatusLine#"
+            )
         );
     }
 
@@ -324,9 +327,9 @@ mod tests {
             workspace_diags: SeverityBuckets::default(),
             cursor_position: Some(CursorPosition { row: 42, col: 7 }),
         };
-        pretty_assertions::assert_eq!(
+        assert_that!(
             statusline.draw(),
-            "%#StatusLine# foo 42:8 %#DiagnosticStatusLineWarn#1 %#DiagnosticStatusLineHint#5 %#StatusLine#",
+            eq("%#StatusLine# foo 42:8 %#DiagnosticStatusLineWarn#1 %#DiagnosticStatusLineHint#5 %#StatusLine#")
         );
     }
 
@@ -338,7 +341,7 @@ mod tests {
     #[case::other(DiagnosticSeverity::Other)]
     fn test_draw_diagnostics_when_zero_count_returns_empty_string(#[case] severity: DiagnosticSeverity) {
         // Any severity with zero count should yield empty string.
-        pretty_assertions::assert_eq!(draw_diagnostics((severity, 0)), String::new());
+        assert_that!(draw_diagnostics((severity, 0)), eq(String::new()));
     }
 
     #[test]
@@ -365,9 +368,11 @@ mod tests {
             cursor_position: Some(CursorPosition { row: 42, col: 7 }),
         };
         // Affirm draw output matches severity ordering; equality macro takes (actual, expected).
-        pretty_assertions::assert_eq!(
+        assert_that!(
             statusline.draw(),
-            "%#DiagnosticStatusLineError#8 %#DiagnosticStatusLineWarn#7 %#DiagnosticStatusLineInfo#6 %#DiagnosticStatusLineHint#5%#StatusLine# foo 42:8 %#DiagnosticStatusLineError#4 %#DiagnosticStatusLineWarn#3 %#DiagnosticStatusLineInfo#2 %#DiagnosticStatusLineHint#1 %#StatusLine#",
+            eq(
+                "%#DiagnosticStatusLineError#8 %#DiagnosticStatusLineWarn#7 %#DiagnosticStatusLineInfo#6 %#DiagnosticStatusLineHint#5%#StatusLine# foo 42:8 %#DiagnosticStatusLineError#4 %#DiagnosticStatusLineWarn#3 %#DiagnosticStatusLineInfo#2 %#DiagnosticStatusLineHint#1 %#StatusLine#"
+            )
         );
     }
 
@@ -380,7 +385,7 @@ mod tests {
             workspace_diags: SeverityBuckets::default(),
             cursor_position: None,
         };
-        pretty_assertions::assert_eq!(statusline.draw(), "%#StatusLine# %#StatusLine#");
+        assert_that!(statusline.draw(), eq("%#StatusLine# %#StatusLine#"));
     }
 
     #[rstest]
@@ -395,6 +400,6 @@ mod tests {
             workspace_diags: SeverityBuckets::default(),
             cursor_position: Some(CursorPosition { row: 10, col }),
         };
-        pretty_assertions::assert_eq!(statusline.draw(), expected);
+        assert_that!(statusline.draw(), eq(expected));
     }
 }

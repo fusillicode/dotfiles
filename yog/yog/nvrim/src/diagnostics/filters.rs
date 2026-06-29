@@ -154,68 +154,87 @@ impl TryFrom<&Dictionary> for DiagnosticLocation {
 
 #[cfg(test)]
 mod tests {
+    use test_that::prelude::*;
+
     use super::*;
 
     #[test]
     fn test_try_from_valid_dictionary_succeeds() {
         let dict = create_diag(0, 1, 2, 3);
-        assert2::assert!(let Ok(loc) = DiagnosticLocation::try_from(&dict));
-        pretty_assertions::assert_eq!(loc.lnum, 0);
-        pretty_assertions::assert_eq!(loc.col, 1);
-        pretty_assertions::assert_eq!(loc.end_lnum, 2);
-        pretty_assertions::assert_eq!(loc.end_col, 3);
+        let loc_result = DiagnosticLocation::try_from(&dict);
+        assert_that!(loc_result, ok(anything()));
+        let loc = loc_result.expect("valid diagnostic location should parse");
+        assert_that!(loc.lnum, eq(0));
+        assert_that!(loc.col, eq(1));
+        assert_that!(loc.end_lnum, eq(2));
+        assert_that!(loc.end_col, eq(3));
     }
 
     #[test]
     fn test_try_from_missing_lnum_key_fails() {
         let dict = ytil_noxi::dict! { col: 1_i64, end_col: 3_i64, end_lnum: 2_i64 };
-        assert2::assert!(let Err(err) = DiagnosticLocation::try_from(&dict));
-        assert!(err.to_string().contains("missing dict value"));
+        assert_that!(
+            (DiagnosticLocation::try_from(&dict)).map(|_| ()),
+            err(displays_as(contains_substring("missing dict value")))
+        );
     }
 
     #[test]
     fn test_try_from_wrong_type_for_lnum_fails() {
         let dict = ytil_noxi::dict! { lnum: "not_an_int", col: 1_i64, end_col: 3_i64, end_lnum: 2_i64 };
-        assert2::assert!(let Err(err) = DiagnosticLocation::try_from(&dict));
-        assert!(err.to_string().contains(r#"value "not_an_int" of key "lnum""#));
-        assert!(err.to_string().contains("is String but Integer was expected"));
+        assert_that!(
+            DiagnosticLocation::try_from(&dict).map_err(|err| err.to_string()),
+            err(all!(
+                contains_substring(r#"value "not_an_int" of key "lnum""#),
+                contains_substring("is String but Integer was expected"),
+            ))
+        );
     }
 
     #[test]
     fn test_try_from_negative_lnum_fails() {
         let dict = create_diag(-1, 1, 2, 3);
-        assert2::assert!(let Err(err) = DiagnosticLocation::try_from(&dict));
-        assert!(err.to_string().contains("out of range"));
+        assert_that!(
+            (DiagnosticLocation::try_from(&dict)).map(|_| ()),
+            err(displays_as(contains_substring("out of range")))
+        );
     }
 
     #[test]
     fn test_try_from_lnum_greater_than_end_lnum_fails() {
         let dict = create_diag(2, 1, 0, 3);
-        assert2::assert!(let Err(err) = DiagnosticLocation::try_from(&dict));
-        assert!(err.to_string().contains("inconsistent line boundaries"));
-        assert!(err.to_string().contains("lnum 2 > end_lnum 0"));
+        assert_that!(
+            (DiagnosticLocation::try_from(&dict)).map(|_| ()),
+            err(displays_as(all!(
+                contains_substring("inconsistent line boundaries"),
+                contains_substring("lnum 2 > end_lnum 0")
+            )))
+        );
     }
 
     #[test]
     fn test_try_from_col_greater_than_end_col_fails() {
         let dict = create_diag(0, 3, 0, 1);
-        assert2::assert!(let Err(err) = DiagnosticLocation::try_from(&dict));
-        assert!(err.to_string().contains("inconsistent col boundaries"));
-        assert!(err.to_string().contains("col 3 > end_col 1 on same line"));
+        assert_that!(
+            (DiagnosticLocation::try_from(&dict)).map(|_| ()),
+            err(displays_as(all!(
+                contains_substring("inconsistent col boundaries"),
+                contains_substring("col 3 > end_col 1 on same line")
+            )))
+        );
     }
 
     #[test]
     fn test_try_from_equal_boundaries_succeeds() {
         let dict = create_diag(1, 2, 1, 2);
-        assert2::assert!(let Ok(loc) = DiagnosticLocation::try_from(&dict));
-        pretty_assertions::assert_eq!(
-            loc,
-            DiagnosticLocation {
+        assert_that!(
+            DiagnosticLocation::try_from(&dict),
+            ok(eq(DiagnosticLocation {
                 lnum: 1,
                 col: 2,
                 end_lnum: 1,
                 end_col: 2
-            }
+            }))
         );
     }
 

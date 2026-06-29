@@ -402,6 +402,7 @@ fn key(code: ClientKeyCode, modifiers: ClientKeyModifiers, raw_bytes: &[u8]) -> 
 #[cfg(test)]
 mod tests {
     use rstest::rstest;
+    use test_that::prelude::*;
 
     use super::*;
 
@@ -409,14 +410,14 @@ mod tests {
     fn test_input_decoder_decode_when_bytes_are_plain_returns_input() {
         let mut decoder = InputDecoder::default();
 
-        pretty_assertions::assert_eq!(decoder.decode(b"abc"), vec![DecodedInput::Input(b"abc".to_vec())]);
+        assert_that!(decoder.decode(b"abc"), eq(vec![DecodedInput::Input(b"abc".to_vec())]));
     }
 
     #[test]
     fn test_input_decoder_decode_when_bare_enter_arrives_preserves_input_bytes() {
         let mut decoder = InputDecoder::default();
 
-        pretty_assertions::assert_eq!(decoder.decode(b"\r"), vec![DecodedInput::Input(b"\r".to_vec())]);
+        assert_that!(decoder.decode(b"\r"), eq(vec![DecodedInput::Input(b"\r".to_vec())]));
     }
 
     #[rstest]
@@ -445,9 +446,9 @@ mod tests {
     ) {
         let mut decoder = InputDecoder::default();
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             decoder.decode(bytes),
-            vec![DecodedInput::Key(key(code, modifiers, bytes))]
+            eq(vec![DecodedInput::Key(key(code, modifiers, bytes))])
         );
     }
 
@@ -457,7 +458,7 @@ mod tests {
     fn test_input_decoder_decode_when_copy_shortcut_arrives_returns_copy_selection(#[case] bytes: &[u8]) {
         let mut decoder = InputDecoder::default();
 
-        pretty_assertions::assert_eq!(decoder.decode(bytes), vec![DecodedInput::CopySelection]);
+        assert_that!(decoder.decode(bytes), eq(vec![DecodedInput::CopySelection]));
     }
 
     #[rstest]
@@ -466,20 +467,20 @@ mod tests {
     fn test_input_decoder_decode_when_inline_copy_shortcut_arrives_returns_inline_copy_selection(#[case] bytes: &[u8]) {
         let mut decoder = InputDecoder::default();
 
-        pretty_assertions::assert_eq!(decoder.decode(bytes), vec![DecodedInput::CopySelectionInline]);
+        assert_that!(decoder.decode(bytes), eq(vec![DecodedInput::CopySelectionInline]));
     }
 
     #[test]
     fn test_input_decoder_decode_when_shortcut_is_between_input_splits_actions() {
         let mut decoder = InputDecoder::default();
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             decoder.decode(b"a\x1bEb"),
-            vec![
+            eq(vec![
                 DecodedInput::Input(b"a".to_vec()),
                 DecodedInput::Key(key(ClientKeyCode::Char('E'), ClientKeyModifiers::SHIFT_ALT, b"\x1bE",)),
                 DecodedInput::Input(b"b".to_vec()),
-            ],
+            ])
         );
     }
 
@@ -489,41 +490,41 @@ mod tests {
     fn test_input_decoder_decode_when_escape_is_not_muxr_cmd_preserves_bytes(#[case] bytes: &[u8]) {
         let mut decoder = InputDecoder::default();
 
-        pretty_assertions::assert_eq!(decoder.decode(bytes), vec![DecodedInput::Input(bytes.to_vec())]);
+        assert_that!(decoder.decode(bytes), eq(vec![DecodedInput::Input(bytes.to_vec())]));
     }
 
     #[test]
     fn test_input_decoder_decode_when_shortcut_is_split_preserves_pending_prefix() {
         let mut decoder = InputDecoder::default();
 
-        pretty_assertions::assert_eq!(decoder.decode(b"\x1b"), Vec::<DecodedInput>::new());
-        pretty_assertions::assert_eq!(decoder.idle_timeout(), InputIdleTimeout::Needed);
-        pretty_assertions::assert_eq!(
+        assert_that!(decoder.decode(b"\x1b"), eq(Vec::<DecodedInput>::new()));
+        assert_that!(decoder.idle_timeout(), eq(InputIdleTimeout::Needed));
+        assert_that!(
             decoder.decode(b"E"),
-            vec![DecodedInput::Key(key(
+            eq(vec![DecodedInput::Key(key(
                 ClientKeyCode::Char('E'),
                 ClientKeyModifiers::SHIFT_ALT,
                 b"\x1bE",
-            ))]
+            ))])
         );
-        pretty_assertions::assert_eq!(decoder.idle_timeout(), InputIdleTimeout::NotNeeded);
+        assert_that!(decoder.idle_timeout(), eq(InputIdleTimeout::NotNeeded));
     }
 
     #[test]
     fn test_input_decoder_finalize_when_bare_escape_arrives_returns_key() {
         let mut decoder = InputDecoder::default();
 
-        pretty_assertions::assert_eq!(decoder.decode(b"\x1b"), Vec::<DecodedInput>::new());
-        pretty_assertions::assert_eq!(decoder.idle_timeout(), InputIdleTimeout::Needed);
-        pretty_assertions::assert_eq!(
+        assert_that!(decoder.decode(b"\x1b"), eq(Vec::<DecodedInput>::new()));
+        assert_that!(decoder.idle_timeout(), eq(InputIdleTimeout::Needed));
+        assert_that!(
             decoder.finalize(),
-            vec![DecodedInput::Key(key(
+            eq(vec![DecodedInput::Key(key(
                 ClientKeyCode::Esc,
                 ClientKeyModifiers::NONE,
                 b"\x1b",
-            ))]
+            ))])
         );
-        pretty_assertions::assert_eq!(decoder.idle_timeout(), InputIdleTimeout::NotNeeded);
+        assert_that!(decoder.idle_timeout(), eq(InputIdleTimeout::NotNeeded));
     }
 
     #[test]
@@ -531,10 +532,10 @@ mod tests {
         let mut decoder = InputDecoder::default();
         let bytes = b"\x1b[1";
 
-        pretty_assertions::assert_eq!(decoder.decode(bytes), Vec::<DecodedInput>::new());
-        pretty_assertions::assert_eq!(decoder.idle_timeout(), InputIdleTimeout::Needed);
-        pretty_assertions::assert_eq!(decoder.finalize(), vec![DecodedInput::Input(bytes.to_vec())]);
-        pretty_assertions::assert_eq!(decoder.idle_timeout(), InputIdleTimeout::NotNeeded);
+        assert_that!(decoder.decode(bytes), eq(Vec::<DecodedInput>::new()));
+        assert_that!(decoder.idle_timeout(), eq(InputIdleTimeout::Needed));
+        assert_that!(decoder.finalize(), eq(vec![DecodedInput::Input(bytes.to_vec())]));
+        assert_that!(decoder.idle_timeout(), eq(InputIdleTimeout::NotNeeded));
     }
 
     #[rstest]
@@ -552,9 +553,9 @@ mod tests {
     ) {
         let mut decoder = InputDecoder::default();
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             decoder.decode(bytes),
-            vec![DecodedInput::Key(key(code, ClientKeyModifiers::NONE, bytes))]
+            eq(vec![DecodedInput::Key(key(code, ClientKeyModifiers::NONE, bytes))])
         );
     }
 
@@ -562,17 +563,17 @@ mod tests {
     fn test_input_decoder_decode_when_arrow_is_split_preserves_pending_prefix() {
         let mut decoder = InputDecoder::default();
 
-        pretty_assertions::assert_eq!(decoder.decode(b"\x1b["), Vec::<DecodedInput>::new());
-        pretty_assertions::assert_eq!(decoder.idle_timeout(), InputIdleTimeout::Needed);
-        pretty_assertions::assert_eq!(
+        assert_that!(decoder.decode(b"\x1b["), eq(Vec::<DecodedInput>::new()));
+        assert_that!(decoder.idle_timeout(), eq(InputIdleTimeout::Needed));
+        assert_that!(
             decoder.decode(b"D"),
-            vec![DecodedInput::Key(key(
+            eq(vec![DecodedInput::Key(key(
                 ClientKeyCode::Left,
                 ClientKeyModifiers::NONE,
                 b"\x1b[D",
-            ))]
+            ))])
         );
-        pretty_assertions::assert_eq!(decoder.idle_timeout(), InputIdleTimeout::NotNeeded);
+        assert_that!(decoder.idle_timeout(), eq(InputIdleTimeout::NotNeeded));
     }
 
     #[rstest]
@@ -592,9 +593,9 @@ mod tests {
     ) {
         let mut decoder = InputDecoder::default();
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             decoder.decode(bytes),
-            vec![DecodedInput::Key(key(code, modifiers, bytes))]
+            eq(vec![DecodedInput::Key(key(code, modifiers, bytes))])
         );
     }
 
@@ -602,26 +603,26 @@ mod tests {
     fn test_input_decoder_decode_when_kitty_key_is_split_preserves_pending_prefix() {
         let mut decoder = InputDecoder::default();
 
-        pretty_assertions::assert_eq!(decoder.decode(b"\x1b[13"), Vec::<DecodedInput>::new());
-        pretty_assertions::assert_eq!(decoder.idle_timeout(), InputIdleTimeout::Needed);
-        pretty_assertions::assert_eq!(
+        assert_that!(decoder.decode(b"\x1b[13"), eq(Vec::<DecodedInput>::new()));
+        assert_that!(decoder.idle_timeout(), eq(InputIdleTimeout::Needed));
+        assert_that!(
             decoder.decode(b";2u"),
-            vec![DecodedInput::Key(key(
+            eq(vec![DecodedInput::Key(key(
                 ClientKeyCode::Enter,
                 ClientKeyModifiers::SHIFT,
                 b"\x1b[13;2u",
-            ))]
+            ))])
         );
-        pretty_assertions::assert_eq!(decoder.idle_timeout(), InputIdleTimeout::NotNeeded);
+        assert_that!(decoder.idle_timeout(), eq(InputIdleTimeout::NotNeeded));
     }
 
     #[test]
     fn test_input_decoder_decode_when_bracketed_paste_arrives_returns_single_paste() {
         let mut decoder = InputDecoder::default();
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             decoder.decode(b"\x1b[200~echo hi\n\x1b[201~"),
-            vec![DecodedInput::Paste(b"echo hi\n".to_vec())]
+            eq(vec![DecodedInput::Paste(b"echo hi\n".to_vec())])
         );
     }
 
@@ -629,13 +630,13 @@ mod tests {
     fn test_input_decoder_decode_when_bracketed_paste_is_split_preserves_pending_paste() {
         let mut decoder = InputDecoder::default();
 
-        pretty_assertions::assert_eq!(decoder.decode(b"\x1b[200~echo"), Vec::<DecodedInput>::new());
-        pretty_assertions::assert_eq!(decoder.idle_timeout(), InputIdleTimeout::NotNeeded);
-        pretty_assertions::assert_eq!(
+        assert_that!(decoder.decode(b"\x1b[200~echo"), eq(Vec::<DecodedInput>::new()));
+        assert_that!(decoder.idle_timeout(), eq(InputIdleTimeout::NotNeeded));
+        assert_that!(
             decoder.decode(b" hi\n\x1b[201~"),
-            vec![DecodedInput::Paste(b"echo hi\n".to_vec())]
+            eq(vec![DecodedInput::Paste(b"echo hi\n".to_vec())])
         );
-        pretty_assertions::assert_eq!(decoder.idle_timeout(), InputIdleTimeout::NotNeeded);
+        assert_that!(decoder.idle_timeout(), eq(InputIdleTimeout::NotNeeded));
     }
 
     #[rstest]
@@ -644,9 +645,9 @@ mod tests {
     fn test_input_decoder_needs_idle_timeout_when_escape_prefix_is_pending(#[case] bytes: &[u8]) {
         let mut decoder = InputDecoder::default();
 
-        pretty_assertions::assert_eq!(decoder.decode(bytes), Vec::<DecodedInput>::new());
+        assert_that!(decoder.decode(bytes), eq(Vec::<DecodedInput>::new()));
 
-        pretty_assertions::assert_eq!(decoder.idle_timeout(), InputIdleTimeout::Needed);
+        assert_that!(decoder.idle_timeout(), eq(InputIdleTimeout::Needed));
     }
 
     #[rstest]
@@ -658,13 +659,13 @@ mod tests {
     ) {
         let mut decoder = InputDecoder::default();
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             decoder.decode(bytes),
-            vec![DecodedInput::Mouse(ClientMouseEvent {
+            eq(vec![DecodedInput::Mouse(ClientMouseEvent {
                 button,
                 phase: ClientMouseEventPhase::Press,
                 position: ClientMousePosition { row: 4, col: 9 },
-            })]
+            })])
         );
     }
 
@@ -672,13 +673,13 @@ mod tests {
     fn test_input_decoder_decode_when_mouse_click_arrives_returns_mouse_event() {
         let mut decoder = InputDecoder::default();
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             decoder.decode(b"\x1b[<0;10;5M"),
-            vec![DecodedInput::Mouse(ClientMouseEvent {
+            eq(vec![DecodedInput::Mouse(ClientMouseEvent {
                 button: 0,
                 phase: ClientMouseEventPhase::Press,
                 position: ClientMousePosition { row: 4, col: 9 },
-            })]
+            })])
         );
     }
 
@@ -686,13 +687,13 @@ mod tests {
     fn test_input_decoder_decode_when_mouse_drag_arrives_returns_mouse_event() {
         let mut decoder = InputDecoder::default();
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             decoder.decode(b"\x1b[<32;10;5M"),
-            vec![DecodedInput::Mouse(ClientMouseEvent {
+            eq(vec![DecodedInput::Mouse(ClientMouseEvent {
                 button: 32,
                 phase: ClientMouseEventPhase::Press,
                 position: ClientMousePosition { row: 4, col: 9 },
-            })]
+            })])
         );
     }
 
@@ -700,13 +701,13 @@ mod tests {
     fn test_input_decoder_decode_when_mouse_release_arrives_returns_mouse_event() {
         let mut decoder = InputDecoder::default();
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             decoder.decode(b"\x1b[<0;10;5m"),
-            vec![DecodedInput::Mouse(ClientMouseEvent {
+            eq(vec![DecodedInput::Mouse(ClientMouseEvent {
                 button: 0,
                 phase: ClientMouseEventPhase::Release,
                 position: ClientMousePosition { row: 4, col: 9 },
-            })]
+            })])
         );
     }
 

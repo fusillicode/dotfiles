@@ -275,6 +275,7 @@ mod tests {
 
     use muxr_core::PaneId;
     use muxr_core::SessionPaths;
+    use test_that::prelude::*;
 
     use super::*;
     use crate::session::files::prepare_session_dirs;
@@ -289,9 +290,9 @@ mod tests {
 
         let (session_tracing, dispatch) = SessionTracing::new(&paths, &session, &timestamp, 12345)?;
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             session_tracing.log_path,
-            paths.server_log_path(&session, &timestamp, 12345)?
+            eq(paths.server_log_path(&session, &timestamp, 12345)?)
         );
         // Drop the dispatch before the appender guard so the non-blocking worker is not shut down while the
         // subscriber still owns the writer.
@@ -317,11 +318,11 @@ mod tests {
         drop(session_tracing);
 
         let log = fs::read_to_string(&log_path).context("failed to read muxr test tracing log")?;
-        assert2::assert!(log_path.exists());
-        assert2::assert!(log.contains("muxr tracing test event"));
-        assert2::assert!(log.contains("kind=\"test_event\""));
-        assert2::assert!(!log.trim_start().starts_with('{'));
-        assert2::assert!(!log.contains('\u{1b}'));
+        assert_that!(log_path.exists(), eq(true));
+        assert_that!(log, contains_substring("muxr tracing test event"));
+        assert_that!(log, contains_substring("kind=\"test_event\""));
+        assert_that!(log.trim_start(), not(starts_with("{")));
+        assert_that!(log, not(contains_substring("\u{1b}")));
         Ok(())
     }
 
@@ -372,50 +373,56 @@ mod tests {
         drop(session_tracing);
 
         let log = fs::read_to_string(&log_path).context("failed to read muxr test tracing log")?;
-        assert2::assert!(log.contains("session=work"));
-        assert2::assert!(log.contains("kind=\"server_ready\""));
-        assert2::assert!(log.contains("kind=\"server_shutdown\""));
-        assert2::assert!(log.contains("reason=\"final_pane_exited\""));
-        assert2::assert!(log.contains("kind=\"server_error\""));
-        assert2::assert!(log.contains("summary=\"muxr server stopped with error\""));
-        assert2::assert!(log.contains("test server failure"));
-        assert2::assert!(log.contains("kind=\"client_session_state_handoff_failed\""));
-        assert2::assert!(log.contains("event=\"finished_state_send\""));
-        assert2::assert!(log.contains("reason=\"channel_full\""));
-        assert2::assert!(log.contains("kind=\"scrollback_editor_restore_failed\""));
-        assert2::assert!(log.contains("event=\"restore_after_client_error\""));
-        assert2::assert!(log.contains("test restore failure"));
-        assert2::assert!(log.contains("kind=\"delete_ack_send_failed\""));
-        assert2::assert!(log.contains("event=\"deleted\""));
-        assert2::assert!(log.contains("reason=\"timeout\""));
-        assert2::assert!(log.contains("kind=\"detach_ack_send_failed\""));
-        assert2::assert!(log.contains("event=\"detached\""));
-        assert2::assert!(log.contains("reason=\"send_failed\""));
-        assert2::assert!(log.contains("kind=\"server_file_cleanup_failed\""));
-        assert2::assert!(log.contains("event=\"remove_socket\""));
-        assert2::assert!(log.contains("path=/tmp/muxr.sock"));
-        assert2::assert!(log.contains("socket busy"));
-        assert2::assert!(log.contains("kind=\"scrollback_cleanup_failed\""));
-        assert2::assert!(log.contains("event=\"remove_editor_history\""));
-        assert2::assert!(log.contains("pane_id=pane-7"));
-        assert2::assert!(log.contains("history busy"));
-        assert2::assert!(log.contains("event=\"remove_dump_after_error\""));
-        assert2::assert!(log.contains("dump busy"));
-        assert2::assert!(log.contains("kind=\"pty_shutdown_failed\""));
-        assert2::assert!(log.contains("event=\"kill_child\""));
-        assert2::assert!(log.contains("summary=\"muxr pty shutdown cleanup failed\""));
-        assert2::assert!(log.contains("kill busy"));
-        assert2::assert!(log.contains("kind=\"pty_exit_wakeup_not_queued\""));
-        assert2::assert!(log.contains("event=\"send_exit_wakeup\""));
-        assert2::assert!(log.contains("reason=\"channel_full\""));
-        assert2::assert!(log.contains("kind=\"pty_reader_stopped_after_error\""));
-        assert2::assert!(log.contains("event=\"write_terminal_replies\""));
-        assert2::assert!(log.contains("summary=\"muxr pty reader stopped after recoverable processing error\""));
-        assert2::assert!(log.contains("reply failed"));
-        assert2::assert!(log.contains("kind=\"pty_writer_stopped_after_error\""));
-        assert2::assert!(log.contains("event=\"write_batch\""));
-        assert2::assert!(log.contains("summary=\"muxr pty writer stopped after recoverable processing error\""));
-        assert2::assert!(log.contains("write failed"));
+        assert_that!(log, contains_substring("session=work"));
+        assert_that!(log, contains_substring("kind=\"server_ready\""));
+        assert_that!(log, contains_substring("kind=\"server_shutdown\""));
+        assert_that!(log, contains_substring("reason=\"final_pane_exited\""));
+        assert_that!(log, contains_substring("kind=\"server_error\""));
+        assert_that!(log, contains_substring("summary=\"muxr server stopped with error\""));
+        assert_that!(log, contains_substring("test server failure"));
+        assert_that!(log, contains_substring("kind=\"client_session_state_handoff_failed\""));
+        assert_that!(log, contains_substring("event=\"finished_state_send\""));
+        assert_that!(log, contains_substring("reason=\"channel_full\""));
+        assert_that!(log, contains_substring("kind=\"scrollback_editor_restore_failed\""));
+        assert_that!(log, contains_substring("event=\"restore_after_client_error\""));
+        assert_that!(log, contains_substring("test restore failure"));
+        assert_that!(log, contains_substring("kind=\"delete_ack_send_failed\""));
+        assert_that!(log, contains_substring("event=\"deleted\""));
+        assert_that!(log, contains_substring("reason=\"timeout\""));
+        assert_that!(log, contains_substring("kind=\"detach_ack_send_failed\""));
+        assert_that!(log, contains_substring("event=\"detached\""));
+        assert_that!(log, contains_substring("reason=\"send_failed\""));
+        assert_that!(log, contains_substring("kind=\"server_file_cleanup_failed\""));
+        assert_that!(log, contains_substring("event=\"remove_socket\""));
+        assert_that!(log, contains_substring("path=/tmp/muxr.sock"));
+        assert_that!(log, contains_substring("socket busy"));
+        assert_that!(log, contains_substring("kind=\"scrollback_cleanup_failed\""));
+        assert_that!(log, contains_substring("event=\"remove_editor_history\""));
+        assert_that!(log, contains_substring("pane_id=pane-7"));
+        assert_that!(log, contains_substring("history busy"));
+        assert_that!(log, contains_substring("event=\"remove_dump_after_error\""));
+        assert_that!(log, contains_substring("dump busy"));
+        assert_that!(log, contains_substring("kind=\"pty_shutdown_failed\""));
+        assert_that!(log, contains_substring("event=\"kill_child\""));
+        assert_that!(log, contains_substring("summary=\"muxr pty shutdown cleanup failed\""));
+        assert_that!(log, contains_substring("kill busy"));
+        assert_that!(log, contains_substring("kind=\"pty_exit_wakeup_not_queued\""));
+        assert_that!(log, contains_substring("event=\"send_exit_wakeup\""));
+        assert_that!(log, contains_substring("reason=\"channel_full\""));
+        assert_that!(log, contains_substring("kind=\"pty_reader_stopped_after_error\""));
+        assert_that!(log, contains_substring("event=\"write_terminal_replies\""));
+        assert_that!(
+            log,
+            contains_substring("summary=\"muxr pty reader stopped after recoverable processing error\"")
+        );
+        assert_that!(log, contains_substring("reply failed"));
+        assert_that!(log, contains_substring("kind=\"pty_writer_stopped_after_error\""));
+        assert_that!(log, contains_substring("event=\"write_batch\""));
+        assert_that!(
+            log,
+            contains_substring("summary=\"muxr pty writer stopped after recoverable processing error\"")
+        );
+        assert_that!(log, contains_substring("write failed"));
         Ok(())
     }
 }

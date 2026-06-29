@@ -579,6 +579,7 @@ pub mod test_helpers {
 mod tests {
     use rootcause::report;
     use rstest::rstest;
+    use test_that::prelude::*;
 
     use super::*;
 
@@ -586,34 +587,34 @@ mod tests {
     fn test_layout_snapshot_single_pane_when_built_returns_stable_layout() -> rootcause::Result<()> {
         let layout = self::layout_snapshot()?;
 
-        pretty_assertions::assert_eq!(layout.active_tab().get(), 1);
-        pretty_assertions::assert_eq!(layout.tabs().len(), 1);
+        assert_that!(layout.active_tab().get(), eq(1));
+        assert_that!(layout.tabs().len(), eq(1));
         let Some(tab) = layout.tabs().first() else {
             return Err(report!("expected one tab"));
         };
-        pretty_assertions::assert_eq!(tab.active_pane().get(), 1);
-        pretty_assertions::assert_eq!(tab.panes().len(), 1);
+        assert_that!(tab.active_pane().get(), eq(1));
+        assert_that!(tab.panes().len(), eq(1));
         Ok(())
     }
 
     #[test]
     fn test_layout_id_new_when_id_is_zero_returns_error() {
-        assert2::assert!(TabId::new(0).is_err());
-        assert2::assert!(PaneId::new(0).is_err());
+        assert_that!(TabId::new(0), err(anything()));
+        assert_that!(PaneId::new(0), err(anything()));
     }
 
     #[test]
     fn test_layout_id_deserialize_when_id_is_zero_returns_error() {
         let raw = "0";
 
-        assert2::assert!(serde_json::from_str::<TabId>(raw).is_err());
-        assert2::assert!(serde_json::from_str::<PaneId>(raw).is_err());
+        assert_that!(serde_json::from_str::<TabId>(raw), err(anything()));
+        assert_that!(serde_json::from_str::<PaneId>(raw), err(anything()));
     }
 
     #[test]
     fn test_layout_id_display_when_formatted_returns_human_label() -> rootcause::Result<()> {
-        pretty_assertions::assert_eq!(TabId::new(1)?.to_string(), "tab-1");
-        pretty_assertions::assert_eq!(PaneId::new(1)?.to_string(), "pane-1");
+        assert_that!(TabId::new(1)?.to_string(), eq("tab-1"));
+        assert_that!(PaneId::new(1)?.to_string(), eq("pane-1"));
         Ok(())
     }
 
@@ -663,7 +664,10 @@ mod tests {
             ],
         ))]
     fn test_layout_snapshot_validate_when_layout_is_invalid_returns_error(#[case] layout: LayoutSnapshot) {
-        assert2::assert!(LayoutSnapshot::new(*layout.active_tab(), layout.tabs().to_vec()).is_err());
+        assert_that!(
+            LayoutSnapshot::new(*layout.active_tab(), layout.tabs().to_vec()),
+            err(anything())
+        );
     }
 
     fn layout_snapshot() -> rootcause::Result<LayoutSnapshot> {

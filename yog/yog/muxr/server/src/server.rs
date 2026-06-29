@@ -448,6 +448,7 @@ mod tests {
     use muxr_transport::ClientConnection;
     use muxr_transport::ClientEventReader;
     use muxr_transport::ClientRequestWriter;
+    use test_that::prelude::*;
     use tokio::io::AsyncWriteExt;
 
     use super::test_helpers::server_config;
@@ -489,8 +490,8 @@ mod tests {
             Ok(())
         })?;
 
-        assert2::assert!(log.contains("kind=\"server_starting\""));
-        assert2::assert!(log.contains("session=work"));
+        assert_that!(log, contains_substring("kind=\"server_starting\""));
+        assert_that!(log, contains_substring("session=work"));
         Ok(())
     }
 
@@ -505,11 +506,11 @@ mod tests {
             self::wait_for_socket(&paths.socket)?;
             self::wait_for_path(&paths.layout)?;
 
-            assert2::assert!(paths.root.is_dir());
-            assert2::assert!(paths.panes.is_dir());
-            assert2::assert!(paths.layout.exists());
-            assert2::assert!(paths.socket.exists());
-            assert2::assert!(paths.pid.exists());
+            assert_that!(paths.root.is_dir(), eq(true));
+            assert_that!(paths.panes.is_dir(), eq(true));
+            assert_that!(paths.layout.exists(), eq(true));
+            assert_that!(paths.socket.exists(), eq(true));
+            assert_that!(paths.pid.exists(), eq(true));
             self::assert_session_state_is_private(&paths)?;
 
             self::attach_and_detach(&session, &paths).await?;
@@ -564,16 +565,16 @@ mod tests {
                 return Err(report!("expected server attached response"));
             };
 
-            pretty_assertions::assert_eq!(attached.layout.active_tab().to_string(), "tab-1");
+            assert_that!(attached.layout.active_tab().to_string(), eq("tab-1"));
             let Some(tab) = attached.layout.tabs().first() else {
                 return Err(report!("expected one tab in layout snapshot"));
             };
-            pretty_assertions::assert_eq!(tab.id().to_string(), "tab-1");
-            pretty_assertions::assert_eq!(tab.active_pane().to_string(), "pane-1");
+            assert_that!(tab.id().to_string(), eq("tab-1"));
+            assert_that!(tab.active_pane().to_string(), eq("pane-1"));
             let Some(pane) = tab.panes().first() else {
                 return Err(report!("expected one pane in layout snapshot"));
             };
-            pretty_assertions::assert_eq!(pane.id.to_string(), "pane-1");
+            assert_that!(pane.id.to_string(), eq("pane-1"));
 
             connection.send_request(&ClientRequest::Detach).await?;
             self::read_connection_until_detached(&mut connection).await?;
@@ -597,7 +598,7 @@ mod tests {
                 return Err(report!("expected second attach rejection"));
             };
 
-            pretty_assertions::assert_eq!(error, ServerError::ClientAlreadyAttached);
+            assert_that!(error, eq(ServerError::ClientAlreadyAttached));
             first_client.writer.send_request(&ClientRequest::Detach).await?;
             self::join_server(handle)
         })
@@ -652,9 +653,9 @@ mod tests {
             }
             let result = self::join_server(handle);
 
-            assert2::assert!(result.is_err());
-            assert2::assert!(!paths.socket.exists());
-            assert2::assert!(!paths.pid.exists());
+            assert_that!(result, err(anything()));
+            assert_that!(paths.socket.exists(), eq(false));
+            assert_that!(paths.pid.exists(), eq(false));
             Ok(())
         })
     }
@@ -695,7 +696,7 @@ mod tests {
             self::wait_for_socket(&paths.socket)?;
             let mut probe = self::connect_client(&paths).await?;
             probe.send_request(&ClientRequest::Ping).await?;
-            pretty_assertions::assert_eq!(probe.recv_event().await?, Some(ServerEvent::Pong));
+            assert_that!(probe.recv_event().await?, eq(Some(ServerEvent::Pong)));
 
             self::attach_and_detach(&session, &paths).await?;
             self::join_server(handle)
@@ -714,12 +715,12 @@ mod tests {
             let mut delete_client = self::connect_client(&paths).await?;
 
             delete_client.send_request(&ClientRequest::DeleteSession).await?;
-            pretty_assertions::assert_eq!(delete_client.recv_event().await?, Some(ServerEvent::Deleted));
+            assert_that!(delete_client.recv_event().await?, eq(Some(ServerEvent::Deleted)));
             self::join_server_with_timeout(handle)?;
 
-            assert2::assert!(!paths.root.exists());
-            assert2::assert!(!paths.socket.exists());
-            assert2::assert!(!paths.pid.exists());
+            assert_that!(paths.root.exists(), eq(false));
+            assert_that!(paths.socket.exists(), eq(false));
+            assert_that!(paths.pid.exists(), eq(false));
             Ok(())
         })
     }
@@ -736,12 +737,12 @@ mod tests {
             let mut delete_client = self::connect_client(&paths).await?;
 
             delete_client.send_request(&ClientRequest::DeleteSession).await?;
-            pretty_assertions::assert_eq!(delete_client.recv_event().await?, Some(ServerEvent::Deleted));
+            assert_that!(delete_client.recv_event().await?, eq(Some(ServerEvent::Deleted)));
             self::join_server_with_timeout(handle)?;
 
-            assert2::assert!(!paths.root.exists());
-            assert2::assert!(!paths.socket.exists());
-            assert2::assert!(!paths.pid.exists());
+            assert_that!(paths.root.exists(), eq(false));
+            assert_that!(paths.socket.exists(), eq(false));
+            assert_that!(paths.pid.exists(), eq(false));
             Ok(())
         })
     }
@@ -757,7 +758,7 @@ mod tests {
 
         let metadata = self::active_pane_session_metadata(&config, &layout)?;
 
-        pretty_assertions::assert_eq!(metadata.cwd, active_cwd);
+        assert_that!(metadata.cwd, eq(active_cwd));
         Ok(())
     }
 
@@ -779,7 +780,7 @@ mod tests {
         let pane = layout
             .pane(pane_id)
             .ok_or_else(|| report!("expected split pane to exist").attach(format!("pane_id={pane_id}")))?;
-        pretty_assertions::assert_eq!(pane.cwd, active_cwd);
+        assert_that!(pane.cwd, eq(active_cwd));
         Ok(())
     }
 
@@ -797,7 +798,7 @@ mod tests {
         let pane = layout
             .pane(pane_id)
             .ok_or_else(|| report!("expected tab pane to exist").attach(format!("pane_id={pane_id}")))?;
-        pretty_assertions::assert_eq!(pane.cwd, active_cwd);
+        assert_that!(pane.cwd, eq(active_cwd));
         Ok(())
     }
 
@@ -906,7 +907,7 @@ mod tests {
                 .tabs()
                 .first()
                 .ok_or_else(|| report!("expected scrollback editor tab"))?;
-            pretty_assertions::assert_eq!(editor_tab.active_pane().to_string(), "pane-2");
+            assert_that!(editor_tab.active_pane().to_string(), eq("pane-2"));
             self::read_until_render_contains(&mut client, b"before-editor").await?;
 
             client
@@ -923,9 +924,9 @@ mod tests {
                 .tabs()
                 .first()
                 .ok_or_else(|| report!("expected restored tab"))?;
-            pretty_assertions::assert_eq!(restored_tab.active_pane().to_string(), "pane-1");
+            assert_that!(restored_tab.active_pane().to_string(), eq("pane-1"));
             self::assert_layout_metadata_panes(&paths, &[1], 1)?;
-            assert2::assert!(!paths.panes.join("2").exists());
+            assert_that!(paths.panes.join("2").exists(), eq(false));
 
             drop(client);
             self::join_server_with_timeout(handle)
@@ -976,7 +977,7 @@ mod tests {
                 .tabs()
                 .first()
                 .ok_or_else(|| report!("expected scrollback editor tab"))?;
-            pretty_assertions::assert_eq!(editor_tab.active_pane().to_string(), "pane-2");
+            assert_that!(editor_tab.active_pane().to_string(), eq("pane-2"));
 
             client
                 .writer
@@ -991,7 +992,7 @@ mod tests {
                 .tabs()
                 .first()
                 .ok_or_else(|| report!("expected restored tab"))?;
-            pretty_assertions::assert_eq!(restored_tab.active_pane().to_string(), "pane-1");
+            assert_that!(restored_tab.active_pane().to_string(), eq("pane-1"));
             self::read_until_render_contains_hex_bytes(&mut client, &["1b", "5b", "4f", "1b", "5b", "49"]).await?;
 
             self::detach_client(client).await?;
@@ -1036,7 +1037,7 @@ mod tests {
                 .tabs()
                 .first()
                 .ok_or_else(|| report!("expected split tab before scrollback editor"))?;
-            pretty_assertions::assert_eq!(split_tab.active_pane().to_string(), "pane-2");
+            assert_that!(split_tab.active_pane().to_string(), eq("pane-2"));
 
             client
                 .writer
@@ -1057,7 +1058,7 @@ mod tests {
                 .tabs()
                 .first()
                 .ok_or_else(|| report!("expected scrollback editor tab"))?;
-            pretty_assertions::assert_eq!(editor_tab.active_pane().to_string(), "pane-3");
+            assert_that!(editor_tab.active_pane().to_string(), eq("pane-3"));
             self::read_until_render_contains(&mut client, b"before-editor").await?;
             let editor_regions =
                 self::read_until_pane_regions_matching(&mut client, "editor layout includes sibling pane", |regions| {
@@ -1093,7 +1094,7 @@ mod tests {
             drop(client);
             self::join_server_with_timeout(handle)?;
             self::assert_layout_metadata_panes(&paths, &[1, 2], 2)?;
-            assert2::assert!(!paths.panes.join("3").exists());
+            assert_that!(paths.panes.join("3").exists(), eq(false));
             Ok(())
         })
     }
@@ -1137,21 +1138,21 @@ mod tests {
                 .tabs()
                 .first()
                 .ok_or_else(|| report!("expected scrollback editor tab"))?;
-            pretty_assertions::assert_eq!(editor_tab.active_pane().to_string(), "pane-2");
+            assert_that!(editor_tab.active_pane().to_string(), eq("pane-2"));
 
             let restored_layout = self::read_until_layout(&mut client).await?;
             let restored_tab = restored_layout
                 .tabs()
                 .first()
                 .ok_or_else(|| report!("expected restored tab after editor exit"))?;
-            pretty_assertions::assert_eq!(restored_tab.active_pane().to_string(), "pane-1");
-            pretty_assertions::assert_eq!(
+            assert_that!(restored_tab.active_pane().to_string(), eq("pane-1"));
+            assert_that!(
                 restored_tab
                     .panes()
                     .iter()
                     .map(|pane| pane.id.to_string())
                     .collect::<Vec<_>>(),
-                vec!["pane-1"],
+                eq(vec!["pane-1"])
             );
 
             client
@@ -1160,7 +1161,7 @@ mod tests {
                 .await?;
             self::read_until_render_contains(&mut client, b"after-editor").await?;
             self::assert_layout_metadata_panes(&paths, &[1], 1)?;
-            assert2::assert!(!paths.panes.join("2").exists());
+            assert_that!(paths.panes.join("2").exists(), eq(false));
 
             self::detach_client(client).await?;
             self::join_server(handle)
@@ -1188,15 +1189,15 @@ mod tests {
             let Some(pane) = tab.panes().first() else {
                 return Err(report!("expected muxr test layout pane"));
             };
-            pretty_assertions::assert_eq!(pane.cwd, "~");
-            pretty_assertions::assert_eq!(pane.cmd_label, None);
+            assert_that!(pane.cwd, eq("~"));
+            assert_that!(pane.cmd_label, eq(None));
 
             let persisted = crate::state::persisted::load_metadata(&paths, &session)?
                 .ok_or_else(|| report!("expected muxr layout metadata"))?;
             let pane = persisted
                 .pane(PaneId::new(1)?)
                 .ok_or_else(|| report!("expected persisted muxr pane"))?;
-            pretty_assertions::assert_eq!(pane.cwd, "~");
+            assert_that!(pane.cwd, eq("~"));
 
             self::detach_client(client).await?;
             self::join_server(handle)
@@ -1222,10 +1223,10 @@ mod tests {
                 .await?;
 
             let layout = self::read_until_layout(&mut client).await?;
-            pretty_assertions::assert_eq!(layout.active_tab().to_string(), "tab-2");
-            pretty_assertions::assert_eq!(
+            assert_that!(layout.active_tab().to_string(), eq("tab-2"));
+            assert_that!(
                 layout.tabs().iter().map(|tab| tab.id().to_string()).collect::<Vec<_>>(),
-                vec!["tab-1", "tab-2"],
+                eq(vec!["tab-1", "tab-2"])
             );
             self::assert_layout_metadata_tabs(&paths, &[1, 2], 2)?;
 
@@ -1264,7 +1265,7 @@ mod tests {
                 }))
                 .await?;
             let created_layout = self::read_until_layout(&mut client).await?;
-            pretty_assertions::assert_eq!(created_layout.active_tab().to_string(), "tab-2");
+            assert_that!(created_layout.active_tab().to_string(), eq("tab-2"));
 
             client
                 .writer
@@ -1275,7 +1276,7 @@ mod tests {
                 }))
                 .await?;
             let focused_layout = self::read_until_layout(&mut client).await?;
-            pretty_assertions::assert_eq!(focused_layout.active_tab().to_string(), "tab-1");
+            assert_that!(focused_layout.active_tab().to_string(), eq("tab-1"));
             self::read_until_render_contains_hex_bytes(
                 &mut client,
                 &["1b", "5b", "4f", "1b", "5b", "49"],
@@ -1302,15 +1303,15 @@ mod tests {
 
             self::wait_for_socket(&paths.socket)?;
             let client = self::open_attached_client(&session, &paths).await?;
-            pretty_assertions::assert_eq!(client.layout.active_tab().to_string(), "tab-2");
-            pretty_assertions::assert_eq!(
+            assert_that!(client.layout.active_tab().to_string(), eq("tab-2"));
+            assert_that!(
                 client
                     .layout
                     .tabs()
                     .iter()
                     .map(|tab| tab.id().to_string())
                     .collect::<Vec<_>>(),
-                vec!["tab-1", "tab-2"],
+                eq(vec!["tab-1", "tab-2"])
             );
             self::detach_client(client).await?;
             self::join_server(handle)
@@ -1340,10 +1341,10 @@ mod tests {
                 .tabs()
                 .first()
                 .ok_or_else(|| report!("expected tab after split"))?;
-            pretty_assertions::assert_eq!(tab.active_pane().to_string(), "pane-2");
-            pretty_assertions::assert_eq!(
+            assert_that!(tab.active_pane().to_string(), eq("pane-2"));
+            assert_that!(
                 tab.panes().iter().map(|pane| pane.id.to_string()).collect::<Vec<_>>(),
-                vec!["pane-1", "pane-2"],
+                eq(vec!["pane-1", "pane-2"])
             );
 
             client
@@ -1387,10 +1388,10 @@ mod tests {
                 .tabs()
                 .first()
                 .ok_or_else(|| report!("expected tab after pane exit"))?;
-            pretty_assertions::assert_eq!(tab.active_pane().to_string(), "pane-1");
-            pretty_assertions::assert_eq!(
+            assert_that!(tab.active_pane().to_string(), eq("pane-1"));
+            assert_that!(
                 tab.panes().iter().map(|pane| pane.id.to_string()).collect::<Vec<_>>(),
-                vec!["pane-1"],
+                eq(vec!["pane-1"])
             );
 
             client
@@ -1432,7 +1433,7 @@ mod tests {
                 cwd: second_cwd.to_string_lossy().into_owned(),
                 started_at: 2,
             })?;
-            pretty_assertions::assert_eq!(active_pane, PaneId::new(2)?);
+            assert_that!(active_pane, eq(PaneId::new(2)?));
             crate::state::persisted::write_metadata(&paths, &layout)?;
 
             let first_cwd = first_cwd.to_string_lossy().into_owned();
@@ -1466,23 +1467,23 @@ mod tests {
 
             self::wait_for_socket(&paths.socket)?;
             let mut client = self::open_attached_client(&session, &paths).await?;
-            pretty_assertions::assert_eq!(client.layout.active_tab().to_string(), "tab-2");
+            assert_that!(client.layout.active_tab().to_string(), eq("tab-2"));
 
             fs::write(&trigger_path, b"exit")?;
             let layout = self::read_until_layout(&mut client).await?;
-            pretty_assertions::assert_eq!(layout.active_tab().to_string(), "tab-2");
-            pretty_assertions::assert_eq!(
+            assert_that!(layout.active_tab().to_string(), eq("tab-2"));
+            assert_that!(
                 layout.tabs().iter().map(|tab| tab.id().to_string()).collect::<Vec<_>>(),
-                vec!["tab-2"],
+                eq(vec!["tab-2"])
             );
             let tab = layout
                 .tabs()
                 .first()
                 .ok_or_else(|| report!("expected tab after inactive pane exit"))?;
-            pretty_assertions::assert_eq!(tab.active_pane().to_string(), "pane-2");
-            pretty_assertions::assert_eq!(
+            assert_that!(tab.active_pane().to_string(), eq("pane-2"));
+            assert_that!(
                 tab.panes().iter().map(|pane| pane.id.to_string()).collect::<Vec<_>>(),
-                vec!["pane-2"],
+                eq(vec!["pane-2"])
             );
 
             client
@@ -1525,7 +1526,7 @@ mod tests {
                 cwd: second_cwd.to_string_lossy().into_owned(),
                 started_at: 2,
             })?;
-            pretty_assertions::assert_eq!(active_pane, PaneId::new(2)?);
+            assert_that!(active_pane, eq(PaneId::new(2)?));
             crate::state::persisted::write_metadata(&paths, &layout)?;
 
             let first_cwd = first_cwd.to_string_lossy().into_owned();
@@ -1590,7 +1591,7 @@ mod tests {
             }
 
             let client = self::open_attached_client(&session, &paths).await?;
-            pretty_assertions::assert_eq!(client.layout.active_tab().to_string(), "tab-2");
+            assert_that!(client.layout.active_tab().to_string(), eq("tab-2"));
             self::detach_client(client).await?;
             self::join_server(handle)
         })
@@ -1670,7 +1671,7 @@ mod tests {
                 .tabs()
                 .first()
                 .ok_or_else(|| report!("expected tab after split"))?;
-            pretty_assertions::assert_eq!(tab.active_pane().to_string(), "pane-2");
+            assert_that!(tab.active_pane().to_string(), eq("pane-2"));
             self::read_until_render_contains(&mut client, b"line-79").await?;
             let ready_regions =
                 self::read_until_pane_regions_matching(&mut client, "both panes have scrollback", |regions| {
@@ -1729,14 +1730,8 @@ mod tests {
             )
             .await?;
 
-            pretty_assertions::assert_eq!(
-                self::scroll_pane_line(&mut client, pane_1_position, PaneScrollDirection::Down).await?,
-                PaneScrollLineStep::Moved,
-            );
-            pretty_assertions::assert_eq!(
-                self::scroll_pane_line(&mut client, pane_2_position, PaneScrollDirection::Down).await?,
-                PaneScrollLineStep::Noop,
-            );
+            assert_that!(self::scroll_pane_line(&mut client, pane_1_position, PaneScrollDirection::Down).await?, eq(PaneScrollLineStep::Moved));
+            assert_that!(self::scroll_pane_line(&mut client, pane_2_position, PaneScrollDirection::Down).await?, eq(PaneScrollLineStep::Noop));
             self::assert_layout_metadata_panes(&paths, &[1, 2], 2)?;
 
             self::detach_client(client).await?;
@@ -1762,13 +1757,13 @@ mod tests {
                 })
                 .await?;
 
-            pretty_assertions::assert_eq!(
+            assert_that!(
                 self::read_until_scroll_pane_line_result(&mut client).await?,
-                (
+                eq((
                     position,
                     PaneScrollDirection::Down,
                     muxr_core::PaneScrollLineMove::Unchanged,
-                ),
+                ))
             );
             self::detach_client(client).await?;
             self::join_server(handle)
@@ -1905,10 +1900,10 @@ mod tests {
                 .tabs()
                 .first()
                 .ok_or_else(|| report!("expected tab after close"))?;
-            pretty_assertions::assert_eq!(tab.active_pane().to_string(), "pane-1");
-            pretty_assertions::assert_eq!(
+            assert_that!(tab.active_pane().to_string(), eq("pane-1"));
+            assert_that!(
                 tab.panes().iter().map(|pane| pane.id.to_string()).collect::<Vec<_>>(),
-                vec!["pane-1"],
+                eq(vec!["pane-1"])
             );
 
             client
@@ -1946,8 +1941,8 @@ mod tests {
         })?;
 
         self::join_server_with_timeout(handle)?;
-        assert2::assert!(!paths.socket.exists());
-        assert2::assert!(!paths.pid.exists());
+        assert_that!(paths.socket.exists(), eq(false));
+        assert_that!(paths.pid.exists(), eq(false));
         self::assert_final_closed_layout_metadata(&paths)?;
         Ok(())
     }
@@ -1974,9 +1969,9 @@ mod tests {
             let before_resize = crate::state::persisted::load_metadata(&paths, &session)?
                 .ok_or_else(|| report!("expected muxr layout metadata to load before resize"))?;
             let before_regions = self::layout_active_tab_pane_regions(&before_resize, &size)?;
-            pretty_assertions::assert_eq!(
+            assert_that!(
                 before_regions.iter().map(|(id, ..)| id.as_str()).collect::<Vec<_>>(),
-                vec!["pane-1", "pane-2"],
+                eq(vec!["pane-1", "pane-2"])
             );
             client
                 .writer
@@ -2001,30 +1996,30 @@ mod tests {
                 .tabs()
                 .first()
                 .ok_or_else(|| report!("expected tab after resize"))?;
-            pretty_assertions::assert_eq!(tab.active_pane().to_string(), "pane-2");
-            pretty_assertions::assert_eq!(
+            assert_that!(tab.active_pane().to_string(), eq("pane-2"));
+            assert_that!(
                 tab.panes().iter().map(|pane| pane.id.to_string()).collect::<Vec<_>>(),
-                vec!["pane-1", "pane-2"],
+                eq(vec!["pane-1", "pane-2"])
             );
             let persisted = crate::state::persisted::load_metadata(&paths, &session)?
                 .ok_or_else(|| report!("expected muxr layout metadata to load"))?;
             let after_regions = self::layout_active_tab_pane_regions(&persisted, &size)?;
-            pretty_assertions::assert_eq!(
+            assert_that!(
                 after_regions.iter().map(|(id, ..)| id.as_str()).collect::<Vec<_>>(),
-                vec!["pane-1", "pane-2"],
+                eq(vec!["pane-1", "pane-2"])
             );
             let before_first = &before_regions[0];
             let before_second = &before_regions[1];
             let after_first = &after_regions[0];
             let after_second = &after_regions[1];
-            pretty_assertions::assert_eq!(
+            assert_that!(
                 (after_first.1, after_first.2, after_first.4),
-                (before_first.1, before_first.2, before_first.4),
+                eq((before_first.1, before_first.2, before_first.4))
             );
-            pretty_assertions::assert_eq!((after_second.2, after_second.4), (before_second.2, before_second.4));
-            assert2::assert!(after_first.3 < before_first.3);
-            assert2::assert!(after_second.3 > before_second.3);
-            pretty_assertions::assert_eq!(after_second.1, after_first.1 + after_first.3 + 1);
+            assert_that!((after_second.2, after_second.4), eq((before_second.2, before_second.4)));
+            assert_that!(after_first.3, lt(before_first.3));
+            assert_that!(after_second.3, gt(before_second.3));
+            assert_that!(after_second.1, eq(after_first.1 + after_first.3 + 1));
             client
                 .writer
                 .send_request(&ClientRequest::Key(ClientKey {
@@ -2159,8 +2154,8 @@ mod tests {
 
         self::join_server_with_timeout(handle)?;
 
-        assert2::assert!(!paths.socket.exists());
-        assert2::assert!(!paths.pid.exists());
+        assert_that!(paths.socket.exists(), eq(false));
+        assert_that!(paths.pid.exists(), eq(false));
         self::assert_final_layout_metadata(&paths, 0, "succeeded")?;
         Ok(())
     }
@@ -2211,8 +2206,8 @@ mod tests {
         })?;
 
         self::join_server_with_timeout(handle)?;
-        assert2::assert!(!paths.socket.exists());
-        assert2::assert!(!paths.pid.exists());
+        assert_that!(paths.socket.exists(), eq(false));
+        assert_that!(paths.pid.exists(), eq(false));
         self::assert_final_layout_metadata(&paths, 7, "failed")?;
         Ok(())
     }
@@ -2257,9 +2252,9 @@ mod tests {
                 self::serve_prepared_async(&config).await
             });
 
-        assert2::assert!(result.is_err());
-        assert2::assert!(!paths.socket.exists());
-        assert2::assert!(!paths.pid.exists());
+        assert_that!(result, err(anything()));
+        assert_that!(paths.socket.exists(), eq(false));
+        assert_that!(paths.pid.exists(), eq(false));
         Ok(())
     }
 
@@ -2472,7 +2467,7 @@ mod tests {
             .mode()
             & 0o777;
 
-        pretty_assertions::assert_eq!(mode, expected_mode);
+        assert_that!(mode, eq(expected_mode));
         Ok(())
     }
 
@@ -2650,7 +2645,7 @@ mod tests {
             .send_request(&ClientRequest::ScrollPaneLineAt { position, direction })
             .await?;
         let (actual_position, actual_direction, movement) = self::read_until_scroll_pane_line_result(client).await?;
-        pretty_assertions::assert_eq!((actual_position, actual_direction), (position, direction));
+        assert_that!((actual_position, actual_direction), eq((position, direction)));
         if matches!(movement, muxr_core::PaneScrollLineMove::Moved) {
             Ok(PaneScrollLineStep::Moved)
         } else {
@@ -2987,17 +2982,17 @@ mod tests {
                 .context("failed to parse muxr test layout metadata")?;
         let pane = &layout["tabs"][0]["pane_tree"];
 
-        pretty_assertions::assert_eq!(layout["version"].as_u64(), Some(u64::from(crate::state::VERSION)));
-        pretty_assertions::assert_eq!(layout["session"].as_str(), Some("work"));
-        pretty_assertions::assert_eq!(layout["active_tab"].as_u64(), Some(1));
-        pretty_assertions::assert_eq!(layout["tabs"][0]["active_pane"].as_u64(), Some(1));
-        pretty_assertions::assert_eq!(pane["id"].as_u64(), Some(1));
-        pretty_assertions::assert_eq!(pane["cmd_label"].as_str(), Some("sh"));
-        assert2::assert!(pane["started_at"].as_u64().is_some());
-        pretty_assertions::assert_eq!(pane["state"]["kind"].as_str(), Some("process_exited"));
-        assert2::assert!(pane["state"]["at"].as_u64().is_some());
-        pretty_assertions::assert_eq!(pane["state"]["status"]["code"].as_u64(), Some(expected_code));
-        pretty_assertions::assert_eq!(pane["state"]["status"]["result"].as_str(), Some(expected_result));
+        assert_that!(layout["version"].as_u64(), eq(Some(u64::from(crate::state::VERSION))));
+        assert_that!(layout["session"].as_str(), eq(Some("work")));
+        assert_that!(layout["active_tab"].as_u64(), eq(Some(1)));
+        assert_that!(layout["tabs"][0]["active_pane"].as_u64(), eq(Some(1)));
+        assert_that!(pane["id"].as_u64(), eq(Some(1)));
+        assert_that!(pane["cmd_label"].as_str(), eq(Some("sh")));
+        assert_that!(pane["started_at"].as_u64(), some(anything()));
+        assert_that!(pane["state"]["kind"].as_str(), eq(Some("process_exited")));
+        assert_that!(pane["state"]["at"].as_u64(), some(anything()));
+        assert_that!(pane["state"]["status"]["code"].as_u64(), eq(Some(expected_code)));
+        assert_that!(pane["state"]["status"]["result"].as_str(), eq(Some(expected_result)));
         Ok(())
     }
 
@@ -3021,8 +3016,8 @@ mod tests {
             })
             .collect::<rootcause::Result<Vec<_>>>()?;
 
-        pretty_assertions::assert_eq!(layout["active_tab"].as_u64(), Some(expected_active));
-        pretty_assertions::assert_eq!(actual_tabs, expected_tabs.to_vec());
+        assert_that!(layout["active_tab"].as_u64(), eq(Some(expected_active)));
+        assert_that!(actual_tabs, eq(expected_tabs.to_vec()));
         Ok(())
     }
 
@@ -3036,8 +3031,8 @@ mod tests {
                 .context("failed to parse muxr test layout metadata")?;
         let actual_panes = self::json_pane_tree_pane_ids(&layout["tabs"][0]["pane_tree"])?;
 
-        pretty_assertions::assert_eq!(layout["tabs"][0]["active_pane"].as_u64(), Some(expected_active));
-        pretty_assertions::assert_eq!(actual_panes, expected_panes.to_vec());
+        assert_that!(layout["tabs"][0]["active_pane"].as_u64(), eq(Some(expected_active)));
+        assert_that!(actual_panes, eq(expected_panes.to_vec()));
         Ok(())
     }
 
@@ -3047,12 +3042,12 @@ mod tests {
                 .context("failed to parse muxr test layout metadata")?;
         let pane = &layout["tabs"][0]["pane_tree"];
 
-        pretty_assertions::assert_eq!(layout["active_tab"].as_u64(), Some(1));
-        pretty_assertions::assert_eq!(layout["tabs"][0]["active_pane"].as_u64(), Some(1));
-        pretty_assertions::assert_eq!(pane["id"].as_u64(), Some(1));
-        pretty_assertions::assert_eq!(pane["state"]["kind"].as_str(), Some("closed"));
-        assert2::assert!(pane["state"]["at"].as_u64().is_some());
-        assert2::assert!(pane["state"].get("status").is_none());
+        assert_that!(layout["active_tab"].as_u64(), eq(Some(1)));
+        assert_that!(layout["tabs"][0]["active_pane"].as_u64(), eq(Some(1)));
+        assert_that!(pane["id"].as_u64(), eq(Some(1)));
+        assert_that!(pane["state"]["kind"].as_str(), eq(Some("closed")));
+        assert_that!(pane["state"]["at"].as_u64(), some(anything()));
+        assert_that!(pane["state"].get("status"), none());
         Ok(())
     }
 

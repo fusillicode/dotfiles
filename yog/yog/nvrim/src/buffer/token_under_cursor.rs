@@ -384,6 +384,7 @@ mod tests {
     use tempfile::NamedTempFile;
     #[cfg(target_os = "macos")]
     use tempfile::TempDir;
+    use test_that::prelude::*;
 
     use super::*;
 
@@ -411,7 +412,7 @@ mod tests {
         #[case] idx: usize,
         #[case] expected: Option<&str>,
     ) {
-        pretty_assertions::assert_eq!(get_word_at_index(s, idx), expected);
+        assert_that!(get_word_at_index(s, idx), eq(expected));
     }
 
     // Tests are skipped in CI because [`TokenUnderCursor::from`] calls `file` command and that
@@ -421,24 +422,20 @@ mod tests {
     #[cfg(target_os = "macos")]
     fn test_token_under_cursor_classify_valid_url_returns_url() {
         let input = "https://example.com".to_string();
-        let result = TokenUnderCursor::classify(&input);
-        assert2::assert!(let Ok(actual) = result);
-        pretty_assertions::assert_eq!(actual, TokenUnderCursor::Url(input));
+        assert_that!(TokenUnderCursor::classify(&input), ok(eq(TokenUnderCursor::Url(input))));
     }
 
     #[test]
     #[cfg(target_os = "macos")]
     fn test_token_under_cursor_classify_invalid_url_plain_word_returns_word() {
         let input = "noturl".to_string();
-        let result = TokenUnderCursor::classify(&input);
-        assert2::assert!(let Ok(actual) = result);
-        pretty_assertions::assert_eq!(
-            actual,
-            TokenUnderCursor::MaybeTextFile {
+        assert_that!(
+            TokenUnderCursor::classify(&input),
+            ok(eq(TokenUnderCursor::MaybeTextFile {
                 value: input,
                 lnum: None,
                 col: None
-            }
+            }))
         );
     }
 
@@ -448,15 +445,13 @@ mod tests {
         let mut temp_file = NamedTempFile::new().unwrap();
         std::io::Write::write_all(&mut temp_file, b"hello world").unwrap();
         let path = temp_file.path().to_string_lossy().into_owned();
-        let result = TokenUnderCursor::classify(&path);
-        assert2::assert!(let Ok(actual) = result);
-        pretty_assertions::assert_eq!(
-            actual,
-            TokenUnderCursor::TextFile {
+        assert_that!(
+            TokenUnderCursor::classify(&path),
+            ok(eq(TokenUnderCursor::TextFile {
                 path,
                 lnum: None,
                 col: None
-            }
+            }))
         );
     }
 
@@ -466,15 +461,13 @@ mod tests {
         let mut temp_file = NamedTempFile::new().unwrap();
         std::io::Write::write_all(&mut temp_file, b"hello world").unwrap();
         let path = temp_file.path().to_string_lossy().into_owned();
-        let result = TokenUnderCursor::classify(&format!("{path}:10"));
-        assert2::assert!(let Ok(actual) = result);
-        pretty_assertions::assert_eq!(
-            actual,
-            TokenUnderCursor::TextFile {
+        assert_that!(
+            TokenUnderCursor::classify(&format!("{path}:10")),
+            ok(eq(TokenUnderCursor::TextFile {
                 path,
                 lnum: Some(10),
                 col: None
-            }
+            }))
         );
     }
 
@@ -484,15 +477,13 @@ mod tests {
         let mut temp_file = NamedTempFile::new().unwrap();
         std::io::Write::write_all(&mut temp_file, b"hello world").unwrap();
         let path = temp_file.path().to_string_lossy().into_owned();
-        let result = TokenUnderCursor::classify(&format!("{path}:10:5"));
-        assert2::assert!(let Ok(actual) = result);
-        pretty_assertions::assert_eq!(
-            actual,
-            TokenUnderCursor::TextFile {
+        assert_that!(
+            TokenUnderCursor::classify(&format!("{path}:10:5")),
+            ok(eq(TokenUnderCursor::TextFile {
                 path,
                 lnum: Some(10),
                 col: Some(5)
-            }
+            }))
         );
     }
 
@@ -501,9 +492,10 @@ mod tests {
     fn test_token_under_cursor_classify_path_to_directory_returns_directory() {
         let temp_dir = TempDir::new().unwrap();
         let path = temp_dir.path().to_string_lossy().into_owned();
-        let result = TokenUnderCursor::classify(&path);
-        assert2::assert!(let Ok(actual) = result);
-        pretty_assertions::assert_eq!(actual, TokenUnderCursor::Directory(path));
+        assert_that!(
+            TokenUnderCursor::classify(&path),
+            ok(eq(TokenUnderCursor::Directory(path)))
+        );
     }
 
     #[test]
@@ -513,24 +505,23 @@ mod tests {
         // Write some binary data
         std::io::Write::write_all(&mut temp_file, &[0, 1, 2, 255]).unwrap();
         let path = temp_file.path().to_string_lossy().into_owned();
-        let result = TokenUnderCursor::classify(&path);
-        assert2::assert!(let Ok(actual) = result);
-        pretty_assertions::assert_eq!(actual, TokenUnderCursor::BinaryFile(path));
+        assert_that!(
+            TokenUnderCursor::classify(&path),
+            ok(eq(TokenUnderCursor::BinaryFile(path)))
+        );
     }
 
     #[test]
     #[cfg(target_os = "macos")]
     fn test_token_under_cursor_classify_nonexistent_path_returns_maybe_text_file() {
         let path = "/nonexistent/path".to_string();
-        let result = TokenUnderCursor::classify(&path);
-        assert2::assert!(let Ok(actual) = result);
-        pretty_assertions::assert_eq!(
-            actual,
-            TokenUnderCursor::MaybeTextFile {
+        assert_that!(
+            TokenUnderCursor::classify(&path),
+            ok(eq(TokenUnderCursor::MaybeTextFile {
                 value: path,
                 lnum: None,
                 col: None
-            }
+            }))
         );
     }
 
@@ -540,15 +531,13 @@ mod tests {
         let temp_file = NamedTempFile::new().unwrap();
         let path = temp_file.path().to_string_lossy().into_owned();
         let input = format!("{path}:invalid");
-        let result = TokenUnderCursor::classify(&input);
-        assert2::assert!(let Ok(actual) = result);
-        pretty_assertions::assert_eq!(
-            actual,
-            TokenUnderCursor::MaybeTextFile {
+        assert_that!(
+            TokenUnderCursor::classify(&input),
+            ok(eq(TokenUnderCursor::MaybeTextFile {
                 value: path,
                 lnum: None,
                 col: None
-            }
+            }))
         );
     }
 
@@ -558,15 +547,13 @@ mod tests {
         let temp_file = NamedTempFile::new().unwrap();
         let path = temp_file.path().to_string_lossy().into_owned();
         let input = format!("{path}:10:invalid");
-        let result = TokenUnderCursor::classify(&input);
-        assert2::assert!(let Ok(actual) = result);
-        pretty_assertions::assert_eq!(
-            actual,
-            TokenUnderCursor::MaybeTextFile {
+        assert_that!(
+            TokenUnderCursor::classify(&input),
+            ok(eq(TokenUnderCursor::MaybeTextFile {
                 value: path,
                 lnum: Some(10),
                 col: None
-            }
+            }))
         );
     }
 
@@ -576,15 +563,13 @@ mod tests {
         let mut temp_file = NamedTempFile::new().unwrap();
         std::io::Write::write_all(&mut temp_file, b"hello world").unwrap();
         let path = temp_file.path().to_string_lossy().into_owned();
-        let result = TokenUnderCursor::classify(&format!("{path}:10:5:extra"));
-        assert2::assert!(let Ok(actual) = result);
-        pretty_assertions::assert_eq!(
-            actual,
-            TokenUnderCursor::TextFile {
+        assert_that!(
+            TokenUnderCursor::classify(&format!("{path}:10:5:extra")),
+            ok(eq(TokenUnderCursor::TextFile {
                 path,
                 lnum: Some(10),
                 col: Some(5)
-            }
+            }))
         );
     }
 
@@ -603,16 +588,23 @@ mod tests {
     #[case("(http://example.com)", "http://example.com")]
     #[case("`http://example.com`", "http://example.com")]
     fn test_classify_url_returns_the_token_url_under_curos(#[case] input: &str, #[case] expected_value: &str) {
-        assert2::assert!(let Ok(actual) = TokenUnderCursor::classify_url(input));
-        pretty_assertions::assert_eq!(actual, TokenUnderCursor::Url(expected_value.to_string()));
+        assert_that!(
+            TokenUnderCursor::classify_url(input),
+            ok(eq(TokenUnderCursor::Url(expected_value.to_string())))
+        );
     }
 
     #[rstest]
     #[case("not a url")]
     #[case("[text](noturl)")]
     fn test_classify_url_when_cannot_classify_url_returns_the_expected_error(#[case] input: &str) {
-        assert2::assert!(let Err(err) = TokenUnderCursor::classify_url(input));
-        assert!(err.downcast_current_context::<url::ParseError>().is_some());
+        assert_that!(
+            TokenUnderCursor::classify_url(input).map(|_| ()),
+            err(result_of!(
+                |err: &rootcause::Report| err.downcast_current_context::<url::ParseError>(),
+                some(anything())
+            ))
+        );
     }
 
     #[rstest]
@@ -631,7 +623,7 @@ mod tests {
         #[case] input: &str,
         #[case] expected: Option<&str>,
     ) {
-        pretty_assertions::assert_eq!(extract_markdown_link(input), expected);
+        assert_that!(extract_markdown_link(input), eq(expected));
     }
 
     #[rstest]
@@ -650,6 +642,6 @@ mod tests {
         #[case] input: &str,
         #[case] expected: Option<&str>,
     ) {
-        pretty_assertions::assert_eq!(extract_https_or_http_link(input), expected);
+        assert_that!(extract_https_or_http_link(input), eq(expected));
     }
 }

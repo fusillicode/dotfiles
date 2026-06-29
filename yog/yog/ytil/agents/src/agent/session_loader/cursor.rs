@@ -158,6 +158,7 @@ mod tests {
 
     use rusqlite::Connection;
     use tempfile::tempdir;
+    use test_that::prelude::*;
 
     use super::*;
 
@@ -174,18 +175,20 @@ mod tests {
         let requested_ids = crate::agent::session_loader::requested_ids(&keys, Agent::Cursor);
         let strings_calls = Cell::new(0);
 
-        assert2::assert!(let Ok(sessions) = load_sessions_from_paths(
+        let sessions_result = load_sessions_from_paths(
             vec![target_db, other_db],
             |_| {
                 strings_calls.set(strings_calls.get() + 1);
                 Ok(workspace.display().to_string())
             },
             Some(&requested_ids),
-        ));
+        );
+        assert_that!(sessions_result.as_ref().map(|_| ()), ok(eq(())));
+        let sessions = sessions_result.expect("target Cursor session should load");
 
-        pretty_assertions::assert_eq!(strings_calls.get(), 1);
-        pretty_assertions::assert_eq!(sessions.len(), 1);
-        pretty_assertions::assert_eq!(sessions[0].id, "target");
+        assert_that!(strings_calls.get(), eq(1));
+        assert_that!(sessions.len(), eq(1));
+        assert_that!(sessions[0].id, eq("target"));
     }
 
     fn create_store_db(path: &Path, session_id: &str) {

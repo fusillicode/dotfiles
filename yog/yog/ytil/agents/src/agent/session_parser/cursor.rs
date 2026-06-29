@@ -224,15 +224,17 @@ fn longest_existing_path(candidate: &str) -> Option<PathBuf> {
 
 #[cfg(test)]
 mod tests {
-
     use tempfile::tempdir;
+    use test_that::prelude::*;
 
     use super::*;
 
     #[test]
     fn test_decodes_cursor_meta_hex_payload() {
-        assert2::assert!(let Ok(decoded) = decode_hex_string("7b226e616d65223a225361666520526562617365227d"));
-        pretty_assertions::assert_eq!(decoded, "{\"name\":\"Safe Rebase\"}");
+        assert_that!(
+            decode_hex_string("7b226e616d65223a225361666520526562617365227d"),
+            ok(eq("{\"name\":\"Safe Rebase\"}"))
+        );
     }
 
     #[test]
@@ -242,11 +244,13 @@ mod tests {
         std::fs::create_dir_all(&workspace).unwrap();
 
         let meta_hex = "7b226167656e744964223a2266626364393632362d623065642d343739632d623838372d376132633264313531376636222c226e616d65223a225361666520526562617365222c22637265617465644174223a313737343837373733383031337d";
-        assert2::assert!(let Ok(cursor_session) = parse(meta_hex, workspace.clone()));
+        let cursor_session_result = parse(meta_hex, workspace.clone());
+        assert_that!(cursor_session_result.as_ref().map(|_| ()), ok(eq(())));
+        let cursor_session = cursor_session_result.expect("Cursor metadata should parse");
         let session = cursor_session.into_session(workspace.join("store.db"));
-        pretty_assertions::assert_eq!(session.agent, Agent::Cursor);
-        pretty_assertions::assert_eq!(session.workspace, workspace);
-        pretty_assertions::assert_eq!(session.name, "Safe Rebase");
+        assert_that!(session.agent, eq(Agent::Cursor));
+        assert_that!(session.workspace, eq(workspace));
+        assert_that!(session.name, eq("Safe Rebase"));
     }
 
     #[test]
@@ -257,7 +261,7 @@ mod tests {
 
         let strings_output = format!("file://{}/README.md\n{}\n", workspace.display(), workspace.display());
         let extracted = extract_cursor_workspace_from_strings(&strings_output, std::slice::from_ref(&workspace), &[]);
-        pretty_assertions::assert_eq!(extracted, Some(workspace));
+        assert_that!(extracted, eq(Some(workspace)));
     }
 
     #[test]
@@ -270,7 +274,7 @@ mod tests {
 
         let strings_output = format!("garbage file://{}/src/main.rs trailing", workspace.display());
         let extracted = extract_cursor_workspace_from_strings(&strings_output, &[], &[ignored]);
-        pretty_assertions::assert_eq!(extracted, Some(workspace.join("src")));
+        assert_that!(extracted, eq(Some(workspace.join("src"))));
     }
 
     #[test]
@@ -287,9 +291,9 @@ mod tests {
 
         let search_text = build_search_text_from_strings("Cursor Session", strings_output);
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             search_text,
-            "Cursor Session user asked about stalled sync job assistant suggested retrying the worker"
+            eq("Cursor Session user asked about stalled sync job assistant suggested retrying the worker")
         );
     }
 }

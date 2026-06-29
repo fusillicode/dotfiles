@@ -43,6 +43,7 @@ pub fn get() -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use rstest::rstest;
+    use test_that::prelude::*;
 
     use super::*;
 
@@ -52,13 +53,13 @@ mod tests {
     #[case::has_help(vec!["--help"], true)]
     #[case::help_among_others(vec!["foo", "--help", "bar"], true)]
     fn test_has_help_for_vec_returns_expected(#[case] args: Vec<&str>, #[case] expected: bool) {
-        pretty_assertions::assert_eq!(args.has_help(), expected);
+        assert_that!(args.has_help(), eq(expected));
     }
 
     #[rstest]
     #[case::empty_vec(Vec::<String>::new(), Vec::<String>::new())]
     #[case::clones_all(vec!["a".to_owned(), "b".to_owned()], vec!["a".to_owned(), "b".to_owned()])]
     fn test_all_for_vec_returns_clone(#[case] args: Vec<String>, #[case] expected: Vec<String>) {
-        pretty_assertions::assert_eq!(args.all(), expected);
+        assert_that!(args.all(), eq(expected));
     }
 }

@@ -178,6 +178,8 @@ impl From<&mut Command> for Cmd {
 
 #[cfg(test)]
 mod tests {
+    use test_that::prelude::*;
+
     use super::*;
 
     #[test]
@@ -185,10 +187,14 @@ mod tests {
         let mut cmd = Command::new("bash");
         cmd.args(["-c", "echo -n ok"]);
 
-        assert2::assert!(let Ok(out) = cmd.exec());
-        assert!(out.status.success());
-        assert_eq!(String::from_utf8(out.stdout).unwrap(), "ok");
-        assert_eq!(String::from_utf8(out.stderr).unwrap(), "");
+        assert_that!(
+            cmd.exec().map(|out| (
+                out.status.success(),
+                String::from_utf8(out.stdout).unwrap(),
+                String::from_utf8(out.stderr).unwrap(),
+            )),
+            ok(eq((true, "ok".to_string(), String::new())))
+        );
     }
 
     #[test]
@@ -196,16 +202,16 @@ mod tests {
         let mut cmd = Command::new("bash");
         cmd.args(["-c", "echo foo error 1>&2; exit 7"]);
 
-        assert2::assert!(let
-            Err(CmdError::CmdFailure {
-                status,
-                stderr,
-                stdout,
-                ..
-            }) = cmd.exec()
+        assert_that!(
+            cmd.exec().map_err(|err| match err {
+                CmdError::CmdFailure {
+                    status, stderr, stdout, ..
+                } => (status.code(), stderr, stdout),
+                CmdError::Io { .. } | CmdError::Utf8 { .. } | CmdError::FromUtf8 { .. } => {
+                    panic!("asserted command failure error")
+                }
+            }),
+            err(eq((Some(7), "foo error\n".to_string(), String::new())))
         );
-        assert_eq!(status.code(), Some(7));
-        assert!(stderr.contains("foo err"));
-        assert!(stdout.is_empty());
     }
 }

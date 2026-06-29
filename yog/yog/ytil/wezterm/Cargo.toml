@@ -20,8 +20,8 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 
 [dev-dependencies]
-assert2 = { workspace = true }
 fake = { workspace = true }
+test-that = { workspace = true }
 
 [lints]
 workspace = true

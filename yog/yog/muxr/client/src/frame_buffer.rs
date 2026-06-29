@@ -482,6 +482,7 @@ mod tests {
     use muxr_core::PaneRegionsSnapshot;
     use muxr_core::RenderTextStyle;
     use rstest::rstest;
+    use test_that::prelude::*;
 
     use super::*;
     use crate::copy_selection::SelectionInput;
@@ -495,9 +496,9 @@ mod tests {
             return Err(report!("expected applied baseline"));
         };
 
-        pretty_assertions::assert_eq!(changes.scope, RenderFrameScope::Full);
-        pretty_assertions::assert_eq!(changes.rows.len(), 2);
-        pretty_assertions::assert_eq!(frame_buffer.seq, Some(1));
+        assert_that!(changes.scope, eq(RenderFrameScope::Full));
+        assert_that!(changes.rows.len(), eq(2));
+        assert_that!(frame_buffer.seq, eq(Some(1)));
         Ok(())
     }
 
@@ -520,7 +521,7 @@ mod tests {
             vec![RenderRowSpan::new(0, 0, vec![render_cell("x")])?],
         )?))?;
 
-        pretty_assertions::assert_eq!(outcome, ApplyOutcome::NeedsResync);
+        assert_that!(outcome, eq(ApplyOutcome::NeedsResync));
         Ok(())
     }
 
@@ -532,9 +533,9 @@ mod tests {
             return Err(report!("expected applied diff"));
         };
 
-        pretty_assertions::assert_eq!(changes.scope, RenderFrameScope::Partial);
-        pretty_assertions::assert_eq!(changes.rows.len(), 1);
-        pretty_assertions::assert_eq!(frame_buffer.seq, Some(2));
+        assert_that!(changes.scope, eq(RenderFrameScope::Partial));
+        assert_that!(changes.rows.len(), eq(1));
+        assert_that!(frame_buffer.seq, eq(Some(2)));
         Ok(())
     }
 
@@ -547,9 +548,9 @@ mod tests {
             .row_redraw_changes(&[1])?
             .ok_or_else(|| report!("expected row redraw changes"))?;
 
-        pretty_assertions::assert_eq!(changes.scope, RenderFrameScope::Partial);
-        pretty_assertions::assert_eq!(changes.rows.len(), 1);
-        pretty_assertions::assert_eq!(changes.rows[0].row(), 1);
+        assert_that!(changes.scope, eq(RenderFrameScope::Partial));
+        assert_that!(changes.rows.len(), eq(1));
+        assert_that!(changes.rows[0].row(), eq(1));
         Ok(())
     }
 
@@ -564,9 +565,9 @@ mod tests {
         frame_buffer.queue_at_with_selection(&mut output, &changes, 0, 0, None, MuxrConfig::default().selection.bg)?;
 
         let rendered = output.rendered_string()?;
-        assert2::assert!(rendered.contains('a'));
-        assert2::assert!(rendered.contains('d'));
-        pretty_assertions::assert_eq!(output.flushes, 0);
+        assert_that!(rendered, contains_substring("a"));
+        assert_that!(rendered, contains_substring("d"));
+        assert_that!(output.flushes, eq(0));
         Ok(())
     }
 
@@ -590,9 +591,9 @@ mod tests {
         let final_cursor_move_index = rendered
             .rfind("\x1b[2;2H")
             .ok_or_else(|| report!("expected final cursor move"))?;
-        assert2::assert!(hide_index < dirty_row_move_index);
-        assert2::assert!(dirty_row_move_index < final_cursor_move_index);
-        assert2::assert!(rendered.ends_with("\x1b[?25h"));
+        assert_that!(hide_index, lt(dirty_row_move_index));
+        assert_that!(dirty_row_move_index, lt(final_cursor_move_index));
+        assert_that!(rendered, ends_with("\x1b[?25h"));
         Ok(())
     }
 
@@ -607,9 +608,9 @@ mod tests {
         frame_buffer.queue_at_with_selection(&mut output, &changes, 1, 2, None, MuxrConfig::default().selection.bg)?;
 
         let rendered = String::from_utf8(output).context("muxr render test output was not utf8")?;
-        assert2::assert!(rendered.contains("\x1b[2;3H"));
-        assert2::assert!(rendered.contains("\x1b[3;3H"));
-        pretty_assertions::assert_eq!(occurrence_count(&rendered, "\x1b[2;3H"), 2);
+        assert_that!(rendered, contains_substring("\x1b[2;3H"));
+        assert_that!(rendered, contains_substring("\x1b[3;3H"));
+        assert_that!(occurrence_count(&rendered, "\x1b[2;3H"), eq(2));
         Ok(())
     }
 
@@ -627,7 +628,7 @@ mod tests {
         frame_buffer.queue_at_with_selection(&mut output, &changes, 0, 0, None, MuxrConfig::default().selection.bg)?;
 
         let rendered = String::from_utf8(output).context("muxr render test output was not utf8")?;
-        assert2::assert!(rendered.contains("\x1b[6 q"));
+        assert_that!(rendered, contains_substring("\x1b[6 q"));
         Ok(())
     }
 
@@ -646,8 +647,8 @@ mod tests {
 
         let rendered = String::from_utf8(output).context("muxr render test output was not utf8")?;
         let foreground_escape = expected_escape(ExpectedEscape::Foreground(RenderColor::Indexed(1)))?;
-        pretty_assertions::assert_eq!(occurrence_count(&rendered, &foreground_escape), 1);
-        assert2::assert!(rendered.contains("abc"));
+        assert_that!(occurrence_count(&rendered, &foreground_escape), eq(1));
+        assert_that!(rendered, contains_substring("abc"));
         Ok(())
     }
 
@@ -667,14 +668,14 @@ mod tests {
         let rendered = String::from_utf8(output).context("muxr render test output was not utf8")?;
         let open = osc8_open(uri);
         let close = osc8_close()?;
-        assert2::assert!(rendered.contains(&format!("{open}ab{close}c")));
-        pretty_assertions::assert_eq!(occurrence_count(&rendered, &open), 1);
-        pretty_assertions::assert_eq!(occurrence_count(&rendered, &close), 1);
+        assert_that!(rendered, contains_substring(format!("{open}ab{close}c")));
+        assert_that!(occurrence_count(&rendered, &open), eq(1));
+        assert_that!(occurrence_count(&rendered, &close), eq(1));
         let close_index = rendered.find(&close).ok_or_else(|| report!("expected OSC 8 close"))?;
         let reset_index = rendered
             .rfind("\x1b[0m")
             .ok_or_else(|| report!("expected terminal style reset"))?;
-        assert2::assert!(close_index < reset_index);
+        assert_that!(close_index, lt(reset_index));
         Ok(())
     }
 
@@ -705,7 +706,10 @@ mod tests {
         frame_buffer.queue_at_with_selection(&mut output, &changes, 0, 0, None, MuxrConfig::default().selection.bg)?;
 
         let rendered = String::from_utf8(output).context("muxr render test output was not utf8")?;
-        assert2::assert!(rendered.contains(&format!("{}x{}", osc8_open(uri), osc8_close()?)));
+        assert_that!(
+            rendered,
+            contains_substring(format!("{}x{}", osc8_open(uri), osc8_close()?))
+        );
         Ok(())
     }
 
@@ -731,7 +735,7 @@ mod tests {
         )?;
 
         let rendered = String::from_utf8(output).context("muxr render test output was not utf8")?;
-        assert2::assert!(rendered.contains(&osc8_open(uri)));
+        assert_that!(rendered, contains_substring(osc8_open(uri)));
         Ok(())
     }
 
@@ -740,23 +744,23 @@ mod tests {
         let (selection, unselected_style) = self::selection_range_and_style()?;
         let selection_bg = MuxrConfig::default().selection.bg;
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             SelectionVisual::for_cell(Some(&selection), 0, 0),
-            SelectionVisual::Selected
+            eq(SelectionVisual::Selected)
         );
-        pretty_assertions::assert_eq!(
+        assert_that!(
             SelectionVisual::for_cell(Some(&selection), 0, 2),
-            SelectionVisual::Unselected
+            eq(SelectionVisual::Unselected)
         );
-        pretty_assertions::assert_eq!(SelectionVisual::for_cell(None, 0, 0), SelectionVisual::Unselected);
+        assert_that!(SelectionVisual::for_cell(None, 0, 0), eq(SelectionVisual::Unselected));
         let selected_style = self::selected_style(unselected_style, Some(&selection), 0, 0, selection_bg);
 
         // Selection colors are tunable; this only gates the invariant that selected cells stay visibly distinct.
-        assert2::assert!(selected_style.bg != unselected_style.bg);
-        pretty_assertions::assert_eq!(selected_style.attrs.inverse(), false);
-        pretty_assertions::assert_eq!(
+        assert_that!(selected_style.bg, not(eq(unselected_style.bg)));
+        assert_that!(selected_style.attrs.inverse(), eq(false));
+        assert_that!(
             self::selected_style(unselected_style, Some(&selection), 0, 2, selection_bg),
-            unselected_style
+            eq(unselected_style)
         );
         Ok(())
     }
@@ -794,7 +798,7 @@ mod tests {
 
         let rendered = String::from_utf8(output).context("muxr render test output was not utf8")?;
         let expected_escape = expected_escape(expected)?;
-        assert2::assert!(rendered.contains(&expected_escape));
+        assert_that!(rendered, contains_substring(expected_escape));
         Ok(())
     }
 
@@ -805,9 +809,9 @@ mod tests {
         queue_full_redraw_start(&mut output)?;
 
         let rendered = output.rendered_string()?;
-        assert2::assert!(rendered.contains("\x1b[?25l"));
-        assert2::assert!(rendered.contains("\x1b[2J"));
-        pretty_assertions::assert_eq!(output.flushes, 0);
+        assert_that!(rendered, contains_substring("\x1b[?25l"));
+        assert_that!(rendered, contains_substring("\x1b[2J"));
+        assert_that!(output.flushes, eq(0));
         Ok(())
     }
 

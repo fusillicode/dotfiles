@@ -100,6 +100,7 @@ fn diagnostic_dict_from_msg(msg: SqruffMessage) -> Dictionary {
 #[cfg(test)]
 mod tests {
     use nvim_oxi::Object;
+    use test_that::prelude::*;
 
     use super::*;
 
@@ -128,7 +129,7 @@ mod tests {
             "source": "sqruff".to_string(),
             "severity": DiagnosticSeverity::Warn.to_number(),
         };
-        pretty_assertions::assert_eq!(res, expected);
+        assert_that!(res, eq(expected));
     }
 
     #[test]
@@ -137,8 +138,10 @@ mod tests {
             "<string>": []
         });
 
-        assert2::assert!(let Ok(parsed) = serde_json::from_value::<SqruffOutput>(value));
-        pretty_assertions::assert_eq!(parsed, SqruffOutput { messages: vec![] });
+        assert_that!(
+            serde_json::from_value::<SqruffOutput>(value),
+            ok(eq(SqruffOutput { messages: vec![] }))
+        );
     }
 
     #[test]
@@ -155,10 +158,9 @@ mod tests {
             ]
         });
 
-        assert2::assert!(let Ok(res) = serde_json::from_value::<SqruffOutput>(value));
-        pretty_assertions::assert_eq!(
-            res,
-            SqruffOutput {
+        assert_that!(
+            serde_json::from_value::<SqruffOutput>(value),
+            ok(eq(SqruffOutput {
                 messages: vec![SqruffMessage {
                     code: Some("R001".into()),
                     message: "Msg".into(),
@@ -169,7 +171,7 @@ mod tests {
                     severity: DiagnosticSeverity::Warn,
                     source: "sqruff".into(),
                 }],
-            }
+            }))
         );
     }
 
@@ -194,10 +196,9 @@ mod tests {
             ]
         });
 
-        assert2::assert!(let Ok(res) = serde_json::from_value::<SqruffOutput>(value));
-        pretty_assertions::assert_eq!(
-            res,
-            SqruffOutput {
+        assert_that!(
+            serde_json::from_value::<SqruffOutput>(value),
+            ok(eq(SqruffOutput {
                 messages: vec![
                     SqruffMessage {
                         code: Some("R001".into()),
@@ -220,7 +221,7 @@ mod tests {
                         source: "sqruff".into(),
                     },
                 ],
-            }
+            }))
         );
     }
 }

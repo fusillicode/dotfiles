@@ -154,6 +154,8 @@ pub fn rm_matching_files<P: AsRef<Path>>(
 
 #[cfg(test)]
 mod tests {
+    use test_that::prelude::*;
+
     use super::*;
 
     #[test]
@@ -162,9 +164,9 @@ mod tests {
         let path = tmp.path().to_path_buf();
 
         // First remove
-        assert2::assert!(let Ok(()) = rm_f(&path));
+        assert_that!(rm_f(&path), ok(eq(())));
         // Second remove, no error
-        assert2::assert!(let Ok(()) = rm_f(&path));
+        assert_that!(rm_f(&path), ok(eq(())));
     }
 
     #[test]
@@ -176,8 +178,8 @@ mod tests {
         let RmFilesOutcome { removed, errors } = rm_matching_files(dir.path(), ".DS_Store", &[], true);
 
         assert_eq!(removed, vec![ds_store.clone()]);
-        assert!(errors.is_empty());
-        assert!(ds_store.exists()); // Should not be removed
+        assert_that!(errors, empty());
+        assert_that!(ds_store.exists(), eq(true)); // Should not be removed
     }
 
     #[test]
@@ -189,8 +191,8 @@ mod tests {
         let RmFilesOutcome { removed, errors } = rm_matching_files(dir.path(), ".DS_Store", &[], false);
 
         assert_eq!(removed, vec![ds_store.clone()]);
-        assert!(errors.is_empty());
-        assert!(!ds_store.exists()); // Should be removed
+        assert_that!(errors, empty());
+        assert_that!(ds_store.exists(), eq(false)); // Should be removed
     }
 
     #[test]
@@ -209,9 +211,9 @@ mod tests {
         let RmFilesOutcome { removed, errors } = rm_matching_files(dir.path(), ".DS_Store", &["node_modules"], false);
 
         assert_eq!(removed, vec![ds_store_in_regular.clone()]);
-        assert!(errors.is_empty());
-        assert!(ds_store_in_excluded.exists()); // Not removed
-        assert!(!ds_store_in_regular.exists()); // Removed
+        assert_that!(errors, empty());
+        assert_that!(ds_store_in_excluded.exists(), eq(true)); // Not removed
+        assert_that!(ds_store_in_regular.exists(), eq(false)); // Removed
     }
 
     #[test]
@@ -225,8 +227,8 @@ mod tests {
         let RmFilesOutcome { removed, errors } = rm_matching_files(dir.path(), ".DS_Store", &[], false);
 
         assert_eq!(removed, vec![ds_store.clone()]);
-        assert!(errors.is_empty());
-        assert!(!ds_store.exists());
+        assert_that!(errors, empty());
+        assert_that!(ds_store.exists(), eq(false));
     }
 
     #[test]
@@ -237,10 +239,15 @@ mod tests {
 
         let RmFilesOutcome { removed, errors } = rm_matching_files("/non/existent/path", ".DS_Store", &[], false);
 
-        assert!(removed.is_empty());
-        assert!(!errors.is_empty());
-        // Check that error has None path for metadata failure
-        assert!(errors.iter().any(|(path, _)| path.is_none()));
+        assert_that!(removed, empty());
+        assert_that!(errors, not(empty()));
+        assert_that!(
+            errors,
+            contains(
+                predicate(|(path, _): &(Option<PathBuf>, std::io::Error)| path.is_none())
+                    .with_description("has no path", "has a path"),
+            )
+        );
     }
 
     #[test]
@@ -254,10 +261,10 @@ mod tests {
         let RmFilesOutcome { removed, errors } = rm_matching_files(dir.path(), ".DS_Store", &[], false);
 
         assert_eq!(removed.len(), 2);
-        assert!(errors.is_empty());
-        assert!(removed.contains(&symlink));
-        assert!(removed.contains(&target));
-        assert!(!symlink.exists());
-        assert!(!target.exists());
+        assert_that!(errors, empty());
+        assert_that!(removed, contains(eq(symlink.clone())));
+        assert_that!(removed, contains(eq(target.clone())));
+        assert_that!(symlink.exists(), eq(false));
+        assert_that!(target.exists(), eq(false));
     }
 }

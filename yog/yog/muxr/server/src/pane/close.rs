@@ -231,6 +231,7 @@ mod tests {
     use muxr_core::TerminalSize;
     use rootcause::prelude::ResultExt;
     use rootcause::report;
+    use test_that::prelude::*;
 
     use super::*;
     use crate::pane::runtime::PaneRuntimes;
@@ -251,23 +252,26 @@ mod tests {
             PaneSplitAxis::Vertical,
         )?;
 
-        pretty_assertions::assert_eq!(pane_id.to_string(), "pane-2");
-        pretty_assertions::assert_eq!(layout.active_pane_id()?.to_string(), "pane-2");
-        pretty_assertions::assert_eq!(
+        assert_that!(pane_id.to_string(), eq("pane-2"));
+        assert_that!(layout.active_pane_id()?.to_string(), eq("pane-2"));
+        assert_that!(
             state_test_helpers::layout_active_tab_pane_ids(&layout)?,
-            vec!["pane-1", "pane-2"]
+            eq(vec!["pane-1", "pane-2"])
         );
 
         let close = layout.close_active_pane(3)?;
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             close,
-            ClosePaneOutcome::Removed {
+            eq(ClosePaneOutcome::Removed {
                 pane_id: PaneId::new(2)?,
-            },
+            })
         );
-        pretty_assertions::assert_eq!(layout.active_pane_id()?.to_string(), "pane-1");
-        pretty_assertions::assert_eq!(state_test_helpers::layout_active_tab_pane_ids(&layout)?, vec!["pane-1"]);
+        assert_that!(layout.active_pane_id()?.to_string(), eq("pane-1"));
+        assert_that!(
+            state_test_helpers::layout_active_tab_pane_ids(&layout)?,
+            eq(vec!["pane-1"])
+        );
         Ok(())
     }
 
@@ -288,23 +292,23 @@ mod tests {
         state_test_helpers::force_balanced_test_split_ratio(&mut layout)?;
         let close = layout.close_active_pane(3)?;
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             close,
-            ClosePaneOutcome::Removed {
+            eq(ClosePaneOutcome::Removed {
                 pane_id: PaneId::new(3)?,
-            },
+            })
         );
-        pretty_assertions::assert_eq!(layout.active_pane_id()?.to_string(), "pane-2");
-        pretty_assertions::assert_eq!(
+        assert_that!(layout.active_pane_id()?.to_string(), eq("pane-2"));
+        assert_that!(
             state_test_helpers::layout_active_tab_pane_ids(&layout)?,
-            vec!["pane-1", "pane-2"]
+            eq(vec!["pane-1", "pane-2"])
         );
-        pretty_assertions::assert_eq!(
+        assert_that!(
             state_test_helpers::layout_active_tab_pane_regions(&layout, &TerminalSize::new(80, 24)?)?,
-            vec![
+            eq(vec![
                 ("pane-1".to_owned(), 0, 0, 40, 24),
                 ("pane-2".to_owned(), 41, 0, 39, 24),
-            ],
+            ])
         );
         Ok(())
     }
@@ -347,13 +351,13 @@ mod tests {
 
         let outcome = self::handle_close_pane_cmd(&config, &mut layout, &mut runtimes)?;
 
-        pretty_assertions::assert_eq!(outcome, ClosePaneOutcome::Final { pane_id });
+        assert_that!(outcome, eq(ClosePaneOutcome::Final { pane_id }));
         let persisted = crate::state::persisted::load_metadata(&config.paths, &config.session)?
             .ok_or_else(|| report!("expected muxr layout metadata"))?;
         let pane = persisted
             .pane(pane_id)
             .ok_or_else(|| report!("expected persisted muxr pane").attach(format!("pane_id={pane_id}")))?;
-        pretty_assertions::assert_eq!(pane.cwd, "~");
+        assert_that!(pane.cwd, eq("~"));
         Ok(())
     }
 }

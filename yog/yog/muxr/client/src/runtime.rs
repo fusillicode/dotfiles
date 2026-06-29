@@ -458,6 +458,7 @@ mod tests {
     use muxr_core::TabSnapshot;
     use muxr_transport::ClientConnection;
     use muxr_transport::ServerListener;
+    use test_that::prelude::*;
 
     use super::*;
     use crate::copy_selection::SelectionInput;
@@ -483,16 +484,16 @@ mod tests {
             let (_reader, writer) = connection.split();
             let (control_sender, control_receiver) = tokio::sync::mpsc::channel(1);
             let (input_sender, input_receiver) = tokio::sync::mpsc::channel(1);
-            assert2::assert!(input_sender.try_send(ClientRequest::Input(vec![b'a'])).is_ok());
-            assert2::assert!(input_sender.try_send(ClientRequest::Input(vec![b'b'])).is_err());
-            assert2::assert!(control_sender.try_send(ClientRequest::Pong).is_ok());
+            assert_that!(input_sender.try_send(ClientRequest::Input(vec![b'a'])), ok(eq(())));
+            assert_that!(input_sender.try_send(ClientRequest::Input(vec![b'b'])), err(anything()));
+            assert_that!(control_sender.try_send(ClientRequest::Pong), ok(eq(())));
 
             let writer_handle = tokio::spawn(self::forward_client_requests(writer, control_receiver, input_receiver));
             let first_request = server_handle
                 .await
                 .map_err(|error| report!("muxr forward test socket task panicked").attach(format!("{error}")))??;
 
-            pretty_assertions::assert_eq!(first_request, ClientRequest::Pong);
+            assert_that!(first_request, eq(ClientRequest::Pong));
             drop(control_sender);
             drop(input_sender);
             writer_handle
@@ -531,9 +532,9 @@ mod tests {
                 modifiers: ClientKeyModifiers::SHIFT_ALT,
                 raw_bytes: b"\x1bE".to_vec(),
             };
-            assert2::assert!(input_sender.try_send(ClientRequest::Input(b"a".to_vec())).is_ok());
-            assert2::assert!(input_sender.try_send(ClientRequest::Key(key.clone())).is_ok());
-            assert2::assert!(input_sender.try_send(ClientRequest::Input(b"b".to_vec())).is_ok());
+            assert_that!(input_sender.try_send(ClientRequest::Input(b"a".to_vec())), ok(eq(())));
+            assert_that!(input_sender.try_send(ClientRequest::Key(key.clone())), ok(eq(())));
+            assert_that!(input_sender.try_send(ClientRequest::Input(b"b".to_vec())), ok(eq(())));
             drop(control_sender);
             drop(input_sender);
 
@@ -542,13 +543,13 @@ mod tests {
                 report!("muxr forward order test socket task panicked").attach(format!("{error}"))
             })??;
 
-            pretty_assertions::assert_eq!(
+            assert_that!(
                 requests,
-                vec![
+                eq(vec![
                     ClientRequest::Input(b"a".to_vec()),
                     ClientRequest::Key(key),
                     ClientRequest::Input(b"b".to_vec()),
-                ],
+                ])
             );
             writer_handle.await.map_err(|error| {
                 report!("muxr forward order test writer task panicked").attach(format!("{error}"))
@@ -581,8 +582,11 @@ mod tests {
             let (_reader, writer) = connection.split();
             let (control_sender, control_receiver) = tokio::sync::mpsc::channel(1);
             let (input_sender, input_receiver) = tokio::sync::mpsc::channel(2);
-            assert2::assert!(input_sender.try_send(ClientRequest::Input(b"exit\n".to_vec())).is_ok());
-            assert2::assert!(input_sender.try_send(ClientRequest::Detach).is_ok());
+            assert_that!(
+                input_sender.try_send(ClientRequest::Input(b"exit\n".to_vec())),
+                ok(eq(()))
+            );
+            assert_that!(input_sender.try_send(ClientRequest::Detach), ok(eq(())));
             drop(control_sender);
             drop(input_sender);
 
@@ -591,9 +595,9 @@ mod tests {
                 .await
                 .map_err(|error| report!("muxr forward EOF test socket task panicked").attach(format!("{error}")))??;
 
-            pretty_assertions::assert_eq!(
+            assert_that!(
                 requests,
-                vec![ClientRequest::Input(b"exit\n".to_vec()), ClientRequest::Detach],
+                eq(vec![ClientRequest::Input(b"exit\n".to_vec()), ClientRequest::Detach])
             );
             writer_handle
                 .await
@@ -611,7 +615,7 @@ mod tests {
             raw_bytes: b"\x1bE".to_vec(),
         };
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             send_decoded_input(
                 &input_sender,
                 vec![
@@ -620,20 +624,24 @@ mod tests {
                     DecodedInput::Input(b"b".to_vec()),
                 ],
             ),
-            ClientInputSend::Accepted,
+            eq(ClientInputSend::Accepted)
         );
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             input_receiver.blocking_recv(),
-            Some(ClientInputAction::ServerRequest(ClientRequest::Input(b"a".to_vec()))),
+            eq(Some(ClientInputAction::ServerRequest(ClientRequest::Input(
+                b"a".to_vec()
+            ))))
         );
-        pretty_assertions::assert_eq!(
+        assert_that!(
             input_receiver.blocking_recv(),
-            Some(ClientInputAction::ServerRequest(ClientRequest::Key(key))),
+            eq(Some(ClientInputAction::ServerRequest(ClientRequest::Key(key))))
         );
-        pretty_assertions::assert_eq!(
+        assert_that!(
             input_receiver.blocking_recv(),
-            Some(ClientInputAction::ServerRequest(ClientRequest::Input(b"b".to_vec()))),
+            eq(Some(ClientInputAction::ServerRequest(ClientRequest::Input(
+                b"b".to_vec()
+            ))))
         );
     }
 
@@ -646,14 +654,14 @@ mod tests {
             raw_bytes: b"\x1bS".to_vec(),
         };
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             send_decoded_input(&input_sender, vec![DecodedInput::Key(key.clone())]),
-            ClientInputSend::Accepted,
+            eq(ClientInputSend::Accepted)
         );
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             input_receiver.blocking_recv(),
-            Some(ClientInputAction::ServerRequest(ClientRequest::Key(key))),
+            eq(Some(ClientInputAction::ServerRequest(ClientRequest::Key(key))))
         );
     }
 
@@ -661,16 +669,16 @@ mod tests {
     fn test_send_decoded_input_when_paste_arrives_uses_input_queue() {
         let (input_sender, mut input_receiver) = tokio::sync::mpsc::channel(1);
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             send_decoded_input(&input_sender, vec![DecodedInput::Paste(b"one\ntwo\n".to_vec())],),
-            ClientInputSend::Accepted,
+            eq(ClientInputSend::Accepted)
         );
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             input_receiver.blocking_recv(),
-            Some(ClientInputAction::ServerRequest(ClientRequest::Paste(
+            eq(Some(ClientInputAction::ServerRequest(ClientRequest::Paste(
                 b"one\ntwo\n".to_vec()
-            ))),
+            ))))
         );
     }
 
@@ -683,19 +691,22 @@ mod tests {
             position: muxr_core::ClientMousePosition { row: 4, col: 9 },
         };
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             send_decoded_input(&input_sender, vec![DecodedInput::Mouse(event)]),
-            ClientInputSend::Accepted,
+            eq(ClientInputSend::Accepted)
         );
 
-        pretty_assertions::assert_eq!(input_receiver.blocking_recv(), Some(ClientInputAction::Mouse(event)),);
+        assert_that!(
+            input_receiver.blocking_recv(),
+            eq(Some(ClientInputAction::Mouse(event)))
+        );
     }
 
     #[test]
     fn test_send_decoded_input_when_mouse_motion_action_queue_is_full_drops_without_blocking() -> rootcause::Result<()>
     {
         let (input_sender, mut input_receiver) = tokio::sync::mpsc::channel(1);
-        assert2::assert!(input_sender.try_send(ClientInputAction::CopySelection).is_ok());
+        assert_that!(input_sender.try_send(ClientInputAction::CopySelection), ok(eq(())));
         let event = ClientMouseEvent {
             button: 32,
             phase: ClientMouseEventPhase::Press,
@@ -716,9 +727,9 @@ mod tests {
             }
         };
 
-        pretty_assertions::assert_eq!(result, ClientInputSend::Accepted);
-        pretty_assertions::assert_eq!(input_receiver.try_recv(), Ok(ClientInputAction::CopySelection));
-        assert2::assert!(input_receiver.try_recv().is_err());
+        assert_that!(result, eq(ClientInputSend::Accepted));
+        assert_that!(input_receiver.try_recv(), eq(Ok(ClientInputAction::CopySelection)));
+        assert_that!(input_receiver.try_recv(), err(anything()));
         handle
             .join()
             .map_err(|error| report!("muxr mouse input test thread panicked").attach(format!("{error:?}")))?;
@@ -728,7 +739,7 @@ mod tests {
     #[test]
     fn test_send_decoded_input_when_mouse_wheel_action_queue_is_full_waits_for_queue_space() -> rootcause::Result<()> {
         let (input_sender, mut input_receiver) = tokio::sync::mpsc::channel(1);
-        assert2::assert!(input_sender.try_send(ClientInputAction::CopySelection).is_ok());
+        assert_that!(input_sender.try_send(ClientInputAction::CopySelection), ok(eq(())));
         let event = ClientMouseEvent {
             button: 64,
             phase: ClientMouseEventPhase::Press,
@@ -739,13 +750,19 @@ mod tests {
             let _ = result_sender.send(send_decoded_input(&input_sender, vec![DecodedInput::Mouse(event)]));
         });
 
-        assert2::assert!(result_receiver.recv_timeout(Duration::from_millis(50)).is_err());
-        pretty_assertions::assert_eq!(input_receiver.blocking_recv(), Some(ClientInputAction::CopySelection));
-        pretty_assertions::assert_eq!(
-            result_receiver.recv_timeout(Duration::from_secs(1)),
-            Ok(ClientInputSend::Accepted),
+        assert_that!(result_receiver.recv_timeout(Duration::from_millis(50)), err(anything()));
+        assert_that!(
+            input_receiver.blocking_recv(),
+            eq(Some(ClientInputAction::CopySelection))
         );
-        pretty_assertions::assert_eq!(input_receiver.blocking_recv(), Some(ClientInputAction::Mouse(event)));
+        assert_that!(
+            result_receiver.recv_timeout(Duration::from_secs(1)),
+            eq(Ok(ClientInputSend::Accepted))
+        );
+        assert_that!(
+            input_receiver.blocking_recv(),
+            eq(Some(ClientInputAction::Mouse(event)))
+        );
         handle
             .join()
             .map_err(|error| report!("muxr mouse input test thread panicked").attach(format!("{error:?}")))?;
@@ -756,26 +773,29 @@ mod tests {
     fn test_send_decoded_input_when_copy_selection_arrives_emits_local_action() {
         let (input_sender, mut input_receiver) = tokio::sync::mpsc::channel(1);
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             send_decoded_input(&input_sender, vec![DecodedInput::CopySelection]),
-            ClientInputSend::Accepted,
+            eq(ClientInputSend::Accepted)
         );
 
-        pretty_assertions::assert_eq!(input_receiver.blocking_recv(), Some(ClientInputAction::CopySelection));
+        assert_that!(
+            input_receiver.blocking_recv(),
+            eq(Some(ClientInputAction::CopySelection))
+        );
     }
 
     #[test]
     fn test_send_decoded_input_when_inline_copy_selection_arrives_emits_local_action() {
         let (input_sender, mut input_receiver) = tokio::sync::mpsc::channel(1);
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             send_decoded_input(&input_sender, vec![DecodedInput::CopySelectionInline]),
-            ClientInputSend::Accepted,
+            eq(ClientInputSend::Accepted)
         );
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             input_receiver.blocking_recv(),
-            Some(ClientInputAction::CopySelectionInline)
+            eq(Some(ClientInputAction::CopySelectionInline))
         );
     }
 
@@ -800,36 +820,39 @@ mod tests {
             direction: PaneScrollDirection::Down,
             position: ClientMousePosition { row: 0, col: 1 },
         };
-        pretty_assertions::assert_eq!(copy_selection_test_helpers::edge_scroll_request(&initial), &expected);
-        pretty_assertions::assert_eq!(
+        assert_that!(
+            copy_selection_test_helpers::edge_scroll_request(&initial),
+            eq(&expected)
+        );
+        assert_that!(
             send_edge_scroll_request(&input_sender, &mut renderer, initial),
-            ClientInputSend::Accepted,
+            eq(ClientInputSend::Accepted)
         );
-        pretty_assertions::assert_eq!(input_receiver.blocking_recv(), Some(expected.clone()));
-        pretty_assertions::assert_eq!(
+        assert_that!(input_receiver.blocking_recv(), eq(Some(expected.clone())));
+        assert_that!(
             send_selection_edge_scroll_request(&input_sender, &mut renderer),
-            ClientInputSend::Accepted,
+            eq(ClientInputSend::Accepted)
         );
-        assert2::assert!(matches!(
+        assert_that!(
             input_receiver.try_recv(),
-            Err(tokio::sync::mpsc::error::TryRecvError::Empty)
-        ));
+            err(matches_pattern!(tokio::sync::mpsc::error::TryRecvError::Empty))
+        );
 
         renderer.apply_pane_regions(&mut output, pane_regions_snapshot_with_visible_top_row(1)?)?;
         renderer.apply_render(&mut output, muxr_core::RenderUpdate::Baseline(render_baseline()?))?;
-        pretty_assertions::assert_eq!(
+        assert_that!(
             send_selection_edge_scroll_request(&input_sender, &mut renderer),
-            ClientInputSend::Accepted,
+            eq(ClientInputSend::Accepted)
         );
 
-        pretty_assertions::assert_eq!(input_receiver.blocking_recv(), Some(expected));
+        assert_that!(input_receiver.blocking_recv(), eq(Some(expected)));
         Ok(())
     }
 
     #[test]
     fn test_send_edge_scroll_request_when_queue_is_full_does_not_mark_scroll_pending() -> rootcause::Result<()> {
         let (input_sender, mut input_receiver) = tokio::sync::mpsc::channel(1);
-        assert2::assert!(input_sender.try_send(ClientRequest::Pong).is_ok());
+        assert_that!(input_sender.try_send(ClientRequest::Pong), ok(eq(())));
         let mut renderer = ClientRenderer::with_synchronized_output(
             layout_snapshot()?,
             pane_regions_snapshot()?,
@@ -845,22 +868,22 @@ mod tests {
             .set_selection_edge_drag(ClientMousePosition { row: 2, col: 1 }, None)
             .ok_or_else(|| report!("expected muxr edge scroll request"))?;
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             send_edge_scroll_request(&input_sender, &mut renderer, request),
-            ClientInputSend::Accepted,
+            eq(ClientInputSend::Accepted)
         );
-        pretty_assertions::assert_eq!(input_receiver.try_recv(), Ok(ClientRequest::Pong));
-        pretty_assertions::assert_eq!(
+        assert_that!(input_receiver.try_recv(), eq(Ok(ClientRequest::Pong)));
+        assert_that!(
             send_selection_edge_scroll_request(&input_sender, &mut renderer),
-            ClientInputSend::Accepted,
+            eq(ClientInputSend::Accepted)
         );
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             input_receiver.blocking_recv(),
-            Some(ClientRequest::ScrollPaneLineAt {
+            eq(Some(ClientRequest::ScrollPaneLineAt {
                 direction: PaneScrollDirection::Down,
                 position: ClientMousePosition { row: 0, col: 1 },
-            }),
+            }))
         );
         Ok(())
     }

@@ -90,6 +90,7 @@ fn dim_channel(channel: u8, percent: u8) -> u8 {
 #[cfg(test)]
 mod tests {
     use muxr_core::RenderTextStyle;
+    use test_that::prelude::*;
 
     use super::*;
 
@@ -109,10 +110,10 @@ mod tests {
             },
         );
 
-        pretty_assertions::assert_eq!(updated.attrs.bold(), true);
-        pretty_assertions::assert_eq!(updated.attrs.dim(), true);
-        pretty_assertions::assert_eq!(updated.bg, style.bg);
-        pretty_assertions::assert_eq!(updated.fg, style.fg);
+        assert_that!(updated.attrs.bold(), eq(true));
+        assert_that!(updated.attrs.dim(), eq(true));
+        assert_that!(updated.bg, eq(style.bg));
+        assert_that!(updated.fg, eq(style.fg));
     }
 
     #[test]
@@ -131,9 +132,9 @@ mod tests {
             },
         );
 
-        pretty_assertions::assert_eq!(updated.attrs.bold(), true);
-        pretty_assertions::assert_eq!(updated.attrs.dim(), false);
-        pretty_assertions::assert_eq!(updated.bg, style.bg);
-        assert2::assert!(updated.fg != style.fg);
+        assert_that!(updated.attrs.bold(), eq(true));
+        assert_that!(updated.attrs.dim(), eq(false));
+        assert_that!(updated.bg, eq(style.bg));
+        assert_that!(updated.fg, not(eq(style.fg)));
     }
 }

@@ -369,6 +369,7 @@ mod tests {
     use muxr_config::MuxrConfig;
     use muxr_core::PaneId;
     use rstest::rstest;
+    use test_that::prelude::*;
 
     use super::*;
 
@@ -402,9 +403,9 @@ mod tests {
             ],
         )?;
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             sidebar_tabs_with_home(&layout, Some("/Users/me")),
-            vec![
+            eq(vec![
                 SidebarTab {
                     state: TabBarItemState::Inactive,
                     tracked_process_state: TrackedProcessState::None,
@@ -417,7 +418,7 @@ mod tests {
                     cmd_label: Some("nvim".to_owned()),
                     path_label: "~/s/muxr".to_owned(),
                 },
-            ],
+            ])
         );
         Ok(())
     }
@@ -446,9 +447,9 @@ mod tests {
             ],
         )?;
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             sidebar_tabs_with_home(&layout, None),
-            vec![
+            eq(vec![
                 SidebarTab {
                     state: TabBarItemState::Active,
                     tracked_process_state: TrackedProcessState::None,
@@ -461,7 +462,7 @@ mod tests {
                     cmd_label: Some("codex".to_owned()),
                     path_label: "/t/codex".to_owned(),
                 },
-            ],
+            ])
         );
         Ok(())
     }
@@ -534,14 +535,14 @@ mod tests {
 
         let tabs = sidebar_tabs_with_home(&layout, None);
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             tabs[1],
-            SidebarTab {
+            eq(SidebarTab {
                 state: TabBarItemState::Inactive,
                 tracked_process_state,
                 cmd_label: Some(expected_cmd_label.to_owned()),
                 path_label: expected_path_label.to_owned(),
-            },
+            })
         );
         Ok(())
     }
@@ -572,14 +573,14 @@ mod tests {
 
         let tabs = sidebar_tabs_with_home(&layout, None);
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             tabs[1],
-            SidebarTab {
+            eq(SidebarTab {
                 state: TabBarItemState::Inactive,
                 tracked_process_state: TrackedProcessState::Seen,
                 cmd_label: Some("codex".to_owned()),
                 path_label: "/t/codex".to_owned(),
-            },
+            })
         );
         Ok(())
     }
@@ -600,14 +601,14 @@ mod tests {
             )?],
         )?;
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             sidebar_tabs_with_home(&layout, None),
-            vec![SidebarTab {
+            eq(vec![SidebarTab {
                 state: TabBarItemState::Active,
                 tracked_process_state: TrackedProcessState::Unseen,
                 cmd_label: Some("codex".to_owned()),
                 path_label: "/t/codex".to_owned(),
-            }],
+            }])
         );
         Ok(())
     }
@@ -622,7 +623,7 @@ mod tests {
         #[case] home: Option<&str>,
         #[case] expected: &str,
     ) {
-        pretty_assertions::assert_eq!(short_cwd_with_home(cwd, home), expected);
+        assert_that!(short_cwd_with_home(cwd, home), eq(expected));
     }
 
     #[test]
@@ -646,11 +647,11 @@ mod tests {
         queue(&mut output, MuxrConfig::default().tab_bar, &layout, 3)?;
 
         let rendered = output.rendered_string()?;
-        assert2::assert!(rendered.contains("project"));
-        assert2::assert!(rendered.contains("codex"));
-        assert2::assert!(rendered.contains("\u{2022}"));
-        assert2::assert!(rendered.contains(SEPARATOR));
-        pretty_assertions::assert_eq!(output.flushes, 0);
+        assert_that!(rendered, contains_substring("project"));
+        assert_that!(rendered, contains_substring("codex"));
+        assert_that!(rendered, contains_substring("\u{2022}"));
+        assert_that!(rendered, contains_substring(SEPARATOR));
+        assert_that!(output.flushes, eq(0));
         Ok(())
     }
 
@@ -675,8 +676,8 @@ mod tests {
         queue(&mut output, MuxrConfig::default().tab_bar, &layout, 2)?;
 
         let visible = self::strip_ansi(&output.rendered_string()?);
-        assert2::assert!(visible.contains("\u{258e}cx"));
-        assert2::assert!(!visible.contains("\u{2022} cx"));
+        assert_that!(visible, contains_substring("\u{258e}cx"));
+        assert_that!(visible, not(contains_substring("\u{2022} cx")));
         Ok(())
     }
 
@@ -702,11 +703,11 @@ mod tests {
         queue(&mut output, MuxrConfig::default().tab_bar, &layout, 2)?;
 
         let visible = self::strip_ansi(&output.rendered_string()?);
-        assert2::assert!(visible.contains("\u{258e}project"));
-        assert2::assert!(visible.contains("\u{258e}\u{2022} cx"));
-        assert2::assert!(!visible.contains("\u{258e} project"));
-        assert2::assert!(!visible.contains("\u{258e} cx"));
-        assert2::assert!(!visible.contains("\u{258e}cx \u{2022}"));
+        assert_that!(visible, contains_substring("\u{258e}project"));
+        assert_that!(visible, contains_substring("\u{258e}\u{2022} cx"));
+        assert_that!(visible, not(contains_substring("\u{258e} project")));
+        assert_that!(visible, not(contains_substring("\u{258e} cx")));
+        assert_that!(visible, not(contains_substring("\u{258e}cx \u{2022}")));
         Ok(())
     }
 
@@ -732,10 +733,10 @@ mod tests {
 
         let visible = self::strip_ansi(&output.rendered_string()?);
         let rows = visible.split(SEPARATOR).collect::<Vec<_>>();
-        pretty_assertions::assert_eq!(rows.len(), 4);
-        assert2::assert!(rows[0].starts_with("\u{258e}project"));
-        assert2::assert!(rows[1].starts_with("\u{258e}\u{2022} cx"));
-        pretty_assertions::assert_eq!(rows[2].trim(), "\u{258e}");
+        assert_that!(rows.len(), eq(4));
+        assert_that!(rows[0], starts_with("\u{258e}project"));
+        assert_that!(rows[1], starts_with("\u{258e}\u{2022} cx"));
+        assert_that!(rows[2].trim(), eq("\u{258e}"));
         Ok(())
     }
 
@@ -769,7 +770,7 @@ mod tests {
             ],
         )?;
 
-        pretty_assertions::assert_eq!(tab_id_at_row(&layout, row).map(TabId::get), expected);
+        assert_that!(tab_id_at_row(&layout, row).map(TabId::get), eq(expected));
         Ok(())
     }
 

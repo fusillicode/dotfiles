@@ -95,6 +95,7 @@ fn handle_create_tab(
 #[cfg(test)]
 mod tests {
     use muxr_core::TerminalSize;
+    use test_that::prelude::*;
 
     use super::*;
     use crate::pane::runtime::test_helpers as pane_runtime_test_helpers;
@@ -111,11 +112,14 @@ mod tests {
         let mut runtimes = pane_runtime_test_helpers::empty_runtimes();
 
         let create_result = self::handle_create_tab(&mut layout, &config, &mut runtimes, &TerminalSize::new(80, 24)?);
-        assert2::assert!(create_result.is_err());
+        assert_that!(create_result, err(anything()));
 
-        pretty_assertions::assert_eq!(layout, initial_layout);
-        pretty_assertions::assert_eq!(runtimes.set_status(), crate::pane::runtime::PaneRuntimeSetStatus::Empty);
-        assert2::assert!(!config.paths.layout.exists());
+        assert_that!(layout, eq(initial_layout));
+        assert_that!(
+            runtimes.set_status(),
+            eq(crate::pane::runtime::PaneRuntimeSetStatus::Empty)
+        );
+        assert_that!(config.paths.layout.exists(), eq(false));
         Ok(())
     }
 }

@@ -611,6 +611,7 @@ fn printable_width(c: char) -> Option<u16> {
 #[cfg(test)]
 mod tests {
     use muxr_core::RenderStyle;
+    use test_that::prelude::*;
 
     use super::*;
 
@@ -625,15 +626,21 @@ mod tests {
 
         scrollback.push_rows([TerminalVisibleRow::new(row.clone(), RowWrap::EndsWithSoftWrap)]);
 
-        assert2::assert!(let Some(TerminalScrollbackRow::Runs {
+        let Some(TerminalScrollbackRow::Runs {
             runs: stored_runs,
             row_wrap,
-        }) = scrollback.rows.front());
-        assert2::assert!(stored_runs.len() < row.len() / 2);
-        pretty_assertions::assert_eq!(*row_wrap, RowWrap::EndsWithSoftWrap);
-        pretty_assertions::assert_eq!(
+        }) = scrollback.rows.front()
+        else {
+            return Err(std::io::Error::other(
+                "expected pattern: Some(TerminalScrollbackRow::Runs { runs: stored_runs, row_wrap, })",
+            )
+            .into());
+        };
+        assert_that!(stored_runs.len(), lt(row.len() / 2));
+        assert_that!(*row_wrap, eq(RowWrap::EndsWithSoftWrap));
+        assert_that!(
             scrollback.captured_rows_for_view(1, 1),
-            vec![TerminalVisibleRow::new(row, RowWrap::EndsWithSoftWrap)]
+            eq(vec![TerminalVisibleRow::new(row, RowWrap::EndsWithSoftWrap)])
         );
         Ok(())
     }
@@ -647,15 +654,21 @@ mod tests {
 
         scrollback.push_rows([TerminalVisibleRow::new(row.clone(), RowWrap::EndsBeforeSoftWrap)]);
 
-        assert2::assert!(let Some(TerminalScrollbackRow::Raw {
+        let Some(TerminalScrollbackRow::Raw {
             cells: stored_cells,
             row_wrap,
-        }) = scrollback.rows.front());
-        pretty_assertions::assert_eq!(stored_cells, &row);
-        pretty_assertions::assert_eq!(*row_wrap, RowWrap::EndsBeforeSoftWrap);
-        pretty_assertions::assert_eq!(
+        }) = scrollback.rows.front()
+        else {
+            return Err(std::io::Error::other(
+                "expected pattern: Some(TerminalScrollbackRow::Raw { cells: stored_cells, row_wrap, })",
+            )
+            .into());
+        };
+        assert_that!(stored_cells, eq(&row));
+        assert_that!(*row_wrap, eq(RowWrap::EndsBeforeSoftWrap));
+        assert_that!(
             scrollback.captured_rows_for_view(1, 1),
-            vec![TerminalVisibleRow::new(row, RowWrap::EndsBeforeSoftWrap)]
+            eq(vec![TerminalVisibleRow::new(row, RowWrap::EndsBeforeSoftWrap)])
         );
         Ok(())
     }

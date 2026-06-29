@@ -80,6 +80,7 @@ fn read_tail(path: &Path) -> rootcause::Result<Vec<u8>> {
 #[cfg(test)]
 mod tests {
     use rootcause::report;
+    use test_that::prelude::*;
 
     use super::*;
 
@@ -92,7 +93,7 @@ mod tests {
 
         let (_history, replay) = PaneHistory::open(&path)?;
 
-        pretty_assertions::assert_eq!(replay, b"abc".to_vec());
+        assert_that!(replay, eq(b"abc".to_vec()));
         Ok(())
     }
 
@@ -102,13 +103,13 @@ mod tests {
         let path = tempdir.path().join("1").join("output.raw");
         let (mut history, replay) = PaneHistory::open(&path)?;
 
-        pretty_assertions::assert_eq!(replay, Vec::<u8>::new());
+        assert_that!(replay, eq(Vec::<u8>::new()));
         history.append(b"abc")?;
         drop(history);
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             fs::read(&path).context("failed to read muxr test history")?,
-            b"abc".to_vec()
+            eq(b"abc".to_vec())
         );
         Ok(())
     }

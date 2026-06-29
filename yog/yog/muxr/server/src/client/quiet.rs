@@ -28,6 +28,8 @@ impl QuietTurn {
 
 #[cfg(test)]
 mod tests {
+    use test_that::prelude::*;
+
     use super::*;
 
     #[test]
@@ -36,11 +38,11 @@ mod tests {
 
         quiet_turn.defer_if_elapsed(QuietDeadline::Elapsed);
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             quiet_turn.take_ready(QuietDeadline::Elapsed),
-            QuietTurn::DrainBeforeClear
+            eq(QuietTurn::DrainBeforeClear)
         );
-        pretty_assertions::assert_eq!(quiet_turn.take_ready(QuietDeadline::Elapsed), QuietTurn::Idle);
+        assert_that!(quiet_turn.take_ready(QuietDeadline::Elapsed), eq(QuietTurn::Idle));
     }
 
     #[test]
@@ -50,11 +52,11 @@ mod tests {
         quiet_turn.defer_if_elapsed(QuietDeadline::Elapsed);
         quiet_turn.defer_if_elapsed(QuietDeadline::Elapsed);
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             quiet_turn.take_ready(QuietDeadline::Elapsed),
-            QuietTurn::DrainBeforeClear
+            eq(QuietTurn::DrainBeforeClear)
         );
-        pretty_assertions::assert_eq!(quiet_turn.take_ready(QuietDeadline::Elapsed), QuietTurn::Idle);
+        assert_that!(quiet_turn.take_ready(QuietDeadline::Elapsed), eq(QuietTurn::Idle));
     }
 
     #[test]
@@ -63,8 +65,8 @@ mod tests {
 
         quiet_turn.defer_if_elapsed(QuietDeadline::Elapsed);
 
-        pretty_assertions::assert_eq!(quiet_turn.take_ready(QuietDeadline::Pending), QuietTurn::Idle);
-        pretty_assertions::assert_eq!(quiet_turn.take_ready(QuietDeadline::Elapsed), QuietTurn::Idle);
+        assert_that!(quiet_turn.take_ready(QuietDeadline::Pending), eq(QuietTurn::Idle));
+        assert_that!(quiet_turn.take_ready(QuietDeadline::Elapsed), eq(QuietTurn::Idle));
     }
 
     #[test]
@@ -74,6 +76,6 @@ mod tests {
         quiet_turn.defer_if_elapsed(QuietDeadline::Pending);
         quiet_turn.defer_if_elapsed(QuietDeadline::Pending);
 
-        pretty_assertions::assert_eq!(quiet_turn.take_ready(QuietDeadline::Elapsed), QuietTurn::Idle);
+        assert_that!(quiet_turn.take_ready(QuietDeadline::Elapsed), eq(QuietTurn::Idle));
     }
 }

@@ -18,8 +18,8 @@ ytil_sys = { workspace = true }
 ytil_wezterm = { workspace = true }
 
 [dev-dependencies]
-pretty_assertions = { workspace = true }
 rstest = { workspace = true }
+test-that = { workspace = true }
 
 [lints]
 workspace = true

@@ -16,10 +16,9 @@ rootcause = { workspace = true }
 serde = { workspace = true }
 
 [dev-dependencies]
-assert2 = { workspace = true }
-pretty_assertions = { workspace = true }
 rstest = { workspace = true }
 serde_json = { workspace = true }
+test-that = { workspace = true }
 
 [lints]
 workspace = true

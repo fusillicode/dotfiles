@@ -23,9 +23,8 @@ tree-sitter = { version = "0.26" }
 tree-sitter-rust = { version = "0.24" }
 
 [dev-dependencies]
-assert2 = { workspace = true }
-pretty_assertions = { workspace = true }
 rstest = { workspace = true }
+test-that = { workspace = true }
 
 [lints]
 workspace = true

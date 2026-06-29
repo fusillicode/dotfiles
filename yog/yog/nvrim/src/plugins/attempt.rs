@@ -171,6 +171,7 @@ mod tests {
     use chrono::TimeZone;
     use rstest::rstest;
     use tempfile::TempDir;
+    use test_that::prelude::*;
 
     use super::*;
 
@@ -188,15 +189,18 @@ mod tests {
 
         let result = Scratch::from(Ok(entry));
 
-        assert2::assert!(let Some(Ok(actual)) = result);
-        pretty_assertions::assert_eq!(
+        assert_that!(result, some(ok(anything())));
+        let actual = result
+            .expect("scratch conversion should return a result")
+            .expect("valid file should convert to scratch");
+        assert_that!(
             actual,
-            Scratch {
+            eq(Scratch {
                 display_name: expected_display.to_string(),
                 base_name: expected_base.to_string(),
                 extension: expected_ext.to_string(),
                 path: expected_path,
-            },
+            })
         );
     }
 
@@ -210,7 +214,7 @@ mod tests {
 
         let result = Scratch::from(Ok(entry));
 
-        assert!(result.is_none());
+        assert_that!(result, none());
     }
 
     #[rstest]
@@ -224,18 +228,30 @@ mod tests {
 
         let result = Scratch::from(Ok(entry));
 
-        assert2::assert!(let Some(Err(err)) = result);
-        assert!(err.to_string().contains(expected_error));
+        assert_that!(
+            result.as_ref().map(|res| res.as_ref().map(|_| ())),
+            some(err(anything()))
+        );
+        let err = result
+            .expect("invalid file should return a result")
+            .map_or_else(|err| err, |_| panic!("invalid file should fail to convert"));
+        assert_that!(err.to_string(), contains_substring(expected_error));
     }
 
     #[test]
     fn test_scratch_from_when_io_error_returns_some_expected_err() {
-        let err = std::io::Error::new(std::io::ErrorKind::NotFound, "test error");
+        let io_err = std::io::Error::new(std::io::ErrorKind::NotFound, "test error");
 
-        let result = Scratch::from(Err(err));
+        let result = Scratch::from(Err(io_err));
 
-        assert2::assert!(let Some(Err(e)) = result);
-        assert!(e.to_string().contains("test error"));
+        assert_that!(
+            result.as_ref().map(|res| res.as_ref().map(|_| ())),
+            some(err(anything()))
+        );
+        let err = result
+            .expect("I/O failure should return a result")
+            .map_or_else(|err| err, |_| panic!("I/O failure should propagate"));
+        assert_that!(err.to_string(), contains_substring("test error"));
     }
 
     #[test]
@@ -250,7 +266,7 @@ mod tests {
         let date_time = Local.with_ymd_and_hms(2023, 1, 1, 12, 0, 0).unwrap();
         let result = scratch.dest_file_path(Path::new("/tmp"), date_time);
 
-        pretty_assertions::assert_eq!(result, PathBuf::from("/tmp/test-20230101-120000.txt"));
+        assert_that!(result, eq(PathBuf::from("/tmp/test-20230101-120000.txt")));
     }
 
     fn dummy_dir_entry(file_name: &str) -> (TempDir, DirEntry) {

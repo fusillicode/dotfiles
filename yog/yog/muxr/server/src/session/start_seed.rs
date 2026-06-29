@@ -139,6 +139,7 @@ fn layout_id(index: usize, kind: &str) -> rootcause::Result<u32> {
 #[cfg(test)]
 mod tests {
     use muxr_core::TerminalSize;
+    use test_that::prelude::*;
 
     use super::*;
     use crate::server::test_helpers as server_test_helpers;
@@ -169,30 +170,30 @@ mod tests {
         )?;
 
         let snapshot = seed.layout.snapshot()?;
-        pretty_assertions::assert_eq!(snapshot.active_tab().to_string(), "tab-1");
-        pretty_assertions::assert_eq!(snapshot.tabs().len(), 2);
-        pretty_assertions::assert_eq!(snapshot.tabs()[0].panes()[0].cwd, "/tmp/one");
-        pretty_assertions::assert_eq!(snapshot.tabs()[0].panes()[0].cmd_label, None);
-        pretty_assertions::assert_eq!(snapshot.tabs()[1].panes()[0].cwd, "/tmp/two");
-        pretty_assertions::assert_eq!(snapshot.tabs()[1].panes()[0].cmd_label, None);
-        pretty_assertions::assert_eq!(
+        assert_that!(snapshot.active_tab().to_string(), eq("tab-1"));
+        assert_that!(snapshot.tabs().len(), eq(2));
+        assert_that!(snapshot.tabs()[0].panes()[0].cwd, eq("/tmp/one"));
+        assert_that!(snapshot.tabs()[0].panes()[0].cmd_label, eq(None));
+        assert_that!(snapshot.tabs()[1].panes()[0].cwd, eq("/tmp/two"));
+        assert_that!(snapshot.tabs()[1].panes()[0].cmd_label, eq(None));
+        assert_that!(
             seed.layout
                 .pane(PaneId::new(2)?)
                 .ok_or_else(|| report!("expected seeded pane"))?
                 .cmd_label,
-            "echo seeded"
+            eq("echo seeded")
         );
-        pretty_assertions::assert_eq!(
+        assert_that!(
             seed.startup_cmds,
-            vec![(PaneId::new(2)?, ShellCmd::with_args("/bin/echo", ["seeded"])?),]
+            eq(vec![(PaneId::new(2)?, ShellCmd::with_args("/bin/echo", ["seeded"])?),])
         );
-        pretty_assertions::assert_eq!(
+        assert_that!(
             seed.layout
                 .active_tab()?
                 .pane_layout(&TerminalSize::new(80, 24)?)?
                 .regions()
                 .len(),
-            1
+            eq(1)
         );
         Ok(())
     }
@@ -214,8 +215,8 @@ mod tests {
         crate::state::persisted::write_metadata(&config.paths, &initial)?;
         config.external_layout = Some(tempdir.path().join("work.json"));
 
-        assert2::assert!(
-            let Err(_) = SessionStartSeed::load(
+        assert_that!(
+            SessionStartSeed::load(
                 &config,
                 SessionMetadata {
                     cmd_label: "sh".to_owned(),
@@ -223,6 +224,8 @@ mod tests {
                     started_at: 2,
                 },
             )
+            .map(|_| ()),
+            err(anything())
         );
         Ok(())
     }
@@ -233,8 +236,8 @@ mod tests {
         let mut config = server_test_helpers::server_config(tempdir.path(), "work")?;
         config.external_layout = Some(tempdir.path().join("missing.json"));
 
-        assert2::assert!(
-            let Err(_) = SessionStartSeed::load(
+        assert_that!(
+            SessionStartSeed::load(
                 &config,
                 SessionMetadata {
                     cmd_label: "sh".to_owned(),
@@ -242,6 +245,8 @@ mod tests {
                     started_at: 1,
                 },
             )
+            .map(|_| ()),
+            err(anything())
         );
         Ok(())
     }

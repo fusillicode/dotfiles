@@ -57,6 +57,7 @@ impl BufferFilter for BufferFilterImpl {
 #[cfg(test)]
 mod tests {
     use rstest::rstest;
+    use test_that::prelude::*;
     use ytil_noxi::buffer::mock::MockBuffer;
 
     use super::*;
@@ -142,8 +143,7 @@ mod tests {
         let filter = TestBufferFilter::new(blacklisted_paths, blacklisted_types);
         let buffer_with_path = create_buffer_with_path(buffer_path, buffer_type);
 
-        assert2::assert!(let Ok(result) = filter.skip_diagnostic(&buffer_with_path));
-        pretty_assertions::assert_eq!(result, expected);
+        assert_that!(filter.skip_diagnostic(&buffer_with_path), ok(eq(expected)));
     }
 
     /// Test implementation of [`BufferFilter`] with configurable blacklists.

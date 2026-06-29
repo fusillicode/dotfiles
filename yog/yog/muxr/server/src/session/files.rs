@@ -81,6 +81,7 @@ fn socket_root(paths: &SessionPaths) -> rootcause::Result<&Path> {
 mod tests {
     use muxr_core::SessionName;
     use muxr_core::SessionPaths;
+    use test_that::prelude::*;
 
     use super::*;
 
@@ -96,10 +97,10 @@ mod tests {
 
         prepare_session_dirs(&paths)?;
 
-        pretty_assertions::assert_eq!(self::mode(state_root)?, PRIVATE_DIR_MODE);
-        assert2::assert!(paths.root.is_dir());
-        assert2::assert!(paths.panes.is_dir());
-        assert2::assert!(paths.logs_root()?.is_dir());
+        assert_that!(self::mode(state_root)?, eq(PRIVATE_DIR_MODE));
+        assert_that!(paths.root.is_dir(), eq(true));
+        assert_that!(paths.panes.is_dir(), eq(true));
+        assert_that!(paths.logs_root()?.is_dir(), eq(true));
         Ok(())
     }
 
@@ -113,7 +114,7 @@ mod tests {
             Ok(())
         })?;
 
-        assert2::assert!(!log.contains("kind=\"server_file_cleanup_failed\""));
+        assert_that!(log, not(contains_substring("kind=\"server_file_cleanup_failed\"")));
         Ok(())
     }
 

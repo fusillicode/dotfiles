@@ -232,6 +232,7 @@ pub fn handle_split_pane_cmd_client(
 mod tests {
     use muxr_config::MuxrConfig;
     use muxr_core::TerminalSize;
+    use test_that::prelude::*;
 
     use super::*;
     use crate::pane::borders::PaneBorderAxis;
@@ -277,18 +278,18 @@ mod tests {
         )?;
         state_test_helpers::force_balanced_test_split_ratio(&mut layout)?;
 
-        pretty_assertions::assert_eq!(layout.active_pane_id()?.to_string(), "pane-3");
-        pretty_assertions::assert_eq!(
+        assert_that!(layout.active_pane_id()?.to_string(), eq("pane-3"));
+        assert_that!(
             state_test_helpers::layout_active_tab_pane_ids(&layout)?,
-            vec!["pane-1", "pane-2", "pane-3"]
+            eq(vec!["pane-1", "pane-2", "pane-3"])
         );
         let expected_regions = expected_regions
             .into_iter()
             .map(|(id, col, row, cols, rows)| (id.to_owned(), col, row, cols, rows))
             .collect::<Vec<_>>();
-        pretty_assertions::assert_eq!(
+        assert_that!(
             state_test_helpers::layout_active_tab_pane_regions(&layout, &TerminalSize::new(80, 24)?)?,
-            expected_regions
+            eq(expected_regions)
         );
         Ok(())
     }
@@ -315,9 +316,9 @@ mod tests {
         )?;
         state_test_helpers::force_balanced_test_split_ratio(&mut layout)?;
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             state_test_helpers::layout_active_tab_pane_borders(&layout, &TerminalSize::new(80, 24)?)?,
-            expected_borders
+            eq(expected_borders)
         );
         Ok(())
     }
@@ -331,20 +332,23 @@ mod tests {
         let mut layout = initial_layout.clone();
         let mut runtimes = pane_runtime_test_helpers::empty_runtimes();
 
-        assert2::assert!(
+        assert_that!(
             self::handle_split_pane_cmd(
                 PaneSplitAxis::Vertical,
                 &config,
                 &mut layout,
                 &mut runtimes,
                 &TerminalSize::new(80, 24)?,
-            )
-            .is_err()
+            ),
+            err(anything())
         );
 
-        pretty_assertions::assert_eq!(layout, initial_layout);
-        pretty_assertions::assert_eq!(runtimes.set_status(), crate::pane::runtime::PaneRuntimeSetStatus::Empty);
-        assert2::assert!(!config.paths.layout.exists());
+        assert_that!(layout, eq(initial_layout));
+        assert_that!(
+            runtimes.set_status(),
+            eq(crate::pane::runtime::PaneRuntimeSetStatus::Empty)
+        );
+        assert_that!(config.paths.layout.exists(), eq(false));
         Ok(())
     }
 }

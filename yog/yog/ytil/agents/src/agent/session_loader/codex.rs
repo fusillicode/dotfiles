@@ -86,6 +86,7 @@ fn codex_session_path_matches_requested_id(path: &Path, requested_ids: &HashSet<
 #[cfg(test)]
 mod tests {
     use tempfile::tempdir;
+    use test_that::prelude::*;
 
     use super::*;
 
@@ -104,12 +105,12 @@ mod tests {
         std::fs::write(root.join("rollout-2026-01-01-other.jsonl"), "not json\n")
             .expect("nonmatching session should be written");
 
-        assert2::assert!(
-            let Ok(sessions) = load_sessions_from_root_by_key(&root, &[SessionKey::new(Agent::Codex, "target")])
-        );
+        let sessions_result = load_sessions_from_root_by_key(&root, &[SessionKey::new(Agent::Codex, "target")]);
+        assert_that!(sessions_result.as_ref().map(|_| ()), ok(eq(())));
+        let sessions = sessions_result.expect("target Codex session should load");
 
-        pretty_assertions::assert_eq!(sessions.len(), 1);
-        pretty_assertions::assert_eq!(sessions[0].id, "target");
+        assert_that!(sessions.len(), eq(1));
+        assert_that!(sessions[0].id, eq("target"));
     }
 
     fn codex_content(id: &str, workspace: &Path) -> String {

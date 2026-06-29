@@ -409,19 +409,21 @@ mod tests {
     use skim::DisplayContext;
     use skim::MatchRange;
     use skim::SkimItem;
+    use test_that::prelude::*;
 
     #[test]
     fn test_require_single_returns_only_item() {
         let selected = vec![1];
-        assert2::assert!(let Ok(item) = super::require_single(&selected, "items"));
-        pretty_assertions::assert_eq!(*item, 1);
+        assert_that!(super::require_single(&selected, "items"), ok(points_to(eq(1))));
     }
 
     #[test]
     fn test_require_single_errors_for_multiple_items() {
         let selected = vec![1, 2];
-        assert2::assert!(let Err(err) = super::require_single(&selected, "items"));
-        assert!(err.to_string().contains("expected exactly one selection"));
+        assert_that!(
+            (super::require_single(&selected, "items")).map(|_| ()),
+            err(displays_as(contains_substring("expected exactly one selection")))
+        );
     }
 
     #[test]
@@ -429,7 +431,9 @@ mod tests {
         let normalize = |value: &str| value.split_whitespace().collect::<Vec<_>>().join(" ");
         let display = normalize("\u{1b}[31mvisible\tvalue\nnext\u{1b}[0m");
         let hidden_search = normalize("hidden\rvalue");
-        assert2::assert!(let Ok(mut display_items) = super::build_ansi_display_items(std::slice::from_ref(&display)));
+        let display_items_result = super::build_ansi_display_items(std::slice::from_ref(&display));
+        assert_that!(display_items_result.as_ref().map(|_| ()), ok(eq(())));
+        let mut display_items = display_items_result.expect("display item should build");
         let display_item = display_items.swap_remove(0);
         let match_text = format!("{} {hidden_search}", display_item.text());
 
@@ -440,14 +444,14 @@ mod tests {
             search_corpus: match_text,
         };
 
-        pretty_assertions::assert_eq!(item.output(), "3");
-        pretty_assertions::assert_eq!(item.text(), "visible value next");
-        pretty_assertions::assert_eq!(
+        assert_that!(item.output(), eq("3"));
+        assert_that!(item.text(), eq("visible value next"));
+        assert_that!(
             item.display(DisplayContext::default())
                 .spans
                 .first()
                 .map(|span| span.content.as_ref()),
-            Some("visible value next")
+            eq(Some("visible value next"))
         );
     }
 
@@ -460,9 +464,9 @@ mod tests {
             search_corpus: "visible value next hidden value".to_owned(),
         };
 
-        assert!(matches!(
+        assert_that!(
             super::clip_match_range(MatchRange::Chars(vec![20, 21]), &item),
-            MatchRange::Chars(indices) if indices.is_empty()
-        ));
+            matches_pattern!(MatchRange::Chars(empty()))
+        );
     }
 }

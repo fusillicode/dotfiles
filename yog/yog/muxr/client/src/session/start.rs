@@ -85,6 +85,7 @@ mod tests {
 
     use muxr_core::EXTERNAL_LAYOUT_ARG;
     use muxr_core::SessionPaths;
+    use test_that::prelude::*;
 
     use super::*;
 
@@ -97,8 +98,8 @@ mod tests {
 
         cleanup_stale_session_files(&paths)?;
 
-        assert2::assert!(!paths.pid.exists());
-        assert2::assert!(!paths.socket.exists());
+        assert_that!(paths.pid.exists(), eq(false));
+        assert_that!(paths.socket.exists(), eq(false));
         Ok(())
     }
 
@@ -111,7 +112,7 @@ mod tests {
 
         cleanup_stale_session_files(&paths)?;
 
-        assert2::assert!(!paths.socket.exists());
+        assert_that!(paths.socket.exists(), eq(false));
         Ok(())
     }
 
@@ -121,8 +122,8 @@ mod tests {
         let cmd = server_cmd(&session, Path::new("/tmp/custom-muxr"), None);
         let args: Vec<_> = cmd.get_args().collect();
 
-        pretty_assertions::assert_eq!(cmd.get_program(), OsStr::new("/tmp/custom-muxr"));
-        pretty_assertions::assert_eq!(args.as_slice(), [OsStr::new("work")]);
+        assert_that!(cmd.get_program(), eq(OsStr::new("/tmp/custom-muxr")));
+        assert_that!(args.as_slice(), eq([OsStr::new("work")]));
         Ok(())
     }
 
@@ -133,13 +134,13 @@ mod tests {
         let cmd = server_cmd(&session, Path::new("/tmp/custom-muxr"), Some(layout));
         let args: Vec<_> = cmd.get_args().collect();
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             args.as_slice(),
-            [
+            eq([
                 OsStr::new("work"),
                 OsStr::new(EXTERNAL_LAYOUT_ARG),
                 OsStr::new("../.config/muxr/layouts/work.json")
-            ]
+            ])
         );
         Ok(())
     }
@@ -151,11 +152,10 @@ mod tests {
         let missing_runner = tempdir.path().join("muxr-server");
         let (_, paths) = self::session_paths(tempdir.path(), "work")?;
 
-        let Err(error) = spawn_server_process(&session, &paths, &missing_runner, None) else {
-            return Err(report!("expected missing runner error"));
-        };
-
-        assert2::assert!(error.to_string().contains("missing muxr server runner"));
+        assert_that!(
+            spawn_server_process(&session, &paths, &missing_runner, None).map(|_| ()),
+            err(displays_as(contains_substring("missing muxr server runner")))
+        );
         Ok(())
     }
 

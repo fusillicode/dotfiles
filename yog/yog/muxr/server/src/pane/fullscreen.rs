@@ -85,6 +85,7 @@ pub fn handle_toggle_active_pane_cmd_client(state: &mut ClientSessionState<'_>) 
 #[cfg(test)]
 mod tests {
     use muxr_config::MuxrConfig;
+    use test_that::prelude::*;
 
     use super::*;
     use crate::pane::layout::PaneArea;
@@ -106,18 +107,18 @@ mod tests {
         fullscreen.toggle_active_pane(&layout)?;
         let pane_layout = fullscreen.pane_layout(&layout, &TerminalSize::new(80, 24)?)?;
 
-        pretty_assertions::assert_eq!(fullscreen.visible_pane_id(&layout)?, Some(pane_id));
-        pretty_assertions::assert_eq!(pane_layout.borders(), &[]);
-        pretty_assertions::assert_eq!(
+        assert_that!(fullscreen.visible_pane_id(&layout)?, eq(Some(pane_id)));
+        assert_that!(pane_layout.borders(), eq(&[]));
+        assert_that!(
             pane_layout.regions(),
-            &[PaneRegion {
+            eq(&[PaneRegion {
                 area: PaneArea {
                     origin: PanePosition { row: 0, col: 0 },
                     size: PaneSize { rows: 24, cols: 80 },
                 },
                 focus_seq: 2,
                 id: pane_id,
-            }]
+            }])
         );
         Ok(())
     }
@@ -130,7 +131,7 @@ mod tests {
         fullscreen.toggle_active_pane(&layout)?;
         fullscreen.toggle_active_pane(&layout)?;
 
-        pretty_assertions::assert_eq!(fullscreen.visible_pane_id(&layout)?, None);
+        assert_that!(fullscreen.visible_pane_id(&layout)?, eq(None));
         Ok(())
     }
 
@@ -150,7 +151,7 @@ mod tests {
             crate::pane::focus::PaneFocusDirection::Left,
         )?;
 
-        pretty_assertions::assert_eq!(fullscreen.visible_pane_id(&layout)?, None);
+        assert_that!(fullscreen.visible_pane_id(&layout)?, eq(None));
         Ok(())
     }
 
@@ -177,11 +178,11 @@ mod tests {
         layout.focus_tab(tab_a)?;
         let restored_fullscreen_layout = fullscreen.pane_layout(&layout, &TerminalSize::new(80, 24)?)?;
 
-        pretty_assertions::assert_eq!(fullscreen.visible_pane_id(&layout)?, Some(pane_a));
-        pretty_assertions::assert_eq!(focused_tab_layout.regions().len(), 2);
-        pretty_assertions::assert_eq!(focused_tab_layout.borders().len(), 1);
-        pretty_assertions::assert_eq!(restored_fullscreen_layout.regions()[0].id, pane_a);
-        pretty_assertions::assert_eq!(restored_fullscreen_layout.borders(), &[]);
+        assert_that!(fullscreen.visible_pane_id(&layout)?, eq(Some(pane_a)));
+        assert_that!(focused_tab_layout.regions().len(), eq(2));
+        assert_that!(focused_tab_layout.borders().len(), eq(1));
+        assert_that!(restored_fullscreen_layout.regions()[0].id, eq(pane_a));
+        assert_that!(restored_fullscreen_layout.borders(), eq(&[]));
         Ok(())
     }
 
@@ -196,8 +197,8 @@ mod tests {
 
         let pane_layout = PaneFullscreen::default().pane_layout(&layout, &TerminalSize::new(80, 24)?)?;
 
-        pretty_assertions::assert_eq!(pane_layout.regions().len(), 2);
-        pretty_assertions::assert_eq!(pane_layout.borders().len(), 1);
+        assert_that!(pane_layout.regions().len(), eq(2));
+        assert_that!(pane_layout.borders().len(), eq(1));
         Ok(())
     }
 
@@ -216,11 +217,14 @@ mod tests {
         layout.create_tab(crate::state::test_helpers::metadata("sh", 3))?;
         fullscreen.toggle_active_pane(&layout)?;
 
-        pretty_assertions::assert_eq!(fullscreen.clear_active_tab(&layout), PaneFullscreenChange::Cleared);
-        pretty_assertions::assert_eq!(fullscreen.clear_active_tab(&layout), PaneFullscreenChange::Unchanged);
+        assert_that!(fullscreen.clear_active_tab(&layout), eq(PaneFullscreenChange::Cleared));
+        assert_that!(
+            fullscreen.clear_active_tab(&layout),
+            eq(PaneFullscreenChange::Unchanged)
+        );
         layout.focus_tab(tab_a)?;
 
-        pretty_assertions::assert_eq!(fullscreen.visible_pane_id(&layout)?, Some(pane_a));
+        assert_that!(fullscreen.visible_pane_id(&layout)?, eq(Some(pane_a)));
         Ok(())
     }
 
@@ -237,22 +241,22 @@ mod tests {
         fullscreen.toggle_active_pane(&layout)?;
         let terminal_size = TerminalSize::new(80, 24)?;
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             crate::screen_render::pane_ids_visible_render_dmg(&layout, &fullscreen, &terminal_size, &[hidden_pane])?,
-            ClientRenderDmg::Clean
+            eq(ClientRenderDmg::Clean)
         );
-        pretty_assertions::assert_eq!(
+        assert_that!(
             crate::screen_render::pane_ids_visible_render_dmg(&layout, &fullscreen, &terminal_size, &[visible_pane])?,
-            ClientRenderDmg::Dirty
+            eq(ClientRenderDmg::Dirty)
         );
-        pretty_assertions::assert_eq!(
+        assert_that!(
             crate::screen_render::pane_ids_visible_render_dmg(
                 &layout,
                 &fullscreen,
                 &terminal_size,
                 &[hidden_pane, visible_pane],
             )?,
-            ClientRenderDmg::Dirty
+            eq(ClientRenderDmg::Dirty)
         );
         Ok(())
     }

@@ -20,8 +20,8 @@ ytil_sys = { workspace = true }
 ytil_tui = { workspace = true }
 
 [dev-dependencies]
-assert2 = { workspace = true }
 rstest = { workspace = true }
+test-that = { workspace = true }
 
 [lints]
 workspace = true

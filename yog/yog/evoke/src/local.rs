@@ -130,6 +130,7 @@ mod tests {
     use std::path::PathBuf;
 
     use rstest::rstest;
+    use test_that::prelude::*;
 
     use crate::local::drop_element;
     use crate::local::remove_last_n_dirs;
@@ -137,22 +138,22 @@ mod tests {
     #[test]
     fn test_drop_element_returns_true_and_removes_the_element_from_the_vec() {
         let mut input = vec![42, 7];
-        assert!(drop_element(&mut input, &7));
+        assert_that!(drop_element(&mut input, &7), eq(true));
         assert_eq!(input, vec![42]);
     }
 
     #[test]
     fn test_drop_element_returns_false_and_does_nothing_to_a_non_empty_vec() {
         let mut input = vec![42, 7];
-        assert!(!drop_element(&mut input, &3));
+        assert_that!(drop_element(&mut input, &3), eq(false));
         assert_eq!(input, vec![42, 7]);
     }
 
     #[test]
     fn test_drop_element_returns_false_and_does_nothing_to_an_empty_vec() {
         let mut input: Vec<usize> = vec![];
-        assert!(!drop_element(&mut input, &3));
-        assert!(input.is_empty());
+        assert_that!(drop_element(&mut input, &3), eq(false));
+        assert_that!(input, empty());
     }
 
     #[rstest]
@@ -167,6 +168,6 @@ mod tests {
         #[case] expected: PathBuf,
     ) {
         remove_last_n_dirs(&mut initial, n);
-        pretty_assertions::assert_eq!(initial, expected);
+        assert_that!(initial, eq(expected));
     }
 }

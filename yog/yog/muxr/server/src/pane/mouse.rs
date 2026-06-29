@@ -292,6 +292,7 @@ mod tests {
     use muxr_core::ClientMousePosition;
     use muxr_core::PaneMouseMode;
     use rstest::rstest;
+    use test_that::prelude::*;
 
     use super::*;
     use crate::terminal::TerminalMouseProtocol;
@@ -308,7 +309,7 @@ mod tests {
         };
         let region = PaneRegionSnapshot::new(muxr_core::PaneId::new(1)?, 5, 3, 10, 4, PaneMouseMode::ButtonMotion, 0)?;
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             encode_pty_mouse_event(
                 event,
                 &region,
@@ -317,7 +318,7 @@ mod tests {
                     encoding: TerminalMouseProtocolEncoding::Sgr
                 },
             )?,
-            Some(b"\x1b[<0;3;2M".to_vec()),
+            eq(Some(b"\x1b[<0;3;2M".to_vec()))
         );
         Ok(())
     }
@@ -331,7 +332,7 @@ mod tests {
         };
         let region = PaneRegionSnapshot::new(muxr_core::PaneId::new(1)?, 5, 3, 10, 4, PaneMouseMode::ButtonMotion, 0)?;
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             encode_pty_mouse_event(
                 event,
                 &region,
@@ -340,7 +341,7 @@ mod tests {
                     encoding: TerminalMouseProtocolEncoding::Sgr
                 },
             )?,
-            None,
+            eq(None)
         );
         Ok(())
     }
@@ -354,7 +355,7 @@ mod tests {
         };
         let region = PaneRegionSnapshot::new(muxr_core::PaneId::new(1)?, 5, 3, 10, 4, PaneMouseMode::ButtonMotion, 0)?;
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             encode_pty_mouse_event(
                 event,
                 &region,
@@ -363,7 +364,7 @@ mod tests {
                     encoding: TerminalMouseProtocolEncoding::Sgr
                 },
             )?,
-            None,
+            eq(None)
         );
         Ok(())
     }
@@ -377,7 +378,7 @@ mod tests {
         };
         let region = PaneRegionSnapshot::new(muxr_core::PaneId::new(1)?, 5, 3, 10, 4, PaneMouseMode::AnyMotion, 0)?;
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             encode_pty_mouse_event(
                 event,
                 &region,
@@ -386,7 +387,7 @@ mod tests {
                     encoding: TerminalMouseProtocolEncoding::Sgr
                 },
             )?,
-            Some(b"\x1b[<35;3;2M".to_vec()),
+            eq(Some(b"\x1b[<35;3;2M".to_vec()))
         );
         Ok(())
     }
@@ -400,7 +401,7 @@ mod tests {
         };
         let region = PaneRegionSnapshot::new(muxr_core::PaneId::new(1)?, 5, 3, 10, 4, PaneMouseMode::ButtonMotion, 0)?;
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             encode_pty_mouse_event(
                 event,
                 &region,
@@ -409,7 +410,7 @@ mod tests {
                     encoding: TerminalMouseProtocolEncoding::Utf8
                 },
             )?,
-            Some(b"\x1b[M #\"".to_vec()),
+            eq(Some(b"\x1b[M #\"".to_vec()))
         );
         Ok(())
     }
@@ -429,12 +430,12 @@ mod tests {
             Some(protocol),
         );
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             PaneMouseAction::from_event(event, mode),
-            PaneMouseAction::ForwardToPty {
+            eq(PaneMouseAction::ForwardToPty {
                 focus: PaneMouseFocus::PreserveFocus,
                 protocol,
-            },
+            })
         );
     }
 
@@ -447,15 +448,15 @@ mod tests {
     ) {
         let event = self::mouse_press(button);
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             PaneMouseAction::from_event(
                 event,
                 self::application_mode(TerminalScreenMode::Alternate, TerminalCursorKeyMode::Application, None),
             ),
-            PaneMouseAction::FauxScrollPty {
+            eq(PaneMouseAction::FauxScrollPty {
                 cursor_key_mode: TerminalCursorKeyMode::Application,
                 direction,
-            },
+            })
         );
     }
 
@@ -468,12 +469,12 @@ mod tests {
     ) {
         let event = self::mouse_press(button);
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             PaneMouseAction::from_event(
                 event,
                 self::application_mode(TerminalScreenMode::Normal, TerminalCursorKeyMode::Normal, None),
             ),
-            PaneMouseAction::ScrollHistory { direction },
+            eq(PaneMouseAction::ScrollHistory { direction })
         );
     }
 
@@ -490,12 +491,12 @@ mod tests {
             Some(protocol),
         );
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             PaneMouseAction::from_event(event, mode),
-            PaneMouseAction::ForwardToPty {
+            eq(PaneMouseAction::ForwardToPty {
                 focus: PaneMouseFocus::FocusPointedPane,
                 protocol,
-            },
+            })
         );
     }
 
@@ -503,12 +504,12 @@ mod tests {
     fn test_resolve_pane_mouse_action_when_click_is_not_reported_focuses_pane() {
         let event = self::mouse_press(0);
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             PaneMouseAction::from_event(
                 event,
                 self::application_mode(TerminalScreenMode::Normal, TerminalCursorKeyMode::Normal, None),
             ),
-            PaneMouseAction::FocusPane,
+            eq(PaneMouseAction::FocusPane)
         );
     }
 
@@ -516,12 +517,12 @@ mod tests {
     fn test_resolve_pane_mouse_action_when_motion_is_not_reported_has_no_action() {
         let event = self::mouse_press(32);
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             PaneMouseAction::from_event(
                 event,
                 self::application_mode(TerminalScreenMode::Normal, TerminalCursorKeyMode::Normal, None),
             ),
-            PaneMouseAction::NoAction,
+            eq(PaneMouseAction::NoAction)
         );
     }
 
@@ -538,12 +539,12 @@ mod tests {
             Some(protocol),
         );
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             PaneMouseAction::from_event(event, mode),
-            PaneMouseAction::ForwardToPty {
+            eq(PaneMouseAction::ForwardToPty {
                 focus: PaneMouseFocus::PreserveFocus,
                 protocol,
-            },
+            })
         );
     }
 

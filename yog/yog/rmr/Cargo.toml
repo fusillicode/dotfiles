@@ -16,10 +16,9 @@ rootcause = { workspace = true }
 ytil_sys = { workspace = true }
 
 [dev-dependencies]
-assert2 = { workspace = true }
-pretty_assertions = { workspace = true }
 rstest = { workspace = true }
 tempfile = "3.25"
+test-that = { workspace = true }
 
 [lints]
 workspace = true

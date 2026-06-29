@@ -621,6 +621,7 @@ mod tests {
     use muxr_core::PaneId;
     use muxr_core::TerminalSize;
     use rootcause::report;
+    use test_that::prelude::*;
 
     use super::*;
     use crate::pane::layout::PaneArea;
@@ -715,7 +716,7 @@ mod tests {
             std::slice::from_ref(&active_region),
         )?;
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             border.ownership(
                 PanePosition {
                     row: cell_row,
@@ -723,7 +724,7 @@ mod tests {
                 },
                 active_pane
             ),
-            BorderCellOwner::Owned
+            eq(BorderCellOwner::Owned)
         );
         Ok(())
     }
@@ -752,7 +753,7 @@ mod tests {
             std::slice::from_ref(&active_region),
         )?;
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             border.ownership(
                 PanePosition {
                     row: cell_row,
@@ -760,7 +761,7 @@ mod tests {
                 },
                 active_pane
             ),
-            BorderCellOwner::Unowned
+            eq(BorderCellOwner::Unowned)
         );
         Ok(())
     }
@@ -811,10 +812,10 @@ mod tests {
                 .get(usize::from(row))
                 .and_then(|row| row.get(usize::from(col)))
                 .ok_or_else(|| report!("expected focused border cell").attach(format!("row={row} col={col}")))?;
-            pretty_assertions::assert_eq!(cell.text(), glyph);
-            pretty_assertions::assert_eq!(
+            assert_that!(cell.text(), eq(glyph));
+            assert_that!(
                 self::border_cell_at(&border_cells, row, col)?.visual,
-                BorderVisual::Focused
+                eq(BorderVisual::Focused)
             );
         }
         Ok(())
@@ -858,10 +859,13 @@ mod tests {
             .and_then(|row| row.get(1))
             .ok_or_else(|| report!("expected junction border cell"))?;
 
-        pretty_assertions::assert_eq!(vertical_cell.text(), "│");
-        pretty_assertions::assert_eq!(horizontal_cell.text(), "─");
-        pretty_assertions::assert_eq!(junction_cell.text(), "┼");
-        pretty_assertions::assert_eq!(self::border_cell_at(&border_cells, 0, 1)?.visual, BorderVisual::Default);
+        assert_that!(vertical_cell.text(), eq("│"));
+        assert_that!(horizontal_cell.text(), eq("─"));
+        assert_that!(junction_cell.text(), eq("┼"));
+        assert_that!(
+            self::border_cell_at(&border_cells, 0, 1)?.visual,
+            eq(BorderVisual::Default)
+        );
         Ok(())
     }
 
@@ -899,8 +903,8 @@ mod tests {
             .and_then(|row| row.get(1))
             .ok_or_else(|| report!("expected active border cell"))?;
 
-        pretty_assertions::assert_eq!(border_cell.text(), "│");
-        pretty_assertions::assert_eq!(self::border_cell_at(&border_cells, 0, 1)?.visual, expected_visual);
+        assert_that!(border_cell.text(), eq("│"));
+        assert_that!(self::border_cell_at(&border_cells, 0, 1)?.visual, eq(expected_visual));
         Ok(())
     }
 
@@ -939,10 +943,10 @@ mod tests {
             .and_then(|row| row.get(1))
             .ok_or_else(|| report!("expected attention border cell"))?;
 
-        pretty_assertions::assert_eq!(border_cell.text(), "│");
-        pretty_assertions::assert_eq!(
+        assert_that!(border_cell.text(), eq("│"));
+        assert_that!(
             self::border_cell_at(&border_cells, 0, 1)?.visual,
-            BorderVisual::Attention
+            eq(BorderVisual::Attention)
         );
         Ok(())
     }
@@ -988,8 +992,8 @@ mod tests {
             .and_then(|row| row.get(1))
             .ok_or_else(|| report!("expected shared active attention border cell"))?;
 
-        pretty_assertions::assert_eq!(border_cell.text(), "│");
-        pretty_assertions::assert_eq!(self::border_cell_at(&border_cells, 0, 1)?.visual, expected_visual);
+        assert_that!(border_cell.text(), eq("│"));
+        assert_that!(self::border_cell_at(&border_cells, 0, 1)?.visual, eq(expected_visual));
         Ok(())
     }
 
@@ -1032,8 +1036,8 @@ mod tests {
             .and_then(|row| row.get(1))
             .ok_or_else(|| report!("expected active attention border cell"))?;
 
-        pretty_assertions::assert_eq!(border_cell.text(), "│");
-        pretty_assertions::assert_eq!(self::border_cell_at(&border_cells, 0, 1)?.visual, expected_visual);
+        assert_that!(border_cell.text(), eq("│"));
+        assert_that!(self::border_cell_at(&border_cells, 0, 1)?.visual, eq(expected_visual));
         Ok(())
     }
 
@@ -1075,8 +1079,8 @@ mod tests {
             .and_then(|row| row.first())
             .ok_or_else(|| report!("expected active junction border cell"))?;
 
-        pretty_assertions::assert_eq!(border_cell.text(), "┼");
-        pretty_assertions::assert_eq!(self::border_cell_at(&border_cells, 0, 0)?.visual, expected_visual);
+        assert_that!(border_cell.text(), eq("┼"));
+        assert_that!(self::border_cell_at(&border_cells, 0, 0)?.visual, eq(expected_visual));
         Ok(())
     }
 
@@ -1124,12 +1128,15 @@ mod tests {
             .and_then(|row| row.get(1))
             .ok_or_else(|| report!("expected active vertical border segment"))?;
 
-        pretty_assertions::assert_eq!(top_segment.text(), "│");
-        pretty_assertions::assert_eq!(corner_segment.text(), "│");
-        pretty_assertions::assert_eq!(active_segment.text(), "│");
-        pretty_assertions::assert_eq!(self::border_cell_at(&border_cells, 0, 1)?.visual, BorderVisual::Default);
-        pretty_assertions::assert_eq!(self::border_cell_at(&border_cells, 1, 1)?.visual, expected_visual);
-        pretty_assertions::assert_eq!(self::border_cell_at(&border_cells, 2, 1)?.visual, expected_visual);
+        assert_that!(top_segment.text(), eq("│"));
+        assert_that!(corner_segment.text(), eq("│"));
+        assert_that!(active_segment.text(), eq("│"));
+        assert_that!(
+            self::border_cell_at(&border_cells, 0, 1)?.visual,
+            eq(BorderVisual::Default)
+        );
+        assert_that!(self::border_cell_at(&border_cells, 1, 1)?.visual, eq(expected_visual));
+        assert_that!(self::border_cell_at(&border_cells, 2, 1)?.visual, eq(expected_visual));
         Ok(())
     }
 

@@ -193,6 +193,7 @@ mod tests {
     use std::fs;
 
     use rstest::rstest;
+    use test_that::prelude::*;
 
     use super::*;
 
@@ -219,14 +220,14 @@ mod tests {
                 )
             })
             .collect::<Vec<_>>();
-        pretty_assertions::assert_eq!(
+        assert_that!(
             sessions
                 .iter()
                 .map(|session| session.name.to_string())
                 .collect::<Vec<_>>(),
-            vec!["newer", "older"]
+            eq(vec!["newer", "older"])
         );
-        pretty_assertions::assert_eq!(rendered, expected);
+        assert_that!(rendered, eq(expected));
         Ok(())
     }
 
@@ -245,9 +246,9 @@ mod tests {
             state,
         };
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             session.display_text(),
-            format!("{expected} {}", self::created_at_text(Some(created_at)))
+            eq(format!("{expected} {}", self::created_at_text(Some(created_at))))
         );
         Ok(())
     }
@@ -260,9 +261,9 @@ mod tests {
             state: SessionState::Stopped,
         };
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             session.display_text(),
-            format!("work [{}] unknown", "stopped".yellow().dim())
+            eq(format!("work [{}] unknown", "stopped".yellow().dim()))
         );
         Ok(())
     }

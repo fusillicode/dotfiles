@@ -267,6 +267,7 @@ struct CodexTimestampedLine {
 #[cfg(test)]
 mod tests {
     use tempfile::tempdir;
+    use test_that::prelude::*;
 
     use super::*;
 
@@ -281,21 +282,23 @@ mod tests {
             workspace.display()
         );
 
-        assert2::assert!(let Ok(codex_session) = parse(
+        let codex_session_result = parse(
             &content,
             "rollout-2026-03-20T07-30-20-019d09f0-0d96-7e23-94cd-1f6aad7cdc09",
-        ));
+        );
+        assert_that!(codex_session_result.as_ref().map(|_| ()), ok(eq(())));
+        let codex_session = codex_session_result.expect("Codex session should parse");
         let session = codex_session.into_session(workspace.join("session.jsonl"));
-        pretty_assertions::assert_eq!(session.agent, Agent::Codex);
-        pretty_assertions::assert_eq!(
+        assert_that!(session.agent, eq(Agent::Codex));
+        assert_that!(
             session.name,
-            "rollout-2026-03-20T07-30-20-019d09f0-0d96-7e23-94cd-1f6aad7cdc09"
+            eq("rollout-2026-03-20T07-30-20-019d09f0-0d96-7e23-94cd-1f6aad7cdc09")
         );
-        pretty_assertions::assert_eq!(
+        assert_that!(
             session.search_text,
-            "rollout-2026-03-20T07-30-20-019d09f0-0d96-7e23-94cd-1f6aad7cdc09"
+            eq("rollout-2026-03-20T07-30-20-019d09f0-0d96-7e23-94cd-1f6aad7cdc09")
         );
-        pretty_assertions::assert_eq!(session.workspace, workspace);
+        assert_that!(session.workspace, eq(workspace));
     }
 
     #[test]
@@ -307,17 +310,19 @@ mod tests {
             "{\"timestamp\":\"2026-03-20T06:33:20.312Z\",\"type\":\"response_item\",\"payload\":{\"type\":\"reasoning\",\"text\":\"hidden\"}}\n"
         );
 
-        assert2::assert!(let Ok(session) = parse(content, "fallback-name"));
-        pretty_assertions::assert_eq!(session.name, "why can't I jump with rust-analyzer to these types?");
-        pretty_assertions::assert_eq!(
+        let session_result = parse(content, "fallback-name");
+        assert_that!(session_result.as_ref().map(|_| ()), ok(eq(())));
+        let session = session_result.expect("Codex session should parse");
+        assert_that!(session.name, eq("why can't I jump with rust-analyzer to these types?"));
+        assert_that!(
             session.search_text,
-            "why can't I jump with rust-analyzer to these types? Because that symbol is re-exported."
+            eq("why can't I jump with rust-analyzer to these types? Because that symbol is re-exported.")
         );
-        pretty_assertions::assert_eq!(
+        assert_that!(
             session.updated_at,
-            chrono::DateTime::parse_from_rfc3339("2026-03-20T06:33:20.312Z")
+            eq(chrono::DateTime::parse_from_rfc3339("2026-03-20T06:33:20.312Z")
                 .unwrap()
-                .to_utc()
+                .to_utc())
         );
     }
 
@@ -329,8 +334,13 @@ mod tests {
             "{\"timestamp\":\"2026-03-20T06:32:20.312Z\",\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"output_text\",\"text\":\"should not index\"}]}}\n"
         );
 
-        assert2::assert!(let Ok(session) = parse(content, "fallback-name"));
-        pretty_assertions::assert_eq!(session.search_text, "first user msg");
+        assert_that!(
+            parse(content, "fallback-name"),
+            ok(result_of!(
+                |session: &CodexSession| session.search_text.as_str(),
+                eq("first user msg")
+            ))
+        );
     }
 
     #[test]
@@ -340,15 +350,25 @@ mod tests {
             "{\"timestamp\":\"2026-03-20T06:31:20.312Z\",\"type\":\"event_msg\",\"payload\":{\"type\":\"user_message\",\"message\":\"The following is the Codex agent history\"}}\n"
         );
 
-        assert2::assert!(let Ok(session) = parse(content, "fallback-name"));
-        assert!(session.is_subagent);
+        assert_that!(
+            parse(content, "fallback-name"),
+            ok(result_of!(
+                |session: &CodexSession| session.is_subagent,
+                predicate(|is_subagent: &bool| *is_subagent)
+                    .with_description("is marked as a subagent", "is not marked as a subagent")
+            ))
+        );
     }
 
     #[test]
     fn test_parse_codex_session_with_invalid_scanned_line_returns_error() {
         let content = "{\"timestamp\":\"not-a-date\",\"type\":\"session_meta\",\"payload\":{\"id\":\"019d09f0-0d96-7e23-94cd-1f6aad7cdc09\",\"timestamp\":\"2026-03-20T06:30:20.312Z\",\"cwd\":\"/tmp/workspace\"}}\n";
 
-        assert2::assert!(let Err(err) = parse(content, "fallback-name"));
-        assert!(err.to_string().contains("failed to parse Codex session json line"));
+        assert_that!(
+            parse(content, "fallback-name").map(|_| ()),
+            err(displays_as(contains_substring(
+                "failed to parse Codex session json line"
+            )))
+        );
     }
 }

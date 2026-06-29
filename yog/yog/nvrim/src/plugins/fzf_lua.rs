@@ -30,6 +30,7 @@ fn parse_line_query((query, last_query): (Option<String>, Option<String>)) -> Op
 #[cfg(test)]
 mod tests {
     use rstest::rstest;
+    use test_that::prelude::*;
 
     use super::*;
 
@@ -59,6 +60,6 @@ mod tests {
     ) {
         let actual = parse_line_query((query.map(ToOwned::to_owned), last_query.map(ToOwned::to_owned)));
 
-        pretty_assertions::assert_eq!(actual, expected);
+        assert_that!(actual, eq(expected));
     }
 }

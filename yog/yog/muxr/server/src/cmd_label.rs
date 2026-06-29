@@ -137,6 +137,7 @@ fn cmd_title_label(title: &str) -> String {
 #[cfg(test)]
 mod tests {
     use rstest::rstest;
+    use test_that::prelude::*;
 
     use super::*;
 
@@ -160,20 +161,20 @@ mod tests {
         #[case] cwd: &str,
         #[case] expected: Option<&str>,
     ) {
-        pretty_assertions::assert_eq!(
+        assert_that!(
             TerminalTitle::classify_with_home(Some(title), cwd, Some("/foo/bar")).cmd_label,
-            expected.map(ToOwned::to_owned)
+            eq(expected.map(ToOwned::to_owned))
         );
     }
 
     #[test]
     fn test_classify_terminal_title_when_title_is_cwd_basename_keeps_known_cwd() {
-        pretty_assertions::assert_eq!(
+        assert_that!(
             TerminalTitle::classify_with_home(Some("project"), "/baz/project", Some("/foo/bar")),
-            TerminalTitle {
+            eq(TerminalTitle {
                 cmd_label: None,
                 cwd: Some("/baz/project".to_owned()),
-            },
+            })
         );
     }
 
@@ -181,12 +182,12 @@ mod tests {
     fn test_classify_terminal_title_when_title_is_home_cwd_updates_cwd() -> rootcause::Result<()> {
         let home = tempfile::Builder::new().prefix("muxr-home.").tempdir()?;
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             TerminalTitle::classify_with_home(Some("~"), "/old/project", Some(home.path().to_string_lossy().as_ref())),
-            TerminalTitle {
+            eq(TerminalTitle {
                 cmd_label: None,
                 cwd: Some("~".to_owned()),
-            },
+            })
         );
         Ok(())
     }
@@ -196,16 +197,16 @@ mod tests {
         let home = tempfile::Builder::new().prefix("muxr-home.").tempdir()?;
         std::fs::create_dir(home.path().join("My Project"))?;
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             TerminalTitle::classify_with_home(
                 Some("~/My Project"),
                 "/old/project",
                 Some(home.path().to_string_lossy().as_ref())
             ),
-            TerminalTitle {
+            eq(TerminalTitle {
                 cmd_label: None,
                 cwd: Some("~/My Project".to_owned()),
-            },
+            })
         );
         Ok(())
     }
@@ -216,16 +217,16 @@ mod tests {
         std::fs::create_dir(home.path().join("bin"))?;
         std::fs::write(home.path().join("bin").join("tool"), b"")?;
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             TerminalTitle::classify_with_home(
                 Some("~/bin/tool"),
                 "/old/project",
                 Some(home.path().to_string_lossy().as_ref())
             ),
-            TerminalTitle {
+            eq(TerminalTitle {
                 cmd_label: Some("tool".to_owned()),
                 cwd: None,
-            },
+            })
         );
         Ok(())
     }

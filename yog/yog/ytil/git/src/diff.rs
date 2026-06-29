@@ -113,6 +113,7 @@ fn extract_new_lnum_value(lnum_line: &str) -> rootcause::Result<usize> {
 #[cfg(test)]
 mod tests {
     use rstest::rstest;
+    use test_that::prelude::*;
 
     use super::*;
 
@@ -143,8 +144,7 @@ mod tests {
         vec![("src/main.rs", 10), ("src/main.rs", 50), ("src/lib.rs", 20), ("src/lib.rs", 60)]
     )]
     fn test_get_hunks_success(#[case] input: &str, #[case] expected: Vec<(&str, usize)>) {
-        assert2::assert!(let Ok(result) = get_hunks(input));
-        pretty_assertions::assert_eq!(result, expected);
+        assert_that!(get_hunks(input), ok(eq(expected)));
     }
 
     #[rstest]
@@ -154,8 +154,10 @@ mod tests {
         "error parsing new_lnum value"
     )]
     fn test_get_hunks_error(#[case] input: &str, #[case] expected_error_contains: &str) {
-        assert2::assert!(let Err(err) = get_hunks(input));
-        assert!(err.to_string().contains(expected_error_contains));
+        assert_that!(
+            (get_hunks(input)).map(|_| ()),
+            err(displays_as(contains_substring(expected_error_contains)))
+        );
     }
 
     #[rstest]
@@ -167,8 +169,7 @@ mod tests {
         #[case] input: &str,
         #[case] expected: usize,
     ) {
-        assert2::assert!(let Ok(result) = extract_new_lnum_value(input));
-        pretty_assertions::assert_eq!(result, expected);
+        assert_that!(extract_new_lnum_value(input), ok(eq(expected)));
     }
 
     #[rstest]
@@ -179,7 +180,9 @@ mod tests {
         #[case] input: &str,
         #[case] expected_error_contains: &str,
     ) {
-        assert2::assert!(let Err(err) = extract_new_lnum_value(input));
-        assert!(err.to_string().contains(expected_error_contains));
+        assert_that!(
+            (extract_new_lnum_value(input)).map(|_| ()),
+            err(displays_as(contains_substring(expected_error_contains)))
+        );
     }
 }

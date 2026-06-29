@@ -47,27 +47,31 @@ pub fn get_relative_path_to_repo(path: &Path, repo: &Repository) -> rootcause::R
 
 #[cfg(test)]
 mod tests {
+    use test_that::prelude::*;
+
     use super::*;
 
     #[test]
     fn test_discover_when_path_is_inside_repo_returns_repo() {
         let (_temp_dir, repo) = crate::tests::init_test_repo(None);
         let workdir = repo.workdir().unwrap();
-        assert2::assert!(let Ok(_repo) = discover(workdir));
+        assert_that!(discover(workdir).map(|_| ()), ok(eq(())));
     }
 
     #[test]
     fn test_discover_when_path_is_not_a_repo_returns_error() {
         let temp_dir = tempfile::TempDir::new().unwrap();
-        assert2::assert!(let Err(err) = discover(temp_dir.path()));
-        assert!(err.to_string().contains("error discovering repo"));
+        assert_that!(
+            discover(temp_dir.path()).map_err(|err| err.to_string()).map(|_| ()),
+            err(contains_substring("error discovering repo"))
+        );
     }
 
     #[test]
     fn test_get_root_returns_workdir() {
         let (_temp_dir, repo) = crate::tests::init_test_repo(None);
         let root = get_root(&repo);
-        pretty_assertions::assert_eq!(root, repo.workdir().unwrap());
+        assert_that!(root, eq(repo.workdir().unwrap()));
     }
 
     #[test]
@@ -79,7 +83,7 @@ mod tests {
 
         let wt_repo = Repository::open(&wt_dir).unwrap();
         let root = get_root(&wt_repo);
-        pretty_assertions::assert_eq!(root, wt_dir.canonicalize().unwrap());
+        assert_that!(root, eq(wt_dir.canonicalize().unwrap()));
     }
 
     #[test]
@@ -87,14 +91,16 @@ mod tests {
         let (_temp_dir, repo) = crate::tests::init_test_repo(None);
         let workdir = repo.workdir().unwrap();
         let file_path = workdir.join("src").join("main.rs");
-        assert2::assert!(let Ok(rel) = get_relative_path_to_repo(&file_path, &repo));
-        pretty_assertions::assert_eq!(rel, PathBuf::from("/src/main.rs"));
+        assert_that!(
+            get_relative_path_to_repo(&file_path, &repo),
+            ok(eq(PathBuf::from("/src/main.rs")))
+        );
     }
 
     #[test]
     fn test_get_relative_path_to_repo_when_path_outside_repo_returns_error() {
         let (_temp_dir, repo) = crate::tests::init_test_repo(None);
         let outside_path = Path::new("/completely/different/path");
-        assert2::assert!(let Err(_err) = get_relative_path_to_repo(outside_path, &repo));
+        assert_that!(get_relative_path_to_repo(outside_path, &repo), err(anything()));
     }
 }

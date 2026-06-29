@@ -292,6 +292,8 @@ pub fn find_matching_recursively_in_dir(
 
 #[cfg(test)]
 mod tests {
+    use test_that::prelude::*;
+
     use super::*;
 
     #[test]
@@ -303,7 +305,7 @@ mod tests {
 
         let res = atomic_cp(&src, &dst);
 
-        assert2::assert!(let Ok(()) = res);
+        assert_that!(res, ok(eq(())));
         assert_eq!(std::fs::read(&dst).unwrap(), b"hello");
     }
 
@@ -315,9 +317,7 @@ mod tests {
 
         let res = atomic_cp(&src, &dst);
 
-        assert2::assert!(let Err(err) = res);
-        // Error now comes from std::fs::copy wrapped with context
-        assert!(err.to_string().contains("error copying file to temp"));
+        assert_that!(res, err(displays_as(contains_substring("error copying file to temp"))));
     }
 
     #[test]
@@ -334,7 +334,8 @@ mod tests {
             |e| e.path().extension().and_then(|s| s.to_str()) == Some("txt"),
             |_| false,
         );
-        assert2::assert!(let Ok(mut found) = res);
+        assert_that!(res.as_ref().map(|_| ()), ok(eq(())));
+        let mut found = res.expect("recursive file search should succeed");
         found.sort();
 
         let mut expected = vec![dir.path().join("c.txt"), dir.path().join("a/b/d.txt")];
@@ -357,8 +358,7 @@ mod tests {
                 |_| false,
             );
 
-            assert2::assert!(let Ok(found) = res);
-            pretty_assertions::assert_eq!(found, vec![dir.path().join("c.txt")]);
+            assert_that!(res, ok(eq(vec![dir.path().join("c.txt")])));
         }
     }
 }

@@ -15,7 +15,7 @@ use muxr_core::SessionName;
 use muxr_core::SessionPaths;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
-
+use test_that::prelude::*;
 const PROCESS_TIMEOUT: Duration = Duration::from_secs(5);
 const SOCKET_HASH_OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
 const SOCKET_HASH_PRIME: u64 = 0x0000_0100_0000_01b3;
@@ -39,15 +39,15 @@ fn test_muxr_start_when_session_is_reused_attaches_to_same_server_and_cleans_up_
 
     let second = run_muxr(home.path(), ["start", session.as_ref()])?;
     assert_success("second start", &second)?;
-    pretty_assertions::assert_eq!(read_pid(&paths)?, first_pid);
+    assert_that!(read_pid(&paths)?, eq(first_pid));
 
     let exit = run_muxr_with_stdin(home.path(), ["start", session.as_ref()], b"exit\n")?;
     assert_success("exit start", &exit)?;
     wait_for_cleanup(&paths)?;
 
-    assert2::assert!(!paths.socket.exists());
-    assert2::assert!(!paths.pid.exists());
-    assert2::assert!(paths.layout.exists());
+    assert_that!(paths.socket.exists(), eq(false));
+    assert_that!(paths.pid.exists(), eq(false));
+    assert_that!(paths.layout.exists(), eq(true));
     Ok(())
 }
 

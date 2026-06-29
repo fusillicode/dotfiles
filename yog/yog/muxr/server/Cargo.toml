@@ -32,10 +32,9 @@ vt100 = { version = "0.16" }
 vte = { version = "0.15" }
 
 [dev-dependencies]
-assert2 = { workspace = true }
-pretty_assertions = { workspace = true }
 rstest = { workspace = true }
 tempfile = { workspace = true }
+test-that = { workspace = true }
 tokio = { workspace = true, features = ["test-util"] }
 
 [lints]

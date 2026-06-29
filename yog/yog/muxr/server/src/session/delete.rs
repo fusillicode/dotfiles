@@ -100,6 +100,7 @@ mod tests {
 
     use muxr_core::SessionName;
     use rootcause::prelude::ResultExt;
+    use test_that::prelude::*;
 
     use super::*;
 
@@ -124,9 +125,9 @@ mod tests {
 
         remove_session_files(&paths)?;
 
-        assert2::assert!(!paths.root.exists());
-        assert2::assert!(!paths.socket.exists());
-        assert2::assert!(log_path.exists());
+        assert_that!(paths.root.exists(), eq(false));
+        assert_that!(paths.socket.exists(), eq(false));
+        assert_that!(log_path.exists(), eq(true));
         Ok(())
     }
 
@@ -140,9 +141,9 @@ mod tests {
             self::record_delete_ack_send_failure(Some(ClientEventSendFailure::Timeout));
             Ok(())
         })?;
-        assert2::assert!(log.contains("kind=\"delete_ack_send_failed\""));
-        assert2::assert!(log.contains("event=\"deleted\""));
-        assert2::assert!(log.contains("reason=\"timeout\""));
+        assert_that!(log, contains_substring("kind=\"delete_ack_send_failed\""));
+        assert_that!(log, contains_substring("event=\"deleted\""));
+        assert_that!(log, contains_substring("reason=\"timeout\""));
         Ok(())
     }
 
@@ -156,7 +157,7 @@ mod tests {
             Ok(())
         })?;
 
-        assert2::assert!(!log.contains("kind=\"delete_ack_send_failed\""));
+        assert_that!(log, not(contains_substring("kind=\"delete_ack_send_failed\"")));
         Ok(())
     }
 

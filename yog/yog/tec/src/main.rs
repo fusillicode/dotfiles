@@ -388,6 +388,7 @@ fn format_timing(duration: Duration) -> String {
 #[cfg(test)]
 mod tests {
     use rstest::rstest;
+    use test_that::prelude::*;
 
     use super::*;
 
@@ -426,9 +427,20 @@ mod tests {
         let result_lint = build_conditional_lint(&ctx, extensions, dummy_lint);
         let lint_result = result_lint(Path::new("/tmp"));
 
-        assert2::assert!(let Ok(LintFnSuccess::PlainMsg(msg)) = lint_result.0);
+        let lint_result = lint_result.0;
+        assert_that!(
+            lint_result.as_ref().map(|success| match success {
+                LintFnSuccess::CmdOutput(_) => "cmd output",
+                LintFnSuccess::PlainMsg(_) => "plain message",
+            }),
+            ok(eq("plain message"))
+        );
+        let msg = match lint_result.expect("lint should return a plain message") {
+            LintFnSuccess::PlainMsg(msg) => msg,
+            LintFnSuccess::CmdOutput(_) => panic!("asserted plain message lint result"),
+        };
         // Using contains instead of exact match because [`NO_OP`] [`Lint`] returns a colorized [`String`].
-        assert!(msg.contains(expected));
+        assert_that!(msg, contains_substring(expected));
     }
 
     #[test]
@@ -437,8 +449,19 @@ mod tests {
         let result_lint = build_conditional_lint(&ctx, RUST_EXTENSIONS, dummy_lint);
         let lint_result = result_lint(Path::new("/tmp"));
 
-        assert2::assert!(let Ok(LintFnSuccess::PlainMsg(msg)) = lint_result.0);
-        assert!(msg.contains("dummy success"));
+        let lint_result = lint_result.0;
+        assert_that!(
+            lint_result.as_ref().map(|success| match success {
+                LintFnSuccess::CmdOutput(_) => "cmd output",
+                LintFnSuccess::PlainMsg(_) => "plain message",
+            }),
+            ok(eq("plain message"))
+        );
+        let msg = match lint_result.expect("lint should return a plain message") {
+            LintFnSuccess::PlainMsg(msg) => msg,
+            LintFnSuccess::CmdOutput(_) => panic!("asserted plain message lint result"),
+        };
+        assert_that!(msg, contains_substring("dummy success"));
     }
 
     fn dummy_lint(_path: &Path) -> LintFnResult {

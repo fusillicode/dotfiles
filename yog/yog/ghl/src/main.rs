@@ -416,6 +416,7 @@ fn pr_title_from_branch_name(branch_name: &str) -> rootcause::Result<String> {
 #[cfg(test)]
 mod tests {
     use rstest::rstest;
+    use test_that::prelude::*;
 
     use super::*;
 
@@ -424,7 +425,7 @@ mod tests {
     #[case("1-hello", "[1]: Hello")]
     #[case("123-long-branch-name-here", "[123]: Long branch name here")]
     fn test_pr_title_from_branch_name_when_valid_input_formats_correctly(#[case] input: &str, #[case] expected: &str) {
-        pretty_assertions::assert_eq!(pr_title_from_branch_name(input).unwrap(), expected);
+        assert_that!(pr_title_from_branch_name(input).unwrap(), eq(expected));
     }
 
     #[rstest]
@@ -435,7 +436,12 @@ mod tests {
         #[case] input: &str,
         #[case] expected_ctx: &str,
     ) {
-        assert2::assert!(let Err(err) = pr_title_from_branch_name(input));
-        assert_eq!(err.format_current_context().to_string(), expected_ctx);
+        assert_that!(
+            pr_title_from_branch_name(input),
+            err(result_of!(
+                |err: &rootcause::Report| err.format_current_context().to_string(),
+                eq(expected_ctx)
+            ))
+        );
     }
 }

@@ -317,6 +317,7 @@ mod tests {
     use muxr_core::TabSnapshot;
     use muxr_core::TerminalSize;
     use rstest::rstest;
+    use test_that::prelude::*;
 
     use super::*;
 
@@ -337,7 +338,7 @@ mod tests {
 
             send_client_request_frame(&mut client_writer, &request).await?;
 
-            pretty_assertions::assert_eq!(recv_client_request_frame(&mut server_reader).await?, Some(request));
+            assert_that!(recv_client_request_frame(&mut server_reader).await?, eq(Some(request)));
             Ok(())
         })
     }
@@ -364,7 +365,7 @@ mod tests {
 
             send_server_event_frame(&mut server_writer, &event).await?;
 
-            pretty_assertions::assert_eq!(recv_server_event_frame(&mut client_reader).await?, Some(event));
+            assert_that!(recv_server_event_frame(&mut client_reader).await?, eq(Some(event)));
             Ok(())
         })
     }
@@ -380,7 +381,7 @@ mod tests {
 
             send_frame(&mut client_writer, Bytes::from_static(b"MUXR-BINV")).await?;
 
-            assert2::assert!(recv_client_request_frame(&mut server_reader).await.is_err());
+            assert_that!(recv_client_request_frame(&mut server_reader).await, err(anything()));
             Ok(())
         })
     }
@@ -396,7 +397,7 @@ mod tests {
 
             send_frame(&mut client_writer, Bytes::from_static(b"MUXR-RKYV")).await?;
 
-            assert2::assert!(recv_client_request_frame(&mut server_reader).await.is_err());
+            assert_that!(recv_client_request_frame(&mut server_reader).await, err(anything()));
             Ok(())
         })
     }
@@ -414,13 +415,13 @@ mod tests {
             send_client_request_frame(&mut client_writer, &ClientRequest::Ping).await?;
             send_client_request_frame(&mut client_writer, &ClientRequest::Resize(resize.clone())).await?;
 
-            pretty_assertions::assert_eq!(
+            assert_that!(
                 recv_client_request_frame(&mut server_reader).await?,
-                Some(ClientRequest::Ping)
+                eq(Some(ClientRequest::Ping))
             );
-            pretty_assertions::assert_eq!(
+            assert_that!(
                 recv_client_request_frame(&mut server_reader).await?,
-                Some(ClientRequest::Resize(resize)),
+                eq(Some(ClientRequest::Resize(resize)))
             );
             Ok(())
         })
@@ -432,7 +433,7 @@ mod tests {
 
         let error = ServerListener::bind(&path).map_or_else(|error| error, |_| report!("expected path length error"));
 
-        assert2::assert!(error.to_string().contains("muxr socket path is too long"));
+        assert_that!(error.to_string(), contains_substring("muxr socket path is too long"));
     }
 
     fn layout_snapshot() -> rootcause::Result<LayoutSnapshot> {

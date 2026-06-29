@@ -319,6 +319,8 @@ const fn resolve_resize_key(input_mode: &mut ServerInputMode, key: &ClientKey) -
 
 #[cfg(test)]
 mod tests {
+    use test_that::prelude::*;
+
     use super::*;
 
     #[rstest::rstest]
@@ -329,7 +331,7 @@ mod tests {
         #[case] bytes: &[u8],
         #[case] expected: TrackedProcessUserInteraction,
     ) {
-        pretty_assertions::assert_eq!(TrackedProcessUserInteraction::from(bytes), expected);
+        assert_that!(TrackedProcessUserInteraction::from(bytes), eq(expected));
     }
 
     #[rstest::rstest]
@@ -438,7 +440,7 @@ mod tests {
         #[case] key: ClientKey,
         #[case] expected: Option<Vec<u8>>,
     ) {
-        pretty_assertions::assert_eq!(self::pane_key_input_bytes(&key, keyboard_protocol), expected);
+        assert_that!(self::pane_key_input_bytes(&key, keyboard_protocol), eq(expected));
     }
 
     #[rstest::rstest]
@@ -457,7 +459,7 @@ mod tests {
         #[case] bytes: &[u8],
         #[case] expected: TrackedProcessUserInteraction,
     ) {
-        pretty_assertions::assert_eq!(TrackedProcessUserInteraction::from_key_input(&key, bytes), expected);
+        assert_that!(TrackedProcessUserInteraction::from_key_input(&key, bytes), eq(expected));
     }
 
     #[rstest::rstest]
@@ -558,8 +560,8 @@ mod tests {
             raw_bytes: raw_bytes.to_vec(),
         };
 
-        pretty_assertions::assert_eq!(self::resolve_key(&mut input_mode, &key), KeyResolution::Cmd(cmd),);
-        pretty_assertions::assert_eq!(input_mode, ServerInputMode::Normal);
+        assert_that!(self::resolve_key(&mut input_mode, &key), eq(KeyResolution::Cmd(cmd)));
+        assert_that!(input_mode, eq(ServerInputMode::Normal));
     }
 
     #[test]
@@ -571,8 +573,8 @@ mod tests {
             raw_bytes: b"x".to_vec(),
         };
 
-        pretty_assertions::assert_eq!(self::resolve_key(&mut input_mode, &key), KeyResolution::Raw);
-        pretty_assertions::assert_eq!(input_mode, ServerInputMode::Normal);
+        assert_that!(self::resolve_key(&mut input_mode, &key), eq(KeyResolution::Raw));
+        assert_that!(input_mode, eq(ServerInputMode::Normal));
     }
 
     #[rstest::rstest]
@@ -595,8 +597,8 @@ mod tests {
             raw_bytes: b"x".to_vec(),
         };
 
-        pretty_assertions::assert_eq!(self::resolve_key(&mut input_mode, &key), KeyResolution::Cmd(cmd),);
-        pretty_assertions::assert_eq!(input_mode, ServerInputMode::Resize);
+        assert_that!(self::resolve_key(&mut input_mode, &key), eq(KeyResolution::Cmd(cmd)));
+        assert_that!(input_mode, eq(ServerInputMode::Resize));
     }
 
     #[test]
@@ -613,16 +615,16 @@ mod tests {
             raw_bytes: b"\x1b".to_vec(),
         };
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             self::resolve_key(&mut input_mode, &enter),
-            KeyResolution::Cmd(ClientCmd::EnterResizeMode),
+            eq(KeyResolution::Cmd(ClientCmd::EnterResizeMode))
         );
-        pretty_assertions::assert_eq!(input_mode, ServerInputMode::Resize);
-        pretty_assertions::assert_eq!(
+        assert_that!(input_mode, eq(ServerInputMode::Resize));
+        assert_that!(
             self::resolve_key(&mut input_mode, &exit),
-            KeyResolution::Cmd(ClientCmd::ExitMode),
+            eq(KeyResolution::Cmd(ClientCmd::ExitMode))
         );
-        pretty_assertions::assert_eq!(input_mode, ServerInputMode::Normal);
+        assert_that!(input_mode, eq(ServerInputMode::Normal));
     }
 
     fn key(code: ClientKeyCode, modifiers: ClientKeyModifiers, raw_bytes: &[u8]) -> ClientKey {

@@ -24,10 +24,9 @@ ytil_macros = { workspace = true }
 home = { version = "0.5" }
 
 [dev-dependencies]
-assert2 = { workspace = true }
-pretty_assertions = { workspace = true }
 rstest = { workspace = true }
 tempfile = { workspace = true }
+test-that = { workspace = true }
 
 [lints]
 workspace = true

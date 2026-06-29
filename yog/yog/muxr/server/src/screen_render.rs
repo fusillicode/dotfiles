@@ -541,6 +541,7 @@ mod tests {
     use muxr_core::SessionName;
     use muxr_core::SessionPaths;
     use rootcause::report;
+    use test_that::prelude::*;
 
     use super::*;
     use crate::pane::cmd::PaneCmd;
@@ -559,7 +560,7 @@ mod tests {
         let runtimes = pane_runtime_test_helpers::empty_runtimes();
         let pane_id = PaneId::new(1)?;
         let mut tracked_processes = PaneTrackedProcesses::default();
-        assert2::assert!(
+        assert_that!(
             tracked_processes
                 .observe_pane_cmd(
                     &MuxrConfig::default(),
@@ -572,7 +573,8 @@ mod tests {
                     Instant::now(),
                 )
                 .state_change()
-                == crate::pane::tracked_process::TrackedProcessStateChange::Changed
+                == crate::pane::tracked_process::TrackedProcessStateChange::Changed,
+            eq(true)
         );
 
         let tracked_snapshot = tracked_processes.snapshot(&layout);
@@ -583,7 +585,7 @@ mod tests {
             .first()
             .and_then(|tab| tab.panes().first())
             .ok_or_else(|| report!("expected pane snapshot"))?;
-        pretty_assertions::assert_eq!(pane.cmd_label, Some("cx".to_owned()));
+        assert_that!(pane.cmd_label, eq(Some("cx".to_owned())));
         Ok(())
     }
 
@@ -622,7 +624,7 @@ mod tests {
             &terminal_size,
         )?);
 
-        pretty_assertions::assert_eq!(layout.attention_pane_ids(), Vec::<PaneId>::new());
+        assert_that!(layout.attention_pane_ids(), eq(Vec::<PaneId>::new()));
         Ok(())
     }
 
@@ -635,21 +637,21 @@ mod tests {
         let fullscreen = PaneFullscreen::default();
         let terminal_size = TerminalSize::new(80, 24)?;
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             self::pane_ids_visible_render_dmg(&layout, &fullscreen, &terminal_size, &[inactive_pane])?,
-            ClientRenderDmg::Clean
+            eq(ClientRenderDmg::Clean)
         );
-        pretty_assertions::assert_eq!(
+        assert_that!(
             self::pane_ids_visible_render_dmg(&layout, &fullscreen, &terminal_size, &[active_pane])?,
-            ClientRenderDmg::Dirty
+            eq(ClientRenderDmg::Dirty)
         );
-        pretty_assertions::assert_eq!(
+        assert_that!(
             self::pane_ids_visible_render_dmg(&layout, &fullscreen, &terminal_size, &[inactive_pane, active_pane],)?,
-            ClientRenderDmg::Dirty
+            eq(ClientRenderDmg::Dirty)
         );
-        pretty_assertions::assert_eq!(
+        assert_that!(
             self::pane_ids_visible_render_dmg(&layout, &fullscreen, &terminal_size, &[])?,
-            ClientRenderDmg::Clean
+            eq(ClientRenderDmg::Clean)
         );
         Ok(())
     }

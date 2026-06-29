@@ -44,34 +44,41 @@ pub fn get_workspace_root() -> rootcause::Result<PathBuf> {
 
 #[cfg(test)]
 mod tests {
+    use test_that::prelude::*;
+
     use super::*;
 
     #[test]
     fn test_build_path_appends_parts_to_root() {
         let root = PathBuf::from("/base");
         let result = build_path(root, &["a", "b", "c"]);
-        pretty_assertions::assert_eq!(result, PathBuf::from("/base/a/b/c"));
+        assert_that!(result, eq(PathBuf::from("/base/a/b/c")));
     }
 
     #[test]
     fn test_build_path_with_empty_parts_returns_root() {
         let root = PathBuf::from("/base");
         let result = build_path(root, &[] as &[&str]);
-        pretty_assertions::assert_eq!(result, PathBuf::from("/base"));
+        assert_that!(result, eq(PathBuf::from("/base")));
     }
 
     #[test]
     #[cfg(not(target_arch = "wasm32"))]
     fn test_build_home_path_returns_path_ending_with_parts() {
-        assert2::assert!(let Ok(path) = build_home_path(&[".config", "test"]));
-        assert!(path.ends_with(".config/test"), "path={}", path.display());
+        assert_that!(
+            build_home_path(&[".config", "test"]),
+            ok(predicate(|path: &PathBuf| path.ends_with(".config/test"))
+                .with_description("ends with .config/test", "does not end with .config/test"))
+        );
     }
 
     #[test]
     fn test_get_workspace_root_returns_existing_directory() {
-        assert2::assert!(let Ok(root) = get_workspace_root());
-        assert!(root.is_dir(), "root={}", root.display());
+        let root_result = get_workspace_root();
+        assert_that!(root_result.as_ref().map(|_| ()), ok(eq(())));
+        let root = root_result.expect("workspace root should resolve");
+        assert_that!(root.is_dir(), eq(true));
         // The workspace root should contain Cargo.toml
-        assert!(root.join("Cargo.toml").exists(), "root={}", root.display());
+        assert_that!(root.join("Cargo.toml").exists(), eq(true));
     }
 }

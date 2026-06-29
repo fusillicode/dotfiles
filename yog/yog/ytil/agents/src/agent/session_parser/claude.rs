@@ -399,6 +399,7 @@ impl ClaudeCmdInvocation {
 #[cfg(test)]
 mod tests {
     use tempfile::tempdir;
+    use test_that::prelude::*;
 
     use super::*;
 
@@ -415,28 +416,36 @@ mod tests {
         )
         .replace("__CWD__", &workspace.display().to_string());
 
-        assert2::assert!(let Ok(claude_session) = parse(&content));
+        let claude_session_result = parse(&content);
+        assert_that!(claude_session_result.as_ref().map(|_| ()), ok(eq(())));
+        let claude_session = claude_session_result.expect("Claude session should parse");
         let session = claude_session.into_session(workspace.join("session.jsonl"));
-        pretty_assertions::assert_eq!(session.agent, Agent::Claude);
-        pretty_assertions::assert_eq!(session.workspace, workspace);
-        pretty_assertions::assert_eq!(session.id, "8649a076-3ead-4d5a-9840-3200f0e1aae5");
-        pretty_assertions::assert_eq!(session.name, "workspace");
-        pretty_assertions::assert_eq!(session.search_text, "workspace");
+        assert_that!(session.agent, eq(Agent::Claude));
+        assert_that!(session.workspace, eq(workspace));
+        assert_that!(session.id, eq("8649a076-3ead-4d5a-9840-3200f0e1aae5"));
+        assert_that!(session.name, eq("workspace"));
+        assert_that!(session.search_text, eq("workspace"));
     }
 
     #[test]
     fn test_parse_claude_session_with_invalid_scanned_line_returns_error() {
         let content = "{\"type\":\"progress\",\"timestamp\":\"not-a-date\",\"cwd\":\"/tmp/workspace\",\"sessionId\":\"8649a076-3ead-4d5a-9840-3200f0e1aae5\"}\n";
 
-        assert2::assert!(let Err(err) = parse(content));
-        assert!(err.to_string().contains("failed to parse Claude session json line"));
+        assert_that!(
+            parse(content).map(|_| ()),
+            err(displays_as(contains_substring(
+                "failed to parse Claude session json line"
+            )))
+        );
     }
 
     #[test]
     fn test_parse_claude_session_without_metadata_returns_error() {
         let content = "{\"type\":\"last-prompt\",\"sessionId\":\"8649a076-3ead-4d5a-9840-3200f0e1aae5\",\"lastPrompt\":\"hello\"}\n";
-        assert2::assert!(let Err(err) = parse(content));
-        assert!(err.to_string().contains("no Claude session record found"));
+        assert_that!(
+            (parse(content)).map(|_| ()),
+            err(displays_as(contains_substring("no Claude session record found")))
+        );
     }
 
     #[test]
@@ -447,18 +456,20 @@ mod tests {
             "{\"type\":\"assistant\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"thinking\",\"thinking\":\"hidden\"},{\"type\":\"text\",\"text\":\"assistant answer\"},{\"type\":\"tool_use\",\"name\":\"Read\"}]},\"timestamp\":\"2026-03-26T16:53:02.119Z\",\"cwd\":\"/tmp/workspace\",\"sessionId\":\"8649a076-3ead-4d5a-9840-3200f0e1aae5\"}\n"
         );
 
-        assert2::assert!(let Ok(claude_session) = parse(content));
+        let claude_session_result = parse(content);
+        assert_that!(claude_session_result.as_ref().map(|_| ()), ok(eq(())));
+        let claude_session = claude_session_result.expect("Claude session should parse");
         let session = claude_session.into_session(PathBuf::from("session.jsonl"));
-        pretty_assertions::assert_eq!(session.name, "this is a very long first user message");
-        pretty_assertions::assert_eq!(
+        assert_that!(session.name, eq("this is a very long first user message"));
+        assert_that!(
             session.search_text,
-            "this is a very long first user message assistant answer"
+            eq("this is a very long first user message assistant answer")
         );
-        pretty_assertions::assert_eq!(
+        assert_that!(
             session.updated_at,
-            chrono::DateTime::parse_from_rfc3339("2026-03-26T16:53:02.119Z")
+            eq(chrono::DateTime::parse_from_rfc3339("2026-03-26T16:53:02.119Z")
                 .unwrap()
-                .to_utc()
+                .to_utc())
         );
     }
 
@@ -469,10 +480,12 @@ mod tests {
             "{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":\"<command-message>privoly-admin</command-message>\\n<command-name>/privoly-admin</command-name>\\n<command-args>install</command-args>\"},\"timestamp\":\"2026-03-26T16:52:02.119Z\",\"cwd\":\"/tmp/workspace\",\"sessionId\":\"8649a076-3ead-4d5a-9840-3200f0e1aae5\"}\n"
         );
 
-        assert2::assert!(let Ok(claude_session) = parse(content));
+        let claude_session_result = parse(content);
+        assert_that!(claude_session_result.as_ref().map(|_| ()), ok(eq(())));
+        let claude_session = claude_session_result.expect("Claude session should parse");
         let session = claude_session.into_session(PathBuf::from("session.jsonl"));
-        pretty_assertions::assert_eq!(session.name, "/privoly-admin install");
-        pretty_assertions::assert_eq!(session.search_text, "/privoly-admin install");
+        assert_that!(session.name, eq("/privoly-admin install"));
+        assert_that!(session.search_text, eq("/privoly-admin install"));
     }
 
     #[test]
@@ -484,10 +497,12 @@ mod tests {
             "{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":\"real prompt\"},\"timestamp\":\"2026-03-26T16:54:02.119Z\",\"cwd\":\"/tmp/workspace\",\"sessionId\":\"8649a076-3ead-4d5a-9840-3200f0e1aae5\"}\n"
         );
 
-        assert2::assert!(let Ok(claude_session) = parse(content));
+        let claude_session_result = parse(content);
+        assert_that!(claude_session_result.as_ref().map(|_| ()), ok(eq(())));
+        let claude_session = claude_session_result.expect("Claude session should parse");
         let session = claude_session.into_session(PathBuf::from("session.jsonl"));
-        pretty_assertions::assert_eq!(session.name, "real prompt");
-        pretty_assertions::assert_eq!(session.search_text, "real prompt");
+        assert_that!(session.name, eq("real prompt"));
+        assert_that!(session.search_text, eq("real prompt"));
     }
 
     #[test]
@@ -497,7 +512,7 @@ mod tests {
         )
         .unwrap();
 
-        pretty_assertions::assert_eq!(value.search_text(), Some("later text".to_owned()));
+        assert_that!(value.search_text(), eq(Some("later text".to_owned())));
     }
 
     #[test]
@@ -507,14 +522,14 @@ mod tests {
         )
         .unwrap();
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             value,
-            ClaudeUserContent::Parts(vec![ClaudeUserContentPart::Text {
+            eq(ClaudeUserContent::Parts(vec![ClaudeUserContentPart::Text {
                 text: ClaudeUserText::Cmd(ClaudeCmdInvocation {
                     name: "/privoly-admin".to_owned(),
                     args: Some("install".to_owned()),
                 }),
-            }])
+            }]))
         );
     }
 }

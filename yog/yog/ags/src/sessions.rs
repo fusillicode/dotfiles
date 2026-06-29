@@ -195,7 +195,7 @@ impl Display for RenderableSession {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 struct JsonSession {
     agent: &'static str,
     workspace: std::path::PathBuf,
@@ -320,6 +320,7 @@ fn delete_session(session: &RenderableSession) -> rootcause::Result<()> {
 mod tests {
     use chrono::DateTime;
     use tempfile::tempdir;
+    use test_that::prelude::*;
 
     use super::*;
 
@@ -330,9 +331,9 @@ mod tests {
 
         let search = search_corpus(display, hidden);
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             search,
-            "cx ~/repo branch session name 09/05/2026-10:00 first user prompt assistant reply"
+            eq("cx ~/repo branch session name 09/05/2026-10:00 first user prompt assistant reply")
         );
     }
 
@@ -355,34 +356,49 @@ mod tests {
         };
         let renderable = RenderableSession::from(session);
 
-        assert2::assert!(let Ok(row) = JsonSession::new(&renderable, dir.path()));
-
-        assert2::assert!(row.display.starts_with("cx ~/repo fix issue"));
-        assert2::assert!(row.search.contains("hidden prompt"));
-        pretty_assertions::assert_eq!(row.agent, "codex");
-        pretty_assertions::assert_eq!(row.workspace, workspace);
-        pretty_assertions::assert_eq!(row.session_id, "session-id");
-        pretty_assertions::assert_eq!(row.summary, "fix issue");
-        pretty_assertions::assert_eq!(row.updated_at, updated_at.to_utc());
-        pretty_assertions::assert_eq!(row.resume_program, "codex");
-        pretty_assertions::assert_eq!(row.resume_args.first().map(String::as_str), Some("resume"));
+        assert_that!(
+            JsonSession::new(&renderable, dir.path()),
+            ok(all!(
+                result_of!(
+                    |row: &JsonSession| row.display.as_str(),
+                    starts_with("cx ~/repo fix issue")
+                ),
+                result_of!(
+                    |row: &JsonSession| row.search.as_str(),
+                    contains_substring("hidden prompt")
+                ),
+                result_of!(|row: &JsonSession| row.agent, eq("codex")),
+                result_of!(|row: &JsonSession| &row.workspace, points_to(eq(workspace))),
+                result_of!(|row: &JsonSession| row.session_id.as_str(), eq("session-id")),
+                result_of!(|row: &JsonSession| row.summary.as_str(), eq("fix issue")),
+                result_of!(|row: &JsonSession| row.updated_at, eq(updated_at.to_utc())),
+                result_of!(|row: &JsonSession| row.resume_program.as_str(), eq("codex")),
+                result_of!(
+                    |row: &JsonSession| row.resume_args.first().map(String::as_str),
+                    eq(Some("resume"))
+                ),
+            ))
+        );
     }
 
     #[test]
     fn test_parse_json_session_keys_requires_at_least_one_session_key() {
-        assert2::assert!(let Err(err) = parse_json_session_keys(&[]));
-        assert!(err.to_string().contains("requires at least one --session"));
+        assert_that!(
+            (parse_json_session_keys(&[])).map(|_| ()),
+            err(displays_as(contains_substring("requires at least one --session")))
+        );
     }
 
     #[test]
     fn test_parse_json_session_keys_parses_and_dedupes_requested_session_keys() {
-        assert2::assert!(let Ok(session_keys) = parse_json_session_keys(&[
-            String::from("--session"),
-            String::from("codex:target"),
-            String::from("--session"),
-            String::from("codex:target"),
-        ]));
-
-        pretty_assertions::assert_eq!(session_keys, [SessionKey::new(Agent::Codex, "target")]);
+        assert_that!(
+            parse_json_session_keys(&[
+                String::from("--session"),
+                String::from("codex:target"),
+                String::from("--session"),
+                String::from("codex:target"),
+            ]),
+            ok(eq([SessionKey::new(Agent::Codex, "target")]))
+        );
     }
 }

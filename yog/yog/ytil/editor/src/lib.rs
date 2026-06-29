@@ -137,6 +137,7 @@ impl FromStr for FileToOpen {
 mod tests {
     use std::path::PathBuf;
 
+    use test_that::prelude::*;
     use ytil_wezterm::WeztermPane;
     use ytil_wezterm::WeztermPaneSize;
 
@@ -164,11 +165,36 @@ mod tests {
 
     #[test]
     fn test_editor_from_str_when_input_varies_returns_expected_editor() {
-        assert2::assert!(let Ok(Editor::Hx) = Editor::from_str("hx"));
-        assert2::assert!(let Ok(Editor::Nvim) = Editor::from_str("nvim"));
-        assert2::assert!(let Ok(Editor::Nvim) = Editor::from_str("nv"));
-        assert2::assert!(let Err(err) = Editor::from_str("unknown"));
-        assert!(err.to_string().contains("unknown editor"));
+        assert_that!(
+            Editor::from_str("hx").map(|editor| editor
+                .pane_titles()
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()),
+            ok(eq(vec!["hx"]))
+        );
+        assert_that!(
+            Editor::from_str("nvim").map(|editor| editor
+                .pane_titles()
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()),
+            ok(eq(vec!["nvim", "nv"]))
+        );
+        assert_that!(
+            Editor::from_str("nv").map(|editor| editor
+                .pane_titles()
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()),
+            ok(eq(vec!["nvim", "nv"]))
+        );
+        assert_that!(
+            Editor::from_str("unknown")
+                .map(|editor| editor.pane_titles().iter().map(ToString::to_string).collect::<Vec<_>>())
+                .map_err(|err| err.to_string()),
+            err(contains_substring("unknown editor"))
+        );
     }
 
     #[test]
@@ -177,59 +203,61 @@ mod tests {
         // We should always have a Cargo.toml...
         let dummy_path = root_dir.join("Cargo.toml").to_string_lossy().into_owned();
 
-        assert2::assert!(let Ok(f0) = FileToOpen::from_str(&dummy_path));
         let expected = FileToOpen {
             path: dummy_path.clone(),
             line_nbr: 0,
             column: 0,
         };
-        assert_eq!(f0, expected);
+        assert_that!(FileToOpen::from_str(&dummy_path), ok(eq(expected)));
 
-        assert2::assert!(let Ok(f1) = FileToOpen::from_str(&format!("{dummy_path}:3")));
         let expected = FileToOpen {
             path: dummy_path.clone(),
             line_nbr: 3,
             column: 0,
         };
-        assert_eq!(f1, expected);
+        assert_that!(FileToOpen::from_str(&format!("{dummy_path}:3")), ok(eq(expected)));
 
-        assert2::assert!(let Ok(f2) = FileToOpen::from_str(&format!("{dummy_path}:3:7")));
+        let input = format!("{dummy_path}:3:7");
         let expected = FileToOpen {
             path: dummy_path,
             line_nbr: 3,
             column: 7,
         };
-        assert_eq!(f2, expected);
+        assert_that!(FileToOpen::from_str(&input), ok(eq(expected)));
     }
 
     #[test]
     fn test_try_from_errors_when_pane_is_missing() {
         let panes: Vec<WeztermPane> = vec![];
-        assert2::assert!(let Err(err) = FileToOpen::try_from(("README.md", 999, panes.as_slice())));
-        assert!(err.to_string().contains("missing pane"));
+        assert_that!(
+            (FileToOpen::try_from(("README.md", 999, panes.as_slice()))).map(|_| ()),
+            err(displays_as(contains_substring("missing pane")))
+        );
     }
 
     #[test]
     fn test_try_from_errors_when_relative_file_is_missing() {
         let dir = std::env::current_dir().unwrap();
         let panes = vec![pane_with(1, 1, &dir)];
-        assert2::assert!(let
-            Err(err) = FileToOpen::try_from(("definitely_missing_12345__file.rs", 1, panes.as_slice()))
+        assert_that!(
+            (FileToOpen::try_from(("definitely_missing_12345__file.rs", 1, panes.as_slice()))).map(|_| ()),
+            err(displays_as(contains_substring("error parsing file to open")))
         );
-        assert!(err.to_string().contains("error parsing file to open"));
     }
 
     #[test]
     fn test_try_from_resolves_relative_existing_file() {
         let dir = std::env::current_dir().unwrap();
         let panes = vec![pane_with(7, 1, &dir)];
-        assert2::assert!(let Ok(file) = FileToOpen::try_from(("Cargo.toml", 7, panes.as_slice())));
         let expected = FileToOpen {
             path: dir.join("Cargo.toml").to_string_lossy().into_owned(),
             line_nbr: 0,
             column: 0,
         };
-        assert_eq!(file, expected);
+        assert_that!(
+            FileToOpen::try_from(("Cargo.toml", 7, panes.as_slice())),
+            ok(eq(expected))
+        );
     }
 
     fn pane_with(pane_id: i64, tab_id: i64, cwd_fs: &std::path::Path) -> WeztermPane {

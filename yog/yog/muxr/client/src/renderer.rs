@@ -480,6 +480,7 @@ mod tests {
     use muxr_core::TabSnapshot;
     use muxr_core::TerminalSize;
     use rootcause::report;
+    use test_that::prelude::*;
 
     use super::*;
     use crate::renderer::test_helpers;
@@ -495,8 +496,8 @@ mod tests {
 
         renderer.apply_layout(two_tab_layout()?);
 
-        pretty_assertions::assert_eq!(output.bytes, Vec::<u8>::new());
-        pretty_assertions::assert_eq!(output.flushes, 0);
+        assert_that!(output.bytes, eq(Vec::<u8>::new()));
+        assert_that!(output.flushes, eq(0));
         Ok(())
     }
 
@@ -517,10 +518,10 @@ mod tests {
         renderer.apply_sidebar_layout(&mut output, two_tab_layout()?)?;
 
         let terminal_output = output.rendered_string()?;
-        assert2::assert!(terminal_output.starts_with("\x1b[?2026h"));
-        assert2::assert!(terminal_output.ends_with("\x1b[?2026l"));
-        assert2::assert!(terminal_output.contains("tab-1"));
-        assert2::assert!(!terminal_output.contains("\x1b[2J"));
+        assert_that!(terminal_output, starts_with("\x1b[?2026h"));
+        assert_that!(terminal_output, ends_with("\x1b[?2026l"));
+        assert_that!(terminal_output, contains_substring("tab-1"));
+        assert_that!(terminal_output, not(contains_substring("\x1b[2J")));
         let hide_index = terminal_output
             .find("\x1b[?25l")
             .ok_or_else(|| report!("expected cursor hide before sidebar redraw"))?;
@@ -530,9 +531,9 @@ mod tests {
         let cursor_restore_index = terminal_output
             .find("\x1b[1;26H\x1b[?25h")
             .ok_or_else(|| report!("expected pane cursor restore after sidebar redraw"))?;
-        assert2::assert!(hide_index < tab_bar_index);
-        assert2::assert!(tab_bar_index < cursor_restore_index);
-        pretty_assertions::assert_eq!(output.flushes, 1);
+        assert_that!(hide_index, lt(tab_bar_index));
+        assert_that!(tab_bar_index, lt(cursor_restore_index));
+        assert_that!(output.flushes, eq(1));
         Ok(())
     }
 
@@ -548,16 +549,16 @@ mod tests {
 
         let outcome = renderer.apply_render(&mut output, muxr_core::RenderUpdate::Baseline(render_baseline()?))?;
 
-        pretty_assertions::assert_eq!(outcome, ClientRenderOutcome::Drawn);
-        pretty_assertions::assert_eq!(output.flushes, 1);
+        assert_that!(outcome, eq(ClientRenderOutcome::Drawn));
+        assert_that!(output.flushes, eq(1));
         let terminal_output = output.rendered_string()?;
-        assert2::assert!(terminal_output.starts_with("\x1b[?2026h"));
-        assert2::assert!(terminal_output.ends_with("\x1b[?2026l"));
+        assert_that!(terminal_output, starts_with("\x1b[?2026h"));
+        assert_that!(terminal_output, ends_with("\x1b[?2026l"));
         let clear_index = terminal_output.find("\x1b[2J").unwrap_or(usize::MAX);
         let tab_bar_index = terminal_output.find("tab-1").unwrap_or(usize::MAX);
         let pane_index = terminal_output.find("ab").unwrap_or(usize::MAX);
-        assert2::assert!(clear_index < tab_bar_index);
-        assert2::assert!(tab_bar_index < pane_index);
+        assert_that!(clear_index, lt(tab_bar_index));
+        assert_that!(tab_bar_index, lt(pane_index));
         Ok(())
     }
 
@@ -572,9 +573,9 @@ mod tests {
 
         let outcome = renderer.apply_render(&mut output, muxr_core::RenderUpdate::Diff(render_diff()?))?;
 
-        pretty_assertions::assert_eq!(outcome, ClientRenderOutcome::NeedsResync);
-        pretty_assertions::assert_eq!(output.bytes, Vec::<u8>::new());
-        pretty_assertions::assert_eq!(output.flushes, 0);
+        assert_that!(outcome, eq(ClientRenderOutcome::NeedsResync));
+        assert_that!(output.bytes, eq(Vec::<u8>::new()));
+        assert_that!(output.flushes, eq(0));
         Ok(())
     }
 
@@ -590,8 +591,8 @@ mod tests {
 
         renderer.apply_pane_regions(&mut output, any_motion_pane_regions_snapshot()?)?;
 
-        pretty_assertions::assert_eq!(output.rendered_string()?, "\x1b[?1003h");
-        pretty_assertions::assert_eq!(output.flushes, 1);
+        assert_that!(output.rendered_string()?, eq("\x1b[?1003h"));
+        assert_that!(output.flushes, eq(1));
         Ok(())
     }
 
@@ -608,11 +609,11 @@ mod tests {
         renderer.sync_mouse_capture(&mut output)?;
         renderer.apply_pane_regions(&mut output, pane_regions_snapshot()?)?;
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             output.rendered_string()?,
-            "\x1b[?1003h\x1b[?1003l\x1b[?1000h\x1b[?1002h\x1b[?1006h",
+            eq("\x1b[?1003h\x1b[?1003l\x1b[?1000h\x1b[?1002h\x1b[?1006h")
         );
-        pretty_assertions::assert_eq!(output.flushes, 2);
+        assert_that!(output.flushes, eq(2));
         Ok(())
     }
 
@@ -625,13 +626,13 @@ mod tests {
             SynchronizedOutput::Csi,
         );
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             renderer.mouse_request_for_event(ClientMouseEvent {
                 button: 64,
                 phase: ClientMouseEventPhase::Press,
                 position: ClientMousePosition { row: 0, col: 0 },
             }),
-            None,
+            eq(None)
         );
         Ok(())
     }
@@ -660,11 +661,11 @@ mod tests {
             SelectionInput::Update(muxr_core::ClientMousePosition { row: 0, col: 1 }),
         )?;
 
-        pretty_assertions::assert_eq!(test_helpers::selection_contains(&renderer, 0, 0), true);
-        pretty_assertions::assert_eq!(test_helpers::selection_contains(&renderer, 0, 1), true);
+        assert_that!(test_helpers::selection_contains(&renderer, 0, 0), eq(true));
+        assert_that!(test_helpers::selection_contains(&renderer, 0, 1), eq(true));
         let selection_output = output.rendered_string()?;
-        assert2::assert!(!selection_output.contains("\x1b[7m"));
-        pretty_assertions::assert_eq!(output.flushes, 1);
+        assert_that!(selection_output, not(contains_substring("\x1b[7m")));
+        assert_that!(output.flushes, eq(1));
         Ok(())
     }
 
@@ -694,9 +695,9 @@ mod tests {
         renderer.apply_pane_regions(&mut output, pane_regions_snapshot_with_visible_top_row(1)?)?;
 
         let redrawn = output.rendered_string()?;
-        assert2::assert!(redrawn.contains("ab"));
-        assert2::assert!(!redrawn.contains("\x1b[7m"));
-        pretty_assertions::assert_eq!(output.flushes, 1);
+        assert_that!(redrawn, contains_substring("ab"));
+        assert_that!(redrawn, not(contains_substring("\x1b[7m")));
+        assert_that!(output.flushes, eq(1));
         Ok(())
     }
 
@@ -725,12 +726,12 @@ mod tests {
             SelectionInput::Update(ClientMousePosition { row: 3, col: 1 }),
         )?;
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             scroll_request,
-            Some(ClientRequest::ScrollPaneLineAt {
+            eq(Some(ClientRequest::ScrollPaneLineAt {
                 direction: PaneScrollDirection::Down,
                 position: ClientMousePosition { row: 2, col: 1 },
-            }),
+            }))
         );
 
         renderer.apply_pane_regions(&mut output, three_row_pane_regions_snapshot(10)?)?;
@@ -739,11 +740,11 @@ mod tests {
             muxr_core::RenderUpdate::Baseline(three_row_render_baseline("bb", "cc", "dd")?),
         )?;
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             test_helpers::selected_text(&renderer),
-            Some("aa\nbb\ncc\ndd".to_owned()),
+            eq(Some("aa\nbb\ncc\ndd".to_owned()))
         );
-        pretty_assertions::assert_eq!(test_helpers::selection_contains(&renderer, 2, 0), true);
+        assert_that!(test_helpers::selection_contains(&renderer, 2, 0), eq(true));
         Ok(())
     }
 
@@ -773,7 +774,10 @@ mod tests {
             .set_selection_edge_drag(position, None)
             .map(|request| request.into_parts().1);
 
-        pretty_assertions::assert_eq!(request, Some(ClientRequest::ScrollPaneLineAt { position, direction }),);
+        assert_that!(
+            request,
+            eq(Some(ClientRequest::ScrollPaneLineAt { position, direction }))
+        );
         Ok(())
     }
 
@@ -802,13 +806,13 @@ mod tests {
         let (pending, _) = request.into_parts();
 
         renderer.mark_selection_edge_scroll_sent(pending);
-        pretty_assertions::assert_eq!(renderer.selection_edge_scroll_request(), None);
+        assert_that!(renderer.selection_edge_scroll_request(), eq(None));
         renderer.apply_scroll_pane_line_result(position, direction, PaneScrollLineMove::Unchanged);
 
         let retry = renderer
             .selection_edge_scroll_request()
             .map(|request| request.into_parts().1);
-        pretty_assertions::assert_eq!(retry, Some(ClientRequest::ScrollPaneLineAt { position, direction }),);
+        assert_that!(retry, eq(Some(ClientRequest::ScrollPaneLineAt { position, direction })));
         Ok(())
     }
 
@@ -839,7 +843,7 @@ mod tests {
         renderer.mark_selection_edge_scroll_sent(pending);
         renderer.apply_scroll_pane_line_result(position, direction, PaneScrollLineMove::Moved);
 
-        pretty_assertions::assert_eq!(renderer.selection_edge_scroll_request(), None);
+        assert_that!(renderer.selection_edge_scroll_request(), eq(None));
         renderer.apply_pane_regions(&mut output, three_row_pane_regions_snapshot(10)?)?;
         renderer.apply_render(
             &mut output,
@@ -848,7 +852,7 @@ mod tests {
         let retry = renderer
             .selection_edge_scroll_request()
             .map(|request| request.into_parts().1);
-        pretty_assertions::assert_eq!(retry, Some(ClientRequest::ScrollPaneLineAt { position, direction }),);
+        assert_that!(retry, eq(Some(ClientRequest::ScrollPaneLineAt { position, direction })));
         Ok(())
     }
 
@@ -884,10 +888,10 @@ mod tests {
         renderer.apply_selection_input_at(&mut output, SelectionInput::End(first_position), now)?;
         renderer.apply_selection_input_at(&mut output, SelectionInput::Start(second_position), second_click_at)?;
 
-        pretty_assertions::assert_eq!(test_helpers::selected_text(&renderer), Some("two".to_owned()),);
+        assert_that!(test_helpers::selected_text(&renderer), eq(Some("two".to_owned())));
         let selection_output = output.rendered_string()?;
-        assert2::assert!(!selection_output.contains("\x1b[7m"));
-        pretty_assertions::assert_eq!(output.flushes, 1);
+        assert_that!(selection_output, not(contains_substring("\x1b[7m")));
+        assert_that!(output.flushes, eq(1));
         Ok(())
     }
 
@@ -915,7 +919,7 @@ mod tests {
         renderer.apply_pane_regions(&mut output, word_pane_regions_snapshot()?)?;
         renderer.apply_selection_input_at(&mut output, SelectionInput::Start(position), second_click_at)?;
 
-        pretty_assertions::assert_eq!(test_helpers::selected_text(&renderer), Some("two".to_owned()),);
+        assert_that!(test_helpers::selected_text(&renderer), eq(Some("two".to_owned())));
         Ok(())
     }
 

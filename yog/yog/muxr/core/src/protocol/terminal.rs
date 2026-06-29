@@ -42,6 +42,7 @@ impl TerminalSize {
 #[cfg(test)]
 mod tests {
     use rstest::rstest;
+    use test_that::prelude::*;
 
     use super::*;
 
@@ -49,22 +50,22 @@ mod tests {
     #[case::zero_cols(r#"{"cols":0,"rows":24}"#)]
     #[case::zero_rows(r#"{"cols":80,"rows":0}"#)]
     fn test_terminal_size_deserialize_when_dimension_is_zero_returns_error(#[case] raw: &str) {
-        assert2::assert!(serde_json::from_str::<TerminalSize>(raw).is_err());
+        assert_that!(serde_json::from_str::<TerminalSize>(raw), err(anything()));
     }
 
     #[rstest]
     #[case::zero_cols(0, 24)]
     #[case::zero_rows(80, 0)]
     fn test_terminal_size_new_when_dimension_is_zero_returns_error(#[case] cols: u16, #[case] rows: u16) {
-        assert2::assert!(TerminalSize::new(cols, rows).is_err());
+        assert_that!(TerminalSize::new(cols, rows), err(anything()));
     }
 
     #[test]
     fn test_terminal_size_new_when_dimensions_are_nonzero_returns_size() -> rootcause::Result<()> {
         let size = TerminalSize::new(120, 40)?;
 
-        pretty_assertions::assert_eq!(size.cols(), 120);
-        pretty_assertions::assert_eq!(size.rows(), 40);
+        assert_that!(size.cols(), eq(120));
+        assert_that!(size.rows(), eq(40));
         Ok(())
     }
 }

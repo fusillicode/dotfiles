@@ -115,43 +115,47 @@ impl FromStr for ExitCond {
 mod tests {
     use core::str::FromStr;
 
+    use test_that::prelude::*;
+
     use super::*;
 
     #[test]
     fn test_exit_cond_from_str_when_ok_returns_ok_variant() {
-        assert2::assert!(let Ok(ExitCond::Ok) = ExitCond::from_str("ok"));
+        assert_that!(ExitCond::from_str("ok"), ok(matches_pattern!(ExitCond::Ok)));
     }
 
     #[test]
     fn test_exit_cond_from_str_when_ko_returns_ko_variant() {
-        assert2::assert!(let Ok(ExitCond::Ko) = ExitCond::from_str("ko"));
+        assert_that!(ExitCond::from_str("ko"), ok(matches_pattern!(ExitCond::Ko)));
     }
 
     #[test]
     fn test_exit_cond_from_str_when_invalid_returns_error() {
-        assert2::assert!(let Err(err) = ExitCond::from_str("invalid"));
-        assert!(err.to_string().contains("unexpected exit condition"));
+        assert_that!(
+            (ExitCond::from_str("invalid")).map(|_| ()),
+            err(displays_as(contains_substring("unexpected exit condition")))
+        );
     }
 
     #[test]
     fn test_should_break_ok_cond_with_success_result_returns_true() {
-        pretty_assertions::assert_eq!(ExitCond::Ok.should_break(Ok(())), true);
+        assert_that!(ExitCond::Ok.should_break(Ok(())), eq(true));
     }
 
     #[test]
     fn test_should_break_ok_cond_with_failure_result_returns_false() {
         let err_result: Result<(), ExitStatusError> = Command::new("false").status().unwrap().exit_ok();
-        pretty_assertions::assert_eq!(ExitCond::Ok.should_break(err_result), false);
+        assert_that!(ExitCond::Ok.should_break(err_result), eq(false));
     }
 
     #[test]
     fn test_should_break_ko_cond_with_failure_result_returns_true() {
         let err_result: Result<(), ExitStatusError> = Command::new("false").status().unwrap().exit_ok();
-        pretty_assertions::assert_eq!(ExitCond::Ko.should_break(err_result), true);
+        assert_that!(ExitCond::Ko.should_break(err_result), eq(true));
     }
 
     #[test]
     fn test_should_break_ko_cond_with_success_result_returns_false() {
-        pretty_assertions::assert_eq!(ExitCond::Ko.should_break(Ok(())), false);
+        assert_that!(ExitCond::Ko.should_break(Ok(())), eq(false));
     }
 }
