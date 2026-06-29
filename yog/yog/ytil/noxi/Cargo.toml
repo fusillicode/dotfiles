@@ -15,7 +15,7 @@ mockall = ["dep:mockall"]
 testing = []
 
 [dependencies]
-mockall = { version = "0.14", optional = true }
+mockall = { version = "0.15", optional = true }
 nvim-oxi = { workspace = true }
 rootcause = { workspace = true }
 serde = { workspace = true }
