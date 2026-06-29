@@ -169,6 +169,7 @@ fn run_command(command: &mut Command) -> rootcause::Result<()> {
 #[cfg(test)]
 mod tests {
     use rstest::rstest;
+    use test_that::prelude::*;
 
     use super::*;
 
@@ -176,8 +177,7 @@ mod tests {
     #[case::without_ci_arg(&["--debug"], None)]
     #[case::default_all(&["ci"], Some(CmdKind::All))]
     fn test_cmd_from_args_returns_expected_command(#[case] input: &[&str], #[case] expected: Option<CmdKind>) {
-        assert2::assert!(let Ok(command) = cmd_from_args(&args(input)));
-        pretty_assertions::assert_eq!(command, expected);
+        assert_that!(cmd_from_args(&args(input)), ok(eq(expected)));
     }
 
     #[rstest]
@@ -186,17 +186,17 @@ mod tests {
     #[case::release_native("release-native", CmdKind::ReleaseNative)]
     #[case::test("test", CmdKind::Test)]
     fn test_cmd_from_args_accepts_known_subcommands(#[case] subcommand: &str, #[case] expected: CmdKind) {
-        assert!(matches!(cmd_from_args(&args(&["ci", subcommand])), Ok(Some(command)) if command == expected));
+        assert_that!(cmd_from_args(&args(&["ci", subcommand])), ok(eq(Some(expected))));
     }
 
     #[test]
     fn test_cmd_from_args_rejects_unknown_subcommand() {
-        assert2::assert!(let Err(_) = cmd_from_args(&args(&["ci", "wat"])));
+        assert_that!(cmd_from_args(&args(&["ci", "wat"])), err(anything()));
     }
 
     #[test]
     fn test_cmd_from_args_rejects_extra_arg() {
-        assert2::assert!(let Err(_) = cmd_from_args(&args(&["ci", "lint", "extra"])));
+        assert_that!(cmd_from_args(&args(&["ci", "lint", "extra"])), err(anything()));
     }
 
     fn args(values: &[&str]) -> Vec<String> {

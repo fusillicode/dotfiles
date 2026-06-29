@@ -43,6 +43,7 @@ pub fn record_detach_ack_send_failure(reason: Option<ClientEventSendFailure>) {
 #[cfg(test)]
 mod tests {
     use muxr_core::SessionName;
+    use test_that::prelude::*;
 
     use super::*;
 
@@ -50,14 +51,14 @@ mod tests {
     fn test_client_should_exit_when_everything_is_current_returns_false() {
         let delete_sessions = DeleteSessions::default();
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             client_should_exit(
                 [OutputFreshness::Current, OutputFreshness::Current],
                 Duration::from_secs(1),
                 &delete_sessions,
                 None,
             ),
-            ClientLifecycleAction::Continue,
+            eq(ClientLifecycleAction::Continue)
         );
     }
 
@@ -65,14 +66,14 @@ mod tests {
     fn test_client_should_exit_when_output_is_stale_returns_true() {
         let delete_sessions = DeleteSessions::default();
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             client_should_exit(
                 [OutputFreshness::Current, OutputFreshness::Stale],
                 Duration::from_secs(1),
                 &delete_sessions,
                 None,
             ),
-            ClientLifecycleAction::Exit,
+            eq(ClientLifecycleAction::Exit)
         );
     }
 
@@ -81,14 +82,14 @@ mod tests {
         let delete_sessions = DeleteSessions::default();
         let heartbeat_started_at = tokio::time::Instant::now() - Duration::from_secs(2);
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             client_should_exit(
                 [OutputFreshness::Current],
                 Duration::from_secs(1),
                 &delete_sessions,
                 Some(heartbeat_started_at),
             ),
-            ClientLifecycleAction::Exit,
+            eq(ClientLifecycleAction::Exit)
         );
     }
 
@@ -97,14 +98,14 @@ mod tests {
         let delete_sessions = DeleteSessions::default();
         delete_sessions.request();
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             client_should_exit(
                 [OutputFreshness::Current],
                 Duration::from_secs(1),
                 &delete_sessions,
                 None,
             ),
-            ClientLifecycleAction::Exit,
+            eq(ClientLifecycleAction::Exit)
         );
     }
 
@@ -119,9 +120,9 @@ mod tests {
             Ok(())
         })?;
 
-        assert2::assert!(log.contains("kind=\"detach_ack_send_failed\""));
-        assert2::assert!(log.contains("event=\"detached\""));
-        assert2::assert!(log.contains("reason=\"send_failed\""));
+        assert_that!(log, contains_substring("kind=\"detach_ack_send_failed\""));
+        assert_that!(log, contains_substring("event=\"detached\""));
+        assert_that!(log, contains_substring("reason=\"send_failed\""));
         Ok(())
     }
 
@@ -135,7 +136,7 @@ mod tests {
             Ok(())
         })?;
 
-        assert2::assert!(!log.contains("kind=\"detach_ack_send_failed\""));
+        assert_that!(log, not(contains_substring("kind=\"detach_ack_send_failed\"")));
         Ok(())
     }
 }

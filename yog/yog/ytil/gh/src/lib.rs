@@ -234,54 +234,79 @@ fn extract_pr_id_form_url(url: &Url) -> rootcause::Result<String> {
 #[cfg(test)]
 mod tests {
     use rstest::rstest;
+    use test_that::prelude::*;
 
     use super::*;
 
     #[test]
     fn test_extract_pr_id_form_url_returns_the_expected_error_when_host_cannot_be_extracted() {
         let url = Url::parse("mailto:foo@bar.com").unwrap();
-        assert2::assert!(let Err(err) = extract_pr_id_form_url(&url));
-        assert_eq!(
-            err.format_current_context().to_string(),
-            "error extracting host from URL"
+        assert_that!(
+            (extract_pr_id_form_url(&url)).map(|_| ()),
+            err(result_of!(
+                |err: &rootcause::Report| err.format_current_context().to_string(),
+                eq("error extracting host from URL")
+            ))
         );
     }
 
     #[test]
     fn test_extract_pr_id_form_url_returns_the_expected_error_when_url_is_not_from_github() {
         let url = Url::parse("https://foo.bar").unwrap();
-        assert2::assert!(let Err(err) = extract_pr_id_form_url(&url));
-        assert_eq!(err.format_current_context().to_string(), "error host mismatch");
+        assert_that!(
+            (extract_pr_id_form_url(&url)).map(|_| ()),
+            err(result_of!(
+                |err: &rootcause::Report| err.format_current_context().to_string(),
+                eq("error host mismatch")
+            ))
+        );
     }
 
     #[test]
     fn test_extract_pr_id_form_url_returns_the_expected_error_when_url_doesnt_have_path_segments() {
         let url = Url::parse(&format!("https://{GITHUB_HOST}")).unwrap();
-        assert2::assert!(let Err(err) = extract_pr_id_form_url(&url));
-        assert_eq!(err.format_current_context().to_string(), "error missing PR ID prefix");
+        assert_that!(
+            (extract_pr_id_form_url(&url)).map(|_| ()),
+            err(result_of!(
+                |err: &rootcause::Report| err.format_current_context().to_string(),
+                eq("error missing PR ID prefix")
+            ))
+        );
     }
 
     #[test]
     fn test_extract_pr_id_form_url_returns_the_expected_error_when_url_doesnt_have_pr_id() {
         let url = Url::parse(&format!("https://{GITHUB_HOST}/pull")).unwrap();
-        assert2::assert!(let Err(err) = extract_pr_id_form_url(&url));
-        assert_eq!(err.format_current_context().to_string(), "error missing PR ID");
+        assert_that!(
+            (extract_pr_id_form_url(&url)).map(|_| ()),
+            err(result_of!(
+                |err: &rootcause::Report| err.format_current_context().to_string(),
+                eq("error missing PR ID")
+            ))
+        );
     }
 
     #[test]
     fn test_extract_pr_id_form_url_returns_the_expected_error_when_url_doenst_have_the_expected_pr_id_prefix() {
         let url = Url::parse(&format!("https://{GITHUB_HOST}/foo")).unwrap();
-        assert2::assert!(let Err(err) = extract_pr_id_form_url(&url));
-        assert_eq!(err.format_current_context().to_string(), "error missing PR ID prefix");
+        assert_that!(
+            (extract_pr_id_form_url(&url)).map(|_| ()),
+            err(result_of!(
+                |err: &rootcause::Report| err.format_current_context().to_string(),
+                eq("error missing PR ID prefix")
+            ))
+        );
     }
 
     #[test]
     fn test_extract_pr_id_form_url_returns_the_expected_error_when_url_has_multiple_pr_id_prefixes() {
         let url = Url::parse(&format!("https://{GITHUB_HOST}/pull/42/pull/43")).unwrap();
-        assert2::assert!(let Err(err) = extract_pr_id_form_url(&url));
-        assert_eq!(
-            err.format_current_context().to_string(),
-            "error multiple PR ID prefixes"
+        assert_that!(
+            (extract_pr_id_form_url(&url)).map(|_| ()),
+            err(result_of!(
+                |err: &rootcause::Report| err.format_current_context().to_string(),
+                eq("error multiple PR ID prefixes")
+            ))
         );
     }
 

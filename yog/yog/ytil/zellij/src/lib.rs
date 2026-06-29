@@ -322,6 +322,7 @@ fn zellij_action_args(session: Option<&str>, action_args: &[&str]) -> Vec<String
 #[cfg(test)]
 mod tests {
     use rstest::rstest;
+    use test_that::prelude::*;
 
     use super::*;
 
@@ -357,28 +358,32 @@ mod tests {
         },
     )]
     fn session_new_parses_list_sessions_line(#[case] input: &str, #[case] expected: Session) {
-        pretty_assertions::assert_eq!(Session::new(input), expected);
+        assert_that!(Session::new(input), eq(expected));
     }
 
     #[test]
     fn test_zellij_action_args_with_session_include_session_and_action() {
-        pretty_assertions::assert_eq!(
+        assert_that!(
             zellij_action_args(Some("work"), &["focus-pane-id", "terminal_42"]),
-            vec![
+            eq(vec![
                 "--session".to_string(),
                 "work".to_string(),
                 "action".to_string(),
                 "focus-pane-id".to_string(),
                 "terminal_42".to_string(),
-            ],
+            ])
         );
     }
 
     #[test]
     fn test_zellij_action_args_without_session_target_current_session() {
-        pretty_assertions::assert_eq!(
+        assert_that!(
             zellij_action_args(None, &["go-to-tab-by-id", "10"]),
-            vec!["action".to_string(), "go-to-tab-by-id".to_string(), "10".to_string(),],
+            eq(vec![
+                "action".to_string(),
+                "go-to-tab-by-id".to_string(),
+                "10".to_string(),
+            ])
         );
     }
 }

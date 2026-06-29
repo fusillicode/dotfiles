@@ -54,6 +54,8 @@ pub trait LspFilter {
 
 #[cfg(test)]
 mod tests {
+    use test_that::prelude::*;
+
     use super::*;
 
     #[test]
@@ -66,8 +68,10 @@ mod tests {
             source: "Test",
             message: "some message",
         };
-        assert2::assert!(let Ok(result) = filter.get_diag_msg_or_skip("tests/main.rs", &diag));
-        pretty_assertions::assert_eq!(result, GetDiagMsgOutput::Skip);
+        assert_that!(
+            filter.get_diag_msg_or_skip("tests/main.rs", &diag),
+            ok(eq(GetDiagMsgOutput::Skip))
+        );
     }
 
     #[test]
@@ -79,8 +83,10 @@ mod tests {
         let diag = dict! {
             message: "some message",
         };
-        assert2::assert!(let Ok(result) = filter.get_diag_msg_or_skip("src/main.rs", &diag));
-        pretty_assertions::assert_eq!(result, GetDiagMsgOutput::Skip);
+        assert_that!(
+            filter.get_diag_msg_or_skip("src/main.rs", &diag),
+            ok(eq(GetDiagMsgOutput::Skip))
+        );
     }
 
     #[test]
@@ -93,8 +99,10 @@ mod tests {
             source: "Other",
             message: "some message",
         };
-        assert2::assert!(let Ok(result) = filter.get_diag_msg_or_skip("src/main.rs", &diag));
-        pretty_assertions::assert_eq!(result, GetDiagMsgOutput::Skip);
+        assert_that!(
+            filter.get_diag_msg_or_skip("src/main.rs", &diag),
+            ok(eq(GetDiagMsgOutput::Skip))
+        );
     }
 
     #[test]
@@ -107,8 +115,10 @@ mod tests {
             source: "Test",
             message: "some message",
         };
-        assert2::assert!(let Ok(result) = filter.get_diag_msg_or_skip("src/main.rs", &diag));
-        pretty_assertions::assert_eq!(result, GetDiagMsgOutput::Msg("some message".to_string()));
+        assert_that!(
+            filter.get_diag_msg_or_skip("src/main.rs", &diag),
+            ok(eq(GetDiagMsgOutput::Msg("some message".to_string())))
+        );
     }
 
     #[test]
@@ -121,8 +131,10 @@ mod tests {
             source: "Test",
             message: "another message",
         };
-        assert2::assert!(let Ok(result) = filter.get_diag_msg_or_skip("any/path.rs", &diag));
-        pretty_assertions::assert_eq!(result, GetDiagMsgOutput::Msg("another message".to_string()));
+        assert_that!(
+            filter.get_diag_msg_or_skip("any/path.rs", &diag),
+            ok(eq(GetDiagMsgOutput::Msg("another message".to_string())))
+        );
     }
 
     #[test]
@@ -135,8 +147,10 @@ mod tests {
             source: "TestLSP",
             message: "some message",
         };
-        assert2::assert!(let Ok(result) = filter.get_diag_msg_or_skip("any/path.rs", &diag));
-        pretty_assertions::assert_eq!(result, GetDiagMsgOutput::Msg("some message".to_string()));
+        assert_that!(
+            filter.get_diag_msg_or_skip("any/path.rs", &diag),
+            ok(eq(GetDiagMsgOutput::Msg("some message".to_string())))
+        );
     }
 
     struct TestFilter {

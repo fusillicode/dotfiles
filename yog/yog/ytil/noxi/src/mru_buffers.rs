@@ -168,6 +168,7 @@ fn parse_mru_buffers_output(mru_buffers_output: &str) -> rootcause::Result<Vec<M
 #[cfg(test)]
 mod tests {
     use rstest::rstest;
+    use test_that::prelude::*;
 
     use super::*;
 
@@ -247,9 +248,7 @@ mod tests {
         }
     )]
     fn from_str_when_valid_input_returns_mru_buffer(#[case] input: &str, #[case] expected: MruBuffer) {
-        let result = MruBuffer::from_str(input);
-        assert2::assert!(let Ok(mru_buffer) = result);
-        pretty_assertions::assert_eq!(mru_buffer, expected);
+        assert_that!(MruBuffer::from_str(input), ok(eq(expected)));
     }
 
     #[rstest]
@@ -260,7 +259,9 @@ mod tests {
     #[case("1u%a  file.txt", "error finding opening quote")]
     fn test_from_str_when_invalid_input_returns_error(#[case] input: &str, #[case] expected_err_substr: &str) {
         let result = MruBuffer::from_str(input);
-        assert2::assert!(let Err(err) = result);
-        assert!(err.to_string().contains(expected_err_substr));
+        assert_that!(
+            (result).map(|_| ()),
+            err(displays_as(contains_substring(expected_err_substr)))
+        );
     }
 }

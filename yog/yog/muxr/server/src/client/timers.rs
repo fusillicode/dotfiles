@@ -217,6 +217,8 @@ fn disabled_sleep_deadline() -> rootcause::Result<tokio::time::Instant> {
 
 #[cfg(test)]
 mod tests {
+    use test_that::prelude::*;
+
     use super::*;
 
     #[tokio::test]
@@ -229,10 +231,10 @@ mod tests {
         timers.schedule_cmd_handoff_sample(pane_id)?;
         let scheduled_deadline = timers.cmd_handoff_sample.deadline();
 
-        pretty_assertions::assert_eq!(timers.take_cmd_handoff_sample_panes()?, vec![pane_id]);
+        assert_that!(timers.take_cmd_handoff_sample_panes()?, eq(vec![pane_id]));
 
-        assert2::assert!(timers.cmd_handoff_sample_panes.is_empty());
-        assert2::assert!(timers.cmd_handoff_sample.deadline() > scheduled_deadline);
+        assert_that!(timers.cmd_handoff_sample_panes, empty());
+        assert_that!(timers.cmd_handoff_sample.deadline(), gt(scheduled_deadline));
         Ok(())
     }
 
@@ -247,8 +249,8 @@ mod tests {
         timers.schedule_cmd_handoff_sample(pane_2)?;
         timers.schedule_cmd_handoff_sample(pane_1)?;
 
-        pretty_assertions::assert_eq!(timers.take_cmd_handoff_sample_panes()?, vec![pane_1, pane_2]);
-        assert2::assert!(timers.cmd_handoff_sample_panes.is_empty());
+        assert_that!(timers.take_cmd_handoff_sample_panes()?, eq(vec![pane_1, pane_2]));
+        assert_that!(timers.cmd_handoff_sample_panes, empty());
         Ok(())
     }
 
@@ -264,8 +266,8 @@ mod tests {
         timers.schedule_cmd_handoff_sample(pane_2)?;
         timers.remove_cmd_handoff_sample_pane(pane_1)?;
 
-        pretty_assertions::assert_eq!(timers.take_cmd_handoff_sample_panes()?, vec![pane_2]);
-        assert2::assert!(timers.cmd_handoff_sample_panes.is_empty());
+        assert_that!(timers.take_cmd_handoff_sample_panes()?, eq(vec![pane_2]));
+        assert_that!(timers.cmd_handoff_sample_panes, empty());
         Ok(())
     }
 
@@ -280,8 +282,8 @@ mod tests {
 
         timers.sync_render_deadline(ClientRenderDmg::Clean)?;
 
-        pretty_assertions::assert_eq!(timers.render_deadline, None);
-        assert2::assert!(timers.render_sleep.deadline() > threshold);
+        assert_that!(timers.render_deadline, eq(None));
+        assert_that!(timers.render_sleep.deadline(), gt(threshold));
         Ok(())
     }
 
@@ -298,10 +300,10 @@ mod tests {
         let latest_deadline = tokio::time::Instant::now();
 
         let scheduled_deadline = timers.render_sleep.deadline();
-        pretty_assertions::assert_eq!(timers.render_deadline, Some(scheduled_deadline));
-        assert2::assert!(scheduled_deadline >= earliest_deadline);
-        assert2::assert!(scheduled_deadline <= latest_deadline);
-        assert2::assert!(scheduled_deadline < disabled_deadline);
+        assert_that!(timers.render_deadline, eq(Some(scheduled_deadline)));
+        assert_that!(scheduled_deadline, ge(earliest_deadline));
+        assert_that!(scheduled_deadline, le(latest_deadline));
+        assert_that!(scheduled_deadline, lt(disabled_deadline));
         Ok(())
     }
 
@@ -315,8 +317,8 @@ mod tests {
         let scheduled_deadline = timers.render_sleep.deadline();
         timers.sync_render_deadline(ClientRenderDmg::Dirty)?;
 
-        pretty_assertions::assert_eq!(timers.render_sleep.deadline(), scheduled_deadline);
-        pretty_assertions::assert_eq!(timers.render_deadline, Some(scheduled_deadline));
+        assert_that!(timers.render_sleep.deadline(), eq(scheduled_deadline));
+        assert_that!(timers.render_deadline, eq(Some(scheduled_deadline)));
         Ok(())
     }
 
@@ -337,9 +339,9 @@ mod tests {
             .ok_or_else(|| report!("muxr test render deadline overflowed"))?;
 
         let scheduled_deadline = timers.render_sleep.deadline();
-        pretty_assertions::assert_eq!(timers.render_deadline, Some(scheduled_deadline));
-        assert2::assert!(scheduled_deadline >= earliest_deadline);
-        assert2::assert!(scheduled_deadline <= latest_deadline);
+        assert_that!(timers.render_deadline, eq(Some(scheduled_deadline)));
+        assert_that!(scheduled_deadline, ge(earliest_deadline));
+        assert_that!(scheduled_deadline, le(latest_deadline));
         Ok(())
     }
 
@@ -362,9 +364,9 @@ mod tests {
             .ok_or_else(|| report!("muxr test interactive render deadline overflowed"))?;
 
         let scheduled_deadline = timers.render_sleep.deadline();
-        pretty_assertions::assert_eq!(timers.render_deadline, Some(scheduled_deadline));
-        assert2::assert!(scheduled_deadline >= earliest_deadline);
-        assert2::assert!(scheduled_deadline <= latest_deadline);
+        assert_that!(timers.render_deadline, eq(Some(scheduled_deadline)));
+        assert_that!(scheduled_deadline, ge(earliest_deadline));
+        assert_that!(scheduled_deadline, le(latest_deadline));
         Ok(())
     }
 
@@ -384,7 +386,7 @@ mod tests {
             .checked_add(RENDER_FRAME_INTERVAL)
             .ok_or_else(|| report!("muxr test render deadline overflowed"))?;
 
-        pretty_assertions::assert_eq!(timers.next_render_deadline(now)?, expected_deadline);
+        assert_that!(timers.next_render_deadline(now)?, eq(expected_deadline));
         Ok(())
     }
 
@@ -402,8 +404,8 @@ mod tests {
         timers.sync_render_deadline(ClientRenderDmg::Dirty)?;
 
         let interactive_deadline = timers.render_sleep.deadline();
-        pretty_assertions::assert_eq!(timers.render_deadline, Some(interactive_deadline));
-        assert2::assert!(interactive_deadline < bulk_deadline);
+        assert_that!(timers.render_deadline, eq(Some(interactive_deadline)));
+        assert_that!(interactive_deadline, lt(bulk_deadline));
         Ok(())
     }
 
@@ -417,8 +419,8 @@ mod tests {
         let scheduled_deadline = timers.render_sleep.deadline();
         timers.complete_render_frame()?;
 
-        pretty_assertions::assert_eq!(timers.render_deadline, None);
-        assert2::assert!(timers.render_sleep.deadline() > scheduled_deadline);
+        assert_that!(timers.render_deadline, eq(None));
+        assert_that!(timers.render_sleep.deadline(), gt(scheduled_deadline));
         Ok(())
     }
 
@@ -432,8 +434,11 @@ mod tests {
 
         timers.disable_tracked_process_quiet_sleep()?;
 
-        pretty_assertions::assert_eq!(timers.tracked_process_quiet_deadline, None);
-        assert2::assert!(timers.tracked_process_quiet_sleep.deadline() > disabled_deadline);
+        assert_that!(timers.tracked_process_quiet_deadline, eq(None));
+        assert_that!(
+            timers.tracked_process_quiet_sleep.deadline() > disabled_deadline,
+            eq(true)
+        );
         Ok(())
     }
 
@@ -463,22 +468,28 @@ mod tests {
         )?;
 
         timers.sync_tracked_process_quiet_deadline_for_layout(&pane_tracked_processes, &layout)?;
-        pretty_assertions::assert_eq!(
+        assert_that!(
             timers.tracked_process_quiet_deadline,
-            Some(self::instant_after(then, Duration::from_secs(5))?)
+            eq(Some(self::instant_after(then, Duration::from_secs(5))?))
         );
-        pretty_assertions::assert_eq!(
+        assert_that!(
             timers.tracked_process_quiet_sleep.deadline(),
-            self::tracked_process_quiet_sleep_deadline(then, Duration::from_secs(5))?
+            eq(self::tracked_process_quiet_sleep_deadline(
+                then,
+                Duration::from_secs(5)
+            )?)
         );
         let focused_deadline = timers.tracked_process_quiet_sleep.deadline();
 
         layout.remove_exited_pane(pane_id, 0, self::successful_exit_status())?;
-        pretty_assertions::assert_eq!(layout.active_pane_id()?, other_pane_id);
+        assert_that!(layout.active_pane_id()?, eq(other_pane_id));
         timers.sync_tracked_process_quiet_deadline_for_layout(&pane_tracked_processes, &layout)?;
 
-        pretty_assertions::assert_eq!(timers.tracked_process_quiet_deadline, None);
-        assert2::assert!(timers.tracked_process_quiet_sleep.deadline() > focused_deadline);
+        assert_that!(timers.tracked_process_quiet_deadline, eq(None));
+        assert_that!(
+            timers.tracked_process_quiet_sleep.deadline() > focused_deadline,
+            eq(true)
+        );
         Ok(())
     }
 
@@ -492,10 +503,10 @@ mod tests {
             .as_mut()
             .reset(tokio::time::Instant::now() + Duration::from_millis(1));
 
-        pretty_assertions::assert_eq!(timers.tracked_process_quiet_deadline(), QuietDeadline::Pending);
+        assert_that!(timers.tracked_process_quiet_deadline(), eq(QuietDeadline::Pending));
         tokio::time::advance(Duration::from_millis(1)).await;
 
-        pretty_assertions::assert_eq!(timers.tracked_process_quiet_deadline(), QuietDeadline::Elapsed);
+        assert_that!(timers.tracked_process_quiet_deadline(), eq(QuietDeadline::Elapsed));
         Ok(())
     }
 

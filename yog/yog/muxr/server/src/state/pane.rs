@@ -145,14 +145,16 @@ pub enum PaneState {
 
 #[cfg(test)]
 mod tests {
+    use test_that::prelude::*;
+
     use super::*;
 
     #[test]
     fn test_snapshot_with_runtime_metadata_when_title_is_cwd_updates_snapshot_cwd() -> rootcause::Result<()> {
         let snapshot = self::pane()?.snapshot_with_runtime_metadata(Some("~"), None, TrackedProcessState::None);
 
-        pretty_assertions::assert_eq!(snapshot.cwd, "~");
-        pretty_assertions::assert_eq!(snapshot.cmd_label, None);
+        assert_that!(snapshot.cwd, eq("~"));
+        assert_that!(snapshot.cmd_label, eq(None));
         Ok(())
     }
 
@@ -161,8 +163,8 @@ mod tests {
         let snapshot =
             self::pane()?.snapshot_with_runtime_metadata(Some("cargo test"), None, TrackedProcessState::None);
 
-        pretty_assertions::assert_eq!(snapshot.cwd, "/old/project");
-        pretty_assertions::assert_eq!(snapshot.cmd_label, Some("cargo test".to_owned()));
+        assert_that!(snapshot.cwd, eq("/old/project"));
+        assert_that!(snapshot.cmd_label, eq(Some("cargo test".to_owned())));
         Ok(())
     }
 
@@ -176,8 +178,8 @@ mod tests {
     ) -> rootcause::Result<()> {
         let snapshot = self::pane()?.snapshot_with_runtime_metadata(Some("dotfiles"), None, tracked_process_state);
 
-        pretty_assertions::assert_eq!(snapshot.tracked_process_state, tracked_process_state);
-        pretty_assertions::assert_eq!(snapshot.cmd_label, Some("dotfiles".to_owned()));
+        assert_that!(snapshot.tracked_process_state, eq(tracked_process_state));
+        assert_that!(snapshot.cmd_label, eq(Some("dotfiles".to_owned())));
         Ok(())
     }
 
@@ -187,7 +189,7 @@ mod tests {
         let snapshot =
             self::pane()?.snapshot_with_runtime_metadata(Some("dotfiles"), Some("codex"), TrackedProcessState::None);
 
-        pretty_assertions::assert_eq!(snapshot.cmd_label, Some("codex".to_owned()));
+        assert_that!(snapshot.cmd_label, eq(Some("codex".to_owned())));
         Ok(())
     }
 
@@ -195,9 +197,9 @@ mod tests {
     fn test_sync_terminal_title_when_title_is_cwd_updates_pane_cwd() -> rootcause::Result<()> {
         let mut pane = self::pane()?;
 
-        pretty_assertions::assert_eq!(pane.sync_terminal_title(Some("~")), PaneMetadataSync::Changed);
+        assert_that!(pane.sync_terminal_title(Some("~")), eq(PaneMetadataSync::Changed));
 
-        pretty_assertions::assert_eq!(pane.cwd, "~");
+        assert_that!(pane.cwd, eq("~"));
         Ok(())
     }
 
@@ -205,12 +207,12 @@ mod tests {
     fn test_sync_terminal_title_when_title_is_same_cwd_returns_false() -> rootcause::Result<()> {
         let mut pane = self::pane()?;
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             pane.sync_terminal_title(Some("/old/project")),
-            PaneMetadataSync::Unchanged,
+            eq(PaneMetadataSync::Unchanged)
         );
 
-        pretty_assertions::assert_eq!(pane.cwd, "/old/project");
+        assert_that!(pane.cwd, eq("/old/project"));
         Ok(())
     }
 
@@ -218,12 +220,12 @@ mod tests {
     fn test_sync_terminal_title_when_title_is_cmd_returns_false() -> rootcause::Result<()> {
         let mut pane = self::pane()?;
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             pane.sync_terminal_title(Some("cargo test")),
-            PaneMetadataSync::Unchanged,
+            eq(PaneMetadataSync::Unchanged)
         );
 
-        pretty_assertions::assert_eq!(pane.cwd, "/old/project");
+        assert_that!(pane.cwd, eq("/old/project"));
         Ok(())
     }
 

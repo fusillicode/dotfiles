@@ -597,6 +597,7 @@ mod tests {
     use std::time::Instant;
 
     use muxr_core::PaneId;
+    use test_that::prelude::*;
 
     use super::*;
     use crate::pane::cmd::PaneCmd;
@@ -639,7 +640,10 @@ mod tests {
         layout.active_tab_mut()?.focus_pane(other_pane_id)?;
         timers.sync_tracked_process_quiet_deadline_for_layout(&pane_tracked_processes, &layout)?;
 
-        assert2::assert!(timers.tracked_process_quiet_sleep.deadline() < focused_deadline);
+        assert_that!(
+            timers.tracked_process_quiet_sleep.deadline() < focused_deadline,
+            eq(true)
+        );
         Ok(())
     }
 
@@ -666,8 +670,8 @@ mod tests {
             &mut render_dmg,
         )?;
 
-        assert2::assert!(timers.render_sleep.deadline() < bulk_deadline);
-        pretty_assertions::assert_eq!(render_dmg, ClientRenderDmg::Dirty);
+        assert_that!(timers.render_sleep.deadline(), lt(bulk_deadline));
+        assert_that!(render_dmg, eq(ClientRenderDmg::Dirty));
         Ok(())
     }
 
@@ -695,18 +699,18 @@ mod tests {
         )?;
         let mut timers = ClientTimers::new(&config)?;
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             self::tracked_process_change_deadline_sync(changes, &timers),
-            PaneRenderDeadlineSync::Skip
+            eq(PaneRenderDeadlineSync::Skip)
         );
 
         timers
             .tracked_process_quiet_sleep
             .as_mut()
             .reset(tokio::time::Instant::now());
-        pretty_assertions::assert_eq!(
+        assert_that!(
             self::tracked_process_change_deadline_sync(changes, &timers),
-            PaneRenderDeadlineSync::Sync
+            eq(PaneRenderDeadlineSync::Sync)
         );
         Ok(())
     }
@@ -734,8 +738,8 @@ mod tests {
             &mut render_dmg,
         )?;
 
-        pretty_assertions::assert_eq!(timers.render_sleep.deadline(), bulk_deadline);
-        pretty_assertions::assert_eq!(render_dmg, ClientRenderDmg::Dirty);
+        assert_that!(timers.render_sleep.deadline(), eq(bulk_deadline));
+        assert_that!(render_dmg, eq(ClientRenderDmg::Dirty));
         Ok(())
     }
 

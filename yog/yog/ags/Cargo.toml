@@ -23,9 +23,8 @@ ytil_sys = { workspace = true }
 ytil_tui = { workspace = true }
 
 [dev-dependencies]
-assert2 = { workspace = true }
-pretty_assertions = { workspace = true }
 tempfile = { workspace = true }
+test-that = { workspace = true }
 
 [lints]
 workspace = true

@@ -381,6 +381,7 @@ fn decimal_to_hex_color(decimal: u32) -> String {
 #[cfg(test)]
 mod tests {
     use rstest::rstest;
+    use test_that::prelude::*;
 
     use super::*;
 
@@ -388,11 +389,11 @@ mod tests {
     fn test_from_default_highlight_infos_produces_default_highlight_opts() {
         let infos = HighlightInfos::default();
         let opts = HighlightOpts::from(&infos);
-        pretty_assertions::assert_eq!(opts.foreground, None);
-        pretty_assertions::assert_eq!(opts.background, None);
-        pretty_assertions::assert_eq!(opts.special_color, None);
-        pretty_assertions::assert_eq!(opts.bold, None);
-        pretty_assertions::assert_eq!(opts.blend, None);
+        assert_that!(opts.foreground, eq(None));
+        assert_that!(opts.background, eq(None));
+        assert_that!(opts.special_color, eq(None));
+        assert_that!(opts.bold, eq(None));
+        assert_that!(opts.blend, eq(None));
     }
 
     #[rstest]
@@ -403,7 +404,7 @@ mod tests {
     fn test_from_highlight_infos_converts_foreground_to_hex(#[case] rgb: u32, #[case] expected: &str) {
         let mut infos = HighlightInfos::default();
         infos.foreground = Some(rgb);
-        pretty_assertions::assert_eq!(HighlightOpts::from(&infos).foreground.as_deref(), Some(expected));
+        assert_that!(HighlightOpts::from(&infos).foreground.as_deref(), eq(Some(expected)));
     }
 
     #[rstest]
@@ -412,14 +413,17 @@ mod tests {
     fn test_from_highlight_infos_converts_background_to_hex(#[case] rgb: u32, #[case] expected: &str) {
         let mut infos = HighlightInfos::default();
         infos.background = Some(rgb);
-        pretty_assertions::assert_eq!(HighlightOpts::from(&infos).background.as_deref(), Some(expected));
+        assert_that!(HighlightOpts::from(&infos).background.as_deref(), eq(Some(expected)));
     }
 
     #[test]
     fn test_from_highlight_infos_converts_special_to_hex() {
         let mut infos = HighlightInfos::default();
         infos.special = Some(0xFF_00_00);
-        pretty_assertions::assert_eq!(HighlightOpts::from(&infos).special_color.as_deref(), Some("#FF0000"));
+        assert_that!(
+            HighlightOpts::from(&infos).special_color.as_deref(),
+            eq(Some("#FF0000"))
+        );
     }
 
     #[test]
@@ -433,19 +437,19 @@ mod tests {
         infos.underlineline = Some(true);
 
         let opts = HighlightOpts::from(&infos);
-        pretty_assertions::assert_eq!(opts.bold, Some(true));
-        pretty_assertions::assert_eq!(opts.italic, Some(false));
-        pretty_assertions::assert_eq!(opts.underline, Some(true));
-        pretty_assertions::assert_eq!(opts.underdotted, Some(true));
-        pretty_assertions::assert_eq!(opts.underdashed, Some(true));
-        pretty_assertions::assert_eq!(opts.underdouble, Some(true));
+        assert_that!(opts.bold, eq(Some(true)));
+        assert_that!(opts.italic, eq(Some(false)));
+        assert_that!(opts.underline, eq(Some(true)));
+        assert_that!(opts.underdotted, eq(Some(true)));
+        assert_that!(opts.underdashed, eq(Some(true)));
+        assert_that!(opts.underdouble, eq(Some(true)));
     }
 
     #[test]
     fn test_from_highlight_infos_maps_blend() {
         let mut infos = HighlightInfos::default();
         infos.blend = Some(50);
-        pretty_assertions::assert_eq!(HighlightOpts::from(&infos).blend, Some(50));
+        assert_that!(HighlightOpts::from(&infos).blend, eq(Some(50)));
     }
 
     #[test]
@@ -468,7 +472,7 @@ mod tests {
         let _ = expected.underline(true);
         let _ = expected.undercurl(false);
 
-        pretty_assertions::assert_eq!(opts.to_set_highlight_opts(), expected.build(),);
+        assert_that!(opts.to_set_highlight_opts(), eq(expected.build()));
     }
 
     #[test]
@@ -481,7 +485,7 @@ mod tests {
         let mut expected = SetHighlightOpts::builder();
         let _ = expected.blend(30);
 
-        pretty_assertions::assert_eq!(opts.to_set_highlight_opts(), expected.build());
+        assert_that!(opts.to_set_highlight_opts(), eq(expected.build()));
     }
 
     #[test]
@@ -491,7 +495,7 @@ mod tests {
             ..Default::default()
         };
 
-        pretty_assertions::assert_eq!(opts.to_set_highlight_opts(), SetHighlightOpts::default());
+        assert_that!(opts.to_set_highlight_opts(), eq(SetHighlightOpts::default()));
     }
 
     #[test]
@@ -502,6 +506,6 @@ mod tests {
         let _ = expected.reverse(false);
         let _ = expected.underline(false);
 
-        pretty_assertions::assert_eq!(opts.to_set_highlight_opts(), expected.build());
+        assert_that!(opts.to_set_highlight_opts(), eq(expected.build()));
     }
 }

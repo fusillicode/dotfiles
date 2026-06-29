@@ -640,13 +640,14 @@ mod tests {
 
     use muxr_config::MuxrConfig;
     use muxr_core::SessionName;
+    use test_that::prelude::*;
 
     use super::super::event::PtyExitResult;
     use super::*;
     use crate::terminal::TerminalFocusReporting;
 
     fn assert_replies_eq(replies: &TerminalReplies, expected: &[Vec<u8>]) {
-        pretty_assertions::assert_eq!(replies.as_slice(), expected);
+        assert_that!(replies.as_slice(), eq(expected));
     }
 
     fn pty_state(size: &TerminalSize) -> PtyState {
@@ -680,8 +681,8 @@ mod tests {
             .join()
             .map_err(|_| report!("muxr pty writer test thread panicked"))?;
 
-        assert2::assert!(!state.exited.load(Ordering::Acquire));
-        assert2::assert!(lock_mutex(&state.exit_status, "pty exit status")?.is_none());
+        assert_that!(state.exited.load(Ordering::Acquire), eq(false));
+        assert_that!(lock_mutex(&state.exit_status, "pty exit status")?.as_ref(), none());
         Ok(())
     }
 
@@ -706,17 +707,17 @@ mod tests {
         let (sender, receiver) = kanal::bounded(1);
         let _guard = handle.attach_sink(sender)?;
 
-        assert2::assert!(matches!(
+        assert_that!(
             receiver.recv_timeout(Duration::from_secs(2)),
-            Ok(PtyEvent::Exited)
-        ));
-        pretty_assertions::assert_eq!(
+            ok(matches_pattern!(PtyEvent::Exited))
+        );
+        assert_that!(
             handle.exit_status()?,
-            Some(PtyExitStatus {
+            eq(Some(PtyExitStatus {
                 code: 7,
                 signal: None,
                 result: PtyExitResult::Failed,
-            })
+            }))
         );
         drop(session);
         Ok(())
@@ -742,19 +743,22 @@ mod tests {
             })
         })?;
 
-        assert2::assert!(state.exited.load(Ordering::Acquire));
-        assert2::assert!(output_current.load(Ordering::Acquire));
-        assert2::assert!(lock_mutex(&state.active_sink, "pty active sink")?.is_some());
-        pretty_assertions::assert_eq!(
+        assert_that!(state.exited.load(Ordering::Acquire), eq(true));
+        assert_that!(output_current.load(Ordering::Acquire), eq(true));
+        assert_that!(
+            lock_mutex(&state.active_sink, "pty active sink")?.as_ref().map(|_| ()),
+            some(eq(()))
+        );
+        assert_that!(
             *lock_mutex(&state.exit_status, "pty exit status")?,
-            Some(PtyExitStatus {
+            eq(Some(PtyExitStatus {
                 code: 7,
                 signal: None,
                 result: PtyExitResult::Failed,
-            })
+            }))
         );
-        assert2::assert!(log.contains("kind=\"pty_exit_wakeup_not_queued\""));
-        assert2::assert!(log.contains("reason=\"channel_full\""));
+        assert_that!(log, contains_substring("kind=\"pty_exit_wakeup_not_queued\""));
+        assert_that!(log, contains_substring("reason=\"channel_full\""));
         Ok(())
     }
 
@@ -778,19 +782,22 @@ mod tests {
             })
         })?;
 
-        assert2::assert!(state.exited.load(Ordering::Acquire));
-        assert2::assert!(lock_mutex(&state.active_sink, "pty active sink")?.is_none());
-        assert2::assert!(!output_current.load(Ordering::Acquire));
-        pretty_assertions::assert_eq!(
+        assert_that!(state.exited.load(Ordering::Acquire), eq(true));
+        assert_that!(
+            lock_mutex(&state.active_sink, "pty active sink")?.as_ref().map(|_| ()),
+            none()
+        );
+        assert_that!(output_current.load(Ordering::Acquire), eq(false));
+        assert_that!(
             *lock_mutex(&state.exit_status, "pty exit status")?,
-            Some(PtyExitStatus {
+            eq(Some(PtyExitStatus {
                 code: 7,
                 signal: None,
                 result: PtyExitResult::Failed,
-            })
+            }))
         );
-        assert2::assert!(log.contains("kind=\"pty_exit_wakeup_not_queued\""));
-        assert2::assert!(log.contains("reason=\"channel_disconnected\""));
+        assert_that!(log, contains_substring("kind=\"pty_exit_wakeup_not_queued\""));
+        assert_that!(log, contains_substring("reason=\"channel_disconnected\""));
         Ok(())
     }
 
@@ -803,7 +810,7 @@ mod tests {
         let _guard = state.attach_sink(sender)?;
         self::assert_replies_eq(&(state.append_output(b"after")?), &[]);
 
-        assert2::assert!(matches!(receiver.recv(), Ok(PtyEvent::OutputReady)));
+        assert_that!(receiver.recv(), ok(eq(PtyEvent::OutputReady)));
         Ok(())
     }
 
@@ -820,8 +827,11 @@ mod tests {
 
         self::assert_replies_eq(&(state.append_output(b"lost client")?), &[]);
 
-        assert2::assert!(lock_mutex(&state.active_sink, "pty active sink")?.is_none());
-        assert2::assert!(!output_current.load(Ordering::Acquire));
+        assert_that!(
+            lock_mutex(&state.active_sink, "pty active sink")?.as_ref().map(|_| ()),
+            none()
+        );
+        assert_that!(output_current.load(Ordering::Acquire), eq(false));
         Ok(())
     }
 
@@ -829,13 +839,13 @@ mod tests {
     fn test_attach_sink_when_output_arrived_before_attach_clears_screen_dirty() -> rootcause::Result<()> {
         let state = Arc::new(pty_state(&terminal_size()?));
         self::assert_replies_eq(&(state.append_output(b"before")?), &[]);
-        pretty_assertions::assert_eq!(state.take_screen_dirty(), PtyScreenDmg::Dirty);
+        assert_that!(state.take_screen_dirty(), eq(PtyScreenDmg::Dirty));
         self::assert_replies_eq(&(state.append_output(b"before again")?), &[]);
         let (sender, _receiver) = kanal::bounded(1);
 
         let _guard = state.attach_sink(sender)?;
 
-        pretty_assertions::assert_eq!(state.take_screen_dirty(), PtyScreenDmg::Clean);
+        assert_that!(state.take_screen_dirty(), eq(PtyScreenDmg::Clean));
         Ok(())
     }
 
@@ -847,9 +857,9 @@ mod tests {
 
         self::assert_replies_eq(&(state.append_output(b"\x1b]2;~\x07")?), &[]);
 
-        pretty_assertions::assert_eq!(state.take_screen_dirty(), PtyScreenDmg::Clean);
-        pretty_assertions::assert_eq!(state.take_title_changes()?, vec![Some("~".to_owned())]);
-        assert2::assert!(matches!(receiver.recv(), Ok(PtyEvent::OutputReady)));
+        assert_that!(state.take_screen_dirty(), eq(PtyScreenDmg::Clean));
+        assert_that!(state.take_title_changes()?, eq(vec![Some("~".to_owned())]));
+        assert_that!(receiver.recv(), ok(eq(PtyEvent::OutputReady)));
         Ok(())
     }
 
@@ -859,8 +869,8 @@ mod tests {
 
         self::assert_replies_eq(&(state.append_output(b"visible")?), &[]);
 
-        pretty_assertions::assert_eq!(state.take_screen_dirty(), PtyScreenDmg::Dirty);
-        pretty_assertions::assert_eq!(state.take_screen_dirty(), PtyScreenDmg::Clean);
+        assert_that!(state.take_screen_dirty(), eq(PtyScreenDmg::Dirty));
+        assert_that!(state.take_screen_dirty(), eq(PtyScreenDmg::Clean));
         Ok(())
     }
 
@@ -882,8 +892,8 @@ mod tests {
             Arc::new(tokio::sync::Notify::new()),
         )?;
 
-        pretty_assertions::assert_eq!(lock_mutex(&state.terminal, "pty terminal")?.title(), None);
-        pretty_assertions::assert_eq!(state.take_title_changes()?, Vec::<Option<String>>::new());
+        assert_that!(lock_mutex(&state.terminal, "pty terminal")?.title(), eq(None));
+        assert_that!(state.take_title_changes()?, eq(Vec::<Option<String>>::new()));
         Ok(())
     }
 
@@ -906,7 +916,7 @@ mod tests {
         )?;
         let mode = lock_mutex(&state.terminal, "pty terminal")?.application_mode();
 
-        pretty_assertions::assert_eq!(mode.focus_reporting, TerminalFocusReporting::Disabled);
+        assert_that!(mode.focus_reporting, eq(TerminalFocusReporting::Disabled));
         Ok(())
     }
 
@@ -923,11 +933,14 @@ mod tests {
         self::assert_replies_eq(&(state.append_output(b"first")?), &[]);
         self::assert_replies_eq(&(state.append_output(b"second")?), &[]);
 
-        assert2::assert!(lock_mutex(&state.active_sink, "pty active sink")?.is_some());
-        assert2::assert!(output_current.load(Ordering::Acquire));
-        pretty_assertions::assert_eq!(state.take_screen_dirty(), PtyScreenDmg::Dirty);
-        pretty_assertions::assert_eq!(state.take_screen_dirty(), PtyScreenDmg::Clean);
-        assert2::assert!(matches!(receiver.recv(), Ok(PtyEvent::OutputReady)));
+        assert_that!(
+            lock_mutex(&state.active_sink, "pty active sink")?.as_ref().map(|_| ()),
+            some(eq(()))
+        );
+        assert_that!(output_current.load(Ordering::Acquire), eq(true));
+        assert_that!(state.take_screen_dirty(), eq(PtyScreenDmg::Dirty));
+        assert_that!(state.take_screen_dirty(), eq(PtyScreenDmg::Clean));
+        assert_that!(receiver.recv(), ok(eq(PtyEvent::OutputReady)));
         Ok(())
     }
 
@@ -944,11 +957,11 @@ mod tests {
         self::assert_replies_eq(&(state.append_output(b"first")?), &[]);
         self::assert_replies_eq(&(state.append_output(b"\x1b]2;cargo test\x07\x1b]2;~\x07")?), &[]);
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             state.take_title_changes()?,
-            vec![Some("cargo test".to_owned()), Some("~".to_owned())],
+            eq(vec![Some("cargo test".to_owned()), Some("~".to_owned())])
         );
-        assert2::assert!(matches!(receiver.recv(), Ok(PtyEvent::OutputReady)));
+        assert_that!(receiver.recv(), ok(eq(PtyEvent::OutputReady)));
         Ok(())
     }
 
@@ -976,10 +989,10 @@ mod tests {
             Ok(())
         })?;
 
-        assert2::assert!(log.contains("kind=\"pty_writer_stopped_after_error\""));
-        assert2::assert!(log.contains("event=\"write_batch\""));
-        assert2::assert!(log.contains("session=work"));
-        assert2::assert!(log.contains("test pty writer failed"));
+        assert_that!(log, contains_substring("kind=\"pty_writer_stopped_after_error\""));
+        assert_that!(log, contains_substring("event=\"write_batch\""));
+        assert_that!(log, contains_substring("session=work"));
+        assert_that!(log, contains_substring("test pty writer failed"));
         Ok(())
     }
 
@@ -1003,7 +1016,7 @@ mod tests {
             .flat_map(|row| row.cells().iter().map(muxr_core::RenderCell::text))
             .collect::<String>();
 
-        assert2::assert!(rendered.contains("history"));
+        assert_that!(rendered, contains_substring("history"));
         Ok(())
     }
 

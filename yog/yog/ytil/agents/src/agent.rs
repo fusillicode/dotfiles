@@ -227,6 +227,7 @@ impl From<Agent> for AgentIcon {
 #[cfg(test)]
 mod tests {
     use rstest::rstest;
+    use test_that::prelude::*;
 
     use super::*;
 
@@ -242,7 +243,7 @@ mod tests {
         #[case] expected: Result<Agent, String>,
     ) {
         let actual = Agent::from_name(name).map_err(|e| e.to_string());
-        pretty_assertions::assert_eq!(actual, expected);
+        assert_that!(actual, eq(expected));
     }
 
     #[rstest]
@@ -253,7 +254,7 @@ mod tests {
     #[case("OpenCode-Agent", Some(Agent::Opencode))]
     #[case("Vim", None)]
     fn test_agent_detect_when_name_varies_returns_expected_agent(#[case] name: &str, #[case] expected: Option<Agent>) {
-        pretty_assertions::assert_eq!(Agent::detect(name), expected);
+        assert_that!(Agent::detect(name), eq(expected));
     }
 
     #[test]
@@ -269,7 +270,7 @@ mod tests {
             ("SessionEnd", AgentEventKind::Exit),
         ];
 
-        pretty_assertions::assert_eq!(Agent::Gemini.hook_events(), expected);
+        assert_that!(Agent::Gemini.hook_events(), eq(expected));
     }
 
     #[test]
@@ -279,7 +280,7 @@ mod tests {
             .iter()
             .find_map(|(event, kind)| (*event == "PermissionRequest").then_some(*kind));
 
-        pretty_assertions::assert_eq!(permission_request_kind, Some(AgentEventKind::Busy));
+        assert_that!(permission_request_kind, eq(Some(AgentEventKind::Busy)));
     }
 
     #[rstest]
@@ -291,16 +292,16 @@ mod tests {
     fn test_agent_icon_from_agent_returns_agent_icon(#[case] agent: Agent, #[case] cache_key: &str) {
         let icon = AgentIcon::from(agent);
 
-        pretty_assertions::assert_eq!(icon.cache_key, cache_key);
+        assert_that!(icon.cache_key, eq(cache_key));
     }
 
     #[test]
     fn test_agent_icon_path_uses_yog_agents_dir() {
         let icon = AgentIcon::from(Agent::Codex);
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             icon.path(Path::new("/home/me")),
-            PathBuf::from("/home/me/.cache/yog/agents/codex.png")
+            eq(PathBuf::from("/home/me/.cache/yog/agents/codex.png"))
         );
     }
 }

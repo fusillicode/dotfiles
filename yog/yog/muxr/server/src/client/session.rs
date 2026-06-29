@@ -701,6 +701,7 @@ mod tests {
     use muxr_transport::ClientConnection;
     use muxr_transport::ClientEventReader;
     use muxr_transport::ServerListener;
+    use test_that::prelude::*;
 
     use super::*;
     use crate::pane::cmd::PaneCmd;
@@ -727,31 +728,28 @@ mod tests {
             let _sent = bridge_done_sender.send(());
         });
 
-        assert2::assert!(
-            pty_event_sender
-                .send_timeout(PtyEvent::OutputReady, Duration::from_secs(1))
-                .is_ok()
+        assert_that!(
+            pty_event_sender.send_timeout(PtyEvent::OutputReady, Duration::from_secs(1)),
+            ok(eq(()))
         );
-        assert2::assert!(
-            pty_event_sender
-                .send_timeout(PtyEvent::Exited, Duration::from_secs(1))
-                .is_ok()
+        assert_that!(
+            pty_event_sender.send_timeout(PtyEvent::Exited, Duration::from_secs(1)),
+            ok(eq(()))
         );
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             self::recv_pty_bridge_event(&mut async_pty_receiver, "output ready").await?,
-            SessionPaneOutputMessage::PaneOutputReady
+            eq(SessionPaneOutputMessage::PaneOutputReady)
         );
-        pretty_assertions::assert_eq!(
+        assert_that!(
             self::recv_pty_bridge_event(&mut async_pty_receiver, "exited").await?,
-            SessionPaneOutputMessage::PaneExited
+            eq(SessionPaneOutputMessage::PaneExited)
         );
 
         drop(async_pty_receiver);
-        assert2::assert!(
-            pty_event_sender
-                .send_timeout(PtyEvent::OutputReady, Duration::from_secs(1))
-                .is_ok()
+        assert_that!(
+            pty_event_sender.send_timeout(PtyEvent::OutputReady, Duration::from_secs(1)),
+            ok(eq(()))
         );
         bridge_done_receiver
             .recv_timeout(Duration::from_secs(1))
@@ -856,14 +854,20 @@ mod tests {
         )
         .await?;
 
-        pretty_assertions::assert_eq!(keep_attached, ClientSessionFlow::Continue);
-        pretty_assertions::assert_eq!(state.layout.active_pane_id()?, other_pane_id);
-        pretty_assertions::assert_eq!(
+        assert_that!(keep_attached, eq(ClientSessionFlow::Continue));
+        assert_that!(state.layout.active_pane_id()?, eq(other_pane_id));
+        assert_that!(
             state.pane_tracked_processes.attention_pane_ids(state.layout),
-            Vec::new()
+            eq(Vec::new())
         );
-        pretty_assertions::assert_eq!(state.pane_tracked_processes.next_quiet_deadline(state.layout)?, None);
-        assert2::assert!(timers.tracked_process_quiet_sleep.deadline() > focused_deadline);
+        assert_that!(
+            state.pane_tracked_processes.next_quiet_deadline(state.layout)?,
+            eq(None)
+        );
+        assert_that!(
+            timers.tracked_process_quiet_sleep.deadline() > focused_deadline,
+            eq(true)
+        );
         self::abort_client_drain(client_drain).await;
         Ok(())
     }
@@ -964,7 +968,7 @@ mod tests {
             state.pane_tracked_processes.remove_pane(second_exited_pane),
         );
         // Batch reap returns every removed pane; this end-to-end assertion keeps all related client resources in sync.
-        pretty_assertions::assert_eq!(
+        assert_that!(
             (
                 keep_attached,
                 state.layout.pane_ids(),
@@ -975,7 +979,7 @@ mod tests {
                 self::tracked_process_snapshot_state(&snapshot, surviving_pane)?,
                 timers.take_cmd_handoff_sample_panes()?,
             ),
-            (
+            eq((
                 ClientSessionFlow::Continue,
                 vec![surviving_pane],
                 vec![surviving_pane],
@@ -984,7 +988,7 @@ mod tests {
                 (TrackedProcessChanges::default(), TrackedProcessChanges::default()),
                 TrackedProcessState::Busy,
                 vec![surviving_pane],
-            )
+            ))
         );
         self::abort_client_drain(client_drain).await;
         Ok(())
@@ -1072,9 +1076,12 @@ mod tests {
         )
         .await?;
 
-        pretty_assertions::assert_eq!(keep_attached, ClientSessionFlow::Continue);
-        pretty_assertions::assert_eq!(state.layout.active_pane_id()?, other_pane_id);
-        assert2::assert!(timers.tracked_process_quiet_sleep.deadline() < focused_deadline);
+        assert_that!(keep_attached, eq(ClientSessionFlow::Continue));
+        assert_that!(state.layout.active_pane_id()?, eq(other_pane_id));
+        assert_that!(
+            timers.tracked_process_quiet_sleep.deadline() < focused_deadline,
+            eq(true)
+        );
         self::abort_client_drain(client_drain).await;
         Ok(())
     }
@@ -1102,11 +1109,11 @@ mod tests {
             &self::fg_tracked_process("codex"),
             then,
         );
-        pretty_assertions::assert_eq!(
+        assert_that!(
             pane_tracked_processes.mark_quiet_deadlines(&layout, self::instant_after(then, Duration::from_secs(3))?,)?,
-            crate::pane::tracked_process::TrackedProcessAttention::Unseen {
+            eq(crate::pane::tracked_process::TrackedProcessAttention::Unseen {
                 pane_ids: vec![fallback_pane_id]
-            }
+            })
         );
         pane_tracked_processes.observe_pane_cmd(
             config.user_config.as_ref(),
@@ -1174,8 +1181,8 @@ mod tests {
         )
         .await?;
 
-        pretty_assertions::assert_eq!(keep_attached, ClientSessionFlow::Continue);
-        pretty_assertions::assert_eq!(state.layout.active_pane_id()?, fallback_pane_id);
+        assert_that!(keep_attached, eq(ClientSessionFlow::Continue));
+        assert_that!(state.layout.active_pane_id()?, eq(fallback_pane_id));
         let sink_guard_pane_ids = state.sink_guards.iter().map(|sink| sink.pane_id).collect::<Vec<_>>();
         let snapshot = state.pane_tracked_processes.snapshot(state.layout);
         let tracked_process_pane_ids = snapshot.panes().map(|(pane_id, _pane)| pane_id).collect::<Vec<_>>();
@@ -1185,7 +1192,7 @@ mod tests {
             .find(|(pane_id, _pane)| *pane_id == fallback_pane_id)
             .map(|(_pane_id, pane)| pane)
             .ok_or_else(|| rootcause::report!("expected fallback pane tracked state"))?;
-        pretty_assertions::assert_eq!(
+        assert_that!(
             (
                 state.layout.pane_ids(),
                 state.runtimes.pane_ids(),
@@ -1195,7 +1202,7 @@ mod tests {
                 fallback.state(),
                 timers.take_cmd_handoff_sample_panes()?,
             ),
-            (
+            eq((
                 vec![fallback_pane_id],
                 vec![fallback_pane_id],
                 vec![fallback_pane_id],
@@ -1203,7 +1210,7 @@ mod tests {
                 TrackedProcessChanges::default(),
                 TrackedProcessState::Seen,
                 vec![fallback_pane_id],
-            )
+            ))
         );
         self::abort_client_drain(client_drain).await;
         Ok(())
@@ -1242,9 +1249,9 @@ mod tests {
             &self::fg_tracked_process("codex"),
             then,
         );
-        pretty_assertions::assert_eq!(
+        assert_that!(
             pane_tracked_processes.mark_quiet_deadlines(&layout, self::instant_after(then, Duration::from_secs(3))?,)?,
-            crate::pane::tracked_process::TrackedProcessAttention::Seen
+            eq(crate::pane::tracked_process::TrackedProcessAttention::Seen)
         );
 
         let mut timers = ClientTimers::new(&config)?;
@@ -1267,9 +1274,9 @@ mod tests {
                 &pane_tracked_processes,
                 &terminal_size,
             )?;
-        pretty_assertions::assert_eq!(
+        assert_that!(
             self::tracked_process_state(&layout_snapshot, pane_id)?,
-            TrackedProcessState::Seen
+            eq(TrackedProcessState::Seen)
         );
         let listener = ServerListener::bind(&config.paths.socket)?;
         let (client_connection, server_connection) =
@@ -1308,17 +1315,17 @@ mod tests {
         )
         .await?;
 
-        pretty_assertions::assert_eq!(keep_attached, ClientSessionFlow::Continue);
+        assert_that!(keep_attached, eq(ClientSessionFlow::Continue));
         let Some(ServerEvent::SidebarLayout(layout_snapshot)) = self::recv_test_event(&mut client_reader).await? else {
             return Err(rootcause::report!(
                 "expected muxr prompt submit tracked-process layout update"
             ));
         };
-        pretty_assertions::assert_eq!(
+        assert_that!(
             self::tracked_process_state(&layout_snapshot, pane_id)?,
-            TrackedProcessState::Busy
+            eq(TrackedProcessState::Busy)
         );
-        pretty_assertions::assert_eq!(timers.tracked_process_quiet_deadline(), QuietDeadline::Pending);
+        assert_that!(timers.tracked_process_quiet_deadline(), eq(QuietDeadline::Pending));
         Ok(())
     }
 
@@ -1390,7 +1397,7 @@ mod tests {
         );
         let mut timers = ClientTimers::new(&config)?;
         timers.sync_tracked_process_quiet_deadline_for_layout(&pane_tracked_processes, &layout)?;
-        pretty_assertions::assert_eq!(timers.tracked_process_quiet_deadline(), QuietDeadline::Elapsed);
+        assert_that!(timers.tracked_process_quiet_deadline(), eq(QuietDeadline::Elapsed));
         let (layout_snapshot, pane_regions, mut render_composer, _render_baseline) =
             crate::screen_render::initial_client_render(
                 &config,
@@ -1432,12 +1439,12 @@ mod tests {
         )
         .await?;
 
-        pretty_assertions::assert_eq!(keep_attached, ClientSessionFlow::Continue);
-        pretty_assertions::assert_eq!(
+        assert_that!(keep_attached, eq(ClientSessionFlow::Continue));
+        assert_that!(
             self::tracked_process_snapshot_state(&state.pane_tracked_processes.snapshot(state.layout), pane_id)?,
-            TrackedProcessState::Busy
+            eq(TrackedProcessState::Busy)
         );
-        pretty_assertions::assert_eq!(timers.tracked_process_quiet_deadline(), QuietDeadline::Pending);
+        assert_that!(timers.tracked_process_quiet_deadline(), eq(QuietDeadline::Pending));
 
         tokio::time::sleep(Duration::from_millis(45)).await;
         let keep_attached = self::handle_session_runtime_timer_message(
@@ -1449,10 +1456,10 @@ mod tests {
             &mut render_dmg,
         )
         .await?;
-        pretty_assertions::assert_eq!(keep_attached, ClientSessionFlow::Continue);
-        pretty_assertions::assert_eq!(
+        assert_that!(keep_attached, eq(ClientSessionFlow::Continue));
+        assert_that!(
             self::tracked_process_snapshot_state(&state.pane_tracked_processes.snapshot(state.layout), pane_id)?,
-            TrackedProcessState::Seen
+            eq(TrackedProcessState::Seen)
         );
         self::abort_client_drain(client_drain).await;
         Ok(())
@@ -1464,7 +1471,7 @@ mod tests {
         self::assert_mouse_request_precedes_quiet_deadline_extends_busy(
             "printf '\\033[?1002h\\033[?1006hready\\n'; exec /bin/cat",
             |mode| {
-                assert2::assert!(mode.mouse_protocol.is_some());
+                assert_that!(mode.mouse_protocol.as_ref(), some(anything()));
                 Ok(())
             },
         )
@@ -1477,8 +1484,8 @@ mod tests {
         self::assert_mouse_request_precedes_quiet_deadline_extends_busy(
             "printf '\\033[?1049hready\\n'; exec /bin/cat",
             |mode| {
-                pretty_assertions::assert_eq!(mode.screen_mode, TerminalScreenMode::Alternate);
-                pretty_assertions::assert_eq!(mode.mouse_protocol, None);
+                assert_that!(mode.screen_mode, eq(TerminalScreenMode::Alternate));
+                assert_that!(mode.mouse_protocol, eq(None));
                 Ok(())
             },
         )
@@ -1514,9 +1521,9 @@ mod tests {
             let tracked_pane = PaneId::new(1)?;
             layout.active_tab_mut()?.focus_pane(tracked_pane)?;
             let target_pane = layout.create_tab(self::metadata("sh", 3))?;
-            pretty_assertions::assert_eq!(
+            assert_that!(
                 layout.focus_tab(TabId::new(1)?)?,
-                crate::tab::focus::TabFocusChange::Changed,
+                eq(crate::tab::focus::TabFocusChange::Changed)
             );
             Ok((
                 layout,
@@ -1621,9 +1628,12 @@ mod tests {
         )
         .await?;
 
-        pretty_assertions::assert_eq!(keep_attached, ClientSessionFlow::Continue);
-        assert2::assert!(state.scrollback_editor.is_some());
-        assert2::assert!(timers.tracked_process_quiet_sleep.deadline() > focused_deadline);
+        assert_that!(keep_attached, eq(ClientSessionFlow::Continue));
+        assert_that!(state.scrollback_editor.as_ref(), some(anything()));
+        assert_that!(
+            timers.tracked_process_quiet_sleep.deadline() > focused_deadline,
+            eq(true)
+        );
         let disabled_deadline = timers.tracked_process_quiet_sleep.deadline();
 
         let keep_attached = crate::request_router::handle_client_message(
@@ -1636,11 +1646,14 @@ mod tests {
         )
         .await?;
 
-        pretty_assertions::assert_eq!(keep_attached, ClientSessionFlow::Continue);
-        assert2::assert!(state.scrollback_editor.is_none());
-        pretty_assertions::assert_eq!(state.layout.active_pane_id()?, tracked_pane);
-        assert2::assert!(timers.tracked_process_quiet_sleep.deadline() < disabled_deadline);
-        pretty_assertions::assert_eq!(timers.tracked_process_quiet_deadline(), QuietDeadline::Pending);
+        assert_that!(keep_attached, eq(ClientSessionFlow::Continue));
+        assert_that!(state.scrollback_editor.as_ref(), none());
+        assert_that!(state.layout.active_pane_id()?, eq(tracked_pane));
+        assert_that!(
+            timers.tracked_process_quiet_sleep.deadline() < disabled_deadline,
+            eq(true)
+        );
+        assert_that!(timers.tracked_process_quiet_deadline(), eq(QuietDeadline::Pending));
         self::abort_client_drain(client_drain).await;
         Ok(())
     }
@@ -1823,9 +1836,9 @@ mod tests {
 
         session_result?;
         client_result?;
-        pretty_assertions::assert_eq!(
+        assert_that!(
             self::tracked_process_snapshot_state(&state.pane_tracked_processes.snapshot(state.layout), pane_id)?,
-            TrackedProcessState::Busy
+            eq(TrackedProcessState::Busy)
         );
         Ok(())
     }
@@ -1930,9 +1943,9 @@ mod tests {
                 match self::recv_test_event(&mut client_reader).await? {
                     Some(ServerEvent::Detached) => break,
                     Some(ServerEvent::SidebarLayout(layout_snapshot)) => {
-                        pretty_assertions::assert_eq!(
+                        assert_that!(
                             self::tracked_process_state(&layout_snapshot, pane_id)?,
-                            TrackedProcessState::Busy
+                            eq(TrackedProcessState::Busy)
                         );
                     }
                     Some(_) => {}
@@ -1946,11 +1959,14 @@ mod tests {
 
         session_result?;
         client_result?;
-        pretty_assertions::assert_eq!(
+        assert_that!(
             self::tracked_process_snapshot_state(&state.pane_tracked_processes.snapshot(state.layout), pane_id)?,
-            TrackedProcessState::Busy
+            eq(TrackedProcessState::Busy)
         );
-        assert2::assert!(matches!(async_pty_receiver.try_recv(), Err(TryRecvError::Empty)));
+        assert_that!(
+            async_pty_receiver.try_recv(),
+            err(matches_pattern!(TryRecvError::Empty))
+        );
         Ok(())
     }
 
@@ -2063,11 +2079,14 @@ mod tests {
 
         session_result?;
         client_result?;
-        pretty_assertions::assert_eq!(
+        assert_that!(
             self::tracked_process_snapshot_state(&state.pane_tracked_processes.snapshot(state.layout), pane_id)?,
-            TrackedProcessState::Busy
+            eq(TrackedProcessState::Busy)
         );
-        assert2::assert!(matches!(async_pty_receiver.try_recv(), Err(TryRecvError::Empty)));
+        assert_that!(
+            async_pty_receiver.try_recv(),
+            err(matches_pattern!(TryRecvError::Empty))
+        );
         Ok(())
     }
 
@@ -2105,7 +2124,7 @@ mod tests {
         );
         let mut timers = ClientTimers::new(&config)?;
         timers.sync_tracked_process_quiet_deadline_for_layout(&pane_tracked_processes, &layout)?;
-        pretty_assertions::assert_eq!(timers.tracked_process_quiet_deadline(), QuietDeadline::Elapsed);
+        assert_that!(timers.tracked_process_quiet_deadline(), eq(QuietDeadline::Elapsed));
         let mut runtimes = PaneRuntimes::spawn_for_start_seed(
             &config,
             &SessionStartSeed {
@@ -2167,7 +2186,7 @@ mod tests {
         };
         let mut render_dmg = ClientRenderDmg::Clean;
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             self::drain_queued_output_before_quiet(
                 &mut async_pty_receiver,
                 &mut event_writer,
@@ -2176,11 +2195,11 @@ mod tests {
                 &mut render_dmg,
             )
             .await?,
-            OutputDrain::BatchLimitReached
+            eq(OutputDrain::BatchLimitReached)
         );
-        pretty_assertions::assert_eq!(timers.tracked_process_quiet_deadline(), QuietDeadline::Elapsed);
+        assert_that!(timers.tracked_process_quiet_deadline(), eq(QuietDeadline::Elapsed));
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             self::drain_queued_output_before_quiet(
                 &mut async_pty_receiver,
                 &mut event_writer,
@@ -2189,15 +2208,18 @@ mod tests {
                 &mut render_dmg,
             )
             .await?,
-            OutputDrain::Output
+            eq(OutputDrain::Output)
         );
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             self::tracked_process_snapshot_state(&state.pane_tracked_processes.snapshot(state.layout), pane_id)?,
-            TrackedProcessState::Busy
+            eq(TrackedProcessState::Busy)
         );
-        pretty_assertions::assert_eq!(timers.tracked_process_quiet_deadline(), QuietDeadline::Pending);
-        assert2::assert!(matches!(async_pty_receiver.try_recv(), Err(TryRecvError::Empty)));
+        assert_that!(timers.tracked_process_quiet_deadline(), eq(QuietDeadline::Pending));
+        assert_that!(
+            async_pty_receiver.try_recv(),
+            err(matches_pattern!(TryRecvError::Empty))
+        );
         self::abort_client_drain(client_drain).await;
         Ok(())
     }
@@ -2232,7 +2254,7 @@ mod tests {
         );
         let mut timers = ClientTimers::new(&config)?;
         timers.sync_tracked_process_quiet_deadline_for_layout(&pane_tracked_processes, &layout)?;
-        pretty_assertions::assert_eq!(timers.tracked_process_quiet_deadline(), QuietDeadline::Elapsed);
+        assert_that!(timers.tracked_process_quiet_deadline(), eq(QuietDeadline::Elapsed));
 
         let mut runtimes = PaneRuntimes::spawn_for_start_seed(
             &config,
@@ -2287,18 +2309,18 @@ mod tests {
         )
         .await?;
 
-        pretty_assertions::assert_eq!(keep_attached, ClientSessionFlow::Continue);
-        pretty_assertions::assert_eq!(
+        assert_that!(keep_attached, eq(ClientSessionFlow::Continue));
+        assert_that!(
             self::tracked_process_snapshot_state(&state.pane_tracked_processes.snapshot(state.layout), pane_id)?,
-            TrackedProcessState::Busy
+            eq(TrackedProcessState::Busy)
         );
-        pretty_assertions::assert_eq!(timers.tracked_process_quiet_deadline(), QuietDeadline::Pending);
-        pretty_assertions::assert_eq!(
+        assert_that!(timers.tracked_process_quiet_deadline(), eq(QuietDeadline::Pending));
+        assert_that!(
             state.pane_tracked_processes.mark_quiet_deadlines(
                 state.layout,
                 self::instant_after(Instant::now(), Duration::from_secs(4))?
             )?,
-            crate::pane::tracked_process::TrackedProcessAttention::Seen
+            eq(crate::pane::tracked_process::TrackedProcessAttention::Seen)
         );
         self::abort_client_drain(client_drain).await;
         Ok(())
@@ -2348,7 +2370,7 @@ mod tests {
         );
         let mut timers = ClientTimers::new(&config)?;
         timers.sync_tracked_process_quiet_deadline_for_layout(&pane_tracked_processes, &layout)?;
-        pretty_assertions::assert_eq!(timers.tracked_process_quiet_deadline(), QuietDeadline::Elapsed);
+        assert_that!(timers.tracked_process_quiet_deadline(), eq(QuietDeadline::Elapsed));
         let (layout_snapshot, pane_regions, mut render_composer, _render_baseline) =
             crate::screen_render::initial_client_render(
                 &config,
@@ -2398,12 +2420,12 @@ mod tests {
         )
         .await?;
 
-        pretty_assertions::assert_eq!(keep_attached, ClientSessionFlow::Continue);
-        pretty_assertions::assert_eq!(
+        assert_that!(keep_attached, eq(ClientSessionFlow::Continue));
+        assert_that!(
             self::tracked_process_snapshot_state(&state.pane_tracked_processes.snapshot(state.layout), pane_id)?,
-            TrackedProcessState::Busy
+            eq(TrackedProcessState::Busy)
         );
-        pretty_assertions::assert_eq!(timers.tracked_process_quiet_deadline(), QuietDeadline::Pending);
+        assert_that!(timers.tracked_process_quiet_deadline(), eq(QuietDeadline::Pending));
         Ok(())
     }
 
@@ -2416,7 +2438,7 @@ mod tests {
         crate::session::files::prepare_session_dirs(&config.paths)?;
         let terminal_size = TerminalSize::new(80, 24)?;
         let (mut layout, tracked_pane_id, request, expected_active_pane) = setup(&config)?;
-        pretty_assertions::assert_eq!(layout.active_pane_id()?, tracked_pane_id);
+        assert_that!(layout.active_pane_id()?, eq(tracked_pane_id));
         let mut pane_tracked_processes = PaneTrackedProcesses::default();
         let then = Instant::now();
         pane_tracked_processes.observe_pane_cmd(
@@ -2485,9 +2507,12 @@ mod tests {
         )
         .await?;
 
-        pretty_assertions::assert_eq!(keep_attached, ClientSessionFlow::Continue);
-        pretty_assertions::assert_eq!(state.layout.active_pane_id()?, expected_active_pane);
-        assert2::assert!(timers.tracked_process_quiet_sleep.deadline() < focused_deadline);
+        assert_that!(keep_attached, eq(ClientSessionFlow::Continue));
+        assert_that!(state.layout.active_pane_id()?, eq(expected_active_pane));
+        assert_that!(
+            timers.tracked_process_quiet_sleep.deadline() < focused_deadline,
+            eq(true)
+        );
         self::abort_client_drain(client_drain).await;
         Ok(())
     }
@@ -2563,9 +2588,9 @@ mod tests {
             match self::recv_test_event(reader).await? {
                 Some(ServerEvent::Pong) => pong = true,
                 Some(ServerEvent::SidebarLayout(layout_snapshot)) => {
-                    pretty_assertions::assert_eq!(
+                    assert_that!(
                         self::tracked_process_state(&layout_snapshot, pane_id)?,
-                        expected_state
+                        eq(expected_state)
                     );
                     sidebar = true;
                 }

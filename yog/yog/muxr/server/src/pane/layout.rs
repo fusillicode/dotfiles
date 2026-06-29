@@ -318,6 +318,8 @@ impl PaneRegion {
 
 #[cfg(test)]
 mod tests {
+    use test_that::prelude::*;
+
     use super::*;
     use crate::state::Pane;
     use crate::state::PaneState;
@@ -327,17 +329,17 @@ mod tests {
         let pane_id = PaneId::new(7)?;
         let layout = PaneLayout::single_pane(pane_id, 3, &TerminalSize::new(80, 24)?);
 
-        pretty_assertions::assert_eq!(layout.borders(), &[]);
-        pretty_assertions::assert_eq!(
+        assert_that!(layout.borders(), eq(&[]));
+        assert_that!(
             layout.regions(),
-            &[PaneRegion {
+            eq(&[PaneRegion {
                 area: PaneArea {
                     origin: PanePosition { row: 0, col: 0 },
                     size: PaneSize { rows: 24, cols: 80 },
                 },
                 focus_seq: 3,
                 id: pane_id,
-            }]
+            }])
         );
         Ok(())
     }
@@ -361,7 +363,7 @@ mod tests {
         )?;
 
         let borders = layout.borders();
-        pretty_assertions::assert_eq!(borders.len(), 2);
+        assert_that!(borders.len(), eq(2));
         let horizontal_border = borders
             .iter()
             .find(|border| {
@@ -374,25 +376,25 @@ mod tests {
                 (border.axis(), border.col(), border.row(), border.len()) == (PaneBorderAxis::Vertical, 40, 0, 24)
             })
             .ok_or_else(|| report!("expected nested vertical split border"))?;
-        pretty_assertions::assert_eq!(
+        assert_that!(
             horizontal_border.ownership(PanePosition { row: 12, col: 41 }, PaneId::new(2)?),
-            crate::pane::borders::BorderCellOwner::Owned
+            eq(crate::pane::borders::BorderCellOwner::Owned)
         );
-        pretty_assertions::assert_eq!(
+        assert_that!(
             horizontal_border.ownership(PanePosition { row: 12, col: 41 }, PaneId::new(3)?),
-            crate::pane::borders::BorderCellOwner::Owned
+            eq(crate::pane::borders::BorderCellOwner::Owned)
         );
-        pretty_assertions::assert_eq!(
+        assert_that!(
             vertical_border.ownership(PanePosition { row: 12, col: 40 }, PaneId::new(1)?),
-            crate::pane::borders::BorderCellOwner::Owned
+            eq(crate::pane::borders::BorderCellOwner::Owned)
         );
-        pretty_assertions::assert_eq!(
+        assert_that!(
             vertical_border.ownership(PanePosition { row: 12, col: 40 }, PaneId::new(2)?),
-            crate::pane::borders::BorderCellOwner::Owned
+            eq(crate::pane::borders::BorderCellOwner::Owned)
         );
-        pretty_assertions::assert_eq!(
+        assert_that!(
             vertical_border.ownership(PanePosition { row: 13, col: 40 }, PaneId::new(3)?),
-            crate::pane::borders::BorderCellOwner::Owned
+            eq(crate::pane::borders::BorderCellOwner::Owned)
         );
         Ok(())
     }

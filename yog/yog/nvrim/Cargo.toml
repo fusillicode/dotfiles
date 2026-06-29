@@ -32,10 +32,9 @@ ytil_wezterm = { workspace = true }
 ytil_zellij = { workspace = true }
 
 [dev-dependencies]
-assert2 = { workspace = true }
-pretty_assertions = { workspace = true }
 rstest = { workspace = true }
 tempfile = { workspace = true }
+test-that = { workspace = true }
 ytil_noxi = { path = "../ytil/noxi", features = ["mockall", "testing"] }
 
 [lints]

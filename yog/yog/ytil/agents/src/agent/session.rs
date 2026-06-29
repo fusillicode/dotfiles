@@ -247,15 +247,18 @@ fn truncate_to_boundary(text: &str, max_bytes: usize) -> Option<&str> {
 mod tests {
     use chrono::DateTime;
     use tempfile::tempdir;
+    use test_that::prelude::*;
 
     use super::*;
 
     #[test]
     fn test_session_key_string_round_trip_uses_agent_session_format() {
-        assert2::assert!(let Ok(key) = "codex:session-id".parse::<SessionKey>());
+        let key_result = "codex:session-id".parse::<SessionKey>();
+        assert_that!(key_result, ok(anything()));
+        let key = key_result.expect("session key should parse");
 
-        pretty_assertions::assert_eq!(key, SessionKey::new(Agent::Codex, "session-id"));
-        pretty_assertions::assert_eq!(key.to_string(), "codex:session-id");
+        assert_that!(key, eq(SessionKey::new(Agent::Codex, "session-id")));
+        assert_that!(key.to_string(), eq("codex:session-id"));
     }
 
     #[test]
@@ -285,37 +288,41 @@ mod tests {
             ..claude.clone()
         };
 
-        assert2::assert!(let Ok((_, claude_args)) = claude.build_resume_command());
-        pretty_assertions::assert_eq!(claude_args, vec!["--resume".to_owned(), "session-id".to_owned()]);
+        let claude_command_result = claude.build_resume_command();
+        assert_that!(claude_command_result, ok(anything()));
+        let (_, claude_args) = claude_command_result.expect("Claude session should build resume command");
+        assert_that!(claude_args, eq(vec!["--resume".to_owned(), "session-id".to_owned()]));
         let workspace_str = workspace.to_str().expect("workspace test path should be utf8");
-        pretty_assertions::assert_eq!(
+        assert_that!(
             codex.build_codex_resume_args(workspace_str, false),
-            vec![
+            eq(vec![
                 "resume".to_owned(),
                 "session-id".to_owned(),
                 "--no-alt-screen".to_owned(),
                 "--cd".to_owned(),
                 workspace_str.to_owned(),
-            ]
+            ])
         );
-        pretty_assertions::assert_eq!(
+        assert_that!(
             codex.build_codex_resume_args(workspace_str, true),
-            vec![
+            eq(vec![
                 "resume".to_owned(),
                 "session-id".to_owned(),
                 "--cd".to_owned(),
                 workspace_str.to_owned(),
-            ]
+            ])
         );
-        assert2::assert!(let Ok((_, cursor_args)) = cursor.build_resume_command());
-        pretty_assertions::assert_eq!(
+        let cursor_command_result = cursor.build_resume_command();
+        assert_that!(cursor_command_result, ok(anything()));
+        let (_, cursor_args) = cursor_command_result.expect("Cursor session should build resume command");
+        assert_that!(
             cursor_args,
-            vec![
+            eq(vec![
                 "--resume".to_owned(),
                 "session-id".to_owned(),
                 "--workspace".to_owned(),
                 workspace_str.to_owned(),
-            ]
+            ])
         );
     }
 
@@ -335,8 +342,8 @@ mod tests {
             created_at.to_utc(),
         );
 
-        pretty_assertions::assert_eq!(session.name, "hello world");
-        pretty_assertions::assert_eq!(session.search_text, "hello world");
+        assert_that!(session.name, eq("hello world"));
+        assert_that!(session.search_text, eq("hello world"));
     }
 
     #[test]
@@ -347,6 +354,6 @@ mod tests {
         }
         let search_text = builder.build("fallback");
 
-        pretty_assertions::assert_eq!(search_text, "fallback first line second line");
+        assert_that!(search_text, eq("fallback first line second line"));
     }
 }

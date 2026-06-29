@@ -167,6 +167,7 @@ fn append_lnum(repo_url: &mut String, bound: &Bound) {
 #[cfg(test)]
 mod tests {
     use rstest::rstest;
+    use test_that::prelude::*;
 
     use super::*;
 
@@ -213,7 +214,7 @@ mod tests {
 
         build_github_file_url(&mut repo_url, url_kind, commit_hash, current_buffer_path, &selection);
 
-        pretty_assertions::assert_eq!(repo_url, expected);
+        assert_that!(repo_url, eq(expected));
     }
 
     #[rstest]
@@ -259,7 +260,7 @@ mod tests {
 
         build_gitlab_file_url(&mut repo_url, url_kind, commit_hash, current_buffer_path, &selection);
 
-        pretty_assertions::assert_eq!(repo_url, expected);
+        assert_that!(repo_url, eq(expected));
     }
 
     fn dummy_selection(start: Bound, end: Bound) -> Selection {

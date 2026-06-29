@@ -232,6 +232,7 @@ mod tests {
     use muxr_core::TabSnapshot;
     use muxr_core::TrackedProcessState;
     use muxr_transport::ServerListener;
+    use test_that::prelude::*;
 
     use super::*;
 
@@ -247,12 +248,11 @@ mod tests {
             .block_on(guard_external_start_seed(&paths, &session, layout))
             .expect_err("expected persisted layout to block external layout seed");
 
-        assert2::assert!(
-            error
-                .to_string()
-                .contains("muxr external layout can only seed a new session")
+        assert_that!(
+            error.to_string(),
+            contains_substring("muxr external layout can only seed a new session")
         );
-        assert2::assert!(error.to_string().contains("state=persisted-layout"));
+        assert_that!(error.to_string(), contains_substring("state=persisted-layout"));
         Ok(())
     }
 
@@ -267,7 +267,7 @@ mod tests {
             let listener = ServerListener::bind(&paths.socket)?;
             let handle = tokio::spawn(async move {
                 let mut connection = listener.accept().await?;
-                pretty_assertions::assert_eq!(connection.recv_request().await?, Some(ClientRequest::Ping));
+                assert_that!(connection.recv_request().await?, eq(Some(ClientRequest::Ping)));
                 connection.send_event(&ServerEvent::Pong).await?;
                 Ok::<(), rootcause::Report>(())
             });
@@ -281,12 +281,11 @@ mod tests {
             Ok::<_, rootcause::Report>(error)
         })?;
 
-        assert2::assert!(
-            error
-                .to_string()
-                .contains("muxr external layout can only seed a new session")
+        assert_that!(
+            error.to_string(),
+            contains_substring("muxr external layout can only seed a new session")
         );
-        assert2::assert!(error.to_string().contains("state=live"));
+        assert_that!(error.to_string(), contains_substring("state=live"));
         Ok(())
     }
 
@@ -298,8 +297,11 @@ mod tests {
             fs::create_dir_all(&paths.root)?;
             let _listener = ServerListener::bind(&paths.socket)?;
 
-            assert2::assert!(handle_attach_failure(AttachFailure::Rejected(report!("already attached"))).is_err());
-            assert2::assert!(paths.socket.exists());
+            assert_that!(
+                handle_attach_failure(AttachFailure::Rejected(report!("already attached"))),
+                err(anything())
+            );
+            assert_that!(paths.socket.exists(), eq(true));
             Ok(())
         })
     }
@@ -313,10 +315,10 @@ mod tests {
             let listener = ServerListener::bind(&paths.socket)?;
             let handle = tokio::spawn(async move {
                 let mut connection = listener.accept().await?;
-                assert2::assert!(matches!(
+                assert_that!(
                     connection.recv_request().await?,
-                    Some(ClientRequest::Attach(_))
-                ));
+                    some(matches_pattern!(ClientRequest::Attach(anything())))
+                );
                 connection
                     .send_event(&ServerEvent::Error(ServerError::ClientAlreadyAttached))
                     .await?;
@@ -330,7 +332,10 @@ mod tests {
                 |_| report!("expected rejected attach"),
             );
 
-            assert2::assert!(attach_error.to_string().contains("muxr server rejected attach"));
+            assert_that!(
+                attach_error.to_string(),
+                contains_substring("muxr server rejected attach")
+            );
             handle
                 .await
                 .map_err(|error| report!("muxr rejected attach test task panicked").attach(format!("{error}")))??;
@@ -348,10 +353,10 @@ mod tests {
             let listener = ServerListener::bind(&paths.socket)?;
             let handle = tokio::spawn(async move {
                 let mut connection = listener.accept().await?;
-                assert2::assert!(matches!(
+                assert_that!(
                     connection.recv_request().await?,
-                    Some(ClientRequest::Attach(_))
-                ));
+                    some(matches_pattern!(ClientRequest::Attach(anything())))
+                );
                 connection.send_event(&self::attached_event()?).await?;
                 Ok::<(), rootcause::Report>(())
             });
@@ -360,7 +365,7 @@ mod tests {
             let attached_session =
                 open_session_with_paths(&session, &paths, TerminalSize::new(80, 24)?, &missing_runner, None).await?;
 
-            pretty_assertions::assert_eq!(attached_session.layout.active_tab(), &TabId::new(1)?);
+            assert_that!(attached_session.layout.active_tab(), eq(&TabId::new(1)?));
             handle
                 .await
                 .map_err(|error| report!("muxr live attach test task panicked").attach(format!("{error}")))??;
@@ -378,22 +383,21 @@ mod tests {
             fs::set_permissions(&runner, fs::Permissions::from_mode(0o755))
                 .context("failed to make fake muxr server executable")?;
 
-            let Err(error) = open_session_with_paths(&session, &paths, TerminalSize::new(80, 24)?, &runner, None).await
-            else {
-                return Err(report!("expected startup failure"));
-            };
-
-            assert2::assert!(
-                error
-                    .to_string()
-                    .contains("muxr server did not become attachable after start")
+            let open_result =
+                open_session_with_paths(&session, &paths, TerminalSize::new(80, 24)?, &runner, None).await;
+            assert_that!(
+                open_result.as_ref().map(|_| ()).map_err(ToString::to_string),
+                err(contains_substring("muxr server did not become attachable after start"))
             );
-            let error = error.to_string();
-            assert2::assert!(error.contains("server_pid="));
-            assert2::assert!(error.contains(&format!("logs_dir={}", paths.logs_root()?.display())));
-            assert2::assert!(error.contains("log_pattern=work-*-"));
-            assert2::assert!(!error.contains("server_log="));
-            assert2::assert!(error.contains(".log"));
+            let error = open_result.map_or_else(|error| error.to_string(), |_| String::new());
+            assert_that!(error, contains_substring("server_pid="));
+            assert_that!(
+                error,
+                contains_substring(format!("logs_dir={}", paths.logs_root()?.display()))
+            );
+            assert_that!(error, contains_substring("log_pattern=work-*-"));
+            assert_that!(error, not(contains_substring("server_log=")));
+            assert_that!(error, contains_substring(".log"));
             Ok(())
         })
     }

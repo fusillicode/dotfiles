@@ -143,6 +143,8 @@ fn remove_file_if_exists(path: &Path) -> rootcause::Result<()> {
 mod tests {
     use std::fs;
 
+    use test_that::prelude::*;
+
     use super::*;
 
     #[test]
@@ -154,8 +156,8 @@ mod tests {
 
         let outcome = self::delete_session_paths(&paths)?;
 
-        pretty_assertions::assert_eq!(outcome, SessionDeleteOutcome::StoppedRemoved);
-        assert2::assert!(!paths.root.exists());
+        assert_that!(outcome, eq(SessionDeleteOutcome::StoppedRemoved));
+        assert_that!(paths.root.exists(), eq(false));
         Ok(())
     }
 
@@ -172,9 +174,9 @@ mod tests {
 
         let outcome = self::delete_session_paths(&paths)?;
 
-        pretty_assertions::assert_eq!(outcome, SessionDeleteOutcome::StoppedRemoved);
-        assert2::assert!(!paths.root.exists());
-        assert2::assert!(log_path.exists());
+        assert_that!(outcome, eq(SessionDeleteOutcome::StoppedRemoved));
+        assert_that!(paths.root.exists(), eq(false));
+        assert_that!(log_path.exists(), eq(true));
         Ok(())
     }
 
@@ -190,9 +192,9 @@ mod tests {
 
         let outcome = self::delete_session_paths(&paths)?;
 
-        pretty_assertions::assert_eq!(outcome, SessionDeleteOutcome::UnknownForced);
-        assert2::assert!(!paths.root.exists());
-        assert2::assert!(!paths.socket.exists());
+        assert_that!(outcome, eq(SessionDeleteOutcome::UnknownForced));
+        assert_that!(paths.root.exists(), eq(false));
+        assert_that!(paths.socket.exists(), eq(false));
         Ok(())
     }
 
@@ -206,8 +208,8 @@ mod tests {
 
         let outcome = self::delete_session_paths(&paths)?;
 
-        pretty_assertions::assert_eq!(outcome, SessionDeleteOutcome::UnknownForced);
-        assert2::assert!(!paths.root.exists());
+        assert_that!(outcome, eq(SessionDeleteOutcome::UnknownForced));
+        assert_that!(paths.root.exists(), eq(false));
         Ok(())
     }
 
@@ -233,7 +235,7 @@ mod tests {
                     let mut connection = listener.accept().await?;
                     drop(listener);
                     self::remove_file_if_exists(&socket)?;
-                    pretty_assertions::assert_eq!(connection.recv_request().await?, Some(ClientRequest::Ping));
+                    assert_that!(connection.recv_request().await?, eq(Some(ClientRequest::Ping)));
                     connection.send_event(&ServerEvent::Pong).await
                 })
         });
@@ -246,9 +248,9 @@ mod tests {
         server
             .join()
             .map_err(|error| report!("fake muxr session thread panicked").attach(format!("{error:?}")))??;
-        pretty_assertions::assert_eq!(outcome, SessionDeleteOutcome::LiveVanishedForced);
-        assert2::assert!(!paths.root.exists());
-        assert2::assert!(!paths.socket.exists());
+        assert_that!(outcome, eq(SessionDeleteOutcome::LiveVanishedForced));
+        assert_that!(paths.root.exists(), eq(false));
+        assert_that!(paths.socket.exists(), eq(false));
         Ok(())
     }
 

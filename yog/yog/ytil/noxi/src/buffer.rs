@@ -433,19 +433,24 @@ pub fn get_current_line() -> Option<String> {
 mod tests {
     use mockall::predicate::*;
     use rstest::rstest;
+    use test_that::assert_that;
+    use test_that::matchers::eq as test_eq;
+    use test_that::prelude::err;
+    use test_that::prelude::ok;
+    use test_that::prelude::result_of;
 
     use super::*;
 
     #[test]
     fn test_cursor_position_adjusted_col_when_zero_returns_one() {
         let pos = CursorPosition { row: 1, col: 0 };
-        pretty_assertions::assert_eq!(pos.adjusted_col(), 1);
+        assert_that!(pos.adjusted_col(), test_eq(1));
     }
 
     #[test]
     fn test_cursor_position_adjusted_col_when_non_zero_increments_by_one() {
         let pos = CursorPosition { row: 10, col: 7 };
-        pretty_assertions::assert_eq!(pos.adjusted_col(), 8);
+        assert_that!(pos.adjusted_col(), test_eq(8));
     }
 
     #[test]
@@ -455,8 +460,7 @@ mod tests {
 
         let result = buffer.get_text_between((0, 6), (0, 11), TextBoundary::Exact);
 
-        assert2::assert!(let Ok(value) = result);
-        pretty_assertions::assert_eq!(value, "world");
+        assert_that!(result, ok(test_eq("world")));
     }
 
     #[test]
@@ -466,8 +470,7 @@ mod tests {
 
         let result = buffer.get_text_between((0, 6), (0, 11), TextBoundary::FromLineStart);
 
-        assert2::assert!(let Ok(value) = result);
-        pretty_assertions::assert_eq!(value, "hello world");
+        assert_that!(result, ok(test_eq("hello world")));
     }
 
     #[test]
@@ -477,8 +480,7 @@ mod tests {
 
         let result = buffer.get_text_between((0, 0), (0, 5), TextBoundary::ToLineEnd);
 
-        assert2::assert!(let Ok(value) = result);
-        pretty_assertions::assert_eq!(value, "hello world");
+        assert_that!(result, ok(test_eq("hello world")));
     }
 
     #[test]
@@ -488,8 +490,7 @@ mod tests {
 
         let result = buffer.get_text_between((0, 6), (0, 5), TextBoundary::FromLineStartToEnd);
 
-        assert2::assert!(let Ok(value) = result);
-        pretty_assertions::assert_eq!(value, "hello world");
+        assert_that!(result, ok(test_eq("hello world")));
     }
 
     #[test]
@@ -503,8 +504,7 @@ mod tests {
 
         let result = buffer.get_text_between((0, 1), (2, 3), TextBoundary::Exact);
 
-        assert2::assert!(let Ok(value) = result);
-        pretty_assertions::assert_eq!(value, "ine1\nline2\nlin");
+        assert_that!(result, ok(test_eq("ine1\nline2\nlin")));
     }
 
     #[test]
@@ -518,8 +518,7 @@ mod tests {
 
         let result = buffer.get_text_between((0, 1), (2, 3), TextBoundary::FromLineStartToEnd);
 
-        assert2::assert!(let Ok(value) = result);
-        pretty_assertions::assert_eq!(value, "line1\nline2\nline3");
+        assert_that!(result, ok(test_eq("line1\nline2\nline3")));
     }
 
     #[test]
@@ -533,8 +532,7 @@ mod tests {
 
         let result = buffer.get_text_between((0, 1), (2, 3), TextBoundary::ToLineEnd);
 
-        assert2::assert!(let Ok(value) = result);
-        pretty_assertions::assert_eq!(value, "ine1\nline2\nline3");
+        assert_that!(result, ok(test_eq("ine1\nline2\nline3")));
     }
 
     #[test]
@@ -544,10 +542,12 @@ mod tests {
 
         let result = buffer.get_text_between((0, 10), (0, 15), TextBoundary::Exact);
 
-        assert2::assert!(let Err(err) = result);
-        assert_eq!(
-            err.format_current_context().to_string(),
-            "cannot extract substring from line"
+        assert_that!(
+            (result).map(|_| ()),
+            err(result_of!(
+                |err: &rootcause::Report| err.format_current_context().to_string(),
+                test_eq("cannot extract substring from line")
+            ))
         );
     }
 
@@ -566,7 +566,7 @@ mod tests {
         #[case] start_col: usize,
         #[case] expected: usize,
     ) {
-        pretty_assertions::assert_eq!(boundary.get_line_start_idx(line_idx, start_col), expected);
+        assert_that!(boundary.get_line_start_idx(line_idx, start_col), test_eq(expected));
     }
 
     #[rstest]
@@ -584,9 +584,9 @@ mod tests {
         #[case] end_col: usize,
         #[case] expected: usize,
     ) {
-        pretty_assertions::assert_eq!(
+        assert_that!(
             boundary.get_line_end_idx(line, line_idx, last_line_idx, end_col),
-            expected
+            test_eq(expected)
         );
     }
 

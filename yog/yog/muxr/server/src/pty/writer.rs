@@ -502,6 +502,7 @@ mod tests {
     use std::time::Duration;
 
     use muxr_core::SessionName;
+    use test_that::prelude::*;
 
     use super::*;
 
@@ -513,7 +514,7 @@ mod tests {
         queue.write_terminal_replies(&[b"one".to_vec(), b"two".to_vec()])?;
         self::drain_queued_writes(&queue, &receiver, self::capturing_pty_writer(Arc::clone(&written)))?;
 
-        pretty_assertions::assert_eq!(self::captured_pty_bytes(written.as_ref())?, b"onetwo".to_vec());
+        assert_that!(self::captured_pty_bytes(written.as_ref())?, eq(b"onetwo".to_vec()));
         Ok(())
     }
 
@@ -542,8 +543,8 @@ mod tests {
             }),
         )?;
 
-        pretty_assertions::assert_eq!(self::captured_pty_bytes(written.as_ref())?, b"onetwo".to_vec());
-        pretty_assertions::assert_eq!(self::captured_flushes(flushes.as_ref())?, 1);
+        assert_that!(self::captured_pty_bytes(written.as_ref())?, eq(b"onetwo".to_vec()));
+        assert_that!(self::captured_flushes(flushes.as_ref())?, eq(1));
         Ok(())
     }
 
@@ -568,7 +569,7 @@ mod tests {
             return Err(report!("expected muxr pty writer backpressure to return pending write"));
         };
 
-        pretty_assertions::assert_eq!(returned_write.bytes, b"two".to_vec());
+        assert_that!(returned_write.bytes, eq(b"two".to_vec()));
         Ok(())
     }
 
@@ -586,8 +587,8 @@ mod tests {
             .err()
             .ok_or_else(|| report!("expected muxr pty write enqueue to fail after receiver drop"))?;
 
-        assert2::assert!(error.to_string().contains("pty writer channel disconnected"));
-        pretty_assertions::assert_eq!(super::lock_queue_mutex(&queue.state.queue)?.queued_bytes, 0);
+        assert_that!(error.to_string(), contains_substring("pty writer channel disconnected"));
+        assert_that!(super::lock_queue_mutex(&queue.state.queue)?.queued_bytes, eq(0));
         Ok(())
     }
 
@@ -596,11 +597,11 @@ mod tests {
         let (queue, receiver) = self::queued_pty_writer();
         drop(receiver);
 
-        let Err(error) = queue.shutdown() else {
-            return Err(report!("expected muxr pty writer shutdown to fail after receiver drop"));
-        };
-
-        assert2::assert!(error.to_string().contains("pty writer channel disconnected"));
+        assert_that!(
+            queue.shutdown(),
+            err(displays_as(contains_substring("pty writer channel disconnected")))
+        );
+        assert_that!(queue.state.stop_state()?, eq(PtyWriterStopState::Stopped));
         Ok(())
     }
 
@@ -632,7 +633,10 @@ mod tests {
             .map_err(|error| {
                 report!("muxr byte-budget waiting enqueue test thread did not start").attach(format!("error={error}"))
             })?;
-        assert2::assert!(waiting_done_receiver.recv_timeout(Duration::from_millis(20)).is_err());
+        assert_that!(
+            waiting_done_receiver.recv_timeout(Duration::from_millis(20)),
+            err(anything())
+        );
 
         let writer_queue = queue.clone();
         let writer_handle = thread::spawn({
@@ -660,7 +664,7 @@ mod tests {
             .join()
             .map_err(|_| report!("muxr byte-budget writer test thread panicked"))?;
 
-        pretty_assertions::assert_eq!(self::captured_pty_bytes(written.as_ref())?, b"abcd".to_vec());
+        assert_that!(self::captured_pty_bytes(written.as_ref())?, eq(b"abcd".to_vec()));
         Ok(())
     }
 
@@ -721,7 +725,7 @@ mod tests {
             .err()
             .ok_or_else(|| report!("expected waiting muxr pty write enqueue to fail after shutdown"))?;
 
-        assert2::assert!(error.contains("pty writer is closed"));
+        assert_that!(error, contains_substring("pty writer is closed"));
         Ok(())
     }
 
@@ -739,7 +743,7 @@ mod tests {
         )?;
         self::drain_queued_writes(&queue, &receiver, self::capturing_pty_writer(Arc::clone(&written)))?;
 
-        pretty_assertions::assert_eq!(self::captured_pty_bytes(written.as_ref())?, payload);
+        assert_that!(self::captured_pty_bytes(written.as_ref())?, eq(payload));
         Ok(())
     }
 
@@ -760,7 +764,7 @@ mod tests {
             queue.state.as_ref(),
         );
 
-        pretty_assertions::assert_eq!(self::captured_pty_bytes(written.as_ref())?, b"accepted".to_vec());
+        assert_that!(self::captured_pty_bytes(written.as_ref())?, eq(b"accepted".to_vec()));
         Ok(())
     }
 
@@ -786,11 +790,11 @@ mod tests {
             }),
         )?;
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             self::captured_pty_bytes(written.as_ref())?,
-            vec![b'x'; PTY_WRITE_BATCH_MAX_MESSAGES + 1]
+            eq(vec![b'x'; PTY_WRITE_BATCH_MAX_MESSAGES + 1])
         );
-        pretty_assertions::assert_eq!(self::captured_flushes(flushes.as_ref())?, 2);
+        assert_that!(self::captured_flushes(flushes.as_ref())?, eq(2));
         Ok(())
     }
 
@@ -823,10 +827,10 @@ mod tests {
         )?;
 
         let written = self::captured_pty_bytes(written.as_ref())?;
-        pretty_assertions::assert_eq!(written.len(), PTY_WRITE_BATCH_MAX_BYTES + 1);
-        pretty_assertions::assert_eq!(written.first(), Some(&b'a'));
-        pretty_assertions::assert_eq!(written.last(), Some(&b'c'));
-        pretty_assertions::assert_eq!(self::captured_flushes(flushes.as_ref())?, 2);
+        assert_that!(written.len(), eq(PTY_WRITE_BATCH_MAX_BYTES + 1));
+        assert_that!(written.first(), eq(Some(&b'a')));
+        assert_that!(written.last(), eq(Some(&b'c')));
+        assert_that!(self::captured_flushes(flushes.as_ref())?, eq(2));
         Ok(())
     }
 
@@ -849,7 +853,7 @@ mod tests {
             .err()
             .ok_or_else(|| report!("expected muxr pty writer enqueue to fail after writer error"))?;
 
-        assert2::assert!(error.to_string().contains("test pty writer failed"));
+        assert_that!(error.to_string(), contains_substring("test pty writer failed"));
         Ok(())
     }
 
@@ -873,7 +877,7 @@ mod tests {
             .err()
             .ok_or_else(|| report!("expected muxr pty writer enqueue to fail after writer error and shutdown"))?;
 
-        assert2::assert!(error.to_string().contains("test pty writer failed"));
+        assert_that!(error.to_string(), contains_substring("test pty writer failed"));
         Ok(())
     }
 
@@ -891,10 +895,10 @@ mod tests {
             Ok(())
         })?;
 
-        assert2::assert!(log.contains("kind=\"pty_writer_stopped_after_error\""));
-        assert2::assert!(log.contains("event=\"write_batch\""));
-        assert2::assert!(log.contains("session="));
-        assert2::assert!(log.contains("test pty writer failed"));
+        assert_that!(log, contains_substring("kind=\"pty_writer_stopped_after_error\""));
+        assert_that!(log, contains_substring("event=\"write_batch\""));
+        assert_that!(log, contains_substring("session="));
+        assert_that!(log, contains_substring("test pty writer failed"));
         Ok(())
     }
 
@@ -906,7 +910,7 @@ mod tests {
         queue.write_focus_event(TerminalFocusReporting::Disabled, TerminalFocusEvent::Lost)?;
         self::drain_queued_writes(&queue, &receiver, self::capturing_pty_writer(Arc::clone(&written)))?;
 
-        pretty_assertions::assert_eq!(self::captured_pty_bytes(written.as_ref())?, Vec::<u8>::new());
+        assert_that!(self::captured_pty_bytes(written.as_ref())?, eq(Vec::<u8>::new()));
         Ok(())
     }
 
@@ -922,7 +926,7 @@ mod tests {
             queue.write_focus_event(TerminalFocusReporting::Enabled, event)?;
             self::drain_queued_writes(&queue, &receiver, self::capturing_pty_writer(Arc::clone(&written)))?;
 
-            pretty_assertions::assert_eq!(self::captured_pty_bytes(written.as_ref())?, expected.to_vec());
+            assert_that!(self::captured_pty_bytes(written.as_ref())?, eq(expected.to_vec()));
         }
         Ok(())
     }

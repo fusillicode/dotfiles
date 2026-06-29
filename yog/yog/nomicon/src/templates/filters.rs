@@ -23,6 +23,7 @@ pub fn format_to_iso_8601(dt: &DateTime<Utc>, _args: &dyn askama::Values) -> ask
 mod tests {
     use askama::Template;
     use chrono::TimeZone;
+    use test_that::prelude::*;
 
     use super::*;
 
@@ -41,7 +42,6 @@ mod tests {
         let dummy_filter_template = DummyFilterTemplate {
             value: Utc.with_ymd_and_hms(2025, 1, 2, 3, 4, 5).unwrap(),
         };
-        assert2::assert!(let Ok(res) = dummy_filter_template.render());
-        pretty_assertions::assert_eq!(res, "2025-01-02T03:04:05Z");
+        assert_that!(dummy_filter_template.render(), ok(eq("2025-01-02T03:04:05Z")));
     }
 }

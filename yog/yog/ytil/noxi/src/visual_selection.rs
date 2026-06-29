@@ -478,6 +478,7 @@ fn get_pos(mark: &str) -> rootcause::Result<Pos> {
 #[cfg(test)]
 mod tests {
     use rstest::rstest;
+    use test_that::prelude::*;
 
     use super::*;
 
@@ -494,8 +495,8 @@ mod tests {
         #[case] expected_second: Pos,
     ) {
         let (first, second) = self_pos.sort(other_pos);
-        pretty_assertions::assert_eq!(first, expected_first);
-        pretty_assertions::assert_eq!(second, expected_second);
+        assert_that!(first, eq(expected_first));
+        assert_that!(second, eq(expected_second));
     }
 
     fn pos(lnum: usize, col: usize) -> Pos {
@@ -506,29 +507,36 @@ mod tests {
     fn test_selection_bounds_from_positions_normalizes_reversed_coordinates() {
         let result = SelectionBounds::from_positions(pos(4, 10), pos(2, 3));
 
-        assert2::assert!(let Ok(bounds) = result);
-        pretty_assertions::assert_eq!(*bounds.start(), Bound { lnum: 2, col: 3 });
-        pretty_assertions::assert_eq!(*bounds.end(), Bound { lnum: 4, col: 10 });
+        assert_that!(result, ok(anything()));
+        let bounds = result.expect("selection bounds should normalize");
+        assert_that!(*bounds.start(), eq(Bound { lnum: 2, col: 3 }));
+        assert_that!(*bounds.end(), eq(Bound { lnum: 4, col: 10 }));
     }
 
     #[test]
     fn test_selection_lines_returns_raw_selected_lines() {
         let result = SelectionBounds::from_positions(pos(1, 2), pos(2, 8));
 
-        assert2::assert!(let Ok(bounds) = result);
+        assert_that!(result, ok(anything()));
+        let bounds = result.expect("selection bounds should parse");
         let selection = Selection::new(
             bounds,
             vec![nvim_oxi::String::from("{\"b\":2}"), nvim_oxi::String::from("x")].into_iter(),
         );
 
-        pretty_assertions::assert_eq!(selection.lines(), &["{\"b\":2}".to_string(), "x".to_string()]);
+        assert_that!(selection.lines(), eq(&["{\"b\":2}".to_string(), "x".to_string()]));
     }
 
     #[test]
     fn test_visual_range_command_prefix_returns_visual_range() {
         let result = SelectionBounds::from_positions(pos(1, 0), pos(3, 4));
 
-        assert2::assert!(let Ok(bounds) = result);
-        pretty_assertions::assert_eq!(visual_range_command_prefix(&bounds), "'<,'>");
+        assert_that!(
+            result,
+            ok(result_of!(
+                |bounds: &SelectionBounds| visual_range_command_prefix(bounds),
+                eq("'<,'>")
+            ))
+        );
     }
 }

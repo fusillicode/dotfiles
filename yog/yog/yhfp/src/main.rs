@@ -67,6 +67,7 @@ mod tests {
     use std::path::PathBuf;
 
     use rstest::rstest;
+    use test_that::prelude::*;
 
     use super::*;
 
@@ -84,7 +85,6 @@ mod tests {
             file_path: PathBuf::from(path),
             position: ytil_hx::HxCursorPosition { line, column },
         };
-        assert2::assert!(let Ok(result) = format_hx_status_line(&status));
-        pretty_assertions::assert_eq!(result, expected);
+        assert_that!(format_hx_status_line(&status), ok(eq(expected)));
     }
 }

@@ -92,6 +92,7 @@ mod tests {
     use muxr_core::RenderTextStyle;
     use muxr_core::SessionName;
     use muxr_core::TerminalSize;
+    use test_that::prelude::*;
 
     use super::*;
     use crate::pane::focus::PaneFocusDirection;
@@ -107,7 +108,7 @@ mod tests {
         };
         pane.attention_state = PaneAttentionState::NeedsAttention;
 
-        pretty_assertions::assert_eq!(layout.attention_pane_ids(), vec![pane_id]);
+        assert_that!(layout.attention_pane_ids(), eq(vec![pane_id]));
         Ok(())
     }
 
@@ -120,12 +121,12 @@ mod tests {
         };
         pane.attention_state = PaneAttentionState::NeedsAttention;
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             layout.focus_pane_direction(&TerminalSize::new(80, 24)?, PaneFocusDirection::Left)?,
-            crate::pane::focus::PaneFocusChange::Changed,
+            eq(crate::pane::focus::PaneFocusChange::Changed)
         );
 
-        pretty_assertions::assert_eq!(layout.attention_pane_ids(), Vec::<PaneId>::new());
+        assert_that!(layout.attention_pane_ids(), eq(Vec::<PaneId>::new()));
         Ok(())
     }
 
@@ -139,10 +140,10 @@ mod tests {
 
         let updated = apply_attention_tint(style, RenderColor::Rgb { r: 80, g: 0, b: 0 });
 
-        pretty_assertions::assert_eq!(updated.attrs.italic(), true);
-        pretty_assertions::assert_eq!(updated.attrs.dim(), false);
-        assert2::assert!(updated.bg != style.bg);
-        pretty_assertions::assert_eq!(updated.fg, style.fg);
+        assert_that!(updated.attrs.italic(), eq(true));
+        assert_that!(updated.attrs.dim(), eq(false));
+        assert_that!(updated.bg, not(eq(style.bg)));
+        assert_that!(updated.fg, eq(style.fg));
     }
 
     #[test]
@@ -156,8 +157,8 @@ mod tests {
 
         let updated = apply_attention_tint(style, tint);
 
-        pretty_assertions::assert_eq!(updated.bg, tint);
-        pretty_assertions::assert_eq!(updated.fg, style.fg);
+        assert_that!(updated.bg, eq(tint));
+        assert_that!(updated.fg, eq(style.fg));
     }
 
     fn layout() -> rootcause::Result<SessionLayout> {

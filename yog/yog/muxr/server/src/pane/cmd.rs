@@ -200,6 +200,8 @@ fn process_group_members(process_group: u32) -> Result<Vec<PaneProcess>, Process
 
 #[cfg(test)]
 mod tests {
+    use test_that::prelude::*;
+
     use super::*;
 
     #[test]
@@ -210,7 +212,7 @@ mod tests {
             shell_pid: Some(9322),
         });
 
-        pretty_assertions::assert_eq!(observation, PaneCmdObservation::Shell);
+        assert_that!(observation, eq(PaneCmdObservation::Shell));
     }
 
     #[test]
@@ -225,10 +227,16 @@ mod tests {
             shell_pid: Some(9322),
         });
 
-        assert2::assert!(let PaneCmdObservation::FgCmd(fg_cmd) = observation);
+        assert_that!(observation, matches_pattern!(PaneCmdObservation::FgCmd(anything())));
+        let fg_cmd = match observation {
+            PaneCmdObservation::FgCmd(fg_cmd) => fg_cmd,
+            PaneCmdObservation::Shell | PaneCmdObservation::Unknown { .. } => {
+                panic!("asserted foreground command")
+            }
+        };
         let cmd = fg_cmd.leader_cmd().expect("expected leader command");
-        pretty_assertions::assert_eq!(cmd.executable, "demo-aarch64-apple-darwin");
-        pretty_assertions::assert_eq!(cmd.pid, 9400);
+        assert_that!(cmd.executable, eq("demo-aarch64-apple-darwin"));
+        assert_that!(cmd.pid, eq(9400));
     }
 
     #[test]
@@ -239,8 +247,14 @@ mod tests {
             shell_pid: Some(9322),
         });
 
-        assert2::assert!(let PaneCmdObservation::FgCmd(fg_cmd) = observation);
-        assert2::assert!(fg_cmd.leader_cmd().is_none());
+        assert_that!(observation, matches_pattern!(PaneCmdObservation::FgCmd(anything())));
+        let fg_cmd = match observation {
+            PaneCmdObservation::FgCmd(fg_cmd) => fg_cmd,
+            PaneCmdObservation::Shell | PaneCmdObservation::Unknown { .. } => {
+                panic!("asserted foreground command")
+            }
+        };
+        assert_that!(fg_cmd.leader_cmd(), none());
     }
 
     #[test]
@@ -250,9 +264,18 @@ mod tests {
             Ok(vec![self::cmd(17989, "codex")]),
         ));
 
-        assert2::assert!(let PaneCmdObservation::FgCmd(fg_cmd) = observation);
-        pretty_assertions::assert_eq!(fg_cmd.leader_cmd().expect("expected leader command").executable, "ags");
-        pretty_assertions::assert_eq!(fg_cmd.process_group_cmds(), Ok(vec![self::cmd(17989, "codex")]));
+        assert_that!(observation, matches_pattern!(PaneCmdObservation::FgCmd(anything())));
+        let fg_cmd = match observation {
+            PaneCmdObservation::FgCmd(fg_cmd) => fg_cmd,
+            PaneCmdObservation::Shell | PaneCmdObservation::Unknown { .. } => {
+                panic!("asserted foreground command")
+            }
+        };
+        assert_that!(
+            fg_cmd.leader_cmd().expect("expected leader command").executable,
+            eq("ags")
+        );
+        assert_that!(fg_cmd.process_group_cmds(), eq(Ok(vec![self::cmd(17989, "codex")])));
     }
 
     #[test]
@@ -263,7 +286,7 @@ mod tests {
             shell_pid: Some(9322),
         });
 
-        pretty_assertions::assert_eq!(observation, PaneCmdObservation::Shell);
+        assert_that!(observation, eq(PaneCmdObservation::Shell));
     }
 
     #[test]
@@ -274,8 +297,17 @@ mod tests {
             shell_pid: Some(9322),
         });
 
-        assert2::assert!(let PaneCmdObservation::FgCmd(fg_cmd) = observation);
-        pretty_assertions::assert_eq!(fg_cmd.leader_cmd().expect("expected leader command").executable, "nvim");
+        assert_that!(observation, matches_pattern!(PaneCmdObservation::FgCmd(anything())));
+        let fg_cmd = match observation {
+            PaneCmdObservation::FgCmd(fg_cmd) => fg_cmd,
+            PaneCmdObservation::Shell | PaneCmdObservation::Unknown { .. } => {
+                panic!("asserted foreground command")
+            }
+        };
+        assert_that!(
+            fg_cmd.leader_cmd().expect("expected leader command").executable,
+            eq("nvim")
+        );
     }
 
     fn process(pid: u32, name: &str) -> PaneProcess {

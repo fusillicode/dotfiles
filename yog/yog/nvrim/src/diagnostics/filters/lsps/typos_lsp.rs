@@ -113,6 +113,8 @@ impl DiagnosticsFilter for TyposLspFilter<'_> {
 
 #[cfg(test)]
 mod tests {
+    use test_that::prelude::*;
+
     use super::*;
     use crate::diagnostics::filters::BufferWithPath;
 
@@ -136,8 +138,7 @@ mod tests {
             source: "typos",
             message: "some test message",
         };
-        assert2::assert!(let Ok(res) = filter.skip_diagnostic(&buf, &diag));
-        assert!(!res);
+        assert_that!(filter.skip_diagnostic(&buf, &diag), ok(eq(false)));
     }
 
     #[test]
@@ -153,8 +154,7 @@ mod tests {
             source: "other",
             message: "some test message",
         };
-        assert2::assert!(let Ok(res) = filter.skip_diagnostic(&buf, &diag));
-        assert!(!res);
+        assert_that!(filter.skip_diagnostic(&buf, &diag), ok(eq(false)));
     }
 
     #[test]
@@ -170,8 +170,7 @@ mod tests {
             source: "typos",
             message: "some other message",
         };
-        assert2::assert!(let Ok(res) = filter.skip_diagnostic(&buf, &diag));
-        assert!(!res);
+        assert_that!(filter.skip_diagnostic(&buf, &diag), ok(eq(false)));
     }
 
     #[test]
@@ -187,8 +186,7 @@ mod tests {
             source: "typos",
             message: "some test message",
         };
-        assert2::assert!(let Ok(res) = filter.skip_diagnostic(&buf, &diag));
-        assert!(res);
+        assert_that!(filter.skip_diagnostic(&buf, &diag), ok(eq(true)));
     }
 
     #[test]
@@ -203,7 +201,12 @@ mod tests {
         let diag = dict! {
             source: "typos",
         };
-        assert2::assert!(let Err(err) = filter.skip_diagnostic(&buf, &diag));
-        assert_eq!(err.format_current_context().to_string(), "missing dict value");
+        assert_that!(
+            (filter.skip_diagnostic(&buf, &diag)).map(|_| ()),
+            err(result_of!(
+                |err: &rootcause::Report| err.format_current_context().to_string(),
+                eq("missing dict value")
+            ))
+        );
     }
 }

@@ -21,15 +21,14 @@ checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 name = "ags"
 version = "0.1.0"
 dependencies = [
- "assert2",
  "chrono",
  "owo-colors",
- "pretty_assertions",
  "rootcause",
  "serde",
  "serde_json",
  "strum",
  "tempfile",
+ "test-that",
  "ytil_agents",
  "ytil_git",
  "ytil_sys",
@@ -253,31 +252,6 @@ dependencies = [
  "serde_derive",
  "unicode-ident",
  "winnow",
-]
-
-[[package]]
-name = "assert2"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a1f7e619706e24555d32d89b4446960bec3d085d1f488c659874b0929998bc28"
-dependencies = [
- "assert2-macros",
- "diff",
- "terminal_size",
- "unicode-width",
- "yansi",
-]
-
-[[package]]
-name = "assert2-macros"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "347ba98d9bd5467cf7e5b5ea0a90b509d9b589060b302fcc0d9ae6268ff7e02e"
-dependencies = [
- "proc-macro2",
- "quote",
- "rustc_version",
- "syn 2.0.118",
 ]
 
 [[package]]
@@ -1178,12 +1152,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "abd57806937c9cc163efc8ea3910e00a62e2aeb0b8119f1793a978088f8f6b04"
 
 [[package]]
-name = "diff"
-version = "0.1.13"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "56254986775e3233ffa9c4d7d3faaf6d36a2c09d30b20687e9f88bc8bafc16c8"
-
-[[package]]
 name = "digest"
 version = "0.10.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1347,13 +1315,12 @@ dependencies = [
 name = "evoke"
 version = "0.1.0"
 dependencies = [
- "assert2",
  "owo-colors",
- "pretty_assertions",
  "rootcause",
  "rstest",
  "serde",
  "serde_json",
+ "test-that",
  "ytil_cmd",
  "ytil_sys",
 ]
@@ -1656,13 +1623,12 @@ dependencies = [
 name = "gbm"
 version = "0.1.0"
 dependencies = [
- "assert2",
  "chrono",
  "owo-colors",
- "pretty_assertions",
  "rootcause",
  "rstest",
  "tempfile",
+ "test-that",
  "ytil_git",
  "ytil_sys",
  "ytil_tui",
@@ -1684,10 +1650,10 @@ dependencies = [
 name = "gcu"
 version = "0.1.0"
 dependencies = [
- "assert2",
  "owo-colors",
  "rootcause",
  "rstest",
+ "test-that",
  "url",
  "ytil_gh",
  "ytil_git",
@@ -1746,12 +1712,11 @@ dependencies = [
 name = "ghl"
 version = "0.1.0"
 dependencies = [
- "assert2",
  "owo-colors",
- "pretty_assertions",
  "rootcause",
  "rstest",
  "strum",
+ "test-that",
  "ytil_gh",
  "ytil_sys",
  "ytil_tui",
@@ -2042,16 +2007,15 @@ dependencies = [
 name = "idt"
 version = "0.1.0"
 dependencies = [
- "assert2",
  "flate2",
  "owo-colors",
- "pretty_assertions",
  "rootcause",
  "rstest",
  "serde_json",
  "sha2 0.11.0",
  "tar",
  "tempfile",
+ "test-that",
  "ureq",
  "xz2",
  "ytil_cmd",
@@ -2722,15 +2686,14 @@ dependencies = [
 name = "muxr-cli"
 version = "0.1.0"
 dependencies = [
- "assert2",
  "muxr-client",
  "muxr-core",
  "owo-colors",
- "pretty_assertions",
  "rootcause",
  "rstest",
  "strum",
  "tempfile",
+ "test-that",
  "ytil_sys",
  "ytil_tui",
 ]
@@ -2739,16 +2702,15 @@ dependencies = [
 name = "muxr-client"
 version = "0.1.0"
 dependencies = [
- "assert2",
  "chrono",
  "crossterm",
  "muxr-config",
  "muxr-core",
  "muxr-transport",
- "pretty_assertions",
  "rootcause",
  "rstest",
  "tempfile",
+ "test-that",
  "tokio",
  "ytil_sys",
 ]
@@ -2757,35 +2719,32 @@ dependencies = [
 name = "muxr-config"
 version = "0.1.0"
 dependencies = [
- "assert2",
  "muxr-core",
- "pretty_assertions",
  "rootcause",
  "rstest",
  "serde",
  "serde_json",
+ "test-that",
 ]
 
 [[package]]
 name = "muxr-core"
 version = "0.1.0"
 dependencies = [
- "assert2",
  "bytes",
  "compact_str",
- "pretty_assertions",
  "rkyv",
  "rootcause",
  "rstest",
  "serde",
  "serde_json",
+ "test-that",
 ]
 
 [[package]]
 name = "muxr-server"
 version = "0.1.0"
 dependencies = [
- "assert2",
  "chrono",
  "kanal",
  "libproc",
@@ -2793,13 +2752,13 @@ dependencies = [
  "muxr-core",
  "muxr-transport",
  "portable-pty",
- "pretty_assertions",
  "rootcause",
  "rstest",
  "serde",
  "serde_json",
  "smallvec",
  "tempfile",
+ "test-that",
  "tokio",
  "tracing",
  "tracing-appender",
@@ -2814,14 +2773,13 @@ dependencies = [
 name = "muxr-transport"
 version = "0.1.0"
 dependencies = [
- "assert2",
  "bytes",
  "futures-util",
  "interprocess",
  "muxr-core",
- "pretty_assertions",
  "rootcause",
  "rstest",
+ "test-that",
  "tokio",
  "tokio-util",
 ]
@@ -2902,11 +2860,10 @@ name = "nomicon"
 version = "0.1.0"
 dependencies = [
  "askama",
- "assert2",
  "chrono",
  "lightningcss",
- "pretty_assertions",
  "rootcause",
+ "test-that",
  "ytil_cmd",
  "ytil_sys",
 ]
@@ -3047,19 +3004,18 @@ dependencies = [
 name = "nvrim"
 version = "0.1.0"
 dependencies = [
- "assert2",
  "chrono",
  "convert_case 0.11.0",
  "fkr",
  "lit2",
  "nvim-oxi",
- "pretty_assertions",
  "rootcause",
  "rstest",
  "serde",
  "serde_json",
  "strum",
  "tempfile",
+ "test-that",
  "url",
  "ytil_cmd",
  "ytil_git",
@@ -3082,9 +3038,9 @@ dependencies = [
 name = "oe"
 version = "0.1.0"
 dependencies = [
- "pretty_assertions",
  "rootcause",
  "rstest",
+ "test-that",
  "ytil_cmd",
  "ytil_editor",
  "ytil_sys",
@@ -3449,16 +3405,6 @@ checksum = "d0de1b847b39c8131db0467e9df1ff60e6d0562ab8e9a16e568ad0fdb372e2f2"
 dependencies = [
  "predicates-core",
  "termtree",
-]
-
-[[package]]
-name = "pretty_assertions"
-version = "1.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3ae130e2f271fbc2ac3a40fb1d07180839cdbbe443c7a27e1e3c13c5cac0116d"
-dependencies = [
- "diff",
- "yansi",
 ]
 
 [[package]]
@@ -4031,12 +3977,11 @@ dependencies = [
 name = "rmr"
 version = "0.1.0"
 dependencies = [
- "assert2",
  "owo-colors",
- "pretty_assertions",
  "rootcause",
  "rstest",
  "tempfile",
+ "test-that",
  "ytil_sys",
 ]
 
@@ -4560,9 +4505,9 @@ name = "strgci"
 version = "0.1.0"
 dependencies = [
  "chrono",
- "pretty_assertions",
  "rootcause",
  "rstest",
+ "test-that",
  "ytil_git",
  "ytil_sys",
 ]
@@ -4660,11 +4605,11 @@ dependencies = [
 name = "tec"
 version = "0.1.0"
 dependencies = [
- "assert2",
  "nomicon",
  "owo-colors",
  "rootcause",
  "rstest",
+ "test-that",
  "thiserror 2.0.18",
  "ytil_cmd",
  "ytil_git",
@@ -4703,16 +4648,6 @@ dependencies = [
  "parking_lot",
  "rustix 1.1.4",
  "signal-hook",
- "windows-sys 0.61.2",
-]
-
-[[package]]
-name = "terminal_size"
-version = "0.4.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "230a1b821ccbd75b185820a1f1ff7b14d21da1e442e22c0863ea5f08771a8874"
-dependencies = [
- "rustix 1.1.4",
  "windows-sys 0.61.2",
 ]
 
@@ -4784,6 +4719,12 @@ dependencies = [
  "wezterm-input-types",
  "winapi",
 ]
+
+[[package]]
+name = "test-that"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3512f5c66134003802dc47e4614c8345199a848d101cffbf2df869d899e2ddff"
 
 [[package]]
 name = "thiserror"
@@ -5095,9 +5036,8 @@ checksum = "dd69c5aa8f924c7519d6372789a74eac5b94fb0f8fcf0d4a97eb0bfc3e785f39"
 name = "try"
 version = "0.1.0"
 dependencies = [
- "assert2",
- "pretty_assertions",
  "rootcause",
+ "test-that",
  "ytil_sys",
 ]
 
@@ -5306,11 +5246,11 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 name = "vpg"
 version = "0.1.0"
 dependencies = [
- "assert2",
  "owo-colors",
  "rootcause",
  "serde",
  "serde_json",
+ "test-that",
  "ytil_sys",
  "ytil_tui",
 ]
@@ -5952,12 +5892,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7a5a4b21e1a62b67a2970e6831bc091d7b87e119e7f9791aef9702e3bef04448"
 
 [[package]]
-name = "yansi"
-version = "1.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cfe53a6657fd280eaa890a3bc59152892ffa3e30101319d168b781ed6529b049"
-
-[[package]]
 name = "yghfl"
 version = "0.1.0"
 dependencies = [
@@ -5977,10 +5911,9 @@ dependencies = [
 name = "yhfp"
 version = "0.1.0"
 dependencies = [
- "assert2",
- "pretty_assertions",
  "rootcause",
  "rstest",
+ "test-that",
  "ytil_editor",
  "ytil_hx",
  "ytil_sys",
@@ -6014,9 +5947,7 @@ dependencies = [
 name = "ytil_agents"
 version = "0.1.0"
 dependencies = [
- "assert2",
  "chrono",
- "pretty_assertions",
  "rootcause",
  "rstest",
  "rusqlite",
@@ -6024,6 +5955,7 @@ dependencies = [
  "serde_json",
  "strum",
  "tempfile",
+ "test-that",
  "ytil_sys",
 ]
 
@@ -6031,8 +5963,8 @@ dependencies = [
 name = "ytil_cmd"
 version = "0.1.0"
 dependencies = [
- "assert2",
  "rootcause",
+ "test-that",
  "thiserror 2.0.18",
 ]
 
@@ -6040,8 +5972,8 @@ dependencies = [
 name = "ytil_editor"
 version = "0.1.0"
 dependencies = [
- "assert2",
  "rootcause",
+ "test-that",
  "ytil_wezterm",
 ]
 
@@ -6049,15 +5981,14 @@ dependencies = [
 name = "ytil_gh"
 version = "0.1.0"
 dependencies = [
- "assert2",
  "chrono",
  "convert_case 0.11.0",
- "pretty_assertions",
  "rootcause",
  "rstest",
  "serde",
  "serde_json",
  "strum",
+ "test-that",
  "url",
  "ytil_cmd",
  "ytil_git",
@@ -6067,13 +5998,12 @@ dependencies = [
 name = "ytil_git"
 version = "0.1.0"
 dependencies = [
- "assert2",
  "chrono",
  "git2",
- "pretty_assertions",
  "rootcause",
  "rstest",
  "tempfile",
+ "test-that",
  "ureq",
  "ytil_cmd",
 ]
@@ -6098,13 +6028,12 @@ dependencies = [
 name = "ytil_noxi"
 version = "0.1.0"
 dependencies = [
- "assert2",
  "mockall",
  "nvim-oxi",
- "pretty_assertions",
  "rootcause",
  "rstest",
  "serde",
+ "test-that",
  "tree-sitter",
  "tree-sitter-rust",
 ]
@@ -6113,17 +6042,16 @@ dependencies = [
 name = "ytil_sys"
 version = "0.1.0"
 dependencies = [
- "assert2",
  "chrono",
  "home",
  "itertools 0.15.0",
  "owo-colors",
  "pico-args",
- "pretty_assertions",
  "rootcause",
  "rstest",
  "serde",
  "tempfile",
+ "test-that",
  "ytil_cmd",
  "ytil_macros",
 ]
@@ -6132,14 +6060,13 @@ dependencies = [
 name = "ytil_tui"
 version = "0.1.0"
 dependencies = [
- "assert2",
  "chrono",
  "owo-colors",
- "pretty_assertions",
  "ratatui",
  "rootcause",
  "rstest",
  "skim",
+ "test-that",
  "tokio",
  "ytil_git",
 ]
@@ -6148,20 +6075,20 @@ dependencies = [
 name = "ytil_wezterm"
 version = "0.1.0"
 dependencies = [
- "assert2",
  "fake",
  "rootcause",
  "serde",
  "serde_json",
+ "test-that",
 ]
 
 [[package]]
 name = "ytil_zellij"
 version = "0.1.0"
 dependencies = [
- "pretty_assertions",
  "rootcause",
  "rstest",
+ "test-that",
  "ytil_cmd",
 ]
 

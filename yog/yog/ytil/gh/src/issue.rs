@@ -149,19 +149,19 @@ pub fn list() -> rootcause::Result<Vec<ListedIssue>> {
 #[cfg(test)]
 mod tests {
     use rstest::rstest;
+    use test_that::prelude::*;
 
     use super::*;
 
     #[test]
     fn test_created_issue_new_parses_valid_output() {
-        assert2::assert!(let Ok(actual) = CreatedIssue::new("Test Issue", "https://github.com/owner/repo/issues/123"));
-        pretty_assertions::assert_eq!(
-            actual,
-            CreatedIssue {
+        assert_that!(
+            CreatedIssue::new("Test Issue", "https://github.com/owner/repo/issues/123"),
+            ok(eq(CreatedIssue {
                 title: "Test Issue".to_string(),
                 repo: "https://github.com/owner/repo".to_string(),
                 issue_nr: "123".to_string(),
-            }
+            }))
         );
     }
 
@@ -171,10 +171,12 @@ mod tests {
     #[case("https://github.com/owner/repo/123")]
     #[case("repo/issues")]
     fn test_created_issue_new_errors_on_invalid_output(#[case] output: &str) {
-        assert2::assert!(let Err(err) = CreatedIssue::new("title", output));
-        assert_eq!(
-            err.format_current_context().to_string(),
-            "error building CreateIssueOutput"
+        assert_that!(
+            (CreatedIssue::new("title", output)).map(|_| ()),
+            err(result_of!(
+                |err: &rootcause::Report| err.format_current_context().to_string(),
+                eq("error building CreateIssueOutput")
+            ))
         );
     }
 
@@ -191,6 +193,6 @@ mod tests {
             issue_nr: issue_nr.to_string(),
             repo: "https://github.com/owner/repo/".to_string(),
         };
-        pretty_assertions::assert_eq!(issue.branch_name(), expected);
+        assert_that!(issue.branch_name(), eq(expected));
     }
 }

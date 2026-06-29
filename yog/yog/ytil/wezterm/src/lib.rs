@@ -163,27 +163,29 @@ pub struct WeztermPaneSize {
 
 #[cfg(test)]
 mod tests {
+    use test_that::prelude::*;
+
     use super::*;
 
     #[test]
     fn test_send_text_to_pane_cmd_returns_the_expected_bash_cmd_string() {
-        assert_eq!(
+        assert_that!(
             send_text_to_pane_cmd("echo hi", 7),
-            "wezterm cli send-text echo hi --pane-id '7' --no-paste"
+            eq("wezterm cli send-text echo hi --pane-id '7' --no-paste")
         );
     }
 
     #[test]
     fn test_submit_pane_cmd_returns_the_expected_bash_cmd_string() {
-        assert_eq!(
+        assert_that!(
             submit_pane_cmd(3),
-            "printf \"\\r\" | wezterm cli send-text --pane-id '3' --no-paste"
+            eq("printf \"\\r\" | wezterm cli send-text --pane-id '3' --no-paste")
         );
     }
 
     #[test]
     fn test_activate_pane_cmd_returns_the_expected_bash_cmd_string() {
-        assert_eq!(activate_pane_cmd(9), "wezterm cli activate-pane --pane-id '9'");
+        assert_that!(activate_pane_cmd(9), eq("wezterm cli activate-pane --pane-id '9'"));
     }
 
     #[test]
@@ -193,22 +195,26 @@ mod tests {
             pane_with(2, 10, "file:///host/home/user/project", "shell"),
             pane_with(3, 11, "file:///host/home/user/other", "hx"),
         ];
-        assert2::assert!(let Ok(sibling) = get_sibling_pane_with_titles(&panes, 2, &["hx"]));
-        assert_eq!(sibling.pane_id, 1);
+        assert_that!(
+            get_sibling_pane_with_titles(&panes, 2, &["hx"]),
+            ok(result_of!(|sibling: &WeztermPane| sibling.pane_id, eq(1)))
+        );
     }
 
     #[test]
     fn test_get_sibling_pane_with_titles_errors_when_no_title_match() {
         let panes = vec![pane_with(1, 10, "file:///host/home/user/project", "shell")];
-        assert2::assert!(let Err(err) = get_sibling_pane_with_titles(&panes, 1, &["hx"]));
-        assert!(err.to_string().contains("error finding pane title in tab"));
+        assert_that!(
+            (get_sibling_pane_with_titles(&panes, 1, &["hx"])).map(|_| ()),
+            err(displays_as(contains_substring("error finding pane title in tab")))
+        );
     }
 
     #[test]
     fn test_absolute_cwd_strips_file_uri_prefix() {
         let pane = pane_with(1, 10, "file:///localhost/Users/alice/src", "hx");
         let abs = pane.absolute_cwd();
-        assert!(abs.starts_with("/Users/alice/src"));
+        assert_that!(abs.to_string_lossy().as_ref(), starts_with("/Users/alice/src"));
     }
 
     #[test]
@@ -216,9 +222,9 @@ mod tests {
         let root = pane_with(1, 10, "file:///localhost/Users/alice/src", "hx");
         let child = pane_with(2, 10, "file:///localhost/Users/alice/src/project", "shell");
         let other_tab = pane_with(3, 11, "file:///localhost/Users/alice/src/project", "shell");
-        assert!(child.is_sibling_terminal_pane_of(&root));
-        assert!(!root.is_sibling_terminal_pane_of(&root));
-        assert!(!other_tab.is_sibling_terminal_pane_of(&root));
+        assert_that!(child.is_sibling_terminal_pane_of(&root), eq(true));
+        assert_that!(root.is_sibling_terminal_pane_of(&root), eq(false));
+        assert_that!(other_tab.is_sibling_terminal_pane_of(&root), eq(false));
     }
 
     fn pane_with(id: i64, tab: i64, cwd: &str, title: &str) -> WeztermPane {

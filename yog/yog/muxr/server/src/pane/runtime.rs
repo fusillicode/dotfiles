@@ -388,6 +388,7 @@ mod tests {
     use muxr_core::PaneId;
     use muxr_core::TerminalSize;
     use rootcause::report;
+    use test_that::prelude::*;
 
     use super::*;
     use crate::pane::cmd::PaneCmd;
@@ -424,12 +425,12 @@ mod tests {
             Arc::new(tokio::sync::Notify::new()),
         )?;
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             runtimes.startup_cmd_labels(),
-            vec![(pane_id, Some("echo seeded".to_owned()))]
+            eq(vec![(pane_id, Some("echo seeded".to_owned()))])
         );
         self::wait_for_runtime_snapshot_contains(&runtimes, pane_id, "seeded")?;
-        pretty_assertions::assert_eq!(runtimes.exited_panes()?, Vec::new());
+        assert_that!(runtimes.exited_panes()?, eq(Vec::new()));
         Ok(())
     }
 
@@ -448,7 +449,7 @@ mod tests {
             },
         )?;
         let mut tracked_processes = PaneTrackedProcesses::default();
-        assert2::assert!(
+        assert_that!(
             tracked_processes
                 .observe_pane_cmd(
                     &MuxrConfig::default(),
@@ -461,7 +462,8 @@ mod tests {
                     Instant::now(),
                 )
                 .state_change()
-                == crate::pane::tracked_process::TrackedProcessStateChange::Changed
+                == crate::pane::tracked_process::TrackedProcessStateChange::Changed,
+            eq(true)
         );
 
         let metadata = PaneRuntimeMetadata::from_sources(
@@ -475,11 +477,14 @@ mod tests {
         );
         let snapshot_fields = metadata.pane_snapshot_fields();
 
-        pretty_assertions::assert_eq!(snapshot_fields.cmd_label(pane_1), Some("cx"));
-        pretty_assertions::assert_eq!(snapshot_fields.cmd_label(pane_2), None);
-        pretty_assertions::assert_eq!(snapshot_fields.cmd_label(pane_3), Some("echo seeded"));
-        pretty_assertions::assert_eq!(snapshot_fields.terminal_title(pane_2), Some("~/work"));
-        pretty_assertions::assert_eq!(snapshot_fields.tracked_process_state(pane_1), TrackedProcessState::Busy);
+        assert_that!(snapshot_fields.cmd_label(pane_1), eq(Some("cx")));
+        assert_that!(snapshot_fields.cmd_label(pane_2), eq(None));
+        assert_that!(snapshot_fields.cmd_label(pane_3), eq(Some("echo seeded")));
+        assert_that!(snapshot_fields.terminal_title(pane_2), eq(Some("~/work")));
+        assert_that!(
+            snapshot_fields.tracked_process_state(pane_1),
+            eq(TrackedProcessState::Busy)
+        );
         Ok(())
     }
 

@@ -733,6 +733,7 @@ pub mod test_helpers {
 #[cfg(test)]
 mod tests {
     use rstest::rstest;
+    use test_that::prelude::*;
 
     use super::*;
 
@@ -740,15 +741,18 @@ mod tests {
     #[case::empty("")]
     #[case::control_char("https://example.com/\u{1b}")]
     fn test_render_hyperlink_new_when_uri_is_invalid_returns_error(#[case] uri: &str) {
-        assert2::assert!(RenderHyperlink::new(uri).is_err());
+        assert_that!(RenderHyperlink::new(uri), err(anything()));
     }
 
     #[test]
     fn test_render_cell_with_hyperlink_uri_when_uri_is_valid_sets_metadata() -> rootcause::Result<()> {
         let cell = self::render_cell("x").with_hyperlink_uri("https://example.com")?;
 
-        pretty_assertions::assert_eq!(cell.hyperlink().map(RenderHyperlink::uri), Some("https://example.com"));
-        assert2::assert!(cell != self::render_cell("x"));
+        assert_that!(
+            cell.hyperlink().map(RenderHyperlink::uri),
+            eq(Some("https://example.com"))
+        );
+        assert_that!(cell, not(eq(self::render_cell("x"))));
         Ok(())
     }
 
@@ -764,12 +768,12 @@ mod tests {
 
         let updated = cell.with_style(updated_style);
 
-        pretty_assertions::assert_eq!(updated.style(), updated_style);
-        pretty_assertions::assert_eq!(updated.text(), "字");
-        pretty_assertions::assert_eq!(updated.width(), RenderCellWidth::Wide);
-        pretty_assertions::assert_eq!(
+        assert_that!(updated.style(), eq(updated_style));
+        assert_that!(updated.text(), eq("字"));
+        assert_that!(updated.width(), eq(RenderCellWidth::Wide));
+        assert_that!(
             updated.hyperlink().map(RenderHyperlink::uri),
-            Some("https://example.com")
+            eq(Some("https://example.com"))
         );
         Ok(())
     }
@@ -781,7 +785,7 @@ mod tests {
 
         let serialized = serde_json::to_value(&cell)?;
 
-        pretty_assertions::assert_eq!(serialized["text"], serde_json::json!(text));
+        assert_that!(serialized["text"], eq(serde_json::json!(text)));
         Ok(())
     }
 
@@ -794,7 +798,7 @@ mod tests {
 
         let deserialized = rkyv::deserialize::<RenderCell, rkyv::rancor::Error>(archived)?;
 
-        pretty_assertions::assert_eq!(deserialized, cell);
+        assert_that!(deserialized, eq(cell));
         Ok(())
     }
 
@@ -809,7 +813,10 @@ mod tests {
         let bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&cell)?;
         let archived = rkyv::access::<rkyv::Archived<RenderCell>, rkyv::rancor::Error>(&bytes)?;
 
-        assert2::assert!(rkyv::deserialize::<RenderCell, rkyv::rancor::Error>(archived).is_err());
+        assert_that!(
+            rkyv::deserialize::<RenderCell, rkyv::rancor::Error>(archived),
+            err(anything())
+        );
         Ok(())
     }
 
@@ -824,7 +831,7 @@ mod tests {
         #[case] render_rows: Vec<RenderRowSpan>,
     ) -> rootcause::Result<()> {
         let size = TerminalSize::new(cols, rows)?;
-        assert2::assert!(
+        assert_that!(
             RenderBaseline::new(
                 seq,
                 size,
@@ -832,11 +839,11 @@ mod tests {
                     row: 0,
                     col: 0,
                     shape: RenderCursorShape::Default,
-                    visibility: RenderCursorVisibility::Visible
+                    visibility: RenderCursorVisibility::Visible,
                 },
-                render_rows
-            )
-            .is_err()
+                render_rows,
+            ),
+            err(anything())
         );
         Ok(())
     }
@@ -849,7 +856,7 @@ mod tests {
         #[case] base_seq: u64,
         #[case] seq: u64,
     ) -> rootcause::Result<()> {
-        assert2::assert!(
+        assert_that!(
             RenderDiff::new(
                 base_seq,
                 seq,
@@ -858,11 +865,11 @@ mod tests {
                     row: 0,
                     col: 0,
                     shape: RenderCursorShape::Default,
-                    visibility: RenderCursorVisibility::Visible
+                    visibility: RenderCursorVisibility::Visible,
                 },
                 vec![RenderRowSpan::new(0, 0, self::render_cells(1))?],
-            )
-            .is_err()
+            ),
+            err(anything())
         );
         Ok(())
     }
@@ -874,7 +881,7 @@ mod tests {
     fn test_render_diff_new_when_row_span_is_invalid_returns_error(
         #[case] row: RenderRowSpan,
     ) -> rootcause::Result<()> {
-        assert2::assert!(
+        assert_that!(
             RenderDiff::new(
                 1,
                 2,
@@ -883,11 +890,11 @@ mod tests {
                     row: 0,
                     col: 0,
                     shape: RenderCursorShape::Default,
-                    visibility: RenderCursorVisibility::Visible
+                    visibility: RenderCursorVisibility::Visible,
                 },
                 vec![row],
-            )
-            .is_err()
+            ),
+            err(anything())
         );
         Ok(())
     }
@@ -920,7 +927,7 @@ mod tests {
     fn test_render_diff_new_when_wide_cell_sequence_is_invalid_returns_error(
         #[case] row: RenderRowSpan,
     ) -> rootcause::Result<()> {
-        assert2::assert!(
+        assert_that!(
             RenderDiff::new(
                 1,
                 2,
@@ -929,11 +936,11 @@ mod tests {
                     row: 0,
                     col: 0,
                     shape: RenderCursorShape::Default,
-                    visibility: RenderCursorVisibility::Visible
+                    visibility: RenderCursorVisibility::Visible,
                 },
                 vec![row],
-            )
-            .is_err()
+            ),
+            err(anything())
         );
         Ok(())
     }
@@ -946,7 +953,7 @@ mod tests {
             vec![RenderCell::wide("字", RenderStyle::default()), self::render_cell("x")],
         )];
 
-        assert2::assert!(
+        assert_that!(
             RenderBaseline::new(
                 1,
                 TerminalSize::new(2, 1)?,
@@ -954,11 +961,11 @@ mod tests {
                     row: 0,
                     col: 0,
                     shape: RenderCursorShape::Default,
-                    visibility: RenderCursorVisibility::Visible
+                    visibility: RenderCursorVisibility::Visible,
                 },
-                rows
-            )
-            .is_err()
+                rows,
+            ),
+            err(anything())
         );
         Ok(())
     }
@@ -987,7 +994,7 @@ mod tests {
             vec![row],
         )?;
 
-        pretty_assertions::assert_eq!(diff.rows().len(), 1);
+        assert_that!(diff.rows().len(), eq(1));
         Ok(())
     }
 
@@ -1002,7 +1009,7 @@ mod tests {
             ],
         )?;
 
-        pretty_assertions::assert_eq!(row.width()?, 2);
+        assert_that!(row.width()?, eq(2));
         Ok(())
     }
 

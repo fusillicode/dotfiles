@@ -323,6 +323,7 @@ mod tests {
     use muxr_core::RenderStyle;
     use rootcause::prelude::ResultExt;
     use rstest::rstest;
+    use test_that::prelude::*;
 
     use super::*;
 
@@ -375,7 +376,13 @@ mod tests {
         let links = self::detect_visible_url_links(&rows)?;
 
         self::assert_linked_text(&rows, &links, uri, uri);
-        assert2::assert!(links.iter().all(|link| link.cell() < uri.len()));
+        assert_that!(
+            links,
+            each(
+                predicate(|link: &PaneUrlLink| link.cell() < uri.len())
+                    .with_description("points inside the URI", "points outside the URI")
+            )
+        );
         Ok(())
     }
 
@@ -386,7 +393,10 @@ mod tests {
         let links = self::detect_visible_url_links(&rows)?;
 
         self::assert_linked_text(&rows, &links, "https://example.com", "https://example.com");
-        assert2::assert!(links.iter().all(|link| !(link.row() == 1 && link.cell() == 7)));
+        assert_that!(
+            links.iter().all(|link| !(link.row() == 1 && link.cell() == 7)),
+            eq(true)
+        );
         Ok(())
     }
 
@@ -400,7 +410,7 @@ mod tests {
 
         let links = self::detect_visible_url_links(&rows)?;
 
-        assert2::assert!(links.is_empty());
+        assert_that!(links, empty());
         Ok(())
     }
 
@@ -410,8 +420,8 @@ mod tests {
         let left_pane_links = self::detect_visible_url_links(&self::rows(&["https://exam"])?)?;
         let right_pane_links = self::detect_visible_url_links(&self::rows(&["ple.com"])?)?;
 
-        assert2::assert!(left_pane_links.is_empty());
-        assert2::assert!(right_pane_links.is_empty());
+        assert_that!(left_pane_links, empty());
+        assert_that!(right_pane_links, empty());
         Ok(())
     }
 
@@ -425,9 +435,9 @@ mod tests {
                     .unwrap_or_default()
             })
             .collect::<String>();
-        pretty_assertions::assert_eq!(linked_text, text);
+        assert_that!(linked_text, eq(text));
         for link in links {
-            pretty_assertions::assert_eq!(link.hyperlink.uri(), uri);
+            assert_that!(link.hyperlink.uri(), eq(uri));
         }
     }
 

@@ -120,6 +120,7 @@ fn parse_checksum(content: &str, filename: &str) -> rootcause::Result<String> {
 #[cfg(test)]
 mod tests {
     use rstest::rstest;
+    use test_that::prelude::*;
 
     use super::*;
 
@@ -133,15 +134,16 @@ mod tests {
         #[case] filename: &str,
         #[case] expected: &str,
     ) {
-        assert2::assert!(let Ok(hash) = parse_checksum(content, filename));
-        pretty_assertions::assert_eq!(hash, expected);
+        assert_that!(parse_checksum(content, filename), ok(eq(expected)));
     }
 
     #[test]
     fn test_parse_checksum_returns_error_when_not_found() {
         let content = "abc123  foo.tar.gz\ndef456  bar.zip\n";
-        assert2::assert!(let Err(err) = parse_checksum(content, "missing.txt"));
-        assert!(err.to_string().contains("error checksum entry not found"));
+        assert_that!(
+            (parse_checksum(content, "missing.txt")).map(|_| ()),
+            err(displays_as(contains_substring("error checksum entry not found")))
+        );
     }
 
     #[test]
@@ -150,8 +152,10 @@ mod tests {
         let file_path = dir.path().join("test.txt");
         std::fs::write(&file_path, b"hello world").unwrap();
 
-        assert2::assert!(let Ok(hash) = compute_sha256(&file_path));
-        pretty_assertions::assert_eq!(hash, "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9");
+        assert_that!(
+            compute_sha256(&file_path),
+            ok(eq("b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9"))
+        );
     }
 
     #[test]
@@ -160,11 +164,12 @@ mod tests {
         let file_path = dir.path().join("test.txt");
         std::fs::write(&file_path, b"hello world").unwrap();
 
-        assert2::assert!(let
-            Ok(()) = verify(
+        assert_that!(
+            verify(
                 &file_path,
                 "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9"
-            )
+            ),
+            ok(eq(()))
         );
     }
 
@@ -174,12 +179,12 @@ mod tests {
         let file_path = dir.path().join("test.txt");
         std::fs::write(&file_path, b"hello world").unwrap();
 
-        assert2::assert!(let
-            Err(err) = verify(
-                &file_path,
-                "0000000000000000000000000000000000000000000000000000000000000000"
-            )
+        let verify_result = verify(
+            &file_path,
+            "0000000000000000000000000000000000000000000000000000000000000000",
         );
-        assert!(err.to_string().contains("error checksum mismatch"));
+        assert_that!(verify_result.as_ref(), err(anything()));
+        let err = verify_result.expect_err("mismatched hash should fail verification");
+        assert_that!(err.to_string(), contains_substring("error checksum mismatch"));
     }
 }

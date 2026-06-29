@@ -95,6 +95,8 @@ fn abbrev_path_dirs(names: &[String]) -> String {
 mod tests {
     use std::path::Path;
 
+    use test_that::prelude::*;
+
     use super::*;
 
     #[rstest::rstest]
@@ -103,16 +105,16 @@ mod tests {
     #[case("abc", 1, "…")]
     #[case("abc", 0, "")]
     fn display_fixed_width_trims_as_expected(#[case] value: &str, #[case] max_chars: usize, #[case] expected: &str) {
-        pretty_assertions::assert_eq!(display_fixed_width(value, max_chars), expected);
+        assert_that!(display_fixed_width(value, max_chars), eq(expected));
     }
 
     #[test]
     fn test_short_path_under_home_abbreviates_parent_directories() {
         let home = Path::new("/home/user");
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             short_path(Path::new("/home/user/src/pkg/myproject"), home),
-            "~/s/p/myproject"
+            eq("~/s/p/myproject")
         );
     }
 
@@ -120,9 +122,9 @@ mod tests {
     fn test_short_path_many_dirs_abbreviates_all_but_last() {
         let home = Path::new("/home/user");
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             short_path(Path::new("/home/user/one/two/three/four/five"), home),
-            "~/o/t/t/f/five"
+            eq("~/o/t/t/f/five")
         );
     }
 
@@ -130,6 +132,6 @@ mod tests {
     fn test_short_path_outside_home_renders_absolute_abbrev() {
         let home = Path::new("/home/user");
 
-        pretty_assertions::assert_eq!(short_path(Path::new("/opt/pkg/foo"), home), "/o/p/foo");
+        assert_that!(short_path(Path::new("/opt/pkg/foo"), home), eq("/o/p/foo"));
     }
 }

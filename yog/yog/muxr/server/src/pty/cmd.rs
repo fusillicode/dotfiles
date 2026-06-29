@@ -152,11 +152,13 @@ fn shell_quote(raw: &str) -> String {
 mod tests {
     use std::path::PathBuf;
 
+    use test_that::prelude::*;
+
     use super::*;
 
     #[test]
     fn test_shell_cmd_new_when_program_is_empty_returns_error() {
-        assert2::assert!(ShellCmd::new("").is_err());
+        assert_that!(ShellCmd::new(""), err(anything()));
     }
 
     #[test]
@@ -164,7 +166,7 @@ mod tests {
         let cwd = tempfile::tempdir()?;
         let cmd = ShellCmd::new("/bin/sh")?.cmd_builder(cwd.path().to_string_lossy().as_ref())?;
 
-        pretty_assertions::assert_eq!(cmd.get_cwd().map(PathBuf::from), Some(cwd.path().to_path_buf()));
+        assert_that!(cmd.get_cwd().map(PathBuf::from), eq(Some(cwd.path().to_path_buf())));
         Ok(())
     }
 
@@ -173,10 +175,9 @@ mod tests {
         let cwd = tempfile::tempdir()?;
         let missing = cwd.path().join("missing");
 
-        assert2::assert!(
-            ShellCmd::new("/bin/sh")?
-                .cmd_builder(missing.to_string_lossy().as_ref())
-                .is_err()
+        assert_that!(
+            ShellCmd::new("/bin/sh")?.cmd_builder(missing.to_string_lossy().as_ref()),
+            err(anything())
         );
         Ok(())
     }
@@ -185,9 +186,9 @@ mod tests {
     fn test_shell_cmd_shell_input_line_quotes_shell_words() -> rootcause::Result<()> {
         let cmd = ShellCmd::with_args("/tmp/with space/cmd", ["simple", "two words", "it's"])?;
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             cmd.shell_input_line(),
-            "'/tmp/with space/cmd' simple 'two words' 'it'\\''s'\n"
+            eq("'/tmp/with space/cmd' simple 'two words' 'it'\\''s'\n")
         );
         Ok(())
     }

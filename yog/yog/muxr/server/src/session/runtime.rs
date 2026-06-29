@@ -315,6 +315,7 @@ mod tests {
     use muxr_transport::ClientConnection;
     use muxr_transport::ServerListener;
     use rootcause::report;
+    use test_that::prelude::*;
 
     use super::*;
     use crate::pane::runtime::test_helpers as pane_runtime_test_helpers;
@@ -369,9 +370,9 @@ mod tests {
             })
         })?;
 
-        assert2::assert!(log.contains("kind=\"client_session_state_handoff_failed\""));
-        assert2::assert!(log.contains("reason=\"channel_full\""));
-        assert2::assert!(log.contains("session=work"));
+        assert_that!(log, contains_substring("kind=\"client_session_state_handoff_failed\""));
+        assert_that!(log, contains_substring("reason=\"channel_full\""));
+        assert_that!(log, contains_substring("session=work"));
         Ok(())
     }
 

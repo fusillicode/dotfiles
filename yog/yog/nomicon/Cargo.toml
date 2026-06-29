@@ -28,8 +28,7 @@ lightningcss = { version = "1.0.0-alpha.71", default-features = false, features 
 rootcause = { workspace = true }
 
 [dev-dependencies]
-assert2 = { workspace = true }
-pretty_assertions = { workspace = true }
+test-that = { workspace = true }
 
 [lints]
 workspace = true

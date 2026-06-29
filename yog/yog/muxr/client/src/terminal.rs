@@ -253,6 +253,7 @@ fn queue_bytes(stdout: &mut impl Write, bytes: &[u8]) -> rootcause::Result<()> {
 mod tests {
     use muxr_config::MuxrConfig;
     use rootcause::prelude::ResultExt;
+    use test_that::prelude::*;
 
     use super::*;
 
@@ -260,13 +261,13 @@ mod tests {
     fn test_pane_size_for_terminal_when_tab_bar_has_room_reserves_sidebar_columns() -> rootcause::Result<()> {
         let tab_bar_width = MuxrConfig::default().tab_bar.width;
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             pane_size_for_terminal(tab_bar_width, &TerminalSize::new(80, 24)?)?,
-            TerminalSize::new(80_u16.saturating_sub(tab_bar_width), 24)?,
+            eq(TerminalSize::new(80_u16.saturating_sub(tab_bar_width), 24)?)
         );
-        pretty_assertions::assert_eq!(
+        assert_that!(
             pane_size_for_terminal(tab_bar_width, &TerminalSize::new(80, 1)?)?,
-            TerminalSize::new(80_u16.saturating_sub(tab_bar_width), 1)?,
+            eq(TerminalSize::new(80_u16.saturating_sub(tab_bar_width), 1)?)
         );
         Ok(())
     }
@@ -278,16 +279,16 @@ mod tests {
         enter_terminal(&mut output)?;
 
         let rendered = String::from_utf8(output).context("muxr terminal test output was not utf8")?;
-        assert2::assert!(rendered.contains("\x1b[?1049h"));
-        assert2::assert!(rendered.contains("\x1b[?2004h"));
-        assert2::assert!(rendered.contains("\x1b[>1u"));
-        assert2::assert!(rendered.contains("\x1b[?1003l"));
-        assert2::assert!(rendered.contains("\x1b[?1000h"));
-        assert2::assert!(rendered.contains("\x1b[?1002h"));
-        assert2::assert!(!rendered.contains("\x1b[?1003h"));
-        assert2::assert!(rendered.contains("\x1b[?1006h"));
-        assert2::assert!(rendered.contains("\x1b[2J"));
-        assert2::assert!(rendered.contains("\x1b[?25l"));
+        assert_that!(rendered, contains_substring("\x1b[?1049h"));
+        assert_that!(rendered, contains_substring("\x1b[?2004h"));
+        assert_that!(rendered, contains_substring("\x1b[>1u"));
+        assert_that!(rendered, contains_substring("\x1b[?1003l"));
+        assert_that!(rendered, contains_substring("\x1b[?1000h"));
+        assert_that!(rendered, contains_substring("\x1b[?1002h"));
+        assert_that!(rendered, not(contains_substring("\x1b[?1003h")));
+        assert_that!(rendered, contains_substring("\x1b[?1006h"));
+        assert_that!(rendered, contains_substring("\x1b[2J"));
+        assert_that!(rendered, contains_substring("\x1b[?25l"));
         Ok(())
     }
 
@@ -297,8 +298,8 @@ mod tests {
 
         set_mouse_any_motion_capture(&mut output, MouseAnyMotionCapture::Enabled)?;
 
-        pretty_assertions::assert_eq!(output.rendered_string()?, "\x1b[?1003h");
-        pretty_assertions::assert_eq!(output.flushes, 1);
+        assert_that!(output.rendered_string()?, eq("\x1b[?1003h"));
+        assert_that!(output.flushes, eq(1));
         Ok(())
     }
 
@@ -308,11 +309,11 @@ mod tests {
 
         set_mouse_any_motion_capture(&mut output, MouseAnyMotionCapture::Disabled)?;
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             output.rendered_string()?,
-            "\x1b[?1003l\x1b[?1000h\x1b[?1002h\x1b[?1006h",
+            eq("\x1b[?1003l\x1b[?1000h\x1b[?1002h\x1b[?1006h")
         );
-        pretty_assertions::assert_eq!(output.flushes, 1);
+        assert_that!(output.flushes, eq(1));
         Ok(())
     }
 
@@ -324,7 +325,7 @@ mod tests {
         #[case] term: Option<&str>,
         #[case] expected: SynchronizedOutput,
     ) {
-        pretty_assertions::assert_eq!(SynchronizedOutput::for_term(term), expected);
+        assert_that!(SynchronizedOutput::for_term(term), eq(expected));
     }
 
     #[rstest::rstest]
@@ -341,7 +342,7 @@ mod tests {
         queue_synchronized_update_end(&mut output, mode)?;
 
         let rendered = String::from_utf8(output).context("muxr terminal test output was not utf8")?;
-        pretty_assertions::assert_eq!(rendered, format!("{start}{end}"));
+        assert_that!(rendered, eq(format!("{start}{end}")));
         Ok(())
     }
 
@@ -352,17 +353,17 @@ mod tests {
         restore_terminal(&mut output)?;
 
         let rendered = String::from_utf8(output).context("muxr terminal test output was not utf8")?;
-        assert2::assert!(rendered.contains("\x1b[<1u"));
-        assert2::assert!(rendered.contains("\x1b[?1006l"));
-        assert2::assert!(rendered.contains("\x1b[?1003l"));
-        assert2::assert!(rendered.contains("\x1b[?1002l"));
-        assert2::assert!(rendered.contains("\x1b[?1000l"));
-        assert2::assert!(rendered.contains("\x1b[?2004l"));
-        assert2::assert!(rendered.contains("\x1b[?1049l"));
-        assert2::assert!(rendered.contains("\x1b[0 q"));
-        assert2::assert!(rendered.contains("\x1b[?25h"));
-        assert2::assert!(rendered.contains("\x1b[0m"));
-        assert2::assert!(rendered.starts_with("\x1b]8;;\x1b\\"));
+        assert_that!(rendered, contains_substring("\x1b[<1u"));
+        assert_that!(rendered, contains_substring("\x1b[?1006l"));
+        assert_that!(rendered, contains_substring("\x1b[?1003l"));
+        assert_that!(rendered, contains_substring("\x1b[?1002l"));
+        assert_that!(rendered, contains_substring("\x1b[?1000l"));
+        assert_that!(rendered, contains_substring("\x1b[?2004l"));
+        assert_that!(rendered, contains_substring("\x1b[?1049l"));
+        assert_that!(rendered, contains_substring("\x1b[0 q"));
+        assert_that!(rendered, contains_substring("\x1b[?25h"));
+        assert_that!(rendered, contains_substring("\x1b[0m"));
+        assert_that!(rendered, starts_with("\x1b]8;;\x1b\\"));
         Ok(())
     }
 

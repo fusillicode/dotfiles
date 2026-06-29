@@ -47,6 +47,8 @@ pub fn handle_move_active_tab_next_cmd_client(state: &mut ClientSessionState<'_>
 
 #[cfg(test)]
 mod tests {
+    use test_that::prelude::*;
+
     use crate::state::test_helpers as state_test_helpers;
 
     #[test]
@@ -55,27 +57,27 @@ mod tests {
 
         layout.create_tab(state_test_helpers::metadata("sh", 2))?;
         layout.create_tab(state_test_helpers::metadata("sh", 3))?;
-        pretty_assertions::assert_eq!(
+        assert_that!(
             state_test_helpers::layout_tab_ids(&layout)?,
-            vec!["tab-1", "tab-2", "tab-3"]
+            eq(vec!["tab-1", "tab-2", "tab-3"])
         );
-        pretty_assertions::assert_eq!(layout.active_tab.to_string(), "tab-3");
+        assert_that!(layout.active_tab.to_string(), eq("tab-3"));
 
         layout.focus_previous_tab()?;
-        pretty_assertions::assert_eq!(layout.active_tab.to_string(), "tab-2");
+        assert_that!(layout.active_tab.to_string(), eq("tab-2"));
         layout.move_active_tab_previous()?;
-        pretty_assertions::assert_eq!(
+        assert_that!(
             state_test_helpers::layout_tab_ids(&layout)?,
-            vec!["tab-2", "tab-1", "tab-3"]
+            eq(vec!["tab-2", "tab-1", "tab-3"])
         );
-        pretty_assertions::assert_eq!(layout.active_tab.to_string(), "tab-2");
+        assert_that!(layout.active_tab.to_string(), eq("tab-2"));
         layout.move_active_tab_next()?;
-        pretty_assertions::assert_eq!(
+        assert_that!(
             state_test_helpers::layout_tab_ids(&layout)?,
-            vec!["tab-1", "tab-2", "tab-3"]
+            eq(vec!["tab-1", "tab-2", "tab-3"])
         );
         layout.focus_next_tab()?;
-        pretty_assertions::assert_eq!(layout.active_tab.to_string(), "tab-3");
+        assert_that!(layout.active_tab.to_string(), eq("tab-3"));
         Ok(())
     }
 }

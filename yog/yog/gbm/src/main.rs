@@ -191,6 +191,7 @@ mod tests {
     use chrono::DateTime;
     use chrono::Utc;
     use rstest::rstest;
+    use test_that::prelude::*;
 
     use super::*;
 
@@ -215,9 +216,9 @@ mod tests {
         #[case] current_branch: &str,
         #[case] expected: Vec<Branch>,
     ) {
-        pretty_assertions::assert_eq!(
+        assert_that!(
             prioritize_current_branch_first(branches, current_branch, None, None),
-            expected
+            eq(expected)
         );
     }
 
@@ -231,15 +232,15 @@ mod tests {
             branch_with_email("mine-2", "me@example.com", 96),
         ];
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             prioritize_current_branch_first(branches, "current", Some("previous"), Some("me@example.com")),
-            vec![
+            eq(vec![
                 branch_with_email("current", "me@example.com", 97),
                 branch_with_email("previous", "other@example.com", 98),
                 branch_with_email("mine-1", "me@example.com", 99),
                 branch_with_email("mine-2", "me@example.com", 96),
                 branch_with_email("other-1", "other@example.com", 100),
-            ],
+            ])
         );
     }
 
@@ -249,14 +250,14 @@ mod tests {
         let zshrc = dir.path().join(".zshrc");
         std::fs::write(&zshrc, "source ~/.zshrc.local\n").unwrap();
 
-        assert2::assert!(let Ok(true) = install_zsh_wrapper_at(&zshrc));
+        assert_that!(install_zsh_wrapper_at(&zshrc), ok(eq(true)));
         let first = std::fs::read_to_string(&zshrc).unwrap();
-        assert2::assert!(let Ok(false) = install_zsh_wrapper_at(&zshrc));
+        assert_that!(install_zsh_wrapper_at(&zshrc), ok(eq(false)));
         let second = std::fs::read_to_string(&zshrc).unwrap();
 
-        pretty_assertions::assert_eq!(first, second);
-        pretty_assertions::assert_eq!(first, format!("source ~/.zshrc.local\n{ZSHRC_INSTALL_LINE}\n"));
-        pretty_assertions::assert_eq!(first.matches(ZSHRC_INSTALL_LINE).count(), 1);
+        assert_that!(first, eq(second));
+        assert_that!(first, eq(format!("source ~/.zshrc.local\n{ZSHRC_INSTALL_LINE}\n")));
+        assert_that!(first.matches(ZSHRC_INSTALL_LINE).count(), eq(1));
     }
 
     #[test]
@@ -264,9 +265,10 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let zshrc = dir.path().join(".zshrc");
 
-        assert2::assert!(let Err(err) = install_zsh_wrapper_at(&zshrc));
-
-        assert!(err.to_string().contains("error reading zshrc"));
+        assert_that!(
+            install_zsh_wrapper_at(&zshrc),
+            err(displays_as(contains_substring("error reading zshrc")))
+        );
     }
 
     fn branch(name: &str, timestamp: i64) -> Branch {

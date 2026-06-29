@@ -88,41 +88,56 @@ fn no_value_matching(query: &[&str], dict: &Dictionary) -> rootcause::Report {
 
 #[cfg(test)]
 mod tests {
+    use test_that::prelude::*;
+
     use super::*;
     use crate::dict;
 
     #[test]
     fn test_get_t_missing_key_errors() {
         let d = dict! { other: 1 };
-        assert2::assert!(let Err(err) = d.get_t::<nvim_oxi::String>("name"));
-        assert_eq!(err.format_current_context().to_string(), "missing dict value");
+        assert_that!(
+            (d.get_t::<nvim_oxi::String>("name")).map(|_| ()),
+            err(result_of!(
+                |err: &rootcause::Report| err.format_current_context().to_string(),
+                eq("missing dict value")
+            ))
+        );
     }
 
     #[test]
     fn test_get_opt_t_missing_key_ok_none() {
         let d = dict! { other: 1 };
-        assert2::assert!(let Ok(v) = d.get_opt_t::<nvim_oxi::String>("name"));
-        assert!(v.is_none());
+        assert_that!(d.get_opt_t::<nvim_oxi::String>("name"), ok(none()));
     }
 
     #[test]
     fn test_get_dict_missing_intermediate_returns_none() {
         let d = dict! { root: dict! { level: dict! { value: 1 } } };
-        assert2::assert!(let Ok(v) = d.get_dict(&["root", "missing", "value"]));
-        assert!(v.is_none());
+        assert_that!(d.get_dict(&["root", "missing", "value"]), ok(none()));
     }
 
     #[test]
     fn test_get_dict_intermediate_wrong_type_errors() {
         let d = dict! { root: dict! { leaf: 1 } };
-        assert2::assert!(let Err(err) = d.get_dict(&["root", "leaf", "value"]));
-        assert_eq!(err.format_current_context().to_string(), "unexpected object kind");
+        assert_that!(
+            (d.get_dict(&["root", "leaf", "value"])).map(|_| ()),
+            err(result_of!(
+                |err: &rootcause::Report| err.format_current_context().to_string(),
+                eq("unexpected object kind")
+            ))
+        );
     }
 
     #[test]
     fn test_get_required_dict_missing_errors() {
         let d = dict! { root: dict! { leaf: 1 } };
-        assert2::assert!(let Err(err) = d.get_required_dict(&["root", "branch"]));
-        assert_eq!(err.format_current_context().to_string(), "missing dict value");
+        assert_that!(
+            (d.get_required_dict(&["root", "branch"])).map(|_| ()),
+            err(result_of!(
+                |err: &rootcause::Report| err.format_current_context().to_string(),
+                eq("missing dict value")
+            ))
+        );
     }
 }

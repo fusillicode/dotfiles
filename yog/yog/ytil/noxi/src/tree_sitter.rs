@@ -110,6 +110,7 @@ fn get_enclosing_fn_name_of_node(src: &[u8], node: Option<Node>) -> Option<Strin
 #[cfg(test)]
 mod tests {
     use rstest::rstest;
+    use test_that::prelude::*;
 
     use super::*;
 
@@ -121,20 +122,20 @@ mod tests {
         #[case] input: CursorPosition,
         #[case] expected: (usize, usize),
     ) {
-        pretty_assertions::assert_eq!(
+        assert_that!(
             PointWrap::from(input),
-            PointWrap(Point {
+            eq(PointWrap(Point {
                 row: expected.0,
                 column: expected.1
-            })
+            }))
         );
     }
 
     #[test]
     fn test_point_wrap_deref_allows_direct_access_to_point() {
-        pretty_assertions::assert_eq!(
+        assert_that!(
             *PointWrap::from(CursorPosition { row: 5, col: 10 }),
-            Point { row: 4, column: 10 }
+            eq(Point { row: 4, column: 10 })
         );
     }
 
@@ -145,7 +146,7 @@ mod tests {
             Point { row: 0, column: 20 },
             get_enclosing_fn_name_of_node,
         );
-        pretty_assertions::assert_eq!(result, Some("test_function".to_string()));
+        assert_that!(result, eq(Some("test_function".to_string())));
     }
 
     #[test]
@@ -155,7 +156,7 @@ mod tests {
             Point { row: 0, column: 5 },
             get_enclosing_fn_name_of_node,
         );
-        pretty_assertions::assert_eq!(result, None);
+        assert_that!(result, eq(None));
     }
 
     #[test]
@@ -165,13 +166,13 @@ mod tests {
             Point { row: 0, column: 25 },
             get_enclosing_fn_name_of_node,
         );
-        pretty_assertions::assert_eq!(result, Some("method".to_string()));
+        assert_that!(result, eq(Some("method".to_string())));
     }
 
     #[test]
     fn test_get_enclosing_fn_name_of_node_returns_none_when_node_is_none() {
         let result = get_enclosing_fn_name_of_node(b"fn test() {}", None);
-        pretty_assertions::assert_eq!(result, None);
+        assert_that!(result, eq(None));
     }
 
     // Helper to work around the [`tree_sitter::Tree`] and [`tree_sitter::Node`] lifetime issues.

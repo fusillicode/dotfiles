@@ -150,6 +150,7 @@ pub const fn handle_exit_resize_mode_cmd_client() -> PaneResizeClientOutcome {
 mod tests {
     use muxr_config::MuxrConfig;
     use muxr_core::TerminalSize;
+    use test_that::prelude::*;
 
     use super::*;
     use crate::state::test_helpers as state_test_helpers;
@@ -201,17 +202,17 @@ mod tests {
         )?;
         state_test_helpers::force_balanced_test_split_ratio(&mut layout)?;
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             layout.resize_active_pane(MuxrConfig::default().layout, direction)?,
-            PaneResizeChange::Changed,
+            eq(PaneResizeChange::Changed)
         );
         let expected_regions = expected_regions
             .into_iter()
             .map(|(id, col, row, cols, rows)| (id.to_owned(), col, row, cols, rows))
             .collect::<Vec<_>>();
-        pretty_assertions::assert_eq!(
+        assert_that!(
             state_test_helpers::layout_active_tab_pane_regions(&layout, &TerminalSize::new(80, 24)?)?,
-            expected_regions
+            eq(expected_regions)
         );
         Ok(())
     }
@@ -232,30 +233,30 @@ mod tests {
         )?;
         state_test_helpers::force_balanced_test_split_ratio(&mut layout)?;
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             layout.resize_active_pane(MuxrConfig::default().layout, PaneResizeDirection::Up)?,
-            PaneResizeChange::Changed,
+            eq(PaneResizeChange::Changed)
         );
-        pretty_assertions::assert_eq!(
+        assert_that!(
             state_test_helpers::layout_active_tab_pane_regions(&layout, &TerminalSize::new(80, 24)?)?,
-            vec![
+            eq(vec![
                 ("pane-1".to_owned(), 0, 0, 40, 24),
                 ("pane-2".to_owned(), 41, 0, 39, 10),
                 ("pane-3".to_owned(), 41, 11, 39, 13),
-            ],
+            ])
         );
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             layout.resize_active_pane(MuxrConfig::default().layout, PaneResizeDirection::Left)?,
-            PaneResizeChange::Changed,
+            eq(PaneResizeChange::Changed)
         );
-        pretty_assertions::assert_eq!(
+        assert_that!(
             state_test_helpers::layout_active_tab_pane_regions(&layout, &TerminalSize::new(80, 24)?)?,
-            vec![
+            eq(vec![
                 ("pane-1".to_owned(), 0, 0, 36, 24),
                 ("pane-2".to_owned(), 37, 0, 43, 10),
                 ("pane-3".to_owned(), 37, 11, 43, 13),
-            ],
+            ])
         );
         Ok(())
     }

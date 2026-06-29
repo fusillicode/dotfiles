@@ -376,13 +376,15 @@ impl ProcessMatcher {
 
 #[cfg(test)]
 mod tests {
+    use test_that::prelude::*;
+
     use super::*;
 
     #[rstest::rstest]
     #[case::below_min(49)]
     #[case::above_max(951)]
     fn test_split_ratio_new_when_value_is_outside_bounds_returns_error(#[case] value: u16) {
-        assert2::assert!(SplitRatio::new(value).is_err());
+        assert_that!(SplitRatio::new(value), err(anything()));
     }
 
     #[rstest::rstest]
@@ -391,7 +393,7 @@ mod tests {
     #[case::current_horizontal_default(500)]
     #[case::max(950)]
     fn test_split_ratio_new_when_value_is_inside_bounds_returns_ratio(#[case] value: u16) -> rootcause::Result<()> {
-        pretty_assertions::assert_eq!(SplitRatio::new(value)?.per_mille(), value);
+        assert_that!(SplitRatio::new(value)?.per_mille(), eq(value));
         Ok(())
     }
 
@@ -399,7 +401,7 @@ mod tests {
     #[case::zero(0)]
     #[case::above_max(951)]
     fn test_split_resize_step_new_when_value_is_outside_bounds_returns_error(#[case] value: u16) {
-        assert2::assert!(SplitResizeStep::new(value).is_err());
+        assert_that!(SplitResizeStep::new(value), err(anything()));
     }
 
     #[test]
@@ -444,8 +446,8 @@ mod tests {
             .tracked_process_for_cmd(executable, path)
             .ok_or_else(|| rootcause::report!("expected tracked process"))?;
 
-        pretty_assertions::assert_eq!(process.id, expected_id);
-        pretty_assertions::assert_eq!(process.label, expected_label);
+        assert_that!(process.id, eq(expected_id));
+        assert_that!(process.label, eq(expected_label));
         Ok(())
     }
 
@@ -460,22 +462,22 @@ mod tests {
     ) {
         let config = MuxrConfig::default();
 
-        pretty_assertions::assert_eq!(config.tracked_process_for_cmd(executable, path), None);
+        assert_that!(config.tracked_process_for_cmd(executable, path), eq(None));
     }
 
     #[test]
     fn test_config_default_exposes_semantic_roles() {
         let config = MuxrConfig::default();
 
-        pretty_assertions::assert_eq!(config.pane_borders.focused, config.pane_borders.default);
-        pretty_assertions::assert_eq!(config.pane_attention.border, config.pane_borders.default);
-        assert2::assert!(config.pane_borders.resize.attrs.bold);
-        assert2::assert!(config.pane_attention.bg_tint.is_some());
-        assert2::assert!(config.pane_dim.unfocused);
-        assert2::assert!(config.pane_dim.explicit_color_percent > 0);
-        assert2::assert!(config.pane_dim.explicit_color_percent <= 100);
-        assert2::assert!(config.scrollback.editor.args.iter().all(|arg| !arg.is_empty()));
-        assert2::assert!(!config.scrollback.editor.program.is_empty());
-        assert2::assert!(config.tab_bar.width > 0);
+        assert_that!(config.pane_borders.focused, eq(config.pane_borders.default));
+        assert_that!(config.pane_attention.border, eq(config.pane_borders.default));
+        assert_that!(config.pane_borders.resize.attrs.bold, eq(true));
+        assert_that!(config.pane_attention.bg_tint, some(anything()));
+        assert_that!(config.pane_dim.unfocused, eq(true));
+        assert_that!(config.pane_dim.explicit_color_percent, gt(0));
+        assert_that!(config.pane_dim.explicit_color_percent, le(100));
+        assert_that!(config.scrollback.editor.args, points_to(each(not(eq("")))));
+        assert_that!(config.scrollback.editor.program, not(eq("")));
+        assert_that!(config.tab_bar.width, gt(0));
     }
 }

@@ -344,6 +344,7 @@ fn pane_visual_render_style(mut style: RenderStyle, visual_style: PaneVisualStyl
 #[cfg(test)]
 mod tests {
     use muxr_config::MuxrConfig;
+    use test_that::prelude::*;
 
     use super::*;
     use crate::pane::layout::PaneArea;
@@ -392,17 +393,17 @@ mod tests {
         let update = composer.render_frame_diff(current, reason)?;
 
         if expected_diff == ExpectedRenderDiff::None {
-            pretty_assertions::assert_eq!(update, None);
-            pretty_assertions::assert_eq!(composer.next_seq, 2);
+            assert_that!(update, eq(None));
+            assert_that!(composer.next_seq, eq(2));
             return Ok(());
         }
 
         let Some(RenderUpdate::Diff(diff)) = update else {
             return Err(report!("expected muxr region-change diff"));
         };
-        pretty_assertions::assert_eq!(diff.base_seq(), 1);
-        pretty_assertions::assert_eq!(diff.seq(), 2);
-        assert2::assert!(diff.rows().is_empty());
+        assert_that!(diff.base_seq(), eq(1));
+        assert_that!(diff.seq(), eq(2));
+        assert_that!(diff.rows(), points_to(empty()));
         Ok(())
     }
 
@@ -427,9 +428,9 @@ mod tests {
             .map(|pane_id| PaneId::new(*pane_id))
             .collect::<rootcause::Result<Vec<_>>>()?;
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             PaneVisualRole::for_pane(PaneId::new(pane_id)?, PaneId::new(1)?, &attention_panes),
-            expected
+            eq(expected)
         );
         Ok(())
     }
@@ -450,7 +451,7 @@ mod tests {
             },
         );
 
-        pretty_assertions::assert_eq!(updated, style);
+        assert_that!(updated, eq(style));
     }
 
     #[test]
@@ -472,10 +473,10 @@ mod tests {
             },
         );
 
-        pretty_assertions::assert_eq!(updated.attrs.italic(), true);
-        pretty_assertions::assert_eq!(updated.attrs.dim(), false);
-        assert2::assert!(updated.bg != style.bg);
-        assert2::assert!(updated.fg != style.fg);
+        assert_that!(updated.attrs.italic(), eq(true));
+        assert_that!(updated.attrs.dim(), eq(false));
+        assert_that!(updated.bg, not(eq(style.bg)));
+        assert_that!(updated.fg, not(eq(style.fg)));
     }
 
     #[test]
@@ -510,12 +511,12 @@ mod tests {
         let row = rows.first().ok_or_else(|| report!("expected muxr composite row"))?;
         let linked_cells = row.iter().filter(|cell| cell.hyperlink().is_some()).collect::<Vec<_>>();
         let linked_text = linked_cells.iter().map(|cell| cell.text()).collect::<String>();
-        pretty_assertions::assert_eq!(linked_text, "https://example.com");
+        assert_that!(linked_text, eq("https://example.com"));
         for cell in linked_cells {
-            pretty_assertions::assert_eq!(cell.style().attrs.dim(), true);
-            pretty_assertions::assert_eq!(
+            assert_that!(cell.style().attrs.dim(), eq(true));
+            assert_that!(
                 cell.hyperlink().map(muxr_core::RenderHyperlink::uri),
-                Some("https://example.com")
+                eq(Some("https://example.com"))
             );
         }
         Ok(())

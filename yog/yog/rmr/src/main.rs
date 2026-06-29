@@ -87,6 +87,7 @@ fn before_first_colon(s: &str) -> &str {
 #[cfg(test)]
 mod tests {
     use rstest::rstest;
+    use test_that::prelude::*;
 
     use super::*;
 
@@ -102,6 +103,6 @@ mod tests {
         #[case] input: &str,
         #[case] expected: &str,
     ) {
-        pretty_assertions::assert_eq!(before_first_colon(input), expected);
+        assert_that!(before_first_colon(input), eq(expected));
     }
 }

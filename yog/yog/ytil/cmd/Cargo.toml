@@ -15,7 +15,7 @@ rootcause = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
-assert2 = { workspace = true }
+test-that = { workspace = true }
 
 [lints]
 workspace = true

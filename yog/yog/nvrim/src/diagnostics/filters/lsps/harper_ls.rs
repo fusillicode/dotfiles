@@ -98,6 +98,7 @@ impl DiagnosticsFilter for HarperLsFilter<'_> {
 
 #[cfg(test)]
 mod tests {
+    use test_that::prelude::*;
     use ytil_noxi::buffer::mock::MockBuffer;
 
     use super::*;
@@ -120,8 +121,7 @@ mod tests {
             end_lnum: 0,
             end_col: 6,
         };
-        assert2::assert!(let Ok(res) = filter.skip_diagnostic(&buf, &diag));
-        assert!(!res);
+        assert_that!(filter.skip_diagnostic(&buf, &diag), ok(eq(false)));
     }
 
     #[test]
@@ -141,8 +141,7 @@ mod tests {
             end_lnum: 0,
             end_col: 6,
         };
-        assert2::assert!(let Ok(res) = filter.skip_diagnostic(&buf, &diag));
-        assert!(!res);
+        assert_that!(filter.skip_diagnostic(&buf, &diag), ok(eq(false)));
     }
 
     #[test]
@@ -162,8 +161,7 @@ mod tests {
             end_lnum: 0,
             end_col: 6,
         };
-        assert2::assert!(let Ok(res) = filter.skip_diagnostic(&buf, &diag));
-        assert!(!res);
+        assert_that!(filter.skip_diagnostic(&buf, &diag), ok(eq(false)));
     }
 
     #[test]
@@ -183,8 +181,7 @@ mod tests {
             end_lnum: 0,
             end_col: 6,
         };
-        assert2::assert!(let Ok(res) = filter.skip_diagnostic(&buf, &diag));
-        assert!(!res);
+        assert_that!(filter.skip_diagnostic(&buf, &diag), ok(eq(false)));
     }
 
     #[test]
@@ -204,8 +201,7 @@ mod tests {
             end_lnum: 0,
             end_col: 6,
         };
-        assert2::assert!(let Ok(res) = filter.skip_diagnostic(&buf, &diag));
-        assert!(res);
+        assert_that!(filter.skip_diagnostic(&buf, &diag), ok(eq(true)));
     }
 
     #[test]
@@ -224,9 +220,13 @@ mod tests {
             col: 1,
             end_col: 7,
         };
-        assert2::assert!(let Err(err) = filter.skip_diagnostic(&buf, &diag));
-        assert!(err.to_string().contains("missing dict value"));
-        assert!(err.to_string().contains(r#""end_lnum""#));
+        assert_that!(
+            (filter.skip_diagnostic(&buf, &diag)).map(|_| ()),
+            err(displays_as(all!(
+                contains_substring("missing dict value"),
+                contains_substring(r#""end_lnum""#)
+            )))
+        );
     }
 
     #[test]
@@ -246,9 +246,13 @@ mod tests {
             end_lnum: 0,
             end_col: 5,
         };
-        assert2::assert!(let Err(err) = filter.skip_diagnostic(&buf, &diag));
-        assert!(err.to_string().contains("inconsistent line boundaries"));
-        assert!(err.to_string().contains("lnum 1 > end_lnum 0"));
+        assert_that!(
+            (filter.skip_diagnostic(&buf, &diag)).map(|_| ()),
+            err(displays_as(all!(
+                contains_substring("inconsistent line boundaries"),
+                contains_substring("lnum 1 > end_lnum 0")
+            )))
+        );
     }
 
     #[test]
@@ -268,9 +272,13 @@ mod tests {
             end_lnum: 0,
             end_col: 0,
         };
-        assert2::assert!(let Err(err) = filter.skip_diagnostic(&buf, &diag));
-        assert!(err.to_string().contains("inconsistent col boundaries"));
-        assert!(err.to_string().contains("col 5 > end_col 0"));
+        assert_that!(
+            (filter.skip_diagnostic(&buf, &diag)).map(|_| ()),
+            err(displays_as(all!(
+                contains_substring("inconsistent col boundaries"),
+                contains_substring("col 5 > end_col 0")
+            )))
+        );
     }
 
     #[test]
@@ -290,8 +298,10 @@ mod tests {
             end_lnum: 0,
             end_col: 15,
         };
-        assert2::assert!(let Err(err) = filter.skip_diagnostic(&buf, &diag));
-        assert!(err.to_string().contains("cannot extract substring"));
+        assert_that!(
+            (filter.skip_diagnostic(&buf, &diag)).map(|_| ()),
+            err(displays_as(contains_substring("cannot extract substring")))
+        );
     }
 
     #[test]
@@ -311,8 +321,7 @@ mod tests {
             end_lnum: 0,
             end_col: 5,
         };
-        assert2::assert!(let Ok(res) = filter.skip_diagnostic(&buf, &diag));
-        assert!(!res);
+        assert_that!(filter.skip_diagnostic(&buf, &diag), ok(eq(false)));
     }
 
     fn create_buffer_with_path_and_content(path: &str, content: Vec<&str>) -> BufferWithPath {

@@ -1193,6 +1193,7 @@ mod tests {
     use muxr_core::RenderStyle;
     use muxr_core::RenderUpdate;
     use muxr_core::TerminalSize;
+    use test_that::prelude::*;
 
     use super::*;
 
@@ -1210,17 +1211,17 @@ mod tests {
         let frame_buffer = FrameBuffer::default();
         let regions = pane_regions()?;
         let now = Instant::now();
-        pretty_assertions::assert_eq!(
+        assert_that!(
             clicks.record_selection_start(ClientMousePosition { row: 0, col: 0 }, &regions, &frame_buffer, now),
-            SelectionClickOutcome::Single,
+            eq(SelectionClickOutcome::Single)
         );
 
         let next_click_at = now
             .checked_add(Duration::from_millis(elapsed_ms))
             .ok_or_else(|| report!("muxr click tracker test instant overflowed"))?;
-        pretty_assertions::assert_eq!(
+        assert_that!(
             clicks.record_selection_start(ClientMousePosition { row, col }, &regions, &frame_buffer, next_click_at),
-            expected_outcome,
+            eq(expected_outcome)
         );
         Ok(())
     }
@@ -1230,29 +1231,33 @@ mod tests {
         let mut selection = SelectionState::default();
         let frame_buffer = FrameBuffer::default();
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             selection.apply(
                 SelectionInput::Start(ClientMousePosition { row: 0, col: 2 }),
                 &pane_regions()?,
                 &frame_buffer,
             )?,
-            SelectionChange::Unchanged,
+            eq(SelectionChange::Unchanged)
         );
-        pretty_assertions::assert_eq!(
+        assert_that!(
             selection.apply(
                 SelectionInput::Update(ClientMousePosition { row: 0, col: 8 }),
                 &pane_regions()?,
                 &frame_buffer,
             )?,
-            SelectionChange::Changed,
+            eq(SelectionChange::Changed)
         );
 
         let range = selection
             .range()
             .ok_or_else(|| report!("expected muxr selection range"))?;
-        pretty_assertions::assert_eq!(range.contains(0, 4), true);
-        pretty_assertions::assert_eq!(range.contains(0, 5), false);
-        pretty_assertions::assert_eq!(range.contains(0, 6), false);
+        assert_that!(
+            range.bounds_positions(),
+            eq(Some((
+                ClientMousePosition { row: 0, col: 2 },
+                ClientMousePosition { row: 0, col: 4 },
+            )))
+        );
         Ok(())
     }
 
@@ -1274,7 +1279,7 @@ mod tests {
             &frame_buffer,
         )?;
 
-        pretty_assertions::assert_eq!(selection.selected_text(), Some("eft".to_owned()));
+        assert_that!(selection.selected_text(), eq(Some("eft".to_owned())));
         Ok(())
     }
 
@@ -1299,9 +1304,14 @@ mod tests {
         let range = selection
             .range()
             .ok_or_else(|| report!("expected muxr wide-cell drag selection range"))?;
-        pretty_assertions::assert_eq!(range.contains(0, 0), true);
-        pretty_assertions::assert_eq!(range.contains(0, 1), true);
-        pretty_assertions::assert_eq!(selection.selected_text(), Some("表".to_owned()));
+        assert_that!(
+            range.bounds_positions(),
+            eq(Some((
+                ClientMousePosition { row: 0, col: 0 },
+                ClientMousePosition { row: 0, col: 2 },
+            )))
+        );
+        assert_that!(selection.selected_text(), eq(Some("表".to_owned())));
         Ok(())
     }
 
@@ -1312,12 +1322,12 @@ mod tests {
         frame_buffer.apply(RenderUpdate::Baseline(render_baseline()?))?;
         let mut selection = SelectionState::default();
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             selection.select_word(ClientMousePosition { row: 0, col: 8 }, &pane_regions()?, &frame_buffer,)?,
-            SelectionChange::Changed,
+            eq(SelectionChange::Changed)
         );
 
-        pretty_assertions::assert_eq!(selection.selected_text(), Some("right".to_owned()));
+        assert_that!(selection.selected_text(), eq(Some("right".to_owned())));
         Ok(())
     }
 
@@ -1331,21 +1341,26 @@ mod tests {
         frame_buffer.apply(RenderUpdate::Baseline(wide_render_baseline()?))?;
         let mut selection = SelectionState::default();
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             selection.select_word(
                 ClientMousePosition { row: 0, col },
                 &wide_pane_regions()?,
                 &frame_buffer,
             )?,
-            SelectionChange::Changed,
+            eq(SelectionChange::Changed)
         );
 
         let range = selection
             .range()
             .ok_or_else(|| report!("expected muxr wide-cell selection range"))?;
-        pretty_assertions::assert_eq!(range.contains(0, 0), true);
-        pretty_assertions::assert_eq!(range.contains(0, 1), true);
-        pretty_assertions::assert_eq!(selection.selected_text(), Some("表".to_owned()));
+        assert_that!(
+            range.bounds_positions(),
+            eq(Some((
+                ClientMousePosition { row: 0, col: 0 },
+                ClientMousePosition { row: 0, col: 1 },
+            )))
+        );
+        assert_that!(selection.selected_text(), eq(Some("表".to_owned())));
         Ok(())
     }
 
@@ -1367,17 +1382,22 @@ mod tests {
         )?;
         frame_buffer.apply(RenderUpdate::Baseline(three_row_render_baseline("zz", "aa", "bb")?))?;
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             selection.clear_if_regions_changed(&three_row_pane_regions(9)?),
-            SelectionChange::Changed,
+            eq(SelectionChange::Changed)
         );
 
         let range = selection
             .range()
             .ok_or_else(|| report!("expected muxr scrolled selection range"))?;
-        pretty_assertions::assert_eq!(range.contains(2, 0), true);
-        pretty_assertions::assert_eq!(range.contains(1, 0), false);
-        pretty_assertions::assert_eq!(selection.selected_text(), Some("bb".to_owned()));
+        assert_that!(
+            range.bounds_positions(),
+            eq(Some((
+                ClientMousePosition { row: 2, col: 0 },
+                ClientMousePosition { row: 2, col: 1 },
+            )))
+        );
+        assert_that!(selection.selected_text(), eq(Some("bb".to_owned())));
         Ok(())
     }
 
@@ -1398,9 +1418,9 @@ mod tests {
             &frame_buffer,
         )?;
         frame_buffer.apply(RenderUpdate::Baseline(three_row_render_baseline("bb", "cc", "dd")?))?;
-        pretty_assertions::assert_eq!(
+        assert_that!(
             selection.clear_if_regions_changed(&three_row_pane_regions(10)?),
-            SelectionChange::Changed,
+            eq(SelectionChange::Changed)
         );
         selection.refresh_visible_rows(&frame_buffer)?;
         selection.apply(
@@ -1409,7 +1429,7 @@ mod tests {
             &frame_buffer,
         )?;
 
-        pretty_assertions::assert_eq!(selection.selected_text(), Some("aa\nbb\ncc\ndd".to_owned()));
+        assert_that!(selection.selected_text(), eq(Some("aa\nbb\ncc\ndd".to_owned())));
         Ok(())
     }
 
@@ -1430,7 +1450,7 @@ mod tests {
             &frame_buffer,
         )?;
 
-        pretty_assertions::assert_eq!(selection.selected_inline_text(), Some("let value + 2".to_owned()));
+        assert_that!(selection.selected_inline_text(), eq(Some("let value + 2".to_owned())));
         Ok(())
     }
 
@@ -1453,7 +1473,7 @@ mod tests {
             &frame_buffer,
         )?;
 
-        pretty_assertions::assert_eq!(selection.selected_inline_text(), Some("(reasoning 54)".to_owned()));
+        assert_that!(selection.selected_inline_text(), eq(Some("(reasoning 54)".to_owned())));
         Ok(())
     }
 
@@ -1478,9 +1498,9 @@ mod tests {
             &frame_buffer,
         )?;
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             selection.selected_inline_text(),
-            Some("output=107,820 (reasoning 54,014)".to_owned())
+            eq(Some("output=107,820 (reasoning 54,014)".to_owned()))
         );
         Ok(())
     }
@@ -1502,7 +1522,7 @@ mod tests {
             &frame_buffer,
         )?;
 
-        pretty_assertions::assert_eq!(selection.selected_inline_text(), Some("WARN next".to_owned()));
+        assert_that!(selection.selected_inline_text(), eq(Some("WARN next".to_owned())));
         Ok(())
     }
 
@@ -1533,7 +1553,7 @@ mod tests {
             &frame_buffer,
         )?;
 
-        pretty_assertions::assert_eq!(selection.selected_inline_text(), Some("a表b".to_owned()));
+        assert_that!(selection.selected_inline_text(), eq(Some("a表b".to_owned())));
         Ok(())
     }
 
@@ -1554,9 +1574,9 @@ mod tests {
             &frame_buffer,
         )?;
         frame_buffer.apply(RenderUpdate::Baseline(three_row_render_baseline("ee", "ff", "gg")?))?;
-        pretty_assertions::assert_eq!(
+        assert_that!(
             selection.clear_if_regions_changed(&three_row_pane_regions(13)?),
-            SelectionChange::Changed,
+            eq(SelectionChange::Changed)
         );
         selection.refresh_visible_rows(&frame_buffer)?;
         selection.apply(
@@ -1565,7 +1585,7 @@ mod tests {
             &frame_buffer,
         )?;
 
-        pretty_assertions::assert_eq!(selection.selected_text(), None);
+        assert_that!(selection.selected_text(), eq(None));
         Ok(())
     }
 

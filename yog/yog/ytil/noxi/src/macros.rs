@@ -17,10 +17,7 @@ macro_rules! dict {
         ::nvim_oxi::Dictionary::default()
     }};
     ( $( $key:tt : $value:expr ),+ $(,)? ) => {{
-        let mut map: ::std::collections::BTreeMap<
-            ::std::borrow::Cow<'static, str>,
-            ::nvim_oxi::Object
-        > = ::std::collections::BTreeMap::new();
+        let mut map = ::std::collections::BTreeMap::new();
         $(
             let k: ::std::borrow::Cow<'static, str> = $crate::__dict_key_to_cow!($key);
             let v: ::nvim_oxi::Object = ::nvim_oxi::Object::from($value);
@@ -92,6 +89,7 @@ macro_rules! fn_from {
 mod tests {
     use nvim_oxi::Dictionary;
     use nvim_oxi::Object;
+    use test_that::prelude::*;
 
     use crate::dict::DictionaryExt;
 
@@ -124,13 +122,23 @@ mod tests {
     #[test]
     fn test_dictionary_ext_get_t_when_key_exists_returns_typed_value() {
         let dict = dict! { "foo": "42" };
-        assert2::assert!(let Err(err) = dict.get_t::<nvim_oxi::String>("bar"));
-        assert_eq!(err.format_current_context().to_string(), "missing dict value");
+        assert_that!(
+            (dict.get_t::<nvim_oxi::String>("bar")).map(|_| ()),
+            err(result_of!(
+                |err: &rootcause::Report| err.format_current_context().to_string(),
+                eq("missing dict value")
+            ))
+        );
         assert_eq!(dict.get_t::<nvim_oxi::String>("foo").unwrap(), "42");
 
         let dict = dict! { "foo": 42 };
-        assert2::assert!(let Err(err) = dict.get_t::<nvim_oxi::String>("foo"));
-        assert_eq!(err.format_current_context().to_string(), "unexpected object kind");
+        assert_that!(
+            (dict.get_t::<nvim_oxi::String>("foo")).map(|_| ()),
+            err(result_of!(
+                |err: &rootcause::Report| err.format_current_context().to_string(),
+                eq("unexpected object kind")
+            ))
+        );
     }
 
     #[test]
@@ -139,8 +147,13 @@ mod tests {
         assert_eq!(dict.get_dict(&["bar"]).unwrap(), None);
 
         let dict = dict! { "foo": 42 };
-        assert2::assert!(let Err(err) = dict.get_dict(&["foo"]));
-        assert_eq!(err.format_current_context().to_string(), "unexpected object kind");
+        assert_that!(
+            (dict.get_dict(&["foo"])).map(|_| ()),
+            err(result_of!(
+                |err: &rootcause::Report| err.format_current_context().to_string(),
+                eq("unexpected object kind")
+            ))
+        );
 
         let expected = dict! { "bar": "42" };
         let dict = dict! { "foo": expected.clone() };

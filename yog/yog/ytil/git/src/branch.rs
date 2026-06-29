@@ -486,6 +486,7 @@ mod tests {
     use git2::Signature;
     use git2::Time;
     use rstest::rstest;
+    use test_that::prelude::*;
 
     use super::*;
 
@@ -524,15 +525,17 @@ mod tests {
         let head_commit = repo.head().unwrap().peel_to_commit().unwrap();
         let branch = repo.branch("test-branch", &head_commit, false).unwrap();
 
-        assert2::assert!(let Ok(result) = Branch::try_from((branch, git2::BranchType::Local)));
+        let branch_result = Branch::try_from((branch, git2::BranchType::Local));
+        assert_that!(branch_result, ok(anything()));
+        let result = branch_result.expect("local branch should convert");
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             result,
-            Branch::Local {
+            eq(Branch::Local {
                 name: "test-branch".to_string(),
                 committer_email: "test@example.com".to_string(),
                 committer_date_time: DateTime::from_timestamp(42, 0).unwrap(),
-            }
+            })
         );
     }
 
@@ -540,11 +543,14 @@ mod tests {
     fn test_rename_current_renames_the_current_branch() {
         let (_temp_dir, repo) = crate::tests::init_test_repo(None);
 
-        assert2::assert!(let Ok(()) = rename_current("renamed", Some(&repo)));
+        assert_that!(rename_current("renamed", Some(&repo)), ok(eq(())));
 
-        pretty_assertions::assert_eq!(repo.head().unwrap().shorthand().unwrap(), "renamed");
+        assert_that!(repo.head().unwrap().shorthand().unwrap(), eq("renamed"));
         repo.find_branch("renamed", git2::BranchType::Local).unwrap();
-        assert2::assert!(let Err(_) = repo.find_branch("master", git2::BranchType::Local));
+        assert_that!(
+            repo.find_branch("master", git2::BranchType::Local).map(|_| ()),
+            err(anything())
+        );
     }
 
     #[test]
@@ -553,9 +559,11 @@ mod tests {
         let head_commit = repo.head().unwrap().peel_to_commit().unwrap();
         repo.branch("existing", &head_commit, false).unwrap();
 
-        assert2::assert!(let Err(err) = rename_current("existing", Some(&repo)));
+        let rename_result = rename_current("existing", Some(&repo));
+        assert_that!(rename_result.as_ref(), err(anything()));
+        let err = rename_result.expect_err("renaming over existing branch should fail");
 
-        assert!(err.to_string().contains("error renaming current branch"));
+        assert_that!(err.to_string(), contains_substring("error renaming current branch"));
     }
 
     #[test]
@@ -565,7 +573,7 @@ mod tests {
 
         let actual = get_at(temp_dir.path(), timestamp);
 
-        pretty_assertions::assert_eq!(actual, None);
+        assert_that!(actual, eq(None));
     }
 
     #[test]
@@ -577,7 +585,7 @@ mod tests {
 
         let actual = get_at(repo.workdir().unwrap(), DateTime::from_timestamp(25, 0).unwrap());
 
-        pretty_assertions::assert_eq!(actual, Some("feature/b".to_string()));
+        assert_that!(actual, eq(Some("feature/b".to_string())));
     }
 
     #[test]
@@ -587,7 +595,7 @@ mod tests {
 
         let actual = get_at(repo.workdir().unwrap(), DateTime::from_timestamp(10, 0).unwrap());
 
-        pretty_assertions::assert_eq!(actual, Some("main".to_string()));
+        assert_that!(actual, eq(Some("main".to_string())));
     }
 
     #[test]
@@ -599,14 +607,14 @@ mod tests {
 
         let actual = get_at(repo.workdir().unwrap(), DateTime::from_timestamp(30, 0).unwrap());
 
-        pretty_assertions::assert_eq!(actual, None);
+        assert_that!(actual, eq(None));
     }
 
     #[rstest]
     #[case::local_variant(local("main"), "main")]
     #[case::remote_variant(remote("origin/feature"), "origin/feature")]
     fn test_branch_name_when_variant_returns_name(#[case] branch: Branch, #[case] expected: &str) {
-        pretty_assertions::assert_eq!(branch.name(), expected);
+        assert_that!(branch.name(), eq(expected));
     }
 
     #[rstest]
@@ -614,7 +622,7 @@ mod tests {
     #[case::remote_origin_prefix(remote("origin/main"), "main")]
     #[case::remote_other_prefix(remote("upstream/feature"), "upstream/feature")]
     fn test_branch_name_no_origin_when_name_returns_trimmed(#[case] branch: Branch, #[case] expected: &str) {
-        pretty_assertions::assert_eq!(branch.name_no_origin(), expected);
+        assert_that!(branch.name_no_origin(), eq(expected));
     }
 
     #[rstest]
@@ -638,7 +646,7 @@ mod tests {
         #[case] branch: Branch,
         #[case] expected: DateTime<Utc>,
     ) {
-        pretty_assertions::assert_eq!(branch.committer_date_time(), &expected);
+        assert_that!(branch.committer_date_time(), eq(&expected));
     }
 
     fn local(name: &str) -> Branch {

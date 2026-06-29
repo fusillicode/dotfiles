@@ -175,6 +175,7 @@ mod tests {
     use muxr_core::TerminalSize;
     use rootcause::prelude::ResultExt;
     use rootcause::report;
+    use test_that::prelude::*;
 
     use super::*;
     use crate::renderer::ClientRenderer;
@@ -193,7 +194,7 @@ mod tests {
             );
             let mut output = CountingWriter::default();
 
-            pretty_assertions::assert_eq!(
+            assert_that!(
                 handle_mouse_input_action(
                     &config,
                     ClientMouseEvent {
@@ -209,12 +210,12 @@ mod tests {
                     &mut output,
                 )
                 .await?,
-                ClientInputSend::Accepted,
+                eq(ClientInputSend::Accepted)
             );
 
-            pretty_assertions::assert_eq!(
+            assert_that!(
                 input_receiver.recv().await,
-                Some(ClientRequest::FocusPaneAt(ClientMousePosition { row: 0, col: 1 })),
+                eq(Some(ClientRequest::FocusPaneAt(ClientMousePosition { row: 0, col: 1 })))
             );
             Ok(())
         })
@@ -232,7 +233,7 @@ mod tests {
             );
             let mut output = CountingWriter::default();
 
-            pretty_assertions::assert_eq!(
+            assert_that!(
                 handle_mouse_input_action(
                     &config,
                     ClientMouseEvent {
@@ -245,14 +246,14 @@ mod tests {
                     &mut output,
                 )
                 .await?,
-                ClientInputSend::Accepted,
+                eq(ClientInputSend::Accepted)
             );
 
-            pretty_assertions::assert_eq!(
+            assert_that!(
                 input_receiver.recv().await,
-                Some(ClientRequest::FocusTab(TabId::new(2)?)),
+                eq(Some(ClientRequest::FocusTab(TabId::new(2)?)))
             );
-            pretty_assertions::assert_eq!(output.flushes, 0);
+            assert_that!(output.flushes, eq(0));
             Ok(())
         })
     }
@@ -275,7 +276,7 @@ mod tests {
             )?;
             let mut output = CountingWriter::default();
 
-            pretty_assertions::assert_eq!(
+            assert_that!(
                 handle_mouse_input_action(
                     &config,
                     ClientMouseEvent {
@@ -291,9 +292,9 @@ mod tests {
                     &mut output,
                 )
                 .await?,
-                ClientInputSend::Accepted,
+                eq(ClientInputSend::Accepted)
             );
-            pretty_assertions::assert_eq!(
+            assert_that!(
                 handle_mouse_input_action(
                     &config,
                     ClientMouseEvent {
@@ -306,14 +307,17 @@ mod tests {
                     &mut output,
                 )
                 .await?,
-                ClientInputSend::Accepted,
+                eq(ClientInputSend::Accepted)
             );
 
-            pretty_assertions::assert_eq!(
+            assert_that!(
                 input_receiver.recv().await,
-                Some(ClientRequest::FocusPaneAt(ClientMousePosition { row: 0, col: 1 })),
+                eq(Some(ClientRequest::FocusPaneAt(ClientMousePosition { row: 0, col: 1 })))
             );
-            pretty_assertions::assert_eq!(renderer_test_helpers::selected_text(&renderer), Some("ab".to_owned()),);
+            assert_that!(
+                renderer_test_helpers::selected_text(&renderer),
+                eq(Some("ab".to_owned()))
+            );
             Ok(())
         })
     }
@@ -336,7 +340,7 @@ mod tests {
             )?;
             let mut output = CountingWriter::default();
 
-            pretty_assertions::assert_eq!(
+            assert_that!(
                 handle_mouse_input_action(
                     &config,
                     ClientMouseEvent {
@@ -352,9 +356,9 @@ mod tests {
                     &mut output,
                 )
                 .await?,
-                ClientInputSend::Accepted,
+                eq(ClientInputSend::Accepted)
             );
-            pretty_assertions::assert_eq!(
+            assert_that!(
                 handle_mouse_input_action(
                     &config,
                     ClientMouseEvent {
@@ -367,18 +371,21 @@ mod tests {
                     &mut output,
                 )
                 .await?,
-                ClientInputSend::Accepted,
+                eq(ClientInputSend::Accepted)
             );
 
-            pretty_assertions::assert_eq!(
+            assert_that!(
                 self::recv_client_request(&mut input_receiver).await?,
-                Some(ClientRequest::FocusPaneAt(ClientMousePosition { row: 0, col: 1 })),
+                eq(Some(ClientRequest::FocusPaneAt(ClientMousePosition { row: 0, col: 1 })))
             );
-            assert2::assert!(matches!(
+            assert_that!(
                 input_receiver.try_recv(),
-                Err(tokio::sync::mpsc::error::TryRecvError::Empty)
-            ));
-            pretty_assertions::assert_eq!(renderer_test_helpers::selected_text(&renderer), Some("ab".to_owned()),);
+                err(matches_pattern!(tokio::sync::mpsc::error::TryRecvError::Empty))
+            );
+            assert_that!(
+                renderer_test_helpers::selected_text(&renderer),
+                eq(Some("ab".to_owned()))
+            );
             Ok(())
         })
     }
@@ -395,7 +402,7 @@ mod tests {
             );
             let mut output = CountingWriter::default();
 
-            pretty_assertions::assert_eq!(
+            assert_that!(
                 handle_mouse_input_action(
                     &config,
                     ClientMouseEvent {
@@ -411,18 +418,18 @@ mod tests {
                     &mut output,
                 )
                 .await?,
-                ClientInputSend::Accepted,
+                eq(ClientInputSend::Accepted)
             );
 
-            pretty_assertions::assert_eq!(
+            assert_that!(
                 input_receiver.recv().await,
-                Some(ClientRequest::Mouse(ClientMouseEvent {
+                eq(Some(ClientRequest::Mouse(ClientMouseEvent {
                     button: 0,
                     phase: ClientMouseEventPhase::Press,
                     position: ClientMousePosition { row: 0, col: 1 }
-                })),
+                })))
             );
-            pretty_assertions::assert_eq!(output.flushes, 0);
+            assert_that!(output.flushes, eq(0));
             Ok(())
         })
     }
@@ -447,19 +454,19 @@ mod tests {
                 },
             };
 
-            pretty_assertions::assert_eq!(
+            assert_that!(
                 handle_mouse_input_action(&config, event, &input_sender, &mut renderer, &mut output).await?,
-                ClientInputSend::Accepted,
+                eq(ClientInputSend::Accepted)
             );
 
-            pretty_assertions::assert_eq!(
+            assert_that!(
                 input_receiver.recv().await,
-                Some(ClientRequest::Mouse(ClientMouseEvent {
+                eq(Some(ClientRequest::Mouse(ClientMouseEvent {
                     position: ClientMousePosition { row: 0, col: 1 },
                     ..event
-                })),
+                })))
             );
-            pretty_assertions::assert_eq!(output.flushes, 0);
+            assert_that!(output.flushes, eq(0));
             Ok(())
         })
     }
@@ -470,7 +477,7 @@ mod tests {
         self::runtime()?.block_on(async {
             let config = MuxrConfig::default();
             let (input_sender, mut input_receiver) = tokio::sync::mpsc::channel(1);
-            assert2::assert!(input_sender.try_send(ClientRequest::Pong).is_ok());
+            assert_that!(input_sender.try_send(ClientRequest::Pong), ok(eq(())));
             let mut renderer = ClientRenderer::with_synchronized_output(
                 self::layout_snapshot()?,
                 self::pane_regions_snapshot()?,
@@ -495,15 +502,12 @@ mod tests {
                 () = tokio::time::sleep(std::time::Duration::from_millis(50)) => {}
             }
 
-            pretty_assertions::assert_eq!(input_receiver.recv().await, Some(ClientRequest::Pong));
-            pretty_assertions::assert_eq!(handle.await?, ClientInputSend::Accepted);
-            pretty_assertions::assert_eq!(
-                input_receiver.recv().await,
-                Some(ClientRequest::Mouse(ClientMouseEvent {
+            assert_that!(input_receiver.recv().await, eq(Some(ClientRequest::Pong)));
+            assert_that!(handle.await?, eq(ClientInputSend::Accepted));
+            assert_that!(input_receiver.recv().await, eq(Some(ClientRequest::Mouse(ClientMouseEvent {
                     position: ClientMousePosition { row: 0, col: 1 },
                     ..event
-                })),
-            );
+                }))));
             Ok(())
         })
     }
@@ -553,40 +557,40 @@ mod tests {
                 },
             ];
             for event in events {
-                pretty_assertions::assert_eq!(
+                assert_that!(
                     handle_mouse_input_action(&config, event, &input_sender, &mut renderer, &mut output).await?,
-                    ClientInputSend::Accepted,
+                    eq(ClientInputSend::Accepted)
                 );
             }
 
-            pretty_assertions::assert_eq!(
+            assert_that!(
                 self::recv_client_request(&mut input_receiver).await?,
-                Some(ClientRequest::Mouse(ClientMouseEvent {
+                eq(Some(ClientRequest::Mouse(ClientMouseEvent {
                     button: 0,
                     phase: ClientMouseEventPhase::Press,
                     position: ClientMousePosition { row: 0, col: 1 }
-                })),
+                })))
             );
-            pretty_assertions::assert_eq!(
+            assert_that!(
                 self::recv_client_request(&mut input_receiver).await?,
-                Some(ClientRequest::Mouse(ClientMouseEvent {
+                eq(Some(ClientRequest::Mouse(ClientMouseEvent {
                     button: 32,
                     phase: ClientMouseEventPhase::Press,
                     position: ClientMousePosition { row: 0, col: 1 }
-                })),
+                })))
             );
-            pretty_assertions::assert_eq!(
+            assert_that!(
                 self::recv_client_request(&mut input_receiver).await?,
-                Some(ClientRequest::Mouse(ClientMouseEvent {
+                eq(Some(ClientRequest::Mouse(ClientMouseEvent {
                     button: 0,
                     phase: ClientMouseEventPhase::Release,
                     position: ClientMousePosition { row: 0, col: 0 }
-                })),
+                })))
             );
-            assert2::assert!(matches!(
+            assert_that!(
                 input_receiver.try_recv(),
-                Err(tokio::sync::mpsc::error::TryRecvError::Empty)
-            ));
+                err(matches_pattern!(tokio::sync::mpsc::error::TryRecvError::Empty))
+            );
             Ok(())
         })
     }

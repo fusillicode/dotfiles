@@ -87,6 +87,7 @@ mod tests {
     use chrono::DateTime;
     use chrono::Utc;
     use rstest::rstest;
+    use test_that::prelude::*;
     use ytil_git::branch::Branch;
 
     use super::*;
@@ -140,7 +141,7 @@ mod tests {
     ) {
         let ordered = prioritize_branches(branches, previous_branch, user_email);
 
-        pretty_assertions::assert_eq!(ordered, expected);
+        assert_that!(ordered, eq(expected));
     }
 
     #[test]
@@ -160,9 +161,9 @@ mod tests {
 
         let ordered = prioritize_branches(branches, None, Some("me@example.com"));
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             &ordered,
-            &[
+            eq(&[
                 branch("mine-1", "me@example.com", 99),
                 branch("mine-2", "me@example.com", 98),
                 branch("mine-3", "me@example.com", 97),
@@ -173,7 +174,7 @@ mod tests {
                 branch("mine-7", "me@example.com", 93),
                 branch("mine-8", "me@example.com", 92),
                 branch("other-2", "other@example.com", 91),
-            ],
+            ])
         );
     }
 
@@ -240,7 +241,7 @@ mod tests {
     ) {
         let ordered = prioritize_branches(branches, previous_branch, user_email);
 
-        pretty_assertions::assert_eq!(ordered, expected);
+        assert_that!(ordered, eq(expected));
     }
 
     fn branch(name: &str, email: &str, timestamp: i64) -> Branch {

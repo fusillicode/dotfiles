@@ -15,7 +15,7 @@ rootcause = { workspace = true }
 ytil_wezterm = { workspace = true }
 
 [dev-dependencies]
-assert2 = { workspace = true }
+test-that = { workspace = true }
 
 [lints]
 workspace = true

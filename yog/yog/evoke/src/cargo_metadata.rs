@@ -71,29 +71,33 @@ impl Target {
 
 #[cfg(test)]
 mod tests {
+    use test_that::prelude::*;
+
     use super::*;
 
     #[test]
     fn test_native_audit_bin_paths_uses_native_bin_targets() {
-        assert2::assert!(let Ok(metadata) = Metadata::from_slice(metadata_fixture()));
-
-        pretty_assertions::assert_eq!(
-            metadata.native_audit_bin_paths(),
-            vec![
+        assert_that!(
+            Metadata::from_slice(metadata_fixture()).map(|metadata| metadata.native_audit_bin_paths()),
+            ok(eq(vec![
                 PathBuf::from("./target/release/evoke"),
                 PathBuf::from("./target/release/fixture-tool"),
                 PathBuf::from("./target/release/helper-cli"),
-            ]
+            ]))
         );
     }
 
     #[test]
     fn test_native_bin_package_names_uses_native_bin_targets() {
-        assert2::assert!(let Ok(metadata) = Metadata::from_slice(metadata_fixture()));
-
-        pretty_assertions::assert_eq!(
-            metadata.native_bin_package_names(),
-            vec!["evoke", "fixture-tool", "helper-cli"]
+        assert_that!(
+            Metadata::from_slice(metadata_fixture()).map(|metadata| {
+                metadata
+                    .native_bin_package_names()
+                    .into_iter()
+                    .map(str::to_owned)
+                    .collect::<Vec<_>>()
+            }),
+            ok(eq(vec!["evoke", "fixture-tool", "helper-cli"]))
         );
     }
 

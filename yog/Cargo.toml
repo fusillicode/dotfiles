@@ -55,7 +55,6 @@ categories = ["command-line-utilities", "development-tools"]
 [workspace.dependencies]
 # Centralized shared dependencies (including those used only as dev-deps in member crates).
 # Member crates reference them with `{ workspace = true }` under their own [dev-dependencies].
-assert2 = { version = "0.4" }
 bytes = { version = "1.11" }
 chrono = { version = "0.4", default-features = false, features = ["clock", "serde"] }
 compact_str = { version = "0.9", features = ["rkyv", "serde"] }
@@ -69,7 +68,6 @@ muxr_transport = { package = "muxr-transport", path = "./yog/muxr/transport" }
 nomicon = { path = "./yog/nomicon" }
 nvim-oxi = { path = "../third_party/nvim-oxi", features = ["neovim-nightly", "mlua"] }
 owo-colors = { version = "4" }
-pretty_assertions = { version = "1.4" }
 rootcause = { version = "0.13" }
 rstest = { version = "0.26" }
 rusqlite = { version = "0.40", features = ["bundled"] }
@@ -78,6 +76,7 @@ serde_json = { version = "1.0" }
 smallvec = { version = "1.15" }
 strum = { version = "0.28", features = ["derive"] }
 tempfile = { version = "3.25" }
+test-that = { version = "0.5", default-features = false, features = ["std"] }
 thiserror = { version = "2.0" }
 tokio = { version = "1.48", default-features = false, features = ["io-util", "macros", "rt-multi-thread", "sync", "time"] }
 ureq = { version = "3.3", default-features = false, features = ["rustls"] }

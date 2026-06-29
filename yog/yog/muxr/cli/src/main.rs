@@ -231,6 +231,7 @@ fn server_executable_next_to(current_exe: &Path) -> rootcause::Result<PathBuf> {
 #[cfg(test)]
 mod tests {
     use rstest::rstest;
+    use test_that::prelude::*;
 
     use super::*;
 
@@ -252,12 +253,23 @@ mod tests {
         #[case] expected_session: &str,
         #[case] expected_layout: Option<&str>,
     ) -> rootcause::Result<()> {
-        assert2::assert!(let Cmd::Start {
+        let parsed = Cmd::parse(&args(raw))?;
+        let Cmd::Start {
             session,
             external_layout,
-        } = Cmd::parse(&args(raw))?);
-        pretty_assertions::assert_eq!(session.as_ref(), expected_session);
-        pretty_assertions::assert_eq!(external_layout.as_deref().and_then(Path::to_str), expected_layout);
+        } = parsed
+        else {
+            assert_that!(
+                parsed,
+                matches_pattern!(Cmd::Start {
+                    session: anything(),
+                    external_layout: anything()
+                })
+            );
+            return Ok(());
+        };
+        assert_that!(session.as_ref(), eq(expected_session));
+        assert_that!(external_layout.as_deref().and_then(Path::to_str), eq(expected_layout));
         Ok(())
     }
 
@@ -265,13 +277,13 @@ mod tests {
     #[case::help_arg(&["--help"])]
     #[case::help_among_args(&["start", "--help"])]
     fn test_parse_when_help_requested_returns_help(#[case] raw: &[&str]) -> rootcause::Result<()> {
-        pretty_assertions::assert_eq!(Cmd::parse(&args(raw))?, Cmd::Help);
+        assert_that!(Cmd::parse(&args(raw))?, eq(Cmd::Help));
         Ok(())
     }
 
     #[test]
     fn test_parse_when_no_args_returns_session_picker() -> rootcause::Result<()> {
-        pretty_assertions::assert_eq!(Cmd::parse(&args(&[]))?, Cmd::Sessions);
+        assert_that!(Cmd::parse(&args(&[]))?, eq(Cmd::Sessions));
         Ok(())
     }
 
@@ -281,7 +293,7 @@ mod tests {
         let muxr = tempdir.path().join("muxr");
         let runner = tempdir.path().join(SERVER_EXECUTABLE);
 
-        pretty_assertions::assert_eq!(server_executable_next_to(&muxr)?, runner);
+        assert_that!(server_executable_next_to(&muxr)?, eq(runner));
         Ok(())
     }
 
@@ -297,7 +309,7 @@ mod tests {
     #[case::old_server_cmd(&["server", "work"])]
     #[case::unknown_cmd(&["bogus"])]
     fn test_parse_when_args_are_invalid_returns_error(#[case] raw: &[&str]) {
-        assert2::assert!(Cmd::parse(&args(raw)).is_err());
+        assert_that!(Cmd::parse(&args(raw)), err(anything()));
     }
 
     #[rstest]
@@ -307,7 +319,7 @@ mod tests {
         #[case] action: SessionAction,
         #[case] expected: String,
     ) {
-        pretty_assertions::assert_eq!(action.to_string(), expected);
+        assert_that!(action.to_string(), eq(expected));
     }
 
     #[test]
@@ -327,8 +339,8 @@ mod tests {
             }
         });
 
-        assert2::assert!(result.is_err());
-        pretty_assertions::assert_eq!(attempted, vec!["ok", "bad", "later"]);
+        assert_that!(result, err(anything()));
+        assert_that!(attempted, eq(vec!["ok", "bad", "later"]));
         Ok(())
     }
 
@@ -339,7 +351,7 @@ mod tests {
         let error = execute_session_action(SessionAction::Attach, &sessions)
             .expect_err("expected attach multi-selection error");
 
-        assert2::assert!(error.to_string().contains("expected exactly one selection"));
+        assert_that!(error.to_string(), contains_substring("expected exactly one selection"));
         Ok(())
     }
 
@@ -364,7 +376,7 @@ mod tests {
         #[case] outcome: muxr_client::SessionDeleteOutcome,
         #[case] expected: String,
     ) -> rootcause::Result<()> {
-        pretty_assertions::assert_eq!(delete_session_message(&listed_session("work")?, outcome), expected);
+        assert_that!(delete_session_message(&listed_session("work")?, outcome), eq(expected));
         Ok(())
     }
 
@@ -373,8 +385,11 @@ mod tests {
         let error = report!("delete failed");
         let message = delete_session_failure_message(&listed_session("work")?, &error);
 
-        assert2::assert!(message.starts_with(&format!("{} to delete session work:", "Failed".red().bold())));
-        assert2::assert!(message.contains("delete failed"));
+        assert_that!(
+            message,
+            starts_with(format!("{} to delete session work:", "Failed".red().bold()))
+        );
+        assert_that!(message, contains_substring("delete failed"));
         Ok(())
     }
 

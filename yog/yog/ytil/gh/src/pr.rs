@@ -158,15 +158,17 @@ pub fn create(title: &str) -> rootcause::Result<String> {
 #[cfg(test)]
 mod tests {
     use rstest::rstest;
+    use test_that::prelude::*;
 
     use super::*;
 
     #[test]
     fn test_create_when_empty_title_returns_error() {
-        assert2::assert!(let Err(err) = create(""));
-        assert!(
-            err.to_string()
-                .contains("error cannot create GitHub PR with empty title")
+        assert_that!(
+            create("").map(|_| ()),
+            err(displays_as(contains_substring(
+                "error cannot create GitHub PR with empty title"
+            )))
         );
     }
 
@@ -187,7 +189,9 @@ mod tests {
         let json = format!(
             r#"{{"number":1,"title":"t","author":{{"login":"a","is_bot":false}},"mergeStateStatus":"{status_str}","updatedAt":"2024-01-01T00:00:00Z"}}"#
         );
-        assert2::assert!(let Ok(pr) = serde_json::from_str::<PullRequest>(&json));
-        pretty_assertions::assert_eq!(pr.merge_state, expected);
+        assert_that!(
+            serde_json::from_str::<PullRequest>(&json),
+            ok(result_of!(|pr: &PullRequest| pr.merge_state, eq(expected)))
+        );
     }
 }

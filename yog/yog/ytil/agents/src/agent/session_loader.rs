@@ -67,6 +67,7 @@ fn file_updated_at(path: &Path) -> rootcause::Result<Option<chrono::DateTime<chr
 
 #[cfg(test)]
 mod tests {
+    use test_that::prelude::*;
     #[test]
     fn test_find_session_paths_missing_root_returns_empty_paths() {
         let dir = tempfile::tempdir().unwrap();
@@ -74,8 +75,7 @@ mod tests {
 
         let res = crate::agent::session_loader::find_session_paths(&missing_root, |_| true, |_| false);
 
-        assert2::assert!(let Ok(paths) = res);
-        pretty_assertions::assert_eq!(paths, Vec::<std::path::PathBuf>::new());
+        assert_that!(res, ok(eq(Vec::<std::path::PathBuf>::new())));
     }
 
     #[test]
@@ -86,7 +86,9 @@ mod tests {
 
         let res = crate::agent::session_loader::find_session_paths(&file_root, |_| true, |_| false);
 
-        assert2::assert!(let Err(err) = res);
-        assert!(err.to_string().contains("error reading directory"));
+        assert_that!(
+            (res).map(|_| ()),
+            err(displays_as(contains_substring("error reading directory")))
+        );
     }
 }

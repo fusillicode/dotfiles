@@ -73,6 +73,7 @@ mod tests {
     use std::path::Path;
 
     use rstest::rstest;
+    use test_that::prelude::*;
 
     use super::*;
 
@@ -80,8 +81,8 @@ mod tests {
     fn test_parse_when_session_is_supplied_returns_session() -> rootcause::Result<()> {
         let args = ServerRunnerArgs::parse(&args(&["work"]))?;
 
-        pretty_assertions::assert_eq!(args.session.as_ref(), "work");
-        pretty_assertions::assert_eq!(args.external_layout, None);
+        assert_that!(args.session.as_ref(), eq("work"));
+        assert_that!(args.external_layout, eq(None));
         Ok(())
     }
 
@@ -89,10 +90,10 @@ mod tests {
     fn test_parse_when_layout_is_supplied_returns_layout() -> rootcause::Result<()> {
         let args = ServerRunnerArgs::parse(&args(&["work", "--layout", ".config/muxr/layouts/work.json"]))?;
 
-        pretty_assertions::assert_eq!(args.session.as_ref(), "work");
-        pretty_assertions::assert_eq!(
+        assert_that!(args.session.as_ref(), eq("work"));
+        assert_that!(
             args.external_layout.as_deref().and_then(Path::to_str),
-            Some(".config/muxr/layouts/work.json")
+            eq(Some(".config/muxr/layouts/work.json"))
         );
         Ok(())
     }
@@ -104,13 +105,13 @@ mod tests {
             session: "work".parse()?,
         };
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             args.argv(),
-            vec![
+            eq(vec![
                 OsString::from("work"),
                 OsString::from(EXTERNAL_LAYOUT_ARG),
                 OsStr::new(".config/muxr/layouts/work.json").to_owned()
-            ]
+            ])
         );
         Ok(())
     }
@@ -125,14 +126,14 @@ mod tests {
         let parsed =
             ServerRunnerArgs::parse(&[OsString::from("work"), OsString::from(EXTERNAL_LAYOUT_ARG), raw_layout])?;
 
-        pretty_assertions::assert_eq!(parsed.session.as_ref(), "work");
-        pretty_assertions::assert_eq!(
+        assert_that!(parsed.session.as_ref(), eq("work"));
+        assert_that!(
             parsed
                 .external_layout
                 .as_deref()
                 .map(Path::as_os_str)
                 .map(OsStr::as_bytes),
-            Some(b"layout-\xFF.json".as_slice())
+            eq(Some(b"layout-\xFF.json".as_slice()))
         );
         Ok(())
     }
@@ -142,7 +143,7 @@ mod tests {
     #[case::extra_args(&["work", "extra"])]
     #[case::missing_layout(&["work", "--layout"])]
     fn test_parse_when_args_are_invalid_returns_error(#[case] raw: &[&str]) {
-        assert2::assert!(ServerRunnerArgs::parse(&args(raw)).is_err());
+        assert_that!(ServerRunnerArgs::parse(&args(raw)), err(anything()));
     }
 
     fn args(raw: &[&str]) -> Vec<OsString> {

@@ -94,6 +94,8 @@ impl ExternalLayoutPane {
 
 #[cfg(test)]
 mod tests {
+    use test_that::prelude::*;
+
     use super::*;
 
     #[test]
@@ -110,16 +112,16 @@ mod tests {
         layout.validate()?;
 
         let tabs = layout.tabs();
-        pretty_assertions::assert_eq!(tabs.len(), 2);
-        pretty_assertions::assert_eq!(tabs[0].cwd(), "/tmp/one");
-        pretty_assertions::assert_eq!(tabs[1].cwd(), "/tmp/two");
+        assert_that!(tabs.len(), eq(2));
+        assert_that!(tabs[0].cwd(), eq("/tmp/one"));
+        assert_that!(tabs[1].cwd(), eq("/tmp/two"));
 
         let demo_process = tabs[1]
             .panes()
             .first()
             .ok_or_else(|| report!("expected demo process command pane"))?;
-        pretty_assertions::assert_eq!(demo_process.cmd(), Some("demo"));
-        pretty_assertions::assert_eq!(demo_process.args(), ["process", "start"]);
+        assert_that!(demo_process.cmd(), eq(Some("demo")));
+        assert_that!(demo_process.args(), eq(["process", "start"]));
         Ok(())
     }
 
@@ -132,6 +134,6 @@ mod tests {
     fn test_external_session_layout_validate_when_required_fields_are_empty_returns_error(#[case] raw: &str) {
         let layout: ExternalSessionLayout = serde_json::from_str(raw).expect("test layout json must parse");
 
-        assert2::assert!(layout.validate().is_err());
+        assert_that!(layout.validate(), err(anything()));
     }
 }

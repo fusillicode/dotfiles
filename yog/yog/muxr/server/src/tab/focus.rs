@@ -203,6 +203,7 @@ mod tests {
     use muxr_core::PaneId;
     use muxr_core::SessionName;
     use muxr_core::TabId;
+    use test_that::prelude::*;
 
     use super::*;
     use crate::state::Pane;
@@ -215,9 +216,9 @@ mod tests {
     fn test_focus_tab_when_tab_exists_updates_active_tab() -> rootcause::Result<()> {
         let mut layout = self::layout()?;
 
-        pretty_assertions::assert_eq!(layout.focus_tab(TabId::new(2)?)?, TabFocusChange::Changed);
+        assert_that!(layout.focus_tab(TabId::new(2)?)?, eq(TabFocusChange::Changed));
 
-        pretty_assertions::assert_eq!(layout.active_tab.get(), 2);
+        assert_that!(layout.active_tab.get(), eq(2));
         Ok(())
     }
 
@@ -225,9 +226,9 @@ mod tests {
     fn test_focus_tab_when_tab_is_missing_keeps_active_tab() -> rootcause::Result<()> {
         let mut layout = self::layout()?;
 
-        pretty_assertions::assert_eq!(layout.focus_tab(TabId::new(3)?)?, TabFocusChange::Unchanged);
+        assert_that!(layout.focus_tab(TabId::new(3)?)?, eq(TabFocusChange::Unchanged));
 
-        pretty_assertions::assert_eq!(layout.active_tab.get(), 1);
+        assert_that!(layout.active_tab.get(), eq(1));
         Ok(())
     }
 

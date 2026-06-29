@@ -213,6 +213,7 @@ fn decode_protocol_payload(frame: &[u8]) -> rootcause::Result<AlignedVec> {
 #[cfg(test)]
 mod tests {
     use rstest::rstest;
+    use test_that::prelude::*;
 
     use super::super::keyboard_input::ClientKeyCode;
     use super::super::keyboard_input::ClientKeyModifiers;
@@ -243,9 +244,9 @@ mod tests {
         let frame = ProtocolFrame::from(b"payload".as_slice());
         let expected = b"MUXR-RKYVpayload";
 
-        pretty_assertions::assert_eq!(frame.as_bytes(), expected);
-        pretty_assertions::assert_eq!(AsRef::<[u8]>::as_ref(&frame), expected);
-        pretty_assertions::assert_eq!(frame.into_bytes().as_ref(), expected);
+        assert_that!(frame.as_bytes(), eq(expected));
+        assert_that!(AsRef::<[u8]>::as_ref(&frame), eq(expected));
+        assert_that!(frame.into_bytes().as_ref(), eq(expected));
     }
 
     #[rstest]
@@ -274,9 +275,9 @@ mod tests {
     fn test_client_request_codec_when_frame_round_trips_returns_original(
         #[case] request: ClientRequest,
     ) -> rootcause::Result<()> {
-        pretty_assertions::assert_eq!(
+        assert_that!(
             decode_client_request(encode_client_request(&request)?.as_bytes())?,
-            request
+            eq(request)
         );
         Ok(())
     }
@@ -302,7 +303,7 @@ mod tests {
     fn test_server_event_codec_when_frame_round_trips_returns_original(
         #[case] event: ServerEvent,
     ) -> rootcause::Result<()> {
-        pretty_assertions::assert_eq!(decode_server_event(encode_server_event(&event)?.as_bytes())?, event);
+        assert_that!(decode_server_event(encode_server_event(&event)?.as_bytes())?, eq(event));
         Ok(())
     }
 
@@ -311,7 +312,7 @@ mod tests {
         let event = self::invalid_render_event()?;
         let encoded = encode_server_event(&event)?;
 
-        assert2::assert!(decode_server_event(encoded.as_bytes()).is_err());
+        assert_that!(decode_server_event(encoded.as_bytes()), err(anything()));
         Ok(())
     }
 
@@ -331,7 +332,7 @@ mod tests {
         });
         let encoded = encode_server_event(&event)?;
 
-        assert2::assert!(decode_server_event(encoded.as_bytes()).is_err());
+        assert_that!(decode_server_event(encoded.as_bytes()), err(anything()));
         Ok(())
     }
 
@@ -348,7 +349,7 @@ mod tests {
         ));
         let encoded = encode_server_event(&event)?;
 
-        assert2::assert!(decode_server_event(encoded.as_bytes()).is_err());
+        assert_that!(decode_server_event(encoded.as_bytes()), err(anything()));
         Ok(())
     }
 
@@ -356,7 +357,7 @@ mod tests {
     fn test_client_request_codec_when_frame_magic_is_missing_returns_error() {
         let encoded = b"not-muxr-rkyv";
 
-        assert2::assert!(decode_client_request(encoded).is_err());
+        assert_that!(decode_client_request(encoded), err(anything()));
     }
 
     fn client_attach_request() -> rootcause::Result<AttachRequest> {

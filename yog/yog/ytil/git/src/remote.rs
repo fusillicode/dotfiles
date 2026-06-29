@@ -93,6 +93,7 @@ fn map_to_https_url(url: &str) -> rootcause::Result<String> {
 #[cfg(test)]
 mod tests {
     use rstest::rstest;
+    use test_that::prelude::*;
 
     use super::*;
 
@@ -105,8 +106,7 @@ mod tests {
     #[case("https://bitbucket.org/user/repo", "https://bitbucket.org/user/repo")]
     fn test_map_to_https_url_when_valid_input_maps_successfully(#[case] input: &str, #[case] expected: &str) {
         let result = map_to_https_url(input);
-        assert2::assert!(let Ok(actual) = result);
-        pretty_assertions::assert_eq!(actual, expected);
+        assert_that!(result, ok(eq(expected)));
     }
 
     #[rstest]
@@ -115,8 +115,9 @@ mod tests {
     #[case("invalid")]
     #[case("")]
     fn test_map_to_https_url_when_unsupported_protocol_returns_error(#[case] input: &str) {
-        let result = map_to_https_url(input);
-        assert2::assert!(let Err(err) = result);
-        assert!(err.to_string().contains("error unsupported protocol for URL"));
+        assert_that!(
+            (map_to_https_url(input)).map(|_| ()),
+            err(displays_as(contains_substring("error unsupported protocol for URL")))
+        );
     }
 }

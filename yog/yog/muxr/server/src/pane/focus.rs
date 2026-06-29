@@ -372,6 +372,7 @@ impl PaneRangeOverlap {
 #[cfg(test)]
 mod tests {
     use muxr_config::MuxrConfig;
+    use test_that::prelude::*;
 
     use super::*;
     use crate::pane::split::PaneSplitAxis;
@@ -394,11 +395,11 @@ mod tests {
         )?;
         state_test_helpers::force_balanced_test_split_ratio(&mut layout)?;
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             layout.focus_pane_at(&TerminalSize::new(80, 24)?, position)?,
-            expected_change,
+            eq(expected_change)
         );
-        pretty_assertions::assert_eq!(layout.active_pane_id()?.to_string(), expected_active_pane);
+        assert_that!(layout.active_pane_id()?.to_string(), eq(expected_active_pane));
         Ok(())
     }
 
@@ -433,9 +434,9 @@ mod tests {
             ),
             (previous_pane, next_pane, Vec::new(), Vec::new()),
         ] {
-            pretty_assertions::assert_eq!(
+            assert_that!(
                 self::pane_focus_events_for_live_panes(previous_pane, next_pane, &live_panes),
-                expected,
+                eq(expected)
             );
         }
         Ok(())
@@ -459,8 +460,8 @@ mod tests {
 
         let pane_id = layout.active_tab()?.pane_at(&TerminalSize::new(80, 24)?, position)?;
 
-        pretty_assertions::assert_eq!(pane_id.map(|id| id.to_string()), expected_pane.map(str::to_owned));
-        pretty_assertions::assert_eq!(layout.active_pane_id()?.to_string(), "pane-2");
+        assert_that!(pane_id.map(|id| id.to_string()), eq(expected_pane.map(str::to_owned)));
+        assert_that!(layout.active_pane_id()?.to_string(), eq("pane-2"));
         Ok(())
     }
 
@@ -481,11 +482,11 @@ mod tests {
             PaneSplitAxis::Vertical,
         )?;
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             layout.focus_pane_direction(&TerminalSize::new(80, 24)?, direction)?,
-            expected_change,
+            eq(expected_change)
         );
-        pretty_assertions::assert_eq!(layout.active_pane_id()?.to_string(), expected_active_pane);
+        assert_that!(layout.active_pane_id()?.to_string(), eq(expected_active_pane));
         Ok(())
     }
 
@@ -504,23 +505,23 @@ mod tests {
             PaneSplitAxis::Horizontal,
         )?;
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             layout.focus_pane_direction(&TerminalSize::new(80, 24)?, PaneFocusDirection::Up)?,
-            PaneFocusChange::Changed,
+            eq(PaneFocusChange::Changed)
         );
-        pretty_assertions::assert_eq!(layout.active_pane_id()?.to_string(), "pane-2");
-        pretty_assertions::assert_eq!(
+        assert_that!(layout.active_pane_id()?.to_string(), eq("pane-2"));
+        assert_that!(
             layout.focus_pane_direction(&TerminalSize::new(80, 24)?, PaneFocusDirection::Left)?,
-            PaneFocusChange::Changed,
+            eq(PaneFocusChange::Changed)
         );
-        pretty_assertions::assert_eq!(layout.active_pane_id()?.to_string(), "pane-1");
+        assert_that!(layout.active_pane_id()?.to_string(), eq("pane-1"));
 
-        pretty_assertions::assert_eq!(
+        assert_that!(
             layout.focus_pane_direction(&TerminalSize::new(80, 24)?, PaneFocusDirection::Right)?,
-            PaneFocusChange::Changed,
+            eq(PaneFocusChange::Changed)
         );
 
-        pretty_assertions::assert_eq!(layout.active_pane_id()?.to_string(), "pane-2");
+        assert_that!(layout.active_pane_id()?.to_string(), eq("pane-2"));
         Ok(())
     }
 }

@@ -138,6 +138,7 @@ impl FromStr for Arch {
 #[cfg(test)]
 mod tests {
     use rstest::rstest;
+    use test_that::prelude::*;
 
     use super::*;
 
@@ -148,15 +149,15 @@ mod tests {
     #[case("ARM64", Arch::Arm)]
     fn test_arch_from_str_when_valid_input_returns_expected_arch(#[case] input: &str, #[case] expected: Arch) {
         let result = Arch::from_str(input);
-        assert2::assert!(let Ok(arch) = result);
-        pretty_assertions::assert_eq!(arch, expected);
+        assert_that!(result, ok(eq(expected)));
     }
 
     #[test]
     fn test_arch_from_str_when_unknown_input_returns_error_with_message() {
-        let result = Arch::from_str("unknown");
-        assert2::assert!(let Err(err) = result);
-        assert!(err.to_string().contains("error unknown normalized arch value"));
+        assert_that!(
+            Arch::from_str("unknown").map(|_| ()),
+            err(displays_as(contains_substring("error unknown normalized arch value")))
+        );
     }
 
     #[rstest]
@@ -166,14 +167,15 @@ mod tests {
     #[case("LINUX", Os::Linux)]
     fn test_os_from_str_when_valid_input_returns_expected_os(#[case] input: &str, #[case] expected: Os) {
         let result = Os::from_str(input);
-        assert2::assert!(let Ok(os) = result);
-        pretty_assertions::assert_eq!(os, expected);
+        assert_that!(result, ok(eq(expected)));
     }
 
     #[test]
     fn test_os_from_str_when_unknown_input_returns_error_with_message() {
         let result = Os::from_str("unknown");
-        assert2::assert!(let Err(err) = result);
-        assert!(err.to_string().contains("error unknown normalized os value"));
+        assert_that!(
+            (result).map(|_| ()),
+            err(displays_as(contains_substring("error unknown normalized os value")))
+        );
     }
 }

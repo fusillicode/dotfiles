@@ -130,6 +130,7 @@ impl<'de> serde::Deserialize<'de> for DiagnosticSeverity {
 mod tests {
     use rstest::rstest;
     use strum::IntoEnumIterator;
+    use test_that::prelude::*;
 
     use super::*;
 
@@ -165,8 +166,7 @@ mod tests {
         #[case] input: &str,
         #[case] expected: DiagnosticSeverity,
     ) {
-        assert2::assert!(let Ok(sev) = serde_json::from_str::<DiagnosticSeverity>(input));
-        assert_eq!(sev, expected);
+        assert_that!(serde_json::from_str::<DiagnosticSeverity>(input), ok(eq(expected)));
     }
 
     #[test]
@@ -179,8 +179,8 @@ mod tests {
             DiagnosticSeverity::Other,
         ];
         let collected: Vec<DiagnosticSeverity> = DiagnosticSeverity::iter().collect();
-        pretty_assertions::assert_eq!(collected.as_slice(), expected.as_slice());
-        pretty_assertions::assert_eq!(collected.len(), DiagnosticSeverity::VARIANT_COUNT);
+        assert_that!(collected.as_slice(), eq(expected.as_slice()));
+        assert_that!(collected.len(), eq(DiagnosticSeverity::VARIANT_COUNT));
     }
 
     #[rstest]
@@ -196,14 +196,14 @@ mod tests {
         #[case] expected: DiagnosticSeverity,
     ) {
         let json = input.to_string();
-        assert2::assert!(let Ok(sev) = serde_json::from_str::<DiagnosticSeverity>(&json));
-        assert_eq!(sev, expected);
+        assert_that!(serde_json::from_str::<DiagnosticSeverity>(&json), ok(eq(expected)));
     }
 
     #[test]
     fn test_diagnostic_severity_deserializes_invalid_json_errors() {
-        assert2::assert!(let Err(err) = serde_json::from_str::<DiagnosticSeverity>("error"));
-        let msg = err.to_string();
-        assert!(msg.contains("expected value"), "unexpected error message: {msg}");
+        assert_that!(
+            serde_json::from_str::<DiagnosticSeverity>("error").map(|_| ()),
+            err(displays_as(contains_substring("expected value")))
+        );
     }
 }
