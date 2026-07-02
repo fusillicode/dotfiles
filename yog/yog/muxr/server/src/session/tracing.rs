@@ -183,6 +183,7 @@ impl SessionTracing {
         let log_timestamp = self::current_server_log_timestamp()?;
         let (session_tracing, dispatch) = Self::new(paths, session, &log_timestamp, std::process::id())?;
         tracing::dispatcher::set_global_default(dispatch).context("failed to install muxr server tracing")?;
+        self::install_panic_hook();
         tracing::info!(
             session = %session,
             log_path = %session_tracing.log_path.display(),
@@ -220,6 +221,19 @@ impl SessionTracing {
             Dispatch::new(subscriber),
         ))
     }
+}
+
+fn install_panic_hook() {
+    static PANIC_HOOK: std::sync::Once = std::sync::Once::new();
+    PANIC_HOOK.call_once(|| {
+        let previous_hook = std::panic::take_hook();
+        // Panic hooks are process-global. Install once so muxr records tracing-panic fields and then delegates to the
+        // previously installed hook's behavior.
+        std::panic::set_hook(Box::new(move |panic_info| {
+            tracing_panic::panic_hook(panic_info);
+            previous_hook(panic_info);
+        }));
+    });
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

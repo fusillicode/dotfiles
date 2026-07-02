@@ -43,6 +43,9 @@ use crate::terminal::TerminalState;
 
 const READ_BUFFER_SIZE: usize = 8192;
 
+type PtyChild = Box<dyn Child + Send + Sync>;
+type SharedPtyChild = Arc<Mutex<Option<PtyChild>>>;
+
 pub struct PtySession {
     child_wait_handle: Option<thread::JoinHandle<()>>,
     handle: PtyHandle,
@@ -68,7 +71,7 @@ impl PtySession {
         let pty_pair = native_pty_system()
             .openpty(pty_size(size))
             .map_err(|error| report!("failed to open muxr shell pty").attach(format!("error={error:#}")))?;
-        let child = pty_pair
+        let mut child = pty_pair
             .slave
             .spawn_command(cmd.cmd_builder(cwd)?)
             .map_err(|error| report!("failed to spawn muxr shell process").attach(format!("error={error:#}")))?;
@@ -84,7 +87,13 @@ impl PtySession {
             .map_err(|error| report!("failed to take muxr pty writer").attach(format!("error={error:#}")))?;
         drop(pty_pair.slave);
 
-        let (writer, writer_handle) = writer::spawn(writer);
+        let (writer, writer_handle) = match writer::spawn(writer) {
+            Ok(writer_parts) => writer_parts,
+            Err(error) => {
+                self::kill_and_wait_child(child.as_mut());
+                return Err(error);
+            }
+        };
         let handle = PtyHandle {
             child_killer,
             child_process_id,
@@ -92,15 +101,18 @@ impl PtySession {
             state: Arc::clone(&state),
             writer: writer.clone(),
         };
-        let child_wait_handle = Some(spawn_child_wait_thread(child, Arc::clone(&state)));
-        let reader_handle = Some(spawn_reader_thread(reader, state, writer));
-
-        Ok(Self {
-            child_wait_handle,
+        let mut session = Self {
+            child_wait_handle: None,
             handle,
-            reader_handle,
+            reader_handle: None,
             writer_handle: Some(writer_handle),
-        })
+        };
+        // Own started resources before each later fallible thread spawn so normal drop cleanup runs on those error
+        // paths.
+        session.child_wait_handle = Some(spawn_child_wait_thread(child, &state)?);
+        session.reader_handle = Some(spawn_reader_thread(reader, state, writer)?);
+
+        Ok(session)
     }
 
     pub fn handle(&self) -> PtyHandle {
@@ -111,16 +123,7 @@ impl PtySession {
 impl Drop for PtySession {
     fn drop(&mut self) {
         if !self.handle.state.exited.load(Ordering::Acquire) {
-            match self::lock_mutex(&self.handle.child_killer, "pty child killer") {
-                Ok(mut killer) => {
-                    let _ = killer.kill().inspect_err(|error| {
-                        crate::session::tracing::pty::shutdown_failed("kill_child", error);
-                    });
-                }
-                Err(error) => {
-                    crate::session::tracing::pty::shutdown_failed("lock_child_killer", &error);
-                }
-            }
+            self::kill_child(&self.handle.child_killer);
         }
 
         if let Some(child_wait_handle) = self.child_wait_handle.take()
@@ -560,39 +563,102 @@ fn spawn_reader_thread(
     mut reader: Box<dyn Read + Send>,
     state: Arc<PtyState>,
     writer: PtyWriter,
-) -> thread::JoinHandle<()> {
+) -> rootcause::Result<thread::JoinHandle<()>> {
     // Raw OS threads do not inherit thread-local tracing state, so carry both the dispatcher and span explicitly.
     let span = tracing::Span::current();
     let dispatch = tracing::dispatcher::get_default(Clone::clone);
-    thread::spawn(move || {
-        tracing::dispatcher::with_default(&dispatch, || {
-            let _guard = span.enter();
-            self::run_reader_loop(&mut *reader, state.as_ref(), &writer);
-        });
-    })
+    Ok(thread::Builder::new()
+        .name("muxr-pty-reader".to_owned())
+        .spawn(move || {
+            tracing::dispatcher::with_default(&dispatch, || {
+                let _guard = span.enter();
+                self::run_reader_loop(&mut *reader, state.as_ref(), &writer);
+            });
+        })
+        .context("failed to spawn muxr pty reader thread")?)
 }
 
-fn spawn_child_wait_thread(mut child: Box<dyn Child + Send + Sync>, state: Arc<PtyState>) -> thread::JoinHandle<()> {
+fn kill_child(child_killer: &Mutex<Box<dyn ChildKiller + Send + Sync>>) {
+    match self::lock_mutex(child_killer, "pty child killer") {
+        Ok(mut killer) => {
+            let _ = killer.kill().inspect_err(|error| {
+                crate::session::tracing::pty::shutdown_failed("kill_child", error);
+            });
+        }
+        Err(error) => {
+            crate::session::tracing::pty::shutdown_failed("lock_child_killer", &error);
+        }
+    }
+}
+
+fn kill_and_wait_child(child: &mut dyn Child) -> Option<PtyExitStatus> {
+    // Early setup failures can happen before the child wait thread owns the child, so cleanup must reap the killed
+    // process here instead of relying on the normal wait-thread path.
+    let _ = child.kill().inspect_err(|error| {
+        crate::session::tracing::pty::shutdown_failed("kill_child", error);
+    });
+    match child.wait() {
+        Ok(exit_status) => Some(PtyExitStatus::from(&exit_status)),
+        Err(error) => {
+            crate::session::tracing::pty::shutdown_failed("wait_child_after_kill", &error);
+            None
+        }
+    }
+}
+
+fn take_child_wait_handle(child: &SharedPtyChild) -> Option<PtyChild> {
+    match self::lock_mutex(child, "pty child wait handle") {
+        Ok(mut child) => child.take(),
+        Err(error) => {
+            crate::session::tracing::pty::shutdown_failed("lock_child_wait_handle", &error);
+            None
+        }
+    }
+}
+
+fn spawn_child_wait_thread(child: PtyChild, state: &Arc<PtyState>) -> rootcause::Result<thread::JoinHandle<()>> {
     // Raw OS threads do not inherit thread-local tracing state, so carry both the dispatcher and span explicitly.
     let span = tracing::Span::current();
     let dispatch = tracing::dispatcher::get_default(Clone::clone);
-    thread::spawn(move || {
-        tracing::dispatcher::with_default(&dispatch, || {
-            let _guard = span.enter();
-            match child.wait() {
-                Ok(exit_status) => {
-                    let _ = state
-                        .mark_exited(PtyExitStatus::from(&exit_status))
-                        .inspect_err(|error| {
-                            crate::session::tracing::pty::shutdown_failed("mark_exited", error);
-                        });
+    // Keep the child recoverable until the wait thread is successfully spawned. Exactly one side takes it: the wait
+    // thread on success, or the spawn-error cleanup path before any reaper exists.
+    let child = Arc::new(Mutex::new(Some(child)));
+    let thread_child = Arc::clone(&child);
+    let thread_state = Arc::clone(state);
+    match thread::Builder::new()
+        .name("muxr-pty-child-wait".to_owned())
+        .spawn(move || {
+            tracing::dispatcher::with_default(&dispatch, || {
+                let _guard = span.enter();
+                let Some(mut child) = self::take_child_wait_handle(&thread_child) else {
+                    return;
+                };
+                match child.wait() {
+                    Ok(exit_status) => {
+                        let _ = thread_state
+                            .mark_exited(PtyExitStatus::from(&exit_status))
+                            .inspect_err(|error| {
+                                crate::session::tracing::pty::shutdown_failed("mark_exited", error);
+                            });
+                    }
+                    Err(error) => {
+                        crate::session::tracing::pty::shutdown_failed("wait_child", &error);
+                    }
                 }
-                Err(error) => {
-                    crate::session::tracing::pty::shutdown_failed("wait_child", &error);
-                }
+            });
+        }) {
+        Ok(handle) => Ok(handle),
+        Err(error) => {
+            if let Some(mut child) = self::take_child_wait_handle(&child)
+                && let Some(exit_status) = self::kill_and_wait_child(child.as_mut())
+            {
+                let _ = state.mark_exited(exit_status).inspect_err(|error| {
+                    crate::session::tracing::pty::shutdown_failed("mark_exited", error);
+                });
             }
-        });
-    })
+            Err(report!("failed to spawn muxr pty child wait thread").attach(format!("error={error:#}")))
+        }
+    }
 }
 
 fn run_reader_loop(reader: &mut dyn Read, state: &PtyState, writer: &PtyWriter) {
@@ -663,15 +729,133 @@ mod tests {
         }
     }
 
+    #[derive(Debug)]
+    struct RecordingChild {
+        events: Arc<Mutex<Vec<&'static str>>>,
+        exit_status: portable_pty::ExitStatus,
+    }
+
+    impl RecordingChild {
+        fn new(events: Arc<Mutex<Vec<&'static str>>>, exit_code: u32) -> Self {
+            Self {
+                events,
+                exit_status: portable_pty::ExitStatus::with_exit_code(exit_code),
+            }
+        }
+    }
+
+    impl ChildKiller for RecordingChild {
+        fn kill(&mut self) -> std::io::Result<()> {
+            lock_mutex(&self.events, "recording child events")
+                .map_err(|error| std::io::Error::other(error.to_string()))?
+                .push("kill");
+            Ok(())
+        }
+
+        fn clone_killer(&self) -> Box<dyn ChildKiller + Send + Sync> {
+            Box::new(RecordingChildKiller {
+                events: Arc::clone(&self.events),
+            })
+        }
+    }
+
+    impl Child for RecordingChild {
+        fn try_wait(&mut self) -> std::io::Result<Option<portable_pty::ExitStatus>> {
+            Ok(Some(self.exit_status.clone()))
+        }
+
+        fn wait(&mut self) -> std::io::Result<portable_pty::ExitStatus> {
+            lock_mutex(&self.events, "recording child events")
+                .map_err(|error| std::io::Error::other(error.to_string()))?
+                .push("wait");
+            Ok(self.exit_status.clone())
+        }
+
+        fn process_id(&self) -> Option<u32> {
+            Some(42)
+        }
+
+        #[cfg(windows)]
+        fn as_raw_handle(&self) -> Option<std::os::windows::io::RawHandle> {
+            None
+        }
+    }
+
+    #[derive(Debug)]
+    struct RecordingChildKiller {
+        events: Arc<Mutex<Vec<&'static str>>>,
+    }
+
+    impl ChildKiller for RecordingChildKiller {
+        fn kill(&mut self) -> std::io::Result<()> {
+            lock_mutex(&self.events, "recording child killer events")
+                .map_err(|error| std::io::Error::other(error.to_string()))?
+                .push("clone_kill");
+            Ok(())
+        }
+
+        fn clone_killer(&self) -> Box<dyn ChildKiller + Send + Sync> {
+            Box::new(Self {
+                events: Arc::clone(&self.events),
+            })
+        }
+    }
+
+    #[test]
+    fn test_kill_and_wait_child_when_child_exits_reaps_and_returns_exit_status() -> rootcause::Result<()> {
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let mut child = RecordingChild::new(Arc::clone(&events), 7);
+
+        let exit_status = self::kill_and_wait_child(&mut child).ok_or_else(|| report!("expected child exit status"))?;
+
+        assert_that!(
+            *lock_mutex(&events, "recording child events")?,
+            eq(vec!["kill", "wait"])
+        );
+        assert_that!(
+            exit_status,
+            eq(PtyExitStatus {
+                code: 7,
+                result: PtyExitResult::Failed,
+                signal: None,
+            })
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_spawn_child_wait_thread_when_child_exits_marks_exit_status() -> rootcause::Result<()> {
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let state = Arc::new(pty_state(&terminal_size()?));
+        let child_wait_handle =
+            self::spawn_child_wait_thread(Box::new(RecordingChild::new(Arc::clone(&events), 7)), &state)?;
+
+        child_wait_handle
+            .join()
+            .map_err(|_| report!("muxr pty child wait test thread panicked"))?;
+
+        assert_that!(*lock_mutex(&events, "recording child events")?, eq(vec!["wait"]));
+        assert_that!(state.exited.load(Ordering::Acquire), eq(true));
+        assert_that!(
+            *lock_mutex(&state.exit_status, "pty exit status")?,
+            eq(Some(PtyExitStatus {
+                code: 7,
+                result: PtyExitResult::Failed,
+                signal: None,
+            }))
+        );
+        Ok(())
+    }
+
     #[test]
     fn test_spawn_reader_thread_when_pty_reaches_eof_does_not_mark_child_exited() -> rootcause::Result<()> {
         let state = Arc::new(pty_state(&terminal_size()?));
-        let (writer, writer_handle) = writer::spawn(self::sink_pty_writer());
+        let (writer, writer_handle) = writer::spawn(self::sink_pty_writer())?;
         let reader_handle = spawn_reader_thread(
             Box::new(std::io::Cursor::new(Vec::new())),
             Arc::clone(&state),
             writer.clone(),
-        );
+        )?;
 
         reader_handle
             .join()
@@ -973,12 +1157,12 @@ mod tests {
         let log = crate::session::tracing::collect_test_log(&session, || {
             let span = tracing::info_span!("muxr_session", session = %session);
             let _guard = span.enter();
-            let (writer, writer_handle) = writer::spawn(self::failing_pty_writer());
+            let (writer, writer_handle) = writer::spawn(self::failing_pty_writer())?;
             let reader_handle = self::spawn_reader_thread(
                 Box::new(std::io::Cursor::new(b"\x1b[6n".to_vec())),
                 Arc::clone(&state),
                 writer.clone(),
-            );
+            )?;
             reader_handle
                 .join()
                 .map_err(|_| report!("muxr pty reader test thread panicked"))?;
