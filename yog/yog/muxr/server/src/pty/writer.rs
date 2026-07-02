@@ -350,7 +350,7 @@ const fn advance_queue_progress(queue: &mut PtyWriteQueueState) {
     queue.progress_version = queue.progress_version.wrapping_add(1);
 }
 
-pub fn spawn(mut writer: Box<dyn Write + Send>) -> (PtyWriter, thread::JoinHandle<()>) {
+pub fn spawn(mut writer: Box<dyn Write + Send>) -> rootcause::Result<(PtyWriter, thread::JoinHandle<()>)> {
     let (sender, receiver) = kanal::bounded(PTY_WRITE_QUEUE_LIMIT);
     let state = Arc::new(PtyWriteState::new());
     let queue = PtyWriter {
@@ -360,13 +360,16 @@ pub fn spawn(mut writer: Box<dyn Write + Send>) -> (PtyWriter, thread::JoinHandl
     // Raw OS threads do not inherit thread-local tracing state, so carry both the dispatcher and span explicitly.
     let span = tracing::Span::current();
     let dispatch = tracing::dispatcher::get_default(Clone::clone);
-    let writer_handle = thread::spawn(move || {
-        tracing::dispatcher::with_default(&dispatch, || {
-            let _guard = span.enter();
-            self::run_writer_loop(&mut *writer, &receiver, state.as_ref());
-        });
-    });
-    (queue, writer_handle)
+    let writer_handle = thread::Builder::new()
+        .name("muxr-pty-writer".to_owned())
+        .spawn(move || {
+            tracing::dispatcher::with_default(&dispatch, || {
+                let _guard = span.enter();
+                self::run_writer_loop(&mut *writer, &receiver, state.as_ref());
+            });
+        })
+        .context("failed to spawn muxr pty writer thread")?;
+    Ok((queue, writer_handle))
 }
 
 fn queue_pty_write(

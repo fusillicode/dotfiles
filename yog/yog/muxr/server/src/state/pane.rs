@@ -65,6 +65,21 @@ impl PaneTree {
             }
         }
     }
+
+    pub(crate) fn last_focused_pane(&self) -> &Pane {
+        match self {
+            Self::Pane(pane) => pane,
+            Self::Split { first, second, .. } => {
+                let first_pane = first.last_focused_pane();
+                let second_pane = second.last_focused_pane();
+                if first_pane.focus_seq >= second_pane.focus_seq {
+                    first_pane
+                } else {
+                    second_pane
+                }
+            }
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]

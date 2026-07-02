@@ -178,6 +178,10 @@ impl PaneLayout {
             .rows
             .checked_sub(1)
             .ok_or_else(|| report!("muxr terminal is too small for horizontal pane border"))?;
+        if content_rows < 2 {
+            self.append_collapsed_split(first, second, area);
+            return Ok(());
+        }
         let (first_rows, second_rows) = first_ratio.split_lengths(content_rows)?;
         let border_row = area
             .origin
@@ -235,6 +239,10 @@ impl PaneLayout {
             .cols
             .checked_sub(1)
             .ok_or_else(|| report!("muxr terminal is too small for vertical pane border"))?;
+        if content_cols < 2 {
+            self.append_collapsed_split(first, second, area);
+            return Ok(());
+        }
         let (first_cols, second_cols) = first_ratio.split_lengths(content_cols)?;
         let border_col = area
             .origin
@@ -300,6 +308,23 @@ impl PaneLayout {
             &second_regions,
         )?);
         Ok(())
+    }
+
+    fn append_collapsed_split(&mut self, first: &PaneTree, second: &PaneTree, area: PaneArea) {
+        // A split with fewer than two content cells cannot show both children and a border. Keep the most recently
+        // focused descendant visible instead of resizing a runtime into an impossible collapsed pane.
+        let first_pane = first.last_focused_pane();
+        let second_pane = second.last_focused_pane();
+        let pane = if first_pane.focus_seq >= second_pane.focus_seq {
+            first_pane
+        } else {
+            second_pane
+        };
+        self.push_region(PaneRegion {
+            area,
+            focus_seq: pane.focus_seq,
+            id: pane.id,
+        });
     }
 }
 
@@ -396,6 +421,103 @@ mod tests {
             vertical_border.ownership(PanePosition { row: 13, col: 40 }, PaneId::new(3)?),
             eq(crate::pane::borders::BorderCellOwner::Owned)
         );
+        Ok(())
+    }
+
+    #[test]
+    fn test_pane_layout_from_pane_tree_when_nested_split_collapses_keeps_focused_visible() -> rootcause::Result<()> {
+        let layout = PaneLayout::from_pane_tree(
+            &PaneTree::Split {
+                axis: PaneSplitAxis::Vertical,
+                first_ratio: PaneSplitRatio::new(500)?,
+                first: Box::new(PaneTree::Pane(self::pane(1, 1)?)),
+                second: Box::new(PaneTree::Split {
+                    axis: PaneSplitAxis::Horizontal,
+                    first_ratio: PaneSplitRatio::new(500)?,
+                    first: Box::new(PaneTree::Pane(self::pane(2, 2)?)),
+                    second: Box::new(PaneTree::Pane(self::pane(3, 3)?)),
+                }),
+            },
+            &TerminalSize::new(5, 1)?,
+        )?;
+
+        assert_that!(
+            layout.regions(),
+            eq(&[
+                PaneRegion {
+                    area: PaneArea {
+                        origin: PanePosition { row: 0, col: 0 },
+                        size: PaneSize { rows: 1, cols: 2 },
+                    },
+                    focus_seq: 1,
+                    id: PaneId::new(1)?,
+                },
+                PaneRegion {
+                    area: PaneArea {
+                        origin: PanePosition { row: 0, col: 3 },
+                        size: PaneSize { rows: 1, cols: 2 },
+                    },
+                    focus_seq: 3,
+                    id: PaneId::new(3)?,
+                },
+            ])
+        );
+        assert_that!(layout.borders().len(), eq(1));
+        Ok(())
+    }
+
+    #[test]
+    fn test_pane_layout_from_pane_tree_when_vertical_split_collapses_keeps_focused_visible() -> rootcause::Result<()> {
+        let layout = PaneLayout::from_pane_tree(
+            &PaneTree::Split {
+                axis: PaneSplitAxis::Vertical,
+                first_ratio: PaneSplitRatio::new(500)?,
+                first: Box::new(PaneTree::Pane(self::pane(1, 1)?)),
+                second: Box::new(PaneTree::Pane(self::pane(2, 2)?)),
+            },
+            &TerminalSize::new(2, 4)?,
+        )?;
+
+        assert_that!(
+            layout.regions(),
+            eq(&[PaneRegion {
+                area: PaneArea {
+                    origin: PanePosition { row: 0, col: 0 },
+                    size: PaneSize { rows: 4, cols: 2 },
+                },
+                focus_seq: 2,
+                id: PaneId::new(2)?,
+            }])
+        );
+        assert_that!(layout.borders(), eq(&[]));
+        Ok(())
+    }
+
+    #[test]
+    fn test_pane_layout_from_pane_tree_when_collapsed_split_first_pane_has_focus_keeps_first_visible()
+    -> rootcause::Result<()> {
+        let layout = PaneLayout::from_pane_tree(
+            &PaneTree::Split {
+                axis: PaneSplitAxis::Vertical,
+                first_ratio: PaneSplitRatio::new(500)?,
+                first: Box::new(PaneTree::Pane(self::pane(1, 3)?)),
+                second: Box::new(PaneTree::Pane(self::pane(2, 2)?)),
+            },
+            &TerminalSize::new(2, 4)?,
+        )?;
+
+        assert_that!(
+            layout.regions(),
+            eq(&[PaneRegion {
+                area: PaneArea {
+                    origin: PanePosition { row: 0, col: 0 },
+                    size: PaneSize { rows: 4, cols: 2 },
+                },
+                focus_seq: 3,
+                id: PaneId::new(1)?,
+            }])
+        );
+        assert_that!(layout.borders(), eq(&[]));
         Ok(())
     }
 
