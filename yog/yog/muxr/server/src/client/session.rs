@@ -73,12 +73,12 @@ pub enum ReapedPanes {
     Stop,
 }
 
-fn attach_pane_sinks(runtimes: &PaneRuntimes, sender: &Sender<PtyEvent>) -> rootcause::Result<Vec<ClientPtySink>> {
-    Ok(runtimes
-        .attach_sinks(sender)?
+fn attach_pane_sinks(runtimes: &PaneRuntimes, sender: &Sender<PtyEvent>) -> Vec<ClientPtySink> {
+    runtimes
+        .attach_sinks(sender)
         .into_iter()
         .map(|(pane_id, guard)| ClientPtySink { guard, pane_id })
-        .collect())
+        .collect()
 }
 
 fn attach_pane_sink(
@@ -87,7 +87,7 @@ fn attach_pane_sink(
     pane_id: PaneId,
 ) -> rootcause::Result<ClientPtySink> {
     Ok(ClientPtySink {
-        guard: runtimes.handle(pane_id)?.attach_sink(sender.clone())?,
+        guard: runtimes.handle(pane_id)?.attach_sink(sender.clone()),
         pane_id,
     })
 }
@@ -136,7 +136,7 @@ pub async fn handle_client(
 ) -> rootcause::Result<()> {
     crate::screen_render::resize_panes_to_layout(layout, runtimes, &attach_request.terminal_size)?;
     let (pty_event_sender, pty_event_receiver) = kanal::bounded(PANE_OUTPUT_EVENT_CHANNEL_LIMIT);
-    let mut sink_guards = self::attach_pane_sinks(runtimes, &pty_event_sender)?;
+    let mut sink_guards = self::attach_pane_sinks(runtimes, &pty_event_sender);
     let (mut request_reader, mut event_writer) = connection.split();
     let mut pane_tracked_processes = PaneTrackedProcesses::default();
     pane_tracked_processes.observe_all_runtime_pane_cmds(
@@ -928,7 +928,7 @@ mod tests {
         let (mut event_writer, client_drain) = self::connect_client_event_drain(&config).await?;
         let delete_sessions = DeleteSessions::default();
         let (pty_event_sender, _pty_event_receiver) = self::pty_event_channel();
-        let mut sink_guards = super::attach_pane_sinks(&runtimes, &pty_event_sender)?;
+        let mut sink_guards = super::attach_pane_sinks(&runtimes, &pty_event_sender);
         runtimes.handle(first_exited_pane)?.write_input(b"exit\n")?;
         runtimes.handle(second_exited_pane)?.write_input(b"exit\n")?;
         self::wait_for_pane_exit(&runtimes, first_exited_pane)?;
@@ -1147,7 +1147,7 @@ mod tests {
         let (mut event_writer, client_drain) = self::connect_client_event_drain(&config).await?;
         let delete_sessions = DeleteSessions::default();
         let (pty_event_sender, _pty_event_receiver) = self::pty_event_channel();
-        let mut sink_guards = super::attach_pane_sinks(&runtimes, &pty_event_sender)?;
+        let mut sink_guards = super::attach_pane_sinks(&runtimes, &pty_event_sender);
         let mut state = ClientSessionState {
             pane_tracked_processes,
             config: &config,
@@ -2357,7 +2357,7 @@ mod tests {
         crate::screen_render::resize_panes_to_layout(&layout, &runtimes, &terminal_size)?;
         self::wait_for_runtime_snapshot_contains(&runtimes, pane_id, "ready")?;
         self::wait_for_runtime_fg_cmd(&runtimes, pane_id, "cat")?;
-        assert_mode(runtimes.handle(pane_id)?.application_mode()?)?;
+        assert_mode(runtimes.handle(pane_id)?.application_mode())?;
         let then = Instant::now()
             .checked_sub(Duration::from_millis(60))
             .ok_or_else(|| rootcause::report!("test instant underflowed"))?;

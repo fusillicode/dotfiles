@@ -1,14 +1,14 @@
 use std::io::Write;
 use std::sync::Arc;
-use std::sync::Condvar;
-use std::sync::Mutex;
-use std::sync::MutexGuard;
 use std::thread;
 
 use kanal::ReceiveError;
 use kanal::Receiver;
 use kanal::SendError;
 use kanal::Sender;
+use parking_lot::Condvar;
+use parking_lot::Mutex;
+use parking_lot::MutexGuard;
 use rootcause::Report;
 use rootcause::markers::Cloneable;
 use rootcause::markers::Dynamic;
@@ -84,7 +84,7 @@ impl PtyWriter {
 
     fn enqueue(&self, mut write: PtyWrite) -> rootcause::Result<()> {
         let write_len = write.len();
-        let mut queue_guard = self::lock_queue_mutex(&self.state.queue)?;
+        let mut queue_guard = self.state.queue.lock();
         loop {
             if let Err(error) = PtyWriteState::ensure_open(&queue_guard) {
                 drop(queue_guard);
@@ -94,7 +94,7 @@ impl PtyWriter {
                 PtyWriteReservation::Reserved => {}
                 PtyWriteReservation::WouldBlock => {
                     let observed_progress = queue_guard.progress_version;
-                    queue_guard = self.state.wait_for_queue_progress(queue_guard, observed_progress)?;
+                    queue_guard = self.state.wait_for_queue_progress(queue_guard, observed_progress);
                     continue;
                 }
             }
@@ -107,7 +107,7 @@ impl PtyWriter {
                     write = returned;
                     PtyWriteState::release_reserved_write_bytes(&mut queue_guard, write_len);
                     let observed_progress = queue_guard.progress_version;
-                    queue_guard = self.state.wait_for_queue_progress(queue_guard, observed_progress)?;
+                    queue_guard = self.state.wait_for_queue_progress(queue_guard, observed_progress);
                 }
                 PtyWriteSendOutcome::Disconnected(PtyWriteRequest::Write(_)) => {
                     PtyWriteState::release_reserved_write_bytes(&mut queue_guard, write_len);
@@ -124,7 +124,7 @@ impl PtyWriter {
     }
 
     pub fn shutdown(&self) -> rootcause::Result<()> {
-        self.state.close()?;
+        self.state.close();
         match self::try_send_pty_write_request(&self.sender, PtyWriteRequest::Shutdown)? {
             PtyWriteSendOutcome::Sent | PtyWriteSendOutcome::Full(PtyWriteRequest::Shutdown) => Ok(()),
             PtyWriteSendOutcome::Disconnected(PtyWriteRequest::Shutdown) => {
@@ -199,16 +199,15 @@ impl PtyWriteState {
         }
     }
 
-    fn close(&self) -> rootcause::Result<()> {
-        let mut queue = self::lock_queue_mutex(&self.queue)?;
+    fn close(&self) {
+        let mut queue = self.queue.lock();
         queue.status.close();
         drop(queue);
         self.notify_queue_progress();
-        Ok(())
     }
 
-    fn stop_state(&self) -> rootcause::Result<PtyWriterStopState> {
-        Ok(self::lock_queue_mutex(&self.queue)?.status.stop_state())
+    fn stop_state(&self) -> PtyWriterStopState {
+        self.queue.lock().status.stop_state()
     }
 
     fn ensure_open(queue: &PtyWriteQueueState) -> rootcause::Result<()> {
@@ -220,14 +219,7 @@ impl PtyWriteState {
     }
 
     fn record_error(&self, error: PtyWriterError) {
-        match self.queue.lock() {
-            Ok(mut queue) => {
-                queue.status = PtyWriterStatus::Failed(error);
-            }
-            Err(error) => {
-                crate::session::tracing::pty::shutdown_failed("record_writer_error", error);
-            }
-        }
+        self.queue.lock().status = PtyWriterStatus::Failed(error);
         self.notify_queue_progress();
     }
 
@@ -262,46 +254,33 @@ impl PtyWriteState {
     }
 
     fn release_queued_bytes(&self, bytes: usize) {
-        match self.queue.lock() {
-            Ok(mut queue) => Self::release_reserved_write_bytes(&mut queue, bytes),
-            Err(error) => {
-                crate::session::tracing::pty::shutdown_failed("release_writer_queue_bytes", error);
-            }
-        }
+        Self::release_reserved_write_bytes(&mut self.queue.lock(), bytes);
         self.queue_progress.notify_all();
     }
 
     fn stopped_report(&self, reason: &'static str) -> rootcause::Report {
         let mut report = report!("muxr pty writer stopped").attach(reason);
-        if let Ok(queue) = self.queue.lock()
-            && let PtyWriterStatus::Failed(error) = &queue.status
-        {
+        let queue = self.queue.lock();
+        if let PtyWriterStatus::Failed(error) = &queue.status {
             report = report.attach(error.clone());
         }
+        drop(queue);
         report
     }
 
     fn wait_for_queue_progress<'a>(
         &self,
-        guard: MutexGuard<'a, PtyWriteQueueState>,
+        mut guard: MutexGuard<'a, PtyWriteQueueState>,
         observed_progress: u64,
-    ) -> rootcause::Result<MutexGuard<'a, PtyWriteQueueState>> {
-        self.queue_progress
-            .wait_while(guard, |queue| {
-                queue.status.stop_state() == PtyWriterStopState::Open && queue.progress_version == observed_progress
-            })
-            .map_err(|_| report!("poisoned muxr pty writer queue mutex"))
+    ) -> MutexGuard<'a, PtyWriteQueueState> {
+        self.queue_progress.wait_while(&mut guard, |queue| {
+            queue.status.stop_state() == PtyWriterStopState::Open && queue.progress_version == observed_progress
+        });
+        guard
     }
 
     fn notify_queue_progress(&self) {
-        match self.queue.lock() {
-            Ok(mut queue) => {
-                self::advance_queue_progress(&mut queue);
-            }
-            Err(error) => {
-                crate::session::tracing::pty::shutdown_failed("record_writer_queue_progress", error);
-            }
-        }
+        self::advance_queue_progress(&mut self.queue.lock());
         self.queue_progress.notify_all();
     }
 }
@@ -392,18 +371,14 @@ fn run_writer_loop(writer: &mut dyn Write, receiver: &Receiver<PtyWriteRequest>,
     let mut batch = Vec::new();
     loop {
         let request = match state.stop_state() {
-            Ok(PtyWriterStopState::Stopped) => match receiver.try_recv() {
+            PtyWriterStopState::Stopped => match receiver.try_recv() {
                 Ok(Some(request)) => request,
                 Ok(None) | Err(ReceiveError::Closed | ReceiveError::SendClosed) => break,
             },
-            Ok(PtyWriterStopState::Open) => match receiver.recv() {
+            PtyWriterStopState::Open => match receiver.recv() {
                 Ok(request) => request,
                 Err(_) => break,
             },
-            Err(error) => {
-                crate::session::tracing::pty::shutdown_failed("read_writer_state", &error);
-                break;
-            }
         };
         match request {
             PtyWriteRequest::Write(write) => {
@@ -472,12 +447,6 @@ fn write_pty_batch(writer: &mut dyn Write, batch: &[PtyWrite]) -> rootcause::Res
     Ok(())
 }
 
-fn lock_queue_mutex<T>(mutex: &Mutex<T>) -> rootcause::Result<MutexGuard<'_, T>> {
-    mutex
-        .lock()
-        .map_err(|_| report!("poisoned muxr pty writer queue mutex"))
-}
-
 // `kanal::try_send` drops the request when a bounded queue is full. Use the option API so muxr can keep the write
 // request and release byte accounting exactly like the old `SyncSender::try_send` full/disconnected error paths.
 fn try_send_pty_write_request(
@@ -500,11 +469,11 @@ fn pending_pty_write_request(pending: Option<PtyWriteRequest>) -> rootcause::Res
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Mutex;
     use std::sync::mpsc;
     use std::time::Duration;
 
     use muxr_core::SessionName;
+    use parking_lot::Mutex;
     use test_that::prelude::*;
 
     use super::*;
@@ -517,7 +486,7 @@ mod tests {
         queue.write_terminal_replies(&[b"one".to_vec(), b"two".to_vec()])?;
         self::drain_queued_writes(&queue, &receiver, self::capturing_pty_writer(Arc::clone(&written)))?;
 
-        assert_that!(self::captured_pty_bytes(written.as_ref())?, eq(b"onetwo".to_vec()));
+        assert_that!(self::captured_pty_bytes(written.as_ref()), eq(b"onetwo".to_vec()));
         Ok(())
     }
 
@@ -546,8 +515,8 @@ mod tests {
             }),
         )?;
 
-        assert_that!(self::captured_pty_bytes(written.as_ref())?, eq(b"onetwo".to_vec()));
-        assert_that!(self::captured_flushes(flushes.as_ref())?, eq(1));
+        assert_that!(self::captured_pty_bytes(written.as_ref()), eq(b"onetwo".to_vec()));
+        assert_that!(self::captured_flushes(flushes.as_ref()), eq(1));
         Ok(())
     }
 
@@ -591,12 +560,12 @@ mod tests {
             .ok_or_else(|| report!("expected muxr pty write enqueue to fail after receiver drop"))?;
 
         assert_that!(error.to_string(), contains_substring("pty writer channel disconnected"));
-        assert_that!(super::lock_queue_mutex(&queue.state.queue)?.queued_bytes, eq(0));
+        assert_that!(queue.state.queue.lock().queued_bytes, eq(0));
         Ok(())
     }
 
     #[test]
-    fn test_pty_writer_shutdown_when_receiver_is_dropped_reports_disconnected() -> rootcause::Result<()> {
+    fn test_pty_writer_shutdown_when_receiver_is_dropped_reports_disconnected() {
         let (queue, receiver) = self::queued_pty_writer();
         drop(receiver);
 
@@ -604,8 +573,7 @@ mod tests {
             queue.shutdown(),
             err(displays_as(contains_substring("pty writer channel disconnected")))
         );
-        assert_that!(queue.state.stop_state()?, eq(PtyWriterStopState::Stopped));
-        Ok(())
+        assert_that!(queue.state.stop_state(), eq(PtyWriterStopState::Stopped));
     }
 
     #[test]
@@ -667,7 +635,7 @@ mod tests {
             .join()
             .map_err(|_| report!("muxr byte-budget writer test thread panicked"))?;
 
-        assert_that!(self::captured_pty_bytes(written.as_ref())?, eq(b"abcd".to_vec()));
+        assert_that!(self::captured_pty_bytes(written.as_ref()), eq(b"abcd".to_vec()));
         Ok(())
     }
 
@@ -746,7 +714,7 @@ mod tests {
         )?;
         self::drain_queued_writes(&queue, &receiver, self::capturing_pty_writer(Arc::clone(&written)))?;
 
-        assert_that!(self::captured_pty_bytes(written.as_ref())?, eq(payload));
+        assert_that!(self::captured_pty_bytes(written.as_ref()), eq(payload));
         Ok(())
     }
 
@@ -767,7 +735,7 @@ mod tests {
             queue.state.as_ref(),
         );
 
-        assert_that!(self::captured_pty_bytes(written.as_ref())?, eq(b"accepted".to_vec()));
+        assert_that!(self::captured_pty_bytes(written.as_ref()), eq(b"accepted".to_vec()));
         Ok(())
     }
 
@@ -794,10 +762,10 @@ mod tests {
         )?;
 
         assert_that!(
-            self::captured_pty_bytes(written.as_ref())?,
+            self::captured_pty_bytes(written.as_ref()),
             eq(vec![b'x'; PTY_WRITE_BATCH_MAX_MESSAGES + 1])
         );
-        assert_that!(self::captured_flushes(flushes.as_ref())?, eq(2));
+        assert_that!(self::captured_flushes(flushes.as_ref()), eq(2));
         Ok(())
     }
 
@@ -829,11 +797,11 @@ mod tests {
             }),
         )?;
 
-        let written = self::captured_pty_bytes(written.as_ref())?;
+        let written = self::captured_pty_bytes(written.as_ref());
         assert_that!(written.len(), eq(PTY_WRITE_BATCH_MAX_BYTES + 1));
         assert_that!(written.first(), eq(Some(&b'a')));
         assert_that!(written.last(), eq(Some(&b'c')));
-        assert_that!(self::captured_flushes(flushes.as_ref())?, eq(2));
+        assert_that!(self::captured_flushes(flushes.as_ref()), eq(2));
         Ok(())
     }
 
@@ -913,7 +881,7 @@ mod tests {
         queue.write_focus_event(TerminalFocusReporting::Disabled, TerminalFocusEvent::Lost)?;
         self::drain_queued_writes(&queue, &receiver, self::capturing_pty_writer(Arc::clone(&written)))?;
 
-        assert_that!(self::captured_pty_bytes(written.as_ref())?, eq(Vec::<u8>::new()));
+        assert_that!(self::captured_pty_bytes(written.as_ref()), eq(Vec::<u8>::new()));
         Ok(())
     }
 
@@ -929,7 +897,7 @@ mod tests {
             queue.write_focus_event(TerminalFocusReporting::Enabled, event)?;
             self::drain_queued_writes(&queue, &receiver, self::capturing_pty_writer(Arc::clone(&written)))?;
 
-            assert_that!(self::captured_pty_bytes(written.as_ref())?, eq(expected.to_vec()));
+            assert_that!(self::captured_pty_bytes(written.as_ref()), eq(expected.to_vec()));
         }
         Ok(())
     }
@@ -974,12 +942,12 @@ mod tests {
         Box::new(FailingWriter)
     }
 
-    fn captured_pty_bytes(written: &Mutex<Vec<u8>>) -> rootcause::Result<Vec<u8>> {
-        Ok(self::lock_queue_mutex(written)?.clone())
+    fn captured_pty_bytes(written: &Mutex<Vec<u8>>) -> Vec<u8> {
+        written.lock().clone()
     }
 
-    fn captured_flushes(flushes: &Mutex<usize>) -> rootcause::Result<usize> {
-        Ok(*self::lock_queue_mutex(flushes)?)
+    fn captured_flushes(flushes: &Mutex<usize>) -> usize {
+        *flushes.lock()
     }
 
     struct CapturingWriter {
@@ -988,10 +956,7 @@ mod tests {
 
     impl Write for CapturingWriter {
         fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-            let mut written = self
-                .written
-                .lock()
-                .map_err(|_| std::io::Error::other("poisoned muxr capturing writer"))?;
+            let mut written = self.written.lock();
             written.extend_from_slice(buf);
             drop(written);
             Ok(buf.len())
@@ -1009,20 +974,14 @@ mod tests {
 
     impl Write for FlushCountingWriter {
         fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-            let mut written = self
-                .written
-                .lock()
-                .map_err(|_| std::io::Error::other("poisoned muxr flush-counting writer"))?;
+            let mut written = self.written.lock();
             written.extend_from_slice(buf);
             drop(written);
             Ok(buf.len())
         }
 
         fn flush(&mut self) -> std::io::Result<()> {
-            let mut flushes = self
-                .flushes
-                .lock()
-                .map_err(|_| std::io::Error::other("poisoned muxr flush counter"))?;
+            let mut flushes = self.flushes.lock();
             *flushes = flushes
                 .checked_add(1)
                 .ok_or_else(|| std::io::Error::other("muxr test flush count overflowed"))?;

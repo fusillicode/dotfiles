@@ -2751,6 +2751,7 @@ dependencies = [
  "muxr-config",
  "muxr-core",
  "muxr-transport",
+ "parking_lot",
  "portable-pty",
  "rootcause",
  "rstest",

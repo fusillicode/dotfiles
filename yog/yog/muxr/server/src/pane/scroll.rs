@@ -91,10 +91,11 @@ fn scroll_pane(
     amount: PaneScrollAmount,
     runtimes: &PaneRuntimes,
 ) -> rootcause::Result<crate::terminal::TerminalScrollMove> {
-    match amount {
-        PaneScrollAmount::Line => runtimes.handle(pane_id)?.scroll_one_line(direction),
-        PaneScrollAmount::Wheel => runtimes.handle(pane_id)?.scroll(direction),
-    }
+    let handle = runtimes.handle(pane_id)?;
+    Ok(match amount {
+        PaneScrollAmount::Line => handle.scroll_one_line(direction),
+        PaneScrollAmount::Wheel => handle.scroll(direction),
+    })
 }
 
 pub fn faux_scroll_input_bytes(direction: PaneScrollDirection, cursor_key_mode: TerminalCursorKeyMode) -> Vec<u8> {

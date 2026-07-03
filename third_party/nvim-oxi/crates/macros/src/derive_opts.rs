@@ -954,27 +954,12 @@ mod tests {
 
     #[test]
     fn fields_order_option() {
-        let fields = [
-            "scope",
-            "win",
-            "buf",
-            "tab",
-            "filetype",
-            "operation",
-            "dry_run",
-        ];
+        let fields =
+            ["scope", "win", "buf", "tab", "filetype", "operation", "dry_run"];
 
         assert_eq!(
             order(&fields),
-            [
-                "buf",
-                "tab",
-                "win",
-                "scope",
-                "dry_run",
-                "filetype",
-                "operation"
-            ]
+            ["buf", "tab", "win", "scope", "dry_run", "filetype", "operation"]
         );
     }
 }

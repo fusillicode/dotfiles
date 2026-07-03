@@ -53,7 +53,7 @@ pub fn handle_client_paste(bytes: &[u8], state: &mut ClientSessionState<'_>) -> 
 
 pub fn handle_client_key(key: &ClientKey, state: &mut ClientSessionState<'_>) -> rootcause::Result<PaneInputOutcome> {
     let (pane_id, handle) = self::active_pane_handle_with_id(state)?;
-    let keyboard_protocol = handle.application_mode()?.keyboard_protocol;
+    let keyboard_protocol = handle.application_mode().keyboard_protocol;
     let Some(bytes) = crate::keyboard_input::pane_key_input_bytes(key, keyboard_protocol) else {
         return Ok(PaneInputOutcome::ignored());
     };

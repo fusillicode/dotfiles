@@ -55,7 +55,7 @@ impl TryFrom<&PtyHandle> for PaneCmdSnapshot {
 
     fn try_from(handle: &PtyHandle) -> rootcause::Result<Self> {
         let shell_pid = handle.process_id();
-        let fg_process_group = handle.fg_process_group()?;
+        let fg_process_group = handle.fg_process_group();
         let fg_process_group_leader = fg_process_group.and_then(PaneProcess::from_pid);
 
         Ok(Self {

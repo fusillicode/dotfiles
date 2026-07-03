@@ -31,7 +31,7 @@ pub async fn handle_pane_output_message(
         }
         Some(SessionPaneOutputMessage::PaneOutputReady) => {
             let screen_dirty_panes = state.runtimes.take_screen_dirty_panes();
-            let title_changes = state.runtimes.take_title_changes()?;
+            let title_changes = state.runtimes.take_title_changes();
             let screen_dirty = !screen_dirty_panes.is_empty();
             let screen_dirty_visible = crate::screen_render::pane_ids_visible_render_dmg(
                 state.layout,
