@@ -4,7 +4,7 @@
   "blink.compat": { "branch": "main", "commit": "2ed6d9a28b07fa6f3bface818470605f8896408c" },
   "blink.lib": { "branch": "main", "commit": "5876dd95deeb70aadbe9f1c0b7117a135061cdac" },
   "blink.pairs": { "branch": "main", "commit": "d0f00431105f773ae50cdc0fa03208448f5f829e" },
-  "canola.nvim": { "branch": "main", "commit": "b6e41f866ae01a1f14e73fd1f57317a15020987a" },
+  "canola.nvim": { "branch": "main", "commit": "6b21ba0bd5da5e6ea241319d5ea83bd6cdb8742d" },
   "conform.nvim": { "branch": "master", "commit": "619363c30309d29ffa631e67c8183f2a72caa373" },
   "crates.nvim": { "branch": "main", "commit": "694357861ec9ebf12475ddcdd04ea45a0923c32d" },
   "fidget.nvim": { "branch": "main", "commit": "6f793b2bcd2d35e201c09520f698bb763220908a" },
