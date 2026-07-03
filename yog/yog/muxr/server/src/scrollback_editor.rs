@@ -283,7 +283,7 @@ fn open(
     terminal_size: &TerminalSize,
     dump_style: ScrollbackDumpStyle,
 ) -> rootcause::Result<OpenScrollbackEditor> {
-    let _synced = runtimes.sync_layout_terminal_titles(layout)?;
+    let _synced = runtimes.sync_layout_terminal_titles(layout);
     let original_layout = layout.clone();
     let original_fullscreen = pane_fullscreen.clone();
     let original_pane_id = layout.active_pane_id()?;
@@ -348,9 +348,7 @@ fn restore(
     self::remove_editor_pane_history(config, editor_pane_id);
 
     let mut original_layout = editor.original_layout;
-    // Restore the real pane tree even if title sync fails; otherwise the attached state could keep pointing at the
-    // temporary editor pane.
-    let sync_result = runtimes.sync_layout_terminal_titles(&mut original_layout);
+    let _synced = runtimes.sync_layout_terminal_titles(&mut original_layout);
     let original_tab_id = original_layout.active_tab;
     let original_tab = original_layout
         .entries
@@ -370,7 +368,6 @@ fn restore(
     }
     *pane_fullscreen = editor.original_fullscreen;
     crate::state::persisted::write_metadata(&config.paths, layout)?;
-    let _synced = sync_result?;
     Ok(())
 }
 

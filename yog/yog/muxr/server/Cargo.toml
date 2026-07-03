@@ -17,6 +17,7 @@ libproc = { version = "0.14.11" }
 muxr_config = { workspace = true }
 muxr_core = { workspace = true }
 muxr_transport = { workspace = true }
+parking_lot = { workspace = true }
 portable-pty = { version = "0.9" }
 rootcause = { workspace = true }
 serde = { workspace = true }

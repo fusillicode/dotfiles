@@ -283,7 +283,7 @@ pub fn reap_exited_panes(
 
     let exited_at = crate::server::unix_timestamp_millis()?;
     let mut final_pane_removed = false;
-    let _ = runtimes.sync_layout_terminal_titles(layout)?;
+    let _synced = runtimes.sync_layout_terminal_titles(layout);
     let mut removed_panes = Vec::new();
     for (pane_id, exit_status) in &exited_panes {
         match layout.remove_exited_pane(*pane_id, exited_at, exit_status.clone())? {

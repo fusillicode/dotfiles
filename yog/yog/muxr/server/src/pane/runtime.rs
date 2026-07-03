@@ -223,11 +223,11 @@ impl PaneRuntimes {
             .ok_or_else(|| report!("muxr pane runtime is missing").attach(format!("pane_id={pane_id}")))
     }
 
-    pub fn attach_sinks(&self, sender: &Sender<PtyEvent>) -> rootcause::Result<Vec<(PaneId, PtySinkGuard)>> {
+    pub fn attach_sinks(&self, sender: &Sender<PtyEvent>) -> Vec<(PaneId, PtySinkGuard)> {
         self.panes
             .iter()
-            .map(|pane| Ok((pane.id, pane.session.handle().attach_sink(sender.clone())?)))
-            .collect()
+            .map(|pane| (pane.id, pane.session.handle().attach_sink(sender.clone())))
+            .collect::<Vec<_>>()
     }
 
     pub fn pane_ids(&self) -> Vec<PaneId> {
@@ -262,7 +262,7 @@ impl PaneRuntimes {
         for pane in &self.panes {
             let handle = pane.session.handle();
             if handle.exit_state() == crate::pty::PtyExitState::Exited {
-                let Some(exit_status) = handle.exit_status()? else {
+                let Some(exit_status) = handle.exit_status() else {
                     return Err(
                         report!("muxr exited pane is missing exit status").attach(format!("pane_id={}", pane.id))
                     );
@@ -294,37 +294,38 @@ impl PaneRuntimes {
         self.handle(pane_id)?.write_scrollback_dump(style, writer)
     }
 
-    pub fn terminal_titles(&self) -> rootcause::Result<Vec<(PaneId, Option<String>)>> {
+    pub fn terminal_titles(&self) -> Vec<(PaneId, Option<String>)> {
         self.panes
             .iter()
-            .filter_map(|pane| match pane.session.handle().terminal_title() {
-                Ok(Some(title)) => Some(Ok((pane.id, Some(title)))),
-                Ok(None) => None,
-                Err(error) => Some(Err(error)),
+            .filter_map(|pane| {
+                pane.session
+                    .handle()
+                    .terminal_title()
+                    .map(|title| (pane.id, Some(title)))
             })
             .collect()
     }
 
     /// Sync runtime terminal titles into layout metadata and return the applied titles.
-    pub fn sync_layout_terminal_titles(&self, layout: &mut SessionLayout) -> rootcause::Result<SyncedTerminalTitles> {
-        let terminal_titles = self.terminal_titles()?;
+    pub fn sync_layout_terminal_titles(&self, layout: &mut SessionLayout) -> SyncedTerminalTitles {
+        let terminal_titles = self.terminal_titles();
         // Shell prompts report cwd through OSC title updates. Keep layout metadata in sync before layout mutations so
         // new panes inherit the live cwd instead of the server startup directory.
         let metadata_sync = layout.sync_terminal_titles(&terminal_titles);
-        Ok(SyncedTerminalTitles {
+        SyncedTerminalTitles {
             metadata_sync,
             titles: terminal_titles,
-        })
+        }
     }
 
-    pub fn take_title_changes(&self) -> rootcause::Result<Vec<(PaneId, Option<String>)>> {
+    pub fn take_title_changes(&self) -> Vec<(PaneId, Option<String>)> {
         let mut title_changes = Vec::new();
         for pane in &self.panes {
-            for title in pane.session.handle().take_title_changes()? {
+            for title in pane.session.handle().take_title_changes() {
                 title_changes.push((pane.id, title));
             }
         }
-        Ok(title_changes)
+        title_changes
     }
 
     pub fn take_screen_dirty_panes(&self) -> Vec<PaneId> {
@@ -336,12 +337,6 @@ impl PaneRuntimes {
         }
         screen_dirty_panes
     }
-}
-
-/// Apply live runtime terminal titles to layout metadata before layout mutations.
-pub fn sync_layout_terminal_titles(layout: &mut SessionLayout, runtimes: &PaneRuntimes) -> rootcause::Result<()> {
-    let _ = runtimes.sync_layout_terminal_titles(layout)?;
-    Ok(())
 }
 
 pub fn spawn_pane_or_restore_layout(

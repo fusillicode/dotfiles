@@ -93,7 +93,7 @@ fn layout_snapshot_and_maybe_persist(
     tracked_processes: &PaneTrackedProcessSnapshot,
     persistence: LayoutPersistence,
 ) -> rootcause::Result<LayoutSnapshot> {
-    let synced = runtimes.sync_layout_terminal_titles(layout)?;
+    let synced = runtimes.sync_layout_terminal_titles(layout);
     if persistence == LayoutPersistence::Persist && synced.metadata_sync() == crate::state::PaneMetadataSync::Changed {
         crate::state::persisted::write_metadata(paths, layout)?;
     }
@@ -116,9 +116,9 @@ fn pane_regions_snapshot(pane_layout: &PaneLayout, runtimes: &PaneRuntimes) -> r
 
 fn pane_region_snapshot(region: &PaneRegion, runtimes: &PaneRuntimes) -> rootcause::Result<PaneRegionSnapshot> {
     let handle = runtimes.handle(region.id)?;
-    let mouse_mode = handle.mouse_mode()?;
+    let mouse_mode = handle.mouse_mode();
     let visible_top_row = handle.visible_top_row()?;
-    let wrapped_rows = handle.visible_row_wraps()?;
+    let wrapped_rows = handle.visible_row_wraps();
     PaneRegionSnapshot::new(
         region.id,
         region.area.origin.col,
@@ -264,15 +264,11 @@ pub async fn flush_render_diff(
     Ok(ClientSessionFlow::Continue)
 }
 
-fn runtime_pane_metadata(state: &ClientSessionState<'_>) -> rootcause::Result<PaneRuntimeMetadata> {
-    let terminal_titles = state.runtimes.terminal_titles()?;
+fn runtime_pane_metadata(state: &ClientSessionState<'_>) -> PaneRuntimeMetadata {
+    let terminal_titles = state.runtimes.terminal_titles();
     let startup_cmd_labels = state.runtimes.startup_cmd_labels();
     let tracked_processes = state.pane_tracked_processes.snapshot(state.layout);
-    Ok(PaneRuntimeMetadata::from_sources(
-        terminal_titles,
-        startup_cmd_labels,
-        &tracked_processes,
-    ))
+    PaneRuntimeMetadata::from_sources(terminal_titles, startup_cmd_labels, &tracked_processes)
 }
 
 pub async fn flush_cmd_label_layout(
@@ -280,7 +276,7 @@ pub async fn flush_cmd_label_layout(
     state: &mut ClientSessionState<'_>,
     title_changes: Vec<(PaneId, Option<String>)>,
 ) -> rootcause::Result<ClientSessionFlow> {
-    let runtime_metadata = self::runtime_pane_metadata(state)?;
+    let runtime_metadata = self::runtime_pane_metadata(state);
     let changes = {
         let mut last_layout_snapshot = state.last_layout_snapshot.clone();
         let mut metadata_sync = crate::state::PaneMetadataSync::Unchanged;
@@ -348,7 +344,7 @@ pub async fn flush_tracked_process_runtime_layout(
     render_dmg: &mut ClientRenderDmg,
     pane_surface_dirty: ClientRenderDmg,
 ) -> rootcause::Result<ClientSessionFlow> {
-    let runtime_metadata = self::runtime_pane_metadata(state)?;
+    let runtime_metadata = self::runtime_pane_metadata(state);
     let layout_snapshot = state
         .layout
         .snapshot_with_runtime_metadata(&runtime_metadata.pane_snapshot_fields())?;
@@ -373,7 +369,7 @@ pub async fn flush_pane_attention(
     };
     render_dmg.include_dmg(pane_surface_dirty);
     timers.sync_render_deadline(*render_dmg)?;
-    let runtime_metadata = self::runtime_pane_metadata(state)?;
+    let runtime_metadata = self::runtime_pane_metadata(state);
     let layout_snapshot = state
         .layout
         .snapshot_with_runtime_metadata(&runtime_metadata.pane_snapshot_fields())?;

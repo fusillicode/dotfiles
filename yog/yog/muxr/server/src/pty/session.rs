@@ -2,8 +2,6 @@ use std::io::Read;
 use std::io::Write;
 use std::path::Path;
 use std::sync::Arc;
-use std::sync::Mutex;
-use std::sync::MutexGuard;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::thread;
@@ -17,6 +15,7 @@ use muxr_core::PaneMouseMode;
 use muxr_core::PaneRegionSnapshot;
 use muxr_core::PaneScrollDirection;
 use muxr_core::TerminalSize;
+use parking_lot::Mutex;
 use portable_pty::Child;
 use portable_pty::ChildKiller;
 use portable_pty::MasterPty;
@@ -198,7 +197,7 @@ pub enum PtyExitState {
 }
 
 impl PtyHandle {
-    pub fn attach_sink(&self, sender: Sender<PtyEvent>) -> rootcause::Result<PtySinkGuard> {
+    pub fn attach_sink(&self, sender: Sender<PtyEvent>) -> PtySinkGuard {
         self.state.attach_sink(sender)
     }
 
@@ -211,10 +210,11 @@ impl PtyHandle {
     }
 
     pub fn resize(&self, size: &TerminalSize) -> rootcause::Result<()> {
-        lock_mutex(&self.master, "pty master")?
+        self.master
+            .lock()
             .resize(pty_size(size))
             .map_err(|error| report!("failed to resize muxr shell pty").attach(format!("error={error:#}")))?;
-        lock_mutex(&self.state.terminal, "pty terminal")?.resize(size);
+        self.state.terminal.lock().resize(size);
         Ok(())
     }
 
@@ -225,7 +225,7 @@ impl PtyHandle {
 
         // PTY-bound input should reveal the live viewport before an app echoes typed bytes; some apps do not echo, so
         // callers need the changed flag to redraw immediately after resetting scrollback.
-        let viewport_move = PtyViewportMove::from(lock_mutex(&self.state.terminal, "pty terminal")?.scroll_to_bottom());
+        let viewport_move = PtyViewportMove::from(self.state.terminal.lock().scroll_to_bottom());
         self.writer.write_bytes(
             bytes,
             "failed to write client input to muxr shell pty",
@@ -240,7 +240,7 @@ impl PtyHandle {
         }
 
         let (viewport_move, paste_mode) = {
-            let mut terminal = lock_mutex(&self.state.terminal, "pty terminal")?;
+            let mut terminal = self.state.terminal.lock();
             let viewport_move = PtyViewportMove::from(terminal.scroll_to_bottom());
             (viewport_move, terminal.paste_mode())
         };
@@ -263,7 +263,7 @@ impl PtyHandle {
             return Ok(PtyMouseWrite::Ignored);
         };
         // Scrollback follows only events that reach the PTY, so filtered motion does not hide history.
-        let viewport_move = PtyViewportMove::from(lock_mutex(&self.state.terminal, "pty terminal")?.scroll_to_bottom());
+        let viewport_move = PtyViewportMove::from(self.state.terminal.lock().scroll_to_bottom());
         self.writer.write_bytes(
             &bytes,
             "failed to write client mouse event to muxr shell pty",
@@ -284,54 +284,55 @@ impl PtyHandle {
     }
 
     pub fn write_focus_event(&self, event: TerminalFocusEvent) -> rootcause::Result<()> {
-        let focus_reporting = self.application_mode()?.focus_reporting;
+        let focus_reporting = self.application_mode().focus_reporting;
         self.writer.write_focus_event(focus_reporting, event)
     }
 
-    pub fn mouse_mode(&self) -> rootcause::Result<PaneMouseMode> {
-        Ok(self.application_mode()?.pane_mouse_mode())
+    pub fn mouse_mode(&self) -> PaneMouseMode {
+        self.application_mode().pane_mouse_mode()
     }
 
-    pub fn application_mode(&self) -> rootcause::Result<TerminalApplicationMode> {
-        Ok(lock_mutex(&self.state.terminal, "pty terminal")?.application_mode())
+    pub fn application_mode(&self) -> TerminalApplicationMode {
+        self.state.terminal.lock().application_mode()
     }
 
-    pub fn scroll(&self, direction: PaneScrollDirection) -> rootcause::Result<TerminalScrollMove> {
-        Ok(lock_mutex(&self.state.terminal, "pty terminal")?.scroll(direction))
+    pub fn scroll(&self, direction: PaneScrollDirection) -> TerminalScrollMove {
+        self.state.terminal.lock().scroll(direction)
     }
 
-    pub fn scroll_one_line(&self, direction: PaneScrollDirection) -> rootcause::Result<TerminalScrollMove> {
-        Ok(lock_mutex(&self.state.terminal, "pty terminal")?.scroll_one_line(direction))
+    pub fn scroll_one_line(&self, direction: PaneScrollDirection) -> TerminalScrollMove {
+        self.state.terminal.lock().scroll_one_line(direction)
     }
 
     pub fn visible_top_row(&self) -> rootcause::Result<u64> {
-        lock_mutex(&self.state.terminal, "pty terminal")?.visible_top_row()
+        self.state.terminal.lock().visible_top_row()
     }
 
-    pub fn visible_row_wraps(&self) -> rootcause::Result<Vec<muxr_core::RowWrap>> {
-        Ok(lock_mutex(&self.state.terminal, "pty terminal")?.visible_row_wraps())
+    pub fn visible_row_wraps(&self) -> Vec<muxr_core::RowWrap> {
+        self.state.terminal.lock().visible_row_wraps()
     }
 
-    pub fn exit_status(&self) -> rootcause::Result<Option<PtyExitStatus>> {
-        Ok(lock_mutex(&self.state.exit_status, "pty exit status")?.clone())
+    pub fn exit_status(&self) -> Option<PtyExitStatus> {
+        self.state.exit_status.lock().clone()
     }
 
     pub const fn process_id(&self) -> Option<u32> {
         self.child_process_id
     }
 
-    pub fn fg_process_group(&self) -> rootcause::Result<Option<u32>> {
-        Ok(lock_mutex(&self.master, "pty master")?
+    pub fn fg_process_group(&self) -> Option<u32> {
+        self.master
+            .lock()
             .process_group_leader()
             .and_then(|process_group| u32::try_from(process_group).ok())
-            .filter(|process_group| *process_group != 0))
+            .filter(|process_group| *process_group != 0)
     }
 
-    pub fn terminal_title(&self) -> rootcause::Result<Option<String>> {
-        Ok(lock_mutex(&self.state.terminal, "pty terminal")?.title())
+    pub fn terminal_title(&self) -> Option<String> {
+        self.state.terminal.lock().title()
     }
 
-    pub fn take_title_changes(&self) -> rootcause::Result<Vec<Option<String>>> {
+    pub fn take_title_changes(&self) -> Vec<Option<String>> {
         self.state.take_title_changes()
     }
 
@@ -340,11 +341,14 @@ impl PtyHandle {
     }
 
     pub fn render_snapshot(&self) -> rootcause::Result<TerminalSnapshot> {
-        lock_mutex(&self.state.terminal, "pty terminal")?.snapshot()
+        self.state.terminal.lock().snapshot()
     }
 
     pub fn write_scrollback_dump(&self, style: ScrollbackDumpStyle, writer: &mut impl Write) -> rootcause::Result<()> {
-        let dump = lock_mutex(&self.state.terminal, "pty terminal")?
+        let dump = self
+            .state
+            .terminal
+            .lock()
             .scrollback_dump(style)
             .context("failed to build muxr scrollback dump")?;
         Ok(writer
@@ -371,9 +375,7 @@ impl PtySinkGuard {
 
 impl Drop for PtySinkGuard {
     fn drop(&mut self) {
-        if let Ok(mut active_sink) = self.state.active_sink.lock() {
-            *active_sink = None;
-        }
+        *self.state.active_sink.lock() = None;
     }
 }
 
@@ -420,28 +422,28 @@ impl PtyState {
         })
     }
 
-    fn attach_sink(self: &Arc<Self>, sender: Sender<PtyEvent>) -> rootcause::Result<PtySinkGuard> {
+    fn attach_sink(self: &Arc<Self>, sender: Sender<PtyEvent>) -> PtySinkGuard {
         let output_current = Arc::new(AtomicBool::new(true));
-        lock_mutex(&self.title_changes, "pty title changes")?.clear();
+        self.title_changes.lock().clear();
         // Attach sends a fresh baseline; discard dirty state accumulated before the client could observe output events.
         self.screen_dirty.store(false, Ordering::Release);
-        *lock_mutex(&self.active_sink, "pty active sink")? = Some(ActivePtySink {
+        *self.active_sink.lock() = Some(ActivePtySink {
             output_current: Arc::clone(&output_current),
             sender,
         });
 
-        Ok(PtySinkGuard {
+        PtySinkGuard {
             output_current,
             state: Arc::clone(self),
-        })
+        }
     }
 
     fn append_output(&self, bytes: &[u8]) -> rootcause::Result<TerminalReplies> {
-        if let Some(history) = lock_mutex(&self.history, "pty history")?.as_mut() {
+        if let Some(history) = self.history.lock().as_mut() {
             history.append(bytes)?;
         }
         let terminal_replies = {
-            let mut terminal = lock_mutex(&self.terminal, "pty terminal")?;
+            let mut terminal = self.terminal.lock();
             let process_outcome = terminal.process(bytes);
             if process_outcome.screen_dmg() == crate::terminal::TerminalScreenDmg::Dirty {
                 // Output events are coalesced, so the visible-screen dirty bit must be sticky until the server consumes
@@ -453,15 +455,15 @@ impl PtyState {
             drop(terminal);
             // Title changes are queued separately from coalesced output events so cmd->cwd title transitions are
             // not collapsed before the server can emit matching tab bar updates.
-            let active_sink = lock_mutex(&self.active_sink, "pty active sink")?;
+            let active_sink = self.active_sink.lock();
             if !title_changes.is_empty() && active_sink.is_some() {
-                lock_mutex(&self.title_changes, "pty title changes")?.extend(title_changes);
+                self.title_changes.lock().extend(title_changes);
             }
             drop(active_sink);
             terminal_replies
         };
 
-        let mut active_sink = lock_mutex(&self.active_sink, "pty active sink")?;
+        let mut active_sink = self.active_sink.lock();
         if let Some(sink) = active_sink.as_ref() {
             match self::try_send_pty_event(&sink.sender, PtyEvent::OutputReady)? {
                 PtyEventSendOutcome::Sent | PtyEventSendOutcome::Full(PtyEvent::OutputReady) => {}
@@ -479,9 +481,9 @@ impl PtyState {
         Ok(terminal_replies)
     }
 
-    fn take_title_changes(&self) -> rootcause::Result<Vec<Option<String>>> {
-        let mut title_changes = lock_mutex(&self.title_changes, "pty title changes")?;
-        Ok(std::mem::take(&mut *title_changes))
+    fn take_title_changes(&self) -> Vec<Option<String>> {
+        let mut title_changes = self.title_changes.lock();
+        std::mem::take(&mut *title_changes)
     }
 
     fn take_screen_dirty(&self) -> PtyScreenDmg {
@@ -493,7 +495,7 @@ impl PtyState {
     }
 
     fn mark_exited(&self, exit_status: PtyExitStatus) -> rootcause::Result<()> {
-        let mut stored_exit_status = lock_mutex(&self.exit_status, "pty exit status")?;
+        let mut stored_exit_status = self.exit_status.lock();
         if stored_exit_status.is_none() {
             *stored_exit_status = Some(exit_status);
         }
@@ -503,7 +505,7 @@ impl PtyState {
         // Detached sessions have no active PTY sink; notify the server loop so it can reap sticky exit state.
         self.pane_exit_notify.notify_one();
 
-        let mut active_sink = lock_mutex(&self.active_sink, "pty active sink")?;
+        let mut active_sink = self.active_sink.lock();
         if let Some(sink) = active_sink.as_ref() {
             match self::try_send_pty_event(&sink.sender, PtyEvent::Exited)? {
                 PtyEventSendOutcome::Sent => {}
@@ -546,10 +548,6 @@ fn pending_pty_event(pending: Option<PtyEvent>) -> rootcause::Result<PtyEvent> {
     pending.ok_or_else(|| report!("kanal dropped muxr pty event during failed send"))
 }
 
-fn lock_mutex<'a, T>(mutex: &'a Mutex<T>, name: &str) -> rootcause::Result<MutexGuard<'a, T>> {
-    mutex.lock().map_err(|_| report!("poisoned muxr {name} mutex"))
-}
-
 const fn pty_size(size: &TerminalSize) -> PtySize {
     PtySize {
         rows: size.rows(),
@@ -579,16 +577,9 @@ fn spawn_reader_thread(
 }
 
 fn kill_child(child_killer: &Mutex<Box<dyn ChildKiller + Send + Sync>>) {
-    match self::lock_mutex(child_killer, "pty child killer") {
-        Ok(mut killer) => {
-            let _ = killer.kill().inspect_err(|error| {
-                crate::session::tracing::pty::shutdown_failed("kill_child", error);
-            });
-        }
-        Err(error) => {
-            crate::session::tracing::pty::shutdown_failed("lock_child_killer", &error);
-        }
-    }
+    let _ = child_killer.lock().kill().inspect_err(|error| {
+        crate::session::tracing::pty::shutdown_failed("kill_child", error);
+    });
 }
 
 fn kill_and_wait_child(child: &mut dyn Child) -> Option<PtyExitStatus> {
@@ -607,13 +598,7 @@ fn kill_and_wait_child(child: &mut dyn Child) -> Option<PtyExitStatus> {
 }
 
 fn take_child_wait_handle(child: &SharedPtyChild) -> Option<PtyChild> {
-    match self::lock_mutex(child, "pty child wait handle") {
-        Ok(mut child) => child.take(),
-        Err(error) => {
-            crate::session::tracing::pty::shutdown_failed("lock_child_wait_handle", &error);
-            None
-        }
-    }
+    child.lock().take()
 }
 
 fn spawn_child_wait_thread(child: PtyChild, state: &Arc<PtyState>) -> rootcause::Result<thread::JoinHandle<()>> {
@@ -746,9 +731,7 @@ mod tests {
 
     impl ChildKiller for RecordingChild {
         fn kill(&mut self) -> std::io::Result<()> {
-            lock_mutex(&self.events, "recording child events")
-                .map_err(|error| std::io::Error::other(error.to_string()))?
-                .push("kill");
+            self.events.lock().push("kill");
             Ok(())
         }
 
@@ -765,9 +748,7 @@ mod tests {
         }
 
         fn wait(&mut self) -> std::io::Result<portable_pty::ExitStatus> {
-            lock_mutex(&self.events, "recording child events")
-                .map_err(|error| std::io::Error::other(error.to_string()))?
-                .push("wait");
+            self.events.lock().push("wait");
             Ok(self.exit_status.clone())
         }
 
@@ -788,9 +769,7 @@ mod tests {
 
     impl ChildKiller for RecordingChildKiller {
         fn kill(&mut self) -> std::io::Result<()> {
-            lock_mutex(&self.events, "recording child killer events")
-                .map_err(|error| std::io::Error::other(error.to_string()))?
-                .push("clone_kill");
+            self.events.lock().push("clone_kill");
             Ok(())
         }
 
@@ -808,10 +787,7 @@ mod tests {
 
         let exit_status = self::kill_and_wait_child(&mut child).ok_or_else(|| report!("expected child exit status"))?;
 
-        assert_that!(
-            *lock_mutex(&events, "recording child events")?,
-            eq(vec!["kill", "wait"])
-        );
+        assert_that!(*events.lock(), eq(vec!["kill", "wait"]));
         assert_that!(
             exit_status,
             eq(PtyExitStatus {
@@ -834,10 +810,10 @@ mod tests {
             .join()
             .map_err(|_| report!("muxr pty child wait test thread panicked"))?;
 
-        assert_that!(*lock_mutex(&events, "recording child events")?, eq(vec!["wait"]));
+        assert_that!(*events.lock(), eq(vec!["wait"]));
         assert_that!(state.exited.load(Ordering::Acquire), eq(true));
         assert_that!(
-            *lock_mutex(&state.exit_status, "pty exit status")?,
+            *state.exit_status.lock(),
             eq(Some(PtyExitStatus {
                 code: 7,
                 result: PtyExitResult::Failed,
@@ -866,7 +842,7 @@ mod tests {
             .map_err(|_| report!("muxr pty writer test thread panicked"))?;
 
         assert_that!(state.exited.load(Ordering::Acquire), eq(false));
-        assert_that!(lock_mutex(&state.exit_status, "pty exit status")?.as_ref(), none());
+        assert_that!(state.exit_status.lock().as_ref(), none());
         Ok(())
     }
 
@@ -889,14 +865,14 @@ mod tests {
         )?;
         let handle = session.handle();
         let (sender, receiver) = kanal::bounded(1);
-        let _guard = handle.attach_sink(sender)?;
+        let _guard = handle.attach_sink(sender);
 
         assert_that!(
             receiver.recv_timeout(Duration::from_secs(2)),
             ok(matches_pattern!(PtyEvent::Exited))
         );
         assert_that!(
-            handle.exit_status()?,
+            handle.exit_status(),
             eq(Some(PtyExitStatus {
                 code: 7,
                 signal: None,
@@ -913,7 +889,7 @@ mod tests {
         let state = pty_state(&terminal_size()?);
         let output_current = Arc::new(AtomicBool::new(true));
         let (sender, _receiver) = kanal::bounded(0);
-        *lock_mutex(&state.active_sink, "pty active sink")? = Some(ActivePtySink {
+        *state.active_sink.lock() = Some(ActivePtySink {
             output_current: Arc::clone(&output_current),
             sender,
         });
@@ -929,12 +905,9 @@ mod tests {
 
         assert_that!(state.exited.load(Ordering::Acquire), eq(true));
         assert_that!(output_current.load(Ordering::Acquire), eq(true));
+        assert_that!(state.active_sink.lock().as_ref().map(|_| ()), some(eq(())));
         assert_that!(
-            lock_mutex(&state.active_sink, "pty active sink")?.as_ref().map(|_| ()),
-            some(eq(()))
-        );
-        assert_that!(
-            *lock_mutex(&state.exit_status, "pty exit status")?,
+            *state.exit_status.lock(),
             eq(Some(PtyExitStatus {
                 code: 7,
                 signal: None,
@@ -951,7 +924,7 @@ mod tests {
         let state = pty_state(&terminal_size()?);
         let output_current = Arc::new(AtomicBool::new(true));
         let (sender, receiver) = kanal::bounded(1);
-        *lock_mutex(&state.active_sink, "pty active sink")? = Some(ActivePtySink {
+        *state.active_sink.lock() = Some(ActivePtySink {
             output_current: Arc::clone(&output_current),
             sender,
         });
@@ -967,13 +940,10 @@ mod tests {
         })?;
 
         assert_that!(state.exited.load(Ordering::Acquire), eq(true));
-        assert_that!(
-            lock_mutex(&state.active_sink, "pty active sink")?.as_ref().map(|_| ()),
-            none()
-        );
+        assert_that!(state.active_sink.lock().as_ref().map(|_| ()), none());
         assert_that!(output_current.load(Ordering::Acquire), eq(false));
         assert_that!(
-            *lock_mutex(&state.exit_status, "pty exit status")?,
+            *state.exit_status.lock(),
             eq(Some(PtyExitStatus {
                 code: 7,
                 signal: None,
@@ -991,7 +961,7 @@ mod tests {
         self::assert_replies_eq(&(state.append_output(b"before")?), &[]);
         let (sender, receiver) = kanal::bounded(1);
 
-        let _guard = state.attach_sink(sender)?;
+        let _guard = state.attach_sink(sender);
         self::assert_replies_eq(&(state.append_output(b"after")?), &[]);
 
         assert_that!(receiver.recv(), ok(eq(PtyEvent::OutputReady)));
@@ -1003,7 +973,7 @@ mod tests {
         let state = pty_state(&terminal_size()?);
         let output_current = Arc::new(AtomicBool::new(true));
         let (sender, receiver) = kanal::bounded(1);
-        *lock_mutex(&state.active_sink, "pty active sink")? = Some(ActivePtySink {
+        *state.active_sink.lock() = Some(ActivePtySink {
             output_current: Arc::clone(&output_current),
             sender,
         });
@@ -1011,10 +981,7 @@ mod tests {
 
         self::assert_replies_eq(&(state.append_output(b"lost client")?), &[]);
 
-        assert_that!(
-            lock_mutex(&state.active_sink, "pty active sink")?.as_ref().map(|_| ()),
-            none()
-        );
+        assert_that!(state.active_sink.lock().as_ref().map(|_| ()), none());
         assert_that!(output_current.load(Ordering::Acquire), eq(false));
         Ok(())
     }
@@ -1027,7 +994,7 @@ mod tests {
         self::assert_replies_eq(&(state.append_output(b"before again")?), &[]);
         let (sender, _receiver) = kanal::bounded(1);
 
-        let _guard = state.attach_sink(sender)?;
+        let _guard = state.attach_sink(sender);
 
         assert_that!(state.take_screen_dirty(), eq(PtyScreenDmg::Clean));
         Ok(())
@@ -1037,12 +1004,12 @@ mod tests {
     fn test_append_output_when_title_only_changes_does_not_mark_screen_dirty() -> rootcause::Result<()> {
         let state = Arc::new(pty_state(&terminal_size()?));
         let (sender, receiver) = kanal::bounded(1);
-        let _guard = state.attach_sink(sender)?;
+        let _guard = state.attach_sink(sender);
 
         self::assert_replies_eq(&(state.append_output(b"\x1b]2;~\x07")?), &[]);
 
         assert_that!(state.take_screen_dirty(), eq(PtyScreenDmg::Clean));
-        assert_that!(state.take_title_changes()?, eq(vec![Some("~".to_owned())]));
+        assert_that!(state.take_title_changes(), eq(vec![Some("~".to_owned())]));
         assert_that!(receiver.recv(), ok(eq(PtyEvent::OutputReady)));
         Ok(())
     }
@@ -1076,8 +1043,8 @@ mod tests {
             Arc::new(tokio::sync::Notify::new()),
         )?;
 
-        assert_that!(lock_mutex(&state.terminal, "pty terminal")?.title(), eq(None));
-        assert_that!(state.take_title_changes()?, eq(Vec::<Option<String>>::new()));
+        assert_that!(state.terminal.lock().title(), eq(None));
+        assert_that!(state.take_title_changes(), eq(Vec::<Option<String>>::new()));
         Ok(())
     }
 
@@ -1098,7 +1065,7 @@ mod tests {
             MuxrConfig::default().scrollback,
             Arc::new(tokio::sync::Notify::new()),
         )?;
-        let mode = lock_mutex(&state.terminal, "pty terminal")?.application_mode();
+        let mode = state.terminal.lock().application_mode();
 
         assert_that!(mode.focus_reporting, eq(TerminalFocusReporting::Disabled));
         Ok(())
@@ -1109,7 +1076,7 @@ mod tests {
         let state = pty_state(&terminal_size()?);
         let (sender, receiver) = kanal::bounded(1);
         let output_current = Arc::new(AtomicBool::new(true));
-        *lock_mutex(&state.active_sink, "pty active sink")? = Some(ActivePtySink {
+        *state.active_sink.lock() = Some(ActivePtySink {
             output_current: Arc::clone(&output_current),
             sender,
         });
@@ -1117,10 +1084,7 @@ mod tests {
         self::assert_replies_eq(&(state.append_output(b"first")?), &[]);
         self::assert_replies_eq(&(state.append_output(b"second")?), &[]);
 
-        assert_that!(
-            lock_mutex(&state.active_sink, "pty active sink")?.as_ref().map(|_| ()),
-            some(eq(()))
-        );
+        assert_that!(state.active_sink.lock().as_ref().map(|_| ()), some(eq(())));
         assert_that!(output_current.load(Ordering::Acquire), eq(true));
         assert_that!(state.take_screen_dirty(), eq(PtyScreenDmg::Dirty));
         assert_that!(state.take_screen_dirty(), eq(PtyScreenDmg::Clean));
@@ -1133,7 +1097,7 @@ mod tests {
         let state = pty_state(&terminal_size()?);
         let (sender, receiver) = kanal::bounded(1);
         let output_current = Arc::new(AtomicBool::new(true));
-        *lock_mutex(&state.active_sink, "pty active sink")? = Some(ActivePtySink {
+        *state.active_sink.lock() = Some(ActivePtySink {
             output_current: Arc::clone(&output_current),
             sender,
         });
@@ -1142,7 +1106,7 @@ mod tests {
         self::assert_replies_eq(&(state.append_output(b"\x1b]2;cargo test\x07\x1b]2;~\x07")?), &[]);
 
         assert_that!(
-            state.take_title_changes()?,
+            state.take_title_changes(),
             eq(vec![Some("cargo test".to_owned()), Some("~".to_owned())])
         );
         assert_that!(receiver.recv(), ok(eq(PtyEvent::OutputReady)));
@@ -1193,7 +1157,7 @@ mod tests {
             MuxrConfig::default().scrollback,
             Arc::new(tokio::sync::Notify::new()),
         )?;
-        let snapshot = lock_mutex(&state.terminal, "pty terminal")?.snapshot()?;
+        let snapshot = state.terminal.lock().snapshot()?;
         let rendered = snapshot
             .rows()
             .iter()

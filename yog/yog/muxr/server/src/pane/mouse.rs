@@ -116,7 +116,7 @@ pub fn handle_mouse_event_client_request(
         return Ok(PaneMouseClientOutcome::unchanged());
     };
     let handle = state.runtimes.handle(*region.id())?;
-    let action = PaneMouseAction::from_event(event, handle.application_mode()?);
+    let action = PaneMouseAction::from_event(event, handle.application_mode());
     match action {
         PaneMouseAction::ForwardToPty { focus, protocol } => {
             // Focus-reporting apps must observe the pane transition before the click bytes; only the layout render can
