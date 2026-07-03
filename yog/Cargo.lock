@@ -4403,9 +4403,9 @@ checksum = "8ee5873ec9cce0195efcb7a4e9507a04cd49aec9c83d0389df45b1ef7ba2e649"
 
 [[package]]
 name = "skim"
-version = "4.10.0"
+version = "5.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "30791605c628772360ec7dcd062ea022aa241b4cd1e6f924a5dd258dd02bfd08"
+checksum = "408db6840f70b7fabe2cedc1e5595108b067e77bcd0cdbcb5cc72c8a3a37e860"
 dependencies = [
  "ansi-to-tui",
  "assert_enum_variants",
@@ -4633,7 +4633,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.3.4",
+ "getrandom 0.4.2",
  "once_cell",
  "rustix 1.1.4",
  "windows-sys 0.61.2",
