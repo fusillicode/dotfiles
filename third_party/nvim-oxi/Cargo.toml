@@ -16,7 +16,7 @@ keywords = ["bindings", "neovim", "nvim"]
 # 3rd-party dependencies.
 cargo_metadata = "0.23"
 libc = "0.2"
-mlua = { version = "0.11", features = ["luajit"] }
+mlua = { version = "0.12", features = ["luajit"] }
 proc-macro2 = "1"
 quote = "1"
 serde = "1"
