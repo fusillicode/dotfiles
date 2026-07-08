@@ -161,9 +161,7 @@ impl UrlSchemeMatch {
 }
 
 fn valid_url_prefix(candidate: &UrlCandidate) -> Option<String> {
-    let trimmed = candidate
-        .text
-        .trim_end_matches(|ch| TrailingPunctuation::from_char(ch) == TrailingPunctuation::Yes);
+    let trimmed = self::trim_url_candidate(&candidate.text);
     let url = Url::parse(trimmed).ok()?;
     if !matches!(url.scheme(), "http" | "https") {
         return None;
@@ -172,6 +170,23 @@ fn valid_url_prefix(candidate: &UrlCandidate) -> Option<String> {
         return None;
     }
     Some(trimmed.to_owned())
+}
+
+fn trim_url_candidate(text: &str) -> &str {
+    let mut trimmed = text.trim_end_matches(|ch| TrailingPunctuation::from_char(ch) == TrailingPunctuation::Yes);
+    let mut unmatched_closing_parentheses = trimmed
+        .matches(')')
+        .count()
+        .saturating_sub(trimmed.matches('(').count());
+    // Keep balanced parentheses in URL paths, but exclude unmatched closing wrappers from the hyperlink target.
+    while unmatched_closing_parentheses > 0 && trimmed.ends_with(')') {
+        let Some(without_wrapper) = trimmed.strip_suffix(')') else {
+            break;
+        };
+        trimmed = without_wrapper.trim_end_matches(|ch| TrailingPunctuation::from_char(ch) == TrailingPunctuation::Yes);
+        unmatched_closing_parentheses = unmatched_closing_parentheses.saturating_sub(1);
+    }
+    trimmed
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -321,6 +336,7 @@ impl UrlChar {
 mod tests {
     use muxr_core::RenderCell;
     use muxr_core::RenderStyle;
+    use rootcause::option_ext::OptionExt;
     use rootcause::prelude::ResultExt;
     use rstest::rstest;
     use test_that::prelude::*;
@@ -332,6 +348,7 @@ mod tests {
     #[case::https("https://example.com")]
     #[case::localhost("http://localhost:3000")]
     #[case::explicit_port_at_edge("http://grafana:3000")]
+    #[case::balanced_parentheses("https://example.com/a_(b)")]
     fn test_link_visible_urls_when_plain_url_is_visible_links_url_cells(#[case] uri: &str) -> rootcause::Result<()> {
         let rows = self::rows(&[&format!("go {uri}")])?;
 
@@ -367,6 +384,8 @@ mod tests {
     #[case::semicolon("https://example.com;", "https://example.com")]
     #[case::bang("https://example.com!", "https://example.com")]
     #[case::question("https://example.com?", "https://example.com")]
+    #[case::closing_parenthesis("(https://example.com)", "https://example.com")]
+    #[case::multiple_closing_parentheses("(https://example.com)))", "https://example.com")]
     fn test_link_visible_urls_when_url_has_trailing_punctuation_trims_link_target(
         #[case] text: &str,
         #[case] uri: &str,
@@ -376,10 +395,14 @@ mod tests {
         let links = self::detect_visible_url_links(&rows)?;
 
         self::assert_linked_text(&rows, &links, uri, uri);
+        let uri_start = text.find(uri).context("muxr test URI is missing from text")?;
+        let uri_end = uri_start
+            .checked_add(uri.len())
+            .context("muxr test URI position overflowed")?;
         assert_that!(
             links,
             each(
-                predicate(|link: &PaneUrlLink| link.cell() < uri.len())
+                predicate(|link: &PaneUrlLink| (uri_start..uri_end).contains(&link.cell()))
                     .with_description("points inside the URI", "points outside the URI")
             )
         );
