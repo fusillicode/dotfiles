@@ -14,7 +14,7 @@ local default_sources = {
 return {
   'saghen/blink.cmp',
   event = 'InsertEnter',
-  build = function() require('blink.cmp').build():wait(60000) end,
+  build = function() require('blink.cmp').build():pwait(60000) end,
   dependencies = {
     'saghen/blink.lib',
     'archie-judd/blink-cmp-words',
