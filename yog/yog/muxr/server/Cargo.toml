@@ -10,6 +10,9 @@ description = "muxr terminal multiplexer session server."
 keywords = ["muxr", "terminal", "multiplexer", "server", "session"]
 categories = ["command-line-utilities", "development-tools"]
 
+[features]
+benchmarking = []
+
 [dependencies]
 chrono = { workspace = true }
 kanal = { workspace = true }
@@ -34,10 +37,16 @@ vt100 = { version = "0.16" }
 vte = { version = "0.15" }
 
 [dev-dependencies]
+criterion = { workspace = true }
 rstest = { workspace = true }
 tempfile = { workspace = true }
 test-that = { workspace = true }
 tokio = { workspace = true, features = ["test-util"] }
+
+[[bench]]
+name = "process_observation"
+harness = false
+required-features = ["benchmarking"]
 
 [lints]
 workspace = true

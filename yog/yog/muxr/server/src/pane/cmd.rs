@@ -198,6 +198,15 @@ fn process_group_members(process_group: u32) -> Result<Vec<PaneProcess>, Process
     Ok(pids.into_iter().filter_map(PaneProcess::from_pid).collect())
 }
 
+#[cfg(feature = "benchmarking")]
+pub fn benchmark_current_process_observation() -> (bool, bool) {
+    let observation = PaneProcess::from_pid(std::process::id());
+    (
+        observation.as_ref().and_then(|process| process.name.as_ref()).is_some(),
+        observation.as_ref().and_then(|process| process.path.as_ref()).is_some(),
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use test_that::prelude::*;

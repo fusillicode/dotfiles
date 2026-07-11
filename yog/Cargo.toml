@@ -59,6 +59,7 @@ bytes = { version = "1.11" }
 chrono = { version = "0.4", default-features = false, features = ["clock", "serde"] }
 compact_str = { version = "0.9", features = ["rkyv", "serde"] }
 convert_case = { version = "0.11" }
+criterion = { version = "0.7", default-features = false, features = ["cargo_bench_support"] }
 fake = { version = "5.1", features = ["derive"] }
 git2 = { version = "0.21", default-features = false }
 kanal = { version = "0.1.1", default-features = false }

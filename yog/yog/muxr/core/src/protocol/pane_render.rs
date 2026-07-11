@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use compact_str::CompactString;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
@@ -12,9 +14,18 @@ pub enum RenderUpdate {
     Diff(RenderDiff),
 }
 
+#[derive(rkyv::Archive, Clone, Copy, Debug, Eq, PartialEq, rkyv::Serialize)]
+pub(super) enum RenderHyperlinkPresence {
+    Absent,
+    Present,
+}
+
 #[derive(rkyv::Archive, Clone, Debug, Eq, PartialEq, Serialize, rkyv::Serialize)]
 pub struct RenderBaseline {
     cursor: RenderCursor,
+    // Constructors and validated deserialization recompute this routing state so encoding never rescans full frames.
+    #[serde(skip)]
+    hyperlink_presence: RenderHyperlinkPresence,
     rows: Vec<RenderRowSpan>,
     seq: u64,
     size: TerminalSize,
@@ -35,6 +46,7 @@ impl RenderBaseline {
     ) -> rootcause::Result<Self> {
         let baseline = Self {
             cursor,
+            hyperlink_presence: Self::rows_hyperlink_presence(&rows),
             rows,
             seq,
             size,
@@ -56,6 +68,11 @@ impl RenderBaseline {
     #[must_use]
     pub fn rows(&self) -> &[RenderRowSpan] {
         &self.rows
+    }
+
+    #[must_use]
+    pub(super) const fn hyperlink_presence(&self) -> RenderHyperlinkPresence {
+        self.hyperlink_presence
     }
 
     #[must_use]
@@ -96,6 +113,18 @@ impl RenderBaseline {
 
         Ok(())
     }
+
+    fn rows_hyperlink_presence(rows: &[RenderRowSpan]) -> RenderHyperlinkPresence {
+        if rows
+            .iter()
+            .flat_map(RenderRowSpan::cells)
+            .any(|cell| cell.hyperlink().is_some())
+        {
+            RenderHyperlinkPresence::Present
+        } else {
+            RenderHyperlinkPresence::Absent
+        }
+    }
 }
 
 impl<D> rkyv::Deserialize<RenderBaseline, D> for ArchivedRenderBaseline
@@ -116,6 +145,9 @@ where
 pub struct RenderDiff {
     base_seq: u64,
     cursor: RenderCursor,
+    // Keep link-free updates on the direct codec without adding a hot-path cell scan.
+    #[serde(skip)]
+    hyperlink_presence: RenderHyperlinkPresence,
     rows: Vec<RenderRowSpan>,
     seq: u64,
     size: TerminalSize,
@@ -138,6 +170,7 @@ impl RenderDiff {
         let diff = Self {
             base_seq,
             cursor,
+            hyperlink_presence: RenderBaseline::rows_hyperlink_presence(&rows),
             rows,
             seq,
             size,
@@ -164,6 +197,11 @@ impl RenderDiff {
     #[must_use]
     pub fn rows(&self) -> &[RenderRowSpan] {
         &self.rows
+    }
+
+    #[must_use]
+    pub(super) const fn hyperlink_presence(&self) -> RenderHyperlinkPresence {
+        self.hyperlink_presence
     }
 
     #[must_use]
@@ -416,10 +454,14 @@ fn invalid_wide_cell_sequence(reason: &'static str, index: usize) -> rootcause::
         .attach(format!("cell_index={index}"))
 }
 
-#[derive(rkyv::Archive, Clone, Debug, Eq, PartialEq, Serialize, rkyv::Serialize)]
-#[serde(transparent)]
+#[derive(rkyv::Archive, Debug, rkyv::Deserialize, Eq, Hash, PartialEq, rkyv::Serialize)]
+struct SharedRenderUri(String);
+
+#[derive(rkyv::Archive, Clone, Debug, Eq, PartialEq, rkyv::Serialize)]
 pub struct RenderHyperlink {
-    uri: String,
+    // Domain clones share the resolved URI; direct rkyv archives still encode it as an ordinary owned value.
+    #[rkyv(with = rkyv::with::Unshare)]
+    uri: Arc<SharedRenderUri>,
 }
 
 impl RenderHyperlink {
@@ -430,6 +472,13 @@ impl RenderHyperlink {
     /// - The URI contains terminal control characters.
     pub fn new(uri: impl Into<String>) -> rootcause::Result<Self> {
         let uri = uri.into();
+        Self::validate_uri(&uri)?;
+        Ok(Self {
+            uri: Arc::new(SharedRenderUri(uri)),
+        })
+    }
+
+    fn validate_uri(uri: &str) -> rootcause::Result<()> {
         if uri.is_empty() {
             return Err(report!("invalid muxr render hyperlink").attach("reason=uri must be nonempty"));
         }
@@ -437,12 +486,26 @@ impl RenderHyperlink {
             return Err(report!("invalid muxr render hyperlink").attach("reason=uri must not contain control chars"));
         }
 
-        Ok(Self { uri })
+        Ok(())
     }
 
     #[must_use]
     pub fn uri(&self) -> &str {
-        &self.uri
+        &self.uri.0
+    }
+
+    #[cfg(test)]
+    pub(crate) fn shares_uri_with(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.uri, &other.uri)
+    }
+}
+
+impl Serialize for RenderHyperlink {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(self.uri())
     }
 }
 
@@ -462,8 +525,8 @@ where
     D::Error: rkyv::rancor::Source,
 {
     fn deserialize(&self, deserializer: &mut D) -> Result<RenderHyperlink, D::Error> {
-        let uri = rkyv::Deserialize::<String, D>::deserialize(&self.uri, deserializer)?;
-        RenderHyperlink::new(uri).map_err(super::rkyv_deserialize_error::<D::Error>)
+        let uri = rkyv::Deserialize::<SharedRenderUri, D>::deserialize(&self.uri, deserializer)?;
+        RenderHyperlink::new(uri.0).map_err(super::rkyv_deserialize_error::<D::Error>)
     }
 }
 
@@ -692,7 +755,9 @@ pub mod test_helpers {
     use super::*;
 
     pub fn raw_render_hyperlink(uri: impl Into<String>) -> RenderHyperlink {
-        RenderHyperlink { uri: uri.into() }
+        RenderHyperlink {
+            uri: Arc::new(SharedRenderUri(uri.into())),
+        }
     }
 
     pub fn raw_render_cell(
@@ -709,7 +774,7 @@ pub mod test_helpers {
         }
     }
 
-    pub const fn raw_render_diff(
+    pub fn raw_render_diff(
         base_seq: u64,
         seq: u64,
         size: TerminalSize,
@@ -719,6 +784,7 @@ pub mod test_helpers {
         RenderDiff {
             base_seq,
             cursor,
+            hyperlink_presence: RenderBaseline::rows_hyperlink_presence(&rows),
             rows,
             seq,
             size,
