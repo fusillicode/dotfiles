@@ -1,5 +1,9 @@
+use std::collections::HashMap;
+use std::collections::HashSet;
+
 use bytes::Bytes;
 use bytes::BytesMut;
+use compact_str::CompactString;
 use rkyv::util::AlignedVec;
 use rootcause::report;
 use serde::Serialize;
@@ -13,12 +17,38 @@ use super::LayoutSnapshot;
 use super::PaneRegionsSnapshot;
 use super::PaneScrollDirection;
 use super::PaneScrollLineMove;
+use super::RenderBaseline;
+use super::RenderCell;
+use super::RenderCellWidth;
+use super::RenderCursor;
+use super::RenderDiff;
+use super::RenderHyperlink;
+use super::RenderRowSpan;
+use super::RenderStyle;
 use super::RenderUpdate;
 use super::TabId;
 use super::TerminalSize;
+use super::pane_render::RenderHyperlinkPresence;
 use crate::SessionName;
 
-const PROTOCOL_FRAME_MAGIC: &[u8; 9] = b"MUXR-RKYV";
+#[repr(u8)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ProtocolFrameKind {
+    Domain = 0,
+    HyperlinkTableRender = 1,
+}
+
+impl TryFrom<u8> for ProtocolFrameKind {
+    type Error = rootcause::Report;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(Self::Domain),
+            1 => Ok(Self::HyperlinkTableRender),
+            _ => Err(report!("invalid muxr protocol frame kind").attach(format!("kind={value}"))),
+        }
+    }
+}
 
 /// Owned muxr protocol frame bytes.
 ///
@@ -37,6 +67,13 @@ impl ProtocolFrame {
     pub fn into_bytes(self) -> Bytes {
         self.0
     }
+
+    fn from_payload(kind: ProtocolFrameKind, payload: &[u8]) -> Self {
+        let mut frame = BytesMut::with_capacity(1_usize.saturating_add(payload.len()));
+        frame.extend_from_slice(&[kind as u8]);
+        frame.extend_from_slice(payload);
+        Self(frame.freeze())
+    }
 }
 
 impl AsRef<[u8]> for ProtocolFrame {
@@ -45,13 +82,10 @@ impl AsRef<[u8]> for ProtocolFrame {
     }
 }
 
-/// Frames raw rkyv payload bytes by prepending muxr's protocol magic.
+/// Frames raw rkyv payload bytes by prepending muxr's frame kind.
 impl From<&[u8]> for ProtocolFrame {
     fn from(payload: &[u8]) -> Self {
-        let mut frame = BytesMut::with_capacity(PROTOCOL_FRAME_MAGIC.len().saturating_add(payload.len()));
-        frame.extend_from_slice(PROTOCOL_FRAME_MAGIC);
-        frame.extend_from_slice(payload);
-        Self(frame.freeze())
+        Self::from_payload(ProtocolFrameKind::Domain, payload)
     }
 }
 
@@ -69,6 +103,18 @@ impl TryFrom<&ServerEvent> for ProtocolFrame {
     type Error = rootcause::Report;
 
     fn try_from(event: &ServerEvent) -> Result<Self, Self::Error> {
+        if let ServerEvent::Render(update) = event
+            && self::render_update_hyperlink_presence(update) == RenderHyperlinkPresence::Present
+        {
+            let wire_update = HyperlinkTableRenderUpdate::from_domain(update)?;
+            let payload = rkyv::to_bytes::<rkyv::rancor::Error>(&wire_update)
+                .map_err(|error| report!("failed to serialize muxr protocol frame").attach(format!("{error:?}")))?;
+            return Ok(Self::from_payload(
+                ProtocolFrameKind::HyperlinkTableRender,
+                payload.as_slice(),
+            ));
+        }
+
         let payload = rkyv::to_bytes::<rkyv::rancor::Error>(event)
             .map_err(|error| report!("failed to serialize muxr protocol frame").attach(format!("{error:?}")))?;
         Ok(Self::from(payload.as_slice()))
@@ -150,6 +196,252 @@ pub enum ServerEvent {
     Detached,
 }
 
+#[derive(rkyv::Archive, Debug, rkyv::Deserialize, rkyv::Serialize)]
+struct HyperlinkTableRenderUpdate {
+    frame: HyperlinkTableRenderFrame,
+    hyperlinks: Vec<String>,
+}
+
+impl HyperlinkTableRenderUpdate {
+    fn from_domain(update: &RenderUpdate) -> rootcause::Result<Self> {
+        let mut table = HyperlinkTableBuilder::default();
+        let frame = HyperlinkTableRenderFrame::from_domain(update, &mut table)?;
+        Ok(Self {
+            frame,
+            hyperlinks: table.into_uris(),
+        })
+    }
+
+    fn into_domain(self) -> rootcause::Result<RenderUpdate> {
+        let mut hyperlinks = ResolvedHyperlinks::new(self.hyperlinks)?;
+        let update = self.frame.into_domain(&mut hyperlinks)?;
+        hyperlinks.validate_all_used()?;
+        Ok(update)
+    }
+}
+
+#[derive(rkyv::Archive, Debug, rkyv::Deserialize, rkyv::Serialize)]
+enum HyperlinkTableRenderFrame {
+    Baseline {
+        cursor: RenderCursor,
+        rows: Vec<HyperlinkTableRenderRowSpan>,
+        seq: u64,
+        size: TerminalSize,
+    },
+    Diff {
+        base_seq: u64,
+        cursor: RenderCursor,
+        rows: Vec<HyperlinkTableRenderRowSpan>,
+        seq: u64,
+        size: TerminalSize,
+    },
+}
+
+impl HyperlinkTableRenderFrame {
+    fn from_domain(update: &RenderUpdate, table: &mut HyperlinkTableBuilder) -> rootcause::Result<Self> {
+        Ok(match update {
+            RenderUpdate::Baseline(baseline) => Self::Baseline {
+                cursor: baseline.cursor().clone(),
+                rows: HyperlinkTableRenderRowSpan::from_domain_rows(baseline.rows(), table)?,
+                seq: baseline.seq(),
+                size: baseline.size().clone(),
+            },
+            RenderUpdate::Diff(diff) => Self::Diff {
+                base_seq: diff.base_seq(),
+                cursor: diff.cursor().clone(),
+                rows: HyperlinkTableRenderRowSpan::from_domain_rows(diff.rows(), table)?,
+                seq: diff.seq(),
+                size: diff.size().clone(),
+            },
+        })
+    }
+
+    fn into_domain(self, hyperlinks: &mut ResolvedHyperlinks) -> rootcause::Result<RenderUpdate> {
+        match self {
+            Self::Baseline {
+                cursor,
+                rows,
+                seq,
+                size,
+            } => Ok(RenderUpdate::Baseline(RenderBaseline::new(
+                seq,
+                size,
+                cursor,
+                HyperlinkTableRenderRowSpan::into_domain_rows(rows, hyperlinks)?,
+            )?)),
+            Self::Diff {
+                base_seq,
+                cursor,
+                rows,
+                seq,
+                size,
+            } => Ok(RenderUpdate::Diff(RenderDiff::new(
+                base_seq,
+                seq,
+                size,
+                cursor,
+                HyperlinkTableRenderRowSpan::into_domain_rows(rows, hyperlinks)?,
+            )?)),
+        }
+    }
+}
+
+#[derive(rkyv::Archive, Debug, rkyv::Deserialize, rkyv::Serialize)]
+struct HyperlinkTableRenderRowSpan {
+    cells: Vec<HyperlinkTableRenderCell>,
+    col: u16,
+    row: u16,
+}
+
+impl HyperlinkTableRenderRowSpan {
+    fn from_domain_rows(rows: &[RenderRowSpan], table: &mut HyperlinkTableBuilder) -> rootcause::Result<Vec<Self>> {
+        rows.iter().map(|row| Self::from_domain(row, table)).collect()
+    }
+
+    fn from_domain(row: &RenderRowSpan, table: &mut HyperlinkTableBuilder) -> rootcause::Result<Self> {
+        Ok(Self {
+            cells: row
+                .cells()
+                .iter()
+                .map(|cell| HyperlinkTableRenderCell::from_domain(cell, table))
+                .collect::<rootcause::Result<Vec<_>>>()?,
+            col: row.col(),
+            row: row.row(),
+        })
+    }
+
+    fn into_domain_rows(rows: Vec<Self>, hyperlinks: &mut ResolvedHyperlinks) -> rootcause::Result<Vec<RenderRowSpan>> {
+        rows.into_iter().map(|row| row.into_domain(hyperlinks)).collect()
+    }
+
+    fn into_domain(self, hyperlinks: &mut ResolvedHyperlinks) -> rootcause::Result<RenderRowSpan> {
+        RenderRowSpan::new(
+            self.row,
+            self.col,
+            self.cells
+                .into_iter()
+                .map(|cell| cell.into_domain(hyperlinks))
+                .collect::<rootcause::Result<Vec<_>>>()?,
+        )
+    }
+}
+
+#[derive(rkyv::Archive, Debug, rkyv::Deserialize, rkyv::Serialize)]
+struct HyperlinkTableRenderCell {
+    hyperlink_id: Option<u32>,
+    style: RenderStyle,
+    text: CompactString,
+    width: RenderCellWidth,
+}
+
+impl HyperlinkTableRenderCell {
+    fn from_domain(cell: &RenderCell, table: &mut HyperlinkTableBuilder) -> rootcause::Result<Self> {
+        Ok(Self {
+            hyperlink_id: cell.hyperlink().map(|hyperlink| table.id_for(hyperlink)).transpose()?,
+            style: cell.style(),
+            text: CompactString::new(cell.text()),
+            width: cell.width(),
+        })
+    }
+
+    fn into_domain(self, hyperlinks: &mut ResolvedHyperlinks) -> rootcause::Result<RenderCell> {
+        let mut cell = match self.width {
+            RenderCellWidth::Narrow => RenderCell::narrow(&self.text, self.style),
+            RenderCellWidth::Wide => RenderCell::wide(&self.text, self.style),
+            RenderCellWidth::WideContinuation if self.text.is_empty() => RenderCell::wide_continuation(self.style),
+            RenderCellWidth::WideContinuation => {
+                return Err(report!("invalid muxr hyperlink-table render cell")
+                    .attach("reason=wide continuation must not carry text"));
+            }
+        };
+        if let Some(id) = self.hyperlink_id {
+            cell = cell.with_hyperlink(hyperlinks.resolve(id)?);
+        }
+        Ok(cell)
+    }
+}
+
+#[derive(Default)]
+struct HyperlinkTableBuilder {
+    by_uri: HashMap<String, u32>,
+    uris: Vec<String>,
+}
+
+impl HyperlinkTableBuilder {
+    fn id_for(&mut self, hyperlink: &RenderHyperlink) -> rootcause::Result<u32> {
+        if let Some(id) = self.by_uri.get(hyperlink.uri()) {
+            return Ok(*id);
+        }
+        let id = u32::try_from(self.uris.len())?
+            .checked_add(1)
+            .ok_or_else(|| report!("muxr hyperlink table id overflowed"))?;
+        let uri = hyperlink.uri().to_owned();
+        self.by_uri.insert(uri.clone(), id);
+        self.uris.push(uri);
+        Ok(id)
+    }
+
+    fn into_uris(self) -> Vec<String> {
+        self.uris
+    }
+}
+
+struct ResolvedHyperlinks {
+    hyperlinks: Vec<RenderHyperlink>,
+    references: Vec<HyperlinkReference>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum HyperlinkReference {
+    Unreferenced,
+    Referenced,
+}
+
+impl ResolvedHyperlinks {
+    fn new(uris: Vec<String>) -> rootcause::Result<Self> {
+        let mut seen = HashSet::with_capacity(uris.len());
+        let mut hyperlinks = Vec::with_capacity(uris.len());
+        for uri in uris {
+            if !seen.insert(uri.clone()) {
+                return Err(report!("invalid muxr hyperlink table").attach("reason=duplicate uri"));
+            }
+            hyperlinks.push(RenderHyperlink::new(uri)?);
+        }
+        let references = vec![HyperlinkReference::Unreferenced; hyperlinks.len()];
+        Ok(Self { hyperlinks, references })
+    }
+
+    fn resolve(&mut self, id: u32) -> rootcause::Result<RenderHyperlink> {
+        let Some(index) = id.checked_sub(1).and_then(|index| usize::try_from(index).ok()) else {
+            return Err(report!("invalid muxr hyperlink table id")
+                .attach("reason=id must be nonzero")
+                .attach(format!("id={id}")));
+        };
+        let Some(hyperlink) = self.hyperlinks.get(index) else {
+            return Err(report!("invalid muxr hyperlink table id")
+                .attach("reason=id is outside hyperlink table")
+                .attach(format!("id={id}"))
+                .attach(format!("table_len={}", self.hyperlinks.len())));
+        };
+        let Some(reference) = self.references.get_mut(index) else {
+            return Err(report!("invalid muxr hyperlink table bookkeeping"));
+        };
+        *reference = HyperlinkReference::Referenced;
+        Ok(hyperlink.clone())
+    }
+
+    fn validate_all_used(&self) -> rootcause::Result<()> {
+        if self
+            .references
+            .iter()
+            .all(|reference| *reference == HyperlinkReference::Referenced)
+        {
+            return Ok(());
+        }
+        Err(report!("invalid muxr hyperlink table").attach("reason=unused uri"))
+    }
+}
+
 /// Encode a client request as a muxr protocol frame containing a rkyv payload.
 ///
 /// # Errors
@@ -164,7 +456,7 @@ pub fn encode_client_request(request: &ClientRequest) -> rootcause::Result<Proto
 /// - The frame is empty or not a valid client request frame.
 /// - The decoded request cannot be deserialized into valid domain values.
 pub fn decode_client_request(line: &[u8]) -> rootcause::Result<ClientRequest> {
-    let payload = self::decode_protocol_payload(line)?;
+    let payload = self::decode_domain_payload(line)?;
     let archived = rkyv::access::<rkyv::Archived<ClientRequest>, rkyv::rancor::Error>(&payload)
         .map_err(|error| report!("failed to validate muxr protocol frame").attach(format!("{error:?}")))?;
     rkyv::deserialize::<ClientRequest, rkyv::rancor::Error>(archived)
@@ -185,29 +477,59 @@ pub fn encode_server_event(event: &ServerEvent) -> rootcause::Result<ProtocolFra
 /// - The frame is empty or not a valid server event frame.
 /// - The decoded event cannot be deserialized into valid domain values.
 pub fn decode_server_event(line: &[u8]) -> rootcause::Result<ServerEvent> {
-    let payload = self::decode_protocol_payload(line)?;
-    let archived = rkyv::access::<rkyv::Archived<ServerEvent>, rkyv::rancor::Error>(&payload)
-        .map_err(|error| report!("failed to validate muxr protocol frame").attach(format!("{error:?}")))?;
-    rkyv::deserialize::<ServerEvent, rkyv::rancor::Error>(archived)
-        .map_err(|error| report!("failed to deserialize muxr protocol frame").attach(format!("{error:?}")))
+    let (kind, payload) = self::protocol_payload(line)?;
+    let payload = self::align_protocol_payload(payload);
+    match kind {
+        ProtocolFrameKind::Domain => {
+            let archived = rkyv::access::<rkyv::Archived<ServerEvent>, rkyv::rancor::Error>(&payload)
+                .map_err(|error| report!("failed to validate muxr protocol frame").attach(format!("{error:?}")))?;
+            rkyv::deserialize::<ServerEvent, rkyv::rancor::Error>(archived)
+                .map_err(|error| report!("failed to deserialize muxr protocol frame").attach(format!("{error:?}")))
+        }
+        ProtocolFrameKind::HyperlinkTableRender => {
+            let archived = rkyv::access::<rkyv::Archived<HyperlinkTableRenderUpdate>, rkyv::rancor::Error>(&payload)
+                .map_err(|error| report!("failed to validate muxr protocol frame").attach(format!("{error:?}")))?;
+            let update = rkyv::deserialize::<HyperlinkTableRenderUpdate, rkyv::rancor::Error>(archived)
+                .map_err(|error| report!("failed to deserialize muxr protocol frame").attach(format!("{error:?}")))?
+                .into_domain()?;
+            Ok(ServerEvent::Render(update))
+        }
+    }
 }
 
-fn decode_protocol_payload(frame: &[u8]) -> rootcause::Result<AlignedVec> {
-    if frame.is_empty() {
-        return Err(report!("empty muxr protocol frame"));
+fn decode_domain_payload(frame: &[u8]) -> rootcause::Result<AlignedVec> {
+    let (kind, payload) = self::protocol_payload(frame)?;
+    if kind != ProtocolFrameKind::Domain {
+        return Err(report!("invalid muxr protocol frame kind")
+            .attach("expected=domain")
+            .attach(format!("actual={kind:?}")));
     }
-    let Some(payload) = frame.strip_prefix(PROTOCOL_FRAME_MAGIC) else {
-        return Err(report!("invalid muxr protocol frame")
-            .attach("reason=missing rkyv frame magic")
-            .attach(format!("magic={PROTOCOL_FRAME_MAGIC:?}")));
+    Ok(self::align_protocol_payload(payload))
+}
+
+fn protocol_payload(frame: &[u8]) -> rootcause::Result<(ProtocolFrameKind, &[u8])> {
+    let Some((&kind, payload)) = frame.split_first() else {
+        return Err(report!("empty muxr protocol frame"));
     };
+    let kind = ProtocolFrameKind::try_from(kind)?;
     if payload.is_empty() {
         return Err(report!("empty muxr protocol payload"));
     }
+    Ok((kind, payload))
+}
+
+fn align_protocol_payload(payload: &[u8]) -> AlignedVec {
     // Socket buffers have arbitrary byte alignment; rkyv checked access requires aligned archived bytes.
     let mut aligned = AlignedVec::with_capacity(payload.len());
     aligned.extend_from_slice(payload);
-    Ok(aligned)
+    aligned
+}
+
+const fn render_update_hyperlink_presence(update: &RenderUpdate) -> RenderHyperlinkPresence {
+    match update {
+        RenderUpdate::Baseline(baseline) => baseline.hyperlink_presence(),
+        RenderUpdate::Diff(diff) => diff.hyperlink_presence(),
+    }
 }
 
 #[cfg(test)]
@@ -240,9 +562,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_protocol_frame_from_when_payload_is_raw_frames_with_magic() {
+    fn test_protocol_frame_from_when_payload_is_raw_prepends_domain_kind() {
         let frame = ProtocolFrame::from(b"payload".as_slice());
-        let expected = b"MUXR-RKYVpayload";
+        let expected = b"\0payload";
 
         assert_that!(frame.as_bytes(), eq(expected));
         assert_that!(AsRef::<[u8]>::as_ref(&frame), eq(expected));
@@ -354,10 +676,99 @@ mod tests {
     }
 
     #[test]
-    fn test_client_request_codec_when_frame_magic_is_missing_returns_error() {
+    fn test_client_request_codec_when_frame_kind_is_invalid_returns_error() {
         let encoded = b"not-muxr-rkyv";
 
         assert_that!(decode_client_request(encoded), err(anything()));
+    }
+
+    #[test]
+    fn test_protocol_codec_when_frame_kind_is_unknown_returns_error() -> rootcause::Result<()> {
+        let encoded = [u8::MAX, b'x'];
+
+        let Err(error) = decode_server_event(&encoded) else {
+            return Err(report!("expected unknown frame kind rejection"));
+        };
+
+        assert_that!(
+            format!("{error:?}"),
+            contains_substring("invalid muxr protocol frame kind")
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_hyperlink_table_render_when_links_repeat_encodes_deterministically_and_shares_decoded_uri()
+    -> rootcause::Result<()> {
+        let event = ServerEvent::Render(RenderUpdate::Baseline(linked_render_baseline()?));
+        let first = encode_server_event(&event)?;
+        let second = encode_server_event(&event)?;
+
+        assert_that!(second.as_bytes(), eq(first.as_bytes()));
+        let ServerEvent::Render(RenderUpdate::Baseline(decoded)) = decode_server_event(first.as_bytes())? else {
+            return Err(report!("expected decoded render baseline"));
+        };
+        let row = decoded
+            .rows()
+            .first()
+            .ok_or_else(|| report!("expected decoded render row"))?;
+        let first_link = row
+            .cells()
+            .first()
+            .and_then(RenderCell::hyperlink)
+            .ok_or_else(|| report!("expected first decoded hyperlink"))?;
+        let second_link = row
+            .cells()
+            .get(1)
+            .and_then(RenderCell::hyperlink)
+            .ok_or_else(|| report!("expected second decoded hyperlink"))?;
+        assert_that!(first_link.uri(), eq("https://example.com"));
+        assert_that!(first_link.shares_uri_with(second_link), eq(true));
+        Ok(())
+    }
+
+    #[rstest]
+    #[case::zero_id(vec!["https://example.com"], vec![0, 0])]
+    #[case::out_of_range_id(vec!["https://example.com"], vec![2, 2])]
+    #[case::duplicate_uri(vec!["https://example.com", "https://example.com"], vec![1, 2])]
+    #[case::unused_uri(vec!["https://example.com", "https://unused.example.com"], vec![1, 1])]
+    fn test_hyperlink_table_render_when_table_is_noncanonical_returns_error(
+        #[case] hyperlinks: Vec<&str>,
+        #[case] hyperlink_ids: Vec<u32>,
+    ) -> rootcause::Result<()> {
+        let wire_update = self::raw_hyperlink_table_render_update(hyperlinks, hyperlink_ids)?;
+        let encoded = self::encode_hyperlink_table_render_update(&wire_update)?;
+
+        assert_that!(decode_server_event(encoded.as_bytes()), err(anything()));
+        Ok(())
+    }
+
+    #[test]
+    fn test_hyperlink_table_render_when_url_frame_is_encoded_is_smaller_than_direct_domain_encoding()
+    -> rootcause::Result<()> {
+        let uri = "https://example.com/muxr/performance/reference";
+        let cells = (0..320)
+            .map(|_| self::render_cell("x").with_hyperlink_uri(uri))
+            .collect::<rootcause::Result<Vec<_>>>()?;
+        let event = ServerEvent::Render(RenderUpdate::Baseline(RenderBaseline::new(
+            1,
+            terminal_size(320, 1)?,
+            RenderCursor {
+                row: 0,
+                col: 0,
+                shape: RenderCursorShape::Default,
+                visibility: RenderCursorVisibility::Visible,
+            },
+            vec![RenderRowSpan::new(0, 0, cells)?],
+        )?));
+        let direct_payload = rkyv::to_bytes::<rkyv::rancor::Error>(&event)
+            .map_err(|error| report!("failed to serialize direct comparison frame").attach(format!("{error:?}")))?;
+
+        let table_frame = encode_server_event(&event)?;
+        let direct_size = 1_usize.saturating_add(direct_payload.len());
+
+        assert_that!(table_frame.as_bytes().len(), lt(direct_size));
+        Ok(())
     }
 
     fn client_attach_request() -> rootcause::Result<AttachRequest> {
@@ -553,5 +964,43 @@ mod tests {
 
     fn render_cell(text: &str) -> RenderCell {
         RenderCell::narrow(text, RenderStyle::default())
+    }
+
+    fn raw_hyperlink_table_render_update(
+        hyperlinks: Vec<&str>,
+        hyperlink_ids: Vec<u32>,
+    ) -> rootcause::Result<HyperlinkTableRenderUpdate> {
+        let cells = hyperlink_ids
+            .into_iter()
+            .map(|hyperlink_id| HyperlinkTableRenderCell {
+                hyperlink_id: Some(hyperlink_id),
+                style: RenderStyle::default(),
+                text: CompactString::new("x"),
+                width: RenderCellWidth::Narrow,
+            })
+            .collect::<Vec<_>>();
+        Ok(HyperlinkTableRenderUpdate {
+            frame: HyperlinkTableRenderFrame::Baseline {
+                cursor: RenderCursor {
+                    row: 0,
+                    col: 0,
+                    shape: RenderCursorShape::Default,
+                    visibility: RenderCursorVisibility::Visible,
+                },
+                rows: vec![HyperlinkTableRenderRowSpan { cells, col: 0, row: 0 }],
+                seq: 1,
+                size: terminal_size(2, 1)?,
+            },
+            hyperlinks: hyperlinks.into_iter().map(str::to_owned).collect(),
+        })
+    }
+
+    fn encode_hyperlink_table_render_update(update: &HyperlinkTableRenderUpdate) -> rootcause::Result<ProtocolFrame> {
+        let payload = rkyv::to_bytes::<rkyv::rancor::Error>(update)
+            .map_err(|error| report!("failed to serialize raw hyperlink-table frame").attach(format!("{error:?}")))?;
+        Ok(ProtocolFrame::from_payload(
+            ProtocolFrameKind::HyperlinkTableRender,
+            payload.as_slice(),
+        ))
     }
 }

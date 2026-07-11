@@ -1,5 +1,9 @@
 pub use server::serve_session;
 
+#[cfg(feature = "benchmarking")]
+#[doc(hidden)]
+pub mod benchmark_support;
+
 mod client;
 mod cmd_label;
 mod event_writer;
