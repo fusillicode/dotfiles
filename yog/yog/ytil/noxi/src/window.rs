@@ -86,8 +86,7 @@ pub fn find_focusable_float(allowed_filetypes: &[&str]) -> Option<Window> {
 
         let opts = OptionOptsBuilder::default().buf(buf).build();
         let has_allowed_ft = nvim_oxi::api::get_option_value::<String>("filetype", &opts)
-            .ok()
-            .is_some_and(|ft| allowed_filetypes.contains(&ft.as_str()));
+            .is_ok_and(|ft| allowed_filetypes.contains(&ft.as_str()));
 
         if has_allowed_ft {
             return Some(win);
