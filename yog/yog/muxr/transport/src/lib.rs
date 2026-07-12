@@ -32,10 +32,6 @@ use tokio::io::AsyncWriteExt;
 use tokio_util::codec::FramedRead;
 use tokio_util::codec::LengthDelimitedCodec;
 
-#[cfg(feature = "benchmarking")]
-#[doc(hidden)]
-pub mod benchmark_support;
-
 const FRAME_HEADER_LENGTH: usize = size_of::<u32>();
 const MAX_FRAME_LENGTH: usize = 8 * 1024 * 1024;
 

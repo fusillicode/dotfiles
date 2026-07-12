@@ -10,9 +10,6 @@ description = "muxr terminal multiplexer client."
 keywords = ["muxr", "terminal", "multiplexer", "client", "cli"]
 categories = ["command-line-utilities", "development-tools"]
 
-[features]
-benchmarking = ["muxr_transport/benchmarking"]
-
 [dependencies]
 chrono = { workspace = true }
 crossterm = { version = "0.29" }
@@ -24,15 +21,9 @@ tokio = { workspace = true }
 ytil_sys = { workspace = true }
 
 [dev-dependencies]
-criterion = { workspace = true }
 rstest = { workspace = true }
 tempfile = { workspace = true }
 test-that = { workspace = true }
-
-[[bench]]
-name = "muxr_performance"
-harness = false
-required-features = ["benchmarking"]
 
 [lints]
 workspace = true

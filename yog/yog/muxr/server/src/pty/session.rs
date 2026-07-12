@@ -171,30 +171,6 @@ pub struct PtyRenderSnapshot {
 }
 
 impl PtyRenderSnapshot {
-    #[cfg(feature = "benchmarking")]
-    pub(crate) fn benchmark(terminal: TerminalSnapshot, visible_top_row: u64) -> Self {
-        Self {
-            mouse_mode: muxr_core::PaneMouseMode::None,
-            visible_row_wraps: vec![muxr_core::RowWrap::EndsBeforeSoftWrap; usize::from(terminal.size().rows())],
-            visible_top_row,
-            terminal,
-        }
-    }
-
-    #[cfg(feature = "benchmarking")]
-    pub(crate) fn benchmark_capture(
-        terminal: &crate::terminal::TerminalState,
-        visible_top_row: Option<u64>,
-    ) -> rootcause::Result<Self> {
-        crate::benchmark_support::record_pane_snapshot();
-        Ok(Self {
-            mouse_mode: terminal.application_mode().pane_mouse_mode(),
-            visible_top_row: visible_top_row.unwrap_or(terminal.visible_top_row()?),
-            visible_row_wraps: terminal.visible_row_wraps(),
-            terminal: terminal.snapshot()?,
-        })
-    }
-
     pub const fn mouse_mode(&self) -> muxr_core::PaneMouseMode {
         self.mouse_mode
     }

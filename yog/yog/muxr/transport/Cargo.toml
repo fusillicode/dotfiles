@@ -10,9 +10,6 @@ description = "Framed local socket transport for muxr."
 keywords = ["muxr", "terminal", "multiplexer", "transport", "ipc"]
 categories = ["command-line-utilities", "development-tools"]
 
-[features]
-benchmarking = []
-
 [dependencies]
 bytes = { workspace = true }
 futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
