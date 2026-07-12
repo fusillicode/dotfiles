@@ -180,8 +180,6 @@ pub fn paste_borders_in_rows(
         if !include_row(row) {
             continue;
         }
-        #[cfg(feature = "benchmarking")]
-        crate::benchmark_support::record_border_cell();
         let target_row = rows
             .get_mut(usize::from(row))
             .ok_or_else(|| report!("muxr pane border row outside composite frame"))?;

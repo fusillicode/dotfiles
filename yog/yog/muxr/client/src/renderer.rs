@@ -92,7 +92,7 @@ impl ClientRenderer {
         )
     }
 
-    #[cfg(any(test, feature = "benchmarking"))]
+    #[cfg(test)]
     pub fn with_synchronized_output(
         layout: LayoutSnapshot,
         pane_regions: PaneRegionsSnapshot,
@@ -291,16 +291,6 @@ impl ClientRenderer {
         if self.render_transaction.capacity() > MAX_RETAINED_RENDER_TRANSACTION_BYTES {
             self.render_transaction = Vec::new();
         }
-    }
-
-    #[cfg(feature = "benchmarking")]
-    pub fn discard_render_transaction_for_benchmark(&mut self) {
-        self.render_transaction = Vec::new();
-    }
-
-    #[cfg(feature = "benchmarking")]
-    pub const fn retained_render_transaction_bytes_for_benchmark(&self) -> usize {
-        self.render_transaction.capacity()
     }
 
     pub fn apply_selection_input(&mut self, stdout: &mut impl Write, input: SelectionInput) -> rootcause::Result<()> {

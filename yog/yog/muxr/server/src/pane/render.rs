@@ -25,8 +25,6 @@ use crate::pane::runtime::PaneRuntimes;
 use crate::pty::PtyRenderSnapshot;
 use crate::render_state::ClientRenderDmg;
 use crate::terminal::TerminalSnapshot;
-#[cfg(feature = "benchmarking")]
-use crate::terminal::TerminalState;
 
 struct CompositeFrame {
     active_pane: PaneId,
@@ -50,22 +48,6 @@ pub struct RenderComposer {
 pub enum RenderDiffReason {
     DirtyFrame,
     RegionChanged,
-}
-
-#[cfg(feature = "benchmarking")]
-pub struct BenchmarkRenderChange {
-    pub damage: ClientRenderDmg,
-    pub reason: RenderDiffReason,
-    pub visible_top_row: u64,
-}
-
-#[cfg(feature = "benchmarking")]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct BenchmarkPaneRegion {
-    mouse_mode: muxr_core::PaneMouseMode,
-    pane_id: PaneId,
-    visible_row_wraps: Vec<muxr_core::RowWrap>,
-    visible_top_row: u64,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -132,173 +114,6 @@ impl Default for RenderComposer {
 }
 
 impl RenderComposer {
-    #[cfg(feature = "benchmarking")]
-    pub(crate) fn benchmark_baseline(
-        &mut self,
-        pane_render: PaneRenderConfig,
-        pane_layout: PaneRenderLayout<'_>,
-        snapshots: &BTreeMap<PaneId, TerminalSnapshot>,
-        size: &TerminalSize,
-        attention_panes: &[PaneId],
-        visible_top_row: u64,
-    ) -> rootcause::Result<RenderUpdate> {
-        let snapshots = benchmark_pane_snapshots(snapshots, pane_layout.active_pane, visible_top_row);
-        self.render_frame_baseline(Self::frame_from_snapshots(
-            pane_render,
-            pane_layout.active_pane,
-            Arc::new(pane_layout.pane_layout.clone()),
-            snapshots,
-            size,
-            attention_panes,
-        )?)
-    }
-
-    #[cfg(feature = "benchmarking")]
-    pub(crate) fn benchmark_diff(
-        &mut self,
-        pane_render: PaneRenderConfig,
-        pane_layout: PaneRenderLayout<'_>,
-        snapshots: &BTreeMap<PaneId, TerminalSnapshot>,
-        size: &TerminalSize,
-        attention_panes: &[PaneId],
-        change: BenchmarkRenderChange,
-    ) -> rootcause::Result<Option<RenderUpdate>> {
-        let BenchmarkRenderChange {
-            damage,
-            reason: _,
-            visible_top_row,
-        } = change;
-        self.render_diff_with(pane_render, pane_layout, size, attention_panes, &damage, |pane_id| {
-            crate::benchmark_support::record_pane_snapshot();
-            snapshots
-                .get(&pane_id)
-                .cloned()
-                .map(|snapshot| crate::pty::PtyRenderSnapshot::benchmark(snapshot, visible_top_row))
-                .ok_or_else(|| report!("muxr composer benchmark is missing a damaged pane snapshot"))
-        })
-    }
-
-    #[cfg(feature = "benchmarking")]
-    pub(crate) fn benchmark_full_diff(
-        &mut self,
-        pane_render: PaneRenderConfig,
-        pane_layout: PaneRenderLayout<'_>,
-        snapshots: &BTreeMap<PaneId, TerminalSnapshot>,
-        size: &TerminalSize,
-        attention_panes: &[PaneId],
-        change: BenchmarkRenderChange,
-    ) -> rootcause::Result<Option<RenderUpdate>> {
-        let BenchmarkRenderChange {
-            damage: _damage,
-            reason,
-            visible_top_row,
-        } = change;
-        let snapshots = benchmark_pane_snapshots(snapshots, pane_layout.active_pane, visible_top_row);
-        let cached_layout = self.benchmark_pane_layout(pane_layout.pane_layout);
-        let frame = Self::frame_from_snapshots(
-            pane_render,
-            pane_layout.active_pane,
-            cached_layout,
-            snapshots,
-            size,
-            attention_panes,
-        )?;
-        self.render_frame_diff(frame, reason)
-    }
-
-    #[cfg(feature = "benchmarking")]
-    pub(crate) fn benchmark_end_to_end_diff(
-        &mut self,
-        pane_render: PaneRenderConfig,
-        pane_layout: PaneRenderLayout<'_>,
-        terminals: &BTreeMap<PaneId, TerminalState>,
-        size: &TerminalSize,
-        attention_panes: &[PaneId],
-        change: BenchmarkRenderChange,
-    ) -> rootcause::Result<Option<RenderUpdate>> {
-        let BenchmarkRenderChange {
-            damage,
-            reason: _,
-            visible_top_row,
-        } = change;
-        self.render_diff_with(pane_render, pane_layout, size, attention_panes, &damage, |pane_id| {
-            let terminal = terminals
-                .get(&pane_id)
-                .ok_or_else(|| report!("muxr end-to-end benchmark is missing a damaged terminal"))?;
-            PtyRenderSnapshot::benchmark_capture(terminal, Some(visible_top_row))
-        })
-    }
-
-    #[cfg(feature = "benchmarking")]
-    pub(crate) fn benchmark_end_to_end_full_diff(
-        &mut self,
-        pane_render: PaneRenderConfig,
-        pane_layout: PaneRenderLayout<'_>,
-        terminals: &BTreeMap<PaneId, TerminalState>,
-        size: &TerminalSize,
-        attention_panes: &[PaneId],
-        change: BenchmarkRenderChange,
-    ) -> rootcause::Result<Option<RenderUpdate>> {
-        let BenchmarkRenderChange {
-            damage: _damage,
-            reason,
-            visible_top_row,
-        } = change;
-        let snapshots = terminals
-            .iter()
-            .map(|(pane_id, terminal)| {
-                PtyRenderSnapshot::benchmark_capture(
-                    terminal,
-                    (*pane_id == pane_layout.active_pane).then_some(visible_top_row),
-                )
-                .map(|snapshot| (*pane_id, snapshot))
-            })
-            .collect::<rootcause::Result<BTreeMap<_, _>>>()?;
-        let cached_layout = self.benchmark_pane_layout(pane_layout.pane_layout);
-        let frame = Self::frame_from_snapshots(
-            pane_render,
-            pane_layout.active_pane,
-            cached_layout,
-            snapshots,
-            size,
-            attention_panes,
-        )?;
-        self.render_frame_diff(frame, reason)
-    }
-
-    #[cfg(feature = "benchmarking")]
-    pub(crate) fn benchmark_pane_regions(&self) -> rootcause::Result<Vec<BenchmarkPaneRegion>> {
-        let frame = self
-            .last_sent
-            .as_ref()
-            .ok_or_else(|| report!("muxr composer benchmark is missing its frame"))?;
-        frame
-            .pane_layout
-            .regions()
-            .iter()
-            .map(|region| {
-                frame
-                    .pane_snapshots
-                    .get(&region.id)
-                    .map(|snapshot| BenchmarkPaneRegion {
-                        mouse_mode: snapshot.mouse_mode(),
-                        pane_id: region.id,
-                        visible_row_wraps: snapshot.visible_row_wraps().to_vec(),
-                        visible_top_row: snapshot.visible_top_row(),
-                    })
-                    .ok_or_else(|| report!("muxr composer benchmark is missing pane-region metadata"))
-            })
-            .collect()
-    }
-
-    #[cfg(feature = "benchmarking")]
-    fn benchmark_pane_layout(&self, pane_layout: &PaneLayout) -> Arc<PaneLayout> {
-        self.last_sent
-            .as_ref()
-            .filter(|frame| frame.pane_layout.as_ref() == pane_layout)
-            .map_or_else(|| Arc::new(pane_layout.clone()), |frame| Arc::clone(&frame.pane_layout))
-    }
-
     pub fn render_baseline(
         &mut self,
         pane_render: PaneRenderConfig,
@@ -708,8 +523,6 @@ fn refresh_pane_rows_with(
         frame.pane_snapshots.insert(*pane_id, snapshot);
     }
     let mut previous_rows = Vec::with_capacity(affected_rows.len());
-    #[cfg(feature = "benchmarking")]
-    crate::benchmark_support::record_rows_recomposed(affected_rows.len());
     let blank = RenderCell::narrow(" ", RenderStyle::default());
     for row in affected_rows.iter() {
         let cells = frame
@@ -756,69 +569,10 @@ fn refresh_pane_rows_with(
         |row| previous.affected_rows.contains(row),
     )?;
     frame.cursor = composite_cursor(frame.active_pane, &frame.pane_layout, &frame.pane_snapshots)?;
-    #[cfg(test)]
-    verify_partial_frame(frame)?;
     Ok(previous)
 }
 
-#[cfg(feature = "benchmarking")]
-fn benchmark_pane_snapshots(
-    snapshots: &BTreeMap<PaneId, TerminalSnapshot>,
-    changed_pane: PaneId,
-    visible_top_row: u64,
-) -> BTreeMap<PaneId, PtyRenderSnapshot> {
-    snapshots
-        .iter()
-        .map(|(pane_id, snapshot)| {
-            crate::benchmark_support::record_pane_snapshot();
-            (
-                *pane_id,
-                PtyRenderSnapshot::benchmark(
-                    snapshot.clone(),
-                    if *pane_id == changed_pane { visible_top_row } else { 0 },
-                ),
-            )
-        })
-        .collect()
-}
-
-#[cfg(test)]
-fn verify_partial_frame(frame: &CompositeFrame) -> rootcause::Result<()> {
-    let oracle = RenderComposer::frame_from_snapshots(
-        frame.pane_render,
-        frame.active_pane,
-        Arc::clone(&frame.pane_layout),
-        frame.pane_snapshots.clone(),
-        &frame.size,
-        &frame.attention_panes,
-    )?;
-    if frame.rows != oracle.rows {
-        let mismatch = frame
-            .rows
-            .iter()
-            .zip(&oracle.rows)
-            .enumerate()
-            .find_map(|(row, (partial, full))| {
-                partial
-                    .iter()
-                    .zip(full)
-                    .enumerate()
-                    .find_map(|(col, (partial, full))| (partial != full).then_some((row, col, partial, full)))
-            });
-        return Err(report!("muxr partial composer diverged from full composer").attach(format!("{mismatch:?}")));
-    }
-    if frame.cursor != oracle.cursor {
-        return Err(report!("muxr partial composer cursor diverged from full composer"));
-    }
-    Ok(())
-}
-
 fn empty_render_rows(size: &TerminalSize) -> Vec<Vec<RenderCell>> {
-    #[cfg(feature = "benchmarking")]
-    {
-        crate::benchmark_support::record_rows_initialized(usize::from(size.rows()));
-        crate::benchmark_support::record_rows_recomposed(usize::from(size.rows()));
-    }
     let blank = RenderCell::narrow(" ", RenderStyle::default());
     (0..size.rows())
         .map(|_| vec![blank.clone(); usize::from(size.cols())])
@@ -960,8 +714,6 @@ fn paste_snapshot_rows(
                 cell = cell.with_hyperlink(link.into_hyperlink());
             }
             *target = cell;
-            #[cfg(feature = "benchmarking")]
-            crate::benchmark_support::record_cells_copied(1);
         }
     }
     Ok(())
@@ -1063,63 +815,6 @@ mod tests {
     enum ExpectedRenderDiff {
         Diff,
         None,
-    }
-
-    #[cfg(feature = "benchmarking")]
-    #[test]
-    fn test_render_composer_benchmark_diff_when_region_change_hits_render_config_fallback_emits_empty_diff()
-    -> rootcause::Result<()> {
-        let pane_id = PaneId::new(1)?;
-        let size = TerminalSize::new(2, 1)?;
-        let pane_layout = PaneLayout::single_pane(pane_id, 1, &size);
-        let mut terminal = crate::terminal::TerminalState::with_scrollback(&size, MuxrConfig::default().scrollback);
-        let _ = terminal.process(b"ab");
-        let snapshots = BTreeMap::from([(pane_id, terminal.snapshot()?)]);
-        let config = MuxrConfig::default();
-        let pane_render = PaneRenderConfig {
-            border_styles: config.pane_borders,
-            mode: BorderRenderMode::Focus,
-            pane_attention: config.pane_attention,
-            pane_dim: config.pane_dim,
-        };
-        let mut composer = RenderComposer::default();
-        let _baseline = composer.benchmark_baseline(
-            pane_render,
-            PaneRenderLayout {
-                active_pane: pane_id,
-                pane_layout: &pane_layout,
-            },
-            &snapshots,
-            &size,
-            &[],
-            0,
-        )?;
-        let mut resized_render = pane_render;
-        resized_render.mode = BorderRenderMode::Resize;
-
-        let update = composer.benchmark_diff(
-            resized_render,
-            PaneRenderLayout {
-                active_pane: pane_id,
-                pane_layout: &pane_layout,
-            },
-            &snapshots,
-            &size,
-            &[],
-            BenchmarkRenderChange {
-                damage: ClientRenderDmg::region_changed(pane_id),
-                reason: RenderDiffReason::RegionChanged,
-                visible_top_row: 0,
-            },
-        )?;
-
-        let Some(RenderUpdate::Diff(diff)) = update else {
-            return Err(report!("expected muxr region-change fallback diff"));
-        };
-        assert_that!(diff.base_seq(), eq(1));
-        assert_that!(diff.seq(), eq(2));
-        assert_that!(diff.rows(), points_to(empty()));
-        Ok(())
     }
 
     #[rstest::rstest]

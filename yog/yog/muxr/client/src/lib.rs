@@ -5,10 +5,6 @@ pub use session::list::ListedSession;
 pub use session::list::SessionState;
 pub use session::list::list_sessions;
 
-#[cfg(feature = "benchmarking")]
-#[doc(hidden)]
-pub mod benchmark_support;
-
 mod copy_selection;
 mod frame_buffer;
 mod input;
