@@ -34,37 +34,49 @@ unsafe impl GlobalAlloc for CountingAllocator {
 }
 
 fn benchmark_muxr(c: &mut Criterion) {
+    // Test-only fault injection verifies that Criterion cannot report success after a preflight failure.
+    if std::env::var_os("MUXR_BENCH_TEST_FAILURE").is_some() {
+        self::fail_benchmark("injected muxr benchmark preflight failure");
+    }
     let Ok(workloads) = benchmark_support::workloads() else {
-        eprintln!("failed to construct muxr benchmark workloads");
-        return;
+        self::fail_benchmark("failed to construct muxr benchmark workloads");
     };
     if let Err(error) = benchmark_support::verify_oracle() {
-        eprintln!("muxr benchmark oracle failed: {error:?}");
-        return;
+        self::fail_benchmark(&format!("muxr benchmark oracle failed: {error:?}"));
     }
 
     for workload in workloads {
         ALLOCATIONS.store(0, Ordering::Relaxed);
         ALLOCATED_BYTES.store(0, Ordering::Relaxed);
         let Ok(sample) = workload.run() else {
-            eprintln!("failed to sample muxr workload {}", workload.name());
-            continue;
+            self::fail_benchmark(&format!("failed to sample muxr workload {}", workload.name()));
         };
         eprintln!(
-            "muxr-baseline workload={} allocations={} allocated_bytes={} encoded_bytes={} payload_copies={} panes_snapshotted={} cells_snapshotted={} terminal_bytes={}",
+            "muxr-baseline workload={} allocations={} allocated_bytes={} encoded_bytes={} frames_encoded={} render_cells_encoded={} dirty_cells_encoded={} terminal_bytes={}",
             workload.name(),
             ALLOCATIONS.load(Ordering::Relaxed),
             ALLOCATED_BYTES.load(Ordering::Relaxed),
             sample.encoded_bytes,
-            sample.counters.payload_copies,
-            sample.counters.panes_snapshotted,
-            sample.counters.cells_snapshotted,
+            sample.counters.frames_encoded,
+            sample.counters.render_cells_encoded,
+            sample.counters.dirty_cells_encoded,
             sample.terminal_bytes.len(),
         );
         c.bench_function(workload.name(), |b| {
-            b.iter(|| black_box(workload.run()));
+            b.iter(|| match workload.run() {
+                Ok(result) => black_box(result),
+                Err(error) => self::fail_benchmark(&format!(
+                    "muxr benchmark workload failed: workload={} error={error:?}",
+                    workload.name()
+                )),
+            });
         });
     }
+}
+
+fn fail_benchmark(message: &str) -> ! {
+    eprintln!("{message}");
+    std::process::exit(1)
 }
 
 criterion_group!(benches, benchmark_muxr);

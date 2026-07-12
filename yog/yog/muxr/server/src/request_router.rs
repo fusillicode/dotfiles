@@ -162,7 +162,7 @@ fn apply_pane_input_timers(
     timers: &mut ClientTimers,
     render_dmg: &mut ClientRenderDmg,
 ) -> rootcause::Result<()> {
-    render_dmg.include_signal(outcome.render_signal);
+    render_dmg.include_signal(&outcome.render_signal);
     if outcome.render_priority == PaneInputRenderPriority::Interactive {
         timers.record_interactive_input()?;
     }
@@ -170,7 +170,7 @@ fn apply_pane_input_timers(
         timers.schedule_cmd_handoff_sample(pane_id)?;
     }
     if outcome.render_signal.deadline_sync() == crate::render_state::PaneRenderDeadlineSync::Sync {
-        timers.sync_render_deadline(*render_dmg)?;
+        timers.sync_render_deadline(render_dmg)?;
     }
     Ok(())
 }
@@ -183,8 +183,8 @@ async fn apply_pane_scroll_line_outcome(
     render_dmg: &mut ClientRenderDmg,
 ) -> rootcause::Result<ClientSessionFlow> {
     let PaneScrollLineRequestOutcome { event, render_signal } = outcome;
-    render_dmg.include_signal(render_signal);
-    timers.sync_render_deadline(*render_dmg)?;
+    render_dmg.include_signal(&render_signal);
+    timers.sync_render_deadline(render_dmg)?;
     crate::event_writer::send_event_with_timeout(event_writer, &event, state.config.client_write_timeout)
         .await
         .map(|outcome| outcome.session_flow())
@@ -202,9 +202,9 @@ async fn apply_pane_mouse_outcome(
         render_signal,
         tracked_process_change,
     } = outcome;
-    render_dmg.include_signal(render_signal);
+    render_dmg.include_signal(&render_signal);
     if render_signal.deadline_sync() == crate::render_state::PaneRenderDeadlineSync::Sync {
-        timers.sync_render_deadline(*render_dmg)?;
+        timers.sync_render_deadline(render_dmg)?;
     }
     if let Some(tracked_process_change) = tracked_process_change
         && self::apply_tracked_process_client_change(tracked_process_change, event_writer, state, timers, render_dmg)
@@ -653,11 +653,11 @@ mod tests {
         let tempdir = tempfile::tempdir()?;
         let config = crate::server::test_helpers::server_config(tempdir.path(), "work")?;
         let mut timers = ClientTimers::new(&config)?;
-        timers.sync_render_deadline(ClientRenderDmg::Dirty)?;
+        timers.sync_render_deadline(&ClientRenderDmg::Full)?;
         timers.complete_render_frame()?;
-        timers.sync_render_deadline(ClientRenderDmg::Dirty)?;
+        timers.sync_render_deadline(&ClientRenderDmg::Full)?;
         let bulk_deadline = timers.render_sleep.deadline();
-        let mut render_dmg = ClientRenderDmg::Dirty;
+        let mut render_dmg = ClientRenderDmg::Full;
 
         apply_pane_input_timers(
             &PaneInputOutcome {
@@ -671,7 +671,7 @@ mod tests {
         )?;
 
         assert_that!(timers.render_sleep.deadline(), lt(bulk_deadline));
-        assert_that!(render_dmg, eq(ClientRenderDmg::Dirty));
+        assert_that!(render_dmg, eq(ClientRenderDmg::Full));
         Ok(())
     }
 
@@ -721,11 +721,11 @@ mod tests {
         let tempdir = tempfile::tempdir()?;
         let config = crate::server::test_helpers::server_config(tempdir.path(), "work")?;
         let mut timers = ClientTimers::new(&config)?;
-        timers.sync_render_deadline(ClientRenderDmg::Dirty)?;
+        timers.sync_render_deadline(&ClientRenderDmg::Full)?;
         timers.complete_render_frame()?;
-        timers.sync_render_deadline(ClientRenderDmg::Dirty)?;
+        timers.sync_render_deadline(&ClientRenderDmg::Full)?;
         let bulk_deadline = timers.render_sleep.deadline();
-        let mut render_dmg = ClientRenderDmg::Dirty;
+        let mut render_dmg = ClientRenderDmg::Full;
 
         apply_pane_input_timers(
             &PaneInputOutcome {
@@ -739,7 +739,7 @@ mod tests {
         )?;
 
         assert_that!(timers.render_sleep.deadline(), eq(bulk_deadline));
-        assert_that!(render_dmg, eq(ClientRenderDmg::Dirty));
+        assert_that!(render_dmg, eq(ClientRenderDmg::Full));
         Ok(())
     }
 

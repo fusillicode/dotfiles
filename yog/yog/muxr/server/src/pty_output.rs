@@ -41,9 +41,9 @@ pub async fn handle_pane_output_message(
             )?;
             // PTY output from hidden panes can still update titles/tracked-process state, but it must not make the
             // attached client rebuild the visible frame when the effective pane layout cannot show those cells.
-            render_dmg.include_dmg(screen_dirty_visible);
+            render_dmg.include_dmg(screen_dirty_visible.clone());
             // Start the coalescing window before bounded writer sends below; otherwise slow sends add another frame.
-            timers.sync_render_deadline(*render_dmg)?;
+            timers.sync_render_deadline(render_dmg)?;
             let now = Instant::now();
             let tracked_process_changes = if screen_dirty {
                 state.pane_tracked_processes.observe_runtime_visible_activity(

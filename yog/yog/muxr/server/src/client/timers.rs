@@ -74,8 +74,8 @@ impl ClientTimers {
         Ok(pane_ids)
     }
 
-    pub fn sync_render_deadline(&mut self, render_dmg: ClientRenderDmg) -> rootcause::Result<()> {
-        if render_dmg != crate::render_state::ClientRenderDmg::Dirty {
+    pub fn sync_render_deadline(&mut self, render_dmg: &ClientRenderDmg) -> rootcause::Result<()> {
+        if render_dmg.is_clean() {
             if self.render_deadline.is_some() {
                 self.disable_render_sleep()?;
             }
@@ -280,7 +280,7 @@ mod tests {
             .checked_add(Duration::from_hours(23))
             .ok_or_else(|| report!("muxr test threshold overflowed"))?;
 
-        timers.sync_render_deadline(ClientRenderDmg::Clean)?;
+        timers.sync_render_deadline(&ClientRenderDmg::Clean)?;
 
         assert_that!(timers.render_deadline, eq(None));
         assert_that!(timers.render_sleep.deadline(), gt(threshold));
@@ -296,7 +296,7 @@ mod tests {
         let disabled_deadline = timers.render_sleep.deadline();
 
         let earliest_deadline = tokio::time::Instant::now();
-        timers.sync_render_deadline(ClientRenderDmg::Dirty)?;
+        timers.sync_render_deadline(&ClientRenderDmg::Full)?;
         let latest_deadline = tokio::time::Instant::now();
 
         let scheduled_deadline = timers.render_sleep.deadline();
@@ -313,9 +313,9 @@ mod tests {
         let config = crate::server::test_helpers::server_config(tempdir.path(), "work")?;
         let mut timers = ClientTimers::new(&config)?;
 
-        timers.sync_render_deadline(ClientRenderDmg::Dirty)?;
+        timers.sync_render_deadline(&ClientRenderDmg::Full)?;
         let scheduled_deadline = timers.render_sleep.deadline();
-        timers.sync_render_deadline(ClientRenderDmg::Dirty)?;
+        timers.sync_render_deadline(&ClientRenderDmg::Full)?;
 
         assert_that!(timers.render_sleep.deadline(), eq(scheduled_deadline));
         assert_that!(timers.render_deadline, eq(Some(scheduled_deadline)));
@@ -328,12 +328,12 @@ mod tests {
         let config = crate::server::test_helpers::server_config(tempdir.path(), "work")?;
         let mut timers = ClientTimers::new(&config)?;
 
-        timers.sync_render_deadline(ClientRenderDmg::Dirty)?;
+        timers.sync_render_deadline(&ClientRenderDmg::Full)?;
         let earliest_deadline = tokio::time::Instant::now()
             .checked_add(RENDER_FRAME_INTERVAL)
             .ok_or_else(|| report!("muxr test render deadline overflowed"))?;
         timers.complete_render_frame()?;
-        timers.sync_render_deadline(ClientRenderDmg::Dirty)?;
+        timers.sync_render_deadline(&ClientRenderDmg::Full)?;
         let latest_deadline = tokio::time::Instant::now()
             .checked_add(RENDER_FRAME_INTERVAL)
             .ok_or_else(|| report!("muxr test render deadline overflowed"))?;
@@ -352,13 +352,13 @@ mod tests {
         let config = crate::server::test_helpers::server_config(tempdir.path(), "work")?;
         let mut timers = ClientTimers::new(&config)?;
 
-        timers.sync_render_deadline(ClientRenderDmg::Dirty)?;
+        timers.sync_render_deadline(&ClientRenderDmg::Full)?;
         let earliest_deadline = tokio::time::Instant::now()
             .checked_add(INTERACTIVE_RENDER_FRAME_INTERVAL)
             .ok_or_else(|| report!("muxr test interactive render deadline overflowed"))?;
         timers.complete_render_frame()?;
         timers.record_interactive_input()?;
-        timers.sync_render_deadline(ClientRenderDmg::Dirty)?;
+        timers.sync_render_deadline(&ClientRenderDmg::Full)?;
         let latest_deadline = tokio::time::Instant::now()
             .checked_add(INTERACTIVE_RENDER_FRAME_INTERVAL)
             .ok_or_else(|| report!("muxr test interactive render deadline overflowed"))?;
@@ -398,10 +398,10 @@ mod tests {
         let mut timers = ClientTimers::new(&config)?;
         timers.last_render_at = Some(tokio::time::Instant::now());
 
-        timers.sync_render_deadline(ClientRenderDmg::Dirty)?;
+        timers.sync_render_deadline(&ClientRenderDmg::Full)?;
         let bulk_deadline = timers.render_sleep.deadline();
         timers.record_interactive_input()?;
-        timers.sync_render_deadline(ClientRenderDmg::Dirty)?;
+        timers.sync_render_deadline(&ClientRenderDmg::Full)?;
 
         let interactive_deadline = timers.render_sleep.deadline();
         assert_that!(timers.render_deadline, eq(Some(interactive_deadline)));
@@ -415,7 +415,7 @@ mod tests {
         let config = crate::server::test_helpers::server_config(tempdir.path(), "work")?;
         let mut timers = ClientTimers::new(&config)?;
 
-        timers.sync_render_deadline(ClientRenderDmg::Dirty)?;
+        timers.sync_render_deadline(&ClientRenderDmg::Full)?;
         let scheduled_deadline = timers.render_sleep.deadline();
         timers.complete_render_frame()?;
 

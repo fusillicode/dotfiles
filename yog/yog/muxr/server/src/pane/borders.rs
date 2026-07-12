@@ -132,6 +132,16 @@ pub enum BorderRenderMode {
     Resize,
 }
 
+#[derive(Clone, Copy)]
+pub struct PasteBordersConfig<'a> {
+    pub active_pane: Option<&'a PaneId>,
+    pub attention_panes: &'a [PaneId],
+    pub border_mode: BorderRenderMode,
+    pub borders: &'a [PaneBorder],
+    pub pane_attention: PaneAttentionConfig,
+    pub styles: PaneBorderStyles,
+}
+
 pub fn paste_borders(
     rows: &mut [Vec<RenderCell>],
     styles: PaneBorderStyles,
@@ -141,15 +151,47 @@ pub fn paste_borders(
     attention_panes: &[PaneId],
     border_mode: BorderRenderMode,
 ) -> rootcause::Result<()> {
-    let border_cells = self::compose_border_cells(borders, active_pane, attention_panes, border_mode)?;
+    self::paste_borders_in_rows(
+        rows,
+        PasteBordersConfig {
+            active_pane,
+            attention_panes,
+            border_mode,
+            borders,
+            pane_attention,
+            styles,
+        },
+        |_| true,
+    )
+}
+
+pub fn paste_borders_in_rows(
+    rows: &mut [Vec<RenderCell>],
+    config: PasteBordersConfig<'_>,
+    include_row: impl Fn(u16) -> bool,
+) -> rootcause::Result<()> {
+    let border_cells = self::compose_border_cells(
+        config.borders,
+        config.active_pane,
+        config.attention_panes,
+        config.border_mode,
+    )?;
     for ((row, col), cell) in border_cells {
+        if !include_row(row) {
+            continue;
+        }
+        #[cfg(feature = "benchmarking")]
+        crate::benchmark_support::record_border_cell();
         let target_row = rows
             .get_mut(usize::from(row))
             .ok_or_else(|| report!("muxr pane border row outside composite frame"))?;
         let target = target_row
             .get_mut(usize::from(col))
             .ok_or_else(|| report!("muxr pane border col outside composite frame"))?;
-        *target = RenderCell::narrow(cell.shape.glyph(), cell.visual.style(styles, pane_attention));
+        *target = RenderCell::narrow(
+            cell.shape.glyph(),
+            cell.visual.style(config.styles, config.pane_attention),
+        );
     }
     Ok(())
 }

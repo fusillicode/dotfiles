@@ -247,7 +247,7 @@ mod tests {
         );
         assert_that!(
             crate::screen_render::pane_ids_visible_render_dmg(&layout, &fullscreen, &terminal_size, &[visible_pane])?,
-            eq(ClientRenderDmg::Dirty)
+            eq(ClientRenderDmg::pane(visible_pane))
         );
         assert_that!(
             crate::screen_render::pane_ids_visible_render_dmg(
@@ -256,7 +256,7 @@ mod tests {
                 &terminal_size,
                 &[hidden_pane, visible_pane],
             )?,
-            eq(ClientRenderDmg::Dirty)
+            eq(ClientRenderDmg::pane(visible_pane))
         );
         Ok(())
     }

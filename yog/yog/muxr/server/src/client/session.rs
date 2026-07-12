@@ -312,7 +312,7 @@ async fn run_client_session_loop(
         {
             return Ok(());
         }
-        timers.sync_render_deadline(render_dmg)?;
+        timers.sync_render_deadline(&render_dmg)?;
         let ready_quiet = quiet_turn.take_ready(timers.tracked_process_quiet_deadline());
         let mut skip_quiet_this_turn = false;
         if ready_quiet == QuietTurn::DrainBeforeClear {

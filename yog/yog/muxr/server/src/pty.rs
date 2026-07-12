@@ -6,6 +6,7 @@ pub use self::event::PtyExitStatus;
 pub use self::session::PtyExitState;
 pub use self::session::PtyHandle;
 pub use self::session::PtyMouseWrite;
+pub use self::session::PtyRenderSnapshot;
 pub use self::session::PtyScreenDmg;
 pub use self::session::PtySession;
 pub use self::session::PtySinkGuard;

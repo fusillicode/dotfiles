@@ -16,6 +16,7 @@ use crate::pane::tracked_process::PaneTrackedProcessSnapshot;
 use crate::pty::PtyEvent;
 use crate::pty::PtyExitStatus;
 use crate::pty::PtyHandle;
+use crate::pty::PtyRenderSnapshot;
 use crate::pty::PtySession;
 use crate::pty::PtySinkGuard;
 use crate::pty::ShellCmd;
@@ -24,7 +25,6 @@ use crate::session::start_seed::SessionStartSeed;
 use crate::state::PaneMetadataSync;
 use crate::state::PaneSnapshotFields;
 use crate::state::SessionLayout;
-use crate::terminal::TerminalSnapshot;
 
 struct PaneRuntime {
     id: PaneId,
@@ -281,8 +281,8 @@ impl PaneRuntimes {
         Ok(())
     }
 
-    pub fn snapshot(&self, pane_id: PaneId) -> rootcause::Result<TerminalSnapshot> {
-        self.handle(pane_id)?.render_snapshot()
+    pub fn pane_render_snapshot(&self, pane_id: PaneId) -> rootcause::Result<PtyRenderSnapshot> {
+        self.handle(pane_id)?.pane_render_snapshot()
     }
 
     pub fn write_scrollback_dump(

@@ -22,15 +22,16 @@ pub struct PaneScrollLineRequestOutcome {
     pub render_signal: PaneRenderSignal,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PaneScrollWheelRequestOutcome {
     pub render_signal: PaneRenderSignal,
 }
 
-const fn scroll_pane_line_result(
+fn scroll_pane_line_result(
     position: ClientMousePosition,
     direction: PaneScrollDirection,
     movement: PaneScrollLineMove,
+    pane_id: Option<PaneId>,
 ) -> PaneScrollLineRequestOutcome {
     PaneScrollLineRequestOutcome {
         event: ServerEvent::ScrollPaneLineResult {
@@ -40,7 +41,12 @@ const fn scroll_pane_line_result(
         },
         // Edge-drag autoscroll can outpace render IO; keep viewport changes coalesced on the render deadline.
         render_signal: match movement {
-            PaneScrollLineMove::Moved => PaneRenderSignal::DirtyAndDeadline,
+            PaneScrollLineMove::Moved => pane_id.map_or(
+                PaneRenderSignal::DirtyAndDeadline(crate::render_state::ClientRenderDmg::Full),
+                |pane_id| {
+                    PaneRenderSignal::DirtyAndDeadline(crate::render_state::ClientRenderDmg::region_changed(pane_id))
+                },
+            ),
             PaneScrollLineMove::Unchanged => PaneRenderSignal::DeadlineOnly,
         },
     }
@@ -51,7 +57,8 @@ pub fn handle_scroll_pane_line_client_request(
     direction: PaneScrollDirection,
     state: &ClientSessionState<'_>,
 ) -> rootcause::Result<PaneScrollLineRequestOutcome> {
-    let movement = if let Some(pane_id) = crate::screen_render::visible_pane_id_at_position(state, position)? {
+    let pane_id = crate::screen_render::visible_pane_id_at_position(state, position)?;
+    let movement = if let Some(pane_id) = pane_id {
         match self::scroll_pane(pane_id, direction, PaneScrollAmount::Line, state.runtimes)? {
             crate::terminal::TerminalScrollMove::Moved => PaneScrollLineMove::Moved,
             crate::terminal::TerminalScrollMove::Unchanged => PaneScrollLineMove::Unchanged,
@@ -59,7 +66,7 @@ pub fn handle_scroll_pane_line_client_request(
     } else {
         PaneScrollLineMove::Unchanged
     };
-    Ok(self::scroll_pane_line_result(position, direction, movement))
+    Ok(self::scroll_pane_line_result(position, direction, movement, pane_id))
 }
 
 pub fn handle_scroll_pane_wheel_client_request(
@@ -81,7 +88,9 @@ pub fn handle_scroll_pane_wheel_client_request(
     }
     // Wheel input can arrive much faster than render IO; mark dirty and let the render deadline coalesce.
     Ok(PaneScrollWheelRequestOutcome {
-        render_signal: PaneRenderSignal::DirtyAndDeadline,
+        render_signal: PaneRenderSignal::DirtyAndDeadline(crate::render_state::ClientRenderDmg::region_changed(
+            pane_id,
+        )),
     })
 }
 
