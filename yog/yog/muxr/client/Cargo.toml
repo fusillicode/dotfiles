@@ -11,7 +11,7 @@ keywords = ["muxr", "terminal", "multiplexer", "client", "cli"]
 categories = ["command-line-utilities", "development-tools"]
 
 [features]
-benchmarking = []
+benchmarking = ["muxr_transport/benchmarking"]
 
 [dependencies]
 chrono = { workspace = true }
