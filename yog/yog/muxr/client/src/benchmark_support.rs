@@ -1,6 +1,5 @@
 //! Feature-gated performance workloads and behavioral oracle for muxr development.
 
-use muxr_config::MuxrConfig;
 use muxr_core::LayoutSnapshot;
 use muxr_core::PaneId;
 use muxr_core::PaneMouseMode;
@@ -29,6 +28,12 @@ use rootcause::report;
 
 use crate::frame_buffer::ApplyOutcome;
 use crate::frame_buffer::FrameBuffer;
+use crate::frame_buffer::TerminalOrigin;
+use crate::frame_buffer::TerminalRender;
+use crate::frame_buffer::TerminalUpdateEncoder;
+use crate::renderer::ClientRenderOutcome;
+use crate::renderer::ClientRenderer;
+use crate::terminal::SynchronizedOutput;
 
 /// Operations derived from one client benchmark's event stream.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -55,6 +60,29 @@ pub struct WorkloadResult {
     pub terminal_bytes: Vec<u8>,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ClientTransactionMode {
+    Fresh,
+    Reused,
+}
+
+impl ClientTransactionMode {
+    #[must_use]
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::Fresh => "fresh",
+            Self::Reused => "reused",
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ClientTransactionResult {
+    pub frames_rendered: u64,
+    pub retained_transaction_bytes: usize,
+    pub terminal_bytes: Vec<u8>,
+}
+
 impl Workload {
     fn new(
         name: &'static str,
@@ -74,6 +102,11 @@ impl Workload {
         self.name
     }
 
+    #[must_use]
+    pub fn has_render_updates(&self) -> bool {
+        self.events.iter().any(|event| matches!(event, ServerEvent::Render(_)))
+    }
+
     /// Execute protocol serialization, validation, framebuffer application, and terminal rendering.
     ///
     /// # Errors
@@ -81,6 +114,7 @@ impl Workload {
     pub fn run(&self) -> rootcause::Result<WorkloadResult> {
         let mut encoded_bytes = 0_u64;
         let mut frame_buffer = FrameBuffer::default();
+        let mut terminal_encoder = TerminalUpdateEncoder::default();
         let mut terminal_bytes = Vec::new();
 
         for event in &self.events {
@@ -103,19 +137,60 @@ impl Workload {
                         .attach(format!("workload={}", self.name)),
                 );
             };
-            frame_buffer.queue_at_with_selection(
+            terminal_encoder.encode(
                 &mut terminal_bytes,
-                &changes,
-                0,
-                0,
-                None,
-                MuxrConfig::default().selection.bg,
+                TerminalRender {
+                    changes: &changes,
+                    frame_buffer: &frame_buffer,
+                    origin: TerminalOrigin { col: 0, row: 0 },
+                    selection: None,
+                },
             )?;
         }
 
         Ok(WorkloadResult {
             counters: self.counters,
             encoded_bytes,
+            terminal_bytes,
+        })
+    }
+
+    /// Render this workload through a persistent production client while selecting the transaction retention policy.
+    /// `Fresh` reproduces the pre-S5 lifecycle by discarding transaction capacity after every rendered frame.
+    ///
+    /// # Errors
+    /// Returns an error if the fixture is invalid or the production client rejects a render update.
+    pub fn run_client_transactions(&self, mode: ClientTransactionMode) -> rootcause::Result<ClientTransactionResult> {
+        let mut renderer = ClientRenderer::with_synchronized_output(
+            self::client_renderer_layout()?,
+            self::client_renderer_regions()?,
+            SynchronizedOutput::Csi,
+        );
+        let mut frames_rendered = 0_u64;
+        let mut terminal_bytes = Vec::new();
+
+        for event in &self.events {
+            let ServerEvent::Render(update) = event.clone() else {
+                continue;
+            };
+            let outcome = renderer.apply_render(&mut terminal_bytes, update)?;
+            if outcome != ClientRenderOutcome::Drawn {
+                return Err(
+                    report!("muxr client transaction benchmark unexpectedly requested resynchronization")
+                        .attach(format!("workload={}", self.name)),
+                );
+            }
+            frames_rendered = frames_rendered
+                .checked_add(1)
+                .ok_or_else(|| report!("muxr client transaction frame count overflowed"))?;
+            if mode == ClientTransactionMode::Fresh {
+                renderer.discard_render_transaction_for_benchmark();
+            }
+        }
+
+        Ok(ClientTransactionResult {
+            frames_rendered,
+            retained_transaction_bytes: renderer.retained_render_transaction_bytes_for_benchmark(),
             terminal_bytes,
         })
     }
@@ -203,7 +278,25 @@ pub fn verify_oracle() -> rootcause::Result<()> {
     if !mismatches.is_empty() {
         return Err(report!("muxr benchmark terminal oracle mismatch").attach(mismatches.join("; ")));
     }
-    self::verify_edge_case_trace()
+    self::verify_edge_case_trace()?;
+    self::verify_client_transaction_oracle()
+}
+
+fn verify_client_transaction_oracle() -> rootcause::Result<()> {
+    for workload in self::workloads()?.into_iter().filter(Workload::has_render_updates) {
+        let fresh = workload.run_client_transactions(ClientTransactionMode::Fresh)?;
+        let reused = workload.run_client_transactions(ClientTransactionMode::Reused)?;
+        if fresh.terminal_bytes != reused.terminal_bytes {
+            return Err(report!("muxr client transaction terminal oracle mismatch")
+                .attach(format!("workload={}", workload.name())));
+        }
+        if fresh.retained_transaction_bytes != 0 {
+            return Err(report!("muxr fresh client transaction retained capacity")
+                .attach(format!("workload={}", workload.name()))
+                .attach(format!("retained_bytes={}", fresh.retained_transaction_bytes)));
+        }
+    }
+    Ok(())
 }
 
 fn two_pane_interactive() -> rootcause::Result<Workload> {
@@ -303,6 +396,39 @@ fn seven_tab_sidebar() -> rootcause::Result<Workload> {
             fnv1a: 14_695_981_039_346_656_037,
         },
     )
+}
+
+fn client_renderer_layout() -> rootcause::Result<LayoutSnapshot> {
+    let pane_id = PaneId::new(1)?;
+    let tab_id = TabId::new(1)?;
+    LayoutSnapshot::new(
+        tab_id,
+        vec![TabSnapshot::new(
+            tab_id,
+            "benchmark".to_owned(),
+            pane_id,
+            vec![PaneSnapshot {
+                tracked_process_state: TrackedProcessState::Busy,
+                cwd: "/tmp/muxr-benchmark".to_owned(),
+                cmd_label: Some("benchmark".to_owned()),
+                focus_seq: 1,
+                id: pane_id,
+                title: "benchmark".to_owned(),
+            }],
+        )?],
+    )
+}
+
+fn client_renderer_regions() -> rootcause::Result<PaneRegionsSnapshot> {
+    PaneRegionsSnapshot::new(vec![PaneRegionSnapshot::new(
+        PaneId::new(1)?,
+        0,
+        0,
+        1,
+        1,
+        PaneMouseMode::None,
+        0,
+    )?])
 }
 
 fn render_workload(

@@ -71,6 +71,44 @@ fn benchmark_muxr(c: &mut Criterion) {
                 )),
             });
         });
+
+        if workload.has_render_updates() {
+            for mode in [
+                benchmark_support::ClientTransactionMode::Fresh,
+                benchmark_support::ClientTransactionMode::Reused,
+            ] {
+                ALLOCATIONS.store(0, Ordering::Relaxed);
+                ALLOCATED_BYTES.store(0, Ordering::Relaxed);
+                let Ok(sample) = workload.run_client_transactions(mode) else {
+                    self::fail_benchmark(&format!(
+                        "failed to sample muxr client transactions: mode={} workload={}",
+                        mode.name(),
+                        workload.name()
+                    ));
+                };
+                eprintln!(
+                    "muxr-client-transactions mode={} workload={} allocations={} allocated_bytes={} frames_rendered={} terminal_bytes={} retained_transaction_bytes={}",
+                    mode.name(),
+                    workload.name(),
+                    ALLOCATIONS.load(Ordering::Relaxed),
+                    ALLOCATED_BYTES.load(Ordering::Relaxed),
+                    sample.frames_rendered,
+                    sample.terminal_bytes.len(),
+                    sample.retained_transaction_bytes,
+                );
+                let benchmark_name = format!("client_transactions/{}/{}", mode.name(), workload.name());
+                c.bench_function(&benchmark_name, |b| {
+                    b.iter(|| match workload.run_client_transactions(mode) {
+                        Ok(result) => black_box(result),
+                        Err(error) => self::fail_benchmark(&format!(
+                            "muxr client transaction benchmark failed: mode={} workload={} error={error:?}",
+                            mode.name(),
+                            workload.name()
+                        )),
+                    });
+                });
+            }
+        }
     }
 }
 

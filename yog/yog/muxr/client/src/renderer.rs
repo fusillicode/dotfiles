@@ -31,8 +31,14 @@ use crate::frame_buffer::ApplyOutcome;
 use crate::frame_buffer::FrameBuffer;
 use crate::frame_buffer::RenderFrameChanges;
 use crate::frame_buffer::RenderFrameScope;
+use crate::frame_buffer::SelectionHighlight;
+use crate::frame_buffer::TerminalOrigin;
+use crate::frame_buffer::TerminalRender;
+use crate::frame_buffer::TerminalUpdateEncoder;
 use crate::terminal::MouseAnyMotionCapture;
 use crate::terminal::SynchronizedOutput;
+
+const MAX_RETAINED_RENDER_TRANSACTION_BYTES: usize = 64 * 1_024;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ClientRenderOutcome {
@@ -72,6 +78,8 @@ pub struct ClientRenderer {
     selection_edge_scroll: SelectionEdgeScrollState,
     selection: SelectionState,
     synchronized_output: SynchronizedOutput,
+    terminal_encoder: TerminalUpdateEncoder,
+    render_transaction: Vec<u8>,
 }
 
 impl ClientRenderer {
@@ -84,7 +92,7 @@ impl ClientRenderer {
         )
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "benchmarking"))]
     pub fn with_synchronized_output(
         layout: LayoutSnapshot,
         pane_regions: PaneRegionsSnapshot,
@@ -113,6 +121,8 @@ impl ClientRenderer {
             selection_edge_scroll: SelectionEdgeScrollState::default(),
             selection: SelectionState::default(),
             synchronized_output,
+            terminal_encoder: TerminalUpdateEncoder::default(),
+            render_transaction: Vec::new(),
         }
     }
 
@@ -193,31 +203,50 @@ impl ClientRenderer {
 
     fn draw(&mut self, stdout: &mut impl Write, changes: &RenderFrameChanges) -> rootcause::Result<()> {
         let render_tab_bar = self.tab_bar_dmg == TabBarDmg::Dirty || changes.scope() == RenderFrameScope::Full;
-        let mut frame = Vec::new();
-        crate::terminal::queue_synchronized_update_start(&mut frame, self.synchronized_output)?;
+        self.render_transaction.clear();
+        let result = self.draw_transaction(stdout, changes, render_tab_bar);
+        self.reset_render_transaction();
+        if result.is_ok() {
+            self.tab_bar_dmg = TabBarDmg::Clean;
+        }
+        result
+    }
+
+    fn draw_transaction(
+        &mut self,
+        stdout: &mut impl Write,
+        changes: &RenderFrameChanges,
+        render_tab_bar: bool,
+    ) -> rootcause::Result<()> {
+        crate::terminal::queue_synchronized_update_start(&mut self.render_transaction, self.synchronized_output)?;
         if changes.scope() == RenderFrameScope::Full {
-            crate::frame_buffer::queue_full_redraw_start(&mut frame)?;
+            crate::frame_buffer::queue_full_redraw_start(&mut self.render_transaction)?;
         }
         if render_tab_bar {
             let rows = self.frame_buffer.size().map_or(0, muxr_core::TerminalSize::rows);
-            crate::tab_bar::queue(&mut frame, self.tab_bar_config, &self.layout, rows)?;
+            crate::tab_bar::queue(&mut self.render_transaction, self.tab_bar_config, &self.layout, rows)?;
         }
-        self.frame_buffer.queue_at_with_selection(
-            &mut frame,
+        let selection = self.selection.range().map(|range| SelectionHighlight {
+            background: self.selection_style.bg,
+            range,
+        });
+        let render = TerminalRender {
             changes,
-            0,
-            self.tab_bar_config.width,
-            self.selection.range(),
-            self.selection_style.bg,
-        )?;
-        crate::terminal::queue_synchronized_update_end(&mut frame, self.synchronized_output)?;
+            frame_buffer: &self.frame_buffer,
+            origin: TerminalOrigin {
+                col: self.tab_bar_config.width,
+                row: 0,
+            },
+            selection,
+        };
+        self.terminal_encoder.encode(&mut self.render_transaction, render)?;
+        crate::terminal::queue_synchronized_update_end(&mut self.render_transaction, self.synchronized_output)?;
         stdout
-            .write_all(&frame)
+            .write_all(&self.render_transaction)
             .context("failed to write muxr client render transaction")?;
         stdout
             .flush()
             .context("failed to flush muxr client render transaction")?;
-        self.tab_bar_dmg = TabBarDmg::Clean;
         Ok(())
     }
 
@@ -226,21 +255,52 @@ impl ClientRenderer {
             self.tab_bar_dmg = TabBarDmg::Dirty;
             return Ok(());
         };
-        let mut frame = Vec::new();
-        crate::terminal::queue_synchronized_update_start(&mut frame, self.synchronized_output)?;
-        crate::tab_bar::queue(&mut frame, self.tab_bar_config, &self.layout, size.rows())?;
+        self.render_transaction.clear();
+        let result = self.draw_sidebar_transaction(stdout, size.rows());
+        self.reset_render_transaction();
+        if result.is_ok() {
+            self.tab_bar_dmg = TabBarDmg::Clean;
+        }
+        result
+    }
+
+    fn draw_sidebar_transaction(&mut self, stdout: &mut impl Write, rows: u16) -> rootcause::Result<()> {
+        crate::terminal::queue_synchronized_update_start(&mut self.render_transaction, self.synchronized_output)?;
+        crate::tab_bar::queue(&mut self.render_transaction, self.tab_bar_config, &self.layout, rows)?;
         // Sidebar-only redraws bypass pane rendering, so restore the real terminal cursor after tab-bar row moves.
-        self.frame_buffer
-            .queue_cursor_at(&mut frame, 0, self.tab_bar_config.width)?;
-        crate::terminal::queue_synchronized_update_end(&mut frame, self.synchronized_output)?;
+        TerminalUpdateEncoder::encode_cursor(
+            &mut self.render_transaction,
+            &self.frame_buffer,
+            TerminalOrigin {
+                col: self.tab_bar_config.width,
+                row: 0,
+            },
+        )?;
+        crate::terminal::queue_synchronized_update_end(&mut self.render_transaction, self.synchronized_output)?;
         stdout
-            .write_all(&frame)
+            .write_all(&self.render_transaction)
             .context("failed to write muxr client sidebar render transaction")?;
         stdout
             .flush()
             .context("failed to flush muxr client sidebar render transaction")?;
-        self.tab_bar_dmg = TabBarDmg::Clean;
         Ok(())
+    }
+
+    fn reset_render_transaction(&mut self) {
+        self.render_transaction.clear();
+        if self.render_transaction.capacity() > MAX_RETAINED_RENDER_TRANSACTION_BYTES {
+            self.render_transaction = Vec::new();
+        }
+    }
+
+    #[cfg(feature = "benchmarking")]
+    pub fn discard_render_transaction_for_benchmark(&mut self) {
+        self.render_transaction = Vec::new();
+    }
+
+    #[cfg(feature = "benchmarking")]
+    pub const fn retained_render_transaction_bytes_for_benchmark(&self) -> usize {
+        self.render_transaction.capacity()
     }
 
     pub fn apply_selection_input(&mut self, stdout: &mut impl Write, input: SelectionInput) -> rootcause::Result<()> {
@@ -559,6 +619,53 @@ mod tests {
         let pane_index = terminal_output.find("ab").unwrap_or(usize::MAX);
         assert_that!(clear_index, lt(tab_bar_index));
         assert_that!(tab_bar_index, lt(pane_index));
+        Ok(())
+    }
+
+    #[test]
+    fn test_client_renderer_when_render_write_fails_reuses_clean_transaction_on_retry() -> rootcause::Result<()> {
+        let mut renderer = ClientRenderer::with_synchronized_output(
+            layout_snapshot()?,
+            pane_regions_snapshot()?,
+            SynchronizedOutput::Csi,
+        );
+        let mut failed_output = FailingWriter;
+
+        assert_that!(
+            renderer
+                .apply_render(
+                    &mut failed_output,
+                    muxr_core::RenderUpdate::Baseline(render_baseline()?),
+                )
+                .is_err(),
+            eq(true)
+        );
+        let mut output = CountingWriter::default();
+        renderer.apply_render(&mut output, muxr_core::RenderUpdate::Baseline(render_baseline()?))?;
+
+        let terminal_output = output.rendered_string()?;
+        assert_that!(terminal_output.matches("\x1b[?2026h").count(), eq(1));
+        assert_that!(terminal_output.matches("\x1b[?2026l").count(), eq(1));
+        Ok(())
+    }
+
+    #[test]
+    fn test_client_renderer_when_render_transaction_capacity_is_outlier_discards_it() -> rootcause::Result<()> {
+        let mut renderer = ClientRenderer::with_synchronized_output(
+            layout_snapshot()?,
+            pane_regions_snapshot()?,
+            SynchronizedOutput::Csi,
+        );
+        renderer
+            .render_transaction
+            .reserve(MAX_RETAINED_RENDER_TRANSACTION_BYTES + 1);
+
+        renderer.reset_render_transaction();
+
+        assert_that!(
+            renderer.render_transaction.capacity(),
+            le(MAX_RETAINED_RENDER_TRANSACTION_BYTES)
+        );
         Ok(())
     }
 
@@ -1121,6 +1228,21 @@ mod tests {
 
         fn flush(&mut self) -> std::io::Result<()> {
             self.flushes = self.flushes.saturating_add(1);
+            Ok(())
+        }
+    }
+
+    struct FailingWriter;
+
+    impl Write for FailingWriter {
+        fn write(&mut self, _buf: &[u8]) -> std::io::Result<usize> {
+            Err(std::io::Error::new(
+                std::io::ErrorKind::BrokenPipe,
+                "injected muxr client write failure",
+            ))
+        }
+
+        fn flush(&mut self) -> std::io::Result<()> {
             Ok(())
         }
     }
