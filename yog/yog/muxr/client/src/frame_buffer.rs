@@ -33,6 +33,7 @@ use crate::copy_selection::SelectionRange;
 const OSC8_CLOSE: &[u8] = b"\x1b]8;;\x1b\\";
 const OSC8_OPEN_PREFIX: &[u8] = b"\x1b]8;;";
 const OSC8_TERMINATOR: &[u8] = b"\x1b\\";
+const MAX_RETAINED_TEXT_RUN_BYTES: usize = 8 * 1_024;
 
 #[derive(Debug, Default)]
 pub struct FrameBuffer {
@@ -89,46 +90,6 @@ impl FrameBuffer {
         }))
     }
 
-    pub fn queue_at_with_selection(
-        &self,
-        stdout: &mut impl Write,
-        changes: &RenderFrameChanges,
-        row_offset: u16,
-        col_offset: u16,
-        selection: Option<&SelectionRange>,
-        selection_bg: RenderColor,
-    ) -> rootcause::Result<()> {
-        if self.cursor.as_ref() != Some(&changes.cursor) {
-            return Err(report!("muxr render changes do not match current frame buffer cursor"));
-        }
-        // Diffs still move the real terminal cursor while repainting dirty rows; hide it until the final pane cursor
-        // position is restored so intermediate write positions cannot flash across panes.
-        queue_cmd(stdout, Hide)?;
-        reset_style(stdout)?;
-        let mut active_style = RenderStyle::default();
-        for row in &changes.rows {
-            render_row_span(
-                stdout,
-                row,
-                &mut active_style,
-                row_offset,
-                col_offset,
-                selection,
-                selection_bg,
-            )?;
-        }
-        reset_style(stdout)?;
-        render_cursor(stdout, &changes.cursor, row_offset, col_offset)?;
-        Ok(())
-    }
-
-    pub fn queue_cursor_at(&self, stdout: &mut impl Write, row_offset: u16, col_offset: u16) -> rootcause::Result<()> {
-        let Some(cursor) = self.cursor.as_ref() else {
-            return Ok(());
-        };
-        render_cursor(stdout, cursor, row_offset, col_offset)
-    }
-
     pub fn row_redraw_changes(&self, changed_rows: &[u16]) -> rootcause::Result<Option<RenderFrameChanges>> {
         let Some(cursor) = self.cursor.clone() else {
             return Ok(None);
@@ -164,6 +125,163 @@ impl FrameBuffer {
     pub const fn size(&self) -> Option<&TerminalSize> {
         self.size.as_ref()
     }
+}
+
+#[derive(Debug, Default)]
+pub struct TerminalUpdateEncoder {
+    active_style: RenderStyle,
+    text_run: String,
+}
+
+impl TerminalUpdateEncoder {
+    pub fn encode(&mut self, output: &mut impl Write, render: TerminalRender<'_>) -> rootcause::Result<()> {
+        self.begin_update();
+        let encode_result = self.encode_update(output, render);
+        self.finish_update();
+        encode_result
+    }
+
+    pub fn encode_cursor(
+        output: &mut impl Write,
+        frame_buffer: &FrameBuffer,
+        origin: TerminalOrigin,
+    ) -> rootcause::Result<()> {
+        let Some(cursor) = frame_buffer.cursor.as_ref() else {
+            return Ok(());
+        };
+        render_cursor(output, cursor, origin.row, origin.col)
+    }
+
+    fn encode_update(&mut self, output: &mut impl Write, render: TerminalRender<'_>) -> rootcause::Result<()> {
+        if render.frame_buffer.cursor.as_ref() != Some(&render.changes.cursor) {
+            return Err(report!("muxr render changes do not match current frame buffer cursor"));
+        }
+        // Diffs still move the real terminal cursor while repainting dirty rows; hide it until the final pane cursor
+        // position is restored so intermediate write positions cannot flash across panes.
+        queue_cmd(output, Hide)?;
+        reset_style(output)?;
+        for row in &render.changes.rows {
+            self.encode_row(output, row, render.origin, render.selection)?;
+        }
+        reset_style(output)?;
+        render_cursor(output, &render.changes.cursor, render.origin.row, render.origin.col)?;
+        Ok(())
+    }
+
+    fn encode_row(
+        &mut self,
+        output: &mut impl Write,
+        row: &RenderRowSpan,
+        origin: TerminalOrigin,
+        selection: Option<SelectionHighlight<'_>>,
+    ) -> rootcause::Result<()> {
+        let rendered_row = row
+            .row()
+            .checked_add(origin.row)
+            .ok_or_else(|| report!("muxr render row offset overflowed"))?;
+        let rendered_col = row
+            .col()
+            .checked_add(origin.col)
+            .ok_or_else(|| report!("muxr render column offset overflowed"))?;
+        queue_cmd(output, MoveTo(rendered_col, rendered_row))?;
+        let mut run_style = None;
+        self.text_run.clear();
+        for (index, cell) in row.cells().iter().enumerate() {
+            if matches!(cell.width(), RenderCellWidth::WideContinuation) {
+                continue;
+            }
+
+            let cell_col = row
+                .col()
+                .checked_add(u16::try_from(index).context("muxr render cell index overflowed")?)
+                .ok_or_else(|| report!("muxr render cell column overflowed"))?;
+            let cell_style = Self::selected_style(cell.style(), selection, row.row(), cell_col);
+            let cell_run_style = RenderRunStyle {
+                hyperlink_uri: cell.hyperlink().map(muxr_core::RenderHyperlink::uri),
+                style: cell_style,
+            };
+            if run_style != Some(cell_run_style) {
+                self.flush_text_run(output, run_style)?;
+                run_style = Some(cell_run_style);
+            }
+            if cell.text().is_empty() {
+                self.text_run.push(' ');
+            } else {
+                self.text_run.push_str(cell.text());
+            }
+        }
+        self.flush_text_run(output, run_style)
+    }
+
+    fn flush_text_run(
+        &mut self,
+        output: &mut impl Write,
+        run_style: Option<RenderRunStyle<'_>>,
+    ) -> rootcause::Result<()> {
+        if self.text_run.is_empty() {
+            return Ok(());
+        }
+        let Some(style) = run_style else {
+            return Err(report!("muxr render text run is missing style"));
+        };
+
+        apply_style_transition(output, &mut self.active_style, style.style)?;
+        if let Some(uri) = style.hyperlink_uri {
+            queue_hyperlink_start(output, uri)?;
+        }
+        queue_cmd(output, Print(self.text_run.as_str()))?;
+        if style.hyperlink_uri.is_some() {
+            queue_hyperlink_end(output)?;
+        }
+        self.text_run.clear();
+        Ok(())
+    }
+
+    fn begin_update(&mut self) {
+        self.active_style = RenderStyle::default();
+        self.text_run.clear();
+    }
+
+    fn finish_update(&mut self) {
+        self.active_style = RenderStyle::default();
+        self.text_run.clear();
+        // Reuse normal text runs without retaining a one-off oversized row for the rest of the client session.
+        if self.text_run.capacity() > MAX_RETAINED_TEXT_RUN_BYTES {
+            self.text_run = String::new();
+        }
+    }
+
+    fn selected_style(
+        style: RenderStyle,
+        selection: Option<SelectionHighlight<'_>>,
+        row: u16,
+        col: u16,
+    ) -> RenderStyle {
+        let Some(selection) = selection else {
+            return style;
+        };
+        SelectionVisual::for_cell(Some(selection.range), row, col).apply(style, selection.background)
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct TerminalOrigin {
+    pub col: u16,
+    pub row: u16,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct SelectionHighlight<'a> {
+    pub background: RenderColor,
+    pub range: &'a SelectionRange,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct TerminalRender<'a> {
+    pub changes: &'a RenderFrameChanges,
+    pub frame_buffer: &'a FrameBuffer,
+    pub origin: TerminalOrigin,
+    pub selection: Option<SelectionHighlight<'a>>,
 }
 
 pub fn queue_full_redraw_start(stdout: &mut impl Write) -> rootcause::Result<()> {
@@ -229,65 +347,6 @@ fn validate_span_against_rows(rows: &[Vec<RenderCell>], span: &RenderRowSpan) ->
     Ok(())
 }
 
-fn render_row_span(
-    stdout: &mut impl Write,
-    row: &RenderRowSpan,
-    active_style: &mut RenderStyle,
-    row_offset: u16,
-    col_offset: u16,
-    selection: Option<&SelectionRange>,
-    selection_bg: RenderColor,
-) -> rootcause::Result<()> {
-    let rendered_row = row
-        .row()
-        .checked_add(row_offset)
-        .ok_or_else(|| report!("muxr render row offset overflowed"))?;
-    let rendered_col = row
-        .col()
-        .checked_add(col_offset)
-        .ok_or_else(|| report!("muxr render column offset overflowed"))?;
-    queue_cmd(stdout, MoveTo(rendered_col, rendered_row))?;
-    let mut run_style = None;
-    let mut run_text = String::new();
-    for (index, cell) in row.cells().iter().enumerate() {
-        if matches!(cell.width(), RenderCellWidth::WideContinuation) {
-            continue;
-        }
-
-        let cell_col = row
-            .col()
-            .checked_add(u16::try_from(index).context("muxr render cell index overflowed")?)
-            .ok_or_else(|| report!("muxr render cell column overflowed"))?;
-        let cell_style = self::selected_style(cell.style(), selection, row.row(), cell_col, selection_bg);
-        let cell_run_style = RenderRunStyle {
-            hyperlink_uri: cell.hyperlink().map(muxr_core::RenderHyperlink::uri),
-            style: cell_style,
-        };
-        if run_style != Some(cell_run_style) {
-            flush_text_run(stdout, active_style, run_style, &mut run_text)?;
-            run_style = Some(cell_run_style);
-        }
-        if cell.text().is_empty() {
-            run_text.push(' ');
-        } else {
-            run_text.push_str(cell.text());
-        }
-    }
-    flush_text_run(stdout, active_style, run_style, &mut run_text)?;
-
-    Ok(())
-}
-
-fn selected_style(
-    style: RenderStyle,
-    selection: Option<&SelectionRange>,
-    row: u16,
-    col: u16,
-    selection_bg: RenderColor,
-) -> RenderStyle {
-    SelectionVisual::for_cell(selection, row, col).apply(style, selection_bg)
-}
-
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum SelectionVisual {
     Selected,
@@ -319,31 +378,6 @@ impl SelectionVisual {
 struct RenderRunStyle<'a> {
     hyperlink_uri: Option<&'a str>,
     style: RenderStyle,
-}
-
-fn flush_text_run(
-    stdout: &mut impl Write,
-    active_style: &mut RenderStyle,
-    run_style: Option<RenderRunStyle<'_>>,
-    run_text: &mut String,
-) -> rootcause::Result<()> {
-    if run_text.is_empty() {
-        return Ok(());
-    }
-    let Some(style) = run_style else {
-        return Err(report!("muxr render text run is missing style"));
-    };
-
-    apply_style_transition(stdout, active_style, style.style)?;
-    if let Some(uri) = style.hyperlink_uri {
-        queue_hyperlink_start(stdout, uri)?;
-    }
-    queue_cmd(stdout, Print(run_text.as_str()))?;
-    if style.hyperlink_uri.is_some() {
-        queue_hyperlink_end(stdout)?;
-    }
-    run_text.clear();
-    Ok(())
 }
 
 fn queue_hyperlink_start(stdout: &mut impl Write, uri: &str) -> rootcause::Result<()> {
@@ -555,14 +589,14 @@ mod tests {
     }
 
     #[test]
-    fn test_frame_buffer_queue_when_changes_arrive_writes_terminal_cmds_without_flushing() -> rootcause::Result<()> {
+    fn test_terminal_update_encoder_when_changes_arrive_writes_commands_without_flushing() -> rootcause::Result<()> {
         let mut frame_buffer = FrameBuffer::default();
         let ApplyOutcome::Applied(changes) = frame_buffer.apply(RenderUpdate::Baseline(render_baseline()?))? else {
             return Err(report!("expected applied baseline"));
         };
         let mut output = CountingWriter::default();
 
-        frame_buffer.queue_at_with_selection(&mut output, &changes, 0, 0, None, MuxrConfig::default().selection.bg)?;
+        encode_terminal_render(&mut output, terminal_render(&frame_buffer, &changes))?;
 
         let rendered = output.rendered_string()?;
         assert_that!(rendered, contains_substring("a"));
@@ -572,14 +606,58 @@ mod tests {
     }
 
     #[test]
-    fn test_frame_buffer_queue_when_diff_arrives_hides_cursor_before_dirty_row_moves() -> rootcause::Result<()> {
+    fn test_terminal_update_encoder_when_text_run_capacity_is_outlier_discards_it() -> rootcause::Result<()> {
+        let mut frame_buffer = FrameBuffer::default();
+        let ApplyOutcome::Applied(changes) = frame_buffer.apply(RenderUpdate::Baseline(render_baseline()?))? else {
+            return Err(report!("expected applied baseline"));
+        };
+        let mut encoder = TerminalUpdateEncoder::default();
+        encoder.text_run.reserve(MAX_RETAINED_TEXT_RUN_BYTES + 1);
+        let mut output = Vec::new();
+
+        encoder.encode(&mut output, terminal_render(&frame_buffer, &changes))?;
+
+        assert_that!(encoder.text_run.capacity(), le(MAX_RETAINED_TEXT_RUN_BYTES));
+        Ok(())
+    }
+
+    #[test]
+    fn test_terminal_update_encoder_when_previous_attempt_failed_does_not_reuse_stale_text() -> rootcause::Result<()> {
+        let mut frame_buffer = FrameBuffer::default();
+        let ApplyOutcome::Applied(changes) = frame_buffer.apply(RenderUpdate::Baseline(render_baseline()?))? else {
+            return Err(report!("expected applied baseline"));
+        };
+        let mut encoder = TerminalUpdateEncoder::default();
+        let mut failed_output = FailOnTextWriter::default();
+
+        assert_that!(
+            encoder
+                .encode(&mut failed_output, terminal_render(&frame_buffer, &changes))
+                .is_err(),
+            eq(true)
+        );
+        assert_that!(failed_output.failed_on_text, eq(true));
+        assert_that!(encoder.text_run, eq(String::new()));
+        assert_that!(encoder.text_run.capacity(), le(MAX_RETAINED_TEXT_RUN_BYTES));
+
+        let mut retry_output = Vec::new();
+        encoder.encode(&mut retry_output, terminal_render(&frame_buffer, &changes))?;
+        let mut fresh_output = Vec::new();
+        TerminalUpdateEncoder::default().encode(&mut fresh_output, terminal_render(&frame_buffer, &changes))?;
+
+        assert_that!(retry_output, eq(fresh_output));
+        Ok(())
+    }
+
+    #[test]
+    fn test_terminal_update_encoder_when_diff_arrives_hides_cursor_before_dirty_row_moves() -> rootcause::Result<()> {
         let mut frame_buffer = applied_frame_buffer()?;
         let ApplyOutcome::Applied(changes) = frame_buffer.apply(RenderUpdate::Diff(render_diff()?))? else {
             return Err(report!("expected applied diff"));
         };
         let mut output = Vec::new();
 
-        frame_buffer.queue_at_with_selection(&mut output, &changes, 0, 0, None, MuxrConfig::default().selection.bg)?;
+        encode_terminal_render(&mut output, terminal_render(&frame_buffer, &changes))?;
 
         let rendered = String::from_utf8(output).context("muxr render test output was not utf8")?;
         let hide_index = rendered
@@ -598,14 +676,22 @@ mod tests {
     }
 
     #[test]
-    fn test_frame_buffer_queue_at_when_offsets_are_set_offsets_rows_columns_and_cursor() -> rootcause::Result<()> {
+    fn test_terminal_update_encoder_when_origin_is_offset_moves_rows_columns_and_cursor() -> rootcause::Result<()> {
         let mut frame_buffer = FrameBuffer::default();
         let ApplyOutcome::Applied(changes) = frame_buffer.apply(RenderUpdate::Baseline(render_baseline()?))? else {
             return Err(report!("expected applied baseline"));
         };
         let mut output = Vec::new();
 
-        frame_buffer.queue_at_with_selection(&mut output, &changes, 1, 2, None, MuxrConfig::default().selection.bg)?;
+        encode_terminal_render(
+            &mut output,
+            TerminalRender {
+                changes: &changes,
+                frame_buffer: &frame_buffer,
+                origin: TerminalOrigin { col: 2, row: 1 },
+                selection: None,
+            },
+        )?;
 
         let rendered = String::from_utf8(output).context("muxr render test output was not utf8")?;
         assert_that!(rendered, contains_substring("\x1b[2;3H"));
@@ -615,7 +701,7 @@ mod tests {
     }
 
     #[test]
-    fn test_frame_buffer_queue_when_cursor_shape_is_bar_emits_shape() -> rootcause::Result<()> {
+    fn test_terminal_update_encoder_when_cursor_shape_is_bar_emits_shape() -> rootcause::Result<()> {
         let mut frame_buffer = FrameBuffer::default();
         let ApplyOutcome::Applied(changes) = frame_buffer.apply(RenderUpdate::Baseline(
             render_baseline_with_cursor_shape(RenderCursorShape::SteadyBar)?,
@@ -625,7 +711,7 @@ mod tests {
         };
         let mut output = Vec::new();
 
-        frame_buffer.queue_at_with_selection(&mut output, &changes, 0, 0, None, MuxrConfig::default().selection.bg)?;
+        encode_terminal_render(&mut output, terminal_render(&frame_buffer, &changes))?;
 
         let rendered = String::from_utf8(output).context("muxr render test output was not utf8")?;
         assert_that!(rendered, contains_substring("\x1b[6 q"));
@@ -633,7 +719,8 @@ mod tests {
     }
 
     #[test]
-    fn test_frame_buffer_render_when_adjacent_cells_share_style_emits_one_color_transition() -> rootcause::Result<()> {
+    fn test_terminal_update_encoder_when_adjacent_cells_share_style_emits_one_color_transition() -> rootcause::Result<()>
+    {
         let style = render_style(RenderColor::Indexed(1), RenderColor::Default, RenderTextStyle::empty());
         let mut frame_buffer = FrameBuffer::default();
         let ApplyOutcome::Applied(changes) =
@@ -643,7 +730,7 @@ mod tests {
         };
         let mut output = Vec::new();
 
-        frame_buffer.queue_at_with_selection(&mut output, &changes, 0, 0, None, MuxrConfig::default().selection.bg)?;
+        encode_terminal_render(&mut output, terminal_render(&frame_buffer, &changes))?;
 
         let rendered = String::from_utf8(output).context("muxr render test output was not utf8")?;
         let foreground_escape = expected_escape(ExpectedEscape::Foreground(RenderColor::Indexed(1)))?;
@@ -653,7 +740,7 @@ mod tests {
     }
 
     #[test]
-    fn test_frame_buffer_render_when_linked_cells_arrive_emits_osc8_around_run() -> rootcause::Result<()> {
+    fn test_terminal_update_encoder_when_linked_cells_arrive_emits_osc8_around_run() -> rootcause::Result<()> {
         let uri = "https://example.com";
         let mut frame_buffer = FrameBuffer::default();
         let ApplyOutcome::Applied(changes) =
@@ -663,7 +750,7 @@ mod tests {
         };
         let mut output = Vec::new();
 
-        frame_buffer.queue_at_with_selection(&mut output, &changes, 0, 0, None, MuxrConfig::default().selection.bg)?;
+        encode_terminal_render(&mut output, terminal_render(&frame_buffer, &changes))?;
 
         let rendered = String::from_utf8(output).context("muxr render test output was not utf8")?;
         let open = osc8_open(uri);
@@ -680,7 +767,7 @@ mod tests {
     }
 
     #[test]
-    fn test_frame_buffer_render_when_linked_diff_starts_mid_row_emits_osc8_start() -> rootcause::Result<()> {
+    fn test_terminal_update_encoder_when_linked_diff_starts_mid_row_emits_osc8_start() -> rootcause::Result<()> {
         let uri = "https://example.com/diff";
         let mut frame_buffer = FrameBuffer::default();
         let ApplyOutcome::Applied(_) = frame_buffer.apply(RenderUpdate::Baseline(render_baseline()?))? else {
@@ -703,7 +790,7 @@ mod tests {
         };
         let mut output = Vec::new();
 
-        frame_buffer.queue_at_with_selection(&mut output, &changes, 0, 0, None, MuxrConfig::default().selection.bg)?;
+        encode_terminal_render(&mut output, terminal_render(&frame_buffer, &changes))?;
 
         let rendered = String::from_utf8(output).context("muxr render test output was not utf8")?;
         assert_that!(
@@ -714,7 +801,7 @@ mod tests {
     }
 
     #[test]
-    fn test_frame_buffer_render_when_linked_cell_is_selected_preserves_osc8() -> rootcause::Result<()> {
+    fn test_terminal_update_encoder_when_linked_cell_is_selected_preserves_osc8() -> rootcause::Result<()> {
         let uri = "https://example.com/selected";
         let (selection, _) = self::selection_range_and_style()?;
         let mut frame_buffer = FrameBuffer::default();
@@ -725,13 +812,18 @@ mod tests {
         };
         let mut output = Vec::new();
 
-        frame_buffer.queue_at_with_selection(
+        let highlight = SelectionHighlight {
+            background: MuxrConfig::default().selection.bg,
+            range: &selection,
+        };
+        encode_terminal_render(
             &mut output,
-            &changes,
-            0,
-            0,
-            Some(&selection),
-            MuxrConfig::default().selection.bg,
+            TerminalRender {
+                changes: &changes,
+                frame_buffer: &frame_buffer,
+                origin: TerminalOrigin { col: 0, row: 0 },
+                selection: Some(highlight),
+            },
         )?;
 
         let rendered = String::from_utf8(output).context("muxr render test output was not utf8")?;
@@ -753,13 +845,17 @@ mod tests {
             eq(SelectionVisual::Unselected)
         );
         assert_that!(SelectionVisual::for_cell(None, 0, 0), eq(SelectionVisual::Unselected));
-        let selected_style = self::selected_style(unselected_style, Some(&selection), 0, 0, selection_bg);
+        let highlight = SelectionHighlight {
+            background: selection_bg,
+            range: &selection,
+        };
+        let selected_style = TerminalUpdateEncoder::selected_style(unselected_style, Some(highlight), 0, 0);
 
         // Selection colors are tunable; this only gates the invariant that selected cells stay visibly distinct.
         assert_that!(selected_style.bg, not(eq(unselected_style.bg)));
         assert_that!(selected_style.attrs.inverse(), eq(false));
         assert_that!(
-            self::selected_style(unselected_style, Some(&selection), 0, 2, selection_bg),
+            TerminalUpdateEncoder::selected_style(unselected_style, Some(highlight), 0, 2),
             eq(unselected_style)
         );
         Ok(())
@@ -782,7 +878,7 @@ mod tests {
         ),
         ExpectedEscape::Attribute(Attribute::Bold)
     )]
-    fn test_frame_buffer_render_when_style_changes_emits_expected_transition(
+    fn test_terminal_update_encoder_when_style_changes_emits_expected_transition(
         #[case] style: RenderStyle,
         #[case] expected: ExpectedEscape,
     ) -> rootcause::Result<()> {
@@ -794,7 +890,7 @@ mod tests {
         };
         let mut output = Vec::new();
 
-        frame_buffer.queue_at_with_selection(&mut output, &changes, 0, 0, None, MuxrConfig::default().selection.bg)?;
+        encode_terminal_render(&mut output, terminal_render(&frame_buffer, &changes))?;
 
         let rendered = String::from_utf8(output).context("muxr render test output was not utf8")?;
         let expected_escape = expected_escape(expected)?;
@@ -836,6 +932,41 @@ mod tests {
         fn flush(&mut self) -> std::io::Result<()> {
             self.flushes = self.flushes.saturating_add(1);
             Ok(())
+        }
+    }
+
+    #[derive(Default)]
+    struct FailOnTextWriter {
+        failed_on_text: bool,
+    }
+
+    impl Write for FailOnTextWriter {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            if buf.contains(&b'a') {
+                self.failed_on_text = true;
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::BrokenPipe,
+                    "injected muxr text-run write failure",
+                ));
+            }
+            Ok(buf.len())
+        }
+
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    fn encode_terminal_render(output: &mut impl Write, render: TerminalRender<'_>) -> rootcause::Result<()> {
+        TerminalUpdateEncoder::default().encode(output, render)
+    }
+
+    const fn terminal_render<'a>(frame_buffer: &'a FrameBuffer, changes: &'a RenderFrameChanges) -> TerminalRender<'a> {
+        TerminalRender {
+            changes,
+            frame_buffer,
+            origin: TerminalOrigin { col: 0, row: 0 },
+            selection: None,
         }
     }
 
