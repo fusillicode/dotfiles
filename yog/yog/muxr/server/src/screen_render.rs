@@ -20,7 +20,6 @@ use crate::pane::layout::PaneRegion;
 use crate::pane::render::PaneRenderConfig;
 use crate::pane::render::PaneRenderLayout;
 use crate::pane::render::RenderComposer;
-use crate::pane::render::RenderDiffReason;
 use crate::pane::runtime::PaneRuntimeMetadata;
 use crate::pane::runtime::PaneRuntimes;
 use crate::pane::tracked_process::PaneTrackedProcessSnapshot;
@@ -57,7 +56,6 @@ pub fn initial_client_render(
     let tracked_processes = pane_tracked_processes.snapshot(layout);
     let layout_snapshot = self::layout_snapshot_and_persist(&config.paths, layout, runtimes, &tracked_processes)?;
     let pane_layout = PaneFullscreen::default().pane_layout(layout, terminal_size)?;
-    let pane_regions = self::pane_regions_snapshot(&pane_layout, runtimes)?;
     let attention_panes = self::attention_pane_ids(layout, pane_tracked_processes);
     let render_baseline = render_composer.render_baseline(
         PaneRenderConfig {
@@ -74,6 +72,7 @@ pub fn initial_client_render(
         terminal_size,
         &attention_panes,
     )?;
+    let pane_regions = self::pane_regions_snapshot_from_composer(&pane_layout, &render_composer)?;
     Ok((layout_snapshot, pane_regions, render_composer, render_baseline))
 }
 
@@ -105,15 +104,6 @@ fn layout_snapshot_and_maybe_persist(
     layout.snapshot_with_runtime_metadata(&runtime_metadata.pane_snapshot_fields())
 }
 
-fn pane_regions_snapshot(pane_layout: &PaneLayout, runtimes: &PaneRuntimes) -> rootcause::Result<PaneRegionsSnapshot> {
-    let regions = pane_layout
-        .regions()
-        .iter()
-        .map(|region| self::pane_region_snapshot(region, runtimes))
-        .collect::<rootcause::Result<Vec<_>>>()?;
-    PaneRegionsSnapshot::new(regions)
-}
-
 fn pane_region_snapshot(region: &PaneRegion, runtimes: &PaneRuntimes) -> rootcause::Result<PaneRegionSnapshot> {
     let handle = runtimes.handle(region.id)?;
     let mouse_mode = handle.mouse_mode();
@@ -129,6 +119,30 @@ fn pane_region_snapshot(region: &PaneRegion, runtimes: &PaneRuntimes) -> rootcau
         visible_top_row,
     )
     .and_then(|snapshot| snapshot.with_wrapped_rows(wrapped_rows))
+}
+
+fn pane_regions_snapshot_from_composer(
+    pane_layout: &PaneLayout,
+    render_composer: &RenderComposer,
+) -> rootcause::Result<PaneRegionsSnapshot> {
+    let regions = pane_layout
+        .regions()
+        .iter()
+        .map(|region| {
+            let snapshot = render_composer.pane_render_snapshot(region.id)?;
+            PaneRegionSnapshot::new(
+                region.id,
+                region.area.origin.col,
+                region.area.origin.row,
+                region.area.size.cols,
+                region.area.size.rows,
+                snapshot.mouse_mode(),
+                snapshot.visible_top_row(),
+            )
+            .and_then(|region| region.with_wrapped_rows(snapshot.visible_row_wraps().to_vec()))
+        })
+        .collect::<rootcause::Result<Vec<_>>>()?;
+    PaneRegionsSnapshot::new(regions)
 }
 
 fn visible_pane_region_at_position(
@@ -205,16 +219,13 @@ pub fn pane_ids_visible_render_dmg(
     if pane_ids.is_empty() {
         return Ok(ClientRenderDmg::Clean);
     }
-    if pane_fullscreen
+    let visible = pane_fullscreen
         .pane_layout(layout, terminal_size)?
         .regions()
         .iter()
-        .any(|region| pane_ids.contains(&region.id))
-    {
-        Ok(ClientRenderDmg::Dirty)
-    } else {
-        Ok(ClientRenderDmg::Clean)
-    }
+        .filter_map(|region| pane_ids.contains(&region.id).then_some(region.id))
+        .collect::<Vec<_>>();
+    Ok(ClientRenderDmg::panes(visible))
 }
 
 pub async fn flush_render_diff(
@@ -222,21 +233,13 @@ pub async fn flush_render_diff(
     state: &mut ClientSessionState<'_>,
     render_dmg: &mut ClientRenderDmg,
 ) -> rootcause::Result<ClientSessionFlow> {
-    if *render_dmg != ClientRenderDmg::Dirty {
+    if render_dmg.is_clean() {
         return Ok(ClientSessionFlow::Continue);
     }
 
     let (pane_regions, render_update) = {
         let pane_layout = self::visible_pane_layout(state)?;
-        let pane_regions = self::pane_regions_snapshot(&pane_layout, state.runtimes)?;
         let attention_panes = self::attention_pane_ids(state.layout, &state.pane_tracked_processes);
-        let reason = if pane_regions == state.pane_regions {
-            RenderDiffReason::DirtyFrame
-        } else {
-            // Scrollback can move the viewport without changing the visible pixels. Send an empty diff in that case so
-            // clients can complete scroll-dependent state after the matching PaneRegions event.
-            RenderDiffReason::RegionChanged
-        };
         let update = state.render_composer.render_diff(
             PaneRenderConfig {
                 border_styles: state.config.user_config.pane_borders,
@@ -251,8 +254,9 @@ pub async fn flush_render_diff(
             state.runtimes,
             &state.terminal_size,
             &attention_panes,
-            reason,
+            render_dmg,
         )?;
+        let pane_regions = self::pane_regions_snapshot_from_composer(&pane_layout, state.render_composer)?;
         (pane_regions, update)
     };
     if self::send_pane_regions_and_render(event_writer, state, pane_regions, render_update).await?
@@ -349,7 +353,7 @@ pub async fn flush_tracked_process_runtime_layout(
         .layout
         .snapshot_with_runtime_metadata(&runtime_metadata.pane_snapshot_fields())?;
     render_dmg.include_dmg(pane_surface_dirty);
-    timers.sync_render_deadline(*render_dmg)?;
+    timers.sync_render_deadline(render_dmg)?;
     self::send_sidebar_layout_if_changed(event_writer, state, layout_snapshot).await
 }
 
@@ -368,7 +372,7 @@ pub async fn flush_pane_attention(
         TrackedProcessAttention::Unchanged => return Ok(ClientSessionFlow::Continue),
     };
     render_dmg.include_dmg(pane_surface_dirty);
-    timers.sync_render_deadline(*render_dmg)?;
+    timers.sync_render_deadline(render_dmg)?;
     let runtime_metadata = self::runtime_pane_metadata(state);
     let layout_snapshot = state
         .layout
@@ -455,7 +459,6 @@ pub async fn send_layout_and_baseline(
             },
         )?;
         let pane_layout = self::visible_pane_layout(state)?;
-        let pane_regions = self::pane_regions_snapshot(&pane_layout, state.runtimes)?;
         let attention_panes = self::attention_pane_ids(state.layout, &state.pane_tracked_processes);
         let render_update = state.render_composer.render_baseline(
             PaneRenderConfig {
@@ -472,6 +475,7 @@ pub async fn send_layout_and_baseline(
             &state.terminal_size,
             &attention_panes,
         )?;
+        let pane_regions = self::pane_regions_snapshot_from_composer(&pane_layout, state.render_composer)?;
         (layout_snapshot, pane_regions, render_update)
     };
     if crate::event_writer::send_event_with_timeout(
@@ -639,11 +643,11 @@ mod tests {
         );
         assert_that!(
             self::pane_ids_visible_render_dmg(&layout, &fullscreen, &terminal_size, &[active_pane])?,
-            eq(ClientRenderDmg::Dirty)
+            eq(ClientRenderDmg::pane(active_pane))
         );
         assert_that!(
             self::pane_ids_visible_render_dmg(&layout, &fullscreen, &terminal_size, &[inactive_pane, active_pane],)?,
-            eq(ClientRenderDmg::Dirty)
+            eq(ClientRenderDmg::pane(active_pane))
         );
         assert_that!(
             self::pane_ids_visible_render_dmg(&layout, &fullscreen, &terminal_size, &[])?,

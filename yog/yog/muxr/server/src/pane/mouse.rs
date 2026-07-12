@@ -91,7 +91,7 @@ impl From<ClientMouseEvent> for PaneMouseFocus {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PaneMouseClientOutcome {
     pub focus: PaneFocusClientOutcome,
     pub render_signal: PaneRenderSignal,
@@ -146,7 +146,7 @@ pub fn handle_mouse_event_client_request(
                 focus,
                 render_signal: PaneRenderSignal::from_dmg_and_deadline(
                     if viewport_move == crate::pty::PtyViewportMove::MovedToBottom {
-                        crate::render_state::ClientRenderDmg::Dirty
+                        crate::render_state::ClientRenderDmg::pane(*region.id())
                     } else {
                         crate::render_state::ClientRenderDmg::Clean
                     },
@@ -170,7 +170,7 @@ pub fn handle_mouse_event_client_request(
                 focus: PaneFocusClientOutcome::Unchanged,
                 render_signal: PaneRenderSignal::from_dmg_and_deadline(
                     if viewport_move == crate::pty::PtyViewportMove::MovedToBottom {
-                        crate::render_state::ClientRenderDmg::Dirty
+                        crate::render_state::ClientRenderDmg::pane(*region.id())
                     } else {
                         crate::render_state::ClientRenderDmg::Clean
                     },

@@ -11,7 +11,7 @@ use crate::pty::PtyViewportMove;
 use crate::render_state::PaneInputRenderPriority;
 use crate::render_state::PaneRenderSignal;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PaneInputOutcome {
     pub cmd_handoff_pane_id: Option<PaneId>,
     pub render_priority: PaneInputRenderPriority,
@@ -74,7 +74,7 @@ pub fn handle_client_key(key: &ClientKey, state: &mut ClientSessionState<'_>) ->
         render_priority: PaneInputRenderPriority::Interactive,
         render_signal: PaneRenderSignal::from_dmg_and_deadline(
             if viewport_move == crate::pty::PtyViewportMove::MovedToBottom {
-                crate::render_state::ClientRenderDmg::Dirty
+                crate::render_state::ClientRenderDmg::pane(pane_id)
             } else {
                 crate::render_state::ClientRenderDmg::Clean
             },
@@ -117,7 +117,7 @@ fn write_active_pane_user_input(
         render_priority,
         render_signal: PaneRenderSignal::from_dmg_and_deadline(
             if viewport_move == crate::pty::PtyViewportMove::MovedToBottom {
-                crate::render_state::ClientRenderDmg::Dirty
+                crate::render_state::ClientRenderDmg::pane(pane_id)
             } else {
                 crate::render_state::ClientRenderDmg::Clean
             },

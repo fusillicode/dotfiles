@@ -48,5 +48,10 @@ name = "process_observation"
 harness = false
 required-features = ["benchmarking"]
 
+[[bench]]
+name = "server_composer"
+harness = false
+required-features = ["benchmarking"]
+
 [lints]
 workspace = true
