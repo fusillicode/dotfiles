@@ -6,6 +6,7 @@ use muxr_core::PaneMouseMode;
 use muxr_core::PaneRegionSnapshot;
 use muxr_core::PaneRegionsSnapshot;
 use muxr_core::PaneSnapshot;
+use muxr_core::ProtocolFrame;
 use muxr_core::RenderBaseline;
 use muxr_core::RenderCell;
 use muxr_core::RenderColor;
@@ -105,6 +106,14 @@ impl Workload {
     #[must_use]
     pub fn has_render_updates(&self) -> bool {
         self.events.iter().any(|event| matches!(event, ServerEvent::Render(_)))
+    }
+
+    /// Encode the deterministic event stream once for transport-only A/B measurement.
+    ///
+    /// # Errors
+    /// Returns an error if any event cannot be encoded.
+    pub fn transport_frames(&self) -> rootcause::Result<Vec<ProtocolFrame>> {
+        self.events.iter().map(encode_server_event).collect()
     }
 
     /// Execute protocol serialization, validation, framebuffer application, and terminal rendering.
