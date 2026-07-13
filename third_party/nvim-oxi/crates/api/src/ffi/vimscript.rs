@@ -7,6 +7,7 @@ use types::*;
 unsafe extern "C" {
     // https://github.com/neovim/neovim/blob/v0.10.0/src/nvim/api/vimscript.c#L278
     pub(crate) fn nvim_call_dict_function(
+        channel_id: u64,
         dict: NonOwning<Object>,
         r#fn: NvimStr,
         args: NonOwning<Array>,
@@ -16,6 +17,7 @@ unsafe extern "C" {
 
     // https://github.com/neovim/neovim/blob/v0.10.0/src/nvim/api/vimscript.c#L263
     pub(crate) fn nvim_call_function(
+        channel_id: u64,
         r#fn: NvimStr,
         args: NonOwning<Array>,
         arena: *mut Arena,

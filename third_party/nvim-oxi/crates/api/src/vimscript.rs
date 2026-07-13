@@ -27,6 +27,7 @@ where
     let mut err = nvim::Error::new();
     let res = unsafe {
         nvim_call_dict_function(
+            crate::LUA_INTERNAL_CALL,
             dict.non_owning(),
             func.as_nvim_str(),
             args.non_owning(),
@@ -53,6 +54,7 @@ where
     let mut err = nvim::Error::new();
     let res = unsafe {
         nvim_call_function(
+            crate::LUA_INTERNAL_CALL,
             func.as_nvim_str(),
             args.non_owning(),
             types::arena(),
