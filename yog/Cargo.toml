@@ -57,7 +57,7 @@ categories = ["command-line-utilities", "development-tools"]
 # Member crates reference them with `{ workspace = true }` under their own [dev-dependencies].
 bytes = { version = "1.11" }
 chrono = { version = "0.4", default-features = false, features = ["clock", "serde"] }
-compact_str = { version = "0.9", features = ["rkyv", "serde"] }
+compact_str = { version = "0.10", features = ["rkyv", "serde"] }
 convert_case = { version = "0.11" }
 fake = { version = "5.1", features = ["derive"] }
 git2 = { version = "0.21", default-features = false }
