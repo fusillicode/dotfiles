@@ -21,7 +21,7 @@ proc-macro2 = "1"
 quote = "1"
 serde = "1"
 serde_repr = "0.1"
-syn = "2"
+syn = "3"
 thiserror = "2"
 tokio = "1"
 
