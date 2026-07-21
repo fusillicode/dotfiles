@@ -770,10 +770,11 @@ impl TerminalState {
             .into_iter()
             .enumerate()
             .map(|(row, visible_row)| {
+                // Scrollback rows retain their capture-time width while live rows follow the resized screen.
                 RenderRowSpan::new(
                     u16::try_from(row).context("muxr terminal snapshot row index overflowed")?,
                     0,
-                    visible_row.into_cells(),
+                    self::cells_fitted_to_width(visible_row.into_cells(), screen_cols),
                 )
             })
             .collect::<rootcause::Result<Vec<_>>>()?;
@@ -993,6 +994,55 @@ fn cursor_shape_from_params(params: &[&[u16]]) -> Option<RenderCursorShape> {
     }
     let param = params.first().and_then(|param| param.first()).copied().unwrap_or(0);
     RenderCursorShape::from_csi_param(param)
+}
+
+fn cells_fitted_to_width(cells: Vec<RenderCell>, width: u16) -> Vec<RenderCell> {
+    let width = usize::from(width);
+    if cells.len() == width {
+        return cells;
+    }
+
+    let mut fitted = Vec::with_capacity(width);
+    let mut cells = cells.into_iter().peekable();
+
+    while fitted.len() < width {
+        let Some(cell) = cells.next() else {
+            break;
+        };
+        match cell.width() {
+            RenderCellWidth::Narrow => fitted.push(cell),
+            RenderCellWidth::Wide => {
+                if fitted.len().saturating_add(2) > width {
+                    fitted.push(RenderCell::narrow(" ", cell.style()));
+                    break;
+                }
+                if cells
+                    .peek()
+                    .is_some_and(|continuation| continuation.width() == RenderCellWidth::WideContinuation)
+                {
+                    if let Some(continuation) = cells.next() {
+                        fitted.push(cell);
+                        fitted.push(continuation);
+                    }
+                } else {
+                    fitted.push(RenderCell::narrow(" ", cell.style()));
+                }
+            }
+            RenderCellWidth::WideContinuation => {
+                if fitted
+                    .last()
+                    .is_some_and(|previous| previous.width() == RenderCellWidth::Wide)
+                {
+                    fitted.push(cell);
+                } else {
+                    fitted.push(RenderCell::narrow(" ", cell.style()));
+                }
+            }
+        }
+    }
+
+    fitted.resize_with(width, || RenderCell::narrow(" ", RenderStyle::default()));
+    fitted
 }
 
 fn screen_rows(screen: &vt100::Screen, rows: u16, cols: u16, row_count: usize) -> Vec<TerminalVisibleRow> {
@@ -1428,6 +1478,32 @@ mod tests {
 
         assert_that!(rendered, contains_substring("row-00"));
         assert_that!(rendered, contains_substring("row-03"));
+        Ok(())
+    }
+
+    #[test]
+    fn test_terminal_state_snapshot_when_scrolled_after_narrowing_resize_fits_history_to_current_width()
+    -> rootcause::Result<()> {
+        let mut terminal = self::terminal_state(&TerminalSize::new(8, 2)?);
+        let _ = terminal.process(b"one\r\ntwo\r\nthree");
+        assert_that!(terminal.scroll(PaneScrollDirection::Up), eq(TerminalScrollMove::Moved));
+
+        let before = terminal.snapshot()?;
+        let before_widths = before
+            .rows()
+            .iter()
+            .map(RenderRowSpan::width)
+            .collect::<rootcause::Result<Vec<_>>>()?;
+        assert_that!(before_widths, eq(vec![8, 8]));
+
+        terminal.resize(&TerminalSize::new(4, 2)?);
+        let after = terminal.snapshot()?;
+        let after_widths = after
+            .rows()
+            .iter()
+            .map(RenderRowSpan::width)
+            .collect::<rootcause::Result<Vec<_>>>()?;
+        assert_that!(after_widths, eq(vec![4, 4]));
         Ok(())
     }
 
