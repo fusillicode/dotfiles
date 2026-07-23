@@ -23,6 +23,12 @@ pub enum PaneTree {
     },
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PaneTreeRightPane {
+    Pane(PaneId),
+    Missing,
+}
+
 impl PaneTree {
     pub fn pane_count(&self) -> usize {
         match self {
@@ -36,6 +42,33 @@ impl PaneTree {
             Self::Pane(pane) => pane.id == pane_id,
             Self::Split { first, second, .. } => first.contains_pane(pane_id) || second.contains_pane(pane_id),
         }
+    }
+
+    // A target is singular only when the closest containing vertical split has a leaf as its second branch; nested
+    // right branches do not identify one pane to reuse.
+    pub(crate) fn right_pane_of(&self, pane_id: PaneId) -> PaneTreeRightPane {
+        let Self::Split {
+            axis, first, second, ..
+        } = self
+        else {
+            return PaneTreeRightPane::Missing;
+        };
+
+        if first.contains_pane(pane_id) {
+            if let PaneTreeRightPane::Pane(right_pane_id) = first.right_pane_of(pane_id) {
+                return PaneTreeRightPane::Pane(right_pane_id);
+            }
+            if matches!(axis, PaneSplitAxis::Vertical)
+                && let Self::Pane(right_pane) = second.as_ref()
+            {
+                return PaneTreeRightPane::Pane(right_pane.id);
+            }
+            return PaneTreeRightPane::Missing;
+        }
+        if second.contains_pane(pane_id) {
+            return second.right_pane_of(pane_id);
+        }
+        PaneTreeRightPane::Missing
     }
 
     pub fn pane_mut(&mut self, pane_id: PaneId) -> Option<&mut Pane> {
@@ -174,6 +207,61 @@ mod tests {
     }
 
     #[test]
+    fn test_right_pane_of_when_clicked_pane_is_first_vertical_child_returns_right_leaf() -> rootcause::Result<()> {
+        let tree = PaneTree::Split {
+            axis: PaneSplitAxis::Vertical,
+            first_ratio: PaneSplitRatio::new(500)?,
+            first: Box::new(PaneTree::Pane(self::pane_with_id(1)?)),
+            second: Box::new(PaneTree::Pane(self::pane_with_id(2)?)),
+        };
+
+        assert_that!(
+            tree.right_pane_of(PaneId::new(1)?),
+            eq(PaneTreeRightPane::Pane(PaneId::new(2)?))
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_right_pane_of_when_nested_vertical_split_is_closer_returns_inner_right_leaf() -> rootcause::Result<()> {
+        let tree = PaneTree::Split {
+            axis: PaneSplitAxis::Vertical,
+            first_ratio: PaneSplitRatio::new(500)?,
+            first: Box::new(PaneTree::Split {
+                axis: PaneSplitAxis::Vertical,
+                first_ratio: PaneSplitRatio::new(500)?,
+                first: Box::new(PaneTree::Pane(self::pane_with_id(1)?)),
+                second: Box::new(PaneTree::Pane(self::pane_with_id(2)?)),
+            }),
+            second: Box::new(PaneTree::Pane(self::pane_with_id(3)?)),
+        };
+
+        assert_that!(
+            tree.right_pane_of(PaneId::new(1)?),
+            eq(PaneTreeRightPane::Pane(PaneId::new(2)?))
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_right_pane_of_when_right_branch_is_nested_returns_missing() -> rootcause::Result<()> {
+        let tree = PaneTree::Split {
+            axis: PaneSplitAxis::Vertical,
+            first_ratio: PaneSplitRatio::new(500)?,
+            first: Box::new(PaneTree::Pane(self::pane_with_id(1)?)),
+            second: Box::new(PaneTree::Split {
+                axis: PaneSplitAxis::Horizontal,
+                first_ratio: PaneSplitRatio::new(500)?,
+                first: Box::new(PaneTree::Pane(self::pane_with_id(2)?)),
+                second: Box::new(PaneTree::Pane(self::pane_with_id(3)?)),
+            }),
+        };
+
+        assert_that!(tree.right_pane_of(PaneId::new(1)?), eq(PaneTreeRightPane::Missing));
+        Ok(())
+    }
+
+    #[test]
     fn test_snapshot_with_runtime_metadata_when_title_is_cmd_keeps_pane_cwd() -> rootcause::Result<()> {
         let snapshot =
             self::pane()?.snapshot_with_runtime_metadata(Some("cargo test"), None, TrackedProcessState::None);
@@ -255,5 +343,11 @@ mod tests {
             state: PaneState::Running,
             title: "zsh".to_owned(),
         })
+    }
+
+    fn pane_with_id(id: u32) -> rootcause::Result<Pane> {
+        let mut pane = self::pane()?;
+        pane.id = PaneId::new(id)?;
+        Ok(pane)
     }
 }

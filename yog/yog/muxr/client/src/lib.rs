@@ -6,6 +6,7 @@ pub use session::list::SessionState;
 pub use session::list::list_sessions;
 
 mod copy_selection;
+mod file_links;
 mod frame_buffer;
 mod input;
 mod pane;

@@ -1,5 +1,8 @@
+use std::fmt::Write as _;
+
 use muxr_core::ClientKey;
 use muxr_core::ClientRequest;
+use muxr_core::PaneId;
 use muxr_core::ServerError;
 use muxr_core::ServerEvent;
 use muxr_transport::ServerEventWriter;
@@ -73,6 +76,12 @@ async fn handle_client_request(
             self::apply_pane_input_outcome(outcome, event_writer, state, timers, render_dmg).await
         }
         ClientRequest::Key(key) => self::handle_key_request(key, event_writer, state, timers, render_dmg).await,
+        ClientRequest::OpenFile {
+            pane_id,
+            path,
+            line,
+            column,
+        } => self::handle_open_file_request(pane_id, &path, line, column, event_writer, state, timers).await,
         ClientRequest::Mouse(event) => {
             self::apply_pane_mouse_outcome(
                 crate::pane::mouse::handle_mouse_event_client_request(event, state)?,
@@ -137,6 +146,114 @@ async fn handle_client_request(
             Ok(ClientSessionFlow::Disconnect)
         }
     }
+}
+
+async fn handle_open_file_request(
+    source_pane_id: PaneId,
+    path: &str,
+    line: Option<u32>,
+    column: Option<u32>,
+    event_writer: &mut ServerEventWriter,
+    state: &mut ClientSessionState<'_>,
+    timers: &mut ClientTimers,
+) -> rootcause::Result<ClientSessionFlow> {
+    if state.scrollback_editor.is_some() || !state.layout.active_tab()?.contains_pane(source_pane_id) {
+        return Ok(ClientSessionFlow::Continue);
+    }
+
+    let fullscreen_visible = state.pane_fullscreen.visible_pane_id(state.layout)?.is_some();
+    let route = if fullscreen_visible {
+        // A fullscreen sibling is hidden from the click target. Preserve it and create the new editor beside the pane
+        // that received the click; focusing the hidden sibling would silently leave fullscreen mode.
+        crate::client::session::OpenFilePaneRoute::NewRightSplit
+    } else {
+        state.open_file_pane_route(source_pane_id)?
+    };
+    if fullscreen_visible {
+        crate::pane::fullscreen::clear_active_tab_for_layout_mutation(state);
+    }
+
+    match route {
+        crate::client::session::OpenFilePaneRoute::ExistingNvim(editor_pane_id) => {
+            state.focus_pane_for_open_file(editor_pane_id, timers)?;
+            if crate::screen_render::send_layout_and_baseline(event_writer, state).await?
+                == ClientSessionFlow::Disconnect
+            {
+                return Ok(ClientSessionFlow::Disconnect);
+            }
+            state
+                .runtimes
+                .handle(editor_pane_id)?
+                .write_input(&self::nvim_edit_input(path, line, column))?;
+            return Ok(ClientSessionFlow::Continue);
+        }
+        crate::client::session::OpenFilePaneRoute::NewRightSplit => {}
+    }
+
+    state.focus_pane_for_open_file(source_pane_id, timers)?;
+    let split = crate::pane::split::handle_split_pane_cmd_client(crate::pane::split::PaneSplitAxis::Vertical, state)?;
+    let new_pane_id = split.new_pane_id;
+    if self::apply_pane_split_outcome(split, event_writer, state, timers).await? == ClientSessionFlow::Disconnect {
+        return Ok(ClientSessionFlow::Disconnect);
+    }
+    state
+        .runtimes
+        .handle(new_pane_id)?
+        .write_input(self::nvim_shell_command(path, line, column).as_bytes())?;
+    Ok(ClientSessionFlow::Continue)
+}
+
+fn nvim_edit_input(path: &str, line: Option<u32>, column: Option<u32>) -> Vec<u8> {
+    let mut command = format!(
+        "\x1b:silent! execute 'edit ' . fnameescape('{}')",
+        self::vimscript_quote(path)
+    );
+    if let Some(line) = line {
+        let column = column.unwrap_or(1);
+        let _ = write!(command, " | call cursor({line},{column})");
+    } else if let Some(column) = column {
+        let _ = write!(command, " | call cursor(1,{column})");
+    }
+    command.push('\r');
+    command.into_bytes()
+}
+
+fn nvim_shell_command(path: &str, line: Option<u32>, column: Option<u32>) -> String {
+    let location = match (line, column) {
+        (Some(line), Some(column)) => format!("+call cursor({line},{column})"),
+        (Some(line), None) => format!("+{line}"),
+        (None, Some(column)) => format!("+call cursor(1,{column})"),
+        (None, None) => String::new(),
+    };
+    let mut command = String::from("nvim");
+    if !location.is_empty() {
+        command.push(' ');
+        command.push_str(&self::shell_quote(&location));
+    }
+    command.push_str(" -- ");
+    command.push_str(&self::shell_quote(path));
+    command.push('\n');
+    command
+}
+
+fn shell_quote(raw: &str) -> String {
+    if raw.is_empty() {
+        return "''".to_owned();
+    }
+    if raw.bytes().all(|byte| {
+        byte.is_ascii_alphanumeric()
+            || matches!(
+                byte,
+                b'/' | b'.' | b'_' | b'-' | b':' | b'+' | b'=' | b',' | b'@' | b'%'
+            )
+    }) {
+        return raw.to_owned();
+    }
+    format!("'{}'", raw.replace('\'', "'\\''"))
+}
+
+fn vimscript_quote(raw: &str) -> String {
+    raw.replace('\'', "''")
 }
 
 async fn apply_pane_input_outcome(
@@ -600,6 +717,7 @@ mod tests {
     use test_that::prelude::*;
 
     use super::*;
+    use crate::pane::cmd::NvimState;
     use crate::pane::cmd::PaneCmd;
     use crate::pane::cmd::PaneCmdObservation;
     use crate::pane::split::PaneSplitAxis;
@@ -741,6 +859,52 @@ mod tests {
         assert_that!(timers.render_sleep.deadline(), eq(bulk_deadline));
         assert_that!(render_dmg, eq(ClientRenderDmg::Full));
         Ok(())
+    }
+
+    #[test]
+    fn test_observation_is_nvim_when_nvim_is_leader_or_group_member_returns_true() {
+        assert_that!(self::fg_tracked_process("nvim").nvim_state(), eq(NvimState::Running));
+        assert_that!(
+            crate::pane::cmd::PaneCmdObservation::FgCmd(crate::pane::cmd::FgCmd::from_test_group(
+                Some(PaneCmd {
+                    executable: "zsh".to_owned(),
+                    path: None,
+                    pid: 42,
+                }),
+                Ok(vec![PaneCmd {
+                    executable: "nvim".to_owned(),
+                    path: None,
+                    pid: 43,
+                }]),
+            ))
+            .nvim_state(),
+            eq(NvimState::Running)
+        );
+    }
+
+    #[test]
+    fn test_observation_is_nvim_when_nvim_is_not_observed_returns_false() {
+        assert_that!(self::fg_tracked_process("vim").nvim_state(), eq(NvimState::NotRunning));
+        assert_that!(
+            crate::pane::cmd::PaneCmdObservation::Shell.nvim_state(),
+            eq(NvimState::NotRunning)
+        );
+    }
+
+    #[test]
+    fn test_nvim_edit_input_when_path_and_location_are_supplied_escapes_and_positions_cursor() {
+        assert_that!(
+            String::from_utf8(self::nvim_edit_input("src/O'Reilly.rs", Some(42), Some(7))).expect("valid nvim input"),
+            eq("\u{1b}:silent! execute 'edit ' . fnameescape('src/O''Reilly.rs') | call cursor(42,7)\r".to_owned(),)
+        );
+    }
+
+    #[test]
+    fn test_nvim_shell_command_when_path_and_location_are_supplied_shell_quotes_arguments() {
+        assert_that!(
+            self::nvim_shell_command("src/a file.rs", Some(42), Some(7)),
+            eq("nvim '+call cursor(42,7)' -- 'src/a file.rs'\n".to_owned())
+        );
     }
 
     fn layout(config: &crate::server::ServerConfig) -> rootcause::Result<SessionLayout> {

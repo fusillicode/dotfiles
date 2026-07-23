@@ -7,6 +7,7 @@ use muxr_config::TabBarConfig;
 use muxr_core::ClientMouseEvent;
 use muxr_core::ClientMouseEventPhase;
 use muxr_core::ClientMousePosition;
+use muxr_core::ClientRequest;
 use muxr_core::LayoutSnapshot;
 use muxr_core::PaneId;
 use muxr_core::PaneMouseMode;
@@ -65,6 +66,17 @@ enum TabBarDmg {
     Dirty,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum FileOpenCapture {
+    Armed,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum FileOpenRelease {
+    Consumed,
+    NotCaptured,
+}
+
 pub struct ClientRenderer {
     any_motion_capture: MouseAnyMotionCapture,
     tab_bar_dmg: TabBarDmg,
@@ -74,6 +86,7 @@ pub struct ClientRenderer {
     frame_buffer: FrameBuffer,
     layout: LayoutSnapshot,
     mouse_capture: Option<MouseCapture>,
+    file_open_capture: Option<FileOpenCapture>,
     pane_regions: PaneRegionsSnapshot,
     selection_edge_scroll: SelectionEdgeScrollState,
     selection: SelectionState,
@@ -117,6 +130,7 @@ impl ClientRenderer {
             frame_buffer: FrameBuffer::default(),
             layout,
             mouse_capture: None,
+            file_open_capture: None,
             pane_regions,
             selection_edge_scroll: SelectionEdgeScrollState::default(),
             selection: SelectionState::default(),
@@ -140,6 +154,42 @@ impl ClientRenderer {
 
     pub fn tab_id_at_sidebar_row(&self, row: u16) -> Option<TabId> {
         crate::tab_bar::tab_id_at_row(&self.layout, row)
+    }
+
+    pub(crate) fn tab_focus_request_for_sidebar_click(&self, event: ClientMouseEvent) -> Option<ClientRequest> {
+        if event.phase != ClientMouseEventPhase::Press || event.button != 0 {
+            return None;
+        }
+        self.tab_id_at_sidebar_row(event.position.row)
+            .map(ClientRequest::FocusTab)
+    }
+
+    pub fn file_open_request(&self, position: ClientMousePosition) -> Option<ClientRequest> {
+        let region = self.pane_regions.pane_at(position)?;
+        let tab = self
+            .layout
+            .tabs()
+            .iter()
+            .find(|tab| *tab.id() == *self.layout.active_tab())?;
+        let pane = tab.panes().iter().find(|pane| pane.id == *region.id())?;
+        let link = self.frame_buffer.file_link_at_resolved(region, position, &pane.cwd)?;
+        Some(ClientRequest::OpenFile {
+            pane_id: *region.id(),
+            path: link.path.to_str()?.to_owned(),
+            line: link.line,
+            column: link.column,
+        })
+    }
+
+    pub const fn begin_file_open_capture(&mut self) {
+        self.file_open_capture = Some(FileOpenCapture::Armed);
+    }
+
+    pub const fn finish_file_open_capture(&mut self) -> FileOpenRelease {
+        match self.file_open_capture.take() {
+            Some(FileOpenCapture::Armed) => FileOpenRelease::Consumed,
+            None => FileOpenRelease::NotCaptured,
+        }
     }
 
     pub fn apply_pane_regions(
@@ -526,6 +576,7 @@ mod tests {
 
     use muxr_core::ClientRequest;
     use muxr_core::PaneSnapshot;
+    use muxr_core::RenderBaseline;
     use muxr_core::TabId;
     use muxr_core::TabSnapshot;
     use muxr_core::TerminalSize;
@@ -534,6 +585,110 @@ mod tests {
 
     use super::*;
     use crate::renderer::test_helpers;
+
+    #[test]
+    fn test_file_open_request_when_bare_file_is_clicked_resolves_against_pane_cwd() -> rootcause::Result<()> {
+        let directory = tempfile::tempdir()?;
+        let path = directory.path().join("README");
+        std::fs::write(&path, b"content")?;
+        let cwd = directory
+            .path()
+            .to_str()
+            .ok_or_else(|| report!("temporary test directory is not UTF-8"))?;
+
+        let request = self::file_open_request_for_text(cwd, "README")?;
+
+        assert_that!(
+            request,
+            some(eq(ClientRequest::OpenFile {
+                pane_id: PaneId::new(1)?,
+                path: path
+                    .to_str()
+                    .ok_or_else(|| report!("temporary test file path is not UTF-8"))?
+                    .to_owned(),
+                line: None,
+                column: None,
+            }))
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_file_open_request_when_bare_directory_is_clicked_resolves_against_pane_cwd() -> rootcause::Result<()> {
+        let directory = tempfile::tempdir()?;
+        let path = directory.path().join("src");
+        std::fs::create_dir(&path)?;
+        let cwd = directory
+            .path()
+            .to_str()
+            .ok_or_else(|| report!("temporary test directory is not UTF-8"))?;
+
+        let request = self::file_open_request_for_text(cwd, "src")?;
+
+        assert_that!(
+            request,
+            some(eq(ClientRequest::OpenFile {
+                pane_id: PaneId::new(1)?,
+                path: path
+                    .to_str()
+                    .ok_or_else(|| report!("temporary directory path is not UTF-8"))?
+                    .to_owned(),
+                line: None,
+                column: None,
+            }))
+        );
+        Ok(())
+    }
+
+    fn file_open_request_for_text(cwd: &str, text: &str) -> rootcause::Result<Option<ClientRequest>> {
+        let width = u16::try_from(text.chars().count())?;
+        let layout = LayoutSnapshot::new(
+            TabId::new(1)?,
+            vec![TabSnapshot::new(
+                TabId::new(1)?,
+                "default",
+                PaneId::new(1)?,
+                vec![PaneSnapshot {
+                    tracked_process_state: muxr_core::TrackedProcessState::None,
+                    cwd: cwd.to_owned(),
+                    cmd_label: None,
+                    focus_seq: 1,
+                    id: PaneId::new(1)?,
+                    title: "shell".to_owned(),
+                }],
+            )?],
+        )?;
+        let pane_regions = PaneRegionsSnapshot::new(vec![PaneRegionSnapshot::new(
+            PaneId::new(1)?,
+            0,
+            0,
+            width,
+            1,
+            PaneMouseMode::None,
+            0,
+        )?])?;
+        let mut renderer = ClientRenderer::with_synchronized_output(layout, pane_regions, SynchronizedOutput::Csi);
+        let baseline = RenderBaseline::new(
+            1,
+            muxr_core::TerminalSize::new(width, 1)?,
+            muxr_core::RenderCursor {
+                row: 0,
+                col: 0,
+                shape: muxr_core::RenderCursorShape::Default,
+                visibility: muxr_core::RenderCursorVisibility::Visible,
+            },
+            vec![muxr_core::RenderRowSpan::new(
+                0,
+                0,
+                text.chars()
+                    .map(|ch| muxr_core::RenderCell::narrow(ch.to_string(), muxr_core::RenderStyle::default()))
+                    .collect(),
+            )?],
+        )?;
+        let mut output = CountingWriter::default();
+        renderer.apply_render(&mut output, RenderUpdate::Baseline(baseline))?;
+        Ok(renderer.file_open_request(ClientMousePosition { row: 0, col: 1 }))
+    }
 
     #[test]
     fn test_client_renderer_apply_layout_when_no_render_arrives_writes_nothing() -> rootcause::Result<()> {
@@ -694,7 +849,7 @@ mod tests {
     }
 
     #[test]
-    fn test_client_renderer_apply_pane_regions_when_any_motion_is_no_longer_needed_disables_outer_capture()
+    fn test_client_renderer_apply_pane_regions_when_any_motion_is_no_longer_needed_reasserts_outer_capture()
     -> rootcause::Result<()> {
         let mut renderer = ClientRenderer::with_synchronized_output(
             layout_snapshot()?,
