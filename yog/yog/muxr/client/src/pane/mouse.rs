@@ -9,6 +9,7 @@ use muxr_core::ClientRequest;
 use crate::copy_selection::SelectionInput;
 use crate::pane::focus::LocalMouseAction;
 use crate::renderer::ClientRenderer;
+use crate::renderer::FileOpenRelease;
 use crate::runtime::ClientInputSend;
 use crate::runtime::DroppableSendOutcome;
 
@@ -19,8 +20,13 @@ pub async fn handle_mouse_input_action(
     renderer: &mut ClientRenderer,
     stdout: &mut impl Write,
 ) -> rootcause::Result<ClientInputSend> {
+    if matches!(self::alt_left_click_phase(event), Some(AltLeftClickPhase::Release))
+        && matches!(renderer.finish_file_open_capture(), FileOpenRelease::Consumed)
+    {
+        return Ok(ClientInputSend::Accepted);
+    }
     let Some(position) = pane_position(muxr_config, event.position) else {
-        if let Some(request) = tab_focus_request_for_sidebar_click(event, renderer) {
+        if let Some(request) = renderer.tab_focus_request_for_sidebar_click(event) {
             if input_sender.send(request).await.is_err() {
                 return Ok(ClientInputSend::Closed);
             }
@@ -64,6 +70,15 @@ pub async fn handle_mouse_input_action(
     if crate::pane::scroll::MouseWheelEvent::from(event) == crate::pane::scroll::MouseWheelEvent::Wheel {
         return send_mouse_request(input_sender, event).await;
     }
+    if matches!(self::alt_left_click_phase(event), Some(AltLeftClickPhase::Press))
+        && let Some(request) = renderer.file_open_request(position)
+    {
+        if input_sender.send(request).await.is_err() {
+            return Ok(ClientInputSend::Closed);
+        }
+        renderer.begin_file_open_capture();
+        return Ok(ClientInputSend::Accepted);
+    }
     if let Some(event) = renderer.mouse_request_for_event(event) {
         return send_mouse_request(input_sender, event).await;
     }
@@ -93,6 +108,22 @@ pub async fn handle_mouse_input_action(
             Ok(ClientInputSend::Accepted)
         }
         None => Ok(ClientInputSend::Accepted),
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum AltLeftClickPhase {
+    Press,
+    Release,
+}
+
+const fn alt_left_click_phase(event: ClientMouseEvent) -> Option<AltLeftClickPhase> {
+    if event.button != 8 {
+        return None;
+    }
+    match event.phase {
+        ClientMouseEventPhase::Press => Some(AltLeftClickPhase::Press),
+        ClientMouseEventPhase::Release => Some(AltLeftClickPhase::Release),
     }
 }
 
@@ -133,15 +164,6 @@ async fn send_mouse_request(
         return Ok(ClientInputSend::Closed);
     }
     Ok(ClientInputSend::Accepted)
-}
-
-fn tab_focus_request_for_sidebar_click(event: ClientMouseEvent, renderer: &ClientRenderer) -> Option<ClientRequest> {
-    if event.phase != ClientMouseEventPhase::Press || event.button != 0 {
-        return None;
-    }
-    renderer
-        .tab_id_at_sidebar_row(event.position.row)
-        .map(ClientRequest::FocusTab)
 }
 
 fn pane_position(config: &MuxrConfig, position: ClientMousePosition) -> Option<ClientMousePosition> {
@@ -219,6 +241,88 @@ mod tests {
             );
             Ok(())
         })
+    }
+
+    #[test]
+    fn test_handle_mouse_input_action_when_alt_click_hits_file_path_sends_one_open_file_request()
+    -> rootcause::Result<()> {
+        self::runtime()?.block_on(async {
+            let config = MuxrConfig::default();
+            let (input_sender, mut input_receiver) = tokio::sync::mpsc::channel(2);
+            let mut renderer = ClientRenderer::with_synchronized_output(
+                self::layout_snapshot()?,
+                self::file_link_pane_regions_snapshot()?,
+                SynchronizedOutput::Csi,
+            );
+            let mut initial_output = CountingWriter::default();
+            renderer.apply_render(
+                &mut initial_output,
+                muxr_core::RenderUpdate::Baseline(self::file_link_render_baseline()?),
+            )?;
+            let mut output = CountingWriter::default();
+
+            assert_that!(
+                handle_mouse_input_action(
+                    &config,
+                    ClientMouseEvent {
+                        button: 8,
+                        phase: ClientMouseEventPhase::Press,
+                        position: ClientMousePosition {
+                            row: 0,
+                            col: config.tab_bar.width.saturating_add(5),
+                        },
+                    },
+                    &input_sender,
+                    &mut renderer,
+                    &mut output,
+                )
+                .await?,
+                eq(ClientInputSend::Accepted)
+            );
+
+            assert_that!(
+                input_receiver.recv().await,
+                eq(Some(ClientRequest::OpenFile {
+                    pane_id: PaneId::new(1)?,
+                    path: "/tmp/foo.rs".to_owned(),
+                    line: Some(42),
+                    column: Some(7),
+                }))
+            );
+            assert_that!(
+                input_receiver.try_recv(),
+                err(matches_pattern!(tokio::sync::mpsc::error::TryRecvError::Empty))
+            );
+
+            let mut decoder = crate::input::InputDecoder::default();
+            let decoded_release = decoder.decode(b"\x1b[<8;10;5m");
+            let [crate::input::DecodedInput::Mouse(release)] = decoded_release.as_slice() else {
+                return Err(report!("expected decoded Alt-left release"));
+            };
+            assert_that!(
+                handle_mouse_input_action(&config, *release, &input_sender, &mut renderer, &mut output,).await?,
+                eq(ClientInputSend::Accepted)
+            );
+            assert_that!(
+                input_receiver.try_recv(),
+                err(matches_pattern!(tokio::sync::mpsc::error::TryRecvError::Empty))
+            );
+            Ok(())
+        })
+    }
+
+    #[test]
+    fn test_alt_left_click_phase_when_extra_modifiers_are_present_ignores_event() {
+        for button in [12, 24, 28] {
+            assert_that!(
+                alt_left_click_phase(ClientMouseEvent {
+                    button,
+                    phase: ClientMouseEventPhase::Press,
+                    position: ClientMousePosition { row: 0, col: 0 },
+                }),
+                none()
+            );
+        }
     }
 
     #[test]
@@ -632,6 +736,18 @@ mod tests {
         )?])
     }
 
+    fn file_link_pane_regions_snapshot() -> rootcause::Result<PaneRegionsSnapshot> {
+        PaneRegionsSnapshot::new(vec![muxr_core::PaneRegionSnapshot::new(
+            muxr_core::PaneId::new(1)?,
+            0,
+            0,
+            16,
+            1,
+            muxr_core::PaneMouseMode::PressRelease,
+            0,
+        )?])
+    }
+
     fn two_tab_layout() -> rootcause::Result<LayoutSnapshot> {
         LayoutSnapshot::new(
             TabId::new(1)?,
@@ -715,6 +831,25 @@ mod tests {
                 0,
                 0,
                 vec![self::render_cell("a"), self::render_cell("b")],
+            )?],
+        )
+    }
+
+    fn file_link_render_baseline() -> rootcause::Result<muxr_core::RenderBaseline> {
+        let text = "/tmp/foo.rs:42:7";
+        muxr_core::RenderBaseline::new(
+            1,
+            TerminalSize::new(16, 1)?,
+            muxr_core::RenderCursor {
+                row: 0,
+                col: 0,
+                shape: muxr_core::RenderCursorShape::Default,
+                visibility: muxr_core::RenderCursorVisibility::Visible,
+            },
+            vec![muxr_core::RenderRowSpan::new(
+                0,
+                0,
+                text.chars().map(|ch| render_cell(&ch.to_string())).collect(),
             )?],
         )
     }

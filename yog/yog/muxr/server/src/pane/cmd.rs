@@ -73,6 +73,34 @@ pub enum PaneCmdObservation {
     Unknown { reason: PaneCmdUnknownReason },
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum NvimState {
+    Running,
+    NotRunning,
+    Unknown,
+}
+
+impl PaneCmdObservation {
+    pub(crate) fn nvim_state(&self) -> NvimState {
+        match self {
+            Self::Shell => NvimState::NotRunning,
+            Self::Unknown { .. } => NvimState::Unknown,
+            Self::FgCmd(foreground)
+                if foreground
+                    .leader_cmd()
+                    .is_some_and(|command| command.executable == "nvim") =>
+            {
+                NvimState::Running
+            }
+            Self::FgCmd(foreground) => match foreground.process_group_cmds() {
+                Ok(commands) if commands.iter().any(|command| command.executable == "nvim") => NvimState::Running,
+                Ok(_) => NvimState::NotRunning,
+                Err(_) => NvimState::Unknown,
+            },
+        }
+    }
+}
+
 /// Fg command observation with a lazy same-process-group fallback.
 ///
 /// Wrappers such as `ags` can stay the fg group leader while a configured agent is a child process. Consumers
@@ -276,6 +304,16 @@ mod tests {
             eq("ags")
         );
         assert_that!(fg_cmd.process_group_cmds(), eq(Ok(vec![self::cmd(17989, "codex")])));
+    }
+
+    #[test]
+    fn test_nvim_state_when_process_group_lookup_fails_returns_unknown() {
+        let observation = PaneCmdObservation::FgCmd(FgCmd::from_test_group(
+            Some(self::cmd(17869, "shell-wrapper")),
+            Err(ProcessGroupLookupError::Failed),
+        ));
+
+        assert_that!(observation.nvim_state(), eq(NvimState::Unknown));
     }
 
     #[test]

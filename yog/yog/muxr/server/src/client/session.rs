@@ -20,6 +20,9 @@ use super::quiet::QuietTurn;
 use crate::client::timers::ClientTimers;
 use crate::client::timers::QuietDeadline;
 use crate::keyboard_input::ServerInputMode;
+use crate::pane::cmd::NvimState;
+use crate::pane::cmd::PaneCmdObservation;
+use crate::pane::cmd::PaneCmdSnapshot;
 use crate::pane::fullscreen::PaneFullscreen;
 use crate::pane::render::RenderComposer;
 use crate::pane::runtime::PaneRuntimes;
@@ -38,11 +41,14 @@ use crate::session::runtime::ReapResult;
 use crate::session::runtime::SessionClientMessage;
 use crate::session::runtime::SessionPaneOutputMessage;
 use crate::session::runtime::SessionRuntimeTimerMessage;
+use crate::state::PaneTreeRightPane;
 use crate::state::SessionLayout;
 
 // A quiet-boundary batch coalesces many PTY wakeup markers into one handler call, but stays small enough to yield back
 // to the request/output select loop before quiet clearing if the channel is full.
 const QUIET_OUTPUT_DRAIN_BATCH_LIMIT: usize = 32;
+#[cfg(test)]
+const TEST_RUNTIME_READY_TIMEOUT: Duration = Duration::from_secs(5);
 
 struct ClientPtySink {
     guard: PtySinkGuard,
@@ -64,6 +70,54 @@ pub struct ClientSessionState<'a> {
     pub scrollback_editor: Option<ScrollbackEditorState>,
     sink_guards: &'a mut Vec<ClientPtySink>,
     pub terminal_size: TerminalSize,
+}
+
+impl ClientSessionState<'_> {
+    pub(crate) fn open_file_pane_route(&self, source_pane_id: PaneId) -> rootcause::Result<OpenFilePaneRoute> {
+        match self.layout.active_tab()?.pane_tree.right_pane_of(source_pane_id) {
+            PaneTreeRightPane::Pane(right_pane_id) if self.pane_nvim_state(right_pane_id) == NvimState::Running => {
+                Ok(OpenFilePaneRoute::ExistingNvim(right_pane_id))
+            }
+            PaneTreeRightPane::Pane(_) | PaneTreeRightPane::Missing => Ok(OpenFilePaneRoute::NewRightSplit),
+        }
+    }
+
+    fn pane_nvim_state(&self, pane_id: PaneId) -> NvimState {
+        let Ok(handle) = self.runtimes.handle(pane_id) else {
+            return NvimState::Unknown;
+        };
+        let Ok(snapshot) = PaneCmdSnapshot::try_from(&handle) else {
+            return NvimState::Unknown;
+        };
+        PaneCmdObservation::from(&snapshot).nvim_state()
+    }
+
+    pub(crate) fn focus_pane_for_open_file(
+        &mut self,
+        pane_id: PaneId,
+        timers: &mut ClientTimers,
+    ) -> rootcause::Result<()> {
+        let previous_pane = self.layout.active_pane_id()?;
+        self.layout.active_tab_mut()?.focus_pane(pane_id)?;
+        if previous_pane != pane_id {
+            crate::pane::focus::write_active_pane_focus_events(previous_pane, self)?;
+            crate::state::persisted::write_metadata(&self.config.paths, self.layout)?;
+        }
+        let _changes = self.pane_tracked_processes.acknowledge_active_pane_attention(
+            self.config.user_config.as_ref(),
+            self.layout,
+            self.runtimes,
+            std::time::Instant::now(),
+        )?;
+        timers.sync_tracked_process_quiet_deadline_for_layout(&self.pane_tracked_processes, self.layout)?;
+        Ok(())
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum OpenFilePaneRoute {
+    ExistingNvim(PaneId),
+    NewRightSplit,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -1065,7 +1119,6 @@ mod tests {
         };
         let mut heartbeat_started_at = None;
         let mut render_dmg = ClientRenderDmg::Clean;
-
         let keep_attached = crate::request_router::handle_client_message(
             SessionClientMessage::Request(ClientRequest::FocusPaneAt(target_position)),
             &mut event_writer,
@@ -2517,6 +2570,581 @@ mod tests {
         Ok(())
     }
 
+    #[tokio::test]
+    async fn test_open_file_request_when_render_writer_is_closed_in_new_split_returns_disconnect()
+    -> rootcause::Result<()> {
+        let tempdir = tempfile::tempdir()?;
+        let mut config = crate::server::test_helpers::server_config(tempdir.path(), "work")?;
+        config.shell_cmd = crate::server::test_helpers::shell_cmd("/bin/cat");
+        let layout = SessionLayout::initial(&config.session, self::metadata("cat", 1))?;
+        assert_that!(
+            self::open_file_request_with_closed_writer(tempdir, config, layout, None).await?,
+            eq(ClientSessionFlow::Disconnect)
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_open_file_request_when_render_writer_is_closed_with_existing_nvim_returns_disconnect()
+    -> rootcause::Result<()> {
+        let tempdir = tempfile::tempdir()?;
+        let config = crate::server::test_helpers::server_config(tempdir.path(), "work")?;
+        let editor_pane_id = PaneId::new(2)?;
+        let layout = self::layout(&config)?;
+        assert_that!(
+            self::open_file_request_with_closed_writer(tempdir, config, layout, Some(editor_pane_id)).await?,
+            eq(ClientSessionFlow::Disconnect)
+        );
+        Ok(())
+    }
+
+    async fn open_file_request_with_closed_writer(
+        tempdir: tempfile::TempDir,
+        config: ServerConfig,
+        mut layout: SessionLayout,
+        editor_pane_id: Option<PaneId>,
+    ) -> rootcause::Result<ClientSessionFlow> {
+        crate::session::files::prepare_session_dirs(&config.paths)?;
+        let terminal_size = TerminalSize::new(80, 24)?;
+        let source_pane_id = PaneId::new(1)?;
+        let initial_path = tempdir.path().join("closed-writer-nvim-start.rs");
+        std::fs::write(&initial_path, b"muxr-closed-writer-nvim-start")?;
+        let mut runtimes = PaneRuntimes::spawn_for_start_seed(
+            &config,
+            &SessionStartSeed {
+                layout: layout.clone(),
+                startup_cmds: Vec::new(),
+            },
+            &terminal_size,
+            Arc::new(tokio::sync::Notify::new()),
+        )?;
+        crate::screen_render::resize_panes_to_layout(&layout, &runtimes, &terminal_size)?;
+        if let Some(editor_pane_id) = editor_pane_id {
+            let startup_command = format!("nvim --clean -- {}\n", initial_path.display());
+            runtimes
+                .handle(editor_pane_id)?
+                .write_input(startup_command.as_bytes())?;
+            self::wait_for_runtime_fg_cmd(&runtimes, editor_pane_id, "nvim")?;
+        }
+        let pane_tracked_processes = PaneTrackedProcesses::default();
+        let (layout_snapshot, pane_regions, mut render_composer, _render_baseline) =
+            crate::screen_render::initial_client_render(
+                &config,
+                &mut layout,
+                &runtimes,
+                &pane_tracked_processes,
+                &terminal_size,
+            )?;
+        let (mut event_writer, client_drain) = self::connect_client_event_drain(&config).await?;
+        self::abort_client_drain(client_drain).await;
+        let delete_sessions = DeleteSessions::default();
+        let (pty_event_sender, _pty_event_receiver) = self::pty_event_channel();
+        let mut sink_guards = Vec::new();
+        let mut state = ClientSessionState {
+            pane_tracked_processes,
+            config: &config,
+            delete_sessions: &delete_sessions,
+            input_mode: ServerInputMode::Normal,
+            last_layout_snapshot: layout_snapshot,
+            layout: &mut layout,
+            pane_fullscreen: PaneFullscreen::default(),
+            pane_regions,
+            pty_event_sender: &pty_event_sender,
+            render_composer: &mut render_composer,
+            runtimes: &mut runtimes,
+            scrollback_editor: None,
+            sink_guards: &mut sink_guards,
+            terminal_size,
+        };
+        let mut timers = ClientTimers::new(&config)?;
+        let mut heartbeat_started_at = None;
+        let mut render_dmg = ClientRenderDmg::Clean;
+
+        crate::request_router::handle_client_message(
+            SessionClientMessage::Request(ClientRequest::OpenFile {
+                pane_id: source_pane_id,
+                path: "/tmp/closed-writer.rs".to_owned(),
+                line: None,
+                column: None,
+            }),
+            &mut event_writer,
+            &mut state,
+            &mut timers,
+            &mut heartbeat_started_at,
+            &mut render_dmg,
+        )
+        .await
+    }
+
+    #[tokio::test]
+    async fn test_open_file_request_without_nvim_creates_vertical_split_and_writes_nvim_command()
+    -> rootcause::Result<()> {
+        let tempdir = tempfile::tempdir()?;
+        let path = tempdir.path().join("new-nvim-route.rs");
+        std::fs::write(&path, b"muxr-new-nvim-route")?;
+        self::open_file_request_without_nvim(tempdir, path, "muxr-new-nvim-route", Some(42), Some(7), None).await
+    }
+
+    #[tokio::test]
+    async fn test_open_file_request_without_nvim_opens_directory_in_new_nvim_split() -> rootcause::Result<()> {
+        let tempdir = tempfile::tempdir()?;
+        let path = tempdir.path().join("new-nvim-directory");
+        std::fs::create_dir(&path)?;
+        self::open_file_request_without_nvim(
+            tempdir,
+            path,
+            "new-nvim-directory",
+            None,
+            None,
+            Some(b"\x1b:echo expand('%:p')\r"),
+        )
+        .await
+    }
+
+    async fn open_file_request_without_nvim(
+        tempdir: tempfile::TempDir,
+        path: std::path::PathBuf,
+        expected_snapshot_text: &'static str,
+        line: Option<u32>,
+        column: Option<u32>,
+        post_open_input: Option<&'static [u8]>,
+    ) -> rootcause::Result<()> {
+        let mut config = crate::server::test_helpers::server_config(tempdir.path(), "work")?;
+        config.shell_cmd = crate::server::test_helpers::shell_cmd("/bin/sh");
+        crate::session::files::prepare_session_dirs(&config.paths)?;
+        let terminal_size = TerminalSize::new(80, 24)?;
+        let mut layout = SessionLayout::initial(&config.session, self::metadata("sh", 1))?;
+        let source_pane_id = PaneId::new(1)?;
+        let new_pane_id = PaneId::new(2)?;
+        let mut runtimes = PaneRuntimes::spawn_for_start_seed(
+            &config,
+            &SessionStartSeed {
+                layout: layout.clone(),
+                startup_cmds: Vec::new(),
+            },
+            &terminal_size,
+            Arc::new(tokio::sync::Notify::new()),
+        )?;
+        crate::screen_render::resize_panes_to_layout(&layout, &runtimes, &terminal_size)?;
+        let pane_tracked_processes = PaneTrackedProcesses::default();
+        let (layout_snapshot, pane_regions, mut render_composer, _render_baseline) =
+            crate::screen_render::initial_client_render(
+                &config,
+                &mut layout,
+                &runtimes,
+                &pane_tracked_processes,
+                &terminal_size,
+            )?;
+        let (mut event_writer, client_drain) = self::connect_client_event_drain(&config).await?;
+        let delete_sessions = DeleteSessions::default();
+        let (pty_event_sender, _pty_event_receiver) = self::pty_event_channel();
+        let mut sink_guards = Vec::new();
+        let mut state = ClientSessionState {
+            pane_tracked_processes,
+            config: &config,
+            delete_sessions: &delete_sessions,
+            input_mode: ServerInputMode::Normal,
+            last_layout_snapshot: layout_snapshot,
+            layout: &mut layout,
+            pane_fullscreen: PaneFullscreen::default(),
+            pane_regions,
+            pty_event_sender: &pty_event_sender,
+            render_composer: &mut render_composer,
+            runtimes: &mut runtimes,
+            scrollback_editor: None,
+            sink_guards: &mut sink_guards,
+            terminal_size,
+        };
+        let mut timers = ClientTimers::new(&config)?;
+        let mut heartbeat_started_at = None;
+        let mut render_dmg = ClientRenderDmg::Clean;
+
+        let keep_attached = crate::request_router::handle_client_message(
+            SessionClientMessage::Request(ClientRequest::OpenFile {
+                pane_id: source_pane_id,
+                path: path
+                    .to_str()
+                    .ok_or_else(|| rootcause::report!("temporary test file path is not UTF-8"))?
+                    .to_owned(),
+                line,
+                column,
+            }),
+            &mut event_writer,
+            &mut state,
+            &mut timers,
+            &mut heartbeat_started_at,
+            &mut render_dmg,
+        )
+        .await?;
+
+        assert_that!(keep_attached, eq(ClientSessionFlow::Continue));
+        assert_that!(state.layout.active_pane_id()?, eq(new_pane_id));
+        assert_that!(state.layout.active_tab()?.pane_ids().len(), eq(2));
+        self::wait_for_runtime_fg_cmd(&runtimes, new_pane_id, "nvim")?;
+        if let Some(input) = post_open_input {
+            runtimes.handle(new_pane_id)?.write_input(input)?;
+        }
+        self::wait_for_runtime_snapshot_contains(&runtimes, new_pane_id, expected_snapshot_text)?;
+        self::abort_client_drain(client_drain).await;
+        Ok(())
+    }
+
+    struct OpenFileRequestContext<'request, 'state> {
+        source_pane_id: PaneId,
+        event_writer: &'request mut ServerEventWriter,
+        state: &'request mut ClientSessionState<'state>,
+        timers: &'request mut ClientTimers,
+        heartbeat_started_at: &'request mut Option<tokio::time::Instant>,
+        render_dmg: &'request mut ClientRenderDmg,
+    }
+
+    impl OpenFileRequestContext<'_, '_> {
+        async fn open_file(
+            &mut self,
+            path: &str,
+            line: Option<u32>,
+            column: Option<u32>,
+        ) -> rootcause::Result<ClientSessionFlow> {
+            crate::request_router::handle_client_message(
+                SessionClientMessage::Request(ClientRequest::OpenFile {
+                    pane_id: self.source_pane_id,
+                    path: path.to_owned(),
+                    line,
+                    column,
+                }),
+                self.event_writer,
+                self.state,
+                self.timers,
+                self.heartbeat_started_at,
+                self.render_dmg,
+            )
+            .await
+        }
+
+        async fn open_directory(&mut self, editor_pane_id: PaneId, path: &str) -> rootcause::Result<()> {
+            let keep_attached = self.open_file(path, None, None).await?;
+            assert_that!(keep_attached, eq(ClientSessionFlow::Continue));
+            assert_that!(self.state.layout.active_pane_id()?, eq(editor_pane_id));
+            assert_that!(self.state.layout.active_tab()?.pane_ids().len(), eq(2));
+            self.state
+                .runtimes
+                .handle(editor_pane_id)?
+                .write_input(b"\x1b:echo expand('%:p')\r")?;
+            self::wait_for_runtime_snapshot_contains(self.state.runtimes, editor_pane_id, "existing-nvim-directory")?;
+            Ok(())
+        }
+    }
+
+    #[tokio::test]
+    async fn test_open_file_request_with_nvim_in_sibling_pane_edits_existing_pane() -> rootcause::Result<()> {
+        let tempdir = tempfile::tempdir()?;
+        let config = crate::server::test_helpers::server_config(tempdir.path(), "work")?;
+        crate::session::files::prepare_session_dirs(&config.paths)?;
+        let terminal_size = TerminalSize::new(80, 24)?;
+        let mut layout = self::layout(&config)?;
+        let source_pane_id = PaneId::new(1)?;
+        let editor_pane_id = PaneId::new(2)?;
+        let initial_path = tempdir.path().join("existing-nvim-start.rs");
+        std::fs::write(&initial_path, b"muxr-existing-nvim-start")?;
+        let path = tempdir.path().join("existing-nvim-route.rs");
+        std::fs::write(&path, b"muxr-existing-nvim-route")?;
+        let mut runtimes = PaneRuntimes::spawn_for_start_seed(
+            &config,
+            &SessionStartSeed {
+                layout: layout.clone(),
+                startup_cmds: Vec::new(),
+            },
+            &terminal_size,
+            Arc::new(tokio::sync::Notify::new()),
+        )?;
+        crate::screen_render::resize_panes_to_layout(&layout, &runtimes, &terminal_size)?;
+        let source_startup_command = format!("nvim --clean -- {}\n", initial_path.display());
+        runtimes
+            .handle(source_pane_id)?
+            .write_input(source_startup_command.as_bytes())?;
+        self::wait_for_runtime_fg_cmd(&runtimes, source_pane_id, "nvim")?;
+        let startup_command = format!("nvim --clean -- {}\n", initial_path.display());
+        runtimes
+            .handle(editor_pane_id)?
+            .write_input(startup_command.as_bytes())?;
+        self::wait_for_runtime_fg_cmd(&runtimes, editor_pane_id, "nvim")?;
+        self::wait_for_runtime_snapshot_contains(&runtimes, editor_pane_id, "muxr-existing-nvim-start")?;
+        let pane_tracked_processes = PaneTrackedProcesses::default();
+        let (layout_snapshot, pane_regions, mut render_composer, _render_baseline) =
+            crate::screen_render::initial_client_render(
+                &config,
+                &mut layout,
+                &runtimes,
+                &pane_tracked_processes,
+                &terminal_size,
+            )?;
+        let (mut event_writer, client_drain) = self::connect_client_event_drain(&config).await?;
+        let delete_sessions = DeleteSessions::default();
+        let (pty_event_sender, _pty_event_receiver) = self::pty_event_channel();
+        let mut sink_guards = Vec::new();
+        let mut state = ClientSessionState {
+            pane_tracked_processes,
+            config: &config,
+            delete_sessions: &delete_sessions,
+            input_mode: ServerInputMode::Normal,
+            last_layout_snapshot: layout_snapshot,
+            layout: &mut layout,
+            pane_fullscreen: PaneFullscreen::default(),
+            pane_regions,
+            pty_event_sender: &pty_event_sender,
+            render_composer: &mut render_composer,
+            runtimes: &mut runtimes,
+            scrollback_editor: None,
+            sink_guards: &mut sink_guards,
+            terminal_size,
+        };
+        let mut timers = ClientTimers::new(&config)?;
+        let mut heartbeat_started_at = None;
+        let mut render_dmg = ClientRenderDmg::Clean;
+        let path = self::utf8_path(&path)?;
+
+        let keep_attached = {
+            let mut request_context = OpenFileRequestContext {
+                source_pane_id,
+                event_writer: &mut event_writer,
+                state: &mut state,
+                timers: &mut timers,
+                heartbeat_started_at: &mut heartbeat_started_at,
+                render_dmg: &mut render_dmg,
+            };
+            request_context.open_file(path, None, None).await?
+        };
+
+        assert_that!(keep_attached, eq(ClientSessionFlow::Continue));
+        assert_that!(state.layout.active_pane_id()?, eq(editor_pane_id));
+        assert_that!(state.layout.active_tab()?.pane_ids().len(), eq(2));
+        // Ask Nvim for the first buffer line to force a redraw and prove the edit command loaded file contents.
+        state
+            .runtimes
+            .handle(editor_pane_id)?
+            .write_input(b"\x1b:echo getline(1)\r")?;
+        self::wait_for_runtime_snapshot_contains(state.runtimes, editor_pane_id, "muxr-existing-nvim-route")?;
+
+        let directory = tempdir.path().join("existing-nvim-directory");
+        std::fs::create_dir(&directory)?;
+        let directory_path = self::utf8_path(&directory)?;
+        {
+            let mut request_context = OpenFileRequestContext {
+                source_pane_id,
+                event_writer: &mut event_writer,
+                state: &mut state,
+                timers: &mut timers,
+                heartbeat_started_at: &mut heartbeat_started_at,
+                render_dmg: &mut render_dmg,
+            };
+            request_context.open_directory(editor_pane_id, directory_path).await?;
+        }
+        self::abort_client_drain(client_drain).await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_open_file_request_when_right_pane_is_not_nvim_ignores_unrelated_nvim_and_splits_right()
+    -> rootcause::Result<()> {
+        let tempdir = tempfile::tempdir()?;
+        let config = crate::server::test_helpers::server_config(tempdir.path(), "work")?;
+        crate::session::files::prepare_session_dirs(&config.paths)?;
+        let terminal_size = TerminalSize::new(80, 24)?;
+        let mut layout = self::layout(&config)?;
+        let source_pane_id = PaneId::new(1)?;
+        let right_pane_id = PaneId::new(2)?;
+        layout.active_tab_mut()?.focus_pane(source_pane_id)?;
+        let unrelated_nvim_pane_id = layout.split_active_pane(
+            config.user_config.layout,
+            self::metadata("sh", 3),
+            crate::pane::split::PaneSplitAxis::Horizontal,
+        )?;
+        layout.active_tab_mut()?.focus_pane(source_pane_id)?;
+        let new_pane_id = PaneId::new(4)?;
+        let initial_path = tempdir.path().join("unrelated-nvim-start.rs");
+        std::fs::write(&initial_path, b"muxr-unrelated-nvim-start")?;
+        let path = tempdir.path().join("right-pane.rs");
+        std::fs::write(&path, b"muxr-right-pane")?;
+        let mut runtimes = PaneRuntimes::spawn_for_start_seed(
+            &config,
+            &SessionStartSeed {
+                layout: layout.clone(),
+                startup_cmds: Vec::new(),
+            },
+            &terminal_size,
+            Arc::new(tokio::sync::Notify::new()),
+        )?;
+        crate::screen_render::resize_panes_to_layout(&layout, &runtimes, &terminal_size)?;
+        let startup_command = format!("nvim --clean -- {}\n", initial_path.display());
+        runtimes
+            .handle(unrelated_nvim_pane_id)?
+            .write_input(startup_command.as_bytes())?;
+        self::wait_for_runtime_fg_cmd(&runtimes, unrelated_nvim_pane_id, "nvim")?;
+        let pane_tracked_processes = PaneTrackedProcesses::default();
+        let (layout_snapshot, pane_regions, mut render_composer, _render_baseline) =
+            crate::screen_render::initial_client_render(
+                &config,
+                &mut layout,
+                &runtimes,
+                &pane_tracked_processes,
+                &terminal_size,
+            )?;
+        let (mut event_writer, client_drain) = self::connect_client_event_drain(&config).await?;
+        let delete_sessions = DeleteSessions::default();
+        let (pty_event_sender, _pty_event_receiver) = self::pty_event_channel();
+        let mut sink_guards = Vec::new();
+        let mut state = ClientSessionState {
+            pane_tracked_processes,
+            config: &config,
+            delete_sessions: &delete_sessions,
+            input_mode: ServerInputMode::Normal,
+            last_layout_snapshot: layout_snapshot,
+            layout: &mut layout,
+            pane_fullscreen: PaneFullscreen::default(),
+            pane_regions,
+            pty_event_sender: &pty_event_sender,
+            render_composer: &mut render_composer,
+            runtimes: &mut runtimes,
+            scrollback_editor: None,
+            sink_guards: &mut sink_guards,
+            terminal_size,
+        };
+        let mut timers = ClientTimers::new(&config)?;
+        let mut heartbeat_started_at = None;
+        let mut render_dmg = ClientRenderDmg::Clean;
+
+        let keep_attached = crate::request_router::handle_client_message(
+            SessionClientMessage::Request(ClientRequest::OpenFile {
+                pane_id: source_pane_id,
+                path: path
+                    .to_str()
+                    .ok_or_else(|| rootcause::report!("temporary test file path is not UTF-8"))?
+                    .to_owned(),
+                line: None,
+                column: None,
+            }),
+            &mut event_writer,
+            &mut state,
+            &mut timers,
+            &mut heartbeat_started_at,
+            &mut render_dmg,
+        )
+        .await?;
+
+        assert_that!(keep_attached, eq(ClientSessionFlow::Continue));
+        assert_that!(state.layout.active_pane_id()?, eq(new_pane_id));
+        assert_that!(state.layout.active_tab()?.pane_ids().len(), eq(4));
+        let right_pane_snapshot = PaneCmdSnapshot::try_from(&runtimes.handle(right_pane_id)?)?;
+        assert_that!(
+            PaneCmdObservation::from(&right_pane_snapshot).nvim_state(),
+            eq(NvimState::NotRunning)
+        );
+        self::wait_for_runtime_fg_cmd(&runtimes, new_pane_id, "nvim")?;
+        self::wait_for_runtime_snapshot_contains(&runtimes, new_pane_id, "muxr-right-pane")?;
+        self::wait_for_runtime_fg_cmd(&runtimes, unrelated_nvim_pane_id, "nvim")?;
+        self::abort_client_drain(client_drain).await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_open_file_request_when_source_is_fullscreen_preserves_hidden_sibling_and_splits_source()
+    -> rootcause::Result<()> {
+        let tempdir = tempfile::tempdir()?;
+        let config = crate::server::test_helpers::server_config(tempdir.path(), "work")?;
+        crate::session::files::prepare_session_dirs(&config.paths)?;
+        let terminal_size = TerminalSize::new(80, 24)?;
+        let mut layout = self::layout(&config)?;
+        let source_pane_id = PaneId::new(1)?;
+        let editor_pane_id = PaneId::new(2)?;
+        layout.active_tab_mut()?.focus_pane(source_pane_id)?;
+        let initial_path = tempdir.path().join("fullscreen-sibling-start.rs");
+        std::fs::write(&initial_path, b"muxr-fullscreen-sibling-start")?;
+        let path = tempdir.path().join("fullscreen-route.rs");
+        std::fs::write(&path, b"muxr-fullscreen-route")?;
+        let mut runtimes = PaneRuntimes::spawn_for_start_seed(
+            &config,
+            &SessionStartSeed {
+                layout: layout.clone(),
+                startup_cmds: Vec::new(),
+            },
+            &terminal_size,
+            Arc::new(tokio::sync::Notify::new()),
+        )?;
+        crate::screen_render::resize_panes_to_layout(&layout, &runtimes, &terminal_size)?;
+        let startup_command = format!("nvim --clean -- {}\n", initial_path.display());
+        runtimes
+            .handle(editor_pane_id)?
+            .write_input(startup_command.as_bytes())?;
+        self::wait_for_runtime_fg_cmd(&runtimes, editor_pane_id, "nvim")?;
+        let pane_tracked_processes = PaneTrackedProcesses::default();
+        let (layout_snapshot, pane_regions, mut render_composer, _render_baseline) =
+            crate::screen_render::initial_client_render(
+                &config,
+                &mut layout,
+                &runtimes,
+                &pane_tracked_processes,
+                &terminal_size,
+            )?;
+        let (mut event_writer, client_drain) = self::connect_client_event_drain(&config).await?;
+        let delete_sessions = DeleteSessions::default();
+        let (pty_event_sender, _pty_event_receiver) = self::pty_event_channel();
+        let mut sink_guards = Vec::new();
+        let mut state = ClientSessionState {
+            pane_tracked_processes,
+            config: &config,
+            delete_sessions: &delete_sessions,
+            input_mode: ServerInputMode::Normal,
+            last_layout_snapshot: layout_snapshot,
+            layout: &mut layout,
+            pane_fullscreen: PaneFullscreen::default(),
+            pane_regions,
+            pty_event_sender: &pty_event_sender,
+            render_composer: &mut render_composer,
+            runtimes: &mut runtimes,
+            scrollback_editor: None,
+            sink_guards: &mut sink_guards,
+            terminal_size,
+        };
+        crate::pane::fullscreen::handle_toggle_active_pane_cmd_client(&mut state)?;
+        assert_that!(
+            state.pane_fullscreen.visible_pane_id(state.layout)?,
+            eq(Some(source_pane_id))
+        );
+        let mut timers = ClientTimers::new(&config)?;
+        let mut heartbeat_started_at = None;
+        let mut render_dmg = ClientRenderDmg::Clean;
+        let path = path
+            .to_str()
+            .ok_or_else(|| rootcause::report!("temporary test file path is not UTF-8"))?;
+
+        let keep_attached = crate::request_router::handle_client_message(
+            SessionClientMessage::Request(ClientRequest::OpenFile {
+                pane_id: source_pane_id,
+                path: path.to_owned(),
+                line: None,
+                column: None,
+            }),
+            &mut event_writer,
+            &mut state,
+            &mut timers,
+            &mut heartbeat_started_at,
+            &mut render_dmg,
+        )
+        .await?;
+
+        assert_that!(keep_attached, eq(ClientSessionFlow::Continue));
+        assert_that!(state.pane_fullscreen.visible_pane_id(state.layout)?, none());
+        assert_that!(state.layout.active_tab()?.pane_ids().len(), eq(3));
+        let new_pane_id = state.layout.active_pane_id()?;
+        assert_that!(new_pane_id, not(eq(source_pane_id)));
+        assert_that!(new_pane_id, not(eq(editor_pane_id)));
+        self::wait_for_runtime_fg_cmd(&runtimes, new_pane_id, "nvim")?;
+        runtimes.handle(new_pane_id)?.write_input(b"\x1b:echo getline(1)\r")?;
+        self::wait_for_runtime_snapshot_contains(&runtimes, new_pane_id, "muxr-fullscreen-route")?;
+        self::abort_client_drain(client_drain).await;
+        Ok(())
+    }
+
     fn layout(config: &ServerConfig) -> rootcause::Result<SessionLayout> {
         let mut layout = SessionLayout::initial(&config.session, self::metadata("sh", 1))?;
         layout.split_active_pane(
@@ -2525,6 +3153,11 @@ mod tests {
             PaneSplitAxis::Vertical,
         )?;
         Ok(layout)
+    }
+
+    fn utf8_path(path: &std::path::Path) -> rootcause::Result<&str> {
+        path.to_str()
+            .ok_or_else(|| rootcause::report!("muxr test path is not UTF-8"))
     }
 
     fn pane_position(
@@ -2703,17 +3336,20 @@ mod tests {
     fn wait_for_runtime_fg_cmd(runtimes: &PaneRuntimes, pane_id: PaneId, expected: &str) -> rootcause::Result<()> {
         let started_at = Instant::now();
         loop {
-            let snapshot = PaneCmdSnapshot::try_from(&runtimes.handle(pane_id)?)?;
+            let handle = runtimes.handle(pane_id)?;
+            let output_generation = handle.output_generation();
+            let snapshot = PaneCmdSnapshot::try_from(&handle)?;
             if let PaneCmdObservation::FgCmd(fg_cmd) = PaneCmdObservation::from(&snapshot)
                 && fg_cmd.leader_cmd().is_some_and(|cmd| cmd.executable == expected)
             {
                 return Ok(());
             }
-            if started_at.elapsed() > Duration::from_secs(2) {
+            let remaining = TEST_RUNTIME_READY_TIMEOUT.saturating_sub(started_at.elapsed());
+            if remaining.is_zero() {
                 return Err(rootcause::report!("timed out waiting for muxr runtime fg cmd")
                     .attach(format!("expected={expected}")));
             }
-            std::thread::sleep(Duration::from_millis(10));
+            handle.wait_for_output(output_generation, remaining);
         }
     }
 
@@ -2724,15 +3360,18 @@ mod tests {
     ) -> rootcause::Result<()> {
         let started_at = Instant::now();
         loop {
-            let snapshot = runtimes.handle(pane_id)?.render_snapshot()?;
+            let handle = runtimes.handle(pane_id)?;
+            let output_generation = handle.output_generation();
+            let snapshot = handle.render_snapshot()?;
             if self::snapshot_text(&snapshot).contains(needle) {
                 return Ok(());
             }
-            if started_at.elapsed() > Duration::from_secs(2) {
+            let remaining = TEST_RUNTIME_READY_TIMEOUT.saturating_sub(started_at.elapsed());
+            if remaining.is_zero() {
                 return Err(rootcause::report!("timed out waiting for muxr runtime snapshot")
                     .attach(format!("needle={needle}")));
             }
-            std::thread::sleep(Duration::from_millis(10));
+            handle.wait_for_output(output_generation, remaining);
         }
     }
 

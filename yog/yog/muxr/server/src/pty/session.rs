@@ -5,6 +5,8 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::thread;
+#[cfg(test)]
+use std::time::Duration;
 
 use kanal::SendError;
 use kanal::Sender;
@@ -15,6 +17,8 @@ use muxr_core::PaneMouseMode;
 use muxr_core::PaneRegionSnapshot;
 use muxr_core::PaneScrollDirection;
 use muxr_core::TerminalSize;
+#[cfg(test)]
+use parking_lot::Condvar;
 use parking_lot::Mutex;
 use portable_pty::Child;
 use portable_pty::ChildKiller;
@@ -372,6 +376,19 @@ impl PtyHandle {
         self.state.terminal.lock().snapshot()
     }
 
+    #[cfg(test)]
+    pub fn output_generation(&self) -> u64 {
+        *self.state.output_waiter.0.lock()
+    }
+
+    #[cfg(test)]
+    pub fn wait_for_output(&self, previous_generation: u64, timeout: Duration) {
+        let mut generation = self.state.output_waiter.0.lock();
+        if *generation <= previous_generation {
+            let _ = self.state.output_waiter.1.wait_for(&mut generation, timeout);
+        }
+    }
+
     pub fn pane_render_snapshot(&self) -> rootcause::Result<PtyRenderSnapshot> {
         let terminal = self.state.terminal.lock();
         Ok(PtyRenderSnapshot {
@@ -428,6 +445,8 @@ struct PtyState {
     exit_status: Mutex<Option<PtyExitStatus>>,
     history: Mutex<Option<PaneHistory>>,
     pane_exit_notify: Arc<tokio::sync::Notify>,
+    #[cfg(test)]
+    output_waiter: (Mutex<u64>, Condvar),
     screen_dirty: AtomicBool,
     terminal: Mutex<TerminalState>,
     title_changes: Mutex<Vec<Option<String>>>,
@@ -454,6 +473,8 @@ impl PtyState {
             exit_status: Mutex::new(None),
             history: Mutex::new(Some(history)),
             pane_exit_notify,
+            #[cfg(test)]
+            output_waiter: (Mutex::new(0), Condvar::new()),
             screen_dirty: AtomicBool::new(false),
             terminal: Mutex::new(terminal),
             title_changes: Mutex::new(Vec::new()),
@@ -515,6 +536,14 @@ impl PtyState {
             }
         }
         drop(active_sink);
+
+        #[cfg(test)]
+        {
+            let mut generation = self.output_waiter.0.lock();
+            *generation = generation.saturating_add(1);
+            drop(generation);
+            self.output_waiter.1.notify_all();
+        }
 
         Ok(terminal_replies)
     }
@@ -746,6 +775,7 @@ mod tests {
             exit_status: Mutex::new(None),
             history: Mutex::new(None),
             pane_exit_notify: Arc::new(tokio::sync::Notify::new()),
+            output_waiter: (Mutex::new(0), Condvar::new()),
             screen_dirty: AtomicBool::new(false),
             terminal: Mutex::new(TerminalState::with_scrollback(size, MuxrConfig::default().scrollback)),
             title_changes: Mutex::new(Vec::new()),

@@ -684,6 +684,34 @@ mod tests {
     }
 
     #[test]
+    fn test_input_decoder_decode_when_sgr_alt_mouse_click_arrives_returns_alt_mouse_event() {
+        let mut decoder = InputDecoder::default();
+
+        assert_that!(
+            decoder.decode(b"\x1b[<8;10;5M"),
+            eq(vec![DecodedInput::Mouse(ClientMouseEvent {
+                button: 8,
+                phase: ClientMouseEventPhase::Press,
+                position: ClientMousePosition { row: 4, col: 9 },
+            })])
+        );
+    }
+
+    #[test]
+    fn test_input_decoder_decode_when_sgr_alt_mouse_release_arrives_returns_alt_mouse_event() {
+        let mut decoder = InputDecoder::default();
+
+        assert_that!(
+            decoder.decode(b"\x1b[<8;10;5m"),
+            eq(vec![DecodedInput::Mouse(ClientMouseEvent {
+                button: 8,
+                phase: ClientMouseEventPhase::Release,
+                position: ClientMousePosition { row: 4, col: 9 },
+            })])
+        );
+    }
+
+    #[test]
     fn test_input_decoder_decode_when_mouse_drag_arrives_returns_mouse_event() {
         let mut decoder = InputDecoder::default();
 

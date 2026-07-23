@@ -169,6 +169,12 @@ pub enum ClientRequest {
     Paste(Vec<u8>),
     Key(ClientKey),
     Mouse(ClientMouseEvent),
+    OpenFile {
+        pane_id: super::PaneId,
+        path: String,
+        line: Option<u32>,
+        column: Option<u32>,
+    },
     ScrollPaneLineAt {
         position: ClientMousePosition,
         direction: PaneScrollDirection,
@@ -588,6 +594,12 @@ mod tests {
             phase: ClientMouseEventPhase::Press,
             position: ClientMousePosition { row: 2, col: 3 },
         }))]
+    #[case::open_file(ClientRequest::OpenFile {
+            pane_id: PaneId::new(7)?,
+            path: "/tmp/missing file.rs".to_owned(),
+            line: Some(42),
+            column: Some(7),
+        })]
     #[case::scroll_line(ClientRequest::ScrollPaneLineAt {
             position: ClientMousePosition { row: 2, col: 3 },
             direction: PaneScrollDirection::Down,

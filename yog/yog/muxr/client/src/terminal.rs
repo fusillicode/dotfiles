@@ -167,9 +167,6 @@ pub fn set_mouse_any_motion_capture(stdout: &mut impl Write, capture: MouseAnyMo
             queue_bytes(stdout, MOUSE_ANY_EVENT_CAPTURE_ENABLE)?;
         }
         MouseAnyMotionCapture::Disabled => {
-            // Some terminals treat mode churn around any-motion capture as a broader mouse-reporting reset. Reassert
-            // the button modes muxr owns so pane selection and wheel routing keep working after an app leaves
-            // any-motion mode.
             queue_bytes(stdout, MOUSE_ANY_EVENT_CAPTURE_DISABLE)?;
             queue_bytes(stdout, MOUSE_BUTTON_CAPTURE_ENABLE)?;
             queue_bytes(stdout, MOUSE_BUTTON_EVENT_CAPTURE_ENABLE)?;
@@ -199,7 +196,6 @@ fn enter_terminal(stdout: &mut impl Write) -> rootcause::Result<()> {
     queue_cmd(stdout, EnterAlternateScreen)?;
     queue_bytes(stdout, BRACKETED_PASTE_ENABLE)?;
     queue_bytes(stdout, KITTY_KEYBOARD_PROTOCOL_ENABLE)?;
-    // Clear stale any-motion capture; the renderer re-enables it only when a pane requests that mode.
     queue_bytes(stdout, MOUSE_ANY_EVENT_CAPTURE_DISABLE)?;
     queue_bytes(stdout, MOUSE_BUTTON_CAPTURE_ENABLE)?;
     queue_bytes(stdout, MOUSE_BUTTON_EVENT_CAPTURE_ENABLE)?;
