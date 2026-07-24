@@ -1,31 +1,14 @@
 use std::path::Path;
+use std::path::PathBuf;
+use std::process::Command;
 
-use ytil_sys::Arch;
-use ytil_sys::Os;
-use ytil_sys::SysInfo;
+use rootcause::prelude::ResultExt;
 
-use crate::downloaders::http::deflate::HttpDeflateOption;
 use crate::installers::Installer;
-use crate::installers::SystemDependent;
+use crate::installers::run_health_check;
 
 pub struct RustAnalyzer<'a> {
     pub bin_dir: &'a Path,
-    pub sys_info: &'a SysInfo,
-}
-
-impl SystemDependent for RustAnalyzer<'_> {
-    fn target_arch_and_os(&self) -> (&str, &str) {
-        let SysInfo { os, arch } = self.sys_info;
-        let os = match os {
-            Os::MacOs => "apple-darwin",
-            Os::Linux => "unknown-linux",
-        };
-        let arch = match arch {
-            Arch::Arm => "aarch64",
-            Arch::X86 => "x86_64",
-        };
-        (arch, os)
-    }
 }
 
 impl Installer for RustAnalyzer<'_> {
@@ -33,26 +16,57 @@ impl Installer for RustAnalyzer<'_> {
         "rust-analyzer"
     }
 
-    fn should_verify_checksum(&self) -> bool {
-        false
-    }
-
     fn install(&self) -> rootcause::Result<()> {
-        let (arch, os) = self.target_arch_and_os();
+        ytil_cmd::silent_cmd("cargo")
+            .args([
+                "+nightly",
+                "install",
+                "--git",
+                "https://github.com/rust-lang/rust-analyzer.git",
+                "--branch",
+                "master",
+                "--locked",
+                "--force",
+                self.bin_name(),
+            ])
+            .status()
+            .context("failed to spawn cargo install")?
+            .exit_ok()
+            .context("cargo install failed")
+            .attach_with(|| format!("tool={}", self.bin_name()))?;
 
-        let target = crate::downloaders::http::run(
-            &format!(
-                "https://github.com/rust-lang/{0}/releases/download/nightly/{0}-{arch}-{os}.gz",
-                self.bin_name()
-            ),
-            &HttpDeflateOption::DecompressGz {
-                dest_path: &self.bin_dir.join(self.bin_name()),
-            },
-            None,
-        )?;
-
-        ytil_sys::file::chmod_x(target)?;
+        let cargo_binary = cargo_bin_dir()
+            .map(|bin_dir| bin_dir.join(self.bin_name()))?
+            .canonicalize()
+            .context("could not resolve Cargo-installed rust-analyzer")?;
+        ytil_sys::file::ln_sf(&cargo_binary, &self.bin_dir.join(self.bin_name()))?;
 
         Ok(())
     }
+
+    fn health_check(&self) -> Option<rootcause::Result<String>> {
+        let args = self.health_check_args()?;
+        let result = cargo_bin_dir().map(|bin_dir| {
+            let mut cmd = Command::new(bin_dir.join(self.bin_name()));
+            cmd.args(args);
+            cmd
+        });
+
+        Some(result.and_then(run_health_check))
+    }
+}
+
+fn cargo_bin_dir() -> rootcause::Result<PathBuf> {
+    if let Some(cargo_home) = std::env::var_os("CARGO_HOME") {
+        let cargo_home = PathBuf::from(cargo_home);
+        return Ok(cargo_bin_dir_for(Some(&cargo_home), Path::new("")));
+    }
+
+    ytil_sys::dir::build_home_path(&[".cargo", "bin"])
+}
+
+fn cargo_bin_dir_for(cargo_home: Option<&Path>, home_dir: &Path) -> PathBuf {
+    cargo_home
+        .map_or_else(|| home_dir.join(".cargo"), Path::to_path_buf)
+        .join("bin")
 }

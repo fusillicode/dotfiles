@@ -158,7 +158,6 @@ fn main() -> rootcause::Result<()> {
         }),
         Box::new(RustAnalyzer {
             bin_dir: Path::new(bin_dir),
-            sys_info: &sys_info,
         }),
         Box::new(Shellcheck {
             bin_dir: Path::new(bin_dir),

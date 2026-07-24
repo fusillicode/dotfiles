@@ -56,23 +56,7 @@ pub trait Installer: Sync + Send {
         let mut cmd = Command::new(self.bin_name());
         cmd.args(args);
 
-        #[expect(
-            clippy::result_large_err,
-            reason = "installer health checks keep rootcause reports as the public error type"
-        )]
-        let res = cmd
-            .exec()
-            .and_then(|output| {
-                std::str::from_utf8(&output.stdout)
-                    .map(ToOwned::to_owned)
-                    .map_err(|err| CmdError::Utf8 {
-                        cmd: Cmd::from(&cmd),
-                        source: err,
-                    })
-            })
-            .map_err(From::from);
-
-        Some(res)
+        Some(run_health_check(cmd))
     }
 
     /// Execute install + optional health check with timing output.
@@ -150,6 +134,16 @@ pub trait Installer: Sync + Send {
     fn should_verify_checksum(&self) -> bool {
         true
     }
+}
+
+/// Runs a command used to verify an installed binary.
+pub fn run_health_check(mut cmd: Command) -> rootcause::Result<String> {
+    let output = cmd.exec()?;
+    let output = std::str::from_utf8(&output.stdout).map_err(|err| CmdError::Utf8 {
+        cmd: Cmd::from(&cmd),
+        source: err,
+    })?;
+    Ok(output.to_owned())
 }
 
 pub trait SystemDependent {
