@@ -10,9 +10,6 @@ use tar::Archive;
 use xz2::read::XzDecoder;
 
 pub enum HttpDeflateOption<'a> {
-    DecompressGz {
-        dest_path: &'a Path,
-    },
     ExtractTarGz {
         dest_dir: &'a Path,
         // Option because not all the downloaded archives has a:
@@ -41,21 +38,6 @@ impl HttpDeflateOption<'_> {
     /// Returns an error when filesystem, decompression, archive extraction, or zip extraction fails.
     pub fn process(&self, tmp_file: &Path) -> rootcause::Result<PathBuf> {
         match self {
-            Self::DecompressGz { dest_path } => {
-                let input = File::open(tmp_file)
-                    .context("error opening tmp file for gz decompression")
-                    .attach_with(|| format!("path={}", tmp_file.display()))?;
-                let mut decoder = GzDecoder::new(input);
-
-                let mut dest = File::create(dest_path)
-                    .context("error creating dest file")
-                    .attach_with(|| format!("path={}", dest_path.display()))?;
-                std::io::copy(&mut decoder, &mut dest)
-                    .context("error decompressing gz to dest file")
-                    .attach_with(|| format!("path={}", dest_path.display()))?;
-
-                Ok(dest_path.into())
-            }
             Self::ExtractTarGz { dest_dir, dest_name } => {
                 let input = File::open(tmp_file)
                     .context("error opening tmp file for tar.gz extraction")
