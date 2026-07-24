@@ -258,8 +258,10 @@ clean_repository() {
   if ((repository_failed)); then
     failed_repositories=$((failed_repositories + 1))
     error "Repository cleanup failed: $repository"
-  else
+  elif ((clean_cargo)); then
     ok "Repository cleanup complete: $repository"
+  else
+    ok "Quarantine cleanup complete: $repository"
   fi
 }
 
