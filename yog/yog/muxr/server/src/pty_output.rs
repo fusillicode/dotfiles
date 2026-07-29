@@ -30,6 +30,9 @@ pub async fn handle_pane_output_message(
             Ok(ClientSessionFlow::Continue)
         }
         Some(SessionPaneOutputMessage::PaneOutputReady) => {
+            // Clear wakeup gates before taking sticky damage. Output racing this boundary is included in this sweep
+            // or publishes the next wakeup, so neither screen damage nor title changes can be stranded.
+            state.runtimes.acknowledge_output_wakeups();
             let screen_dirty_panes = state.runtimes.take_screen_dirty_panes();
             let title_changes = state.runtimes.take_title_changes();
             let screen_dirty = !screen_dirty_panes.is_empty();

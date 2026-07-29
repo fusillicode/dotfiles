@@ -371,6 +371,11 @@ impl PtyHandle {
         self.state.take_screen_dirty()
     }
 
+    /// Acknowledge an attached client's output turn before it consumes sticky output state.
+    pub fn acknowledge_output_wakeup(&self) {
+        self.state.acknowledge_output_wakeup();
+    }
+
     #[cfg(test)]
     pub fn render_snapshot(&self) -> rootcause::Result<TerminalSnapshot> {
         self.state.terminal.lock().snapshot()
@@ -436,6 +441,7 @@ impl Drop for PtySinkGuard {
 
 struct ActivePtySink {
     output_current: Arc<AtomicBool>,
+    output_wakeup_pending: AtomicBool,
     sender: Sender<PtyEvent>,
 }
 
@@ -488,6 +494,7 @@ impl PtyState {
         self.screen_dirty.store(false, Ordering::Release);
         *self.active_sink.lock() = Some(ActivePtySink {
             output_current: Arc::clone(&output_current),
+            output_wakeup_pending: AtomicBool::new(false),
             sender,
         });
 
@@ -524,14 +531,28 @@ impl PtyState {
 
         let mut active_sink = self.active_sink.lock();
         if let Some(sink) = active_sink.as_ref() {
-            match self::try_send_pty_event(&sink.sender, PtyEvent::OutputReady)? {
-                PtyEventSendOutcome::Sent | PtyEventSendOutcome::Full(PtyEvent::OutputReady) => {}
-                PtyEventSendOutcome::Disconnected(PtyEvent::OutputReady) => {
-                    sink.output_current.store(false, Ordering::Release);
-                    *active_sink = None;
-                }
-                PtyEventSendOutcome::Full(PtyEvent::Exited) | PtyEventSendOutcome::Disconnected(PtyEvent::Exited) => {
-                    return Err(report!("unexpected muxr pty exit event while sending output"));
+            // Set the edge-triggered gate before the non-blocking send. The output handler clears it before
+            // sweeping sticky screen/title state, so a read racing that acknowledgement is either swept by the
+            // current turn or publishes the next wakeup.
+            if sink
+                .output_wakeup_pending
+                .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+                .is_ok()
+            {
+                match self::try_send_pty_event(&sink.sender, PtyEvent::OutputReady)? {
+                    PtyEventSendOutcome::Sent => {}
+                    PtyEventSendOutcome::Full(PtyEvent::OutputReady) => {
+                        // The receiver has no queued wakeup to consume; let later output retry once capacity opens.
+                        sink.output_wakeup_pending.store(false, Ordering::Release);
+                    }
+                    PtyEventSendOutcome::Disconnected(PtyEvent::OutputReady) => {
+                        sink.output_current.store(false, Ordering::Release);
+                        *active_sink = None;
+                    }
+                    PtyEventSendOutcome::Full(PtyEvent::Exited)
+                    | PtyEventSendOutcome::Disconnected(PtyEvent::Exited) => {
+                        return Err(report!("unexpected muxr pty exit event while sending output"));
+                    }
                 }
             }
         }
@@ -558,6 +579,12 @@ impl PtyState {
             PtyScreenDmg::Dirty
         } else {
             PtyScreenDmg::Clean
+        }
+    }
+
+    fn acknowledge_output_wakeup(&self) {
+        if let Some(sink) = self.active_sink.lock().as_ref() {
+            sink.output_wakeup_pending.store(false, Ordering::Release);
         }
     }
 
@@ -959,6 +986,7 @@ mod tests {
         let (sender, _receiver) = kanal::bounded(0);
         *state.active_sink.lock() = Some(ActivePtySink {
             output_current: Arc::clone(&output_current),
+            output_wakeup_pending: AtomicBool::new(false),
             sender,
         });
         let session = SessionName::default();
@@ -994,6 +1022,7 @@ mod tests {
         let (sender, receiver) = kanal::bounded(1);
         *state.active_sink.lock() = Some(ActivePtySink {
             output_current: Arc::clone(&output_current),
+            output_wakeup_pending: AtomicBool::new(false),
             sender,
         });
         drop(receiver);
@@ -1043,6 +1072,7 @@ mod tests {
         let (sender, receiver) = kanal::bounded(1);
         *state.active_sink.lock() = Some(ActivePtySink {
             output_current: Arc::clone(&output_current),
+            output_wakeup_pending: AtomicBool::new(false),
             sender,
         });
         drop(receiver);
@@ -1071,13 +1101,95 @@ mod tests {
     #[test]
     fn test_append_output_when_title_only_changes_does_not_mark_screen_dirty() -> rootcause::Result<()> {
         let state = Arc::new(pty_state(&terminal_size()?));
-        let (sender, receiver) = kanal::bounded(1);
+        let (sender, receiver) = kanal::bounded(2);
         let _guard = state.attach_sink(sender);
 
         self::assert_replies_eq(&(state.append_output(b"\x1b]2;~\x07")?), &[]);
+        self::assert_replies_eq(&(state.append_output(b"\x1b]2;work\x07")?), &[]);
+        assert_that!(
+            state
+                .active_sink
+                .lock()
+                .as_ref()
+                .is_some_and(|sink| sink.output_wakeup_pending.load(Ordering::Acquire)),
+            eq(true)
+        );
 
         assert_that!(state.take_screen_dirty(), eq(PtyScreenDmg::Clean));
-        assert_that!(state.take_title_changes(), eq(vec![Some("~".to_owned())]));
+        assert_that!(
+            state.take_title_changes(),
+            eq(vec![Some("~".to_owned()), Some("work".to_owned())])
+        );
+        assert_that!(receiver.recv(), ok(eq(PtyEvent::OutputReady)));
+        assert_that!(receiver.try_recv(), ok(none()));
+        Ok(())
+    }
+
+    #[test]
+    fn test_append_output_sends_one_wakeup_per_acknowledged_wave() -> rootcause::Result<()> {
+        let state = Arc::new(pty_state(&terminal_size()?));
+        let (sender, receiver) = kanal::bounded(2);
+        let _guard = state.attach_sink(sender);
+
+        self::assert_replies_eq(&(state.append_output(b"first")?), &[]);
+        self::assert_replies_eq(&(state.append_output(b"second")?), &[]);
+        assert_that!(
+            state
+                .active_sink
+                .lock()
+                .as_ref()
+                .is_some_and(|sink| sink.output_wakeup_pending.load(Ordering::Acquire)),
+            eq(true)
+        );
+        state.acknowledge_output_wakeup();
+        self::assert_replies_eq(&(state.append_output(b"third")?), &[]);
+
+        assert_that!(receiver.recv(), ok(eq(PtyEvent::OutputReady)));
+        assert_that!(receiver.recv(), ok(eq(PtyEvent::OutputReady)));
+        assert_that!(receiver.try_recv(), ok(none()));
+        Ok(())
+    }
+
+    #[test]
+    fn test_append_output_when_wakeup_channel_is_full_retries_after_capacity_opens() -> rootcause::Result<()> {
+        let state = pty_state(&terminal_size()?);
+        let (sender, receiver) = kanal::bounded(1);
+        sender.send(PtyEvent::Exited)?;
+        let output_current = Arc::new(AtomicBool::new(true));
+        *state.active_sink.lock() = Some(ActivePtySink {
+            output_current: Arc::clone(&output_current),
+            output_wakeup_pending: AtomicBool::new(false),
+            sender,
+        });
+
+        self::assert_replies_eq(&(state.append_output(b"first")?), &[]);
+        assert_that!(
+            state
+                .active_sink
+                .lock()
+                .as_ref()
+                .is_some_and(|sink| !sink.output_wakeup_pending.load(Ordering::Acquire)),
+            eq(true)
+        );
+        assert_that!(receiver.recv(), ok(eq(PtyEvent::Exited)));
+        self::assert_replies_eq(&(state.append_output(b"second")?), &[]);
+
+        assert_that!(receiver.recv(), ok(eq(PtyEvent::OutputReady)));
+        Ok(())
+    }
+
+    #[test]
+    fn test_output_after_acknowledgement_before_sweep_is_not_missed() -> rootcause::Result<()> {
+        let state = Arc::new(pty_state(&terminal_size()?));
+        let (sender, receiver) = kanal::bounded(2);
+        let _guard = state.attach_sink(sender);
+
+        self::assert_replies_eq(&(state.append_output(b"before acknowledgement")?), &[]);
+        state.acknowledge_output_wakeup();
+        self::assert_replies_eq(&(state.append_output(b"after acknowledgement")?), &[]);
+
+        assert_that!(state.take_screen_dirty(), eq(PtyScreenDmg::Dirty));
+        assert_that!(receiver.recv(), ok(eq(PtyEvent::OutputReady)));
         assert_that!(receiver.recv(), ok(eq(PtyEvent::OutputReady)));
         Ok(())
     }
@@ -1146,6 +1258,7 @@ mod tests {
         let output_current = Arc::new(AtomicBool::new(true));
         *state.active_sink.lock() = Some(ActivePtySink {
             output_current: Arc::clone(&output_current),
+            output_wakeup_pending: AtomicBool::new(false),
             sender,
         });
 
@@ -1167,6 +1280,7 @@ mod tests {
         let output_current = Arc::new(AtomicBool::new(true));
         *state.active_sink.lock() = Some(ActivePtySink {
             output_current: Arc::clone(&output_current),
+            output_wakeup_pending: AtomicBool::new(false),
             sender,
         });
 

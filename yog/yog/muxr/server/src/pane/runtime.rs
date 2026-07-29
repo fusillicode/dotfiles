@@ -337,6 +337,13 @@ impl PaneRuntimes {
         }
         screen_dirty_panes
     }
+
+    /// Clear attached-client output wakeup gates before consuming their sticky output state.
+    pub fn acknowledge_output_wakeups(&self) {
+        for pane in &self.panes {
+            pane.session.handle().acknowledge_output_wakeup();
+        }
+    }
 }
 
 pub fn spawn_pane_or_restore_layout(
