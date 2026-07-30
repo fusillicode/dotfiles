@@ -1,16 +1,16 @@
+use std::collections::BTreeMap;
 use std::time::Instant;
 
-use muxr_core::AttachAccepted;
 use muxr_core::ClientMousePosition;
 use muxr_core::LayoutSnapshot;
 use muxr_core::PaneId;
 use muxr_core::PaneRegionSnapshot;
 use muxr_core::PaneRegionsSnapshot;
+#[cfg(test)]
 use muxr_core::RenderUpdate;
 use muxr_core::ServerEvent;
 use muxr_core::SessionPaths;
 use muxr_core::TerminalSize;
-use muxr_transport::ServerEventWriter;
 
 use crate::client::session::ClientSessionState;
 use crate::client::timers::ClientTimers;
@@ -18,8 +18,6 @@ use crate::pane::fullscreen::PaneFullscreen;
 use crate::pane::layout::PaneLayout;
 use crate::pane::layout::PaneRegion;
 use crate::pane::render::PaneRenderConfig;
-use crate::pane::render::PaneRenderLayout;
-use crate::pane::render::RenderComposer;
 use crate::pane::runtime::PaneRuntimeMetadata;
 use crate::pane::runtime::PaneRuntimes;
 use crate::pane::tracked_process::PaneTrackedProcessSnapshot;
@@ -27,6 +25,10 @@ use crate::pane::tracked_process::PaneTrackedProcesses;
 use crate::pane::tracked_process::TrackedProcessAttention;
 use crate::render_state::ClientRenderDmg;
 use crate::render_state::ClientSessionFlow;
+use crate::render_worker::RenderInput;
+use crate::render_worker::RenderWorker;
+#[cfg(test)]
+use crate::render_worker::ServerRenderCommand;
 use crate::server::ServerConfig;
 use crate::state::SessionLayout;
 
@@ -45,35 +47,77 @@ pub fn resize_panes_to_layout(
     runtimes.resize_panes(&regions)
 }
 
+#[cfg(test)]
 pub fn initial_client_render(
     config: &ServerConfig,
     layout: &mut SessionLayout,
     runtimes: &PaneRuntimes,
     pane_tracked_processes: &PaneTrackedProcesses,
     terminal_size: &TerminalSize,
-) -> rootcause::Result<(LayoutSnapshot, PaneRegionsSnapshot, RenderComposer, RenderUpdate)> {
-    let mut render_composer = RenderComposer::default();
+) -> rootcause::Result<(LayoutSnapshot, PaneRegionsSnapshot, RenderWorker, RenderUpdate)> {
+    let mut render_worker = RenderWorker::default();
     let tracked_processes = pane_tracked_processes.snapshot(layout);
     let layout_snapshot = self::layout_snapshot_and_persist(&config.paths, layout, runtimes, &tracked_processes)?;
     let pane_layout = PaneFullscreen::default().pane_layout(layout, terminal_size)?;
     let attention_panes = self::attention_pane_ids(layout, pane_tracked_processes);
-    let render_baseline = render_composer.render_baseline(
+    let input = self::render_input(
+        &mut render_worker,
         PaneRenderConfig {
             border_styles: config.user_config.pane_borders,
             mode: crate::pane::borders::BorderRenderMode::Focus,
             pane_attention: config.user_config.pane_attention,
             pane_dim: config.user_config.pane_dim,
         },
-        PaneRenderLayout {
-            active_pane: layout.active_pane_id()?,
-            pane_layout: &pane_layout,
-        },
+        layout.active_pane_id()?,
+        pane_layout,
         runtimes,
-        terminal_size,
-        &attention_panes,
+        terminal_size.clone(),
+        attention_panes,
+        ClientRenderDmg::Full,
+        true,
     )?;
-    let pane_regions = self::pane_regions_snapshot_from_composer(&pane_layout, &render_composer)?;
-    Ok((layout_snapshot, pane_regions, render_composer, render_baseline))
+    let pane_regions = input.pane_regions()?;
+    let ServerRenderCommand::Ready {
+        render: Some(render_baseline),
+        ..
+    } = render_worker.stage_render(input)?
+    else {
+        return Err(rootcause::report!(
+            "muxr detached initial render did not produce a baseline"
+        ));
+    };
+    Ok((layout_snapshot, pane_regions, render_worker, render_baseline))
+}
+
+pub fn initial_client_render_input(
+    config: &ServerConfig,
+    layout: &mut SessionLayout,
+    runtimes: &PaneRuntimes,
+    pane_tracked_processes: &PaneTrackedProcesses,
+    terminal_size: &TerminalSize,
+    render_worker: &mut RenderWorker,
+) -> rootcause::Result<(LayoutSnapshot, PaneRegionsSnapshot, RenderInput)> {
+    let tracked_processes = pane_tracked_processes.snapshot(layout);
+    let layout_snapshot = self::layout_snapshot_and_persist(&config.paths, layout, runtimes, &tracked_processes)?;
+    let pane_layout = PaneFullscreen::default().pane_layout(layout, terminal_size)?;
+    let input = self::render_input(
+        render_worker,
+        PaneRenderConfig {
+            border_styles: config.user_config.pane_borders,
+            mode: crate::pane::borders::BorderRenderMode::Focus,
+            pane_attention: config.user_config.pane_attention,
+            pane_dim: config.user_config.pane_dim,
+        },
+        layout.active_pane_id()?,
+        pane_layout,
+        runtimes,
+        terminal_size.clone(),
+        self::attention_pane_ids(layout, pane_tracked_processes),
+        ClientRenderDmg::Full,
+        true,
+    )?;
+    let pane_regions = input.pane_regions()?;
+    Ok((layout_snapshot, pane_regions, input))
 }
 
 fn layout_snapshot_and_persist(
@@ -121,28 +165,41 @@ fn pane_region_snapshot(region: &PaneRegion, runtimes: &PaneRuntimes) -> rootcau
     .and_then(|snapshot| snapshot.with_wrapped_rows(wrapped_rows))
 }
 
-fn pane_regions_snapshot_from_composer(
-    pane_layout: &PaneLayout,
-    render_composer: &RenderComposer,
-) -> rootcause::Result<PaneRegionsSnapshot> {
-    let regions = pane_layout
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the state actor must publish every immutable render input"
+)]
+fn render_input(
+    render_worker: &mut RenderWorker,
+    pane_render: PaneRenderConfig,
+    active_pane: PaneId,
+    pane_layout: PaneLayout,
+    runtimes: &PaneRuntimes,
+    size: TerminalSize,
+    attention_panes: Vec<PaneId>,
+    damage: ClientRenderDmg,
+    force_baseline: bool,
+) -> rootcause::Result<RenderInput> {
+    let pane_snapshots = pane_layout
         .regions()
         .iter()
         .map(|region| {
-            let snapshot = render_composer.pane_render_snapshot(region.id)?;
-            PaneRegionSnapshot::new(
-                region.id,
-                region.area.origin.col,
-                region.area.origin.row,
-                region.area.size.cols,
-                region.area.size.rows,
-                snapshot.mouse_mode(),
-                snapshot.visible_top_row(),
-            )
-            .and_then(|region| region.with_wrapped_rows(snapshot.visible_row_wraps().to_vec()))
+            runtimes
+                .pane_render_snapshot(region.id)
+                .map(|snapshot| (region.id, snapshot))
         })
-        .collect::<rootcause::Result<Vec<_>>>()?;
-    PaneRegionsSnapshot::new(regions)
+        .collect::<rootcause::Result<BTreeMap<_, _>>>()?;
+    Ok(RenderInput::new(
+        render_worker.next_generation()?,
+        pane_render,
+        active_pane,
+        pane_layout,
+        pane_snapshots,
+        size,
+        attention_panes,
+        damage,
+        force_baseline,
+    ))
 }
 
 fn visible_pane_region_at_position(
@@ -183,33 +240,6 @@ fn attention_pane_ids(layout: &SessionLayout, pane_tracked_processes: &PaneTrack
     pane_ids
 }
 
-pub async fn send_attach_response_and_baseline(
-    event_writer: &mut ServerEventWriter,
-    layout: LayoutSnapshot,
-    pane_regions: PaneRegionsSnapshot,
-    render_baseline: RenderUpdate,
-    client_write_timeout: std::time::Duration,
-) -> rootcause::Result<ClientSessionFlow> {
-    if crate::event_writer::send_event_with_timeout(
-        event_writer,
-        &ServerEvent::Attached(AttachAccepted { layout, pane_regions }),
-        client_write_timeout,
-    )
-    .await?
-    .session_flow()
-        == ClientSessionFlow::Disconnect
-    {
-        return Ok(ClientSessionFlow::Disconnect);
-    }
-    crate::event_writer::send_event_with_timeout(
-        event_writer,
-        &ServerEvent::Render(render_baseline),
-        client_write_timeout,
-    )
-    .await
-    .map(|outcome| outcome.session_flow())
-}
-
 pub fn pane_ids_visible_render_dmg(
     layout: &SessionLayout,
     pane_fullscreen: &PaneFullscreen,
@@ -229,7 +259,7 @@ pub fn pane_ids_visible_render_dmg(
 }
 
 pub async fn flush_render_diff(
-    event_writer: &mut ServerEventWriter,
+    event_writer: &mut impl crate::event_writer::ServerEventSink,
     state: &mut ClientSessionState<'_>,
     render_dmg: &mut ClientRenderDmg,
 ) -> rootcause::Result<ClientSessionFlow> {
@@ -237,29 +267,27 @@ pub async fn flush_render_diff(
         return Ok(ClientSessionFlow::Continue);
     }
 
-    let (pane_regions, render_update) = {
-        let pane_layout = self::visible_pane_layout(state)?;
-        let attention_panes = self::attention_pane_ids(state.layout, &state.pane_tracked_processes);
-        let update = state.render_composer.render_diff(
-            PaneRenderConfig {
-                border_styles: state.config.user_config.pane_borders,
-                mode: crate::pane::borders::BorderRenderMode::from(state.input_mode),
-                pane_attention: state.config.user_config.pane_attention,
-                pane_dim: state.config.user_config.pane_dim,
-            },
-            PaneRenderLayout {
-                active_pane: state.layout.active_pane_id()?,
-                pane_layout: &pane_layout,
-            },
-            state.runtimes,
-            &state.terminal_size,
-            &attention_panes,
-            render_dmg,
-        )?;
-        let pane_regions = self::pane_regions_snapshot_from_composer(&pane_layout, state.render_composer)?;
-        (pane_regions, update)
-    };
-    if self::send_pane_regions_and_render(event_writer, state, pane_regions, render_update).await?
+    let input = self::render_input(
+        state.render_worker,
+        PaneRenderConfig {
+            border_styles: state.config.user_config.pane_borders,
+            mode: crate::pane::borders::BorderRenderMode::from(state.input_mode),
+            pane_attention: state.config.user_config.pane_attention,
+            pane_dim: state.config.user_config.pane_dim,
+        },
+        state.layout.active_pane_id()?,
+        self::visible_pane_layout(state)?,
+        state.runtimes,
+        state.terminal_size.clone(),
+        self::attention_pane_ids(state.layout, &state.pane_tracked_processes),
+        render_dmg.clone(),
+        false,
+    )?;
+    state.pane_regions = input.pane_regions()?;
+    let command = state.render_worker.stage_render(input)?;
+    if crate::event_writer::send_render_with_timeout(event_writer, &command, state.config.client_write_timeout)
+        .await?
+        .session_flow()
         == ClientSessionFlow::Disconnect
     {
         return Ok(ClientSessionFlow::Disconnect);
@@ -276,7 +304,7 @@ fn runtime_pane_metadata(state: &ClientSessionState<'_>) -> PaneRuntimeMetadata 
 }
 
 pub async fn flush_cmd_label_layout(
-    event_writer: &mut ServerEventWriter,
+    event_writer: &mut impl crate::event_writer::ServerEventSink,
     state: &mut ClientSessionState<'_>,
     title_changes: Vec<(PaneId, Option<String>)>,
 ) -> rootcause::Result<ClientSessionFlow> {
@@ -316,7 +344,7 @@ pub async fn flush_cmd_label_layout(
 
 pub async fn handle_cmd_handoff_sample(
     timers: &mut ClientTimers,
-    event_writer: &mut ServerEventWriter,
+    event_writer: &mut impl crate::event_writer::ServerEventSink,
     state: &mut ClientSessionState<'_>,
     render_dmg: &mut ClientRenderDmg,
 ) -> rootcause::Result<ClientSessionFlow> {
@@ -343,7 +371,7 @@ pub async fn handle_cmd_handoff_sample(
 
 pub async fn flush_tracked_process_runtime_layout(
     timers: &mut ClientTimers,
-    event_writer: &mut ServerEventWriter,
+    event_writer: &mut impl crate::event_writer::ServerEventSink,
     state: &mut ClientSessionState<'_>,
     render_dmg: &mut ClientRenderDmg,
     pane_surface_dirty: ClientRenderDmg,
@@ -359,7 +387,7 @@ pub async fn flush_tracked_process_runtime_layout(
 
 pub async fn flush_pane_attention(
     timers: &mut ClientTimers,
-    event_writer: &mut ServerEventWriter,
+    event_writer: &mut impl crate::event_writer::ServerEventSink,
     state: &mut ClientSessionState<'_>,
     render_dmg: &mut ClientRenderDmg,
 ) -> rootcause::Result<ClientSessionFlow> {
@@ -382,20 +410,17 @@ pub async fn flush_pane_attention(
 }
 
 async fn send_sidebar_layout_if_changed(
-    event_writer: &mut ServerEventWriter,
+    event_writer: &mut impl crate::event_writer::ServerEventSink,
     state: &mut ClientSessionState<'_>,
     layout_snapshot: LayoutSnapshot,
 ) -> rootcause::Result<ClientSessionFlow> {
     if layout_snapshot == state.last_layout_snapshot {
         return Ok(ClientSessionFlow::Continue);
     }
-    if crate::event_writer::send_event_with_timeout(
-        event_writer,
-        &ServerEvent::SidebarLayout(layout_snapshot.clone()),
-        state.config.client_write_timeout,
-    )
-    .await?
-    .session_flow()
+    let event = RenderWorker::stage_mandatory(ServerEvent::SidebarLayout(layout_snapshot.clone()));
+    if crate::event_writer::send_event_with_timeout(event_writer, &event, state.config.client_write_timeout)
+        .await?
+        .session_flow()
         == ClientSessionFlow::Disconnect
     {
         return Ok(ClientSessionFlow::Disconnect);
@@ -404,48 +429,11 @@ async fn send_sidebar_layout_if_changed(
     Ok(ClientSessionFlow::Continue)
 }
 
-async fn send_pane_regions_and_render(
-    event_writer: &mut ServerEventWriter,
-    state: &mut ClientSessionState<'_>,
-    pane_regions: PaneRegionsSnapshot,
-    render_update: Option<RenderUpdate>,
-) -> rootcause::Result<ClientSessionFlow> {
-    // Region metadata must precede the render using it: selection/copy translate visible cells through
-    // `visible_top_row` and wrap flags, so tab-bar-only renders still need normal pane-render ordering.
-    if pane_regions != state.pane_regions {
-        if crate::event_writer::send_event_with_timeout(
-            event_writer,
-            &ServerEvent::PaneRegions(pane_regions.clone()),
-            state.config.client_write_timeout,
-        )
-        .await?
-        .session_flow()
-            == ClientSessionFlow::Disconnect
-        {
-            return Ok(ClientSessionFlow::Disconnect);
-        }
-        state.pane_regions = pane_regions;
-    }
-    if let Some(render_update) = render_update
-        && crate::event_writer::send_event_with_timeout(
-            event_writer,
-            &ServerEvent::Render(render_update),
-            state.config.client_write_timeout,
-        )
-        .await?
-        .session_flow()
-            == ClientSessionFlow::Disconnect
-    {
-        return Ok(ClientSessionFlow::Disconnect);
-    }
-    Ok(ClientSessionFlow::Continue)
-}
-
 pub async fn send_layout_and_baseline(
-    event_writer: &mut ServerEventWriter,
+    event_writer: &mut impl crate::event_writer::ServerEventSink,
     state: &mut ClientSessionState<'_>,
 ) -> rootcause::Result<ClientSessionFlow> {
-    let (layout_snapshot, pane_regions, render_update) = {
+    let (layout_snapshot, render_input) = {
         let tracked_processes = state.pane_tracked_processes.snapshot(state.layout);
         let layout_snapshot = self::layout_snapshot_and_maybe_persist(
             &state.config.paths,
@@ -458,52 +446,31 @@ pub async fn send_layout_and_baseline(
                 LayoutPersistence::SnapshotOnly
             },
         )?;
-        let pane_layout = self::visible_pane_layout(state)?;
-        let attention_panes = self::attention_pane_ids(state.layout, &state.pane_tracked_processes);
-        let render_update = state.render_composer.render_baseline(
+        let render_input = self::render_input(
+            state.render_worker,
             PaneRenderConfig {
                 border_styles: state.config.user_config.pane_borders,
                 mode: crate::pane::borders::BorderRenderMode::from(state.input_mode),
                 pane_attention: state.config.user_config.pane_attention,
                 pane_dim: state.config.user_config.pane_dim,
             },
-            PaneRenderLayout {
-                active_pane: state.layout.active_pane_id()?,
-                pane_layout: &pane_layout,
-            },
+            state.layout.active_pane_id()?,
+            self::visible_pane_layout(state)?,
             state.runtimes,
-            &state.terminal_size,
-            &attention_panes,
+            state.terminal_size.clone(),
+            self::attention_pane_ids(state.layout, &state.pane_tracked_processes),
+            ClientRenderDmg::Full,
+            true,
         )?;
-        let pane_regions = self::pane_regions_snapshot_from_composer(&pane_layout, state.render_composer)?;
-        (layout_snapshot, pane_regions, render_update)
+        (layout_snapshot, render_input)
     };
-    if crate::event_writer::send_event_with_timeout(
+    let layout_event = RenderWorker::stage_mandatory(ServerEvent::Layout(layout_snapshot.clone()));
+    state.pane_regions = render_input.pane_regions()?;
+    let command = state.render_worker.stage_render(render_input)?;
+    if crate::event_writer::send_event_and_render_with_timeout(
         event_writer,
-        &ServerEvent::Layout(layout_snapshot.clone()),
-        state.config.client_write_timeout,
-    )
-    .await?
-    .session_flow()
-        == ClientSessionFlow::Disconnect
-    {
-        return Ok(ClientSessionFlow::Disconnect);
-    }
-    if crate::event_writer::send_event_with_timeout(
-        event_writer,
-        &ServerEvent::PaneRegions(pane_regions.clone()),
-        state.config.client_write_timeout,
-    )
-    .await?
-    .session_flow()
-        == ClientSessionFlow::Disconnect
-    {
-        return Ok(ClientSessionFlow::Disconnect);
-    }
-    state.pane_regions = pane_regions;
-    if crate::event_writer::send_event_with_timeout(
-        event_writer,
-        &ServerEvent::Render(render_update),
+        &layout_event,
+        &command,
         state.config.client_write_timeout,
     )
     .await?
@@ -517,7 +484,7 @@ pub async fn send_layout_and_baseline(
 }
 
 pub async fn resize_panes_and_render(
-    event_writer: &mut ServerEventWriter,
+    event_writer: &mut impl crate::event_writer::ServerEventSink,
     state: &mut ClientSessionState<'_>,
 ) -> rootcause::Result<ClientSessionFlow> {
     let pane_layout = self::visible_pane_layout(state)?;

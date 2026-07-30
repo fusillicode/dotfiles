@@ -1,3 +1,4 @@
+pub mod heartbeat;
 pub mod lifecycle;
 mod quiet;
 pub mod session;

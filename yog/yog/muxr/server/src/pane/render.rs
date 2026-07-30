@@ -21,7 +21,6 @@ use smallvec::SmallVec;
 use crate::pane::borders::BorderRenderMode;
 use crate::pane::layout::PaneLayout;
 use crate::pane::layout::PaneRegion;
-use crate::pane::runtime::PaneRuntimes;
 use crate::pty::PtyRenderSnapshot;
 use crate::render_state::ClientRenderDmg;
 use crate::terminal::TerminalSnapshot;
@@ -114,21 +113,8 @@ impl Default for RenderComposer {
 }
 
 impl RenderComposer {
-    pub fn render_baseline(
-        &mut self,
-        pane_render: PaneRenderConfig,
-        pane_layout: PaneRenderLayout<'_>,
-        runtimes: &PaneRuntimes,
-        size: &TerminalSize,
-        attention_panes: &[PaneId],
-    ) -> rootcause::Result<RenderUpdate> {
-        self.render_frame_baseline(Self::current_frame(
-            pane_render,
-            pane_layout,
-            runtimes,
-            size,
-            attention_panes,
-        )?)
+    pub const fn has_baseline(&self) -> bool {
+        self.last_sent.is_some()
     }
 
     fn render_frame_baseline(&mut self, mut frame: CompositeFrame) -> rootcause::Result<RenderUpdate> {
@@ -143,18 +129,41 @@ impl RenderComposer {
         Ok(RenderUpdate::Baseline(baseline))
     }
 
-    pub fn render_diff(
+    pub fn render_diff_snapshots(
         &mut self,
         pane_render: PaneRenderConfig,
         pane_layout: PaneRenderLayout<'_>,
-        runtimes: &PaneRuntimes,
         size: &TerminalSize,
         attention_panes: &[PaneId],
         damage: &ClientRenderDmg,
+        snapshots: &BTreeMap<PaneId, PtyRenderSnapshot>,
     ) -> rootcause::Result<Option<RenderUpdate>> {
         self.render_diff_with(pane_render, pane_layout, size, attention_panes, damage, |pane_id| {
-            runtimes.pane_render_snapshot(pane_id)
+            snapshots.get(&pane_id).cloned().ok_or_else(|| {
+                report!("muxr render command is missing a pane snapshot").attach(format!("pane={pane_id}"))
+            })
         })
+    }
+
+    pub fn render_baseline_snapshots(
+        &mut self,
+        pane_render: PaneRenderConfig,
+        pane_layout: PaneRenderLayout<'_>,
+        size: &TerminalSize,
+        attention_panes: &[PaneId],
+        snapshots: &BTreeMap<PaneId, PtyRenderSnapshot>,
+    ) -> rootcause::Result<RenderUpdate> {
+        self.render_frame_baseline(Self::current_frame_with(
+            pane_render,
+            pane_layout,
+            size,
+            attention_panes,
+            &mut |pane_id| {
+                snapshots.get(&pane_id).cloned().ok_or_else(|| {
+                    report!("muxr render command is missing a pane snapshot").attach(format!("pane={pane_id}"))
+                })
+            },
+        )?)
     }
 
     fn render_diff_with(
@@ -336,27 +345,6 @@ impl RenderComposer {
             &attention_panes,
         )?;
         self.render_frame_diff(frame, reason)
-    }
-
-    pub fn pane_render_snapshot(&self, pane_id: PaneId) -> rootcause::Result<&PtyRenderSnapshot> {
-        self.last_sent
-            .as_ref()
-            .and_then(|frame| frame.pane_snapshots.get(&pane_id))
-            .ok_or_else(|| {
-                report!("muxr composite frame is missing a pane snapshot").attach(format!("pane_id={pane_id}"))
-            })
-    }
-
-    fn current_frame(
-        pane_render: PaneRenderConfig,
-        pane_layout: PaneRenderLayout<'_>,
-        runtimes: &PaneRuntimes,
-        size: &TerminalSize,
-        attention_panes: &[PaneId],
-    ) -> rootcause::Result<CompositeFrame> {
-        Self::current_frame_with(pane_render, pane_layout, size, attention_panes, &mut |pane_id| {
-            runtimes.pane_render_snapshot(pane_id)
-        })
     }
 
     fn current_frame_with(

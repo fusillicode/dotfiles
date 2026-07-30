@@ -251,6 +251,16 @@ impl ClientRenderer {
         }
     }
 
+    pub fn full_redraw_transaction(&mut self) -> rootcause::Result<Option<Vec<u8>>> {
+        let Some(changes) = self.frame_buffer.full_redraw_changes() else {
+            return Ok(None);
+        };
+        let mut transaction = Vec::new();
+        crate::terminal::set_mouse_any_motion_capture(&mut transaction, self.any_motion_capture)?;
+        self.draw(&mut transaction, &changes)?;
+        Ok(Some(transaction))
+    }
+
     fn draw(&mut self, stdout: &mut impl Write, changes: &RenderFrameChanges) -> rootcause::Result<()> {
         let render_tab_bar = self.tab_bar_dmg == TabBarDmg::Dirty || changes.scope() == RenderFrameScope::Full;
         self.render_transaction.clear();
@@ -866,6 +876,27 @@ mod tests {
             eq("\x1b[?1003h\x1b[?1003l\x1b[?1000h\x1b[?1002h\x1b[?1006h")
         );
         assert_that!(output.flushes, eq(2));
+        Ok(())
+    }
+
+    #[test]
+    fn test_full_redraw_transaction_reasserts_current_mouse_capture_before_frame() -> rootcause::Result<()> {
+        let mut renderer = ClientRenderer::with_synchronized_output(
+            layout_snapshot()?,
+            pane_regions_snapshot()?,
+            SynchronizedOutput::Csi,
+        );
+        let mut output = CountingWriter::default();
+        renderer.apply_render(&mut output, muxr_core::RenderUpdate::Baseline(render_baseline()?))?;
+        renderer.apply_pane_regions(&mut output, any_motion_pane_regions_snapshot()?)?;
+
+        let transaction = renderer
+            .full_redraw_transaction()?
+            .ok_or_else(|| report!("expected a full redraw transaction for the current frame"))?;
+        let terminal_output = String::from_utf8(transaction)?;
+
+        assert_that!(terminal_output, starts_with("\x1b[?1003h\x1b[?2026h"));
+        assert_that!(terminal_output, contains_substring("\x1b[2J"));
         Ok(())
     }
 

@@ -21,6 +21,8 @@ use crate::input::InputIdleTimeout;
 use crate::renderer::ClientRenderOutcome;
 use crate::renderer::ClientRenderer;
 use crate::session::attach::AttachedSession;
+use crate::stdout_worker::StdoutSender;
+use crate::stdout_worker::StdoutWorker;
 use crate::terminal::TerminalGuard;
 
 const RESIZE_POLL_INTERVAL: Duration = Duration::from_millis(250);
@@ -48,6 +50,12 @@ enum ClientInputAction {
 pub enum ClientInputSend {
     Accepted,
     Closed,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum InteractiveFlow {
+    Continue,
+    Stop,
 }
 
 /// Start or attach to a muxr session and run an interactive client.
@@ -85,9 +93,11 @@ async fn run_interactive(
     let writer = attached_session.writer;
     let writer_handle =
         tokio::spawn(async move { self::forward_client_requests(writer, control_receiver, input_receiver).await });
-    let mut stdout = std::io::stdout();
+    let (stdout_sender, _stdout_worker, mut stdout_failure_receiver) = StdoutWorker::spawn();
     let mut renderer = ClientRenderer::new(muxr_config, attached_session.layout, attached_session.pane_regions);
-    renderer.sync_mouse_capture(&mut stdout)?;
+    let mut transaction = Vec::new();
+    renderer.sync_mouse_capture(&mut transaction)?;
+    stdout_sender.send_mandatory(transaction)?;
     let edge_scroll_tick_start = tokio::time::Instant::now()
         .checked_add(SELECTION_EDGE_SCROLL_INTERVAL)
         .ok_or_else(|| report!("muxr selection edge scroll interval overflowed"))?;
@@ -101,41 +111,10 @@ async fn run_interactive(
                 let Some(event) = event? else {
                     break;
                 };
-                match event {
-                    ServerEvent::Deleted | ServerEvent::Detached => break,
-                    ServerEvent::Error(error) => {
-                        return Err(report!("muxr server returned error")
-                            .attach(format!("code={}", error.code()))
-                            .attach(format!("msg={}", error.msg())));
-                    }
-                    ServerEvent::Ping => {
-                        if control_sender.send(ClientRequest::Pong).await.is_err() {
-                            break;
-                        }
-                    }
-                    ServerEvent::Layout(next_layout) => {
-                        renderer.apply_layout(next_layout);
-                    }
-                    ServerEvent::SidebarLayout(next_layout) => {
-                        renderer.apply_sidebar_layout(&mut stdout, next_layout)?;
-                    }
-                    ServerEvent::PaneRegions(next_regions) => {
-                        renderer.apply_pane_regions(&mut stdout, next_regions)?;
-                    }
-                    ServerEvent::Render(update) => match renderer.apply_render(&mut stdout, update)? {
-                        ClientRenderOutcome::Drawn => {}
-                        ClientRenderOutcome::NeedsResync => {
-                            if control_sender.send(ClientRequest::RenderResync).await.is_err() {
-                                break;
-                            }
-                        }
-                    },
-                    ServerEvent::ScrollPaneLineResult {
-                        position,
-                        direction,
-                        movement,
-                    } => renderer.apply_scroll_pane_line_result(position, direction, movement),
-                    ServerEvent::Attached(_) | ServerEvent::Pong => {}
+                if self::handle_server_event(event, &control_sender, &mut renderer, &stdout_sender).await?
+                    == InteractiveFlow::Stop
+                {
+                    break;
                 }
             },
             action = input_action_receiver.recv(), if !input_actions_closed => {
@@ -143,14 +122,20 @@ async fn run_interactive(
                     input_actions_closed = true;
                     continue;
                 };
-                if self::handle_client_input_action(action, muxr_config, &input_request_sender, &mut renderer, &mut stdout).await? == ClientInputSend::Closed {
+                let mut transaction = Vec::new();
+                if self::handle_client_input_action(action, muxr_config, &input_request_sender, &mut renderer, &mut transaction).await? == ClientInputSend::Closed {
                     break;
                 }
+                stdout_sender.send_mandatory(transaction)?;
             },
             _ = edge_scroll_tick.tick(), if renderer.selection_edge_drag() == crate::renderer::SelectionEdgeDrag::Active => {
                 if self::send_selection_edge_scroll_request(&input_request_sender, &mut renderer) == ClientInputSend::Closed {
                     break;
                 }
+            },
+            stdout_failure = &mut stdout_failure_receiver => {
+                let error = stdout_failure.unwrap_or_else(|_| "stdout worker stopped unexpectedly".to_owned());
+                return Err(report!("muxr client stdout worker failed").attach(error));
             },
             else => {
                 if input_actions_closed {
@@ -165,6 +150,71 @@ async fn run_interactive(
     drop(stdin_handle);
     drop(resize_handle);
     Ok(())
+}
+
+async fn handle_server_event(
+    event: ServerEvent,
+    control_sender: &tokio::sync::mpsc::Sender<ClientRequest>,
+    renderer: &mut ClientRenderer,
+    stdout_sender: &StdoutSender,
+) -> rootcause::Result<InteractiveFlow> {
+    match event {
+        ServerEvent::Deleted | ServerEvent::Detached => Ok(InteractiveFlow::Stop),
+        ServerEvent::Error(error) => Err(report!("muxr server returned error")
+            .attach(format!("code={}", error.code()))
+            .attach(format!("msg={}", error.msg()))),
+        ServerEvent::Ping => Ok(if control_sender.send(ClientRequest::Pong).await.is_ok() {
+            InteractiveFlow::Continue
+        } else {
+            InteractiveFlow::Stop
+        }),
+        ServerEvent::Layout(next_layout) => {
+            renderer.apply_layout(next_layout);
+            Ok(InteractiveFlow::Continue)
+        }
+        ServerEvent::SidebarLayout(next_layout) => {
+            let mut transaction = Vec::new();
+            renderer.apply_sidebar_layout(&mut transaction, next_layout)?;
+            stdout_sender.send_mandatory(transaction)?;
+            Ok(InteractiveFlow::Continue)
+        }
+        ServerEvent::PaneRegions(next_regions) => {
+            let mut transaction = Vec::new();
+            renderer.apply_pane_regions(&mut transaction, next_regions)?;
+            stdout_sender.send_mandatory(transaction)?;
+            Ok(InteractiveFlow::Continue)
+        }
+        ServerEvent::Render(update) => self::handle_render_event(update, control_sender, renderer, stdout_sender).await,
+        ServerEvent::ScrollPaneLineResult {
+            position,
+            direction,
+            movement,
+        } => {
+            renderer.apply_scroll_pane_line_result(position, direction, movement);
+            Ok(InteractiveFlow::Continue)
+        }
+        ServerEvent::Attached(_) | ServerEvent::Pong => Ok(InteractiveFlow::Continue),
+    }
+}
+
+async fn handle_render_event(
+    update: muxr_core::RenderUpdate,
+    control_sender: &tokio::sync::mpsc::Sender<ClientRequest>,
+    renderer: &mut ClientRenderer,
+    stdout_sender: &StdoutSender,
+) -> rootcause::Result<InteractiveFlow> {
+    let mut transaction = Vec::new();
+    match renderer.apply_render(&mut transaction, update)? {
+        ClientRenderOutcome::Drawn => {
+            let _queued = stdout_sender.replace_render(transaction, || renderer.full_redraw_transaction())?;
+            Ok(InteractiveFlow::Continue)
+        }
+        ClientRenderOutcome::NeedsResync => Ok(if control_sender.send(ClientRequest::RenderResync).await.is_ok() {
+            InteractiveFlow::Continue
+        } else {
+            InteractiveFlow::Stop
+        }),
+    }
 }
 
 async fn handle_client_input_action(
