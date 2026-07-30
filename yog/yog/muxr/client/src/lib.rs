@@ -13,5 +13,6 @@ mod pane;
 mod renderer;
 mod runtime;
 mod session;
+mod stdout_worker;
 mod tab_bar;
 mod terminal;

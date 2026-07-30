@@ -6,7 +6,6 @@ use std::time::Duration;
 use muxr_core::ServerEvent;
 use muxr_core::SessionPaths;
 use muxr_transport::ServerConnection;
-use muxr_transport::ServerEventWriter;
 use rootcause::prelude::ResultExt;
 
 use crate::session::tracing::ClientEventSendFailure;
@@ -49,13 +48,14 @@ pub async fn handle_handshake_delete(
 }
 
 pub async fn handle_client_delete(
-    event_writer: &mut ServerEventWriter,
+    event_writer: &mut impl crate::event_writer::ServerEventSink,
     delete_sessions: &DeleteSessions,
     client_write_timeout: Duration,
 ) -> rootcause::Result<()> {
     delete_sessions.request();
     self::record_delete_ack_send_failure(
-        crate::event_writer::send_event_failure(event_writer, &ServerEvent::Deleted, client_write_timeout).await,
+        crate::event_writer::send_lifecycle_event_failure(event_writer, &ServerEvent::Deleted, client_write_timeout)
+            .await,
     );
     Ok(())
 }
@@ -87,7 +87,7 @@ async fn send_connection_event_failure(
     }
 }
 
-fn record_delete_ack_send_failure(reason: Option<ClientEventSendFailure>) {
+pub fn record_delete_ack_send_failure(reason: Option<ClientEventSendFailure>) {
     if let Some(reason) = reason {
         crate::session::tracing::ack::delete_failed(reason);
     }

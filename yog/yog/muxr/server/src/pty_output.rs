@@ -1,7 +1,5 @@
 use std::time::Instant;
 
-use muxr_transport::ServerEventWriter;
-
 use crate::client::session::ClientSessionState;
 use crate::client::session::ReapedPanes;
 use crate::client::timers::ClientTimers;
@@ -12,7 +10,7 @@ use crate::session::runtime::SessionPaneOutputMessage;
 
 pub async fn handle_pane_output_message(
     event: Option<SessionPaneOutputMessage>,
-    event_writer: &mut ServerEventWriter,
+    event_writer: &mut impl crate::event_writer::ServerEventSink,
     state: &mut ClientSessionState<'_>,
     timers: &mut ClientTimers,
     render_dmg: &mut ClientRenderDmg,

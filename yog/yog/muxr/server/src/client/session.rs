@@ -1,4 +1,5 @@
 use std::collections::BTreeSet;
+#[cfg(test)]
 use std::time::Duration;
 use std::time::Instant;
 
@@ -11,12 +12,15 @@ use muxr_core::PaneRegionsSnapshot;
 use muxr_core::ServerEvent;
 use muxr_core::TerminalSize;
 use muxr_transport::ServerConnection;
+#[cfg(test)]
 use muxr_transport::ServerEventWriter;
 use muxr_transport::ServerRequestReader;
 use rootcause::report;
 use tokio::sync::mpsc::error::TryRecvError;
 
 use super::quiet::QuietTurn;
+use crate::client::heartbeat::HeartbeatStatus;
+use crate::client::heartbeat::HeartbeatTracker;
 use crate::client::timers::ClientTimers;
 use crate::client::timers::QuietDeadline;
 use crate::keyboard_input::ServerInputMode;
@@ -24,7 +28,6 @@ use crate::pane::cmd::NvimState;
 use crate::pane::cmd::PaneCmdObservation;
 use crate::pane::cmd::PaneCmdSnapshot;
 use crate::pane::fullscreen::PaneFullscreen;
-use crate::pane::render::RenderComposer;
 use crate::pane::runtime::PaneRuntimes;
 use crate::pane::tracked_process::PaneTrackedProcesses;
 use crate::pty::PtyEvent;
@@ -33,6 +36,7 @@ use crate::render_state::ClientLifecycleAction;
 use crate::render_state::ClientRenderDmg;
 use crate::render_state::ClientSessionFlow;
 use crate::render_state::ClientSessionSelectBias;
+use crate::render_worker::RenderWorker;
 use crate::scrollback_editor::ScrollbackEditorState;
 use crate::server::ServerConfig;
 use crate::session::delete::DeleteSessions;
@@ -65,7 +69,7 @@ pub struct ClientSessionState<'a> {
     pub pane_fullscreen: PaneFullscreen,
     pub pane_regions: PaneRegionsSnapshot,
     pty_event_sender: &'a Sender<PtyEvent>,
-    pub render_composer: &'a mut RenderComposer,
+    pub render_worker: &'a mut RenderWorker,
     pub runtimes: &'a mut PaneRuntimes,
     pub scrollback_editor: Option<ScrollbackEditorState>,
     sink_guards: &'a mut Vec<ClientPtySink>,
@@ -180,6 +184,10 @@ pub fn remove_pane_from_client_state(
     self::remove_live_pane_tracking(state, timers, pane_id)
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "attach setup and teardown keep resource ownership in one auditable scope"
+)]
 pub async fn handle_client(
     config: &ServerConfig,
     connection: ServerConnection,
@@ -187,11 +195,11 @@ pub async fn handle_client(
     delete_sessions: &DeleteSessions,
     layout: &mut SessionLayout,
     runtimes: &mut PaneRuntimes,
-) -> rootcause::Result<()> {
+) -> rootcause::Result<ClientSessionCompletion> {
     crate::screen_render::resize_panes_to_layout(layout, runtimes, &attach_request.terminal_size)?;
     let (pty_event_sender, pty_event_receiver) = kanal::bounded(PANE_OUTPUT_EVENT_CHANNEL_LIMIT);
     let mut sink_guards = self::attach_pane_sinks(runtimes, &pty_event_sender);
-    let (mut request_reader, mut event_writer) = connection.split();
+    let (mut request_reader, event_writer) = connection.split();
     let mut pane_tracked_processes = PaneTrackedProcesses::default();
     pane_tracked_processes.observe_all_runtime_pane_cmds(
         config.user_config.as_ref(),
@@ -199,27 +207,47 @@ pub async fn handle_client(
         runtimes,
         Instant::now(),
     )?;
-    let (layout_snapshot, pane_regions, mut render_composer, render_baseline) =
-        crate::screen_render::initial_client_render(
-            config,
-            layout,
-            runtimes,
-            &pane_tracked_processes,
-            &attach_request.terminal_size,
-        )?;
+    let mut render_worker = RenderWorker::default();
+    let mut event_writer = render_worker.attach_writer(event_writer, config.client_write_timeout)?;
+    let (layout_snapshot, pane_regions, initial_render) = crate::screen_render::initial_client_render_input(
+        config,
+        layout,
+        runtimes,
+        &pane_tracked_processes,
+        &attach_request.terminal_size,
+        &mut render_worker,
+    )?;
     let last_layout_snapshot = layout_snapshot.clone();
     let initial_pane_regions = pane_regions.clone();
-    if crate::screen_render::send_attach_response_and_baseline(
+    if crate::event_writer::send_event_with_timeout(
         &mut event_writer,
-        layout_snapshot,
-        pane_regions,
-        render_baseline,
+        &ServerEvent::Attached(muxr_core::AttachAccepted {
+            layout: layout_snapshot,
+            pane_regions,
+        }),
         config.client_write_timeout,
     )
     .await?
+    .session_flow()
         == ClientSessionFlow::Disconnect
     {
-        return Ok(());
+        render_worker.shutdown().await?;
+        return Ok(ClientSessionCompletion {
+            render_worker,
+            result: Ok(()),
+        });
+    }
+    let initial_render = render_worker.stage_render(initial_render)?;
+    if crate::event_writer::send_render_with_timeout(&mut event_writer, &initial_render, config.client_write_timeout)
+        .await?
+        .session_flow()
+        == ClientSessionFlow::Disconnect
+    {
+        render_worker.shutdown().await?;
+        return Ok(ClientSessionCompletion {
+            render_worker,
+            result: Ok(()),
+        });
     }
 
     let (mut async_pty_receiver, bridge_handle) = self::spawn_pty_event_bridge(pty_event_receiver);
@@ -233,7 +261,7 @@ pub async fn handle_client(
         pane_fullscreen: PaneFullscreen::default(),
         pane_regions: initial_pane_regions,
         pty_event_sender: &pty_event_sender,
-        render_composer: &mut render_composer,
+        render_worker: &mut render_worker,
         runtimes,
         scrollback_editor: None,
         sink_guards: &mut sink_guards,
@@ -260,7 +288,7 @@ pub async fn handle_client(
     bridge_handle
         .await
         .map_err(|error| report!("muxr server pty bridge task panicked").attach(format!("{error}")))?;
-    match result {
+    let result = match result {
         Ok(()) => restore_result.map(|_| ()),
         Err(error) => {
             let _ = restore_result.inspect_err(|restore_error| {
@@ -268,6 +296,19 @@ pub async fn handle_client(
             });
             Err(error)
         }
+    };
+    Ok(ClientSessionCompletion { render_worker, result })
+}
+
+pub struct ClientSessionCompletion {
+    render_worker: RenderWorker,
+    result: rootcause::Result<()>,
+}
+
+impl ClientSessionCompletion {
+    pub async fn finish(mut self) -> rootcause::Result<()> {
+        self.render_worker.shutdown().await?;
+        self.result
     }
 }
 
@@ -306,7 +347,7 @@ fn pty_event_channel() -> (Sender<PtyEvent>, Receiver<PtyEvent>) {
 
 async fn run_client_session(
     request_reader: &mut ServerRequestReader,
-    event_writer: &mut ServerEventWriter,
+    event_writer: &mut impl crate::event_writer::ServerEventSink,
     state: &mut ClientSessionState<'_>,
     pty_event_receiver: &mut tokio::sync::mpsc::Receiver<SessionPaneOutputMessage>,
 ) -> rootcause::Result<()> {
@@ -323,7 +364,7 @@ async fn run_client_session(
 #[cfg(test)]
 async fn run_client_session_after_output_turn(
     request_reader: &mut ServerRequestReader,
-    event_writer: &mut ServerEventWriter,
+    event_writer: &mut impl crate::event_writer::ServerEventSink,
     state: &mut ClientSessionState<'_>,
     pty_event_receiver: &mut tokio::sync::mpsc::Receiver<SessionPaneOutputMessage>,
 ) -> rootcause::Result<()> {
@@ -345,23 +386,26 @@ async fn run_client_session_after_output_turn(
 )]
 async fn run_client_session_loop(
     request_reader: &mut ServerRequestReader,
-    event_writer: &mut ServerEventWriter,
+    event_writer: &mut impl crate::event_writer::ServerEventSink,
     state: &mut ClientSessionState<'_>,
     pty_event_receiver: &mut tokio::sync::mpsc::Receiver<SessionPaneOutputMessage>,
     mut select_bias: ClientSessionSelectBias,
 ) -> rootcause::Result<()> {
     let mut timers = ClientTimers::new(state.config)?;
     timers.sync_tracked_process_quiet_deadline_for_layout(&state.pane_tracked_processes, state.layout)?;
-    let mut heartbeat_started_at: Option<tokio::time::Instant> = None;
+    let mut heartbeat = HeartbeatTracker::default();
     let mut render_dmg = ClientRenderDmg::Clean;
     let mut quiet_turn = QuietTurn::default();
 
     loop {
+        if heartbeat.sync_delivery() == ClientSessionFlow::Disconnect {
+            return Ok(());
+        }
         if crate::client::lifecycle::client_should_exit(
             state.sink_guards.iter().map(|sink| sink.guard.output_freshness()),
             state.config.client_heartbeat_timeout,
             state.delete_sessions,
-            heartbeat_started_at,
+            heartbeat.response_started_at(),
         ) == ClientLifecycleAction::Exit
         {
             return Ok(());
@@ -400,7 +444,7 @@ async fn run_client_session_loop(
                 event_writer,
                 state,
                 &mut timers,
-                &mut heartbeat_started_at,
+                &mut heartbeat,
                 &mut render_dmg,
             )
             .await?
@@ -420,7 +464,7 @@ async fn run_client_session_loop(
                         event_writer,
                         state,
                         &mut timers,
-                        &mut heartbeat_started_at,
+                        &mut heartbeat,
                         &mut render_dmg,
                     ).await? == ClientSessionFlow::Disconnect {
                         return Ok(());
@@ -432,7 +476,7 @@ async fn run_client_session_loop(
                         event_writer,
                         state,
                         &mut timers,
-                        &mut heartbeat_started_at,
+                        &mut heartbeat,
                         &mut render_dmg,
                     ).await? == ClientSessionFlow::Disconnect {
                         return Ok(());
@@ -444,7 +488,7 @@ async fn run_client_session_loop(
                         event_writer,
                         state,
                         &mut timers,
-                        &mut heartbeat_started_at,
+                        &mut heartbeat,
                         &mut render_dmg,
                     ).await? == ClientSessionFlow::Disconnect {
                         return Ok(());
@@ -452,7 +496,7 @@ async fn run_client_session_loop(
                 },
                 request = request_reader.recv_request() => {
                     let message = SessionClientMessage::from_request(request?);
-                    if crate::request_router::handle_client_message(message, event_writer, state, &mut timers, &mut heartbeat_started_at, &mut render_dmg).await? == ClientSessionFlow::Disconnect {
+                    if crate::request_router::handle_client_message(message, event_writer, state, &mut timers, &mut heartbeat, &mut render_dmg).await? == ClientSessionFlow::Disconnect {
                         return Ok(());
                     }
                     select_bias = ClientSessionSelectBias::Output;
@@ -471,7 +515,7 @@ async fn run_client_session_loop(
                         event_writer,
                         state,
                         &mut timers,
-                        &mut heartbeat_started_at,
+                        &mut heartbeat,
                         &mut render_dmg,
                     ).await? == ClientSessionFlow::Disconnect {
                         return Ok(());
@@ -487,7 +531,7 @@ async fn run_client_session_loop(
                         event_writer,
                         state,
                         &mut timers,
-                        &mut heartbeat_started_at,
+                        &mut heartbeat,
                         &mut render_dmg,
                     ).await? == ClientSessionFlow::Disconnect {
                         return Ok(());
@@ -499,7 +543,7 @@ async fn run_client_session_loop(
                         event_writer,
                         state,
                         &mut timers,
-                        &mut heartbeat_started_at,
+                        &mut heartbeat,
                         &mut render_dmg,
                     ).await? == ClientSessionFlow::Disconnect {
                         return Ok(());
@@ -511,7 +555,7 @@ async fn run_client_session_loop(
                         event_writer,
                         state,
                         &mut timers,
-                        &mut heartbeat_started_at,
+                        &mut heartbeat,
                         &mut render_dmg,
                     ).await? == ClientSessionFlow::Disconnect {
                         return Ok(());
@@ -527,7 +571,7 @@ async fn run_client_session_loop(
                 },
                 request = request_reader.recv_request() => {
                     let message = SessionClientMessage::from_request(request?);
-                    if crate::request_router::handle_client_message(message, event_writer, state, &mut timers, &mut heartbeat_started_at, &mut render_dmg).await? == ClientSessionFlow::Disconnect {
+                    if crate::request_router::handle_client_message(message, event_writer, state, &mut timers, &mut heartbeat, &mut render_dmg).await? == ClientSessionFlow::Disconnect {
                         return Ok(());
                     }
                     select_bias = ClientSessionSelectBias::Output;
@@ -539,7 +583,7 @@ async fn run_client_session_loop(
                         event_writer,
                         state,
                         &mut timers,
-                        &mut heartbeat_started_at,
+                        &mut heartbeat,
                         &mut render_dmg,
                     ).await? == ClientSessionFlow::Disconnect {
                         return Ok(());
@@ -560,7 +604,7 @@ enum OutputDrain {
 
 async fn drain_queued_output_before_quiet(
     pty_event_receiver: &mut tokio::sync::mpsc::Receiver<SessionPaneOutputMessage>,
-    event_writer: &mut ServerEventWriter,
+    event_writer: &mut impl crate::event_writer::ServerEventSink,
     state: &mut ClientSessionState<'_>,
     timers: &mut ClientTimers,
     render_dmg: &mut ClientRenderDmg,
@@ -612,15 +656,15 @@ async fn drain_queued_output_before_quiet(
 
 async fn handle_session_runtime_timer_message(
     message: SessionRuntimeTimerMessage,
-    event_writer: &mut ServerEventWriter,
+    event_writer: &mut impl crate::event_writer::ServerEventSink,
     state: &mut ClientSessionState<'_>,
     timers: &mut ClientTimers,
-    heartbeat_started_at: &mut Option<tokio::time::Instant>,
+    heartbeat: &mut impl HeartbeatStatus,
     render_dmg: &mut ClientRenderDmg,
 ) -> rootcause::Result<ClientSessionFlow> {
     match message {
         SessionRuntimeTimerMessage::HeartbeatTick => {
-            self::send_heartbeat_if_idle(event_writer, state.config.client_write_timeout, heartbeat_started_at).await
+            crate::client::heartbeat::send_if_idle(event_writer, state.config.client_write_timeout, heartbeat).await
         }
         SessionRuntimeTimerMessage::RenderDeadlineReached => {
             let flow = crate::screen_render::flush_render_diff(event_writer, state, render_dmg).await?;
@@ -645,29 +689,9 @@ async fn handle_session_runtime_timer_message(
     }
 }
 
-async fn send_heartbeat_if_idle(
-    event_writer: &mut ServerEventWriter,
-    client_write_timeout: Duration,
-    heartbeat_started_at: &mut Option<tokio::time::Instant>,
-) -> rootcause::Result<ClientSessionFlow> {
-    if heartbeat_started_at.is_some() {
-        return Ok(ClientSessionFlow::Continue);
-    }
-
-    if crate::event_writer::send_event_with_timeout(event_writer, &ServerEvent::Ping, client_write_timeout)
-        .await?
-        .session_flow()
-        == ClientSessionFlow::Disconnect
-    {
-        return Ok(ClientSessionFlow::Disconnect);
-    }
-    *heartbeat_started_at = Some(tokio::time::Instant::now());
-    Ok(ClientSessionFlow::Continue)
-}
-
 pub async fn handle_reaped_panes(
     state: &mut ClientSessionState<'_>,
-    event_writer: &mut ServerEventWriter,
+    event_writer: &mut impl crate::event_writer::ServerEventSink,
     timers: &mut ClientTimers,
 ) -> rootcause::Result<ReapedPanes> {
     let previous_pane_before_restore = state.layout.active_pane_id()?;
@@ -867,7 +891,7 @@ mod tests {
             Arc::new(tokio::sync::Notify::new()),
         )?;
         crate::screen_render::resize_panes_to_layout(&layout, &runtimes, &terminal_size)?;
-        let (layout_snapshot, pane_regions, mut render_composer, _render_baseline) =
+        let (layout_snapshot, pane_regions, mut render_worker, _render_baseline) =
             crate::screen_render::initial_client_render(
                 &config,
                 &mut layout,
@@ -891,7 +915,7 @@ mod tests {
             pane_fullscreen: PaneFullscreen::default(),
             pane_regions,
             pty_event_sender: &pty_event_sender,
-            render_composer: &mut render_composer,
+            render_worker: &mut render_worker,
             runtimes: &mut runtimes,
             scrollback_editor: None,
             sink_guards: &mut sink_guards,
@@ -971,7 +995,7 @@ mod tests {
             Arc::new(tokio::sync::Notify::new()),
         )?;
         crate::screen_render::resize_panes_to_layout(&layout, &runtimes, &terminal_size)?;
-        let (layout_snapshot, pane_regions, mut render_composer, _render_baseline) =
+        let (layout_snapshot, pane_regions, mut render_worker, _render_baseline) =
             crate::screen_render::initial_client_render(
                 &config,
                 &mut layout,
@@ -997,7 +1021,7 @@ mod tests {
             pane_fullscreen: PaneFullscreen::default(),
             pane_regions,
             pty_event_sender: &pty_event_sender,
-            render_composer: &mut render_composer,
+            render_worker: &mut render_worker,
             runtimes: &mut runtimes,
             scrollback_editor: None,
             sink_guards: &mut sink_guards,
@@ -1089,7 +1113,7 @@ mod tests {
             Arc::new(tokio::sync::Notify::new()),
         )?;
         crate::screen_render::resize_panes_to_layout(&layout, &runtimes, &terminal_size)?;
-        let (layout_snapshot, pane_regions, mut render_composer, _render_baseline) =
+        let (layout_snapshot, pane_regions, mut render_worker, _render_baseline) =
             crate::screen_render::initial_client_render(
                 &config,
                 &mut layout,
@@ -1111,7 +1135,7 @@ mod tests {
             pane_fullscreen: PaneFullscreen::default(),
             pane_regions,
             pty_event_sender: &pty_event_sender,
-            render_composer: &mut render_composer,
+            render_worker: &mut render_worker,
             runtimes: &mut runtimes,
             scrollback_editor: None,
             sink_guards: &mut sink_guards,
@@ -1189,7 +1213,7 @@ mod tests {
             Arc::new(tokio::sync::Notify::new()),
         )?;
         crate::screen_render::resize_panes_to_layout(&layout, &runtimes, &terminal_size)?;
-        let (layout_snapshot, pane_regions, mut render_composer, _render_baseline) =
+        let (layout_snapshot, pane_regions, mut render_worker, _render_baseline) =
             crate::screen_render::initial_client_render(
                 &config,
                 &mut layout,
@@ -1211,7 +1235,7 @@ mod tests {
             pane_fullscreen: PaneFullscreen::default(),
             pane_regions,
             pty_event_sender: &pty_event_sender,
-            render_composer: &mut render_composer,
+            render_worker: &mut render_worker,
             runtimes: &mut runtimes,
             scrollback_editor: None,
             sink_guards: &mut sink_guards,
@@ -1319,7 +1343,7 @@ mod tests {
             Arc::new(tokio::sync::Notify::new()),
         )?;
         crate::screen_render::resize_panes_to_layout(&layout, &runtimes, &terminal_size)?;
-        let (layout_snapshot, pane_regions, mut render_composer, _render_baseline) =
+        let (layout_snapshot, pane_regions, mut render_worker, _render_baseline) =
             crate::screen_render::initial_client_render(
                 &config,
                 &mut layout,
@@ -1349,7 +1373,7 @@ mod tests {
             pane_fullscreen: PaneFullscreen::default(),
             pane_regions,
             pty_event_sender: &pty_event_sender,
-            render_composer: &mut render_composer,
+            render_worker: &mut render_worker,
             runtimes: &mut runtimes,
             scrollback_editor: None,
             sink_guards: &mut sink_guards,
@@ -1451,7 +1475,7 @@ mod tests {
         let mut timers = ClientTimers::new(&config)?;
         timers.sync_tracked_process_quiet_deadline_for_layout(&pane_tracked_processes, &layout)?;
         assert_that!(timers.tracked_process_quiet_deadline(), eq(QuietDeadline::Elapsed));
-        let (layout_snapshot, pane_regions, mut render_composer, _render_baseline) =
+        let (layout_snapshot, pane_regions, mut render_worker, _render_baseline) =
             crate::screen_render::initial_client_render(
                 &config,
                 &mut layout,
@@ -1473,7 +1497,7 @@ mod tests {
             pane_fullscreen: PaneFullscreen::default(),
             pane_regions,
             pty_event_sender: &pty_event_sender,
-            render_composer: &mut render_composer,
+            render_worker: &mut render_worker,
             runtimes: &mut runtimes,
             scrollback_editor: None,
             sink_guards: &mut sink_guards,
@@ -1640,7 +1664,7 @@ mod tests {
         let mut timers = ClientTimers::new(&config)?;
         timers.sync_tracked_process_quiet_deadline_for_layout(&pane_tracked_processes, &layout)?;
         let focused_deadline = timers.tracked_process_quiet_sleep.deadline();
-        let (layout_snapshot, pane_regions, mut render_composer, _render_baseline) =
+        let (layout_snapshot, pane_regions, mut render_worker, _render_baseline) =
             crate::screen_render::initial_client_render(
                 &config,
                 &mut layout,
@@ -1662,7 +1686,7 @@ mod tests {
             pane_fullscreen: PaneFullscreen::default(),
             pane_regions,
             pty_event_sender: &pty_event_sender,
-            render_composer: &mut render_composer,
+            render_worker: &mut render_worker,
             runtimes: &mut runtimes,
             scrollback_editor: None,
             sink_guards: &mut sink_guards,
@@ -1742,7 +1766,7 @@ mod tests {
             Arc::new(tokio::sync::Notify::new()),
         )?;
         crate::screen_render::resize_panes_to_layout(&layout, &runtimes, &terminal_size)?;
-        let (layout_snapshot, pane_regions, mut render_composer, _render_baseline) =
+        let (layout_snapshot, pane_regions, mut render_worker, _render_baseline) =
             crate::screen_render::initial_client_render(
                 &config,
                 &mut layout,
@@ -1770,7 +1794,7 @@ mod tests {
             pane_fullscreen: PaneFullscreen::default(),
             pane_regions,
             pty_event_sender: &pty_event_sender,
-            render_composer: &mut render_composer,
+            render_worker: &mut render_worker,
             runtimes: &mut runtimes,
             scrollback_editor: None,
             sink_guards: &mut sink_guards,
@@ -1836,7 +1860,7 @@ mod tests {
         )?;
         crate::screen_render::resize_panes_to_layout(&layout, &runtimes, &terminal_size)?;
         self::wait_for_runtime_fg_cmd(&runtimes, pane_id, "cat")?;
-        let (layout_snapshot, pane_regions, mut render_composer, _render_baseline) =
+        let (layout_snapshot, pane_regions, mut render_worker, _render_baseline) =
             crate::screen_render::initial_client_render(
                 &config,
                 &mut layout,
@@ -1871,7 +1895,7 @@ mod tests {
             pane_fullscreen: PaneFullscreen::default(),
             pane_regions,
             pty_event_sender: &pty_event_sender,
-            render_composer: &mut render_composer,
+            render_worker: &mut render_worker,
             runtimes: &mut runtimes,
             scrollback_editor: None,
             sink_guards: &mut sink_guards,
@@ -1939,7 +1963,7 @@ mod tests {
         )?;
         crate::screen_render::resize_panes_to_layout(&layout, &runtimes, &terminal_size)?;
         self::wait_for_runtime_fg_cmd(&runtimes, pane_id, "cat")?;
-        let (layout_snapshot, pane_regions, mut render_composer, _render_baseline) =
+        let (layout_snapshot, pane_regions, mut render_worker, _render_baseline) =
             crate::screen_render::initial_client_render(
                 &config,
                 &mut layout,
@@ -1976,7 +2000,7 @@ mod tests {
             pane_fullscreen: PaneFullscreen::default(),
             pane_regions,
             pty_event_sender: &pty_event_sender,
-            render_composer: &mut render_composer,
+            render_worker: &mut render_worker,
             runtimes: &mut runtimes,
             scrollback_editor: None,
             sink_guards: &mut sink_guards,
@@ -2067,7 +2091,7 @@ mod tests {
         )?;
         crate::screen_render::resize_panes_to_layout(&layout, &runtimes, &terminal_size)?;
         self::wait_for_runtime_fg_cmd(&runtimes, pane_id, "cat")?;
-        let (layout_snapshot, pane_regions, mut render_composer, _render_baseline) =
+        let (layout_snapshot, pane_regions, mut render_worker, _render_baseline) =
             crate::screen_render::initial_client_render(
                 &config,
                 &mut layout,
@@ -2114,7 +2138,7 @@ mod tests {
             pane_fullscreen: PaneFullscreen::default(),
             pane_regions,
             pty_event_sender: &pty_event_sender,
-            render_composer: &mut render_composer,
+            render_worker: &mut render_worker,
             runtimes: &mut runtimes,
             scrollback_editor: None,
             sink_guards: &mut sink_guards,
@@ -2189,7 +2213,7 @@ mod tests {
         )?;
         crate::screen_render::resize_panes_to_layout(&layout, &runtimes, &terminal_size)?;
         self::wait_for_runtime_fg_cmd(&runtimes, pane_id, "cat")?;
-        let (layout_snapshot, pane_regions, mut render_composer, _render_baseline) =
+        let (layout_snapshot, pane_regions, mut render_worker, _render_baseline) =
             crate::screen_render::initial_client_render(
                 &config,
                 &mut layout,
@@ -2231,7 +2255,7 @@ mod tests {
             pane_fullscreen: PaneFullscreen::default(),
             pane_regions,
             pty_event_sender: &pty_event_sender,
-            render_composer: &mut render_composer,
+            render_worker: &mut render_worker,
             runtimes: &mut runtimes,
             scrollback_editor: None,
             sink_guards: &mut sink_guards,
@@ -2320,7 +2344,7 @@ mod tests {
         )?;
         crate::screen_render::resize_panes_to_layout(&layout, &runtimes, &terminal_size)?;
         self::wait_for_runtime_fg_cmd(&runtimes, pane_id, "cat")?;
-        let (layout_snapshot, pane_regions, mut render_composer, _render_baseline) =
+        let (layout_snapshot, pane_regions, mut render_worker, _render_baseline) =
             crate::screen_render::initial_client_render(
                 &config,
                 &mut layout,
@@ -2345,7 +2369,7 @@ mod tests {
             pane_fullscreen: PaneFullscreen::default(),
             pane_regions,
             pty_event_sender: &pty_event_sender,
-            render_composer: &mut render_composer,
+            render_worker: &mut render_worker,
             runtimes: &mut runtimes,
             scrollback_editor: None,
             sink_guards: &mut sink_guards,
@@ -2424,7 +2448,7 @@ mod tests {
         let mut timers = ClientTimers::new(&config)?;
         timers.sync_tracked_process_quiet_deadline_for_layout(&pane_tracked_processes, &layout)?;
         assert_that!(timers.tracked_process_quiet_deadline(), eq(QuietDeadline::Elapsed));
-        let (layout_snapshot, pane_regions, mut render_composer, _render_baseline) =
+        let (layout_snapshot, pane_regions, mut render_worker, _render_baseline) =
             crate::screen_render::initial_client_render(
                 &config,
                 &mut layout,
@@ -2450,7 +2474,7 @@ mod tests {
             pane_fullscreen: PaneFullscreen::default(),
             pane_regions,
             pty_event_sender: &pty_event_sender,
-            render_composer: &mut render_composer,
+            render_worker: &mut render_worker,
             runtimes: &mut runtimes,
             scrollback_editor: None,
             sink_guards: &mut sink_guards,
@@ -2519,7 +2543,7 @@ mod tests {
             Arc::new(tokio::sync::Notify::new()),
         )?;
         crate::screen_render::resize_panes_to_layout(&layout, &runtimes, &terminal_size)?;
-        let (layout_snapshot, pane_regions, mut render_composer, _render_baseline) =
+        let (layout_snapshot, pane_regions, mut render_worker, _render_baseline) =
             crate::screen_render::initial_client_render(
                 &config,
                 &mut layout,
@@ -2541,7 +2565,7 @@ mod tests {
             pane_fullscreen: PaneFullscreen::default(),
             pane_regions,
             pty_event_sender: &pty_event_sender,
-            render_composer: &mut render_composer,
+            render_worker: &mut render_worker,
             runtimes: &mut runtimes,
             scrollback_editor: None,
             sink_guards: &mut sink_guards,
@@ -2627,7 +2651,7 @@ mod tests {
             self::wait_for_runtime_fg_cmd(&runtimes, editor_pane_id, "nvim")?;
         }
         let pane_tracked_processes = PaneTrackedProcesses::default();
-        let (layout_snapshot, pane_regions, mut render_composer, _render_baseline) =
+        let (layout_snapshot, pane_regions, mut render_worker, _render_baseline) =
             crate::screen_render::initial_client_render(
                 &config,
                 &mut layout,
@@ -2650,7 +2674,7 @@ mod tests {
             pane_fullscreen: PaneFullscreen::default(),
             pane_regions,
             pty_event_sender: &pty_event_sender,
-            render_composer: &mut render_composer,
+            render_worker: &mut render_worker,
             runtimes: &mut runtimes,
             scrollback_editor: None,
             sink_guards: &mut sink_guards,
@@ -2727,7 +2751,7 @@ mod tests {
         )?;
         crate::screen_render::resize_panes_to_layout(&layout, &runtimes, &terminal_size)?;
         let pane_tracked_processes = PaneTrackedProcesses::default();
-        let (layout_snapshot, pane_regions, mut render_composer, _render_baseline) =
+        let (layout_snapshot, pane_regions, mut render_worker, _render_baseline) =
             crate::screen_render::initial_client_render(
                 &config,
                 &mut layout,
@@ -2749,7 +2773,7 @@ mod tests {
             pane_fullscreen: PaneFullscreen::default(),
             pane_regions,
             pty_event_sender: &pty_event_sender,
-            render_composer: &mut render_composer,
+            render_worker: &mut render_worker,
             runtimes: &mut runtimes,
             scrollback_editor: None,
             sink_guards: &mut sink_guards,
@@ -2870,7 +2894,7 @@ mod tests {
         self::wait_for_runtime_fg_cmd(&runtimes, editor_pane_id, "nvim")?;
         self::wait_for_runtime_snapshot_contains(&runtimes, editor_pane_id, "muxr-existing-nvim-start")?;
         let pane_tracked_processes = PaneTrackedProcesses::default();
-        let (layout_snapshot, pane_regions, mut render_composer, _render_baseline) =
+        let (layout_snapshot, pane_regions, mut render_worker, _render_baseline) =
             crate::screen_render::initial_client_render(
                 &config,
                 &mut layout,
@@ -2892,7 +2916,7 @@ mod tests {
             pane_fullscreen: PaneFullscreen::default(),
             pane_regions,
             pty_event_sender: &pty_event_sender,
-            render_composer: &mut render_composer,
+            render_worker: &mut render_worker,
             runtimes: &mut runtimes,
             scrollback_editor: None,
             sink_guards: &mut sink_guards,
@@ -2981,7 +3005,7 @@ mod tests {
             .write_input(startup_command.as_bytes())?;
         self::wait_for_runtime_fg_cmd(&runtimes, unrelated_nvim_pane_id, "nvim")?;
         let pane_tracked_processes = PaneTrackedProcesses::default();
-        let (layout_snapshot, pane_regions, mut render_composer, _render_baseline) =
+        let (layout_snapshot, pane_regions, mut render_worker, _render_baseline) =
             crate::screen_render::initial_client_render(
                 &config,
                 &mut layout,
@@ -3003,7 +3027,7 @@ mod tests {
             pane_fullscreen: PaneFullscreen::default(),
             pane_regions,
             pty_event_sender: &pty_event_sender,
-            render_composer: &mut render_composer,
+            render_worker: &mut render_worker,
             runtimes: &mut runtimes,
             scrollback_editor: None,
             sink_guards: &mut sink_guards,
@@ -3077,7 +3101,7 @@ mod tests {
             .write_input(startup_command.as_bytes())?;
         self::wait_for_runtime_fg_cmd(&runtimes, editor_pane_id, "nvim")?;
         let pane_tracked_processes = PaneTrackedProcesses::default();
-        let (layout_snapshot, pane_regions, mut render_composer, _render_baseline) =
+        let (layout_snapshot, pane_regions, mut render_worker, _render_baseline) =
             crate::screen_render::initial_client_render(
                 &config,
                 &mut layout,
@@ -3099,7 +3123,7 @@ mod tests {
             pane_fullscreen: PaneFullscreen::default(),
             pane_regions,
             pty_event_sender: &pty_event_sender,
-            render_composer: &mut render_composer,
+            render_worker: &mut render_worker,
             runtimes: &mut runtimes,
             scrollback_editor: None,
             sink_guards: &mut sink_guards,

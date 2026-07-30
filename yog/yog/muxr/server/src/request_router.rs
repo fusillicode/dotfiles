@@ -5,7 +5,6 @@ use muxr_core::ClientRequest;
 use muxr_core::PaneId;
 use muxr_core::ServerError;
 use muxr_core::ServerEvent;
-use muxr_transport::ServerEventWriter;
 
 use crate::client::session::ClientSessionState;
 use crate::client::timers::ClientTimers;
@@ -34,26 +33,26 @@ use crate::tab::focus::TabFocusClientOutcome;
 
 pub async fn handle_client_message(
     message: SessionClientMessage,
-    event_writer: &mut ServerEventWriter,
+    event_writer: &mut impl crate::event_writer::ServerEventSink,
     state: &mut ClientSessionState<'_>,
     timers: &mut ClientTimers,
-    heartbeat_started_at: &mut Option<tokio::time::Instant>,
+    heartbeat: &mut impl crate::client::heartbeat::HeartbeatStatus,
     render_dmg: &mut ClientRenderDmg,
 ) -> rootcause::Result<ClientSessionFlow> {
     match message {
         SessionClientMessage::ClientDisconnected => Ok(ClientSessionFlow::Disconnect),
         SessionClientMessage::Request(request) => {
-            self::handle_client_request(request, event_writer, state, timers, heartbeat_started_at, render_dmg).await
+            self::handle_client_request(request, event_writer, state, timers, heartbeat, render_dmg).await
         }
     }
 }
 
 async fn handle_client_request(
     request: ClientRequest,
-    event_writer: &mut ServerEventWriter,
+    event_writer: &mut impl crate::event_writer::ServerEventSink,
     state: &mut ClientSessionState<'_>,
     timers: &mut ClientTimers,
-    heartbeat_started_at: &mut Option<tokio::time::Instant>,
+    heartbeat: &mut impl crate::client::heartbeat::HeartbeatStatus,
     render_dmg: &mut ClientRenderDmg,
 ) -> rootcause::Result<ClientSessionFlow> {
     match request {
@@ -133,7 +132,7 @@ async fn handle_client_request(
         .await
         .map(|outcome| outcome.session_flow()),
         ClientRequest::Pong => {
-            *heartbeat_started_at = None;
+            heartbeat.acknowledge();
             Ok(ClientSessionFlow::Continue)
         }
         request @ ClientRequest::Attach(_) => {
@@ -153,7 +152,7 @@ async fn handle_open_file_request(
     path: &str,
     line: Option<u32>,
     column: Option<u32>,
-    event_writer: &mut ServerEventWriter,
+    event_writer: &mut impl crate::event_writer::ServerEventSink,
     state: &mut ClientSessionState<'_>,
     timers: &mut ClientTimers,
 ) -> rootcause::Result<ClientSessionFlow> {
@@ -258,7 +257,7 @@ fn vimscript_quote(raw: &str) -> String {
 
 async fn apply_pane_input_outcome(
     outcome: PaneInputOutcome,
-    event_writer: &mut ServerEventWriter,
+    event_writer: &mut impl crate::event_writer::ServerEventSink,
     state: &mut ClientSessionState<'_>,
     timers: &mut ClientTimers,
     render_dmg: &mut ClientRenderDmg,
@@ -294,7 +293,7 @@ fn apply_pane_input_timers(
 
 async fn apply_pane_scroll_line_outcome(
     outcome: PaneScrollLineRequestOutcome,
-    event_writer: &mut ServerEventWriter,
+    event_writer: &mut impl crate::event_writer::ServerEventSink,
     state: &ClientSessionState<'_>,
     timers: &mut ClientTimers,
     render_dmg: &mut ClientRenderDmg,
@@ -309,7 +308,7 @@ async fn apply_pane_scroll_line_outcome(
 
 async fn apply_pane_mouse_outcome(
     outcome: PaneMouseClientOutcome,
-    event_writer: &mut ServerEventWriter,
+    event_writer: &mut impl crate::event_writer::ServerEventSink,
     state: &mut ClientSessionState<'_>,
     timers: &mut ClientTimers,
     render_dmg: &mut ClientRenderDmg,
@@ -335,7 +334,7 @@ async fn apply_pane_mouse_outcome(
 
 async fn apply_tracked_process_client_change(
     tracked_process_change: TrackedProcessClientChange,
-    event_writer: &mut ServerEventWriter,
+    event_writer: &mut impl crate::event_writer::ServerEventSink,
     state: &mut ClientSessionState<'_>,
     timers: &mut ClientTimers,
     render_dmg: &mut ClientRenderDmg,
@@ -383,7 +382,7 @@ fn tracked_process_change_deadline_sync(
 
 async fn apply_pane_focus_outcome(
     outcome: PaneFocusClientOutcome,
-    event_writer: &mut ServerEventWriter,
+    event_writer: &mut impl crate::event_writer::ServerEventSink,
     state: &mut ClientSessionState<'_>,
     timers: &mut ClientTimers,
 ) -> rootcause::Result<ClientSessionFlow> {
@@ -402,13 +401,13 @@ async fn apply_pane_focus_outcome(
 }
 
 async fn send_detached_event(
-    event_writer: &mut ServerEventWriter,
+    event_writer: &mut impl crate::event_writer::ServerEventSink,
     state: &mut ClientSessionState<'_>,
     timers: &mut ClientTimers,
 ) -> rootcause::Result<ClientSessionFlow> {
     self::restore_scrollback_editor_without_render(state, timers)?;
     crate::client::lifecycle::record_detach_ack_send_failure(
-        crate::event_writer::send_event_failure(
+        crate::event_writer::send_lifecycle_event_failure(
             event_writer,
             &ServerEvent::Detached,
             state.config.client_write_timeout,
@@ -420,7 +419,7 @@ async fn send_detached_event(
 
 async fn handle_key_request(
     key: ClientKey,
-    event_writer: &mut ServerEventWriter,
+    event_writer: &mut impl crate::event_writer::ServerEventSink,
     state: &mut ClientSessionState<'_>,
     timers: &mut ClientTimers,
     render_dmg: &mut ClientRenderDmg,
@@ -442,7 +441,7 @@ async fn handle_key_request(
 
 async fn handle_cmd_request(
     cmd: ClientCmd,
-    event_writer: &mut ServerEventWriter,
+    event_writer: &mut impl crate::event_writer::ServerEventSink,
     state: &mut ClientSessionState<'_>,
     timers: &mut ClientTimers,
 ) -> rootcause::Result<ClientSessionFlow> {
@@ -552,7 +551,7 @@ fn restore_scrollback_editor_without_render(
 
 async fn apply_scrollback_editor_open_outcome(
     outcome: ScrollbackEditorOpenClientOutcome,
-    event_writer: &mut ServerEventWriter,
+    event_writer: &mut impl crate::event_writer::ServerEventSink,
     state: &mut ClientSessionState<'_>,
     timers: &mut ClientTimers,
 ) -> rootcause::Result<ClientSessionFlow> {
@@ -577,7 +576,7 @@ async fn apply_scrollback_editor_open_outcome(
 
 async fn apply_pane_split_outcome(
     outcome: PaneSplitClientOutcome,
-    event_writer: &mut ServerEventWriter,
+    event_writer: &mut impl crate::event_writer::ServerEventSink,
     state: &mut ClientSessionState<'_>,
     timers: &mut ClientTimers,
 ) -> rootcause::Result<ClientSessionFlow> {
@@ -593,7 +592,7 @@ async fn apply_pane_split_outcome(
 
 async fn apply_pane_close_outcome(
     outcome: ClosePaneClientOutcome,
-    event_writer: &mut ServerEventWriter,
+    event_writer: &mut impl crate::event_writer::ServerEventSink,
     state: &mut ClientSessionState<'_>,
     timers: &mut ClientTimers,
 ) -> rootcause::Result<ClientSessionFlow> {
@@ -616,7 +615,7 @@ async fn apply_pane_close_outcome(
 
 async fn apply_pane_resize_outcome(
     outcome: PaneResizeClientOutcome,
-    event_writer: &mut ServerEventWriter,
+    event_writer: &mut impl crate::event_writer::ServerEventSink,
     state: &mut ClientSessionState<'_>,
 ) -> rootcause::Result<ClientSessionFlow> {
     match outcome {
@@ -632,7 +631,7 @@ async fn apply_pane_resize_outcome(
 
 async fn handle_tab_cmd_request(
     cmd: TabCmd,
-    event_writer: &mut ServerEventWriter,
+    event_writer: &mut impl crate::event_writer::ServerEventSink,
     state: &mut ClientSessionState<'_>,
     timers: &mut ClientTimers,
 ) -> rootcause::Result<ClientSessionFlow> {
@@ -678,7 +677,7 @@ async fn handle_tab_cmd_request(
 
 async fn apply_tab_create_outcome(
     outcome: TabCreateClientOutcome,
-    event_writer: &mut ServerEventWriter,
+    event_writer: &mut impl crate::event_writer::ServerEventSink,
     state: &mut ClientSessionState<'_>,
     timers: &mut ClientTimers,
 ) -> rootcause::Result<ClientSessionFlow> {
@@ -694,7 +693,7 @@ async fn apply_tab_create_outcome(
 
 async fn apply_tab_focus_outcome(
     outcome: TabFocusClientOutcome,
-    event_writer: &mut ServerEventWriter,
+    event_writer: &mut impl crate::event_writer::ServerEventSink,
     state: &mut ClientSessionState<'_>,
     timers: &mut ClientTimers,
 ) -> rootcause::Result<ClientSessionFlow> {

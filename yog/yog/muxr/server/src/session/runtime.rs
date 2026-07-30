@@ -164,7 +164,10 @@ impl ClientSessionTaskRuntime {
                 crate::session::tracing::client::state_handoff_failed("channel_full");
             }
         }
-        result
+        match result {
+            Ok(completion) => completion.finish().await,
+            Err(error) => Err(error),
+        }
     }
 }
 

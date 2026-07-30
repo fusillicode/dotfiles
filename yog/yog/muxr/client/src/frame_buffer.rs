@@ -116,6 +116,21 @@ impl FrameBuffer {
         }))
     }
 
+    pub fn full_redraw_changes(&self) -> Option<RenderFrameChanges> {
+        let cursor = self.cursor.clone()?;
+        let rows = self
+            .rows
+            .iter()
+            .enumerate()
+            .map(|(row, cells)| RenderRowSpan::new(u16::try_from(row).ok()?, 0, cells.clone()).ok())
+            .collect::<Option<Vec<_>>>()?;
+        Some(RenderFrameChanges {
+            cursor,
+            scope: RenderFrameScope::Full,
+            rows,
+        })
+    }
+
     #[must_use]
     pub fn cell(&self, row: u16, col: u16) -> Option<&RenderCell> {
         self.rows.get(usize::from(row))?.get(usize::from(col))
@@ -570,6 +585,23 @@ mod tests {
         assert_that!(changes.scope, eq(RenderFrameScope::Partial));
         assert_that!(changes.rows.len(), eq(1));
         assert_that!(frame_buffer.seq, eq(Some(2)));
+        Ok(())
+    }
+
+    #[test]
+    fn test_frame_buffer_full_redraw_after_diff_contains_complete_successor_frame() -> rootcause::Result<()> {
+        let mut frame_buffer = applied_frame_buffer()?;
+        let ApplyOutcome::Applied(_) = frame_buffer.apply(RenderUpdate::Diff(render_diff()?))? else {
+            return Err(report!("expected applied diff"));
+        };
+
+        let changes = frame_buffer
+            .full_redraw_changes()
+            .ok_or_else(|| report!("expected full redraw changes"))?;
+
+        assert_that!(changes.scope, eq(RenderFrameScope::Full));
+        assert_that!(changes.rows.len(), eq(2));
+        assert_that!(changes.rows[1].cells()[1].text(), eq("x"));
         Ok(())
     }
 
