@@ -10,6 +10,7 @@
 #![feature(exit_status_error)]
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::path::Path;
 
 use owo_colors::OwoColorize;
@@ -21,13 +22,14 @@ use ytil_sys::cli::Args;
 use crate::installers::Installer;
 use crate::installers::alacritty::Alacritty;
 use crate::installers::bash_language_server::BashLanguageServer;
+use crate::installers::cargo::Cargo;
+use crate::installers::cargo::cargo_bin_dir;
 use crate::installers::commitlint::Commitlint;
 use crate::installers::deno::Deno;
 use crate::installers::docker_langserver::DockerLangServer;
 use crate::installers::eslint_d::EslintD;
 use crate::installers::graphql_lsp::GraphQlLsp;
 use crate::installers::hadolint::Hadolint;
-use crate::installers::harper_ls::HarperLs;
 use crate::installers::helm_ls::HelmLs;
 use crate::installers::lua_ls::LuaLanguageServer;
 use crate::installers::marksman::Marksman;
@@ -37,12 +39,10 @@ use crate::installers::prettierd::PrettierD;
 use crate::installers::quicktype::Quicktype;
 use crate::installers::rio::Rio;
 use crate::installers::ruff_lsp::RuffLsp;
-use crate::installers::rust_analyzer::RustAnalyzer;
 use crate::installers::shellcheck::Shellcheck;
 use crate::installers::sql_language_server::SqlLanguageServer;
 use crate::installers::sqruff::Sqruff;
 use crate::installers::starship::Starship;
-use crate::installers::taplo::Taplo;
 use crate::installers::terraform_ls::TerraformLs;
 use crate::installers::typescript_language_server::TypescriptLanguageServer;
 use crate::installers::typos_lsp::TyposLsp;
@@ -81,147 +81,16 @@ fn main() -> rootcause::Result<()> {
 
     let sys_info = SysInfo::get()?;
 
-    std::fs::create_dir_all(dev_tools_dir)?;
-    std::fs::create_dir_all(bin_dir)?;
+    let dev_tools_path = Path::new(dev_tools_dir);
+    let bin_path = Path::new(bin_dir);
+    std::fs::create_dir_all(dev_tools_path)?;
+    std::fs::create_dir_all(bin_path)?;
 
-    let all_installers: Vec<Box<dyn Installer>> = vec![
-        Box::new(Alacritty {
-            dev_tools_dir: Path::new(dev_tools_dir),
-            bin_dir: Path::new(bin_dir),
-        }),
-        Box::new(BashLanguageServer {
-            dev_tools_dir: Path::new(dev_tools_dir),
-            bin_dir: Path::new(bin_dir),
-        }),
-        Box::new(Commitlint {
-            dev_tools_dir: Path::new(dev_tools_dir),
-            bin_dir: Path::new(bin_dir),
-        }),
-        Box::new(Deno {
-            bin_dir: Path::new(bin_dir),
-            sys_info: &sys_info,
-        }),
-        Box::new(DockerLangServer {
-            dev_tools_dir: Path::new(dev_tools_dir),
-            bin_dir: Path::new(bin_dir),
-        }),
-        Box::new(EslintD {
-            dev_tools_dir: Path::new(dev_tools_dir),
-            bin_dir: Path::new(bin_dir),
-        }),
-        Box::new(GraphQlLsp {
-            dev_tools_dir: Path::new(dev_tools_dir),
-            bin_dir: Path::new(bin_dir),
-        }),
-        Box::new(Hadolint {
-            bin_dir: Path::new(bin_dir),
-            sys_info: &sys_info,
-        }),
-        Box::new(HarperLs {
-            bin_dir: Path::new(bin_dir),
-        }),
-        Box::new(HelmLs {
-            bin_dir: Path::new(bin_dir),
-            sys_info: &sys_info,
-        }),
-        Box::new(LuaLanguageServer {
-            dev_tools_dir: Path::new(dev_tools_dir),
-            sys_info: &sys_info,
-        }),
-        Box::new(Marksman {
-            bin_dir: Path::new(bin_dir),
-            sys_info: &sys_info,
-        }),
-        Box::new(Nvim {
-            dev_tools_dir: Path::new(dev_tools_dir),
-            bin_dir: Path::new(bin_dir),
-        }),
-        Box::new(Opencode {
-            bin_dir: Path::new(bin_dir),
-            sys_info: &sys_info,
-        }),
-        Box::new(PrettierD {
-            dev_tools_dir: Path::new(dev_tools_dir),
-            bin_dir: Path::new(bin_dir),
-        }),
-        Box::new(Quicktype {
-            dev_tools_dir: Path::new(dev_tools_dir),
-            bin_dir: Path::new(bin_dir),
-        }),
-        Box::new(Rio {
-            dev_tools_dir: Path::new(dev_tools_dir),
-            bin_dir: Path::new(bin_dir),
-        }),
-        Box::new(RuffLsp {
-            dev_tools_dir: Path::new(dev_tools_dir),
-            bin_dir: Path::new(bin_dir),
-        }),
-        Box::new(RustAnalyzer {
-            bin_dir: Path::new(bin_dir),
-        }),
-        Box::new(Shellcheck {
-            bin_dir: Path::new(bin_dir),
-            sys_info: &sys_info,
-        }),
-        Box::new(Sqruff {
-            bin_dir: Path::new(bin_dir),
-            sys_info: &sys_info,
-        }),
-        Box::new(SqlLanguageServer {
-            dev_tools_dir: Path::new(dev_tools_dir),
-            bin_dir: Path::new(bin_dir),
-        }),
-        Box::new(Starship {
-            dev_tools_dir: Path::new(dev_tools_dir),
-            bin_dir: Path::new(bin_dir),
-        }),
-        Box::new(Taplo {
-            bin_dir: Path::new(bin_dir),
-        }),
-        Box::new(TerraformLs {
-            bin_dir: Path::new(bin_dir),
-            sys_info: &sys_info,
-        }),
-        Box::new(TypescriptLanguageServer {
-            dev_tools_dir: Path::new(dev_tools_dir),
-            bin_dir: Path::new(bin_dir),
-        }),
-        Box::new(TyposLsp {
-            bin_dir: Path::new(bin_dir),
-            sys_info: &sys_info,
-        }),
-        Box::new(VsCodeLangServers {
-            dev_tools_dir: Path::new(dev_tools_dir),
-            bin_dir: Path::new(bin_dir),
-        }),
-        Box::new(YamlLanguageServer {
-            dev_tools_dir: Path::new(dev_tools_dir),
-            bin_dir: Path::new(bin_dir),
-        }),
-        Box::new(Zellij {
-            dev_tools_dir: Path::new(dev_tools_dir),
-            bin_dir: Path::new(bin_dir),
-        }),
-    ];
-
-    let (selected_installers, unknown_bin_names): (Vec<_>, Vec<_>) = if supplied_bin_names.is_empty() {
-        (all_installers.iter().collect(), vec![])
-    } else {
-        // Build HashMap for O(1) installer lookup instead of O(n) linear search
-        let installer_map: HashMap<&str, &Box<dyn Installer>> =
-            all_installers.iter().map(|i| (i.bin_name(), i)).collect();
-
-        let mut selected_installers = Vec::with_capacity(supplied_bin_names.len());
-        let mut unknown_installers = vec![];
-        for chosen_bin in supplied_bin_names {
-            if let Some(&installer) = installer_map.get(chosen_bin) {
-                selected_installers.push(installer);
-            } else {
-                unknown_installers.push(chosen_bin);
-            }
-        }
-        (selected_installers, unknown_installers)
-    };
+    let cargo_bin_dir = cargo_bin_dir()?;
+    let parallel_installers = parallel_installers(dev_tools_path, bin_path, &sys_info);
+    let managed_cargo_installers = managed_cargo_installers(&cargo_bin_dir, bin_path);
+    let (selected_parallel_installers, selected_cargo_installers, unknown_bin_names) =
+        select_installers(&supplied_bin_names, &parallel_installers, &managed_cargo_installers);
 
     if !unknown_bin_names.is_empty() {
         eprintln!(
@@ -230,17 +99,7 @@ fn main() -> rootcause::Result<()> {
         );
     }
 
-    let installers_res = std::thread::scope(|scope| {
-        let mut handles = Vec::with_capacity(selected_installers.len());
-        for installer in selected_installers {
-            handles.push((installer.bin_name(), scope.spawn(move || installer.run())));
-        }
-        let mut res = Vec::with_capacity(handles.len());
-        for (bin_name, handle) in handles {
-            res.push((bin_name, handle.join()));
-        }
-        res
-    });
+    let installers_res = run_installers(selected_parallel_installers, selected_cargo_installers);
 
     if let Err(errors) = report(&installers_res) {
         eprintln!(
@@ -254,6 +113,218 @@ fn main() -> rootcause::Result<()> {
     ytil_sys::rm::rm_dead_symlinks(bin_dir)?;
 
     Ok(())
+}
+
+/// Construct installers that can run independently.
+fn parallel_installers<'a>(
+    dev_tools_dir: &'a Path,
+    bin_dir: &'a Path,
+    sys_info: &'a SysInfo,
+) -> Vec<Box<dyn Installer + 'a>> {
+    vec![
+        Box::new(Alacritty { dev_tools_dir, bin_dir }),
+        Box::new(BashLanguageServer { dev_tools_dir, bin_dir }),
+        Box::new(Commitlint { dev_tools_dir, bin_dir }),
+        Box::new(Deno { bin_dir, sys_info }),
+        Box::new(DockerLangServer { dev_tools_dir, bin_dir }),
+        Box::new(EslintD { dev_tools_dir, bin_dir }),
+        Box::new(GraphQlLsp { dev_tools_dir, bin_dir }),
+        Box::new(Hadolint { bin_dir, sys_info }),
+        Box::new(HelmLs { bin_dir, sys_info }),
+        Box::new(LuaLanguageServer {
+            dev_tools_dir,
+            sys_info,
+        }),
+        Box::new(Marksman { bin_dir, sys_info }),
+        Box::new(Nvim { dev_tools_dir, bin_dir }),
+        Box::new(Opencode { bin_dir, sys_info }),
+        Box::new(PrettierD { dev_tools_dir, bin_dir }),
+        Box::new(Quicktype { dev_tools_dir, bin_dir }),
+        Box::new(Rio { dev_tools_dir, bin_dir }),
+        Box::new(RuffLsp { dev_tools_dir, bin_dir }),
+        Box::new(Shellcheck { bin_dir, sys_info }),
+        Box::new(Sqruff { bin_dir, sys_info }),
+        Box::new(SqlLanguageServer { dev_tools_dir, bin_dir }),
+        Box::new(Starship { dev_tools_dir, bin_dir }),
+        Box::new(TerraformLs { bin_dir, sys_info }),
+        Box::new(TypescriptLanguageServer { dev_tools_dir, bin_dir }),
+        Box::new(TyposLsp { bin_dir, sys_info }),
+        Box::new(VsCodeLangServers { dev_tools_dir, bin_dir }),
+        Box::new(YamlLanguageServer { dev_tools_dir, bin_dir }),
+        Box::new(Zellij { dev_tools_dir, bin_dir }),
+    ]
+}
+
+/// Construct the declared Cargo and Git tool inventory.
+fn managed_cargo_installers<'a>(cargo_bin_dir: &'a Path, bin_dir: &'a Path) -> Vec<Box<dyn Installer + 'a>> {
+    vec![
+        Box::new(Cargo::registry(
+            cargo_bin_dir,
+            bin_dir,
+            "cargo-auditable",
+            "cargo-auditable",
+        )),
+        Box::new(Cargo::registry_with_features(
+            cargo_bin_dir,
+            bin_dir,
+            "cargo-audit",
+            "cargo-audit",
+            "fix",
+        )),
+        Box::new(Cargo::registry(
+            cargo_bin_dir,
+            bin_dir,
+            "cargo-machete",
+            "cargo-machete",
+        )),
+        Box::new(Cargo::registry(cargo_bin_dir, bin_dir, "cargo-make", "cargo-make")),
+        Box::new(Cargo::registry(cargo_bin_dir, bin_dir, "cargo-sort", "cargo-sort")),
+        Box::new(Cargo::registry(
+            cargo_bin_dir,
+            bin_dir,
+            "cargo-sort-derives",
+            "cargo-sort-derives",
+        )),
+        Box::new(Cargo::registry(cargo_bin_dir, bin_dir, "ccase", "ccase")),
+        Box::new(Cargo::registry(cargo_bin_dir, bin_dir, "fd", "fd-find")),
+        Box::new(Cargo::registry(cargo_bin_dir, bin_dir, "jnv", "jnv")),
+        Box::new(Cargo::registry(cargo_bin_dir, bin_dir, "mise", "mise")),
+        Box::new(Cargo::registry(cargo_bin_dir, bin_dir, "pv", "pv")),
+        Box::new(Cargo::registry(cargo_bin_dir, bin_dir, "qj", "qj")),
+        Box::new(Cargo::registry(cargo_bin_dir, bin_dir, "rg", "ripgrep")),
+        Box::new(Cargo::registry(cargo_bin_dir, bin_dir, "sd", "sd")),
+        Box::new(Cargo::registry(cargo_bin_dir, bin_dir, "sqlx", "sqlx-cli")),
+        Box::new(Cargo::registry(
+            cargo_bin_dir,
+            bin_dir,
+            "tree-sitter",
+            "tree-sitter-cli",
+        )),
+        Box::new(Cargo::registry(cargo_bin_dir, bin_dir, "typos", "typos-cli")),
+        Box::new(Cargo::registry(cargo_bin_dir, bin_dir, "harper-ls", "harper-ls")),
+        Box::new(Cargo::registry_with_all_features(
+            cargo_bin_dir,
+            bin_dir,
+            "taplo",
+            "taplo-cli",
+        )),
+        Box::new(Cargo::nightly_git(
+            cargo_bin_dir,
+            bin_dir,
+            "rust-analyzer",
+            "https://github.com/rust-lang/rust-analyzer.git",
+            "master",
+        )),
+        Box::new(Cargo::locked_registry(
+            cargo_bin_dir,
+            bin_dir,
+            "cargo-nextest",
+            "cargo-nextest",
+        )),
+        Box::new(Cargo::registry(
+            cargo_bin_dir,
+            bin_dir,
+            "cargo-llvm-cov",
+            "cargo-llvm-cov",
+        )),
+        Box::new(Cargo::git(
+            cargo_bin_dir,
+            bin_dir,
+            "rtk",
+            "https://github.com/rtk-ai/rtk",
+        )),
+    ]
+}
+
+/// Select individual installers or expand the `cargo` selector group.
+fn select_installers<'installer, 'name>(
+    supplied_bin_names: &[&'name str],
+    parallel_installers: &'installer [Box<dyn Installer + 'installer>],
+    managed_cargo_installers: &'installer [Box<dyn Installer + 'installer>],
+) -> (
+    Vec<&'installer dyn Installer>,
+    Vec<&'installer dyn Installer>,
+    Vec<&'name str>,
+) {
+    if supplied_bin_names.is_empty() {
+        return (
+            parallel_installers.iter().map(Box::as_ref).collect(),
+            managed_cargo_installers.iter().map(Box::as_ref).collect(),
+            vec![],
+        );
+    }
+
+    let parallel_installer_map: HashMap<&str, &dyn Installer> = parallel_installers
+        .iter()
+        .map(|installer| (installer.bin_name(), installer.as_ref()))
+        .collect();
+    let cargo_installer_map: HashMap<&str, &dyn Installer> = managed_cargo_installers
+        .iter()
+        .map(|installer| (installer.bin_name(), installer.as_ref()))
+        .collect();
+
+    let mut selected_parallel_installers = Vec::with_capacity(supplied_bin_names.len());
+    let mut selected_cargo_installers = Vec::with_capacity(supplied_bin_names.len());
+    let mut unknown_installers = vec![];
+    let mut selected_bin_names = HashSet::new();
+    for chosen_bin in supplied_bin_names {
+        if *chosen_bin == "cargo" {
+            for installer in managed_cargo_installers {
+                if selected_bin_names.insert(installer.bin_name()) {
+                    selected_cargo_installers.push(installer.as_ref());
+                }
+            }
+        } else if let Some(&installer) = parallel_installer_map.get(chosen_bin) {
+            if selected_bin_names.insert(installer.bin_name()) {
+                selected_parallel_installers.push(installer);
+            }
+        } else if let Some(&installer) = cargo_installer_map.get(chosen_bin) {
+            if selected_bin_names.insert(installer.bin_name()) {
+                selected_cargo_installers.push(installer);
+            }
+        } else {
+            unknown_installers.push(*chosen_bin);
+        }
+    }
+
+    (
+        selected_parallel_installers,
+        selected_cargo_installers,
+        unknown_installers,
+    )
+}
+
+/// Run independent installers concurrently and Cargo installers on one serial worker.
+fn run_installers<'a>(
+    selected_parallel_installers: Vec<&'a dyn Installer>,
+    selected_cargo_installers: Vec<&'a dyn Installer>,
+) -> Vec<(&'a str, std::thread::Result<rootcause::Result<()>>)> {
+    std::thread::scope(|scope| {
+        let mut handles = Vec::with_capacity(selected_parallel_installers.len());
+        for installer in selected_parallel_installers {
+            handles.push((installer.bin_name(), scope.spawn(move || installer.run())));
+        }
+        let cargo_handle = scope.spawn(move || {
+            selected_cargo_installers
+                .into_iter()
+                .map(|installer| (installer.bin_name(), installer.run()))
+                .collect::<Vec<_>>()
+        });
+
+        let mut results = Vec::with_capacity(handles.len());
+        for (bin_name, handle) in handles {
+            results.push((bin_name, handle.join()));
+        }
+        match cargo_handle.join() {
+            Ok(cargo_results) => results.extend(
+                cargo_results
+                    .into_iter()
+                    .map(|(bin_name, result)| (bin_name, Ok(result))),
+            ),
+            Err(error) => results.push(("cargo", Err(error))),
+        }
+        results
+    })
 }
 
 /// Summarize installer thread outcomes; collect failing bin names.
