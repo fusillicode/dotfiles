@@ -1,12 +1,13 @@
 Usage: idt <dev_tools_dir> <bin_dir> [tool_names...]
 
-Install language servers, linters, formatters, and developer helpers concurrently.
+Install language servers, linters, formatters, and developer helpers. Cargo-backed installers run serially.
 
 Arguments:
   <dev_tools_dir>  Directory for tool installation.
   <bin_dir>        Directory for binary symlinks.
-  [tool_names...]  Optional specific tools to install (default: all).
+  [tool_names...]  Optional specific tools to install (default: all). Use `cargo` for the declared Cargo/Git inventory only.
 
 Examples:
   idt ~/.dev/tools ~/.local/bin              Install all tools.
+  idt ~/.dev/tools ~/.local/bin cargo         Install declared Cargo/Git tools only.
   idt ~/.dev/tools ~/.local/bin ruff_lsp rust_analyzer  Subset.
