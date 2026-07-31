@@ -1,0 +1,20 @@
+[package]
+name = "aiya"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+description = "Maintenance commands for local AI tools."
+keywords = ["ai", "codex", "maintenance", "cli", "tools"]
+categories = ["command-line-utilities", "development-tools"]
+
+[dependencies]
+owo-colors = { workspace = true }
+rootcause = { workspace = true }
+rusqlite = { workspace = true }
+ytil_sys = { workspace = true }
+
+[lints]
+workspace = true

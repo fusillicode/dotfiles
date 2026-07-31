@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
     "yog/ags",
+    "yog/aiya",
     "yog/catl",
     "yog/evoke",
     "yog/fkr",

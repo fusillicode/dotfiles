@@ -8,6 +8,7 @@ use owo_colors::OwoColorize;
 /// NOTE: if a new binary is added this list must be updated!
 const BINS: &[&str] = &[
     "ags",
+    "aiya",
     "catl",
     "fkr",
     "gbm",
