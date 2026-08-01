@@ -17,47 +17,6 @@ use ytil_agents::agent::Agent;
 use ytil_agents::agent::session::Session;
 use ytil_agents::agent::session::SessionKey;
 
-pub fn list_json(args: &[String]) -> rootcause::Result<()> {
-    let session_keys = parse_json_session_keys(args)?;
-    let sessions = load_sorted_sessions_by_key(&session_keys)?;
-    let home_dir = std::env::var_os("HOME").map_or_else(|| std::path::PathBuf::from("/"), std::path::PathBuf::from);
-    let rows = sessions
-        .into_iter()
-        .map(RenderableSession::from)
-        .map(|session| JsonSession::new(&session, &home_dir))
-        .collect::<rootcause::Result<Vec<_>>>()?;
-
-    println!(
-        "{}",
-        serde_json::to_string(&rows).context("failed to serialize sessions")?
-    );
-    Ok(())
-}
-
-fn parse_json_session_keys(args: &[String]) -> rootcause::Result<Vec<SessionKey>> {
-    let mut session_keys = Vec::new();
-    let mut args = args.iter();
-    while let Some(arg) = args.next() {
-        match arg.as_str() {
-            "--session" => {
-                let Some(key) = args.next() else {
-                    return Err(report!("missing --session value"));
-                };
-                session_keys.push(key.parse()?);
-            }
-            unexpected => {
-                return Err(report!("unknown ags list --json arg").attach(format!("arg={unexpected}")));
-            }
-        }
-    }
-    if session_keys.is_empty() {
-        return Err(report!("ags list --json requires at least one --session"));
-    }
-    session_keys.sort();
-    session_keys.dedup();
-    Ok(session_keys)
-}
-
 pub fn run() -> rootcause::Result<()> {
     let sessions = load_sorted_sessions()?;
 
@@ -89,6 +48,47 @@ pub fn run() -> rootcause::Result<()> {
             Ok(())
         }
     }
+}
+
+pub fn run_json(args: &[String]) -> rootcause::Result<()> {
+    let session_keys = parse_json_session_keys(args)?;
+    let sessions = load_sorted_sessions_by_key(&session_keys)?;
+    let home_dir = std::env::var_os("HOME").map_or_else(|| std::path::PathBuf::from("/"), std::path::PathBuf::from);
+    let rows = sessions
+        .into_iter()
+        .map(RenderableSession::from)
+        .map(|session| JsonSession::new(&session, &home_dir))
+        .collect::<rootcause::Result<Vec<_>>>()?;
+
+    println!(
+        "{}",
+        serde_json::to_string(&rows).context("failed to serialize sessions")?
+    );
+    Ok(())
+}
+
+fn parse_json_session_keys(args: &[String]) -> rootcause::Result<Vec<SessionKey>> {
+    let mut session_keys = Vec::new();
+    let mut args = args.iter();
+    while let Some(arg) = args.next() {
+        match arg.as_str() {
+            "--session" => {
+                let Some(key) = args.next() else {
+                    return Err(report!("missing --session value"));
+                };
+                session_keys.push(key.parse()?);
+            }
+            unexpected => {
+                return Err(report!("unknown agg sessions list --json arg").attach(format!("arg={unexpected}")));
+            }
+        }
+    }
+    if session_keys.is_empty() {
+        return Err(report!("agg sessions list --json requires at least one --session"));
+    }
+    session_keys.sort();
+    session_keys.dedup();
+    Ok(session_keys)
 }
 
 fn load_sorted_sessions() -> rootcause::Result<Vec<Session>> {
@@ -269,13 +269,12 @@ fn launch_session(session: &RenderableSession) -> rootcause::Result<()> {
 
     #[cfg(unix)]
     {
-        Err::<(), std::io::Error>(cmd.exec())
-            .context("failed to exec agent CLI")
-            .attach_with(|| format!("agent={}", session.agent.name()))
-            .attach_with(|| format!("workspace={}", session.workspace.display()))
-            .attach_with(|| format!("session_id={}", session.id))?;
-
-        Ok(())
+        let error = cmd.exec();
+        Err(report!("failed to exec agent CLI")
+            .attach(format!("error={error}"))
+            .attach(format!("agent={}", session.agent.name()))
+            .attach(format!("workspace={}", session.workspace.display()))
+            .attach(format!("session_id={}", session.id)))
     }
 
     #[cfg(not(unix))]
@@ -325,7 +324,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_search_corpus_matches_ags_visible_plus_hidden_filtering() {
+    fn test_search_corpus_matches_agg_visible_plus_hidden_filtering() {
         let display = "cx  ~/repo   branch   session name  09/05/2026-10:00";
         let hidden = "first user prompt\nassistant reply";
 
@@ -338,7 +337,7 @@ mod tests {
     }
 
     #[test]
-    fn test_json_session_renders_plain_ags_summary_and_resume_command() {
+    fn test_json_session_renders_plain_agg_summary_and_resume_command() {
         let dir = tempdir().expect("tempdir should be created");
         let workspace = dir.path().join("repo");
         std::fs::create_dir_all(&workspace).expect("workspace should be created");

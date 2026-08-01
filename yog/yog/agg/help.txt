@@ -1,0 +1,13 @@
+agg - Manage local AI agent sessions and maintenance tasks.
+
+USAGE:
+    agg
+    agg sessions list
+    agg sessions list --json --session <agent>:<session-id>...
+    agg codex --compact
+
+COMMANDS:
+    sessions list     Show resumable AI agent sessions.
+    codex --compact   Compact the local Codex log database.
+
+Without a command, shows Claude, Codex, and Cursor resumable sessions in a picker, then resumes or deletes the selected session.

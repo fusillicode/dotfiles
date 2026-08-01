@@ -1,5 +1,5 @@
 [package]
-name = "ags"
+name = "agg"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
@@ -14,6 +14,7 @@ categories = ["command-line-utilities", "development-tools"]
 chrono = { workspace = true }
 owo-colors = { workspace = true }
 rootcause = { workspace = true }
+rusqlite = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 strum = { workspace = true }
@@ -23,6 +24,7 @@ ytil_sys = { workspace = true }
 ytil_tui = { workspace = true }
 
 [dev-dependencies]
+rstest = { workspace = true }
 tempfile = { workspace = true }
 test-that = { workspace = true }
 
