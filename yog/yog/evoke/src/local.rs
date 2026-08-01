@@ -20,6 +20,7 @@ const BINS: &[&str] = &[
     "muxr-server",
     "oe",
     "rmr",
+    "frs",
     "strgci",
     "tec",
     "try",

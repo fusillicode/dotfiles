@@ -6,6 +6,7 @@ members = [
     "yog/catl",
     "yog/evoke",
     "yog/fkr",
+    "yog/frs",
     "yog/gbm",
     "yog/gch",
     "yog/gcu",
