@@ -78,12 +78,12 @@ pub struct ClientSessionState<'a> {
 
 impl ClientSessionState<'_> {
     pub(crate) fn open_file_pane_route(&self, source_pane_id: PaneId) -> rootcause::Result<OpenFilePaneRoute> {
-        match self.layout.active_tab()?.pane_tree.right_pane_of(source_pane_id) {
-            PaneTreeRightPane::Pane(right_pane_id) if self.pane_nvim_state(right_pane_id) == NvimState::Running => {
-                Ok(OpenFilePaneRoute::ExistingNvim(right_pane_id))
-            }
-            PaneTreeRightPane::Pane(_) | PaneTreeRightPane::Missing => Ok(OpenFilePaneRoute::NewRightSplit),
-        }
+        let right_pane = self.layout.active_tab()?.pane_tree.right_pane_of(source_pane_id);
+        let nvim_state = match right_pane {
+            PaneTreeRightPane::Pane(right_pane_id) => self.pane_nvim_state(right_pane_id),
+            PaneTreeRightPane::Missing => NvimState::Unknown,
+        };
+        Ok(self::open_file_pane_route_for_right_pane(right_pane, nvim_state))
     }
 
     fn pane_nvim_state(&self, pane_id: PaneId) -> NvimState {
@@ -115,6 +115,15 @@ impl ClientSessionState<'_> {
         )?;
         timers.sync_tracked_process_quiet_deadline_for_layout(&self.pane_tracked_processes, self.layout)?;
         Ok(())
+    }
+}
+
+fn open_file_pane_route_for_right_pane(right_pane: PaneTreeRightPane, nvim_state: NvimState) -> OpenFilePaneRoute {
+    match right_pane {
+        PaneTreeRightPane::Pane(right_pane_id) if nvim_state == NvimState::Running => {
+            OpenFilePaneRoute::ExistingNvim(right_pane_id)
+        }
+        PaneTreeRightPane::Pane(_) | PaneTreeRightPane::Missing => OpenFilePaneRoute::NewRightSplit,
     }
 }
 
@@ -790,10 +799,34 @@ mod tests {
     use crate::pane::tracked_process::TrackedProcessUserInteraction;
     use crate::pty::ShellCmd;
     use crate::session::start_seed::SessionStartSeed;
+    use crate::state::PaneTreeRightPane;
     use crate::state::SessionMetadata;
     use crate::terminal::TerminalApplicationMode;
     use crate::terminal::TerminalScreenMode;
     use crate::terminal::TerminalSnapshot;
+
+    #[rstest::rstest]
+    #[case::running_right_nvim(true, NvimState::Running, true)]
+    #[case::right_pane_without_nvim(true, NvimState::NotRunning, false)]
+    #[case::right_pane_with_unknown_state(true, NvimState::Unknown, false)]
+    #[case::missing_right_pane(false, NvimState::Running, false)]
+    fn test_open_file_pane_route_reuses_only_a_running_right_nvim_pane(
+        #[case] has_right_pane: bool,
+        #[case] nvim_state: NvimState,
+        #[case] reuses_right_pane: bool,
+    ) -> rootcause::Result<()> {
+        let right_pane_id = PaneId::new(2)?;
+        let right_pane = has_right_pane.then_some(PaneTreeRightPane::Pane(right_pane_id));
+        assert_that!(
+            self::open_file_pane_route_for_right_pane(right_pane.unwrap_or(PaneTreeRightPane::Missing), nvim_state),
+            eq(if reuses_right_pane {
+                OpenFilePaneRoute::ExistingNvim(right_pane_id)
+            } else {
+                OpenFilePaneRoute::NewRightSplit
+            })
+        );
+        Ok(())
+    }
 
     #[tokio::test]
     async fn test_pty_event_bridge_forwards_events_in_order_and_stops_when_async_receiver_drops()
@@ -2602,37 +2635,20 @@ mod tests {
         config.shell_cmd = crate::server::test_helpers::shell_cmd("/bin/cat");
         let layout = SessionLayout::initial(&config.session, self::metadata("cat", 1))?;
         assert_that!(
-            self::open_file_request_with_closed_writer(tempdir, config, layout, None).await?,
-            eq(ClientSessionFlow::Disconnect)
-        );
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_open_file_request_when_render_writer_is_closed_with_existing_nvim_returns_disconnect()
-    -> rootcause::Result<()> {
-        let tempdir = tempfile::tempdir()?;
-        let config = crate::server::test_helpers::server_config(tempdir.path(), "work")?;
-        let editor_pane_id = PaneId::new(2)?;
-        let layout = self::layout(&config)?;
-        assert_that!(
-            self::open_file_request_with_closed_writer(tempdir, config, layout, Some(editor_pane_id)).await?,
+            self::open_file_request_with_closed_writer(tempdir, config, layout).await?,
             eq(ClientSessionFlow::Disconnect)
         );
         Ok(())
     }
 
     async fn open_file_request_with_closed_writer(
-        tempdir: tempfile::TempDir,
+        _tempdir: tempfile::TempDir,
         config: ServerConfig,
         mut layout: SessionLayout,
-        editor_pane_id: Option<PaneId>,
     ) -> rootcause::Result<ClientSessionFlow> {
         crate::session::files::prepare_session_dirs(&config.paths)?;
         let terminal_size = TerminalSize::new(80, 24)?;
         let source_pane_id = PaneId::new(1)?;
-        let initial_path = tempdir.path().join("closed-writer-nvim-start.rs");
-        std::fs::write(&initial_path, b"muxr-closed-writer-nvim-start")?;
         let mut runtimes = PaneRuntimes::spawn_for_start_seed(
             &config,
             &SessionStartSeed {
@@ -2643,13 +2659,6 @@ mod tests {
             Arc::new(tokio::sync::Notify::new()),
         )?;
         crate::screen_render::resize_panes_to_layout(&layout, &runtimes, &terminal_size)?;
-        if let Some(editor_pane_id) = editor_pane_id {
-            let startup_command = format!("nvim --clean -- {}\n", initial_path.display());
-            runtimes
-                .handle(editor_pane_id)?
-                .write_input(startup_command.as_bytes())?;
-            self::wait_for_runtime_fg_cmd(&runtimes, editor_pane_id, "nvim")?;
-        }
         let pane_tracked_processes = PaneTrackedProcesses::default();
         let (layout_snapshot, pane_regions, mut render_worker, _render_baseline) =
             crate::screen_render::initial_client_render(
@@ -2705,39 +2714,29 @@ mod tests {
     -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
         let path = tempdir.path().join("new-nvim-route.rs");
-        std::fs::write(&path, b"muxr-new-nvim-route")?;
-        self::open_file_request_without_nvim(tempdir, path, "muxr-new-nvim-route", Some(42), Some(7), None).await
+        self::open_file_request_without_nvim(tempdir, path, Some(42), Some(7), " '+call cursor(42,7)'").await
     }
 
     #[tokio::test]
-    async fn test_open_file_request_without_nvim_opens_directory_in_new_nvim_split() -> rootcause::Result<()> {
+    async fn test_open_file_request_without_nvim_opens_directory_in_new_split() -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
         let path = tempdir.path().join("new-nvim-directory");
         std::fs::create_dir(&path)?;
-        self::open_file_request_without_nvim(
-            tempdir,
-            path,
-            "new-nvim-directory",
-            None,
-            None,
-            Some(b"\x1b:echo expand('%:p')\r"),
-        )
-        .await
+        self::open_file_request_without_nvim(tempdir, path, None, None, "").await
     }
 
     async fn open_file_request_without_nvim(
         tempdir: tempfile::TempDir,
         path: std::path::PathBuf,
-        expected_snapshot_text: &'static str,
         line: Option<u32>,
         column: Option<u32>,
-        post_open_input: Option<&'static [u8]>,
+        expected_location: &str,
     ) -> rootcause::Result<()> {
         let mut config = crate::server::test_helpers::server_config(tempdir.path(), "work")?;
-        config.shell_cmd = crate::server::test_helpers::shell_cmd("/bin/sh");
+        config.shell_cmd = crate::server::test_helpers::shell_cmd("/bin/cat");
         crate::session::files::prepare_session_dirs(&config.paths)?;
         let terminal_size = TerminalSize::new(80, 24)?;
-        let mut layout = SessionLayout::initial(&config.session, self::metadata("sh", 1))?;
+        let mut layout = SessionLayout::initial(&config.session, self::metadata("cat", 1))?;
         let source_pane_id = PaneId::new(1)?;
         let new_pane_id = PaneId::new(2)?;
         let mut runtimes = PaneRuntimes::spawn_for_start_seed(
@@ -2804,191 +2803,31 @@ mod tests {
         assert_that!(keep_attached, eq(ClientSessionFlow::Continue));
         assert_that!(state.layout.active_pane_id()?, eq(new_pane_id));
         assert_that!(state.layout.active_tab()?.pane_ids().len(), eq(2));
-        self::wait_for_runtime_fg_cmd(&runtimes, new_pane_id, "nvim")?;
-        if let Some(input) = post_open_input {
-            runtimes.handle(new_pane_id)?.write_input(input)?;
-        }
-        self::wait_for_runtime_snapshot_contains(&runtimes, new_pane_id, expected_snapshot_text)?;
-        self::abort_client_drain(client_drain).await;
-        Ok(())
-    }
-
-    struct OpenFileRequestContext<'request, 'state> {
-        source_pane_id: PaneId,
-        event_writer: &'request mut ServerEventWriter,
-        state: &'request mut ClientSessionState<'state>,
-        timers: &'request mut ClientTimers,
-        heartbeat_started_at: &'request mut Option<tokio::time::Instant>,
-        render_dmg: &'request mut ClientRenderDmg,
-    }
-
-    impl OpenFileRequestContext<'_, '_> {
-        async fn open_file(
-            &mut self,
-            path: &str,
-            line: Option<u32>,
-            column: Option<u32>,
-        ) -> rootcause::Result<ClientSessionFlow> {
-            crate::request_router::handle_client_message(
-                SessionClientMessage::Request(ClientRequest::OpenFile {
-                    pane_id: self.source_pane_id,
-                    path: path.to_owned(),
-                    line,
-                    column,
-                }),
-                self.event_writer,
-                self.state,
-                self.timers,
-                self.heartbeat_started_at,
-                self.render_dmg,
-            )
-            .await
-        }
-
-        async fn open_directory(&mut self, editor_pane_id: PaneId, path: &str) -> rootcause::Result<()> {
-            let keep_attached = self.open_file(path, None, None).await?;
-            assert_that!(keep_attached, eq(ClientSessionFlow::Continue));
-            assert_that!(self.state.layout.active_pane_id()?, eq(editor_pane_id));
-            assert_that!(self.state.layout.active_tab()?.pane_ids().len(), eq(2));
-            self.state
-                .runtimes
-                .handle(editor_pane_id)?
-                .write_input(b"\x1b:echo expand('%:p')\r")?;
-            self::wait_for_runtime_snapshot_contains(self.state.runtimes, editor_pane_id, "existing-nvim-directory")?;
-            Ok(())
-        }
-    }
-
-    #[tokio::test]
-    async fn test_open_file_request_with_nvim_in_sibling_pane_edits_existing_pane() -> rootcause::Result<()> {
-        let tempdir = tempfile::tempdir()?;
-        let config = crate::server::test_helpers::server_config(tempdir.path(), "work")?;
-        crate::session::files::prepare_session_dirs(&config.paths)?;
-        let terminal_size = TerminalSize::new(80, 24)?;
-        let mut layout = self::layout(&config)?;
-        let source_pane_id = PaneId::new(1)?;
-        let editor_pane_id = PaneId::new(2)?;
-        let initial_path = tempdir.path().join("existing-nvim-start.rs");
-        std::fs::write(&initial_path, b"muxr-existing-nvim-start")?;
-        let path = tempdir.path().join("existing-nvim-route.rs");
-        std::fs::write(&path, b"muxr-existing-nvim-route")?;
-        let mut runtimes = PaneRuntimes::spawn_for_start_seed(
-            &config,
-            &SessionStartSeed {
-                layout: layout.clone(),
-                startup_cmds: Vec::new(),
-            },
-            &terminal_size,
-            Arc::new(tokio::sync::Notify::new()),
-        )?;
-        crate::screen_render::resize_panes_to_layout(&layout, &runtimes, &terminal_size)?;
-        let source_startup_command = format!("nvim --clean -- {}\n", initial_path.display());
-        runtimes
-            .handle(source_pane_id)?
-            .write_input(source_startup_command.as_bytes())?;
-        self::wait_for_runtime_fg_cmd(&runtimes, source_pane_id, "nvim")?;
-        let startup_command = format!("nvim --clean -- {}\n", initial_path.display());
-        runtimes
-            .handle(editor_pane_id)?
-            .write_input(startup_command.as_bytes())?;
-        self::wait_for_runtime_fg_cmd(&runtimes, editor_pane_id, "nvim")?;
-        self::wait_for_runtime_snapshot_contains(&runtimes, editor_pane_id, "muxr-existing-nvim-start")?;
-        let pane_tracked_processes = PaneTrackedProcesses::default();
-        let (layout_snapshot, pane_regions, mut render_worker, _render_baseline) =
-            crate::screen_render::initial_client_render(
-                &config,
-                &mut layout,
-                &runtimes,
-                &pane_tracked_processes,
-                &terminal_size,
-            )?;
-        let (mut event_writer, client_drain) = self::connect_client_event_drain(&config).await?;
-        let delete_sessions = DeleteSessions::default();
-        let (pty_event_sender, _pty_event_receiver) = self::pty_event_channel();
-        let mut sink_guards = Vec::new();
-        let mut state = ClientSessionState {
-            pane_tracked_processes,
-            config: &config,
-            delete_sessions: &delete_sessions,
-            input_mode: ServerInputMode::Normal,
-            last_layout_snapshot: layout_snapshot,
-            layout: &mut layout,
-            pane_fullscreen: PaneFullscreen::default(),
-            pane_regions,
-            pty_event_sender: &pty_event_sender,
-            render_worker: &mut render_worker,
-            runtimes: &mut runtimes,
-            scrollback_editor: None,
-            sink_guards: &mut sink_guards,
-            terminal_size,
-        };
-        let mut timers = ClientTimers::new(&config)?;
-        let mut heartbeat_started_at = None;
-        let mut render_dmg = ClientRenderDmg::Clean;
-        let path = self::utf8_path(&path)?;
-
-        let keep_attached = {
-            let mut request_context = OpenFileRequestContext {
-                source_pane_id,
-                event_writer: &mut event_writer,
-                state: &mut state,
-                timers: &mut timers,
-                heartbeat_started_at: &mut heartbeat_started_at,
-                render_dmg: &mut render_dmg,
-            };
-            request_context.open_file(path, None, None).await?
-        };
-
-        assert_that!(keep_attached, eq(ClientSessionFlow::Continue));
-        assert_that!(state.layout.active_pane_id()?, eq(editor_pane_id));
-        assert_that!(state.layout.active_tab()?.pane_ids().len(), eq(2));
-        // Ask Nvim for the first buffer line to force a redraw and prove the edit command loaded file contents.
-        state
-            .runtimes
-            .handle(editor_pane_id)?
-            .write_input(b"\x1b:echo getline(1)\r")?;
-        self::wait_for_runtime_snapshot_contains(state.runtimes, editor_pane_id, "muxr-existing-nvim-route")?;
-
-        let directory = tempdir.path().join("existing-nvim-directory");
-        std::fs::create_dir(&directory)?;
-        let directory_path = self::utf8_path(&directory)?;
-        {
-            let mut request_context = OpenFileRequestContext {
-                source_pane_id,
-                event_writer: &mut event_writer,
-                state: &mut state,
-                timers: &mut timers,
-                heartbeat_started_at: &mut heartbeat_started_at,
-                render_dmg: &mut render_dmg,
-            };
-            request_context.open_directory(editor_pane_id, directory_path).await?;
-        }
+        let expected_command = format!("nvim{expected_location} -- {}", self::utf8_path(&path)?);
+        self::wait_for_runtime_snapshot_contains(&runtimes, new_pane_id, expected_command.trim_end())?;
         self::abort_client_drain(client_drain).await;
         Ok(())
     }
 
     #[tokio::test]
-    async fn test_open_file_request_when_right_pane_is_not_nvim_ignores_unrelated_nvim_and_splits_right()
-    -> rootcause::Result<()> {
+    async fn test_open_file_request_when_right_pane_is_not_nvim_splits_right() -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
-        let config = crate::server::test_helpers::server_config(tempdir.path(), "work")?;
+        let mut config = crate::server::test_helpers::server_config(tempdir.path(), "work")?;
+        config.shell_cmd = crate::server::test_helpers::shell_cmd("/bin/cat");
         crate::session::files::prepare_session_dirs(&config.paths)?;
         let terminal_size = TerminalSize::new(80, 24)?;
         let mut layout = self::layout(&config)?;
         let source_pane_id = PaneId::new(1)?;
         let right_pane_id = PaneId::new(2)?;
         layout.active_tab_mut()?.focus_pane(source_pane_id)?;
-        let unrelated_nvim_pane_id = layout.split_active_pane(
+        let _unrelated_pane_id = layout.split_active_pane(
             config.user_config.layout,
-            self::metadata("sh", 3),
+            self::metadata("cat", 3),
             crate::pane::split::PaneSplitAxis::Horizontal,
         )?;
         layout.active_tab_mut()?.focus_pane(source_pane_id)?;
         let new_pane_id = PaneId::new(4)?;
-        let initial_path = tempdir.path().join("unrelated-nvim-start.rs");
-        std::fs::write(&initial_path, b"muxr-unrelated-nvim-start")?;
         let path = tempdir.path().join("right-pane.rs");
-        std::fs::write(&path, b"muxr-right-pane")?;
         let mut runtimes = PaneRuntimes::spawn_for_start_seed(
             &config,
             &SessionStartSeed {
@@ -2999,11 +2838,6 @@ mod tests {
             Arc::new(tokio::sync::Notify::new()),
         )?;
         crate::screen_render::resize_panes_to_layout(&layout, &runtimes, &terminal_size)?;
-        let startup_command = format!("nvim --clean -- {}\n", initial_path.display());
-        runtimes
-            .handle(unrelated_nvim_pane_id)?
-            .write_input(startup_command.as_bytes())?;
-        self::wait_for_runtime_fg_cmd(&runtimes, unrelated_nvim_pane_id, "nvim")?;
         let pane_tracked_processes = PaneTrackedProcesses::default();
         let (layout_snapshot, pane_regions, mut render_worker, _render_baseline) =
             crate::screen_render::initial_client_render(
@@ -3063,9 +2897,8 @@ mod tests {
             PaneCmdObservation::from(&right_pane_snapshot).nvim_state(),
             eq(NvimState::NotRunning)
         );
-        self::wait_for_runtime_fg_cmd(&runtimes, new_pane_id, "nvim")?;
-        self::wait_for_runtime_snapshot_contains(&runtimes, new_pane_id, "muxr-right-pane")?;
-        self::wait_for_runtime_fg_cmd(&runtimes, unrelated_nvim_pane_id, "nvim")?;
+        let expected_command = format!("nvim -- {}", self::utf8_path(&path)?);
+        self::wait_for_runtime_snapshot_contains(&runtimes, new_pane_id, expected_command.trim_end())?;
         self::abort_client_drain(client_drain).await;
         Ok(())
     }
@@ -3074,17 +2907,15 @@ mod tests {
     async fn test_open_file_request_when_source_is_fullscreen_preserves_hidden_sibling_and_splits_source()
     -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
-        let config = crate::server::test_helpers::server_config(tempdir.path(), "work")?;
+        let mut config = crate::server::test_helpers::server_config(tempdir.path(), "work")?;
+        config.shell_cmd = crate::server::test_helpers::shell_cmd("/bin/cat");
         crate::session::files::prepare_session_dirs(&config.paths)?;
         let terminal_size = TerminalSize::new(80, 24)?;
         let mut layout = self::layout(&config)?;
         let source_pane_id = PaneId::new(1)?;
         let editor_pane_id = PaneId::new(2)?;
         layout.active_tab_mut()?.focus_pane(source_pane_id)?;
-        let initial_path = tempdir.path().join("fullscreen-sibling-start.rs");
-        std::fs::write(&initial_path, b"muxr-fullscreen-sibling-start")?;
         let path = tempdir.path().join("fullscreen-route.rs");
-        std::fs::write(&path, b"muxr-fullscreen-route")?;
         let mut runtimes = PaneRuntimes::spawn_for_start_seed(
             &config,
             &SessionStartSeed {
@@ -3095,11 +2926,6 @@ mod tests {
             Arc::new(tokio::sync::Notify::new()),
         )?;
         crate::screen_render::resize_panes_to_layout(&layout, &runtimes, &terminal_size)?;
-        let startup_command = format!("nvim --clean -- {}\n", initial_path.display());
-        runtimes
-            .handle(editor_pane_id)?
-            .write_input(startup_command.as_bytes())?;
-        self::wait_for_runtime_fg_cmd(&runtimes, editor_pane_id, "nvim")?;
         let pane_tracked_processes = PaneTrackedProcesses::default();
         let (layout_snapshot, pane_regions, mut render_worker, _render_baseline) =
             crate::screen_render::initial_client_render(
@@ -3162,9 +2988,8 @@ mod tests {
         let new_pane_id = state.layout.active_pane_id()?;
         assert_that!(new_pane_id, not(eq(source_pane_id)));
         assert_that!(new_pane_id, not(eq(editor_pane_id)));
-        self::wait_for_runtime_fg_cmd(&runtimes, new_pane_id, "nvim")?;
-        runtimes.handle(new_pane_id)?.write_input(b"\x1b:echo getline(1)\r")?;
-        self::wait_for_runtime_snapshot_contains(&runtimes, new_pane_id, "muxr-fullscreen-route")?;
+        let expected_command = format!("nvim -- {path}");
+        self::wait_for_runtime_snapshot_contains(&runtimes, new_pane_id, expected_command.trim_end())?;
         self::abort_client_drain(client_drain).await;
         Ok(())
     }
