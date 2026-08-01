@@ -1,0 +1,9 @@
+Rust maintenance commands
+
+Usage:
+  frs repo fix [--clean] [--jobs N] DIRECTORY
+
+Commands:
+  repo fix           Configure Rust workspace build directories and remove quarantine metadata.
+
+Run `frs repo fix --help` for command details.

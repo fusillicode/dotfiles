@@ -1,0 +1,10 @@
+Configure Rust workspaces and remove quarantine metadata.
+
+Usage:
+  frs repo fix [--clean] [--jobs N] DIRECTORY
+
+Options:
+  --clean     Run `cargo clean` once for every discovered Cargo workspace before setup.
+  --jobs N    Run at most N cargo and quarantine cleanup jobs at once (default: 7).
+
+The command asks for confirmation before making changes.
