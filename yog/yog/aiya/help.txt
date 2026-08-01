@@ -1,7 +1,0 @@
-aiya - Local AI maintenance commands.
-
-USAGE:
-    aiya codex compact
-
-COMMANDS:
-    codex compact    Compact the local Codex log database.

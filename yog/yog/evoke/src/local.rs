@@ -3,12 +3,12 @@ use std::path::PathBuf;
 use std::process::Command;
 
 use owo_colors::OwoColorize;
+use rootcause::report;
 
 /// List of binaries that should be copied after building.
 /// NOTE: if a new binary is added this list must be updated!
 const BINS: &[&str] = &[
-    "ags",
-    "aiya",
+    "agg",
     "catl",
     "fkr",
     "gbm",
@@ -28,6 +28,8 @@ const BINS: &[&str] = &[
     "yghfl",
     "yhfp",
 ];
+/// Binaries removed from the local deployment during the AI CLI migration.
+const REMOVED_BINS: &[&str] = &["ags", "aiya"];
 /// List of library files that need to be renamed after building, mapping (`source_name`, `target_name`).
 const LIBS: &[(&str, &str)] = &[("libnvrim.dylib", "nvrim.so")];
 /// Path segments for the default binaries install dir.
@@ -77,6 +79,10 @@ pub fn run(args: &mut Vec<String>) -> rootcause::Result<()> {
         .status()?
         .exit_ok()?;
 
+    for bin in REMOVED_BINS {
+        remove_legacy_bin(&bins_path.join(bin))?;
+    }
+
     for bin in BINS {
         cp(&cargo_target_location.join(bin), &bins_path.join(bin))?;
     }
@@ -115,6 +121,28 @@ where
     true
 }
 
+fn remove_legacy_bin(path: &Path) -> rootcause::Result<()> {
+    let metadata = match std::fs::symlink_metadata(path) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => {
+            return Err(
+                report!("cannot inspect legacy binary").attach(format!("path={} error={error}", path.display()))
+            );
+        }
+    };
+    let file_type = metadata.file_type();
+    if !file_type.is_file() && !file_type.is_symlink() {
+        return Err(report!("refusing to remove non-file legacy binary").attach(format!("path={}", path.display())));
+    }
+
+    std::fs::remove_file(path).map_err(|error| {
+        report!("cannot remove legacy binary").attach(format!("path={} error={error}", path.display()))
+    })?;
+    println!("{} {}", "Removed".red().bold(), path.display());
+    Ok(())
+}
+
 /// Copies a built binary or library from `from` to `to` using
 /// [`ytil_sys::file::atomic_cp`] and prints an "Copied" status line.
 ///
@@ -136,6 +164,7 @@ mod tests {
 
     use crate::local::drop_element;
     use crate::local::remove_last_n_dirs;
+    use crate::local::remove_legacy_bin;
 
     #[test]
     fn test_drop_element_returns_true_and_removes_the_element_from_the_vec() {
@@ -171,5 +200,29 @@ mod tests {
     ) {
         remove_last_n_dirs(&mut initial, n);
         assert_that!(initial, eq(expected));
+    }
+
+    #[rstest]
+    #[case::missing(false)]
+    #[case::file(true)]
+    fn test_remove_legacy_bin_handles_missing_and_file_paths(#[case] create_file: bool) {
+        let dir = tempfile::tempdir().expect("tempdir should be created");
+        let path = dir.path().join("ags");
+        if create_file {
+            std::fs::write(&path, "legacy binary").expect("legacy binary should be created");
+        }
+
+        assert_that!(remove_legacy_bin(&path), ok(eq(())));
+        assert_that!(path.exists(), eq(false));
+    }
+
+    #[test]
+    fn test_remove_legacy_bin_refuses_directory() {
+        let dir = tempfile::tempdir().expect("tempdir should be created");
+        let path = dir.path().join("aiya");
+        std::fs::create_dir(&path).expect("legacy directory should be created");
+
+        assert_that!(remove_legacy_bin(&path), err(anything()));
+        assert_that!(path.is_dir(), eq(true));
     }
 }

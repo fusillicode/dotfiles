@@ -103,7 +103,7 @@ impl PaneCmdObservation {
 
 /// Fg command observation with a lazy same-process-group fallback.
 ///
-/// Wrappers such as `ags` can stay the fg group leader while a configured agent is a child process. Consumers
+/// Wrappers such as `agg` can stay the fg group leader while a configured agent is a child process. Consumers
 /// check the leader first and only scan the process group when the leader itself is not tracked.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct FgCmd {
@@ -288,7 +288,7 @@ mod tests {
     #[test]
     fn test_observe_pane_cmd_when_fg_group_has_child_command_returns_group_cmd() {
         let observation = PaneCmdObservation::FgCmd(FgCmd::from_test_group(
-            Some(self::cmd(17869, "ags")),
+            Some(self::cmd(17869, "agg")),
             Ok(vec![self::cmd(17989, "codex")]),
         ));
 
@@ -301,7 +301,7 @@ mod tests {
         };
         assert_that!(
             fg_cmd.leader_cmd().expect("expected leader command").executable,
-            eq("ags")
+            eq("agg")
         );
         assert_that!(fg_cmd.process_group_cmds(), eq(Ok(vec![self::cmd(17989, "codex")])));
     }

@@ -1,5 +1,3 @@
-//! Local maintenance commands for AI tools.
-
 use std::io::ErrorKind;
 use std::path::Path;
 use std::path::PathBuf;
@@ -10,33 +8,18 @@ use rootcause::prelude::ResultExt;
 use rootcause::report;
 use rusqlite::Connection;
 use rusqlite::OpenFlags;
-use ytil_sys::cli::Args;
 
-const CODEX_DATABASE_FILE_NAME: &str = "logs_2.sqlite";
+const DATABASE_FILE_NAME: &str = "logs_2.sqlite";
 const SQLITE_BUSY_TIMEOUT: Duration = Duration::from_secs(3);
 
-#[ytil_sys::main]
-fn main() -> rootcause::Result<()> {
-    let args = ytil_sys::cli::get();
-    if args.is_empty() || args.has_help() {
-        println!("{}", include_str!("../help.txt"));
-        return Ok(());
-    }
-
-    match args.as_slice() {
-        [codex, compact] if codex == "codex" && compact == "compact" => compact_codex_logs(),
-        _ => Err(report!("unsupported aiya command").attach(format!("args={args:?}"))),
-    }
-}
-
-/// Compacts the local Codex log database after validating its integrity and WAL checkpoint state.
+/// Compact the local Codex log database after validating its integrity and WAL checkpoint state.
 ///
 /// # Errors
 /// - The configured Codex database does not exist or is not a regular file.
 /// - SQLite cannot obtain a write lock within three seconds.
 /// - An integrity check fails, WAL checkpoint is busy or incomplete, or vacuuming fails.
-fn compact_codex_logs() -> rootcause::Result<()> {
-    let database_path = codex_database_path()?;
+pub fn run() -> rootcause::Result<()> {
+    let database_path = database_path()?;
     let connection = open_database(&database_path)?;
 
     verify_integrity(&connection, "pre-vacuum")?;
@@ -66,14 +49,14 @@ fn compact_codex_logs() -> rootcause::Result<()> {
     Ok(())
 }
 
-fn codex_database_path() -> rootcause::Result<PathBuf> {
+fn database_path() -> rootcause::Result<PathBuf> {
     let codex_home = std::env::var_os("CODEX_HOME")
         .filter(|value| !value.is_empty())
         .map_or_else(
             || ytil_sys::dir::build_home_path(&[".codex"]),
             |value| Ok(PathBuf::from(value)),
         )?;
-    let database_path = codex_home.join(CODEX_DATABASE_FILE_NAME);
+    let database_path = codex_home.join(DATABASE_FILE_NAME);
     let metadata = database_path.metadata().map_err(|error| {
         if error.kind() == ErrorKind::NotFound {
             report!("Codex log database not found").attach(format!("path={}", database_path.display()))

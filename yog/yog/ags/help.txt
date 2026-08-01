@@ -1,7 +1,0 @@
-ags - Show AI agent resumable sessions.
-
-USAGE:
-    ags
-    ags list --json --session <agent>:<session-id>...
-
-Shows Claude, Codex, and Cursor resumable sessions in a picker, then resumes or deletes the selected session.

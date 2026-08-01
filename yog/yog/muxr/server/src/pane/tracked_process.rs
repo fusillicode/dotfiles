@@ -1105,7 +1105,7 @@ mod tests {
                     &MuxrConfig::default(),
                     pane_id,
                     &PaneCmdObservation::FgCmd(FgCmd::from_test_group(
-                        Some(self::cmd(17869, "ags")),
+                        Some(self::cmd(17869, "agg")),
                         Ok(vec![self::cmd(17989, "codex")]),
                     )),
                     Instant::now(),
