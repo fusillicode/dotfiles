@@ -1,52 +1,23 @@
 use std::time::Duration;
 
 use muxr_core::ServerEvent;
-use muxr_transport::ServerEventWriter;
 
 use crate::render_state::ClientEventSendOutcome;
-use crate::render_worker::ServerRenderCommand;
+use crate::render_worker::RenderInput;
 use crate::session::tracing::ClientEventSendFailure;
 
-pub enum HeartbeatDelivery {
-    Delivered(tokio::time::Instant),
-    Queued(tokio::sync::oneshot::Receiver<Result<tokio::time::Instant, ClientEventSendFailure>>),
-}
+pub type HeartbeatDelivery = tokio::sync::oneshot::Receiver<Result<tokio::time::Instant, ClientEventSendFailure>>;
 
-// NOTE: The live attached session sends through `RenderWorkerSender`, which keeps the transport writer owned by the
-// render worker. This trait preserves direct `ServerEventWriter` use in focused tests and non-worker call paths.
 pub trait ServerEventSink {
     async fn send_event(&mut self, event: &ServerEvent) -> rootcause::Result<()>;
 
-    async fn send_event_and_render(
-        &mut self,
-        event: &ServerEvent,
-        command: &ServerRenderCommand,
-    ) -> rootcause::Result<()> {
-        self.send_event(event).await?;
-        self.send_render(command).await
-    }
+    async fn send_event_and_render(&mut self, event: &ServerEvent, input: &RenderInput) -> rootcause::Result<()>;
 
-    async fn send_lifecycle_event(&mut self, event: &ServerEvent) -> rootcause::Result<()> {
-        self.send_event(event).await
-    }
+    async fn send_lifecycle_event(&mut self, event: &ServerEvent) -> rootcause::Result<()>;
 
-    async fn send_heartbeat(&mut self) -> rootcause::Result<HeartbeatDelivery> {
-        self.send_event(&ServerEvent::Ping).await?;
-        Ok(HeartbeatDelivery::Delivered(tokio::time::Instant::now()))
-    }
+    async fn send_heartbeat(&mut self) -> rootcause::Result<HeartbeatDelivery>;
 
-    async fn send_render(&mut self, command: &ServerRenderCommand) -> rootcause::Result<()> {
-        let ServerRenderCommand::Ready { pane_regions, render } = command else {
-            return Err(rootcause::report!(
-                "muxr direct event writer received uncomposed render inputs"
-            ));
-        };
-        self.send_event(&ServerEvent::PaneRegions(pane_regions.clone())).await?;
-        if let Some(render) = render {
-            self.send_event(&ServerEvent::Render(render.clone())).await?;
-        }
-        Ok(())
-    }
+    async fn send_render(&mut self, input: &RenderInput) -> rootcause::Result<()>;
 }
 
 pub async fn send_heartbeat_with_timeout(
@@ -63,11 +34,11 @@ pub async fn send_heartbeat_with_timeout(
 pub async fn send_event_and_render_with_timeout(
     writer: &mut impl ServerEventSink,
     event: &ServerEvent,
-    command: &ServerRenderCommand,
+    input: &RenderInput,
     client_write_timeout: Duration,
 ) -> rootcause::Result<ClientEventSendOutcome> {
     Ok(
-        tokio::time::timeout(client_write_timeout, writer.send_event_and_render(event, command))
+        tokio::time::timeout(client_write_timeout, writer.send_event_and_render(event, input))
             .await
             .map_or(
                 ClientEventSendOutcome::Failed(crate::session::tracing::ClientEventSendFailure::Timeout),
@@ -83,10 +54,10 @@ pub async fn send_event_and_render_with_timeout(
 
 pub async fn send_render_with_timeout(
     writer: &mut impl ServerEventSink,
-    command: &ServerRenderCommand,
+    input: &RenderInput,
     client_write_timeout: Duration,
 ) -> rootcause::Result<ClientEventSendOutcome> {
-    Ok(tokio::time::timeout(client_write_timeout, writer.send_render(command))
+    Ok(tokio::time::timeout(client_write_timeout, writer.send_render(input))
         .await
         .map_or(
             ClientEventSendOutcome::Failed(crate::session::tracing::ClientEventSendFailure::Timeout),
@@ -97,12 +68,6 @@ pub async fn send_render_with_timeout(
                 )
             },
         ))
-}
-
-impl ServerEventSink for ServerEventWriter {
-    async fn send_event(&mut self, event: &ServerEvent) -> rootcause::Result<()> {
-        self.send_event(event).await
-    }
 }
 
 /// Send one event on an attached-client writer with the server's bounded write timeout.

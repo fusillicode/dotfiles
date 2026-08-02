@@ -48,10 +48,7 @@ impl HeartbeatStatus for HeartbeatTracker {
     }
 
     fn track(&mut self, delivery: HeartbeatDelivery) {
-        self.phase = match delivery {
-            HeartbeatDelivery::Delivered(at) => HeartbeatPhase::AwaitingPong(at),
-            HeartbeatDelivery::Queued(delivery) => HeartbeatPhase::Queued(delivery),
-        };
+        self.phase = HeartbeatPhase::Queued(delivery);
     }
 
     fn sync_delivery(&mut self) -> ClientSessionFlow {
@@ -84,10 +81,8 @@ impl HeartbeatStatus for Option<tokio::time::Instant> {
     }
 
     fn track(&mut self, delivery: HeartbeatDelivery) {
-        *self = Some(match delivery {
-            HeartbeatDelivery::Delivered(at) => at,
-            HeartbeatDelivery::Queued(_) => tokio::time::Instant::now(),
-        });
+        drop(delivery);
+        *self = Some(tokio::time::Instant::now());
     }
 
     fn sync_delivery(&mut self) -> ClientSessionFlow {
@@ -124,7 +119,7 @@ mod tests {
     fn test_heartbeat_timeout_starts_at_worker_delivery() -> rootcause::Result<()> {
         let (delivery_sender, delivery_receiver) = tokio::sync::oneshot::channel();
         let mut heartbeat = HeartbeatTracker::default();
-        heartbeat.track(HeartbeatDelivery::Queued(delivery_receiver));
+        heartbeat.track(delivery_receiver);
         let delivered_at = tokio::time::Instant::now() + Duration::from_secs(30);
 
         assert_that!(heartbeat.response_started_at(), eq(None));
@@ -143,7 +138,7 @@ mod tests {
     fn test_heartbeat_worker_delivery_failure_disconnects_session() {
         let (delivery_sender, delivery_receiver) = tokio::sync::oneshot::channel();
         let mut heartbeat = HeartbeatTracker::default();
-        heartbeat.track(HeartbeatDelivery::Queued(delivery_receiver));
+        heartbeat.track(delivery_receiver);
         assert_that!(delivery_sender.send(Err(ClientEventSendFailure::Timeout)), ok(eq(())));
 
         assert_that!(heartbeat.sync_delivery(), eq(ClientSessionFlow::Disconnect));

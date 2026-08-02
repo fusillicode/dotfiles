@@ -242,8 +242,8 @@ impl SelectionEdgeScrollState {
         }
     }
 
-    pub const fn clear_render_acknowledged_pending(&mut self) {
-        if matches!(&self.pending, SelectionEdgeScrollPendingState::WaitingForRender(_)) {
+    pub fn clear_render_acknowledged_pending(&mut self, expected: &SelectionEdgeScrollPending) {
+        if matches!(&self.pending, SelectionEdgeScrollPendingState::WaitingForRender(pending) if pending == expected) {
             self.pending = SelectionEdgeScrollPendingState::Idle;
         }
     }
@@ -252,6 +252,17 @@ impl SelectionEdgeScrollState {
         match self.drag {
             Some(_) => SelectionEdgeScrollActive::Active,
             None => SelectionEdgeScrollActive::Inactive,
+        }
+    }
+
+    pub const fn waits_for_render(&self) -> bool {
+        matches!(&self.pending, SelectionEdgeScrollPendingState::WaitingForRender(_))
+    }
+
+    pub const fn render_pending(&self) -> Option<&SelectionEdgeScrollPending> {
+        match &self.pending {
+            SelectionEdgeScrollPendingState::WaitingForRender(pending) => Some(pending),
+            SelectionEdgeScrollPendingState::Idle | SelectionEdgeScrollPendingState::WaitingForViewportMove(_) => None,
         }
     }
 

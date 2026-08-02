@@ -136,40 +136,16 @@ impl RenderInput {
     }
 }
 
-/// A render command is either immutable work for the live worker or a precomposed update used by focused direct-writer
-/// tests. The production `Attached` variant never contains a `RenderComposer`.
-pub enum ServerRenderCommand {
-    Inputs(RenderInput),
-    Ready {
-        pane_regions: PaneRegionsSnapshot,
-        render: Option<RenderUpdate>,
-    },
-}
-
-enum RenderWorkerMode {
-    Detached(RenderComposer),
-    Attached {
-        sender: RenderWorkerSender,
-        task: Option<tokio::task::JoinHandle<()>>,
-    },
+struct AttachedRenderWorker {
+    sender: RenderWorkerSender,
+    task: Option<tokio::task::JoinHandle<()>>,
 }
 
 /// Render coordinator stored by attached-client state.
-///
-/// Before a transport is attached, the detached mode preserves the repository's direct-writer test seam. In the live
-/// path `attach_writer` drops that local composer, spawns the sole render/output owner, and leaves only a sender here.
+#[derive(Default)]
 pub struct RenderWorker {
     generation: u64,
-    mode: RenderWorkerMode,
-}
-
-impl Default for RenderWorker {
-    fn default() -> Self {
-        Self {
-            generation: 0,
-            mode: RenderWorkerMode::Detached(RenderComposer::default()),
-        }
-    }
+    attached: Option<AttachedRenderWorker>,
 }
 
 #[derive(Clone)]
@@ -206,7 +182,7 @@ impl RenderWorker {
         writer: ServerEventWriter,
         write_timeout: Duration,
     ) -> rootcause::Result<RenderWorkerSender> {
-        if matches!(self.mode, RenderWorkerMode::Attached { .. }) {
+        if self.attached.is_some() {
             return Err(rootcause::report!("muxr render worker already owns an event writer"));
         }
         let output = Arc::new(OutputShared {
@@ -223,22 +199,18 @@ impl RenderWorker {
         let task = tokio::spawn(async move {
             Self::run_output(RenderComposer::default(), writer, output, write_timeout).await;
         });
-        self.mode = RenderWorkerMode::Attached {
+        self.attached = Some(AttachedRenderWorker {
             sender: sender.clone(),
             task: Some(task),
-        };
+        });
         Ok(sender)
     }
 
-    pub fn stage_render(&mut self, input: RenderInput) -> rootcause::Result<ServerRenderCommand> {
-        match &mut self.mode {
-            RenderWorkerMode::Attached { .. } => Ok(ServerRenderCommand::Inputs(input)),
-            RenderWorkerMode::Detached(composer) => {
-                let pane_regions = input.pane_regions()?;
-                let render = Self::compose(composer, &input)?;
-                Ok(ServerRenderCommand::Ready { pane_regions, render })
-            }
+    pub fn stage_render(&self, input: RenderInput) -> rootcause::Result<RenderInput> {
+        if self.attached.is_none() {
+            return Err(rootcause::report!("muxr render worker has no event writer"));
         }
+        Ok(input)
     }
 
     async fn run_output(
@@ -381,12 +353,12 @@ impl RenderWorker {
     }
 
     pub async fn shutdown(&mut self) -> rootcause::Result<()> {
-        let RenderWorkerMode::Attached { sender, task } = &mut self.mode else {
+        let Some(attached) = &mut self.attached else {
             return Ok(());
         };
-        sender.output.closed.store(true, Ordering::Release);
-        sender.output.wake.notify_waiters();
-        if let Some(task) = task.take() {
+        attached.sender.output.closed.store(true, Ordering::Release);
+        attached.sender.output.wake.notify_waiters();
+        if let Some(task) = attached.task.take() {
             task.await
                 .map_err(|error| rootcause::report!("muxr render/output worker panicked").attach(error.to_string()))?;
         }
@@ -396,11 +368,11 @@ impl RenderWorker {
 
 impl Drop for RenderWorker {
     fn drop(&mut self) {
-        let RenderWorkerMode::Attached { sender, .. } = &self.mode else {
+        let Some(attached) = &self.attached else {
             return;
         };
-        sender.output.closed.store(true, Ordering::Release);
-        sender.output.wake.notify_waiters();
+        attached.sender.output.closed.store(true, Ordering::Release);
+        attached.sender.output.wake.notify_waiters();
     }
 }
 
@@ -414,16 +386,7 @@ impl ServerEventSink for RenderWorkerSender {
         Ok(())
     }
 
-    async fn send_event_and_render(
-        &mut self,
-        event: &ServerEvent,
-        command: &ServerRenderCommand,
-    ) -> rootcause::Result<()> {
-        let ServerRenderCommand::Inputs(input) = command else {
-            return Err(rootcause::report!(
-                "muxr attached render worker received a precomposed render"
-            ));
-        };
+    async fn send_event_and_render(&mut self, event: &ServerEvent, input: &RenderInput) -> rootcause::Result<()> {
         let mut state = self.output.state.lock().await;
         self.ensure_open(&state)?;
         state
@@ -450,15 +413,10 @@ impl ServerEventSink for RenderWorkerSender {
         state.queue.push_heartbeat(delivered)?;
         drop(state);
         self.output.wake.notify_one();
-        Ok(HeartbeatDelivery::Queued(delivery))
+        Ok(delivery)
     }
 
-    async fn send_render(&mut self, command: &ServerRenderCommand) -> rootcause::Result<()> {
-        let ServerRenderCommand::Inputs(input) = command else {
-            return Err(rootcause::report!(
-                "muxr attached render worker received a precomposed render"
-            ));
-        };
+    async fn send_render(&mut self, input: &RenderInput) -> rootcause::Result<()> {
         let mut state = self.output.state.lock().await;
         self.ensure_open(&state)?;
         let _queued = state.queue.replace_render(input.clone());

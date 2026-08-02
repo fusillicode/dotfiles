@@ -115,6 +115,28 @@ impl FrameBuffer {
         }))
     }
 
+    #[must_use]
+    pub fn changed_rows_since(&self, previous: &Self) -> Option<Vec<u16>> {
+        if self.size != previous.size {
+            return None;
+        }
+        let rows = self
+            .rows
+            .iter()
+            .zip(&previous.rows)
+            .enumerate()
+            .filter_map(|(row, (next, previous))| (!Arc::ptr_eq(next, previous)).then_some(row))
+            .map(u16::try_from)
+            .collect::<Result<Vec<_>, _>>()
+            .ok()?;
+        (self.rows.len() == previous.rows.len()).then_some(rows)
+    }
+
+    #[must_use]
+    pub fn cursor_matches(&self, previous: &Self) -> bool {
+        self.cursor == previous.cursor
+    }
+
     pub fn full_redraw_changes(&self) -> Option<RenderFrameChanges> {
         let cursor = self.cursor.clone()?;
         let rows = self
@@ -153,17 +175,6 @@ impl TerminalUpdateEncoder {
         let encode_result = self.encode_update(output, render);
         self.finish_update();
         encode_result
-    }
-
-    pub fn encode_cursor(
-        output: &mut impl Write,
-        frame_buffer: &FrameBuffer,
-        origin: TerminalOrigin,
-    ) -> rootcause::Result<()> {
-        let Some(cursor) = frame_buffer.cursor.as_ref() else {
-            return Ok(());
-        };
-        render_cursor(output, cursor, origin.row, origin.col)
     }
 
     fn encode_update(&mut self, output: &mut impl Write, render: TerminalRender<'_>) -> rootcause::Result<()> {

@@ -13,8 +13,6 @@ use muxr_core::PaneId;
 use muxr_core::ServerEvent;
 use muxr_core::TerminalSize;
 use muxr_transport::ServerConnection;
-#[cfg(test)]
-use muxr_transport::ServerEventWriter;
 use muxr_transport::ServerRequestReader;
 use rootcause::report;
 use tokio::sync::mpsc::error::TryRecvError;
@@ -386,22 +384,17 @@ async fn run_client_session(
 }
 
 #[cfg(test)]
-async fn run_client_session_after_output_turn(
+async fn run_test_client_session(
     request_reader: &mut ServerRequestReader,
     event_writer: &mut impl crate::event_writer::ServerEventSink,
     state: &mut ClientSessionState<'_>,
     pty_event_receiver: &mut tokio::sync::mpsc::Receiver<SessionPaneOutputMessage>,
+    select_bias: ClientSessionSelectBias,
 ) -> rootcause::Result<()> {
-    // An output turn flips the loop to request-priority before the next select. Seeding that state lets tests cover
-    // request-deferred quiet handling without racing a real timer against a client request.
-    self::run_client_session_loop(
-        request_reader,
-        event_writer,
-        state,
-        pty_event_receiver,
-        ClientSessionSelectBias::Request,
-    )
-    .await
+    let result =
+        self::run_client_session_loop(request_reader, event_writer, state, pty_event_receiver, select_bias).await;
+    state.render_worker.shutdown().await?;
+    result
 }
 
 #[expect(
@@ -939,17 +932,16 @@ mod tests {
             Arc::new(tokio::sync::Notify::new()),
         )?;
         crate::screen_render::resize_panes_to_layout(&layout, &runtimes, &terminal_size)?;
-        let (layout_snapshot, _pane_regions, mut render_worker, _render_baseline) =
-            crate::screen_render::initial_client_render(
-                &config,
-                &mut layout,
-                &runtimes,
-                &pane_tracked_processes,
-                &terminal_size,
-            )?;
+        let (layout_snapshot, mut render_worker) = crate::screen_render::initial_client_render(
+            &config,
+            &mut layout,
+            &runtimes,
+            &pane_tracked_processes,
+            &terminal_size,
+        )?;
         runtimes.handle(pane_id)?.write_input(b"exit\n")?;
         self::wait_for_pane_exit(&runtimes, pane_id)?;
-        let (mut event_writer, client_drain) = self::connect_client_event_drain(&config).await?;
+        let (mut event_writer, client_drain) = self::connect_client_event_drain(&config, &mut render_worker).await?;
         let delete_sessions = DeleteSessions::default();
         let (pty_event_sender, _pty_event_receiver) = self::pty_event_channel();
         let mut sink_guards = Vec::new();
@@ -1042,15 +1034,14 @@ mod tests {
             Arc::new(tokio::sync::Notify::new()),
         )?;
         crate::screen_render::resize_panes_to_layout(&layout, &runtimes, &terminal_size)?;
-        let (layout_snapshot, _pane_regions, mut render_worker, _render_baseline) =
-            crate::screen_render::initial_client_render(
-                &config,
-                &mut layout,
-                &runtimes,
-                &pane_tracked_processes,
-                &terminal_size,
-            )?;
-        let (mut event_writer, client_drain) = self::connect_client_event_drain(&config).await?;
+        let (layout_snapshot, mut render_worker) = crate::screen_render::initial_client_render(
+            &config,
+            &mut layout,
+            &runtimes,
+            &pane_tracked_processes,
+            &terminal_size,
+        )?;
+        let (mut event_writer, client_drain) = self::connect_client_event_drain(&config, &mut render_worker).await?;
         let delete_sessions = DeleteSessions::default();
         let (pty_event_sender, _pty_event_receiver) = self::pty_event_channel();
         let mut sink_guards = super::attach_pane_sinks(&runtimes, &pty_event_sender)?;
@@ -1159,15 +1150,14 @@ mod tests {
             Arc::new(tokio::sync::Notify::new()),
         )?;
         crate::screen_render::resize_panes_to_layout(&layout, &runtimes, &terminal_size)?;
-        let (layout_snapshot, _pane_regions, mut render_worker, _render_baseline) =
-            crate::screen_render::initial_client_render(
-                &config,
-                &mut layout,
-                &runtimes,
-                &pane_tracked_processes,
-                &terminal_size,
-            )?;
-        let (mut event_writer, client_drain) = self::connect_client_event_drain(&config).await?;
+        let (layout_snapshot, mut render_worker) = crate::screen_render::initial_client_render(
+            &config,
+            &mut layout,
+            &runtimes,
+            &pane_tracked_processes,
+            &terminal_size,
+        )?;
+        let (mut event_writer, client_drain) = self::connect_client_event_drain(&config, &mut render_worker).await?;
         let delete_sessions = DeleteSessions::default();
         let (pty_event_sender, _pty_event_receiver) = self::pty_event_channel();
         let mut sink_guards = Vec::new();
@@ -1258,15 +1248,14 @@ mod tests {
             Arc::new(tokio::sync::Notify::new()),
         )?;
         crate::screen_render::resize_panes_to_layout(&layout, &runtimes, &terminal_size)?;
-        let (layout_snapshot, _pane_regions, mut render_worker, _render_baseline) =
-            crate::screen_render::initial_client_render(
-                &config,
-                &mut layout,
-                &runtimes,
-                &pane_tracked_processes,
-                &terminal_size,
-            )?;
-        let (mut event_writer, client_drain) = self::connect_client_event_drain(&config).await?;
+        let (layout_snapshot, mut render_worker) = crate::screen_render::initial_client_render(
+            &config,
+            &mut layout,
+            &runtimes,
+            &pane_tracked_processes,
+            &terminal_size,
+        )?;
+        let (mut event_writer, client_drain) = self::connect_client_event_drain(&config, &mut render_worker).await?;
         let delete_sessions = DeleteSessions::default();
         let (pty_event_sender, _pty_event_receiver) = self::pty_event_channel();
         let mut sink_guards = super::attach_pane_sinks(&runtimes, &pty_event_sender)?;
@@ -1387,14 +1376,13 @@ mod tests {
             Arc::new(tokio::sync::Notify::new()),
         )?;
         crate::screen_render::resize_panes_to_layout(&layout, &runtimes, &terminal_size)?;
-        let (layout_snapshot, _pane_regions, mut render_worker, _render_baseline) =
-            crate::screen_render::initial_client_render(
-                &config,
-                &mut layout,
-                &runtimes,
-                &pane_tracked_processes,
-                &terminal_size,
-            )?;
+        let (layout_snapshot, mut render_worker) = crate::screen_render::initial_client_render(
+            &config,
+            &mut layout,
+            &runtimes,
+            &pane_tracked_processes,
+            &terminal_size,
+        )?;
         assert_that!(
             self::tracked_process_state(&layout_snapshot, pane_id)?,
             eq(TrackedProcessState::Seen)
@@ -1403,7 +1391,8 @@ mod tests {
         let (client_connection, server_connection) =
             tokio::try_join!(ClientConnection::connect(&config.paths.socket), listener.accept())?;
         let (mut client_reader, _client_writer) = client_connection.split();
-        let (_request_reader, mut event_writer) = server_connection.split();
+        let (_request_reader, event_writer) = server_connection.split();
+        let mut event_writer = render_worker.attach_writer(event_writer, config.client_write_timeout)?;
         let delete_sessions = DeleteSessions::default();
         let (pty_event_sender, _pty_event_receiver) = self::pty_event_channel();
         let mut sink_guards = Vec::new();
@@ -1518,15 +1507,14 @@ mod tests {
         let mut timers = ClientTimers::new(&config)?;
         timers.sync_tracked_process_quiet_deadline_for_layout(&pane_tracked_processes, &layout)?;
         assert_that!(timers.tracked_process_quiet_deadline(), eq(QuietDeadline::Elapsed));
-        let (layout_snapshot, _pane_regions, mut render_worker, _render_baseline) =
-            crate::screen_render::initial_client_render(
-                &config,
-                &mut layout,
-                &runtimes,
-                &pane_tracked_processes,
-                &terminal_size,
-            )?;
-        let (mut event_writer, client_drain) = self::connect_client_event_drain(&config).await?;
+        let (layout_snapshot, mut render_worker) = crate::screen_render::initial_client_render(
+            &config,
+            &mut layout,
+            &runtimes,
+            &pane_tracked_processes,
+            &terminal_size,
+        )?;
+        let (mut event_writer, client_drain) = self::connect_client_event_drain(&config, &mut render_worker).await?;
         let delete_sessions = DeleteSessions::default();
         let (pty_event_sender, _pty_event_receiver) = self::pty_event_channel();
         let mut sink_guards = Vec::new();
@@ -1706,15 +1694,14 @@ mod tests {
         let mut timers = ClientTimers::new(&config)?;
         timers.sync_tracked_process_quiet_deadline_for_layout(&pane_tracked_processes, &layout)?;
         let focused_deadline = timers.tracked_process_quiet_sleep.deadline();
-        let (layout_snapshot, _pane_regions, mut render_worker, _render_baseline) =
-            crate::screen_render::initial_client_render(
-                &config,
-                &mut layout,
-                &runtimes,
-                &pane_tracked_processes,
-                &terminal_size,
-            )?;
-        let (mut event_writer, client_drain) = self::connect_client_event_drain(&config).await?;
+        let (layout_snapshot, mut render_worker) = crate::screen_render::initial_client_render(
+            &config,
+            &mut layout,
+            &runtimes,
+            &pane_tracked_processes,
+            &terminal_size,
+        )?;
+        let (mut event_writer, client_drain) = self::connect_client_event_drain(&config, &mut render_worker).await?;
         let delete_sessions = DeleteSessions::default();
         let (pty_event_sender, _pty_event_receiver) = self::pty_event_channel();
         let mut sink_guards = Vec::new();
@@ -1807,19 +1794,19 @@ mod tests {
             Arc::new(tokio::sync::Notify::new()),
         )?;
         crate::screen_render::resize_panes_to_layout(&layout, &runtimes, &terminal_size)?;
-        let (layout_snapshot, _pane_regions, mut render_worker, _render_baseline) =
-            crate::screen_render::initial_client_render(
-                &config,
-                &mut layout,
-                &runtimes,
-                &pane_tracked_processes,
-                &terminal_size,
-            )?;
+        let (layout_snapshot, mut render_worker) = crate::screen_render::initial_client_render(
+            &config,
+            &mut layout,
+            &runtimes,
+            &pane_tracked_processes,
+            &terminal_size,
+        )?;
         let listener = ServerListener::bind(&config.paths.socket)?;
         let (client_connection, server_connection) =
             tokio::try_join!(ClientConnection::connect(&config.paths.socket), listener.accept())?;
         let (mut client_reader, mut client_writer) = client_connection.split();
-        let (mut request_reader, mut event_writer) = server_connection.split();
+        let (mut request_reader, event_writer) = server_connection.split();
+        let mut event_writer = render_worker.attach_writer(event_writer, config.client_write_timeout)?;
         client_writer.send_request(&ClientRequest::Ping).await?;
         let delete_sessions = DeleteSessions::default();
         let (pty_event_sender, _pty_event_receiver) = self::pty_event_channel();
@@ -1840,11 +1827,12 @@ mod tests {
             sink_guards: &mut sink_guards,
             terminal_size,
         };
-        let session = self::run_client_session(
+        let session = self::run_test_client_session(
             &mut request_reader,
             &mut event_writer,
             &mut state,
             &mut async_pty_receiver,
+            ClientSessionSelectBias::Output,
         );
         let client = async {
             self::recv_until_pong_and_sidebar_state(&mut client_reader, pane_id, TrackedProcessState::Seen).await?;
@@ -1900,14 +1888,13 @@ mod tests {
         )?;
         crate::screen_render::resize_panes_to_layout(&layout, &runtimes, &terminal_size)?;
         self::wait_for_runtime_fg_cmd(&runtimes, pane_id, "cat")?;
-        let (layout_snapshot, _pane_regions, mut render_worker, _render_baseline) =
-            crate::screen_render::initial_client_render(
-                &config,
-                &mut layout,
-                &runtimes,
-                &pane_tracked_processes,
-                &terminal_size,
-            )?;
+        let (layout_snapshot, mut render_worker) = crate::screen_render::initial_client_render(
+            &config,
+            &mut layout,
+            &runtimes,
+            &pane_tracked_processes,
+            &terminal_size,
+        )?;
         let _baseline_dirty_panes = runtimes.take_screen_dirty_panes();
         runtimes.handle(pane_id)?.write_input(b"muxr-loop-boundary\n")?;
         self::wait_for_runtime_snapshot_contains(&runtimes, pane_id, "muxr-loop-boundary")?;
@@ -1915,7 +1902,8 @@ mod tests {
         let (client_connection, server_connection) =
             tokio::try_join!(ClientConnection::connect(&config.paths.socket), listener.accept())?;
         let (mut client_reader, mut client_writer) = client_connection.split();
-        let (mut request_reader, mut event_writer) = server_connection.split();
+        let (mut request_reader, event_writer) = server_connection.split();
+        let mut event_writer = render_worker.attach_writer(event_writer, config.client_write_timeout)?;
         client_writer.send_request(&ClientRequest::Detach).await?;
         let delete_sessions = DeleteSessions::default();
         let (pty_event_sender, _pty_event_receiver) = self::pty_event_channel();
@@ -1940,11 +1928,12 @@ mod tests {
             sink_guards: &mut sink_guards,
             terminal_size,
         };
-        let session = self::run_client_session(
+        let session = self::run_test_client_session(
             &mut request_reader,
             &mut event_writer,
             &mut state,
             &mut async_pty_receiver,
+            ClientSessionSelectBias::Output,
         );
         let client = async { self::recv_until_detached(&mut client_reader).await };
 
@@ -2002,14 +1991,13 @@ mod tests {
         )?;
         crate::screen_render::resize_panes_to_layout(&layout, &runtimes, &terminal_size)?;
         self::wait_for_runtime_fg_cmd(&runtimes, pane_id, "cat")?;
-        let (layout_snapshot, _pane_regions, mut render_worker, _render_baseline) =
-            crate::screen_render::initial_client_render(
-                &config,
-                &mut layout,
-                &runtimes,
-                &pane_tracked_processes,
-                &terminal_size,
-            )?;
+        let (layout_snapshot, mut render_worker) = crate::screen_render::initial_client_render(
+            &config,
+            &mut layout,
+            &runtimes,
+            &pane_tracked_processes,
+            &terminal_size,
+        )?;
         let _baseline_dirty_panes = runtimes.take_screen_dirty_panes();
         runtimes
             .handle(pane_id)?
@@ -2019,7 +2007,8 @@ mod tests {
         let (client_connection, server_connection) =
             tokio::try_join!(ClientConnection::connect(&config.paths.socket), listener.accept())?;
         let (mut client_reader, mut client_writer) = client_connection.split();
-        let (mut request_reader, mut event_writer) = server_connection.split();
+        let (mut request_reader, event_writer) = server_connection.split();
+        let mut event_writer = render_worker.attach_writer(event_writer, config.client_write_timeout)?;
         client_writer.send_request(&ClientRequest::Ping).await?;
         let delete_sessions = DeleteSessions::default();
         let (pty_event_sender, _pty_event_receiver) = self::pty_event_channel();
@@ -2044,11 +2033,12 @@ mod tests {
             sink_guards: &mut sink_guards,
             terminal_size,
         };
-        let session = self::run_client_session_after_output_turn(
+        let session = self::run_test_client_session(
             &mut request_reader,
             &mut event_writer,
             &mut state,
             &mut async_pty_receiver,
+            ClientSessionSelectBias::Request,
         );
         let client = async {
             self::recv_until_pong_rejecting_sidebar_state(&mut client_reader, pane_id, TrackedProcessState::Seen)
@@ -2129,14 +2119,13 @@ mod tests {
         )?;
         crate::screen_render::resize_panes_to_layout(&layout, &runtimes, &terminal_size)?;
         self::wait_for_runtime_fg_cmd(&runtimes, pane_id, "cat")?;
-        let (layout_snapshot, _pane_regions, mut render_worker, _render_baseline) =
-            crate::screen_render::initial_client_render(
-                &config,
-                &mut layout,
-                &runtimes,
-                &pane_tracked_processes,
-                &terminal_size,
-            )?;
+        let (layout_snapshot, mut render_worker) = crate::screen_render::initial_client_render(
+            &config,
+            &mut layout,
+            &runtimes,
+            &pane_tracked_processes,
+            &terminal_size,
+        )?;
         let _baseline_dirty_panes = runtimes.take_screen_dirty_panes();
         runtimes.handle(pane_id)?.write_input(b"muxr-loop-queued-boundary\n")?;
         self::wait_for_runtime_snapshot_contains(&runtimes, pane_id, "muxr-loop-queued-boundary")?;
@@ -2144,7 +2133,8 @@ mod tests {
         let (client_connection, server_connection) =
             tokio::try_join!(ClientConnection::connect(&config.paths.socket), listener.accept())?;
         let (mut client_reader, mut client_writer) = client_connection.split();
-        let (mut request_reader, mut event_writer) = server_connection.split();
+        let (mut request_reader, event_writer) = server_connection.split();
+        let mut event_writer = render_worker.attach_writer(event_writer, config.client_write_timeout)?;
         client_writer.send_request(&ClientRequest::Detach).await?;
         let delete_sessions = DeleteSessions::default();
         let (pty_event_sender, _pty_event_receiver) = self::pty_event_channel();
@@ -2181,11 +2171,12 @@ mod tests {
             sink_guards: &mut sink_guards,
             terminal_size,
         };
-        let session = self::run_client_session(
+        let session = self::run_test_client_session(
             &mut request_reader,
             &mut event_writer,
             &mut state,
             &mut async_pty_receiver,
+            ClientSessionSelectBias::Output,
         );
         let client = async { self::recv_until_detached(&mut client_reader).await };
 
@@ -2250,18 +2241,17 @@ mod tests {
         )?;
         crate::screen_render::resize_panes_to_layout(&layout, &runtimes, &terminal_size)?;
         self::wait_for_runtime_fg_cmd(&runtimes, pane_id, "cat")?;
-        let (layout_snapshot, _pane_regions, mut render_worker, _render_baseline) =
-            crate::screen_render::initial_client_render(
-                &config,
-                &mut layout,
-                &runtimes,
-                &pane_tracked_processes,
-                &terminal_size,
-            )?;
+        let (layout_snapshot, mut render_worker) = crate::screen_render::initial_client_render(
+            &config,
+            &mut layout,
+            &runtimes,
+            &pane_tracked_processes,
+            &terminal_size,
+        )?;
         let _baseline_dirty_panes = runtimes.take_screen_dirty_panes();
         runtimes.handle(pane_id)?.write_input(b"muxr-queued-boundary\n")?;
         self::wait_for_runtime_snapshot_contains(&runtimes, pane_id, "muxr-queued-boundary")?;
-        let (mut event_writer, client_drain) = self::connect_client_event_drain(&config).await?;
+        let (mut event_writer, client_drain) = self::connect_client_event_drain(&config, &mut render_worker).await?;
         let delete_sessions = DeleteSessions::default();
         let (pty_event_sender, _pty_event_receiver) = self::pty_event_channel();
         let (async_pty_sender, mut async_pty_receiver) = tokio::sync::mpsc::channel(PANE_OUTPUT_EVENT_CHANNEL_LIMIT);
@@ -2380,18 +2370,17 @@ mod tests {
         )?;
         crate::screen_render::resize_panes_to_layout(&layout, &runtimes, &terminal_size)?;
         self::wait_for_runtime_fg_cmd(&runtimes, pane_id, "cat")?;
-        let (layout_snapshot, _pane_regions, mut render_worker, _render_baseline) =
-            crate::screen_render::initial_client_render(
-                &config,
-                &mut layout,
-                &runtimes,
-                &pane_tracked_processes,
-                &terminal_size,
-            )?;
+        let (layout_snapshot, mut render_worker) = crate::screen_render::initial_client_render(
+            &config,
+            &mut layout,
+            &runtimes,
+            &pane_tracked_processes,
+            &terminal_size,
+        )?;
         let _baseline_dirty_panes = runtimes.take_screen_dirty_panes();
         runtimes.handle(pane_id)?.write_input(b"muxr-boundary\n")?;
         self::wait_for_runtime_snapshot_contains(&runtimes, pane_id, "muxr-boundary")?;
-        let (mut event_writer, client_drain) = self::connect_client_event_drain(&config).await?;
+        let (mut event_writer, client_drain) = self::connect_client_event_drain(&config, &mut render_worker).await?;
         let delete_sessions = DeleteSessions::default();
         let (pty_event_sender, _pty_event_receiver) = self::pty_event_channel();
         let mut sink_guards = Vec::new();
@@ -2483,19 +2472,19 @@ mod tests {
         let mut timers = ClientTimers::new(&config)?;
         timers.sync_tracked_process_quiet_deadline_for_layout(&pane_tracked_processes, &layout)?;
         assert_that!(timers.tracked_process_quiet_deadline(), eq(QuietDeadline::Elapsed));
-        let (layout_snapshot, _pane_regions, mut render_worker, _render_baseline) =
-            crate::screen_render::initial_client_render(
-                &config,
-                &mut layout,
-                &runtimes,
-                &pane_tracked_processes,
-                &terminal_size,
-            )?;
+        let (layout_snapshot, mut render_worker) = crate::screen_render::initial_client_render(
+            &config,
+            &mut layout,
+            &runtimes,
+            &pane_tracked_processes,
+            &terminal_size,
+        )?;
         let position = self::pane_position(&layout, &terminal_size, pane_id)?;
         let listener = ServerListener::bind(&config.paths.socket)?;
         let (_client_connection, server_connection) =
             tokio::try_join!(ClientConnection::connect(&config.paths.socket), listener.accept())?;
-        let (_request_reader, mut event_writer) = server_connection.split();
+        let (_request_reader, event_writer) = server_connection.split();
+        let mut event_writer = render_worker.attach_writer(event_writer, config.client_write_timeout)?;
         let delete_sessions = DeleteSessions::default();
         let (pty_event_sender, _pty_event_receiver) = self::pty_event_channel();
         let mut sink_guards = Vec::new();
@@ -2577,15 +2566,14 @@ mod tests {
             Arc::new(tokio::sync::Notify::new()),
         )?;
         crate::screen_render::resize_panes_to_layout(&layout, &runtimes, &terminal_size)?;
-        let (layout_snapshot, _pane_regions, mut render_worker, _render_baseline) =
-            crate::screen_render::initial_client_render(
-                &config,
-                &mut layout,
-                &runtimes,
-                &pane_tracked_processes,
-                &terminal_size,
-            )?;
-        let (mut event_writer, client_drain) = self::connect_client_event_drain(&config).await?;
+        let (layout_snapshot, mut render_worker) = crate::screen_render::initial_client_render(
+            &config,
+            &mut layout,
+            &runtimes,
+            &pane_tracked_processes,
+            &terminal_size,
+        )?;
+        let (mut event_writer, client_drain) = self::connect_client_event_drain(&config, &mut render_worker).await?;
         let delete_sessions = DeleteSessions::default();
         let (pty_event_sender, _pty_event_receiver) = self::pty_event_channel();
         let mut sink_guards = Vec::new();
@@ -2660,16 +2648,16 @@ mod tests {
         )?;
         crate::screen_render::resize_panes_to_layout(&layout, &runtimes, &terminal_size)?;
         let pane_tracked_processes = PaneTrackedProcesses::default();
-        let (layout_snapshot, _pane_regions, mut render_worker, _render_baseline) =
-            crate::screen_render::initial_client_render(
-                &config,
-                &mut layout,
-                &runtimes,
-                &pane_tracked_processes,
-                &terminal_size,
-            )?;
-        let (mut event_writer, client_drain) = self::connect_client_event_drain(&config).await?;
+        let (layout_snapshot, mut render_worker) = crate::screen_render::initial_client_render(
+            &config,
+            &mut layout,
+            &runtimes,
+            &pane_tracked_processes,
+            &terminal_size,
+        )?;
+        let (mut event_writer, client_drain) = self::connect_client_event_drain(&config, &mut render_worker).await?;
         self::abort_client_drain(client_drain).await;
+        render_worker.shutdown().await?;
         let delete_sessions = DeleteSessions::default();
         let (pty_event_sender, _pty_event_receiver) = self::pty_event_channel();
         let mut sink_guards = Vec::new();
@@ -2749,15 +2737,14 @@ mod tests {
         )?;
         crate::screen_render::resize_panes_to_layout(&layout, &runtimes, &terminal_size)?;
         let pane_tracked_processes = PaneTrackedProcesses::default();
-        let (layout_snapshot, _pane_regions, mut render_worker, _render_baseline) =
-            crate::screen_render::initial_client_render(
-                &config,
-                &mut layout,
-                &runtimes,
-                &pane_tracked_processes,
-                &terminal_size,
-            )?;
-        let (mut event_writer, client_drain) = self::connect_client_event_drain(&config).await?;
+        let (layout_snapshot, mut render_worker) = crate::screen_render::initial_client_render(
+            &config,
+            &mut layout,
+            &runtimes,
+            &pane_tracked_processes,
+            &terminal_size,
+        )?;
+        let (mut event_writer, client_drain) = self::connect_client_event_drain(&config, &mut render_worker).await?;
         let delete_sessions = DeleteSessions::default();
         let (pty_event_sender, _pty_event_receiver) = self::pty_event_channel();
         let mut sink_guards = Vec::new();
@@ -2837,15 +2824,14 @@ mod tests {
         )?;
         crate::screen_render::resize_panes_to_layout(&layout, &runtimes, &terminal_size)?;
         let pane_tracked_processes = PaneTrackedProcesses::default();
-        let (layout_snapshot, _pane_regions, mut render_worker, _render_baseline) =
-            crate::screen_render::initial_client_render(
-                &config,
-                &mut layout,
-                &runtimes,
-                &pane_tracked_processes,
-                &terminal_size,
-            )?;
-        let (mut event_writer, client_drain) = self::connect_client_event_drain(&config).await?;
+        let (layout_snapshot, mut render_worker) = crate::screen_render::initial_client_render(
+            &config,
+            &mut layout,
+            &runtimes,
+            &pane_tracked_processes,
+            &terminal_size,
+        )?;
+        let (mut event_writer, client_drain) = self::connect_client_event_drain(&config, &mut render_worker).await?;
         let delete_sessions = DeleteSessions::default();
         let (pty_event_sender, _pty_event_receiver) = self::pty_event_channel();
         let mut sink_guards = Vec::new();
@@ -2924,15 +2910,14 @@ mod tests {
         )?;
         crate::screen_render::resize_panes_to_layout(&layout, &runtimes, &terminal_size)?;
         let pane_tracked_processes = PaneTrackedProcesses::default();
-        let (layout_snapshot, _pane_regions, mut render_worker, _render_baseline) =
-            crate::screen_render::initial_client_render(
-                &config,
-                &mut layout,
-                &runtimes,
-                &pane_tracked_processes,
-                &terminal_size,
-            )?;
-        let (mut event_writer, client_drain) = self::connect_client_event_drain(&config).await?;
+        let (layout_snapshot, mut render_worker) = crate::screen_render::initial_client_render(
+            &config,
+            &mut layout,
+            &runtimes,
+            &pane_tracked_processes,
+            &terminal_size,
+        )?;
+        let (mut event_writer, client_drain) = self::connect_client_event_drain(&config, &mut render_worker).await?;
         let delete_sessions = DeleteSessions::default();
         let (pty_event_sender, _pty_event_receiver) = self::pty_event_channel();
         let mut sink_guards = Vec::new();
@@ -3064,7 +3049,9 @@ mod tests {
         let mut sidebar = false;
         while !pong || !sidebar {
             match self::recv_test_event(reader).await? {
-                Some(ServerEvent::Pong) => pong = true,
+                Some(ServerEvent::Pong) => {
+                    pong = true;
+                }
                 Some(ServerEvent::SidebarLayout(layout_snapshot)) => {
                     assert_that!(
                         self::tracked_process_state(&layout_snapshot, pane_id)?,
@@ -3118,7 +3105,8 @@ mod tests {
 
     async fn connect_client_event_drain(
         config: &ServerConfig,
-    ) -> rootcause::Result<(ServerEventWriter, tokio::task::JoinHandle<()>)> {
+        render_worker: &mut RenderWorker,
+    ) -> rootcause::Result<(crate::render_worker::RenderWorkerSender, tokio::task::JoinHandle<()>)> {
         let listener = ServerListener::bind(&config.paths.socket)?;
         let (client_connection, server_connection) =
             tokio::try_join!(ClientConnection::connect(&config.paths.socket), listener.accept())?;
@@ -3126,7 +3114,10 @@ mod tests {
         let client_drain =
             tokio::spawn(async move { while let Ok(Some(_event)) = client_reader.recv_event().await {} });
         let (_request_reader, event_writer) = server_connection.split();
-        Ok((event_writer, client_drain))
+        Ok((
+            render_worker.attach_writer(event_writer, config.client_write_timeout)?,
+            client_drain,
+        ))
     }
 
     async fn abort_client_drain(handle: tokio::task::JoinHandle<()>) {

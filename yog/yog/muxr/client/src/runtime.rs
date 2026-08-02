@@ -1,5 +1,4 @@
 use std::io::Read;
-use std::io::Write;
 use std::path::Path;
 use std::thread;
 use std::time::Duration;
@@ -18,6 +17,7 @@ use crate::copy_selection::SelectionEdgeScrollRequest;
 use crate::input::DecodedInput;
 use crate::input::InputDecoder;
 use crate::input::InputIdleTimeout;
+use crate::renderer::ClientPresentationSnapshot;
 use crate::renderer::ClientRenderOutcome;
 use crate::renderer::ClientRenderer;
 use crate::session::attach::AttachedSession;
@@ -92,6 +92,53 @@ enum InteractiveFlow {
     Stop,
 }
 
+struct RenderCoordinator {
+    committed: Option<ClientPresentationSnapshot>,
+    in_flight: Option<ClientPresentationSnapshot>,
+}
+
+trait RenderSink {
+    fn send_render(&self, transaction: Vec<u8>) -> rootcause::Result<()>;
+}
+
+impl RenderSink for StdoutSender {
+    fn send_render(&self, transaction: Vec<u8>) -> rootcause::Result<()> {
+        Self::send_render(self, transaction)
+    }
+}
+
+impl RenderCoordinator {
+    const fn new() -> Self {
+        Self {
+            committed: None,
+            in_flight: None,
+        }
+    }
+
+    fn complete(&mut self, renderer: &mut ClientRenderer, output: &impl RenderSink) -> rootcause::Result<()> {
+        let completed = self
+            .in_flight
+            .take()
+            .ok_or_else(|| report!("muxr client stdout completed an unknown render"))?;
+        renderer.acknowledge_presentation(&completed);
+        self.committed = Some(completed);
+        self.submit(renderer, output)
+    }
+
+    fn submit(&mut self, renderer: &mut ClientRenderer, output: &impl RenderSink) -> rootcause::Result<()> {
+        if self.in_flight.is_some() {
+            return Ok(());
+        }
+        let snapshot = renderer.presentation_snapshot();
+        let Some(transaction) = renderer.presentation_transaction(self.committed.as_ref())? else {
+            return Ok(());
+        };
+        output.send_render(transaction)?;
+        self.in_flight = Some(snapshot);
+        Ok(())
+    }
+}
+
 /// Start or attach to a muxr session and run an interactive client.
 ///
 /// # Errors
@@ -127,11 +174,11 @@ async fn run_interactive(
     let writer = attached_session.writer;
     let writer_handle =
         tokio::spawn(async move { self::forward_client_requests(writer, control_receiver, input_receiver).await });
-    let (stdout_sender, _stdout_worker, mut stdout_failure_receiver) = StdoutWorker::spawn();
+    let (stdout_sender, _stdout_worker, mut stdout_failure_receiver, mut stdout_completion_receiver) =
+        StdoutWorker::spawn();
     let mut renderer = ClientRenderer::new(muxr_config, attached_session.layout, attached_session.pane_regions);
-    let mut transaction = Vec::new();
-    renderer.sync_mouse_capture(&mut transaction)?;
-    stdout_sender.send_mandatory(transaction)?;
+    renderer.sync_mouse_capture_logical();
+    let mut render_coordinator = RenderCoordinator::new();
     let edge_scroll_tick_start = tokio::time::Instant::now()
         .checked_add(SELECTION_EDGE_SCROLL_INTERVAL)
         .ok_or_else(|| report!("muxr selection edge scroll interval overflowed"))?;
@@ -149,6 +196,7 @@ async fn run_interactive(
                     event,
                     &control_sender,
                     &mut renderer,
+                    &mut render_coordinator,
                     &stdout_sender,
                 ).await?
                     == InteractiveFlow::Stop
@@ -168,11 +216,10 @@ async fn run_interactive(
                         continue;
                     }
                 };
-                let mut transaction = Vec::new();
-                if self::handle_client_input_action(action, muxr_config, &input_request_sender, &mut renderer, &mut transaction).await? == ClientInputSend::Closed {
+                if self::handle_client_input_action(action, muxr_config, &input_request_sender, &mut renderer).await? == ClientInputSend::Closed {
                     break;
                 }
-                stdout_sender.send_mandatory(transaction)?;
+                render_coordinator.submit(&mut renderer, &stdout_sender)?;
             },
             _ = edge_scroll_tick.tick(), if renderer.selection_edge_drag() == crate::renderer::SelectionEdgeDrag::Active => {
                 if self::send_selection_edge_scroll_request(&input_request_sender, &mut renderer) == ClientInputSend::Closed {
@@ -182,6 +229,12 @@ async fn run_interactive(
             stdout_failure = &mut stdout_failure_receiver => {
                 let error = stdout_failure.unwrap_or_else(|_| "stdout worker stopped unexpectedly".to_owned());
                 return Err(report!("muxr client stdout worker failed").attach(error));
+            },
+            completed = stdout_completion_receiver.recv() => {
+                if completed.is_none() {
+                    return Err(report!("muxr client stdout completion worker stopped unexpectedly"));
+                }
+                render_coordinator.complete(&mut renderer, &stdout_sender)?;
             },
             else => {
                 if input_cmd_receiver_state == InputCmdReceiverState::Closed {
@@ -202,6 +255,7 @@ async fn handle_server_event(
     event: ServerEvent,
     control_sender: &tokio::sync::mpsc::Sender<ClientRequest>,
     renderer: &mut ClientRenderer,
+    render_coordinator: &mut RenderCoordinator,
     stdout_sender: &StdoutSender,
 ) -> rootcause::Result<InteractiveFlow> {
     match event {
@@ -216,21 +270,22 @@ async fn handle_server_event(
         }),
         ServerEvent::Layout(next_layout) => {
             renderer.apply_layout(next_layout);
+            render_coordinator.submit(renderer, stdout_sender)?;
             Ok(InteractiveFlow::Continue)
         }
         ServerEvent::SidebarLayout(next_layout) => {
-            let mut transaction = Vec::new();
-            renderer.apply_sidebar_layout(&mut transaction, next_layout)?;
-            stdout_sender.send_mandatory(transaction)?;
+            renderer.apply_sidebar_layout_logical(next_layout);
+            render_coordinator.submit(renderer, stdout_sender)?;
             Ok(InteractiveFlow::Continue)
         }
         ServerEvent::PaneRegions(next_regions) => {
-            let mut transaction = Vec::new();
-            renderer.apply_pane_regions(&mut transaction, next_regions)?;
-            stdout_sender.send_mandatory(transaction)?;
+            renderer.apply_pane_regions_logical(next_regions);
+            render_coordinator.submit(renderer, stdout_sender)?;
             Ok(InteractiveFlow::Continue)
         }
-        ServerEvent::Render(update) => self::handle_render_event(update, control_sender, renderer, stdout_sender).await,
+        ServerEvent::Render(update) => {
+            self::handle_render_event(update, control_sender, renderer, render_coordinator, stdout_sender).await
+        }
         ServerEvent::ScrollPaneLineResult {
             position,
             direction,
@@ -247,12 +302,12 @@ async fn handle_render_event(
     update: muxr_core::RenderUpdate,
     control_sender: &tokio::sync::mpsc::Sender<ClientRequest>,
     renderer: &mut ClientRenderer,
+    render_coordinator: &mut RenderCoordinator,
     stdout_sender: &StdoutSender,
 ) -> rootcause::Result<InteractiveFlow> {
-    let mut transaction = Vec::new();
-    match renderer.apply_render(&mut transaction, update)? {
+    match renderer.apply_render_logical(update)? {
         ClientRenderOutcome::Drawn => {
-            stdout_sender.replace_render(transaction, || renderer.full_redraw_transaction())?;
+            render_coordinator.submit(renderer, stdout_sender)?;
             Ok(InteractiveFlow::Continue)
         }
         ClientRenderOutcome::NeedsResync => Ok(if control_sender.send(ClientRequest::RenderResync).await.is_ok() {
@@ -268,7 +323,6 @@ async fn handle_client_input_action(
     muxr_config: &MuxrConfig,
     input_sender: &tokio::sync::mpsc::Sender<ClientRequest>,
     renderer: &mut ClientRenderer,
-    stdout: &mut impl Write,
 ) -> rootcause::Result<ClientInputSend> {
     match action {
         ClientInputAction::CopySelection => {
@@ -280,7 +334,7 @@ async fn handle_client_input_action(
             Ok(ClientInputSend::Accepted)
         }
         ClientInputAction::Mouse(event) => {
-            crate::pane::mouse::handle_mouse_input_action(muxr_config, event, input_sender, renderer, stdout).await
+            crate::pane::mouse::handle_mouse_input_action(muxr_config, event, input_sender, renderer).await
         }
     }
 }
@@ -608,8 +662,8 @@ fn spawn_resize_forwarder(
 
 #[cfg(test)]
 mod tests {
+    use std::cell::RefCell;
     use std::fs;
-    use std::io::Write;
     use std::path::Path;
 
     use muxr_core::ClientKey;
@@ -633,6 +687,65 @@ mod tests {
     use crate::copy_selection::SelectionInput;
     use crate::copy_selection::test_helpers as copy_selection_test_helpers;
     use crate::terminal::SynchronizedOutput;
+
+    #[derive(Default)]
+    struct RecordingRenderSink {
+        transactions: RefCell<Vec<Vec<u8>>>,
+    }
+
+    impl RecordingRenderSink {
+        fn len(&self) -> usize {
+            self.transactions.borrow().len()
+        }
+
+        fn transaction(&self, index: usize) -> rootcause::Result<Vec<u8>> {
+            self.transactions
+                .borrow()
+                .get(index)
+                .cloned()
+                .ok_or_else(|| report!("muxr coordinator test transaction is missing").attach(format!("index={index}")))
+        }
+    }
+
+    impl RenderSink for RecordingRenderSink {
+        fn send_render(&self, transaction: Vec<u8>) -> rootcause::Result<()> {
+            self.transactions.borrow_mut().push(transaction);
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn test_render_coordinator_when_logical_state_changes_in_flight_emits_one_delta_after_completion()
+    -> rootcause::Result<()> {
+        let mut renderer = ClientRenderer::with_synchronized_output(
+            layout_snapshot()?,
+            pane_regions_snapshot()?,
+            SynchronizedOutput::Csi,
+        );
+        let mut coordinator = RenderCoordinator::new();
+        let output = RecordingRenderSink::default();
+
+        renderer.apply_render_logical(muxr_core::RenderUpdate::Baseline(render_baseline()?))?;
+        coordinator.submit(&mut renderer, &output)?;
+        assert_that!(output.len(), eq(1));
+
+        renderer.apply_selection_input_logical(SelectionInput::Start(ClientMousePosition { row: 0, col: 0 }))?;
+        renderer.apply_selection_input_logical(SelectionInput::Update(ClientMousePosition { row: 0, col: 1 }))?;
+        coordinator.submit(&mut renderer, &output)?;
+        assert_that!(output.len(), eq(1));
+
+        coordinator.complete(&mut renderer, &output)?;
+        assert_that!(output.len(), eq(2));
+        let initial = String::from_utf8(output.transaction(0)?)?;
+        let delta = String::from_utf8(output.transaction(1)?)?;
+        assert_that!(initial, contains_substring("/tmp"));
+        assert_that!(delta, not(contains_substring("/tmp")));
+        assert_that!(delta, not(contains_substring("\x1b[2J")));
+
+        coordinator.complete(&mut renderer, &output)?;
+        assert_that!(output.len(), eq(2));
+        Ok(())
+    }
 
     #[test]
     fn test_forward_client_requests_when_input_queue_is_ready_sends_control_first() -> rootcause::Result<()> {
@@ -1013,12 +1126,8 @@ mod tests {
             pane_regions_snapshot()?,
             SynchronizedOutput::Csi,
         );
-        let mut output = CountingWriter::default();
-        renderer.apply_render(&mut output, muxr_core::RenderUpdate::Baseline(render_baseline()?))?;
-        renderer.apply_selection_input(
-            &mut output,
-            SelectionInput::Start(ClientMousePosition { row: 0, col: 0 }),
-        )?;
+        renderer.apply_render_logical(muxr_core::RenderUpdate::Baseline(render_baseline()?))?;
+        renderer.apply_selection_input_logical(SelectionInput::Start(ClientMousePosition { row: 0, col: 0 }))?;
         let initial = renderer
             .set_selection_edge_drag(ClientMousePosition { row: 2, col: 1 }, None)
             .ok_or_else(|| report!("expected initial muxr edge scroll request"))?;
@@ -1044,14 +1153,16 @@ mod tests {
             err(matches_pattern!(tokio::sync::mpsc::error::TryRecvError::Empty))
         );
 
-        renderer.apply_pane_regions(&mut output, pane_regions_snapshot_with_visible_top_row(1)?)?;
-        renderer.apply_render(&mut output, muxr_core::RenderUpdate::Baseline(render_baseline()?))?;
+        renderer.apply_pane_regions_logical(pane_regions_snapshot_with_visible_top_row(1)?);
+        renderer.apply_render_logical(muxr_core::RenderUpdate::Baseline(render_baseline()?))?;
+        let flushed = renderer.presentation_snapshot();
+        renderer.acknowledge_presentation(&flushed);
         assert_that!(
             send_selection_edge_scroll_request(&input_sender, &mut renderer),
             eq(ClientInputSend::Accepted)
         );
 
-        assert_that!(input_receiver.blocking_recv(), eq(Some(expected)));
+        assert_that!(input_receiver.try_recv(), eq(Ok(expected)));
         Ok(())
     }
 
@@ -1064,12 +1175,8 @@ mod tests {
             pane_regions_snapshot()?,
             SynchronizedOutput::Csi,
         );
-        let mut output = CountingWriter::default();
-        renderer.apply_render(&mut output, muxr_core::RenderUpdate::Baseline(render_baseline()?))?;
-        renderer.apply_selection_input(
-            &mut output,
-            SelectionInput::Start(ClientMousePosition { row: 0, col: 0 }),
-        )?;
+        renderer.apply_render_logical(muxr_core::RenderUpdate::Baseline(render_baseline()?))?;
+        renderer.apply_selection_input_logical(SelectionInput::Start(ClientMousePosition { row: 0, col: 0 }))?;
         let request = renderer
             .set_selection_edge_drag(ClientMousePosition { row: 2, col: 1 }, None)
             .ok_or_else(|| report!("expected muxr edge scroll request"))?;
@@ -1161,24 +1268,6 @@ mod tests {
 
     fn render_cell(text: &str) -> muxr_core::RenderCell {
         muxr_core::RenderCell::narrow(text, muxr_core::RenderStyle::default())
-    }
-
-    #[derive(Default)]
-    struct CountingWriter {
-        bytes: Vec<u8>,
-        flushes: usize,
-    }
-
-    impl Write for CountingWriter {
-        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-            self.bytes.extend_from_slice(buf);
-            Ok(buf.len())
-        }
-
-        fn flush(&mut self) -> std::io::Result<()> {
-            self.flushes = self.flushes.saturating_add(1);
-            Ok(())
-        }
     }
 
     fn runtime() -> rootcause::Result<tokio::runtime::Runtime> {
