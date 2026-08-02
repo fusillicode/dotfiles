@@ -1,5 +1,3 @@
-use std::io::Write;
-
 use muxr_config::MuxrConfig;
 use muxr_core::ClientMouseEvent;
 use muxr_core::ClientMouseEventPhase;
@@ -18,7 +16,6 @@ pub async fn handle_mouse_input_action(
     event: ClientMouseEvent,
     input_sender: &tokio::sync::mpsc::Sender<ClientRequest>,
     renderer: &mut ClientRenderer,
-    stdout: &mut impl Write,
 ) -> rootcause::Result<ClientInputSend> {
     if matches!(self::alt_left_click_phase(event), Some(AltLeftClickPhase::Release))
         && matches!(renderer.finish_file_open_capture(), FileOpenRelease::Consumed)
@@ -47,7 +44,7 @@ pub async fn handle_mouse_input_action(
             Some(LocalMouseAction::SelectionUpdate(_)) => {
                 if let Some(position) = pane_position_for_sidebar_drag(muxr_config, tab_bar_position) {
                     let scroll_request = renderer.set_selection_outside_edge_drag(position);
-                    renderer.apply_selection_input(stdout, SelectionInput::Update(position))?;
+                    renderer.apply_selection_input_logical(SelectionInput::Update(position))?;
                     if let Some(request) = scroll_request {
                         return Ok(crate::runtime::send_edge_scroll_request(
                             input_sender,
@@ -59,7 +56,7 @@ pub async fn handle_mouse_input_action(
             }
             Some(LocalMouseAction::SelectionEnd(_)) => {
                 if let Some(position) = pane_position_for_sidebar_drag(muxr_config, tab_bar_position) {
-                    renderer.apply_selection_input(stdout, SelectionInput::End(position))?;
+                    renderer.apply_selection_input_logical(SelectionInput::End(position))?;
                 }
             }
             Some(LocalMouseAction::FocusAndSelectionStart(_)) | None => {}
@@ -88,12 +85,12 @@ pub async fn handle_mouse_input_action(
             if input_sender.send(ClientRequest::FocusPaneAt(position)).await.is_err() {
                 return Ok(ClientInputSend::Closed);
             }
-            renderer.apply_selection_input(stdout, SelectionInput::Start(position))?;
+            renderer.apply_selection_input_logical(SelectionInput::Start(position))?;
             Ok(ClientInputSend::Accepted)
         }
         Some(LocalMouseAction::SelectionUpdate(position)) => {
             let scroll_request = renderer.set_selection_edge_drag(position, None);
-            renderer.apply_selection_input(stdout, SelectionInput::Update(position))?;
+            renderer.apply_selection_input_logical(SelectionInput::Update(position))?;
             if let Some(request) = scroll_request {
                 return Ok(crate::runtime::send_edge_scroll_request(
                     input_sender,
@@ -104,7 +101,7 @@ pub async fn handle_mouse_input_action(
             Ok(ClientInputSend::Accepted)
         }
         Some(LocalMouseAction::SelectionEnd(position)) => {
-            renderer.apply_selection_input(stdout, SelectionInput::End(position))?;
+            renderer.apply_selection_input_logical(SelectionInput::End(position))?;
             Ok(ClientInputSend::Accepted)
         }
         None => Ok(ClientInputSend::Accepted),
@@ -214,8 +211,6 @@ mod tests {
                 self::pane_regions_snapshot()?,
                 SynchronizedOutput::Csi,
             );
-            let mut output = CountingWriter::default();
-
             assert_that!(
                 handle_mouse_input_action(
                     &config,
@@ -229,7 +224,6 @@ mod tests {
                     },
                     &input_sender,
                     &mut renderer,
-                    &mut output,
                 )
                 .await?,
                 eq(ClientInputSend::Accepted)
@@ -254,13 +248,7 @@ mod tests {
                 self::file_link_pane_regions_snapshot()?,
                 SynchronizedOutput::Csi,
             );
-            let mut initial_output = CountingWriter::default();
-            renderer.apply_render(
-                &mut initial_output,
-                muxr_core::RenderUpdate::Baseline(self::file_link_render_baseline()?),
-            )?;
-            let mut output = CountingWriter::default();
-
+            renderer.apply_render_logical(muxr_core::RenderUpdate::Baseline(self::file_link_render_baseline()?))?;
             assert_that!(
                 handle_mouse_input_action(
                     &config,
@@ -274,7 +262,6 @@ mod tests {
                     },
                     &input_sender,
                     &mut renderer,
-                    &mut output,
                 )
                 .await?,
                 eq(ClientInputSend::Accepted)
@@ -300,7 +287,7 @@ mod tests {
                 return Err(report!("expected decoded Alt-left release"));
             };
             assert_that!(
-                handle_mouse_input_action(&config, *release, &input_sender, &mut renderer, &mut output,).await?,
+                handle_mouse_input_action(&config, *release, &input_sender, &mut renderer).await?,
                 eq(ClientInputSend::Accepted)
             );
             assert_that!(
@@ -335,8 +322,6 @@ mod tests {
                 self::pane_regions_snapshot()?,
                 SynchronizedOutput::Csi,
             );
-            let mut output = CountingWriter::default();
-
             assert_that!(
                 handle_mouse_input_action(
                     &config,
@@ -347,7 +332,6 @@ mod tests {
                     },
                     &input_sender,
                     &mut renderer,
-                    &mut output,
                 )
                 .await?,
                 eq(ClientInputSend::Accepted)
@@ -357,7 +341,6 @@ mod tests {
                 input_receiver.recv().await,
                 eq(Some(ClientRequest::FocusTab(TabId::new(2)?)))
             );
-            assert_that!(output.flushes, eq(0));
             Ok(())
         })
     }
@@ -373,13 +356,7 @@ mod tests {
                 self::pane_regions_snapshot()?,
                 SynchronizedOutput::Csi,
             );
-            let mut initial_output = CountingWriter::default();
-            renderer.apply_render(
-                &mut initial_output,
-                muxr_core::RenderUpdate::Baseline(self::render_baseline()?),
-            )?;
-            let mut output = CountingWriter::default();
-
+            renderer.apply_render_logical(muxr_core::RenderUpdate::Baseline(self::render_baseline()?))?;
             assert_that!(
                 handle_mouse_input_action(
                     &config,
@@ -393,7 +370,6 @@ mod tests {
                     },
                     &input_sender,
                     &mut renderer,
-                    &mut output,
                 )
                 .await?,
                 eq(ClientInputSend::Accepted)
@@ -408,7 +384,6 @@ mod tests {
                     },
                     &input_sender,
                     &mut renderer,
-                    &mut output,
                 )
                 .await?,
                 eq(ClientInputSend::Accepted)
@@ -437,13 +412,7 @@ mod tests {
                 self::pane_regions_snapshot()?,
                 SynchronizedOutput::Csi,
             );
-            let mut initial_output = CountingWriter::default();
-            renderer.apply_render(
-                &mut initial_output,
-                muxr_core::RenderUpdate::Baseline(self::render_baseline()?),
-            )?;
-            let mut output = CountingWriter::default();
-
+            renderer.apply_render_logical(muxr_core::RenderUpdate::Baseline(self::render_baseline()?))?;
             assert_that!(
                 handle_mouse_input_action(
                     &config,
@@ -457,7 +426,6 @@ mod tests {
                     },
                     &input_sender,
                     &mut renderer,
-                    &mut output,
                 )
                 .await?,
                 eq(ClientInputSend::Accepted)
@@ -472,7 +440,6 @@ mod tests {
                     },
                     &input_sender,
                     &mut renderer,
-                    &mut output,
                 )
                 .await?,
                 eq(ClientInputSend::Accepted)
@@ -504,8 +471,6 @@ mod tests {
                 self::mouse_tracking_pane_regions_snapshot()?,
                 SynchronizedOutput::Csi,
             );
-            let mut output = CountingWriter::default();
-
             assert_that!(
                 handle_mouse_input_action(
                     &config,
@@ -519,7 +484,6 @@ mod tests {
                     },
                     &input_sender,
                     &mut renderer,
-                    &mut output,
                 )
                 .await?,
                 eq(ClientInputSend::Accepted)
@@ -533,7 +497,6 @@ mod tests {
                     position: ClientMousePosition { row: 0, col: 1 }
                 })))
             );
-            assert_that!(output.flushes, eq(0));
             Ok(())
         })
     }
@@ -548,7 +511,6 @@ mod tests {
                 self::pane_regions_snapshot()?,
                 SynchronizedOutput::Csi,
             );
-            let mut output = CountingWriter::default();
             let event = ClientMouseEvent {
                 button: 64,
                 phase: ClientMouseEventPhase::Press,
@@ -559,7 +521,7 @@ mod tests {
             };
 
             assert_that!(
-                handle_mouse_input_action(&config, event, &input_sender, &mut renderer, &mut output).await?,
+                handle_mouse_input_action(&config, event, &input_sender, &mut renderer).await?,
                 eq(ClientInputSend::Accepted)
             );
 
@@ -570,7 +532,6 @@ mod tests {
                     ..event
                 })))
             );
-            assert_that!(output.flushes, eq(0));
             Ok(())
         })
     }
@@ -587,7 +548,6 @@ mod tests {
                 self::pane_regions_snapshot()?,
                 SynchronizedOutput::Csi,
             );
-            let mut output = CountingWriter::default();
             let event = ClientMouseEvent {
                 button: 64,
                 phase: ClientMouseEventPhase::Press,
@@ -596,7 +556,7 @@ mod tests {
                     col: config.tab_bar.width.saturating_add(1),
                 },
             };
-            let handle = handle_mouse_input_action(&config, event, &input_sender, &mut renderer, &mut output);
+            let handle = handle_mouse_input_action(&config, event, &input_sender, &mut renderer);
             tokio::pin!(handle);
 
             tokio::select! {
@@ -627,8 +587,6 @@ mod tests {
                 self::split_mouse_tracking_pane_regions_snapshot()?,
                 SynchronizedOutput::Csi,
             );
-            let mut output = CountingWriter::default();
-
             let events = [
                 ClientMouseEvent {
                     button: 0,
@@ -662,7 +620,7 @@ mod tests {
             ];
             for event in events {
                 assert_that!(
-                    handle_mouse_input_action(&config, event, &input_sender, &mut renderer, &mut output).await?,
+                    handle_mouse_input_action(&config, event, &input_sender, &mut renderer).await?,
                     eq(ClientInputSend::Accepted)
                 );
             }
@@ -856,22 +814,6 @@ mod tests {
 
     fn render_cell(text: &str) -> muxr_core::RenderCell {
         muxr_core::RenderCell::narrow(text, muxr_core::RenderStyle::default())
-    }
-
-    #[derive(Default)]
-    struct CountingWriter {
-        flushes: usize,
-    }
-
-    impl std::io::Write for CountingWriter {
-        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-            Ok(buf.len())
-        }
-
-        fn flush(&mut self) -> std::io::Result<()> {
-            self.flushes = self.flushes.saturating_add(1);
-            Ok(())
-        }
     }
 
     fn runtime() -> rootcause::Result<tokio::runtime::Runtime> {

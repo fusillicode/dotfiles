@@ -6,8 +6,6 @@ use muxr_core::LayoutSnapshot;
 use muxr_core::PaneId;
 use muxr_core::PaneRegionSnapshot;
 use muxr_core::PaneRegionsSnapshot;
-#[cfg(test)]
-use muxr_core::RenderUpdate;
 use muxr_core::ServerEvent;
 use muxr_core::SessionPaths;
 use muxr_core::TerminalSize;
@@ -27,8 +25,6 @@ use crate::render_state::ClientRenderDmg;
 use crate::render_state::ClientSessionFlow;
 use crate::render_worker::RenderInput;
 use crate::render_worker::RenderWorker;
-#[cfg(test)]
-use crate::render_worker::ServerRenderCommand;
 use crate::server::ServerConfig;
 use crate::state::SessionLayout;
 
@@ -66,39 +62,17 @@ pub fn initial_client_render(
     runtimes: &PaneRuntimes,
     pane_tracked_processes: &PaneTrackedProcesses,
     terminal_size: &TerminalSize,
-) -> rootcause::Result<(LayoutSnapshot, PaneRegionsSnapshot, RenderWorker, RenderUpdate)> {
+) -> rootcause::Result<(LayoutSnapshot, RenderWorker)> {
     let mut render_worker = RenderWorker::default();
-    let tracked_processes = pane_tracked_processes.snapshot(layout);
-    let layout_snapshot = self::layout_snapshot_and_persist(&config.paths, layout, runtimes, &tracked_processes)?;
-    let pane_layout = PaneFullscreen::default().pane_layout(layout, terminal_size)?;
-    let attention_panes = self::attention_pane_ids(layout, pane_tracked_processes);
-    let input = self::render_input(
-        &mut render_worker,
-        PaneRenderConfig {
-            border_styles: config.user_config.pane_borders,
-            mode: crate::pane::borders::BorderRenderMode::Focus,
-            pane_attention: config.user_config.pane_attention,
-            pane_dim: config.user_config.pane_dim,
-        },
-        layout.active_pane_id()?,
-        pane_layout,
+    let (layout_snapshot, _pane_regions, _initial_render) = self::initial_client_render_input(
+        config,
+        layout,
         runtimes,
-        terminal_size.clone(),
-        attention_panes,
-        ClientRenderDmg::Full,
-        true,
+        pane_tracked_processes,
+        terminal_size,
+        &mut render_worker,
     )?;
-    let pane_regions = input.pane_regions()?;
-    let ServerRenderCommand::Ready {
-        render: Some(render_baseline),
-        ..
-    } = render_worker.stage_render(input)?
-    else {
-        return Err(rootcause::report!(
-            "muxr detached initial render did not produce a baseline"
-        ));
-    };
-    Ok((layout_snapshot, pane_regions, render_worker, render_baseline))
+    Ok((layout_snapshot, render_worker))
 }
 
 pub fn initial_client_render_input(

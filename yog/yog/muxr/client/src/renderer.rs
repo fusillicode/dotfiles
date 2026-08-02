@@ -1,4 +1,4 @@
-use std::io::Write;
+use std::collections::BTreeSet;
 use std::time::Instant;
 
 use muxr_config::MuxrConfig;
@@ -17,9 +17,7 @@ use muxr_core::PaneScrollDirection;
 use muxr_core::PaneScrollLineMove;
 use muxr_core::RenderUpdate;
 use muxr_core::TabId;
-use rootcause::prelude::ResultExt;
 
-use crate::copy_selection::SelectionChange;
 use crate::copy_selection::SelectionClickOutcome;
 use crate::copy_selection::SelectionClickTracker;
 use crate::copy_selection::SelectionEdgeScrollPending;
@@ -93,6 +91,18 @@ pub struct ClientRenderer {
     synchronized_output: SynchronizedOutput,
     terminal_encoder: TerminalUpdateEncoder,
     render_transaction: Vec<u8>,
+    render_generation: u64,
+    edge_scroll_render_generation: Option<u64>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ClientPresentationSnapshot {
+    any_motion_capture: MouseAnyMotionCapture,
+    edge_scroll_pending: Option<crate::copy_selection::SelectionEdgeScrollPending>,
+    frame_buffer: FrameBuffer,
+    layout: LayoutSnapshot,
+    edge_scroll_render_generation: Option<u64>,
+    selection: Option<SelectionRange>,
 }
 
 impl ClientRenderer {
@@ -137,6 +147,8 @@ impl ClientRenderer {
             synchronized_output,
             terminal_encoder: TerminalUpdateEncoder::default(),
             render_transaction: Vec::new(),
+            render_generation: 0,
+            edge_scroll_render_generation: None,
         }
     }
 
@@ -147,9 +159,8 @@ impl ClientRenderer {
         self.tab_bar_dmg = TabBarDmg::Dirty;
     }
 
-    pub fn apply_sidebar_layout(&mut self, stdout: &mut impl Write, layout: LayoutSnapshot) -> rootcause::Result<()> {
+    pub fn apply_sidebar_layout_logical(&mut self, layout: LayoutSnapshot) {
         self.layout = layout;
-        self.draw_sidebar(stdout)
     }
 
     pub fn tab_id_at_sidebar_row(&self, row: u16) -> Option<TabId> {
@@ -192,12 +203,7 @@ impl ClientRenderer {
         }
     }
 
-    pub fn apply_pane_regions(
-        &mut self,
-        stdout: &mut impl Write,
-        pane_regions: PaneRegionsSnapshot,
-    ) -> rootcause::Result<()> {
-        let previous_selection = self.selection.range().cloned();
+    pub fn apply_pane_regions_logical(&mut self, pane_regions: PaneRegionsSnapshot) {
         self.pane_regions = pane_regions;
         self.clicks.retain_for_regions(&self.pane_regions);
         self.mouse_capture = self
@@ -205,17 +211,16 @@ impl ClientRenderer {
             .take()
             .and_then(|capture| capture.retain_for_regions(&self.pane_regions));
         self.selection_edge_scroll.retain_for_regions(&self.pane_regions);
-        let selection_change = self.selection.clear_if_regions_changed(&self.pane_regions);
-        self.sync_mouse_capture(stdout)?;
-        if selection_change == SelectionChange::Changed {
-            let next_selection = self.selection.range().cloned();
-            self.redraw_selection(stdout, previous_selection.as_ref(), next_selection.as_ref())?;
-        }
-        Ok(())
+        self.selection.clear_if_regions_changed(&self.pane_regions);
+        self.sync_mouse_capture_logical();
     }
 
-    pub fn sync_mouse_capture(&mut self, stdout: &mut impl Write) -> rootcause::Result<()> {
-        let next = if self
+    pub fn sync_mouse_capture_logical(&mut self) {
+        self.any_motion_capture = self.next_mouse_capture();
+    }
+
+    fn next_mouse_capture(&self) -> MouseAnyMotionCapture {
+        if self
             .pane_regions
             .regions()
             .iter()
@@ -224,126 +229,105 @@ impl ClientRenderer {
             MouseAnyMotionCapture::Enabled
         } else {
             MouseAnyMotionCapture::Disabled
-        };
-        if self.any_motion_capture == next {
-            return Ok(());
         }
-
-        crate::terminal::set_mouse_any_motion_capture(stdout, next)?;
-        self.any_motion_capture = next;
-        Ok(())
     }
 
-    pub fn apply_render(
-        &mut self,
-        stdout: &mut impl Write,
-        update: RenderUpdate,
-    ) -> rootcause::Result<ClientRenderOutcome> {
+    pub fn apply_render_logical(&mut self, update: RenderUpdate) -> rootcause::Result<ClientRenderOutcome> {
         match self.frame_buffer.apply(update)? {
-            ApplyOutcome::Applied(changes) => {
+            ApplyOutcome::Applied(_) => {
+                self.render_generation = self
+                    .render_generation
+                    .checked_add(1)
+                    .ok_or_else(|| rootcause::report!("muxr client render generation overflowed"))?;
+                if self.selection_edge_scroll.waits_for_render() {
+                    self.edge_scroll_render_generation = Some(self.render_generation);
+                }
                 self.selection.refresh_visible_rows(&self.frame_buffer)?;
-                self.draw(stdout, &changes)?;
-                self.refresh_edge_drag_selection(stdout)?;
-                self.selection_edge_scroll.clear_render_acknowledged_pending();
+                self.refresh_edge_drag_selection_logical()?;
+                self.tab_bar_dmg = TabBarDmg::Clean;
                 Ok(ClientRenderOutcome::Drawn)
             }
             ApplyOutcome::NeedsResync => Ok(ClientRenderOutcome::NeedsResync),
         }
     }
 
-    pub fn full_redraw_transaction(&mut self) -> rootcause::Result<Option<Vec<u8>>> {
-        let Some(changes) = self.frame_buffer.full_redraw_changes() else {
-            return Ok(None);
-        };
-        let mut transaction = Vec::new();
-        crate::terminal::set_mouse_any_motion_capture(&mut transaction, self.any_motion_capture)?;
-        self.draw(&mut transaction, &changes)?;
-        Ok(Some(transaction))
-    }
-
-    fn draw(&mut self, stdout: &mut impl Write, changes: &RenderFrameChanges) -> rootcause::Result<()> {
-        let render_tab_bar = self.tab_bar_dmg == TabBarDmg::Dirty || changes.scope() == RenderFrameScope::Full;
-        self.render_transaction.clear();
-        let result = self.draw_transaction(stdout, changes, render_tab_bar);
-        self.reset_render_transaction();
-        if result.is_ok() {
-            self.tab_bar_dmg = TabBarDmg::Clean;
+    pub fn presentation_snapshot(&self) -> ClientPresentationSnapshot {
+        ClientPresentationSnapshot {
+            any_motion_capture: self.any_motion_capture,
+            edge_scroll_pending: self.selection_edge_scroll.render_pending().cloned(),
+            frame_buffer: self.frame_buffer.clone(),
+            layout: self.layout.clone(),
+            edge_scroll_render_generation: self.edge_scroll_render_generation,
+            selection: self.selection.range().cloned(),
         }
-        result
     }
 
-    fn draw_transaction(
+    pub fn presentation_transaction(
         &mut self,
-        stdout: &mut impl Write,
-        changes: &RenderFrameChanges,
-        render_tab_bar: bool,
-    ) -> rootcause::Result<()> {
-        crate::terminal::queue_synchronized_update_start(&mut self.render_transaction, self.synchronized_output)?;
-        if changes.scope() == RenderFrameScope::Full {
-            crate::frame_buffer::queue_full_redraw_start(&mut self.render_transaction)?;
+        committed: Option<&ClientPresentationSnapshot>,
+    ) -> rootcause::Result<Option<Vec<u8>>> {
+        if self.tab_bar_dmg == TabBarDmg::Dirty {
+            return Ok(None);
         }
-        if render_tab_bar {
-            let rows = self.frame_buffer.size().map_or(0, muxr_core::TerminalSize::rows);
-            crate::tab_bar::queue(&mut self.render_transaction, self.tab_bar_config, &self.layout, rows)?;
-        }
-        let selection = self.selection.range().map(|range| SelectionHighlight {
-            background: self.selection_style.bg,
-            range,
-        });
-        let render = TerminalRender {
-            changes,
-            frame_buffer: &self.frame_buffer,
-            origin: TerminalOrigin {
-                col: self.tab_bar_config.width,
-                row: 0,
-            },
-            selection,
+        let logical = self.presentation_snapshot();
+        let mouse_changed = committed.is_none_or(|previous| previous.any_motion_capture != logical.any_motion_capture);
+        let Some(changes) = self.presentation_changes(committed, &logical)? else {
+            if !mouse_changed {
+                return Ok(None);
+            }
+            let mut transaction = Vec::new();
+            crate::terminal::queue_mouse_any_motion_capture(&mut transaction, logical.any_motion_capture)?;
+            return Ok(Some(transaction));
         };
-        self.terminal_encoder.encode(&mut self.render_transaction, render)?;
-        crate::terminal::queue_synchronized_update_end(&mut self.render_transaction, self.synchronized_output)?;
-        stdout
-            .write_all(&self.render_transaction)
-            .context("failed to write muxr client render transaction")?;
-        stdout
-            .flush()
-            .context("failed to flush muxr client render transaction")?;
-        Ok(())
-    }
-
-    fn draw_sidebar(&mut self, stdout: &mut impl Write) -> rootcause::Result<()> {
-        let Some(size) = self.frame_buffer.size() else {
-            self.tab_bar_dmg = TabBarDmg::Dirty;
-            return Ok(());
-        };
+        let render_tab_bar = committed.is_none_or(|previous| previous.layout != logical.layout)
+            || changes.scope() == RenderFrameScope::Full;
         self.render_transaction.clear();
-        let result = self.draw_sidebar_transaction(stdout, size.rows());
+        let result = (|| {
+            if mouse_changed {
+                crate::terminal::queue_mouse_any_motion_capture(
+                    &mut self.render_transaction,
+                    logical.any_motion_capture,
+                )?;
+            }
+            crate::terminal::queue_synchronized_update_start(&mut self.render_transaction, self.synchronized_output)?;
+            if changes.scope() == RenderFrameScope::Full {
+                crate::frame_buffer::queue_full_redraw_start(&mut self.render_transaction)?;
+            }
+            if render_tab_bar {
+                let rows = self.frame_buffer.size().map_or(0, muxr_core::TerminalSize::rows);
+                crate::tab_bar::queue(&mut self.render_transaction, self.tab_bar_config, &self.layout, rows)?;
+            }
+            let selection = self.selection.range().map(|range| SelectionHighlight {
+                background: self.selection_style.bg,
+                range,
+            });
+            self.terminal_encoder.encode(
+                &mut self.render_transaction,
+                TerminalRender {
+                    changes: &changes,
+                    frame_buffer: &self.frame_buffer,
+                    origin: TerminalOrigin {
+                        col: self.tab_bar_config.width,
+                        row: 0,
+                    },
+                    selection,
+                },
+            )?;
+            crate::terminal::queue_synchronized_update_end(&mut self.render_transaction, self.synchronized_output)
+        })();
+        let transaction = result.map(|()| self.render_transaction.clone());
         self.reset_render_transaction();
-        if result.is_ok() {
-            self.tab_bar_dmg = TabBarDmg::Clean;
-        }
-        result
+        transaction.map(Some)
     }
 
-    fn draw_sidebar_transaction(&mut self, stdout: &mut impl Write, rows: u16) -> rootcause::Result<()> {
-        crate::terminal::queue_synchronized_update_start(&mut self.render_transaction, self.synchronized_output)?;
-        crate::tab_bar::queue(&mut self.render_transaction, self.tab_bar_config, &self.layout, rows)?;
-        // Sidebar-only redraws bypass pane rendering, so restore the real terminal cursor after tab-bar row moves.
-        TerminalUpdateEncoder::encode_cursor(
-            &mut self.render_transaction,
-            &self.frame_buffer,
-            TerminalOrigin {
-                col: self.tab_bar_config.width,
-                row: 0,
-            },
-        )?;
-        crate::terminal::queue_synchronized_update_end(&mut self.render_transaction, self.synchronized_output)?;
-        stdout
-            .write_all(&self.render_transaction)
-            .context("failed to write muxr client sidebar render transaction")?;
-        stdout
-            .flush()
-            .context("failed to flush muxr client sidebar render transaction")?;
-        Ok(())
+    pub fn acknowledge_presentation(&mut self, snapshot: &ClientPresentationSnapshot) {
+        if snapshot.edge_scroll_render_generation == self.edge_scroll_render_generation
+            && snapshot.edge_scroll_render_generation.is_some()
+            && let Some(pending) = snapshot.edge_scroll_pending.as_ref()
+        {
+            self.selection_edge_scroll.clear_render_acknowledged_pending(pending);
+            self.edge_scroll_render_generation = None;
+        }
     }
 
     fn reset_render_transaction(&mut self) {
@@ -353,21 +337,20 @@ impl ClientRenderer {
         }
     }
 
-    pub fn apply_selection_input(&mut self, stdout: &mut impl Write, input: SelectionInput) -> rootcause::Result<()> {
-        self.apply_selection_input_at(stdout, input, Instant::now())
+    pub fn apply_selection_input_logical(&mut self, input: SelectionInput) -> rootcause::Result<()> {
+        self.apply_selection_input_at_logical(input, Instant::now())
     }
 
-    pub fn apply_selection_input_at(
+    pub(crate) fn apply_selection_input_at_logical(
         &mut self,
-        stdout: &mut impl Write,
         input: SelectionInput,
         now: Instant,
     ) -> rootcause::Result<()> {
-        let previous_selection = self.selection.range().cloned();
         if matches!(input, SelectionInput::Start(_) | SelectionInput::End(_)) {
             self.selection_edge_scroll.clear();
+            self.edge_scroll_render_generation = None;
         }
-        let change = match input {
+        match input {
             SelectionInput::Start(position)
                 if self
                     .clicks
@@ -390,10 +373,6 @@ impl ClientRenderer {
                     .apply(SelectionInput::End(position), &self.pane_regions, &self.frame_buffer)?
             }
         };
-        if change == SelectionChange::Changed {
-            let next_selection = self.selection.range().cloned();
-            self.redraw_selection(stdout, previous_selection.as_ref(), next_selection.as_ref())?;
-        }
         Ok(())
     }
 
@@ -456,14 +435,13 @@ impl ClientRenderer {
             .set_outside_edge_drag(position, drag_region.as_ref())
     }
 
-    fn refresh_edge_drag_selection(&mut self, stdout: &mut impl Write) -> rootcause::Result<()> {
+    fn refresh_edge_drag_selection_logical(&mut self) -> rootcause::Result<()> {
         let Some(position) = self.selection_edge_scroll.drag_position(&self.pane_regions) else {
             self.selection_edge_scroll.clear();
+            self.edge_scroll_render_generation = None;
             return Ok(());
         };
-        // Edge-drag scrolling changes the viewport before the next mouse packet arrives; refresh the drag focus after
-        // the scrolled frame renders so the selected range grows with the content under the held pointer.
-        self.apply_selection_input(stdout, SelectionInput::Update(position))
+        self.apply_selection_input_logical(SelectionInput::Update(position))
     }
 
     pub fn selection_edge_scroll_request(&self) -> Option<SelectionEdgeScrollRequest> {
@@ -480,17 +458,40 @@ impl ClientRenderer {
             .apply_scroll_pane_line_result(position, direction, movement);
     }
 
-    fn redraw_selection(
-        &mut self,
-        stdout: &mut impl Write,
-        previous: Option<&SelectionRange>,
-        next: Option<&SelectionRange>,
-    ) -> rootcause::Result<()> {
-        let rows = crate::copy_selection::changed_selection_rows(previous, next);
-        let Some(changes) = self.frame_buffer.row_redraw_changes(&rows)? else {
-            return Ok(());
+    fn presentation_changes(
+        &self,
+        committed: Option<&ClientPresentationSnapshot>,
+        logical: &ClientPresentationSnapshot,
+    ) -> rootcause::Result<Option<RenderFrameChanges>> {
+        let Some(committed) = committed else {
+            return Ok(self.frame_buffer.full_redraw_changes());
         };
-        self.draw(stdout, &changes)
+        let Some(mut rows) = self.frame_buffer.changed_rows_since(&committed.frame_buffer) else {
+            return Ok(self.frame_buffer.full_redraw_changes());
+        };
+        if committed.selection != logical.selection {
+            rows.extend(crate::copy_selection::changed_selection_rows(
+                committed.selection.as_ref(),
+                logical.selection.as_ref(),
+            ));
+        }
+        let rows = rows
+            .into_iter()
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect::<Vec<_>>();
+        if rows.is_empty() {
+            return if committed.layout == logical.layout {
+                if self.frame_buffer.cursor_matches(&committed.frame_buffer) {
+                    Ok(None)
+                } else {
+                    self.frame_buffer.row_redraw_changes(&[])
+                }
+            } else {
+                self.frame_buffer.row_redraw_changes(&[])
+            };
+        }
+        self.frame_buffer.row_redraw_changes(&rows)
     }
 
     pub const fn mouse_capture_state(&self) -> MouseCaptureState {
@@ -695,111 +696,31 @@ mod tests {
                     .collect(),
             )?],
         )?;
-        let mut output = CountingWriter::default();
-        renderer.apply_render(&mut output, RenderUpdate::Baseline(baseline))?;
+        renderer.apply_render_logical(RenderUpdate::Baseline(baseline))?;
         Ok(renderer.file_open_request(ClientMousePosition { row: 0, col: 1 }))
     }
 
     #[test]
-    fn test_client_renderer_apply_layout_when_no_render_arrives_writes_nothing() -> rootcause::Result<()> {
-        let mut renderer = ClientRenderer::with_synchronized_output(
-            layout_snapshot()?,
-            pane_regions_snapshot()?,
-            SynchronizedOutput::Csi,
-        );
-        let output = CountingWriter::default();
-
-        renderer.apply_layout(two_tab_layout()?);
-
-        assert_that!(output.bytes, eq(Vec::<u8>::new()));
-        assert_that!(output.flushes, eq(0));
-        Ok(())
-    }
-
-    #[test]
-    fn test_client_renderer_apply_sidebar_layout_when_frame_exists_flushes_only_sidebar() -> rootcause::Result<()> {
-        let mut renderer = ClientRenderer::with_synchronized_output(
-            layout_snapshot()?,
-            pane_regions_snapshot()?,
-            SynchronizedOutput::Csi,
-        );
-        let mut initial_output = CountingWriter::default();
-        renderer.apply_render(
-            &mut initial_output,
-            muxr_core::RenderUpdate::Baseline(render_baseline()?),
-        )?;
-        let mut output = CountingWriter::default();
-
-        renderer.apply_sidebar_layout(&mut output, two_tab_layout()?)?;
-
-        let terminal_output = output.rendered_string()?;
-        assert_that!(terminal_output, starts_with("\x1b[?2026h"));
-        assert_that!(terminal_output, ends_with("\x1b[?2026l"));
-        assert_that!(terminal_output, contains_substring("tab-1"));
-        assert_that!(terminal_output, not(contains_substring("\x1b[2J")));
-        let hide_index = terminal_output
-            .find("\x1b[?25l")
-            .ok_or_else(|| report!("expected cursor hide before sidebar redraw"))?;
-        let tab_bar_index = terminal_output
-            .find("tab-1")
-            .ok_or_else(|| report!("expected tab bar text"))?;
-        let cursor_restore_index = terminal_output
-            .find("\x1b[1;26H\x1b[?25h")
-            .ok_or_else(|| report!("expected pane cursor restore after sidebar redraw"))?;
-        assert_that!(hide_index, lt(tab_bar_index));
-        assert_that!(tab_bar_index, lt(cursor_restore_index));
-        assert_that!(output.flushes, eq(1));
-        Ok(())
-    }
-
-    #[test]
-    fn test_client_renderer_apply_render_when_layout_is_dirty_flushes_one_complete_frame() -> rootcause::Result<()> {
+    fn test_presentation_transaction_when_layout_is_dirty_encodes_one_complete_frame() -> rootcause::Result<()> {
         let mut renderer = ClientRenderer::with_synchronized_output(
             layout_snapshot()?,
             pane_regions_snapshot()?,
             SynchronizedOutput::Csi,
         );
         renderer.apply_layout(two_tab_layout()?);
-        let mut output = CountingWriter::default();
-
-        let outcome = renderer.apply_render(&mut output, muxr_core::RenderUpdate::Baseline(render_baseline()?))?;
+        let outcome = renderer.apply_render_logical(muxr_core::RenderUpdate::Baseline(render_baseline()?))?;
+        let transaction = renderer
+            .presentation_transaction(None)?
+            .ok_or_else(|| report!("expected presentation transaction"))?;
 
         assert_that!(outcome, eq(ClientRenderOutcome::Drawn));
-        assert_that!(output.flushes, eq(1));
-        let terminal_output = output.rendered_string()?;
-        assert_that!(terminal_output, starts_with("\x1b[?2026h"));
+        let terminal_output = String::from_utf8(transaction)?;
+        assert_that!(terminal_output, contains_substring("\x1b[?2026h"));
         assert_that!(terminal_output, ends_with("\x1b[?2026l"));
         let tab_bar_index = terminal_output.find("tab-1").unwrap_or(usize::MAX);
         let pane_index = terminal_output.find("ab").unwrap_or(usize::MAX);
         assert_that!(terminal_output, not(contains_substring("\x1b[2J")));
         assert_that!(tab_bar_index, lt(pane_index));
-        Ok(())
-    }
-
-    #[test]
-    fn test_client_renderer_when_render_write_fails_reuses_clean_transaction_on_retry() -> rootcause::Result<()> {
-        let mut renderer = ClientRenderer::with_synchronized_output(
-            layout_snapshot()?,
-            pane_regions_snapshot()?,
-            SynchronizedOutput::Csi,
-        );
-        let mut failed_output = FailingWriter;
-
-        assert_that!(
-            renderer
-                .apply_render(
-                    &mut failed_output,
-                    muxr_core::RenderUpdate::Baseline(render_baseline()?),
-                )
-                .is_err(),
-            eq(true)
-        );
-        let mut output = CountingWriter::default();
-        renderer.apply_render(&mut output, muxr_core::RenderUpdate::Baseline(render_baseline()?))?;
-
-        let terminal_output = output.rendered_string()?;
-        assert_that!(terminal_output.matches("\x1b[?2026h").count(), eq(1));
-        assert_that!(terminal_output.matches("\x1b[?2026l").count(), eq(1));
         Ok(())
     }
 
@@ -824,36 +745,28 @@ mod tests {
     }
 
     #[test]
-    fn test_client_renderer_apply_render_when_resync_is_needed_does_not_flush() -> rootcause::Result<()> {
+    fn test_client_renderer_apply_render_logical_when_resync_is_needed_returns_needs_resync() -> rootcause::Result<()> {
         let mut renderer = ClientRenderer::with_synchronized_output(
             layout_snapshot()?,
             pane_regions_snapshot()?,
             SynchronizedOutput::Csi,
         );
-        let mut output = CountingWriter::default();
-
-        let outcome = renderer.apply_render(&mut output, muxr_core::RenderUpdate::Diff(render_diff()?))?;
+        let outcome = renderer.apply_render_logical(muxr_core::RenderUpdate::Diff(render_diff()?))?;
 
         assert_that!(outcome, eq(ClientRenderOutcome::NeedsResync));
-        assert_that!(output.bytes, eq(Vec::<u8>::new()));
-        assert_that!(output.flushes, eq(0));
         Ok(())
     }
 
     #[test]
-    fn test_client_renderer_apply_pane_regions_when_any_motion_is_needed_enables_outer_capture() -> rootcause::Result<()>
-    {
+    fn test_presentation_transaction_when_pane_regions_need_mouse_capture_defers_until_first_render()
+    -> rootcause::Result<()> {
         let mut renderer = ClientRenderer::with_synchronized_output(
             layout_snapshot()?,
             pane_regions_snapshot()?,
             SynchronizedOutput::Csi,
         );
-        let mut output = CountingWriter::default();
-
-        renderer.apply_pane_regions(&mut output, any_motion_pane_regions_snapshot()?)?;
-
-        assert_that!(output.rendered_string()?, eq("\x1b[?1003h"));
-        assert_that!(output.flushes, eq(1));
+        renderer.apply_pane_regions_logical(any_motion_pane_regions_snapshot()?);
+        assert_that!(renderer.presentation_transaction(None)?, eq(None));
         Ok(())
     }
 
@@ -865,37 +778,152 @@ mod tests {
             any_motion_pane_regions_snapshot()?,
             SynchronizedOutput::Csi,
         );
-        let mut output = CountingWriter::default();
-
-        renderer.sync_mouse_capture(&mut output)?;
-        renderer.apply_pane_regions(&mut output, pane_regions_snapshot()?)?;
+        renderer.sync_mouse_capture_logical();
+        renderer.apply_render_logical(muxr_core::RenderUpdate::Baseline(render_baseline()?))?;
+        let committed = renderer.presentation_snapshot();
+        renderer.apply_pane_regions_logical(pane_regions_snapshot()?);
+        let transaction = renderer
+            .presentation_transaction(Some(&committed))?
+            .ok_or_else(|| report!("expected mouse capture transaction"))?;
 
         assert_that!(
-            output.rendered_string()?,
-            eq("\x1b[?1003h\x1b[?1003l\x1b[?1000h\x1b[?1002h\x1b[?1006h")
+            String::from_utf8(transaction)?,
+            eq("\x1b[?1003l\x1b[?1000h\x1b[?1002h\x1b[?1006h")
         );
-        assert_that!(output.flushes, eq(2));
         Ok(())
     }
 
     #[test]
-    fn test_full_redraw_transaction_reasserts_current_mouse_capture_before_frame() -> rootcause::Result<()> {
+    fn test_presentation_transaction_when_initial_frame_reasserts_current_mouse_capture_before_frame()
+    -> rootcause::Result<()> {
         let mut renderer = ClientRenderer::with_synchronized_output(
             layout_snapshot()?,
             pane_regions_snapshot()?,
             SynchronizedOutput::Csi,
         );
-        let mut output = CountingWriter::default();
-        renderer.apply_render(&mut output, muxr_core::RenderUpdate::Baseline(render_baseline()?))?;
-        renderer.apply_pane_regions(&mut output, any_motion_pane_regions_snapshot()?)?;
-
+        renderer.apply_render_logical(muxr_core::RenderUpdate::Baseline(render_baseline()?))?;
+        renderer.apply_pane_regions_logical(any_motion_pane_regions_snapshot()?);
         let transaction = renderer
-            .full_redraw_transaction()?
+            .presentation_transaction(None)?
             .ok_or_else(|| report!("expected a full redraw transaction for the current frame"))?;
         let terminal_output = String::from_utf8(transaction)?;
 
         assert_that!(terminal_output, starts_with("\x1b[?1003h\x1b[?2026h"));
         assert_that!(terminal_output, not(contains_substring("\x1b[2J")));
+        Ok(())
+    }
+
+    #[test]
+    fn test_presentation_transaction_when_initial_frame_arrives_encodes_full_repaint_without_clear()
+    -> rootcause::Result<()> {
+        let mut renderer = ClientRenderer::with_synchronized_output(
+            layout_snapshot()?,
+            pane_regions_snapshot()?,
+            SynchronizedOutput::Csi,
+        );
+
+        assert_that!(
+            renderer.apply_render_logical(muxr_core::RenderUpdate::Baseline(render_baseline()?))?,
+            eq(ClientRenderOutcome::Drawn)
+        );
+        let transaction = renderer
+            .presentation_transaction(None)?
+            .ok_or_else(|| report!("expected initial presentation transaction"))?;
+        let terminal_output = String::from_utf8(transaction)?;
+
+        assert_that!(terminal_output, contains_substring("\x1b[?2026h"));
+        assert_that!(terminal_output, not(contains_substring("\x1b[2J")));
+        Ok(())
+    }
+
+    #[test]
+    fn test_presentation_transaction_when_selection_changes_encodes_delta_from_committed_snapshot()
+    -> rootcause::Result<()> {
+        let mut renderer = ClientRenderer::with_synchronized_output(
+            layout_snapshot()?,
+            pane_regions_snapshot()?,
+            SynchronizedOutput::Csi,
+        );
+        renderer.apply_render_logical(muxr_core::RenderUpdate::Baseline(render_baseline()?))?;
+        let committed = renderer.presentation_snapshot();
+        renderer.apply_selection_input_logical(SelectionInput::Start(ClientMousePosition { row: 0, col: 0 }))?;
+        renderer.apply_selection_input_logical(SelectionInput::Update(ClientMousePosition { row: 0, col: 1 }))?;
+
+        let transaction = renderer
+            .presentation_transaction(Some(&committed))?
+            .ok_or_else(|| report!("expected selection presentation transaction"))?;
+        let terminal_output = String::from_utf8(transaction)?;
+
+        assert_that!(terminal_output, starts_with("\x1b[?2026h"));
+        assert_that!(terminal_output, not(contains_substring("tab-0")));
+        assert_that!(terminal_output, not(contains_substring("\x1b[2J")));
+        Ok(())
+    }
+
+    #[test]
+    fn test_client_renderer_when_region_diff_is_pixel_identical_skips_terminal_transaction() -> rootcause::Result<()> {
+        let mut renderer = ClientRenderer::with_synchronized_output(
+            layout_snapshot()?,
+            pane_regions_snapshot()?,
+            SynchronizedOutput::Csi,
+        );
+        renderer.apply_render_logical(muxr_core::RenderUpdate::Baseline(render_baseline()?))?;
+        let committed = renderer.presentation_snapshot();
+
+        renderer.apply_render_logical(muxr_core::RenderUpdate::Diff(muxr_core::RenderDiff::new(
+            1,
+            2,
+            TerminalSize::new(2, 1)?,
+            muxr_core::RenderCursor {
+                row: 0,
+                col: 1,
+                shape: muxr_core::RenderCursorShape::Default,
+                visibility: muxr_core::RenderCursorVisibility::Visible,
+            },
+            Vec::new(),
+        )?))?;
+
+        assert_that!(renderer.presentation_transaction(Some(&committed))?, eq(None));
+        Ok(())
+    }
+
+    #[test]
+    fn test_client_renderer_when_sidebar_layout_changes_encodes_sidebar_only_transaction() -> rootcause::Result<()> {
+        let mut renderer = ClientRenderer::with_synchronized_output(
+            layout_snapshot()?,
+            pane_regions_snapshot()?,
+            SynchronizedOutput::Csi,
+        );
+        renderer.apply_render_logical(muxr_core::RenderUpdate::Baseline(render_baseline()?))?;
+        let committed = renderer.presentation_snapshot();
+
+        renderer.apply_sidebar_layout_logical(two_tab_layout()?);
+
+        let transaction = renderer
+            .presentation_transaction(Some(&committed))?
+            .ok_or_else(|| report!("expected sidebar-only presentation transaction"))?;
+        let terminal_output = String::from_utf8(transaction)?;
+
+        assert_that!(terminal_output, contains_substring("tab-1"));
+        assert_that!(terminal_output, not(contains_substring("\x1b[2J")));
+        Ok(())
+    }
+
+    #[test]
+    fn test_client_renderer_when_sidebar_follows_layout_defers_presentation_until_render() -> rootcause::Result<()> {
+        let mut renderer = ClientRenderer::with_synchronized_output(
+            layout_snapshot()?,
+            pane_regions_snapshot()?,
+            SynchronizedOutput::Csi,
+        );
+        renderer.apply_render_logical(muxr_core::RenderUpdate::Baseline(render_baseline()?))?;
+        let committed = renderer.presentation_snapshot();
+
+        let layout = two_tab_layout()?;
+        renderer.apply_layout(layout.clone());
+        renderer.apply_sidebar_layout_logical(layout);
+
+        assert_that!(renderer.presentation_transaction(Some(&committed))?, eq(None));
         Ok(())
     }
 
@@ -927,27 +955,23 @@ mod tests {
             pane_regions_snapshot()?,
             SynchronizedOutput::Csi,
         );
-        let mut initial_output = CountingWriter::default();
-        renderer.apply_render(
-            &mut initial_output,
-            muxr_core::RenderUpdate::Baseline(render_baseline()?),
-        )?;
-        let mut output = CountingWriter::default();
-
-        renderer.apply_selection_input(
-            &mut output,
-            SelectionInput::Start(muxr_core::ClientMousePosition { row: 0, col: 0 }),
-        )?;
-        renderer.apply_selection_input(
-            &mut output,
-            SelectionInput::Update(muxr_core::ClientMousePosition { row: 0, col: 1 }),
-        )?;
+        renderer.apply_render_logical(muxr_core::RenderUpdate::Baseline(render_baseline()?))?;
+        let committed = renderer.presentation_snapshot();
+        renderer
+            .apply_selection_input_logical(SelectionInput::Start(muxr_core::ClientMousePosition { row: 0, col: 0 }))?;
+        renderer.apply_selection_input_logical(SelectionInput::Update(muxr_core::ClientMousePosition {
+            row: 0,
+            col: 1,
+        }))?;
 
         assert_that!(test_helpers::selection_contains(&renderer, 0, 0), eq(true));
         assert_that!(test_helpers::selection_contains(&renderer, 0, 1), eq(true));
-        let selection_output = output.rendered_string()?;
+        let selection_output = String::from_utf8(
+            renderer
+                .presentation_transaction(Some(&committed))?
+                .ok_or_else(|| report!("expected selection transaction"))?,
+        )?;
         assert_that!(selection_output, not(contains_substring("\x1b[7m")));
-        assert_that!(output.flushes, eq(1));
         Ok(())
     }
 
@@ -959,27 +983,21 @@ mod tests {
             pane_regions_snapshot()?,
             SynchronizedOutput::Csi,
         );
-        let mut initial_output = CountingWriter::default();
-        renderer.apply_render(
-            &mut initial_output,
-            muxr_core::RenderUpdate::Baseline(render_baseline()?),
-        )?;
-        renderer.apply_selection_input(
-            &mut initial_output,
-            SelectionInput::Start(muxr_core::ClientMousePosition { row: 0, col: 0 }),
-        )?;
-        renderer.apply_selection_input(
-            &mut initial_output,
-            SelectionInput::End(muxr_core::ClientMousePosition { row: 0, col: 1 }),
-        )?;
-        let mut output = CountingWriter::default();
+        renderer.apply_render_logical(muxr_core::RenderUpdate::Baseline(render_baseline()?))?;
+        renderer
+            .apply_selection_input_logical(SelectionInput::Start(muxr_core::ClientMousePosition { row: 0, col: 0 }))?;
+        renderer
+            .apply_selection_input_logical(SelectionInput::End(muxr_core::ClientMousePosition { row: 0, col: 1 }))?;
+        let committed = renderer.presentation_snapshot();
+        renderer.apply_pane_regions_logical(pane_regions_snapshot_with_visible_top_row(1)?);
 
-        renderer.apply_pane_regions(&mut output, pane_regions_snapshot_with_visible_top_row(1)?)?;
-
-        let redrawn = output.rendered_string()?;
+        let redrawn = String::from_utf8(
+            renderer
+                .presentation_transaction(Some(&committed))?
+                .ok_or_else(|| report!("expected selection viewport transaction"))?,
+        )?;
         assert_that!(redrawn, contains_substring("ab"));
         assert_that!(redrawn, not(contains_substring("\x1b[7m")));
-        assert_that!(output.flushes, eq(1));
         Ok(())
     }
 
@@ -991,22 +1009,14 @@ mod tests {
             three_row_pane_regions_snapshot(9)?,
             SynchronizedOutput::Csi,
         );
-        let mut output = CountingWriter::default();
-        renderer.apply_render(
-            &mut output,
-            muxr_core::RenderUpdate::Baseline(three_row_render_baseline("aa", "bb", "cc")?),
-        )?;
-        renderer.apply_selection_input(
-            &mut output,
-            SelectionInput::Start(ClientMousePosition { row: 0, col: 0 }),
-        )?;
+        renderer.apply_render_logical(muxr_core::RenderUpdate::Baseline(three_row_render_baseline(
+            "aa", "bb", "cc",
+        )?))?;
+        renderer.apply_selection_input_logical(SelectionInput::Start(ClientMousePosition { row: 0, col: 0 }))?;
         let scroll_request = renderer
             .set_selection_edge_drag(ClientMousePosition { row: 3, col: 1 }, None)
             .map(|request| request.into_parts().1);
-        renderer.apply_selection_input(
-            &mut output,
-            SelectionInput::Update(ClientMousePosition { row: 3, col: 1 }),
-        )?;
+        renderer.apply_selection_input_logical(SelectionInput::Update(ClientMousePosition { row: 3, col: 1 }))?;
 
         assert_that!(
             scroll_request,
@@ -1016,17 +1026,92 @@ mod tests {
             }))
         );
 
-        renderer.apply_pane_regions(&mut output, three_row_pane_regions_snapshot(10)?)?;
-        renderer.apply_render(
-            &mut output,
-            muxr_core::RenderUpdate::Baseline(three_row_render_baseline("bb", "cc", "dd")?),
-        )?;
+        renderer.apply_pane_regions_logical(three_row_pane_regions_snapshot(10)?);
+        renderer.apply_render_logical(muxr_core::RenderUpdate::Baseline(three_row_render_baseline(
+            "bb", "cc", "dd",
+        )?))?;
 
         assert_that!(
             test_helpers::selected_text(&renderer),
             eq(Some("aa\nbb\ncc\ndd".to_owned()))
         );
         assert_that!(test_helpers::selection_contains(&renderer, 2, 0), eq(true));
+        Ok(())
+    }
+
+    #[test]
+    fn test_client_renderer_acknowledge_presentation_when_edge_scroll_render_flushes_releases_next_request()
+    -> rootcause::Result<()> {
+        let mut renderer = ClientRenderer::with_synchronized_output(
+            layout_snapshot()?,
+            three_row_pane_regions_snapshot(9)?,
+            SynchronizedOutput::Csi,
+        );
+        renderer.apply_render_logical(muxr_core::RenderUpdate::Baseline(three_row_render_baseline(
+            "aa", "bb", "cc",
+        )?))?;
+        renderer.apply_selection_input_logical(SelectionInput::Start(ClientMousePosition { row: 0, col: 0 }))?;
+        let request = renderer
+            .set_selection_edge_drag(ClientMousePosition { row: 3, col: 1 }, None)
+            .ok_or_else(|| report!("expected edge-scroll request"))?;
+        let (pending, _) = request.into_parts();
+        renderer.mark_selection_edge_scroll_sent(pending);
+        renderer.apply_pane_regions_logical(three_row_pane_regions_snapshot(10)?);
+
+        let before_render = renderer.presentation_snapshot();
+        renderer.acknowledge_presentation(&before_render);
+        assert_that!(renderer.selection_edge_scroll_request(), eq(None));
+
+        renderer.apply_render_logical(muxr_core::RenderUpdate::Baseline(three_row_render_baseline(
+            "bb", "cc", "dd",
+        )?))?;
+        let flushed_snapshot = renderer.presentation_snapshot();
+        renderer.acknowledge_presentation(&flushed_snapshot);
+
+        assert_that!(renderer.selection_edge_scroll_request().is_some(), eq(true));
+        Ok(())
+    }
+
+    #[test]
+    fn test_client_renderer_when_old_edge_scroll_flushes_keeps_new_pending_request() -> rootcause::Result<()> {
+        let mut renderer = ClientRenderer::with_synchronized_output(
+            layout_snapshot()?,
+            three_row_pane_regions_snapshot(9)?,
+            SynchronizedOutput::Csi,
+        );
+        renderer.apply_render_logical(muxr_core::RenderUpdate::Baseline(three_row_render_baseline(
+            "aa", "bb", "cc",
+        )?))?;
+        renderer.apply_selection_input_logical(SelectionInput::Start(ClientMousePosition { row: 0, col: 0 }))?;
+
+        let first_request = renderer
+            .set_selection_edge_drag(ClientMousePosition { row: 2, col: 1 }, None)
+            .ok_or_else(|| report!("expected first edge-scroll request"))?;
+        let (first_pending, _) = first_request.into_parts();
+        renderer.mark_selection_edge_scroll_sent(first_pending);
+        renderer.apply_pane_regions_logical(three_row_pane_regions_snapshot(10)?);
+        renderer.apply_render_logical(muxr_core::RenderUpdate::Baseline(three_row_render_baseline(
+            "bb", "cc", "dd",
+        )?))?;
+        let first_snapshot = renderer.presentation_snapshot();
+
+        let second_request = renderer
+            .set_selection_edge_drag(ClientMousePosition { row: 0, col: 1 }, None)
+            .ok_or_else(|| report!("expected second edge-scroll request"))?;
+        let (second_pending, _) = second_request.into_parts();
+        renderer.mark_selection_edge_scroll_sent(second_pending);
+        renderer.apply_pane_regions_logical(three_row_pane_regions_snapshot(9)?);
+
+        renderer.acknowledge_presentation(&first_snapshot);
+        assert_that!(renderer.selection_edge_scroll_request(), eq(None));
+
+        renderer.apply_render_logical(muxr_core::RenderUpdate::Baseline(three_row_render_baseline(
+            "aa", "bb", "cc",
+        )?))?;
+        let second_snapshot = renderer.presentation_snapshot();
+        renderer.acknowledge_presentation(&second_snapshot);
+
+        assert_that!(renderer.selection_edge_scroll_request().is_some(), eq(true));
         Ok(())
     }
 
@@ -1042,15 +1127,10 @@ mod tests {
             three_row_pane_regions_snapshot(9)?,
             SynchronizedOutput::Csi,
         );
-        let mut output = CountingWriter::default();
-        renderer.apply_render(
-            &mut output,
-            muxr_core::RenderUpdate::Baseline(three_row_render_baseline("aa", "bb", "cc")?),
-        )?;
-        renderer.apply_selection_input(
-            &mut output,
-            SelectionInput::Start(ClientMousePosition { row: 1, col: 0 }),
-        )?;
+        renderer.apply_render_logical(muxr_core::RenderUpdate::Baseline(three_row_render_baseline(
+            "aa", "bb", "cc",
+        )?))?;
+        renderer.apply_selection_input_logical(SelectionInput::Start(ClientMousePosition { row: 1, col: 0 }))?;
 
         let request = renderer
             .set_selection_edge_drag(position, None)
@@ -1071,15 +1151,10 @@ mod tests {
             three_row_pane_regions_snapshot(9)?,
             SynchronizedOutput::Csi,
         );
-        let mut output = CountingWriter::default();
-        renderer.apply_render(
-            &mut output,
-            muxr_core::RenderUpdate::Baseline(three_row_render_baseline("aa", "bb", "cc")?),
-        )?;
-        renderer.apply_selection_input(
-            &mut output,
-            SelectionInput::Start(ClientMousePosition { row: 1, col: 0 }),
-        )?;
+        renderer.apply_render_logical(muxr_core::RenderUpdate::Baseline(three_row_render_baseline(
+            "aa", "bb", "cc",
+        )?))?;
+        renderer.apply_selection_input_logical(SelectionInput::Start(ClientMousePosition { row: 1, col: 0 }))?;
         let position = ClientMousePosition { row: 2, col: 1 };
         let direction = PaneScrollDirection::Down;
         let request = renderer
@@ -1106,15 +1181,10 @@ mod tests {
             three_row_pane_regions_snapshot(9)?,
             SynchronizedOutput::Csi,
         );
-        let mut output = CountingWriter::default();
-        renderer.apply_render(
-            &mut output,
-            muxr_core::RenderUpdate::Baseline(three_row_render_baseline("aa", "bb", "cc")?),
-        )?;
-        renderer.apply_selection_input(
-            &mut output,
-            SelectionInput::Start(ClientMousePosition { row: 1, col: 0 }),
-        )?;
+        renderer.apply_render_logical(muxr_core::RenderUpdate::Baseline(three_row_render_baseline(
+            "aa", "bb", "cc",
+        )?))?;
+        renderer.apply_selection_input_logical(SelectionInput::Start(ClientMousePosition { row: 1, col: 0 }))?;
         let position = ClientMousePosition { row: 2, col: 1 };
         let direction = PaneScrollDirection::Down;
         let request = renderer
@@ -1126,11 +1196,12 @@ mod tests {
         renderer.apply_scroll_pane_line_result(position, direction, PaneScrollLineMove::Moved);
 
         assert_that!(renderer.selection_edge_scroll_request(), eq(None));
-        renderer.apply_pane_regions(&mut output, three_row_pane_regions_snapshot(10)?)?;
-        renderer.apply_render(
-            &mut output,
-            muxr_core::RenderUpdate::Baseline(three_row_render_baseline("bb", "cc", "dd")?),
-        )?;
+        renderer.apply_pane_regions_logical(three_row_pane_regions_snapshot(10)?);
+        renderer.apply_render_logical(muxr_core::RenderUpdate::Baseline(three_row_render_baseline(
+            "bb", "cc", "dd",
+        )?))?;
+        let rendered_snapshot = renderer.presentation_snapshot();
+        renderer.acknowledge_presentation(&rendered_snapshot);
         let retry = renderer
             .selection_edge_scroll_request()
             .map(|request| request.into_parts().1);
@@ -1150,11 +1221,7 @@ mod tests {
             word_pane_regions_snapshot()?,
             SynchronizedOutput::Csi,
         );
-        let mut initial_output = CountingWriter::default();
-        renderer.apply_render(
-            &mut initial_output,
-            muxr_core::RenderUpdate::Baseline(word_render_baseline()?),
-        )?;
+        renderer.apply_render_logical(muxr_core::RenderUpdate::Baseline(word_render_baseline()?))?;
         let now = Instant::now();
         let first_position = ClientMousePosition { row: 0, col: first_col };
         let second_position = ClientMousePosition {
@@ -1164,16 +1231,11 @@ mod tests {
         let second_click_at = now
             .checked_add(Duration::from_millis(100))
             .ok_or_else(|| report!("muxr double-click selection test instant overflowed"))?;
-        let mut output = CountingWriter::default();
-
-        renderer.apply_selection_input_at(&mut output, SelectionInput::Start(first_position), now)?;
-        renderer.apply_selection_input_at(&mut output, SelectionInput::End(first_position), now)?;
-        renderer.apply_selection_input_at(&mut output, SelectionInput::Start(second_position), second_click_at)?;
+        renderer.apply_selection_input_at_logical(SelectionInput::Start(first_position), now)?;
+        renderer.apply_selection_input_at_logical(SelectionInput::End(first_position), now)?;
+        renderer.apply_selection_input_at_logical(SelectionInput::Start(second_position), second_click_at)?;
 
         assert_that!(test_helpers::selected_text(&renderer), eq(Some("two".to_owned())));
-        let selection_output = output.rendered_string()?;
-        assert_that!(selection_output, not(contains_substring("\x1b[7m")));
-        assert_that!(output.flushes, eq(1));
         Ok(())
     }
 
@@ -1184,22 +1246,16 @@ mod tests {
             word_pane_regions_snapshot()?,
             SynchronizedOutput::Csi,
         );
-        let mut initial_output = CountingWriter::default();
-        renderer.apply_render(
-            &mut initial_output,
-            muxr_core::RenderUpdate::Baseline(word_render_baseline()?),
-        )?;
+        renderer.apply_render_logical(muxr_core::RenderUpdate::Baseline(word_render_baseline()?))?;
         let now = Instant::now();
         let position = ClientMousePosition { row: 0, col: 4 };
         let second_click_at = now
             .checked_add(Duration::from_millis(100))
             .ok_or_else(|| report!("muxr retained double-click selection test instant overflowed"))?;
-        let mut output = CountingWriter::default();
-
-        renderer.apply_selection_input_at(&mut output, SelectionInput::Start(position), now)?;
-        renderer.apply_selection_input_at(&mut output, SelectionInput::End(position), now)?;
-        renderer.apply_pane_regions(&mut output, word_pane_regions_snapshot()?)?;
-        renderer.apply_selection_input_at(&mut output, SelectionInput::Start(position), second_click_at)?;
+        renderer.apply_selection_input_at_logical(SelectionInput::Start(position), now)?;
+        renderer.apply_selection_input_at_logical(SelectionInput::End(position), now)?;
+        renderer.apply_pane_regions_logical(word_pane_regions_snapshot()?);
+        renderer.apply_selection_input_at_logical(SelectionInput::Start(position), second_click_at)?;
 
         assert_that!(test_helpers::selected_text(&renderer), eq(Some("two".to_owned())));
         Ok(())
@@ -1381,44 +1437,5 @@ mod tests {
 
     fn render_cell(text: &str) -> muxr_core::RenderCell {
         muxr_core::RenderCell::narrow(text, muxr_core::RenderStyle::default())
-    }
-
-    #[derive(Default)]
-    struct CountingWriter {
-        bytes: Vec<u8>,
-        flushes: usize,
-    }
-
-    impl CountingWriter {
-        fn rendered_string(&self) -> rootcause::Result<String> {
-            Ok(String::from_utf8(self.bytes.clone()).context("muxr client render test output was not utf8")?)
-        }
-    }
-
-    impl Write for CountingWriter {
-        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-            self.bytes.extend_from_slice(buf);
-            Ok(buf.len())
-        }
-
-        fn flush(&mut self) -> std::io::Result<()> {
-            self.flushes = self.flushes.saturating_add(1);
-            Ok(())
-        }
-    }
-
-    struct FailingWriter;
-
-    impl Write for FailingWriter {
-        fn write(&mut self, _buf: &[u8]) -> std::io::Result<usize> {
-            Err(std::io::Error::new(
-                std::io::ErrorKind::BrokenPipe,
-                "injected muxr client write failure",
-            ))
-        }
-
-        fn flush(&mut self) -> std::io::Result<()> {
-            Ok(())
-        }
     }
 }

@@ -154,14 +154,17 @@ pub enum MouseAnyMotionCapture {
     Enabled,
 }
 
-/// Enable or disable outer-terminal any-motion mouse capture.
+/// Queue the outer-terminal any-motion mouse capture mode.
 ///
 /// Pane applications request this mode dynamically. Button-event capture remains enabled, so disabling any-motion
 /// returns the client to the lower-volume mouse mode.
 ///
 /// # Errors
-/// - The terminal mode sequence cannot be written or flushed.
-pub fn set_mouse_any_motion_capture(stdout: &mut impl Write, capture: MouseAnyMotionCapture) -> rootcause::Result<()> {
+/// - The terminal mode sequence cannot be queued.
+pub fn queue_mouse_any_motion_capture(
+    stdout: &mut impl Write,
+    capture: MouseAnyMotionCapture,
+) -> rootcause::Result<()> {
     match capture {
         MouseAnyMotionCapture::Enabled => {
             queue_bytes(stdout, MOUSE_ANY_EVENT_CAPTURE_ENABLE)?;
@@ -173,9 +176,6 @@ pub fn set_mouse_any_motion_capture(stdout: &mut impl Write, capture: MouseAnyMo
             queue_bytes(stdout, MOUSE_SGR_ENABLE)?;
         }
     }
-    stdout
-        .flush()
-        .context("failed to flush muxr any-motion mouse capture")?;
     Ok(())
 }
 
@@ -289,27 +289,25 @@ mod tests {
     }
 
     #[test]
-    fn test_set_mouse_any_motion_capture_when_enabled_writes_any_motion_sequence() -> rootcause::Result<()> {
-        let mut output = CountingWriter::default();
+    fn test_queue_mouse_any_motion_capture_when_enabled_writes_any_motion_sequence() -> rootcause::Result<()> {
+        let mut output = Vec::new();
 
-        set_mouse_any_motion_capture(&mut output, MouseAnyMotionCapture::Enabled)?;
+        queue_mouse_any_motion_capture(&mut output, MouseAnyMotionCapture::Enabled)?;
 
-        assert_that!(output.rendered_string()?, eq("\x1b[?1003h"));
-        assert_that!(output.flushes, eq(1));
+        assert_that!(String::from_utf8(output)?, eq("\x1b[?1003h"));
         Ok(())
     }
 
     #[test]
-    fn test_set_mouse_any_motion_capture_when_disabled_reasserts_button_capture() -> rootcause::Result<()> {
-        let mut output = CountingWriter::default();
+    fn test_queue_mouse_any_motion_capture_when_disabled_reasserts_button_capture() -> rootcause::Result<()> {
+        let mut output = Vec::new();
 
-        set_mouse_any_motion_capture(&mut output, MouseAnyMotionCapture::Disabled)?;
+        queue_mouse_any_motion_capture(&mut output, MouseAnyMotionCapture::Disabled)?;
 
         assert_that!(
-            output.rendered_string()?,
+            String::from_utf8(output)?,
             eq("\x1b[?1003l\x1b[?1000h\x1b[?1002h\x1b[?1006h")
         );
-        assert_that!(output.flushes, eq(1));
         Ok(())
     }
 
@@ -361,29 +359,5 @@ mod tests {
         assert_that!(rendered, contains_substring("\x1b[0m"));
         assert_that!(rendered, starts_with("\x1b]8;;\x1b\\"));
         Ok(())
-    }
-
-    #[derive(Default)]
-    struct CountingWriter {
-        bytes: Vec<u8>,
-        flushes: usize,
-    }
-
-    impl CountingWriter {
-        fn rendered_string(&self) -> rootcause::Result<String> {
-            Ok(String::from_utf8(self.bytes.clone()).context("muxr terminal test output was not utf8")?)
-        }
-    }
-
-    impl std::io::Write for CountingWriter {
-        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-            self.bytes.extend_from_slice(buf);
-            Ok(buf.len())
-        }
-
-        fn flush(&mut self) -> std::io::Result<()> {
-            self.flushes = self.flushes.saturating_add(1);
-            Ok(())
-        }
     }
 }
