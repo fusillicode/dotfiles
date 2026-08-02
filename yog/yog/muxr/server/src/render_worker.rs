@@ -21,17 +21,17 @@ use crate::pane::layout::PaneLayout;
 use crate::pane::render::PaneRenderConfig;
 use crate::pane::render::PaneRenderLayout;
 use crate::pane::render::RenderComposer;
-use crate::pty::PtyRenderSnapshot;
+use crate::pty::PtyHandle;
 use crate::render_state::ClientRenderDmg;
 use crate::session::tracing::ClientEventSendFailure;
 
 const MANDATORY_EVENT_LIMIT: usize = 128;
 
-/// Immutable state published by the attached-session actor.
+/// Compact render intent published by the attached-session actor.
 ///
-/// The live actor captures terminal state and layout geometry, but only the worker turns those inputs into a render
-/// sequence. This keeps `RenderComposer` and the transport writer under one task's ownership.
-#[derive(Clone, Debug, Eq, PartialEq)]
+/// The worker alone snapshots terminal state, composes, and writes output, so the session actor can return to
+/// requests without copying visible terminal grids.
+#[derive(Clone)]
 pub struct RenderInput {
     active_pane: PaneId,
     attention_panes: Vec<PaneId>,
@@ -40,8 +40,25 @@ pub struct RenderInput {
     generation: u64,
     pane_layout: Arc<PaneLayout>,
     pane_render: PaneRenderConfig,
-    pane_snapshots: BTreeMap<PaneId, PtyRenderSnapshot>,
+    pane_handles: BTreeMap<PaneId, PtyHandle>,
     size: TerminalSize,
+}
+
+impl std::fmt::Debug for RenderInput {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("RenderInput")
+            .field("active_pane", &self.active_pane)
+            .field("attention_panes", &self.attention_panes)
+            .field("damage", &self.damage)
+            .field("force_baseline", &self.force_baseline)
+            .field("generation", &self.generation)
+            .field("pane_layout", &self.pane_layout)
+            .field("pane_render", &self.pane_render)
+            .field("pane_handle_count", &self.pane_handles.len())
+            .field("size", &self.size)
+            .finish()
+    }
 }
 
 impl RenderInput {
@@ -54,7 +71,7 @@ impl RenderInput {
         pane_render: PaneRenderConfig,
         active_pane: PaneId,
         pane_layout: PaneLayout,
-        pane_snapshots: BTreeMap<PaneId, PtyRenderSnapshot>,
+        pane_handles: BTreeMap<PaneId, PtyHandle>,
         size: TerminalSize,
         attention_panes: Vec<PaneId>,
         damage: ClientRenderDmg,
@@ -68,7 +85,7 @@ impl RenderInput {
             generation,
             pane_layout: Arc::new(pane_layout),
             pane_render,
-            pane_snapshots,
+            pane_handles,
             size,
         }
     }
@@ -79,29 +96,48 @@ impl RenderInput {
             .regions()
             .iter()
             .map(|region| {
-                let snapshot = self.pane_snapshots.get(&region.id).ok_or_else(|| {
-                    rootcause::report!("muxr render command is missing a pane snapshot")
-                        .attach(format!("pane={}", region.id))
-                })?;
+                let metadata = self
+                    .pane_handles
+                    .get(&region.id)
+                    .ok_or_else(|| {
+                        rootcause::report!("muxr render command is missing a pane handle")
+                            .attach(format!("pane={}", region.id))
+                    })?
+                    .pane_render_metadata()?;
                 PaneRegionSnapshot::new(
                     region.id,
                     region.area.origin.col,
                     region.area.origin.row,
                     region.area.size.cols,
                     region.area.size.rows,
-                    snapshot.mouse_mode(),
-                    snapshot.visible_top_row(),
+                    metadata.mouse_mode(),
+                    metadata.visible_top_row(),
                 )
-                .and_then(|region| region.with_wrapped_rows(snapshot.visible_row_wraps().to_vec()))
+                .and_then(|region| region.with_wrapped_rows(metadata.visible_row_wraps().to_vec()))
             })
             .collect::<rootcause::Result<Vec<_>>>()?;
         PaneRegionsSnapshot::new(regions)
+    }
+
+    fn pane_render_snapshot(&self, pane_id: PaneId) -> rootcause::Result<crate::pty::PtyRenderSnapshot> {
+        self.pane_handles
+            .get(&pane_id)
+            .ok_or_else(|| {
+                rootcause::report!("muxr render command is missing a pane handle").attach(format!("pane={pane_id}"))
+            })?
+            .pane_render_snapshot()
+    }
+
+    fn with_complete_damage(mut self) -> Self {
+        // Compare the complete newest state with the compositor's last sent frame so no earlier pane damage is lost
+        // with the discarded input.
+        self.damage = ClientRenderDmg::Full;
+        self
     }
 }
 
 /// A render command is either immutable work for the live worker or a precomposed update used by focused direct-writer
 /// tests. The production `Attached` variant never contains a `RenderComposer`.
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ServerRenderCommand {
     Inputs(RenderInput),
     Ready {
@@ -199,7 +235,7 @@ impl RenderWorker {
             RenderWorkerMode::Attached { .. } => Ok(ServerRenderCommand::Inputs(input)),
             RenderWorkerMode::Detached(composer) => {
                 let pane_regions = input.pane_regions()?;
-                let render = Self::compose(composer, &input, false)?;
+                let render = Self::compose(composer, &input)?;
                 Ok(ServerRenderCommand::Ready { pane_regions, render })
             }
         }
@@ -255,13 +291,13 @@ impl RenderWorker {
                     }
                     write_result.map_err(WorkerCommandFailure::from_write)
                 }
-                ServerOutputCommand::Render { input, superseded } => {
+                ServerOutputCommand::Render(input) => {
                     async {
                         let next_regions = input
                             .pane_regions()
                             .map_err(|error| WorkerCommandFailure::from_local(&error))?;
                         let force_regions = input.force_baseline && composer.has_baseline();
-                        let render = Self::compose(&mut composer, &input, superseded)
+                        let render = Self::compose(&mut composer, &input)
                             .map_err(|error| WorkerCommandFailure::from_local(&error))?;
                         if force_regions || pane_regions.as_ref() != Some(&next_regions) {
                             Self::write_event(
@@ -318,33 +354,29 @@ impl RenderWorker {
         }
     }
 
-    fn compose(
-        composer: &mut RenderComposer,
-        input: &RenderInput,
-        superseded: bool,
-    ) -> rootcause::Result<Option<RenderUpdate>> {
+    fn compose(composer: &mut RenderComposer, input: &RenderInput) -> rootcause::Result<Option<RenderUpdate>> {
         let layout = PaneRenderLayout {
             active_pane: input.active_pane,
             pane_layout: &input.pane_layout,
         };
-        if input.force_baseline || superseded {
+        if input.force_baseline {
             return composer
-                .render_baseline_snapshots(
+                .render_baseline_with_snapshot(
                     input.pane_render,
                     layout,
                     &input.size,
                     &input.attention_panes,
-                    &input.pane_snapshots,
+                    |pane_id| input.pane_render_snapshot(pane_id),
                 )
                 .map(Some);
         }
-        composer.render_diff_snapshots(
+        composer.render_diff_with_snapshot(
             input.pane_render,
             layout,
             &input.size,
             &input.attention_panes,
             &input.damage,
-            &input.pane_snapshots,
+            |pane_id| input.pane_render_snapshot(pane_id),
         )
     }
 
@@ -451,7 +483,7 @@ impl RenderWorkerSender {
 #[derive(Debug)]
 enum ServerOutputCommand {
     Mandatory(MandatoryOutput),
-    Render { input: RenderInput, superseded: bool },
+    Render(RenderInput),
 }
 
 #[derive(Debug)]
@@ -504,13 +536,12 @@ impl WorkerCommandFailure {
 
 /// Bounded ingress queue for the single server render/output owner.
 ///
-/// Mandatory events retain FIFO order and are always emitted before the latest pending render. A replacement is
-/// explicitly marked so only the worker can establish the successor state with a fresh baseline.
+/// Mandatory events retain FIFO order and are always emitted before the latest pending render. Replacements carry a
+/// full-damage input, so the worker compares the complete latest state against its last sent frame.
 #[derive(Debug)]
 pub struct ServerOutputQueue {
     mandatory: VecDeque<MandatoryOutput>,
     pending_render: Option<RenderInput>,
-    pending_render_superseded: bool,
     mandatory_limit: usize,
 }
 
@@ -525,7 +556,6 @@ impl ServerOutputQueue {
         Self {
             mandatory: VecDeque::new(),
             pending_render: None,
-            pending_render_superseded: false,
             mandatory_limit,
         }
     }
@@ -611,8 +641,9 @@ impl ServerOutputQueue {
     }
 
     pub fn replace_render(&mut self, input: RenderInput) -> QueueRender {
-        let replaced = self.pending_render.replace(input).is_some();
-        self.pending_render_superseded |= replaced;
+        let replaced = self.pending_render.is_some();
+        let input = if replaced { input.with_complete_damage() } else { input };
+        self.pending_render = Some(input);
         if replaced {
             QueueRender::Replaced
         } else {
@@ -631,12 +662,7 @@ impl ServerOutputQueue {
         self.mandatory
             .pop_front()
             .map(ServerOutputCommand::Mandatory)
-            .or_else(|| {
-                self.pending_render.take().map(|input| {
-                    let superseded = std::mem::take(&mut self.pending_render_superseded);
-                    ServerOutputCommand::Render { input, superseded }
-                })
-            })
+            .or_else(|| self.pending_render.take().map(ServerOutputCommand::Render))
     }
 }
 
@@ -673,16 +699,16 @@ mod tests {
     }
 
     #[test]
-    fn test_server_output_queue_marks_replaced_render_for_worker_baseline() -> rootcause::Result<()> {
+    fn test_server_output_queue_marks_replaced_render_with_complete_damage() -> rootcause::Result<()> {
         let mut queue = ServerOutputQueue::new(1);
         assert_that!(queue.replace_render(input(1)?), eq(QueueRender::Queued));
         assert_that!(queue.replace_render(input(2)?), eq(QueueRender::Replaced));
 
-        let Some(ServerOutputCommand::Render { input, superseded }) = queue.pop() else {
+        let Some(ServerOutputCommand::Render(input)) = queue.pop() else {
             return Err(rootcause::report!("expected pending render"));
         };
         assert_that!(input.generation, eq(2));
-        assert_that!(superseded, eq(true));
+        assert_that!(input.damage, eq(ClientRenderDmg::Full));
         Ok(())
     }
 
@@ -701,7 +727,7 @@ mod tests {
         ) {
             return Err(rootcause::report!("expected mandatory event before render"));
         }
-        if !matches!(queue.pop(), Some(ServerOutputCommand::Render { superseded: false, .. })) {
+        if !matches!(queue.pop(), Some(ServerOutputCommand::Render(_))) {
             return Err(rootcause::report!(
                 "expected non-superseded render after mandatory event"
             ));
@@ -710,8 +736,7 @@ mod tests {
     }
 
     #[test]
-    fn test_server_output_queue_atomically_replaces_old_render_with_layout_dependent_baseline() -> rootcause::Result<()>
-    {
+    fn test_server_output_queue_atomically_replaces_old_render_with_complete_successor() -> rootcause::Result<()> {
         let mut queue = ServerOutputQueue::new(2);
         assert_that!(queue.replace_render(input(1)?), eq(QueueRender::Queued));
         assert_that!(
@@ -728,11 +753,11 @@ mod tests {
         ) {
             return Err(rootcause::report!("expected atomic mandatory event before successor"));
         }
-        let Some(ServerOutputCommand::Render { input, superseded }) = queue.pop() else {
+        let Some(ServerOutputCommand::Render(input)) = queue.pop() else {
             return Err(rootcause::report!("expected atomic successor render"));
         };
         assert_that!(input.generation, eq(2));
-        assert_that!(superseded, eq(true));
+        assert_that!(input.damage, eq(ClientRenderDmg::Full));
         assert_that!(queue.pop(), none());
         Ok(())
     }
@@ -786,19 +811,18 @@ mod tests {
     }
 
     #[test]
-    fn test_superseded_render_generates_baseline_inside_worker_composer() -> rootcause::Result<()> {
+    fn test_superseded_render_does_not_generate_a_baseline_inside_worker_composer() -> rootcause::Result<()> {
         let mut composer = RenderComposer::default();
-        let first = RenderWorker::compose(&mut composer, &input(1)?, false)?
+        let first_input = input(1)?;
+        let first = RenderWorker::compose(&mut composer, &first_input)?
             .ok_or_else(|| rootcause::report!("initial worker render was empty"))?;
         if !matches!(first, RenderUpdate::Baseline(_)) {
             return Err(rootcause::report!("initial worker render was not a baseline"));
         }
 
-        let successor = RenderWorker::compose(&mut composer, &input(2)?, true)?
-            .ok_or_else(|| rootcause::report!("superseded worker render was empty"))?;
-        if !matches!(successor, RenderUpdate::Baseline(_)) {
-            return Err(rootcause::report!("superseded worker render was not a baseline"));
-        }
+        let successor_input = input(2)?;
+        let successor = RenderWorker::compose(&mut composer, &successor_input)?;
+        assert_that!(matches!(successor, Some(RenderUpdate::Baseline(_))), eq(false));
         Ok(())
     }
 }

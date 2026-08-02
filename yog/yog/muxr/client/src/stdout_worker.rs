@@ -9,6 +9,7 @@ use std::thread;
 use rootcause::report;
 
 const MANDATORY_TRANSACTION_LIMIT: usize = 128;
+const QUEUED_TRANSACTION_BYTE_LIMIT: usize = 4 * 1024 * 1024;
 
 /// A single stdout owner with ordered mandatory writes and one replaceable render slot.
 pub struct StdoutWorker {
@@ -29,19 +30,14 @@ struct Shared {
 struct State {
     closed: bool,
     failed: Option<String>,
-    output: VecDeque<OutputCommand>,
+    output: VecDeque<OutputCmd>,
     mandatory_count: usize,
+    queued_bytes: usize,
 }
 
-enum OutputCommand {
+enum OutputCmd {
     Mandatory(Vec<u8>),
     Render(Vec<u8>),
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ReplaceRender {
-    Queued,
-    Replaced,
 }
 
 impl StdoutWorker {
@@ -53,6 +49,7 @@ impl StdoutWorker {
                 failed: None,
                 output: VecDeque::new(),
                 mandatory_count: 0,
+                queued_bytes: 0,
             }),
             wake: Condvar::new(),
         });
@@ -94,7 +91,12 @@ impl StdoutSender {
         if state.mandatory_count == MANDATORY_TRANSACTION_LIMIT {
             return Err(report!("muxr client stdout mandatory queue is full"));
         }
-        state.output.push_back(OutputCommand::Mandatory(transaction));
+        self::reserve_queued_bytes(&state, transaction.len())?;
+        state.queued_bytes = state
+            .queued_bytes
+            .checked_add(transaction.len())
+            .ok_or_else(|| report!("muxr client stdout queued byte count overflowed"))?;
+        state.output.push_back(OutputCmd::Mandatory(transaction));
         state.mandatory_count = state
             .mandatory_count
             .checked_add(1)
@@ -107,52 +109,71 @@ impl StdoutSender {
     pub fn replace_render(
         &self,
         transaction: Vec<u8>,
-        full_redraw: impl FnOnce() -> rootcause::Result<Option<Vec<u8>>>,
-    ) -> rootcause::Result<ReplaceRender> {
+        replacement_transaction: impl FnOnce() -> rootcause::Result<Option<Vec<u8>>>,
+    ) -> rootcause::Result<()> {
         let mut state = self::lock_state(&self.shared)?;
         ensure_open(&state)?;
-        let State {
-            output,
-            mandatory_count,
-            ..
-        } = &mut *state;
-        let replaced = self::replace_render_command(output, mandatory_count, transaction, full_redraw)?;
+        self::replace_render_cmd(&mut state, transaction, replacement_transaction)?;
         drop(state);
         self.shared.wake.notify_one();
-        Ok(if replaced {
-            ReplaceRender::Replaced
-        } else {
-            ReplaceRender::Queued
-        })
+        Ok(())
     }
 }
 
-fn replace_render_command(
-    output: &mut VecDeque<OutputCommand>,
-    mandatory_count: &mut usize,
+fn replace_render_cmd(
+    state: &mut State,
     transaction: Vec<u8>,
-    full_redraw: impl FnOnce() -> rootcause::Result<Option<Vec<u8>>>,
+    replacement_transaction: impl FnOnce() -> rootcause::Result<Option<Vec<u8>>>,
 ) -> rootcause::Result<bool> {
-    if let Some(position) = output
-        .iter_mut()
-        .position(|command| matches!(command, OutputCommand::Render(_)))
-    {
-        let full_redraw = full_redraw()?
+    if let Some(position) = state.output.iter().position(|cmd| matches!(cmd, OutputCmd::Render(_))) {
+        let replacement_transaction = replacement_transaction()?
             .ok_or_else(|| report!("muxr client cannot supersede a pending render without a full redraw"))?;
-        let superseded_mandatory = output
+        let retained_bytes = state
+            .output
             .iter()
-            .skip(position.saturating_add(1))
-            .filter(|command| matches!(command, OutputCommand::Mandatory(_)))
+            .take(position)
+            .map(OutputCmd::len)
+            .try_fold(replacement_transaction.len(), usize::checked_add)
+            .ok_or_else(|| report!("muxr client stdout queued byte count overflowed"))?;
+        if retained_bytes > QUEUED_TRANSACTION_BYTE_LIMIT {
+            return Err(report!("muxr client stdout queued byte budget is exhausted"));
+        }
+        state.output.truncate(position);
+        state.mandatory_count = state
+            .output
+            .iter()
+            .filter(|cmd| matches!(cmd, OutputCmd::Mandatory(_)))
             .count();
-        *mandatory_count = mandatory_count
-            .checked_sub(superseded_mandatory)
-            .ok_or_else(|| report!("muxr client stdout mandatory queue count underflowed"))?;
-        output.truncate(position);
-        output.push_back(OutputCommand::Render(full_redraw));
+        state.queued_bytes = retained_bytes;
+        state.output.push_back(OutputCmd::Render(replacement_transaction));
         Ok(true)
     } else {
-        output.push_back(OutputCommand::Render(transaction));
+        self::reserve_queued_bytes(state, transaction.len())?;
+        state.queued_bytes = state
+            .queued_bytes
+            .checked_add(transaction.len())
+            .ok_or_else(|| report!("muxr client stdout queued byte count overflowed"))?;
+        state.output.push_back(OutputCmd::Render(transaction));
         Ok(false)
+    }
+}
+
+fn reserve_queued_bytes(state: &State, additional_bytes: usize) -> rootcause::Result<()> {
+    let next = state
+        .queued_bytes
+        .checked_add(additional_bytes)
+        .ok_or_else(|| report!("muxr client stdout queued byte count overflowed"))?;
+    if next > QUEUED_TRANSACTION_BYTE_LIMIT {
+        return Err(report!("muxr client stdout queued byte budget is exhausted"));
+    }
+    Ok(())
+}
+
+impl OutputCmd {
+    const fn len(&self) -> usize {
+        match self {
+            Self::Mandatory(transaction) | Self::Render(transaction) => transaction.len(),
+        }
     }
 }
 
@@ -176,7 +197,7 @@ fn lock_state(shared: &Shared) -> rootcause::Result<MutexGuard<'_, State>> {
 fn run(shared: &Shared, failure_sender: tokio::sync::oneshot::Sender<String>) {
     let mut stdout = std::io::stdout();
     loop {
-        let transaction = {
+        let cmd = {
             let Ok(mut state) = self::lock_state(shared) else {
                 return;
             };
@@ -189,16 +210,20 @@ fn run(shared: &Shared, failure_sender: tokio::sync::oneshot::Sender<String>) {
             if state.closed && state.output.is_empty() {
                 return;
             }
-            let command = state.output.pop_front();
-            if matches!(command, Some(OutputCommand::Mandatory(_))) {
+            let cmd = state.output.pop_front();
+            if let Some(cmd) = cmd.as_ref() {
+                state.queued_bytes = state.queued_bytes.saturating_sub(cmd.len());
+            }
+            if matches!(cmd, Some(OutputCmd::Mandatory(_))) {
                 state.mandatory_count = state.mandatory_count.saturating_sub(1);
             }
-            command.map(|command| match command {
-                OutputCommand::Mandatory(transaction) | OutputCommand::Render(transaction) => transaction,
-            })
+            cmd
         };
-        let Some(transaction) = transaction else {
+        let Some(cmd) = cmd else {
             continue;
+        };
+        let transaction = match cmd {
+            OutputCmd::Mandatory(transaction) | OutputCmd::Render(transaction) => transaction,
         };
         if let Err(error) = stdout.write_all(&transaction).and_then(|()| stdout.flush()) {
             if let Ok(mut state) = self::lock_state(shared) {
@@ -225,83 +250,101 @@ mod tests {
             closed: false,
             failed: None,
             output: VecDeque::from([
-                OutputCommand::Render(b"render".to_vec()),
-                OutputCommand::Mandatory(b"selection".to_vec()),
+                OutputCmd::Render(b"render".to_vec()),
+                OutputCmd::Mandatory(b"selection".to_vec()),
             ]),
             mandatory_count: 1,
+            queued_bytes: b"render".len() + b"selection".len(),
         };
 
         let first = state.output.pop_front();
         let second = state.output.pop_front();
-        assert!(matches!(first, Some(OutputCommand::Render(transaction)) if transaction == b"render"));
-        assert!(matches!(second, Some(OutputCommand::Mandatory(transaction)) if transaction == b"selection"));
+        assert!(matches!(first, Some(OutputCmd::Render(transaction)) if transaction == b"render"));
+        assert!(matches!(second, Some(OutputCmd::Mandatory(transaction)) if transaction == b"selection"));
     }
 
     #[test]
     fn test_replace_render_compacts_intervening_state_into_full_redraw() -> rootcause::Result<()> {
-        let mut output = VecDeque::from([
-            OutputCommand::Render(b"old-render".to_vec()),
-            OutputCommand::Mandatory(b"selection".to_vec()),
-        ]);
-        let mut mandatory_count = 1;
+        let mut state = State {
+            closed: false,
+            failed: None,
+            output: VecDeque::from([
+                OutputCmd::Render(b"old-render".to_vec()),
+                OutputCmd::Mandatory(b"selection".to_vec()),
+            ]),
+            mandatory_count: 1,
+            queued_bytes: b"old-render".len() + b"selection".len(),
+        };
 
         assert_that!(
-            replace_render_command(&mut output, &mut mandatory_count, b"incremental".to_vec(), || {
+            replace_render_cmd(&mut state, b"incremental".to_vec(), || {
                 Ok(Some(b"full-redraw".to_vec()))
             },)?,
             eq(true)
         );
         assert_that!(
-            matches!(output.front(), Some(OutputCommand::Render(transaction)) if transaction == b"full-redraw"),
+            matches!(state.output.front(), Some(OutputCmd::Render(transaction)) if transaction == b"full-redraw"),
             eq(true)
         );
-        assert_that!(output.len(), eq(1));
-        assert_that!(mandatory_count, eq(0));
+        assert_that!(state.output.len(), eq(1));
+        assert_that!(state.mandatory_count, eq(0));
+        assert_that!(state.queued_bytes, eq(b"full-redraw".len()));
         Ok(())
     }
 
     #[test]
     fn test_replace_render_without_pending_render_queues_incremental_without_generating_full_redraw()
     -> rootcause::Result<()> {
-        let mut output = VecDeque::new();
-        let mut mandatory_count: usize = 0;
+        let mut state = State {
+            closed: false,
+            failed: None,
+            output: VecDeque::new(),
+            mandatory_count: 0,
+            queued_bytes: 0,
+        };
 
         assert_that!(
-            replace_render_command(&mut output, &mut mandatory_count, b"incremental".to_vec(), || {
+            replace_render_cmd(&mut state, b"incremental".to_vec(), || {
                 Err(report!("full redraw should not be generated"))
             },)?,
             eq(false)
         );
         assert_that!(
-            matches!(output.front(), Some(OutputCommand::Render(transaction)) if transaction == b"incremental"),
+            matches!(state.output.front(), Some(OutputCmd::Render(transaction)) if transaction == b"incremental"),
             eq(true)
         );
-        assert_that!(mandatory_count, eq(0));
+        assert_that!(state.mandatory_count, eq(0));
         Ok(())
     }
 
     #[test]
     fn test_repeated_render_state_supersession_keeps_one_payload() -> rootcause::Result<()> {
-        let mut output = VecDeque::from([OutputCommand::Render(b"render-0".to_vec())]);
-        let mut mandatory_count: usize = 0;
+        let mut state = State {
+            closed: false,
+            failed: None,
+            output: VecDeque::from([OutputCmd::Render(b"render-0".to_vec())]),
+            mandatory_count: 0,
+            queued_bytes: b"render-0".len(),
+        };
 
         for generation in 1..=MANDATORY_TRANSACTION_LIMIT {
-            output.push_back(OutputCommand::Mandatory(format!("selection-{generation}").into_bytes()));
-            mandatory_count = mandatory_count.saturating_add(1);
+            let generation = u64::try_from(generation)
+                .map_err(|_| report!("muxr stdout test render generation does not fit in u64"))?;
+            let selection = format!("selection-{generation}").into_bytes();
+            state.queued_bytes += selection.len();
+            state.output.push_back(OutputCmd::Mandatory(selection));
+            state.mandatory_count = state.mandatory_count.saturating_add(1);
             assert_that!(
-                replace_render_command(
-                    &mut output,
-                    &mut mandatory_count,
-                    format!("incremental-{generation}").into_bytes(),
-                    || { Ok(Some(format!("full-redraw-{generation}").into_bytes())) },
-                )?,
+                replace_render_cmd(&mut state, format!("incremental-{generation}").into_bytes(), || {
+                    Ok(Some(format!("full-redraw-{generation}").into_bytes()))
+                },)?,
                 eq(true)
             );
-            assert_that!(output.len(), eq(1));
-            assert_that!(mandatory_count, eq(0));
+            assert_that!(state.output.len(), eq(1));
+            assert_that!(state.mandatory_count, eq(0));
         }
         assert_that!(
-            matches!(output.front(), Some(OutputCommand::Render(transaction)) if transaction == b"full-redraw-128"),
+            matches!(state.output.front(), Some(OutputCmd::Render(transaction)) if transaction == b"full-redraw-128"),
             eq(true)
         );
         Ok(())
@@ -313,8 +356,9 @@ mod tests {
             state: Mutex::new(State {
                 closed: false,
                 failed: None,
-                output: VecDeque::from([OutputCommand::Render(b"old-render".to_vec())]),
+                output: VecDeque::from([OutputCmd::Render(b"old-render".to_vec())]),
                 mandatory_count: 0,
+                queued_bytes: b"old-render".len(),
             }),
             wake: Condvar::new(),
         });
@@ -322,18 +366,30 @@ mod tests {
             shared: Arc::clone(&shared),
         };
 
-        let replaced = sender.replace_render(b"incremental".to_vec(), || {
+        sender.replace_render(b"incremental".to_vec(), || {
             if shared.state.try_lock().is_ok() {
                 return Err(report!("stdout queue lock was released before full redraw generation"));
             }
             Ok(Some(b"full-redraw".to_vec()))
         })?;
-        assert_that!(replaced, eq(ReplaceRender::Replaced));
         let state = self::lock_state(&shared)?;
         let installed =
-            matches!(state.output.front(), Some(OutputCommand::Render(transaction)) if transaction == b"full-redraw");
+            matches!(state.output.front(), Some(OutputCmd::Render(transaction)) if transaction == b"full-redraw");
         drop(state);
         assert_that!(installed, eq(true));
         Ok(())
+    }
+
+    #[test]
+    fn test_queued_byte_budget_rejects_another_transaction() {
+        let state = State {
+            closed: false,
+            failed: None,
+            output: VecDeque::new(),
+            mandatory_count: 0,
+            queued_bytes: QUEUED_TRANSACTION_BYTE_LIMIT,
+        };
+
+        assert_that!(reserve_queued_bytes(&state, 1).is_err(), eq(true));
     }
 }

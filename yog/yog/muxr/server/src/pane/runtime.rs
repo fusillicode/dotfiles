@@ -2,7 +2,6 @@ use std::collections::BTreeMap;
 use std::io::Write;
 use std::sync::Arc;
 
-use kanal::Sender;
 use muxr_config::ScrollbackDumpStyle;
 use muxr_core::PaneId;
 use muxr_core::TerminalSize;
@@ -13,12 +12,9 @@ use rootcause::report;
 use crate::history::pane_output_path;
 use crate::pane::layout::PaneRegion;
 use crate::pane::tracked_process::PaneTrackedProcessSnapshot;
-use crate::pty::PtyEvent;
 use crate::pty::PtyExitStatus;
 use crate::pty::PtyHandle;
-use crate::pty::PtyRenderSnapshot;
 use crate::pty::PtySession;
-use crate::pty::PtySinkGuard;
 use crate::pty::ShellCmd;
 use crate::server::ServerConfig;
 use crate::session::start_seed::SessionStartSeed;
@@ -223,13 +219,6 @@ impl PaneRuntimes {
             .ok_or_else(|| report!("muxr pane runtime is missing").attach(format!("pane_id={pane_id}")))
     }
 
-    pub fn attach_sinks(&self, sender: &Sender<PtyEvent>) -> Vec<(PaneId, PtySinkGuard)> {
-        self.panes
-            .iter()
-            .map(|pane| (pane.id, pane.session.handle().attach_sink(sender.clone())))
-            .collect::<Vec<_>>()
-    }
-
     pub fn pane_ids(&self) -> Vec<PaneId> {
         self.panes.iter().map(|pane| pane.id).collect()
     }
@@ -279,10 +268,6 @@ impl PaneRuntimes {
                 .resize(&TerminalSize::new(region.area.size.cols, region.area.size.rows)?)?;
         }
         Ok(())
-    }
-
-    pub fn pane_render_snapshot(&self, pane_id: PaneId) -> rootcause::Result<PtyRenderSnapshot> {
-        self.handle(pane_id)?.pane_render_snapshot()
     }
 
     pub fn write_scrollback_dump(
@@ -343,6 +328,14 @@ impl PaneRuntimes {
         for pane in &self.panes {
             pane.session.handle().acknowledge_output_wakeup();
         }
+    }
+
+    /// Re-publish sticky output after a non-output event consumed bounded-channel capacity.
+    pub fn retry_output_wakeups(&self) -> rootcause::Result<()> {
+        for pane in &self.panes {
+            pane.session.handle().retry_output_wakeup()?;
+        }
+        Ok(())
     }
 }
 

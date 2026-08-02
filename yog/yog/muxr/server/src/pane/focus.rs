@@ -25,7 +25,7 @@ pub enum PaneFocusDirection {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PaneFocusRender {
     ResizePanesAndRender,
-    SendLayoutAndBaseline,
+    SendLayoutAndRenderDiff,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -220,7 +220,7 @@ pub fn handle_focus_pane_at_client_request(
     }
     self::write_active_pane_focus_events(previous_pane, state)?;
     Ok(PaneFocusClientOutcome::Focused {
-        render: PaneFocusRender::SendLayoutAndBaseline,
+        render: PaneFocusRender::SendLayoutAndRenderDiff,
     })
 }
 
@@ -247,7 +247,7 @@ pub fn handle_focus_pane_cmd_client(
     {
         PaneFocusRender::ResizePanesAndRender
     } else {
-        PaneFocusRender::SendLayoutAndBaseline
+        PaneFocusRender::SendLayoutAndRenderDiff
     };
     Ok(PaneFocusClientOutcome::Focused { render })
 }

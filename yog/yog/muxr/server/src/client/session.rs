@@ -1,4 +1,6 @@
 use std::collections::BTreeSet;
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 #[cfg(test)]
 use std::time::Duration;
 use std::time::Instant;
@@ -8,7 +10,6 @@ use kanal::Sender;
 use muxr_core::AttachRequest;
 use muxr_core::LayoutSnapshot;
 use muxr_core::PaneId;
-use muxr_core::PaneRegionsSnapshot;
 use muxr_core::ServerEvent;
 use muxr_core::TerminalSize;
 use muxr_transport::ServerConnection;
@@ -57,6 +58,7 @@ const TEST_RUNTIME_READY_TIMEOUT: Duration = Duration::from_secs(5);
 struct ClientPtySink {
     guard: PtySinkGuard,
     pane_id: PaneId,
+    output_wakeup_pending: Arc<AtomicBool>,
 }
 
 pub struct ClientSessionState<'a> {
@@ -67,7 +69,6 @@ pub struct ClientSessionState<'a> {
     pub last_layout_snapshot: LayoutSnapshot,
     pub layout: &'a mut SessionLayout,
     pub pane_fullscreen: PaneFullscreen,
-    pub pane_regions: PaneRegionsSnapshot,
     pty_event_sender: &'a Sender<PtyEvent>,
     pub render_worker: &'a mut RenderWorker,
     pub runtimes: &'a mut PaneRuntimes,
@@ -140,11 +141,20 @@ pub enum ReapedPanes {
     Stop,
 }
 
-fn attach_pane_sinks(runtimes: &PaneRuntimes, sender: &Sender<PtyEvent>) -> Vec<ClientPtySink> {
+fn attach_pane_sinks(runtimes: &PaneRuntimes, sender: &Sender<PtyEvent>) -> rootcause::Result<Vec<ClientPtySink>> {
+    let output_wakeup_pending = Arc::new(AtomicBool::new(false));
     runtimes
-        .attach_sinks(sender)
+        .pane_ids()
         .into_iter()
-        .map(|(pane_id, guard)| ClientPtySink { guard, pane_id })
+        .map(|pane_id| {
+            Ok(ClientPtySink {
+                guard: runtimes
+                    .handle(pane_id)?
+                    .attach_sink_with_output_wakeup(sender.clone(), Arc::clone(&output_wakeup_pending)),
+                pane_id,
+                output_wakeup_pending: Arc::clone(&output_wakeup_pending),
+            })
+        })
         .collect()
 }
 
@@ -152,17 +162,28 @@ fn attach_pane_sink(
     runtimes: &PaneRuntimes,
     sender: &Sender<PtyEvent>,
     pane_id: PaneId,
+    output_wakeup_pending: &Arc<AtomicBool>,
 ) -> rootcause::Result<ClientPtySink> {
     Ok(ClientPtySink {
-        guard: runtimes.handle(pane_id)?.attach_sink(sender.clone()),
+        guard: runtimes
+            .handle(pane_id)?
+            .attach_sink_with_output_wakeup(sender.clone(), Arc::clone(output_wakeup_pending)),
         pane_id,
+        output_wakeup_pending: Arc::clone(output_wakeup_pending),
     })
 }
 
 pub fn attach_pane_sink_to_state(state: &mut ClientSessionState<'_>, pane_id: PaneId) -> rootcause::Result<()> {
-    state
-        .sink_guards
-        .push(self::attach_pane_sink(state.runtimes, state.pty_event_sender, pane_id)?);
+    let output_wakeup_pending = state.sink_guards.first().map_or_else(
+        || Arc::new(AtomicBool::new(false)),
+        |sink| Arc::clone(&sink.output_wakeup_pending),
+    );
+    state.sink_guards.push(self::attach_pane_sink(
+        state.runtimes,
+        state.pty_event_sender,
+        pane_id,
+        &output_wakeup_pending,
+    )?);
     Ok(())
 }
 
@@ -193,10 +214,6 @@ pub fn remove_pane_from_client_state(
     self::remove_live_pane_tracking(state, timers, pane_id)
 }
 
-#[expect(
-    clippy::too_many_lines,
-    reason = "attach setup and teardown keep resource ownership in one auditable scope"
-)]
 pub async fn handle_client(
     config: &ServerConfig,
     connection: ServerConnection,
@@ -207,7 +224,7 @@ pub async fn handle_client(
 ) -> rootcause::Result<ClientSessionCompletion> {
     crate::screen_render::resize_panes_to_layout(layout, runtimes, &attach_request.terminal_size)?;
     let (pty_event_sender, pty_event_receiver) = kanal::bounded(PANE_OUTPUT_EVENT_CHANNEL_LIMIT);
-    let mut sink_guards = self::attach_pane_sinks(runtimes, &pty_event_sender);
+    let mut sink_guards = self::attach_pane_sinks(runtimes, &pty_event_sender)?;
     let (mut request_reader, event_writer) = connection.split();
     let mut pane_tracked_processes = PaneTrackedProcesses::default();
     pane_tracked_processes.observe_all_runtime_pane_cmds(
@@ -227,7 +244,6 @@ pub async fn handle_client(
         &mut render_worker,
     )?;
     let last_layout_snapshot = layout_snapshot.clone();
-    let initial_pane_regions = pane_regions.clone();
     if crate::event_writer::send_event_with_timeout(
         &mut event_writer,
         &ServerEvent::Attached(muxr_core::AttachAccepted {
@@ -268,7 +284,6 @@ pub async fn handle_client(
         last_layout_snapshot,
         layout,
         pane_fullscreen: PaneFullscreen::default(),
-        pane_regions: initial_pane_regions,
         pty_event_sender: &pty_event_sender,
         render_worker: &mut render_worker,
         runtimes,
@@ -924,7 +939,7 @@ mod tests {
             Arc::new(tokio::sync::Notify::new()),
         )?;
         crate::screen_render::resize_panes_to_layout(&layout, &runtimes, &terminal_size)?;
-        let (layout_snapshot, pane_regions, mut render_worker, _render_baseline) =
+        let (layout_snapshot, _pane_regions, mut render_worker, _render_baseline) =
             crate::screen_render::initial_client_render(
                 &config,
                 &mut layout,
@@ -946,7 +961,6 @@ mod tests {
             last_layout_snapshot: layout_snapshot,
             layout: &mut layout,
             pane_fullscreen: PaneFullscreen::default(),
-            pane_regions,
             pty_event_sender: &pty_event_sender,
             render_worker: &mut render_worker,
             runtimes: &mut runtimes,
@@ -1028,7 +1042,7 @@ mod tests {
             Arc::new(tokio::sync::Notify::new()),
         )?;
         crate::screen_render::resize_panes_to_layout(&layout, &runtimes, &terminal_size)?;
-        let (layout_snapshot, pane_regions, mut render_worker, _render_baseline) =
+        let (layout_snapshot, _pane_regions, mut render_worker, _render_baseline) =
             crate::screen_render::initial_client_render(
                 &config,
                 &mut layout,
@@ -1039,7 +1053,7 @@ mod tests {
         let (mut event_writer, client_drain) = self::connect_client_event_drain(&config).await?;
         let delete_sessions = DeleteSessions::default();
         let (pty_event_sender, _pty_event_receiver) = self::pty_event_channel();
-        let mut sink_guards = super::attach_pane_sinks(&runtimes, &pty_event_sender);
+        let mut sink_guards = super::attach_pane_sinks(&runtimes, &pty_event_sender)?;
         runtimes.handle(first_exited_pane)?.write_input(b"exit\n")?;
         runtimes.handle(second_exited_pane)?.write_input(b"exit\n")?;
         self::wait_for_pane_exit(&runtimes, first_exited_pane)?;
@@ -1052,7 +1066,6 @@ mod tests {
             last_layout_snapshot: layout_snapshot,
             layout: &mut layout,
             pane_fullscreen: PaneFullscreen::default(),
-            pane_regions,
             pty_event_sender: &pty_event_sender,
             render_worker: &mut render_worker,
             runtimes: &mut runtimes,
@@ -1146,7 +1159,7 @@ mod tests {
             Arc::new(tokio::sync::Notify::new()),
         )?;
         crate::screen_render::resize_panes_to_layout(&layout, &runtimes, &terminal_size)?;
-        let (layout_snapshot, pane_regions, mut render_worker, _render_baseline) =
+        let (layout_snapshot, _pane_regions, mut render_worker, _render_baseline) =
             crate::screen_render::initial_client_render(
                 &config,
                 &mut layout,
@@ -1166,7 +1179,6 @@ mod tests {
             last_layout_snapshot: layout_snapshot,
             layout: &mut layout,
             pane_fullscreen: PaneFullscreen::default(),
-            pane_regions,
             pty_event_sender: &pty_event_sender,
             render_worker: &mut render_worker,
             runtimes: &mut runtimes,
@@ -1246,7 +1258,7 @@ mod tests {
             Arc::new(tokio::sync::Notify::new()),
         )?;
         crate::screen_render::resize_panes_to_layout(&layout, &runtimes, &terminal_size)?;
-        let (layout_snapshot, pane_regions, mut render_worker, _render_baseline) =
+        let (layout_snapshot, _pane_regions, mut render_worker, _render_baseline) =
             crate::screen_render::initial_client_render(
                 &config,
                 &mut layout,
@@ -1257,7 +1269,7 @@ mod tests {
         let (mut event_writer, client_drain) = self::connect_client_event_drain(&config).await?;
         let delete_sessions = DeleteSessions::default();
         let (pty_event_sender, _pty_event_receiver) = self::pty_event_channel();
-        let mut sink_guards = super::attach_pane_sinks(&runtimes, &pty_event_sender);
+        let mut sink_guards = super::attach_pane_sinks(&runtimes, &pty_event_sender)?;
         let mut state = ClientSessionState {
             pane_tracked_processes,
             config: &config,
@@ -1266,7 +1278,6 @@ mod tests {
             last_layout_snapshot: layout_snapshot,
             layout: &mut layout,
             pane_fullscreen: PaneFullscreen::default(),
-            pane_regions,
             pty_event_sender: &pty_event_sender,
             render_worker: &mut render_worker,
             runtimes: &mut runtimes,
@@ -1376,7 +1387,7 @@ mod tests {
             Arc::new(tokio::sync::Notify::new()),
         )?;
         crate::screen_render::resize_panes_to_layout(&layout, &runtimes, &terminal_size)?;
-        let (layout_snapshot, pane_regions, mut render_worker, _render_baseline) =
+        let (layout_snapshot, _pane_regions, mut render_worker, _render_baseline) =
             crate::screen_render::initial_client_render(
                 &config,
                 &mut layout,
@@ -1404,7 +1415,6 @@ mod tests {
             last_layout_snapshot: layout_snapshot,
             layout: &mut layout,
             pane_fullscreen: PaneFullscreen::default(),
-            pane_regions,
             pty_event_sender: &pty_event_sender,
             render_worker: &mut render_worker,
             runtimes: &mut runtimes,
@@ -1508,7 +1518,7 @@ mod tests {
         let mut timers = ClientTimers::new(&config)?;
         timers.sync_tracked_process_quiet_deadline_for_layout(&pane_tracked_processes, &layout)?;
         assert_that!(timers.tracked_process_quiet_deadline(), eq(QuietDeadline::Elapsed));
-        let (layout_snapshot, pane_regions, mut render_worker, _render_baseline) =
+        let (layout_snapshot, _pane_regions, mut render_worker, _render_baseline) =
             crate::screen_render::initial_client_render(
                 &config,
                 &mut layout,
@@ -1528,7 +1538,6 @@ mod tests {
             last_layout_snapshot: layout_snapshot,
             layout: &mut layout,
             pane_fullscreen: PaneFullscreen::default(),
-            pane_regions,
             pty_event_sender: &pty_event_sender,
             render_worker: &mut render_worker,
             runtimes: &mut runtimes,
@@ -1697,7 +1706,7 @@ mod tests {
         let mut timers = ClientTimers::new(&config)?;
         timers.sync_tracked_process_quiet_deadline_for_layout(&pane_tracked_processes, &layout)?;
         let focused_deadline = timers.tracked_process_quiet_sleep.deadline();
-        let (layout_snapshot, pane_regions, mut render_worker, _render_baseline) =
+        let (layout_snapshot, _pane_regions, mut render_worker, _render_baseline) =
             crate::screen_render::initial_client_render(
                 &config,
                 &mut layout,
@@ -1717,7 +1726,6 @@ mod tests {
             last_layout_snapshot: layout_snapshot,
             layout: &mut layout,
             pane_fullscreen: PaneFullscreen::default(),
-            pane_regions,
             pty_event_sender: &pty_event_sender,
             render_worker: &mut render_worker,
             runtimes: &mut runtimes,
@@ -1799,7 +1807,7 @@ mod tests {
             Arc::new(tokio::sync::Notify::new()),
         )?;
         crate::screen_render::resize_panes_to_layout(&layout, &runtimes, &terminal_size)?;
-        let (layout_snapshot, pane_regions, mut render_worker, _render_baseline) =
+        let (layout_snapshot, _pane_regions, mut render_worker, _render_baseline) =
             crate::screen_render::initial_client_render(
                 &config,
                 &mut layout,
@@ -1825,7 +1833,6 @@ mod tests {
             last_layout_snapshot: layout_snapshot,
             layout: &mut layout,
             pane_fullscreen: PaneFullscreen::default(),
-            pane_regions,
             pty_event_sender: &pty_event_sender,
             render_worker: &mut render_worker,
             runtimes: &mut runtimes,
@@ -1893,7 +1900,7 @@ mod tests {
         )?;
         crate::screen_render::resize_panes_to_layout(&layout, &runtimes, &terminal_size)?;
         self::wait_for_runtime_fg_cmd(&runtimes, pane_id, "cat")?;
-        let (layout_snapshot, pane_regions, mut render_worker, _render_baseline) =
+        let (layout_snapshot, _pane_regions, mut render_worker, _render_baseline) =
             crate::screen_render::initial_client_render(
                 &config,
                 &mut layout,
@@ -1926,7 +1933,6 @@ mod tests {
             last_layout_snapshot: layout_snapshot,
             layout: &mut layout,
             pane_fullscreen: PaneFullscreen::default(),
-            pane_regions,
             pty_event_sender: &pty_event_sender,
             render_worker: &mut render_worker,
             runtimes: &mut runtimes,
@@ -1996,7 +2002,7 @@ mod tests {
         )?;
         crate::screen_render::resize_panes_to_layout(&layout, &runtimes, &terminal_size)?;
         self::wait_for_runtime_fg_cmd(&runtimes, pane_id, "cat")?;
-        let (layout_snapshot, pane_regions, mut render_worker, _render_baseline) =
+        let (layout_snapshot, _pane_regions, mut render_worker, _render_baseline) =
             crate::screen_render::initial_client_render(
                 &config,
                 &mut layout,
@@ -2031,7 +2037,6 @@ mod tests {
             last_layout_snapshot: layout_snapshot,
             layout: &mut layout,
             pane_fullscreen: PaneFullscreen::default(),
-            pane_regions,
             pty_event_sender: &pty_event_sender,
             render_worker: &mut render_worker,
             runtimes: &mut runtimes,
@@ -2124,7 +2129,7 @@ mod tests {
         )?;
         crate::screen_render::resize_panes_to_layout(&layout, &runtimes, &terminal_size)?;
         self::wait_for_runtime_fg_cmd(&runtimes, pane_id, "cat")?;
-        let (layout_snapshot, pane_regions, mut render_worker, _render_baseline) =
+        let (layout_snapshot, _pane_regions, mut render_worker, _render_baseline) =
             crate::screen_render::initial_client_render(
                 &config,
                 &mut layout,
@@ -2169,7 +2174,6 @@ mod tests {
             last_layout_snapshot: layout_snapshot,
             layout: &mut layout,
             pane_fullscreen: PaneFullscreen::default(),
-            pane_regions,
             pty_event_sender: &pty_event_sender,
             render_worker: &mut render_worker,
             runtimes: &mut runtimes,
@@ -2246,7 +2250,7 @@ mod tests {
         )?;
         crate::screen_render::resize_panes_to_layout(&layout, &runtimes, &terminal_size)?;
         self::wait_for_runtime_fg_cmd(&runtimes, pane_id, "cat")?;
-        let (layout_snapshot, pane_regions, mut render_worker, _render_baseline) =
+        let (layout_snapshot, _pane_regions, mut render_worker, _render_baseline) =
             crate::screen_render::initial_client_render(
                 &config,
                 &mut layout,
@@ -2286,7 +2290,6 @@ mod tests {
             last_layout_snapshot: layout_snapshot,
             layout: &mut layout,
             pane_fullscreen: PaneFullscreen::default(),
-            pane_regions,
             pty_event_sender: &pty_event_sender,
             render_worker: &mut render_worker,
             runtimes: &mut runtimes,
@@ -2377,7 +2380,7 @@ mod tests {
         )?;
         crate::screen_render::resize_panes_to_layout(&layout, &runtimes, &terminal_size)?;
         self::wait_for_runtime_fg_cmd(&runtimes, pane_id, "cat")?;
-        let (layout_snapshot, pane_regions, mut render_worker, _render_baseline) =
+        let (layout_snapshot, _pane_regions, mut render_worker, _render_baseline) =
             crate::screen_render::initial_client_render(
                 &config,
                 &mut layout,
@@ -2400,7 +2403,6 @@ mod tests {
             last_layout_snapshot: layout_snapshot,
             layout: &mut layout,
             pane_fullscreen: PaneFullscreen::default(),
-            pane_regions,
             pty_event_sender: &pty_event_sender,
             render_worker: &mut render_worker,
             runtimes: &mut runtimes,
@@ -2481,7 +2483,7 @@ mod tests {
         let mut timers = ClientTimers::new(&config)?;
         timers.sync_tracked_process_quiet_deadline_for_layout(&pane_tracked_processes, &layout)?;
         assert_that!(timers.tracked_process_quiet_deadline(), eq(QuietDeadline::Elapsed));
-        let (layout_snapshot, pane_regions, mut render_worker, _render_baseline) =
+        let (layout_snapshot, _pane_regions, mut render_worker, _render_baseline) =
             crate::screen_render::initial_client_render(
                 &config,
                 &mut layout,
@@ -2505,7 +2507,6 @@ mod tests {
             last_layout_snapshot: layout_snapshot,
             layout: &mut layout,
             pane_fullscreen: PaneFullscreen::default(),
-            pane_regions,
             pty_event_sender: &pty_event_sender,
             render_worker: &mut render_worker,
             runtimes: &mut runtimes,
@@ -2576,7 +2577,7 @@ mod tests {
             Arc::new(tokio::sync::Notify::new()),
         )?;
         crate::screen_render::resize_panes_to_layout(&layout, &runtimes, &terminal_size)?;
-        let (layout_snapshot, pane_regions, mut render_worker, _render_baseline) =
+        let (layout_snapshot, _pane_regions, mut render_worker, _render_baseline) =
             crate::screen_render::initial_client_render(
                 &config,
                 &mut layout,
@@ -2596,7 +2597,6 @@ mod tests {
             last_layout_snapshot: layout_snapshot,
             layout: &mut layout,
             pane_fullscreen: PaneFullscreen::default(),
-            pane_regions,
             pty_event_sender: &pty_event_sender,
             render_worker: &mut render_worker,
             runtimes: &mut runtimes,
@@ -2660,7 +2660,7 @@ mod tests {
         )?;
         crate::screen_render::resize_panes_to_layout(&layout, &runtimes, &terminal_size)?;
         let pane_tracked_processes = PaneTrackedProcesses::default();
-        let (layout_snapshot, pane_regions, mut render_worker, _render_baseline) =
+        let (layout_snapshot, _pane_regions, mut render_worker, _render_baseline) =
             crate::screen_render::initial_client_render(
                 &config,
                 &mut layout,
@@ -2681,7 +2681,6 @@ mod tests {
             last_layout_snapshot: layout_snapshot,
             layout: &mut layout,
             pane_fullscreen: PaneFullscreen::default(),
-            pane_regions,
             pty_event_sender: &pty_event_sender,
             render_worker: &mut render_worker,
             runtimes: &mut runtimes,
@@ -2750,7 +2749,7 @@ mod tests {
         )?;
         crate::screen_render::resize_panes_to_layout(&layout, &runtimes, &terminal_size)?;
         let pane_tracked_processes = PaneTrackedProcesses::default();
-        let (layout_snapshot, pane_regions, mut render_worker, _render_baseline) =
+        let (layout_snapshot, _pane_regions, mut render_worker, _render_baseline) =
             crate::screen_render::initial_client_render(
                 &config,
                 &mut layout,
@@ -2770,7 +2769,6 @@ mod tests {
             last_layout_snapshot: layout_snapshot,
             layout: &mut layout,
             pane_fullscreen: PaneFullscreen::default(),
-            pane_regions,
             pty_event_sender: &pty_event_sender,
             render_worker: &mut render_worker,
             runtimes: &mut runtimes,
@@ -2839,7 +2837,7 @@ mod tests {
         )?;
         crate::screen_render::resize_panes_to_layout(&layout, &runtimes, &terminal_size)?;
         let pane_tracked_processes = PaneTrackedProcesses::default();
-        let (layout_snapshot, pane_regions, mut render_worker, _render_baseline) =
+        let (layout_snapshot, _pane_regions, mut render_worker, _render_baseline) =
             crate::screen_render::initial_client_render(
                 &config,
                 &mut layout,
@@ -2859,7 +2857,6 @@ mod tests {
             last_layout_snapshot: layout_snapshot,
             layout: &mut layout,
             pane_fullscreen: PaneFullscreen::default(),
-            pane_regions,
             pty_event_sender: &pty_event_sender,
             render_worker: &mut render_worker,
             runtimes: &mut runtimes,
@@ -2927,7 +2924,7 @@ mod tests {
         )?;
         crate::screen_render::resize_panes_to_layout(&layout, &runtimes, &terminal_size)?;
         let pane_tracked_processes = PaneTrackedProcesses::default();
-        let (layout_snapshot, pane_regions, mut render_worker, _render_baseline) =
+        let (layout_snapshot, _pane_regions, mut render_worker, _render_baseline) =
             crate::screen_render::initial_client_render(
                 &config,
                 &mut layout,
@@ -2947,7 +2944,6 @@ mod tests {
             last_layout_snapshot: layout_snapshot,
             layout: &mut layout,
             pane_fullscreen: PaneFullscreen::default(),
-            pane_regions,
             pty_event_sender: &pty_event_sender,
             render_worker: &mut render_worker,
             runtimes: &mut runtimes,

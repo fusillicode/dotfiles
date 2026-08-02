@@ -17,6 +17,12 @@ pub async fn handle_pane_output_message(
 ) -> rootcause::Result<ClientSessionFlow> {
     match event {
         Some(SessionPaneOutputMessage::PaneExited) => {
+            // An exit can be the event that occupied the bounded bridge while the final output wakeup was rejected.
+            // Its delivery has now freed capacity. It can also be consumed before an older OutputReady marker, so
+            // clear the session-wide gate before re-publishing sticky screen/title state; otherwise surviving panes
+            // may remain dirty behind the exited pane's marker.
+            state.runtimes.acknowledge_output_wakeups();
+            state.runtimes.retry_output_wakeups()?;
             match crate::client::session::handle_reaped_panes(state, event_writer, timers).await? {
                 ReapedPanes::Unchanged => {}
                 ReapedPanes::LayoutChanged => {

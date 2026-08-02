@@ -43,7 +43,41 @@ enum ClientInputAction {
     CopySelection,
     CopySelectionInline,
     Mouse(ClientMouseEvent),
-    ServerRequest(ClientRequest),
+}
+
+#[derive(Debug)]
+enum ClientInputCmd {
+    Action(ClientInputAction),
+    Barrier(std::sync::mpsc::SyncSender<()>),
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum InputCmdReceiverState {
+    Open,
+    Closed,
+}
+
+impl InputCmdReceiverState {
+    const fn is_open(self) -> bool {
+        matches!(self, Self::Open)
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum LocalActionCompletion {
+    Wait,
+    #[cfg(test)]
+    Skip,
+}
+
+impl LocalActionCompletion {
+    const fn waits(self) -> bool {
+        match self {
+            Self::Wait => true,
+            #[cfg(test)]
+            Self::Skip => false,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -86,9 +120,9 @@ async fn run_interactive(
 ) -> rootcause::Result<()> {
     let _terminal_guard = TerminalGuard::enable_if_terminal()?;
     let (control_sender, control_receiver) = tokio::sync::mpsc::channel(CONTROL_REQUEST_CHANNEL_LIMIT);
-    let (input_action_sender, mut input_action_receiver) = tokio::sync::mpsc::channel(INPUT_REQUEST_CHANNEL_LIMIT);
+    let (input_cmd_sender, mut input_cmd_receiver) = tokio::sync::mpsc::channel(INPUT_REQUEST_CHANNEL_LIMIT);
     let (input_request_sender, input_receiver) = tokio::sync::mpsc::channel(INPUT_REQUEST_CHANNEL_LIMIT);
-    let stdin_handle = self::spawn_stdin_forwarder(input_action_sender);
+    let stdin_handle = self::spawn_stdin_forwarder(input_cmd_sender, input_request_sender.clone());
     let resize_handle = self::spawn_resize_forwarder(control_sender.clone(), muxr_config.tab_bar.width, initial_size);
     let writer = attached_session.writer;
     let writer_handle =
@@ -103,7 +137,7 @@ async fn run_interactive(
         .ok_or_else(|| report!("muxr selection edge scroll interval overflowed"))?;
     let mut edge_scroll_tick = tokio::time::interval_at(edge_scroll_tick_start, SELECTION_EDGE_SCROLL_INTERVAL);
     edge_scroll_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-    let mut input_actions_closed = false;
+    let mut input_cmd_receiver_state = InputCmdReceiverState::Open;
 
     loop {
         tokio::select! {
@@ -111,16 +145,28 @@ async fn run_interactive(
                 let Some(event) = event? else {
                     break;
                 };
-                if self::handle_server_event(event, &control_sender, &mut renderer, &stdout_sender).await?
+                if self::handle_server_event(
+                    event,
+                    &control_sender,
+                    &mut renderer,
+                    &stdout_sender,
+                ).await?
                     == InteractiveFlow::Stop
                 {
                     break;
                 }
             },
-            action = input_action_receiver.recv(), if !input_actions_closed => {
-                let Some(action) = action else {
-                    input_actions_closed = true;
+            cmd = input_cmd_receiver.recv(), if input_cmd_receiver_state.is_open() => {
+                let Some(cmd) = cmd else {
+                    input_cmd_receiver_state = InputCmdReceiverState::Closed;
                     continue;
+                };
+                let action = match cmd {
+                    ClientInputCmd::Action(action) => action,
+                    ClientInputCmd::Barrier(completed) => {
+                        let _sent = completed.send(());
+                        continue;
+                    }
                 };
                 let mut transaction = Vec::new();
                 if self::handle_client_input_action(action, muxr_config, &input_request_sender, &mut renderer, &mut transaction).await? == ClientInputSend::Closed {
@@ -138,7 +184,7 @@ async fn run_interactive(
                 return Err(report!("muxr client stdout worker failed").attach(error));
             },
             else => {
-                if input_actions_closed {
+                if input_cmd_receiver_state == InputCmdReceiverState::Closed {
                     break;
                 }
             }
@@ -206,7 +252,7 @@ async fn handle_render_event(
     let mut transaction = Vec::new();
     match renderer.apply_render(&mut transaction, update)? {
         ClientRenderOutcome::Drawn => {
-            let _queued = stdout_sender.replace_render(transaction, || renderer.full_redraw_transaction())?;
+            stdout_sender.replace_render(transaction, || renderer.full_redraw_transaction())?;
             Ok(InteractiveFlow::Continue)
         }
         ClientRenderOutcome::NeedsResync => Ok(if control_sender.send(ClientRequest::RenderResync).await.is_ok() {
@@ -235,12 +281,6 @@ async fn handle_client_input_action(
         }
         ClientInputAction::Mouse(event) => {
             crate::pane::mouse::handle_mouse_input_action(muxr_config, event, input_sender, renderer, stdout).await
-        }
-        ClientInputAction::ServerRequest(request) => {
-            if input_sender.send(request).await.is_err() {
-                return Ok(ClientInputSend::Closed);
-            }
-            Ok(ClientInputSend::Accepted)
         }
     }
 }
@@ -334,7 +374,10 @@ async fn forward_client_requests(
     Ok(())
 }
 
-fn spawn_stdin_forwarder(input_sender: tokio::sync::mpsc::Sender<ClientInputAction>) -> thread::JoinHandle<()> {
+fn spawn_stdin_forwarder(
+    cmd_sender: tokio::sync::mpsc::Sender<ClientInputCmd>,
+    request_sender: tokio::sync::mpsc::Sender<ClientRequest>,
+) -> thread::JoinHandle<()> {
     thread::spawn(move || {
         let (read_sender, read_receiver) = std::sync::mpsc::channel();
         drop(self::spawn_stdin_reader(read_sender));
@@ -347,7 +390,13 @@ fn spawn_stdin_forwarder(input_sender: tokio::sync::mpsc::Sender<ClientInputActi
                 match read_receiver.recv_timeout(AMBIGUOUS_INPUT_TIMEOUT) {
                     Ok(read) => read,
                     Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
-                        if self::send_decoded_input(&input_sender, decoder.finalize()) == ClientInputSend::Closed {
+                        if self::send_decoded_input_with_ordering(
+                            &cmd_sender,
+                            &request_sender,
+                            decoder.finalize(),
+                            LocalActionCompletion::Wait,
+                        ) == ClientInputSend::Closed
+                        {
                             break;
                         }
                         continue;
@@ -360,16 +409,28 @@ fn spawn_stdin_forwarder(input_sender: tokio::sync::mpsc::Sender<ClientInputActi
 
             match read {
                 StdinRead::Bytes(bytes) => {
-                    if self::send_decoded_input(&input_sender, decoder.decode(&bytes)) == ClientInputSend::Closed {
+                    if self::send_decoded_input_with_ordering(
+                        &cmd_sender,
+                        &request_sender,
+                        decoder.decode(&bytes),
+                        LocalActionCompletion::Wait,
+                    ) == ClientInputSend::Closed
+                    {
                         break;
                     }
                 }
                 StdinRead::Eof => {
-                    if self::send_decoded_input(&input_sender, decoder.finalize()) == ClientInputSend::Closed {
+                    if self::send_decoded_input_with_ordering(
+                        &cmd_sender,
+                        &request_sender,
+                        decoder.finalize(),
+                        LocalActionCompletion::Wait,
+                    ) == ClientInputSend::Closed
+                    {
                         break;
                     }
                     // EOF detach follows any queued stdin bytes so piped cmds like `exit\n` reach the shell first.
-                    drop(input_sender.blocking_send(ClientInputAction::ServerRequest(ClientRequest::Detach)));
+                    drop(request_sender.blocking_send(ClientRequest::Detach));
                     break;
                 }
             }
@@ -402,34 +463,61 @@ fn spawn_stdin_reader(sender: std::sync::mpsc::Sender<StdinRead>) -> thread::Joi
     })
 }
 
+#[cfg(test)]
 fn send_decoded_input(
-    input_sender: &tokio::sync::mpsc::Sender<ClientInputAction>,
+    cmd_sender: &tokio::sync::mpsc::Sender<ClientInputCmd>,
+    request_sender: &tokio::sync::mpsc::Sender<ClientRequest>,
     decoded: Vec<DecodedInput>,
+) -> ClientInputSend {
+    self::send_decoded_input_with_ordering(cmd_sender, request_sender, decoded, LocalActionCompletion::Skip)
+}
+
+fn send_decoded_input_with_ordering(
+    cmd_sender: &tokio::sync::mpsc::Sender<ClientInputCmd>,
+    request_sender: &tokio::sync::mpsc::Sender<ClientRequest>,
+    decoded: Vec<DecodedInput>,
+    local_action_completion: LocalActionCompletion,
 ) -> ClientInputSend {
     for decoded in decoded {
         let action = match decoded {
             DecodedInput::CopySelection => ClientInputAction::CopySelection,
             DecodedInput::CopySelectionInline => ClientInputAction::CopySelectionInline,
-            DecodedInput::Input(bytes) => ClientInputAction::ServerRequest(ClientRequest::Input(bytes)),
+            // These requests do not need local renderer state. Send them directly to the sole request writer so
+            // terminal encoding and selection rebuilding cannot delay PTY input while another pane is repainting.
+            DecodedInput::Input(bytes) => {
+                if request_sender.blocking_send(ClientRequest::Input(bytes)).is_err() {
+                    return ClientInputSend::Closed;
+                }
+                continue;
+            }
             DecodedInput::Key(key) => {
-                // Key events come from stdin; keep them on the input queue so raw-byte fallback cannot overtake earlier
-                // PTY bytes.
-                ClientInputAction::ServerRequest(ClientRequest::Key(key))
+                if request_sender.blocking_send(ClientRequest::Key(key)).is_err() {
+                    return ClientInputSend::Closed;
+                }
+                continue;
             }
             DecodedInput::Mouse(event)
                 if crate::pane::mouse::MouseEventDrop::from(event) == crate::pane::mouse::MouseEventDrop::Droppable =>
             {
-                if self::send_droppable_input_action(input_sender, ClientInputAction::Mouse(event))
-                    == ClientInputSend::Closed
+                if self::send_droppable_input_action(
+                    cmd_sender,
+                    ClientInputAction::Mouse(event),
+                    local_action_completion,
+                ) == ClientInputSend::Closed
                 {
                     return ClientInputSend::Closed;
                 }
                 continue;
             }
             DecodedInput::Mouse(event) => ClientInputAction::Mouse(event),
-            DecodedInput::Paste(bytes) => ClientInputAction::ServerRequest(ClientRequest::Paste(bytes)),
+            DecodedInput::Paste(bytes) => {
+                if request_sender.blocking_send(ClientRequest::Paste(bytes)).is_err() {
+                    return ClientInputSend::Closed;
+                }
+                continue;
+            }
         };
-        if input_sender.blocking_send(action).is_err() {
+        if self::send_input_action(cmd_sender, action, local_action_completion) == ClientInputSend::Closed {
             return ClientInputSend::Closed;
         }
     }
@@ -438,10 +526,12 @@ fn send_decoded_input(
 }
 
 fn send_droppable_input_action(
-    input_sender: &tokio::sync::mpsc::Sender<ClientInputAction>,
+    cmd_sender: &tokio::sync::mpsc::Sender<ClientInputCmd>,
     action: ClientInputAction,
+    local_action_completion: LocalActionCompletion,
 ) -> ClientInputSend {
-    match input_sender.try_send(action) {
+    match cmd_sender.try_send(ClientInputCmd::Action(action)) {
+        Ok(()) if local_action_completion.waits() => self::send_input_action_barrier(cmd_sender),
         Ok(()) => ClientInputSend::Accepted,
         Err(tokio::sync::mpsc::error::TrySendError::Full(action)) => {
             drop(action);
@@ -452,6 +542,35 @@ fn send_droppable_input_action(
             ClientInputSend::Closed
         }
     }
+}
+
+fn send_input_action(
+    cmd_sender: &tokio::sync::mpsc::Sender<ClientInputCmd>,
+    action: ClientInputAction,
+    local_action_completion: LocalActionCompletion,
+) -> ClientInputSend {
+    if cmd_sender.blocking_send(ClientInputCmd::Action(action)).is_err() {
+        return ClientInputSend::Closed;
+    }
+    if local_action_completion.waits() {
+        self::send_input_action_barrier(cmd_sender)
+    } else {
+        ClientInputSend::Accepted
+    }
+}
+
+fn send_input_action_barrier(cmd_sender: &tokio::sync::mpsc::Sender<ClientInputCmd>) -> ClientInputSend {
+    let (completed_sender, completed_receiver) = std::sync::mpsc::sync_channel(0);
+    if cmd_sender
+        .blocking_send(ClientInputCmd::Barrier(completed_sender))
+        .is_err()
+    {
+        return ClientInputSend::Closed;
+    }
+    if completed_receiver.recv().is_err() {
+        return ClientInputSend::Closed;
+    }
+    ClientInputSend::Accepted
 }
 
 fn spawn_resize_forwarder(
@@ -657,8 +776,9 @@ mod tests {
     }
 
     #[test]
-    fn test_send_decoded_input_when_key_arrives_uses_input_queue_in_order() {
-        let (input_sender, mut input_receiver) = tokio::sync::mpsc::channel(3);
+    fn test_send_decoded_input_when_key_arrives_bypasses_the_renderer_action_queue_in_order() {
+        let (cmd_sender, mut cmd_receiver) = tokio::sync::mpsc::channel(1);
+        let (request_sender, mut request_receiver) = tokio::sync::mpsc::channel(3);
         let key = ClientKey {
             code: ClientKeyCode::Char('E'),
             modifiers: ClientKeyModifiers::SHIFT_ALT,
@@ -667,7 +787,8 @@ mod tests {
 
         assert_that!(
             send_decoded_input(
-                &input_sender,
+                &cmd_sender,
+                &request_sender,
                 vec![
                     DecodedInput::Input(b"a".to_vec()),
                     DecodedInput::Key(key.clone()),
@@ -678,26 +799,21 @@ mod tests {
         );
 
         assert_that!(
-            input_receiver.blocking_recv(),
-            eq(Some(ClientInputAction::ServerRequest(ClientRequest::Input(
-                b"a".to_vec()
-            ))))
+            request_receiver.blocking_recv(),
+            eq(Some(ClientRequest::Input(b"a".to_vec())))
         );
+        assert_that!(request_receiver.blocking_recv(), eq(Some(ClientRequest::Key(key))));
         assert_that!(
-            input_receiver.blocking_recv(),
-            eq(Some(ClientInputAction::ServerRequest(ClientRequest::Key(key))))
+            request_receiver.blocking_recv(),
+            eq(Some(ClientRequest::Input(b"b".to_vec())))
         );
-        assert_that!(
-            input_receiver.blocking_recv(),
-            eq(Some(ClientInputAction::ServerRequest(ClientRequest::Input(
-                b"b".to_vec()
-            ))))
-        );
+        assert_that!(cmd_receiver.try_recv().is_err(), eq(true));
     }
 
     #[test]
     fn test_send_decoded_input_when_scrollback_editor_shortcut_arrives_sends_key_request() {
-        let (input_sender, mut input_receiver) = tokio::sync::mpsc::channel(1);
+        let (cmd_sender, _cmd_receiver) = tokio::sync::mpsc::channel(1);
+        let (request_sender, mut request_receiver) = tokio::sync::mpsc::channel(1);
         let key = ClientKey {
             code: ClientKeyCode::Char('S'),
             modifiers: ClientKeyModifiers::SHIFT_ALT,
@@ -705,36 +821,37 @@ mod tests {
         };
 
         assert_that!(
-            send_decoded_input(&input_sender, vec![DecodedInput::Key(key.clone())]),
+            send_decoded_input(&cmd_sender, &request_sender, vec![DecodedInput::Key(key.clone())]),
             eq(ClientInputSend::Accepted)
         );
 
-        assert_that!(
-            input_receiver.blocking_recv(),
-            eq(Some(ClientInputAction::ServerRequest(ClientRequest::Key(key))))
-        );
+        assert_that!(request_receiver.blocking_recv(), eq(Some(ClientRequest::Key(key))));
     }
 
     #[test]
     fn test_send_decoded_input_when_paste_arrives_uses_input_queue() {
-        let (input_sender, mut input_receiver) = tokio::sync::mpsc::channel(1);
+        let (cmd_sender, _cmd_receiver) = tokio::sync::mpsc::channel(1);
+        let (request_sender, mut request_receiver) = tokio::sync::mpsc::channel(1);
 
         assert_that!(
-            send_decoded_input(&input_sender, vec![DecodedInput::Paste(b"one\ntwo\n".to_vec())],),
+            send_decoded_input(
+                &cmd_sender,
+                &request_sender,
+                vec![DecodedInput::Paste(b"one\ntwo\n".to_vec())],
+            ),
             eq(ClientInputSend::Accepted)
         );
 
         assert_that!(
-            input_receiver.blocking_recv(),
-            eq(Some(ClientInputAction::ServerRequest(ClientRequest::Paste(
-                b"one\ntwo\n".to_vec()
-            ))))
+            request_receiver.blocking_recv(),
+            eq(Some(ClientRequest::Paste(b"one\ntwo\n".to_vec())))
         );
     }
 
     #[test]
     fn test_send_decoded_input_when_mouse_arrives_emits_local_mouse_action() {
-        let (input_sender, mut input_receiver) = tokio::sync::mpsc::channel(1);
+        let (cmd_sender, mut cmd_receiver) = tokio::sync::mpsc::channel(1);
+        let (request_sender, _request_receiver) = tokio::sync::mpsc::channel(1);
         let event = ClientMouseEvent {
             button: 0,
             phase: ClientMouseEventPhase::Press,
@@ -742,21 +859,28 @@ mod tests {
         };
 
         assert_that!(
-            send_decoded_input(&input_sender, vec![DecodedInput::Mouse(event)]),
+            send_decoded_input(&cmd_sender, &request_sender, vec![DecodedInput::Mouse(event)]),
             eq(ClientInputSend::Accepted)
         );
 
         assert_that!(
-            input_receiver.blocking_recv(),
-            eq(Some(ClientInputAction::Mouse(event)))
+            matches!(
+                cmd_receiver.blocking_recv(),
+                Some(ClientInputCmd::Action(ClientInputAction::Mouse(actual))) if actual == event
+            ),
+            eq(true)
         );
     }
 
     #[test]
     fn test_send_decoded_input_when_mouse_motion_action_queue_is_full_drops_without_blocking() -> rootcause::Result<()>
     {
-        let (input_sender, mut input_receiver) = tokio::sync::mpsc::channel(1);
-        assert_that!(input_sender.try_send(ClientInputAction::CopySelection), ok(eq(())));
+        let (cmd_sender, mut cmd_receiver) = tokio::sync::mpsc::channel(1);
+        let (request_sender, _request_receiver) = tokio::sync::mpsc::channel(1);
+        assert_that!(
+            cmd_sender.try_send(ClientInputCmd::Action(ClientInputAction::CopySelection)),
+            ok(eq(()))
+        );
         let event = ClientMouseEvent {
             button: 32,
             phase: ClientMouseEventPhase::Press,
@@ -764,12 +888,16 @@ mod tests {
         };
         let (result_sender, result_receiver) = std::sync::mpsc::channel();
         let handle = thread::spawn(move || {
-            let _ = result_sender.send(send_decoded_input(&input_sender, vec![DecodedInput::Mouse(event)]));
+            let _ = result_sender.send(send_decoded_input(
+                &cmd_sender,
+                &request_sender,
+                vec![DecodedInput::Mouse(event)],
+            ));
         });
         let result = match result_receiver.recv_timeout(Duration::from_secs(1)) {
             Ok(result) => result,
             Err(error) => {
-                drop(input_receiver);
+                drop(cmd_receiver);
                 handle
                     .join()
                     .map_err(|error| report!("muxr mouse input test thread panicked").attach(format!("{error:?}")))?;
@@ -778,8 +906,14 @@ mod tests {
         };
 
         assert_that!(result, eq(ClientInputSend::Accepted));
-        assert_that!(input_receiver.try_recv(), eq(Ok(ClientInputAction::CopySelection)));
-        assert_that!(input_receiver.try_recv(), err(anything()));
+        assert_that!(
+            matches!(
+                cmd_receiver.try_recv(),
+                Ok(ClientInputCmd::Action(ClientInputAction::CopySelection))
+            ),
+            eq(true)
+        );
+        assert_that!(cmd_receiver.try_recv(), err(anything()));
         handle
             .join()
             .map_err(|error| report!("muxr mouse input test thread panicked").attach(format!("{error:?}")))?;
@@ -788,8 +922,12 @@ mod tests {
 
     #[test]
     fn test_send_decoded_input_when_mouse_wheel_action_queue_is_full_waits_for_queue_space() -> rootcause::Result<()> {
-        let (input_sender, mut input_receiver) = tokio::sync::mpsc::channel(1);
-        assert_that!(input_sender.try_send(ClientInputAction::CopySelection), ok(eq(())));
+        let (cmd_sender, mut cmd_receiver) = tokio::sync::mpsc::channel(1);
+        let (request_sender, _request_receiver) = tokio::sync::mpsc::channel(1);
+        assert_that!(
+            cmd_sender.try_send(ClientInputCmd::Action(ClientInputAction::CopySelection)),
+            ok(eq(()))
+        );
         let event = ClientMouseEvent {
             button: 64,
             phase: ClientMouseEventPhase::Press,
@@ -797,21 +935,31 @@ mod tests {
         };
         let (result_sender, result_receiver) = std::sync::mpsc::channel();
         let handle = thread::spawn(move || {
-            let _ = result_sender.send(send_decoded_input(&input_sender, vec![DecodedInput::Mouse(event)]));
+            let _ = result_sender.send(send_decoded_input(
+                &cmd_sender,
+                &request_sender,
+                vec![DecodedInput::Mouse(event)],
+            ));
         });
 
         assert_that!(result_receiver.recv_timeout(Duration::from_millis(50)), err(anything()));
         assert_that!(
-            input_receiver.blocking_recv(),
-            eq(Some(ClientInputAction::CopySelection))
+            matches!(
+                cmd_receiver.blocking_recv(),
+                Some(ClientInputCmd::Action(ClientInputAction::CopySelection))
+            ),
+            eq(true)
         );
         assert_that!(
             result_receiver.recv_timeout(Duration::from_secs(1)),
             eq(Ok(ClientInputSend::Accepted))
         );
         assert_that!(
-            input_receiver.blocking_recv(),
-            eq(Some(ClientInputAction::Mouse(event)))
+            matches!(
+                cmd_receiver.blocking_recv(),
+                Some(ClientInputCmd::Action(ClientInputAction::Mouse(actual))) if actual == event
+            ),
+            eq(true)
         );
         handle
             .join()
@@ -821,31 +969,39 @@ mod tests {
 
     #[test]
     fn test_send_decoded_input_when_copy_selection_arrives_emits_local_action() {
-        let (input_sender, mut input_receiver) = tokio::sync::mpsc::channel(1);
+        let (cmd_sender, mut cmd_receiver) = tokio::sync::mpsc::channel(1);
+        let (request_sender, _request_receiver) = tokio::sync::mpsc::channel(1);
 
         assert_that!(
-            send_decoded_input(&input_sender, vec![DecodedInput::CopySelection]),
+            send_decoded_input(&cmd_sender, &request_sender, vec![DecodedInput::CopySelection]),
             eq(ClientInputSend::Accepted)
         );
 
         assert_that!(
-            input_receiver.blocking_recv(),
-            eq(Some(ClientInputAction::CopySelection))
+            matches!(
+                cmd_receiver.blocking_recv(),
+                Some(ClientInputCmd::Action(ClientInputAction::CopySelection))
+            ),
+            eq(true)
         );
     }
 
     #[test]
     fn test_send_decoded_input_when_inline_copy_selection_arrives_emits_local_action() {
-        let (input_sender, mut input_receiver) = tokio::sync::mpsc::channel(1);
+        let (cmd_sender, mut cmd_receiver) = tokio::sync::mpsc::channel(1);
+        let (request_sender, _request_receiver) = tokio::sync::mpsc::channel(1);
 
         assert_that!(
-            send_decoded_input(&input_sender, vec![DecodedInput::CopySelectionInline]),
+            send_decoded_input(&cmd_sender, &request_sender, vec![DecodedInput::CopySelectionInline]),
             eq(ClientInputSend::Accepted)
         );
 
         assert_that!(
-            input_receiver.blocking_recv(),
-            eq(Some(ClientInputAction::CopySelectionInline))
+            matches!(
+                cmd_receiver.blocking_recv(),
+                Some(ClientInputCmd::Action(ClientInputAction::CopySelectionInline))
+            ),
+            eq(true)
         );
     }
 
