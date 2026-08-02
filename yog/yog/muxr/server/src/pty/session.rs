@@ -167,20 +167,15 @@ pub struct PtyHandle {
 
 /// Pane render data captured under one terminal-state lock.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct PtyRenderSnapshot {
+pub struct PtyRenderMetadata {
     mouse_mode: muxr_core::PaneMouseMode,
-    terminal: TerminalSnapshot,
     visible_row_wraps: Vec<muxr_core::RowWrap>,
     visible_top_row: u64,
 }
 
-impl PtyRenderSnapshot {
+impl PtyRenderMetadata {
     pub const fn mouse_mode(&self) -> muxr_core::PaneMouseMode {
         self.mouse_mode
-    }
-
-    pub const fn terminal(&self) -> &TerminalSnapshot {
-        &self.terminal
     }
 
     pub fn visible_row_wraps(&self) -> &[muxr_core::RowWrap] {
@@ -189,6 +184,18 @@ impl PtyRenderSnapshot {
 
     pub const fn visible_top_row(&self) -> u64 {
         self.visible_top_row
+    }
+}
+
+/// Pane render data captured under one terminal-state lock.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PtyRenderSnapshot {
+    terminal: TerminalSnapshot,
+}
+
+impl PtyRenderSnapshot {
+    pub const fn terminal(&self) -> &TerminalSnapshot {
+        &self.terminal
     }
 }
 
@@ -228,8 +235,21 @@ pub enum PtyExitState {
 }
 
 impl PtyHandle {
+    #[cfg(test)]
     pub fn attach_sink(&self, sender: Sender<PtyEvent>) -> PtySinkGuard {
-        self.state.attach_sink(sender)
+        self.attach_sink_with_output_wakeup(sender, Arc::new(AtomicBool::new(false)))
+    }
+
+    /// Attach this pane to an output bridge sharing one session-level wakeup gate.
+    ///
+    /// The attached-session consumer sweeps every pane after one `OutputReady`, so separate per-pane markers only
+    /// create redundant bounded-channel traffic during a noisy output burst.
+    pub fn attach_sink_with_output_wakeup(
+        &self,
+        sender: Sender<PtyEvent>,
+        output_wakeup_pending: Arc<AtomicBool>,
+    ) -> PtySinkGuard {
+        self.state.attach_sink_with_output_wakeup(sender, output_wakeup_pending)
     }
 
     pub fn exit_state(&self) -> PtyExitState {
@@ -376,6 +396,11 @@ impl PtyHandle {
         self.state.acknowledge_output_wakeup();
     }
 
+    /// Retry a sticky output wakeup after another PTY event made capacity available.
+    pub fn retry_output_wakeup(&self) -> rootcause::Result<()> {
+        self.state.retry_output_wakeup()
+    }
+
     #[cfg(test)]
     pub fn render_snapshot(&self) -> rootcause::Result<TerminalSnapshot> {
         self.state.terminal.lock().snapshot()
@@ -397,10 +422,20 @@ impl PtyHandle {
     pub fn pane_render_snapshot(&self) -> rootcause::Result<PtyRenderSnapshot> {
         let terminal = self.state.terminal.lock();
         Ok(PtyRenderSnapshot {
+            terminal: terminal.snapshot()?,
+        })
+    }
+
+    /// Read only the viewport data needed for a `PaneRegions` event.
+    ///
+    /// This deliberately avoids cloning terminal cells; the render composer requests those only for panes that are
+    /// actually damaged.
+    pub fn pane_render_metadata(&self) -> rootcause::Result<PtyRenderMetadata> {
+        let terminal = self.state.terminal.lock();
+        Ok(PtyRenderMetadata {
             mouse_mode: terminal.application_mode().pane_mouse_mode(),
             visible_top_row: terminal.visible_top_row()?,
             visible_row_wraps: terminal.visible_row_wraps(),
-            terminal: terminal.snapshot()?,
         })
     }
 
@@ -441,7 +476,7 @@ impl Drop for PtySinkGuard {
 
 struct ActivePtySink {
     output_current: Arc<AtomicBool>,
-    output_wakeup_pending: AtomicBool,
+    output_wakeup_pending: Arc<AtomicBool>,
     sender: Sender<PtyEvent>,
 }
 
@@ -487,14 +522,23 @@ impl PtyState {
         })
     }
 
+    #[cfg(test)]
     fn attach_sink(self: &Arc<Self>, sender: Sender<PtyEvent>) -> PtySinkGuard {
+        self.attach_sink_with_output_wakeup(sender, Arc::new(AtomicBool::new(false)))
+    }
+
+    fn attach_sink_with_output_wakeup(
+        self: &Arc<Self>,
+        sender: Sender<PtyEvent>,
+        output_wakeup_pending: Arc<AtomicBool>,
+    ) -> PtySinkGuard {
         let output_current = Arc::new(AtomicBool::new(true));
         self.title_changes.lock().clear();
         // Attach sends a fresh baseline; discard dirty state accumulated before the client could observe output events.
         self.screen_dirty.store(false, Ordering::Release);
         *self.active_sink.lock() = Some(ActivePtySink {
             output_current: Arc::clone(&output_current),
-            output_wakeup_pending: AtomicBool::new(false),
+            output_wakeup_pending,
             sender,
         });
 
@@ -586,6 +630,38 @@ impl PtyState {
         if let Some(sink) = self.active_sink.lock().as_ref() {
             sink.output_wakeup_pending.store(false, Ordering::Release);
         }
+    }
+
+    fn retry_output_wakeup(&self) -> rootcause::Result<()> {
+        if !self.screen_dirty.load(Ordering::Acquire) && self.title_changes.lock().is_empty() {
+            return Ok(());
+        }
+        let mut active_sink = self.active_sink.lock();
+        let Some(sink) = active_sink.as_ref() else {
+            return Ok(());
+        };
+        if sink
+            .output_wakeup_pending
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .is_err()
+        {
+            return Ok(());
+        }
+        match self::try_send_pty_event(&sink.sender, PtyEvent::OutputReady)? {
+            PtyEventSendOutcome::Sent => {}
+            PtyEventSendOutcome::Full(PtyEvent::OutputReady) => {
+                sink.output_wakeup_pending.store(false, Ordering::Release);
+            }
+            PtyEventSendOutcome::Disconnected(PtyEvent::OutputReady) => {
+                sink.output_current.store(false, Ordering::Release);
+                *active_sink = None;
+            }
+            PtyEventSendOutcome::Full(PtyEvent::Exited) | PtyEventSendOutcome::Disconnected(PtyEvent::Exited) => {
+                return Err(report!("unexpected muxr pty exit event while retrying output"));
+            }
+        }
+        drop(active_sink);
+        Ok(())
     }
 
     fn mark_exited(&self, exit_status: PtyExitStatus) -> rootcause::Result<()> {
@@ -986,7 +1062,7 @@ mod tests {
         let (sender, _receiver) = kanal::bounded(0);
         *state.active_sink.lock() = Some(ActivePtySink {
             output_current: Arc::clone(&output_current),
-            output_wakeup_pending: AtomicBool::new(false),
+            output_wakeup_pending: Arc::new(AtomicBool::new(false)),
             sender,
         });
         let session = SessionName::default();
@@ -1022,7 +1098,7 @@ mod tests {
         let (sender, receiver) = kanal::bounded(1);
         *state.active_sink.lock() = Some(ActivePtySink {
             output_current: Arc::clone(&output_current),
-            output_wakeup_pending: AtomicBool::new(false),
+            output_wakeup_pending: Arc::new(AtomicBool::new(false)),
             sender,
         });
         drop(receiver);
@@ -1072,7 +1148,7 @@ mod tests {
         let (sender, receiver) = kanal::bounded(1);
         *state.active_sink.lock() = Some(ActivePtySink {
             output_current: Arc::clone(&output_current),
-            output_wakeup_pending: AtomicBool::new(false),
+            output_wakeup_pending: Arc::new(AtomicBool::new(false)),
             sender,
         });
         drop(receiver);
@@ -1151,6 +1227,25 @@ mod tests {
     }
 
     #[test]
+    fn test_session_output_wakeup_gate_coalesces_multiple_panes() -> rootcause::Result<()> {
+        let first = Arc::new(pty_state(&terminal_size()?));
+        let second = Arc::new(pty_state(&terminal_size()?));
+        let (sender, receiver) = kanal::bounded(2);
+        let output_wakeup_pending = Arc::new(AtomicBool::new(false));
+        let _first_guard = first.attach_sink_with_output_wakeup(sender.clone(), Arc::clone(&output_wakeup_pending));
+        let _second_guard = second.attach_sink_with_output_wakeup(sender, Arc::clone(&output_wakeup_pending));
+
+        self::assert_replies_eq(&(first.append_output(b"first pane")?), &[]);
+        self::assert_replies_eq(&(second.append_output(b"second pane")?), &[]);
+
+        assert_that!(receiver.recv(), ok(eq(PtyEvent::OutputReady)));
+        assert_that!(receiver.try_recv(), ok(none()));
+        assert_that!(first.take_screen_dirty(), eq(PtyScreenDmg::Dirty));
+        assert_that!(second.take_screen_dirty(), eq(PtyScreenDmg::Dirty));
+        Ok(())
+    }
+
+    #[test]
     fn test_append_output_when_wakeup_channel_is_full_retries_after_capacity_opens() -> rootcause::Result<()> {
         let state = pty_state(&terminal_size()?);
         let (sender, receiver) = kanal::bounded(1);
@@ -1158,7 +1253,7 @@ mod tests {
         let output_current = Arc::new(AtomicBool::new(true));
         *state.active_sink.lock() = Some(ActivePtySink {
             output_current: Arc::clone(&output_current),
-            output_wakeup_pending: AtomicBool::new(false),
+            output_wakeup_pending: Arc::new(AtomicBool::new(false)),
             sender,
         });
 
@@ -1172,7 +1267,7 @@ mod tests {
             eq(true)
         );
         assert_that!(receiver.recv(), ok(eq(PtyEvent::Exited)));
-        self::assert_replies_eq(&(state.append_output(b"second")?), &[]);
+        state.retry_output_wakeup()?;
 
         assert_that!(receiver.recv(), ok(eq(PtyEvent::OutputReady)));
         Ok(())
@@ -1258,7 +1353,7 @@ mod tests {
         let output_current = Arc::new(AtomicBool::new(true));
         *state.active_sink.lock() = Some(ActivePtySink {
             output_current: Arc::clone(&output_current),
-            output_wakeup_pending: AtomicBool::new(false),
+            output_wakeup_pending: Arc::new(AtomicBool::new(false)),
             sender,
         });
 
@@ -1280,7 +1375,7 @@ mod tests {
         let output_current = Arc::new(AtomicBool::new(true));
         *state.active_sink.lock() = Some(ActivePtySink {
             output_current: Arc::clone(&output_current),
-            output_wakeup_pending: AtomicBool::new(false),
+            output_wakeup_pending: Arc::new(AtomicBool::new(false)),
             sender,
         });
 

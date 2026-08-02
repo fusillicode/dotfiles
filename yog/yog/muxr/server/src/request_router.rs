@@ -394,8 +394,8 @@ async fn apply_pane_focus_outcome(
         PaneFocusRender::ResizePanesAndRender => {
             crate::screen_render::resize_panes_and_render(event_writer, state).await
         }
-        PaneFocusRender::SendLayoutAndBaseline => {
-            crate::screen_render::send_layout_and_baseline(event_writer, state).await
+        PaneFocusRender::SendLayoutAndRenderDiff => {
+            crate::screen_render::send_layout_and_render_diff(event_writer, state).await
         }
     }
 }

@@ -1,4 +1,5 @@
 use std::io::Write;
+use std::sync::Arc;
 
 use crossterm::Command;
 use crossterm::QueueableCommand;
@@ -12,8 +13,6 @@ use crossterm::style::ResetColor;
 use crossterm::style::SetAttribute;
 use crossterm::style::SetBackgroundColor;
 use crossterm::style::SetForegroundColor;
-use crossterm::terminal::Clear;
-use crossterm::terminal::ClearType;
 use muxr_core::RenderCell;
 use muxr_core::RenderCellWidth;
 use muxr_core::RenderColor;
@@ -35,10 +34,10 @@ const OSC8_OPEN_PREFIX: &[u8] = b"\x1b]8;;";
 const OSC8_TERMINATOR: &[u8] = b"\x1b\\";
 const MAX_RETAINED_TEXT_RUN_BYTES: usize = 8 * 1_024;
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct FrameBuffer {
     cursor: Option<RenderCursor>,
-    rows: Vec<Vec<RenderCell>>,
+    rows: Vec<Arc<[RenderCell]>>,
     seq: Option<u64>,
     size: Option<TerminalSize>,
 }
@@ -50,7 +49,7 @@ impl FrameBuffer {
                 let (seq, size, cursor, spans) = baseline.into_parts();
                 // RenderBaseline construction validates ordered full-width rows; clone them directly instead of
                 // allocating a blank frame and overwriting every cell.
-                let rows = spans.iter().map(|span| span.cells().to_vec()).collect();
+                let rows = spans.iter().map(|span| Arc::from(span.cells().to_vec())).collect();
 
                 self.cursor = Some(cursor.clone());
                 self.rows = rows;
@@ -106,7 +105,7 @@ impl FrameBuffer {
             let Some(cells) = self.rows.get(usize::from(*row)) else {
                 return Err(report!("muxr frame buffer row is missing").attach(format!("row={row}")));
             };
-            rows.push(RenderRowSpan::new(*row, 0, cells.clone())?);
+            rows.push(RenderRowSpan::new(*row, 0, cells.as_ref().to_vec())?);
         }
 
         Ok(Some(RenderFrameChanges {
@@ -122,7 +121,7 @@ impl FrameBuffer {
             .rows
             .iter()
             .enumerate()
-            .map(|(row, cells)| RenderRowSpan::new(u16::try_from(row).ok()?, 0, cells.clone()).ok())
+            .map(|(row, cells)| RenderRowSpan::new(u16::try_from(row).ok()?, 0, cells.as_ref().to_vec()).ok())
             .collect::<Option<Vec<_>>>()?;
         Some(RenderFrameChanges {
             cursor,
@@ -300,8 +299,9 @@ pub struct TerminalRender<'a> {
 }
 
 pub fn queue_full_redraw_start(stdout: &mut impl Write) -> rootcause::Result<()> {
-    queue_cmd(stdout, Hide)?;
-    queue_cmd(stdout, Clear(ClearType::All))
+    // A complete redraw writes every cell, including trailing spaces. Clearing first creates a visible blank frame
+    // whenever an encoded render is superseded, even inside terminals that do not honor synchronized output.
+    queue_cmd(stdout, Hide)
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -330,11 +330,12 @@ pub enum RenderFrameScope {
     Partial,
 }
 
-fn apply_span_to_rows(rows: &mut [Vec<RenderCell>], span: &RenderRowSpan) -> rootcause::Result<()> {
+fn apply_span_to_rows(rows: &mut [Arc<[RenderCell]>], span: &RenderRowSpan) -> rootcause::Result<()> {
     validate_span_against_rows(rows, span)?;
     let Some(row) = rows.get_mut(usize::from(span.row())) else {
         return Err(report!("muxr render row outside frame").attach(format!("row={}", span.row())));
     };
+    let row = Arc::make_mut(row);
     let col = usize::from(span.col());
 
     for (target, cell) in row.iter_mut().skip(col).zip(span.cells().iter()) {
@@ -343,7 +344,7 @@ fn apply_span_to_rows(rows: &mut [Vec<RenderCell>], span: &RenderRowSpan) -> roo
     Ok(())
 }
 
-fn validate_span_against_rows(rows: &[Vec<RenderCell>], span: &RenderRowSpan) -> rootcause::Result<()> {
+fn validate_span_against_rows(rows: &[Arc<[RenderCell]>], span: &RenderRowSpan) -> rootcause::Result<()> {
     let Some(row) = rows.get(usize::from(span.row())) else {
         return Err(report!("muxr render row outside frame").attach(format!("row={}", span.row())));
     };
@@ -585,6 +586,20 @@ mod tests {
         assert_that!(changes.scope, eq(RenderFrameScope::Partial));
         assert_that!(changes.rows.len(), eq(1));
         assert_that!(frame_buffer.seq, eq(Some(2)));
+        Ok(())
+    }
+
+    #[test]
+    fn test_frame_buffer_clone_when_diff_changes_one_row_shares_unchanged_rows() -> rootcause::Result<()> {
+        let frame_buffer = applied_frame_buffer()?;
+        let mut successor = frame_buffer.clone();
+
+        let ApplyOutcome::Applied(_) = successor.apply(RenderUpdate::Diff(render_diff()?))? else {
+            return Err(report!("expected applied diff"));
+        };
+
+        assert_that!(Arc::ptr_eq(&frame_buffer.rows[0], &successor.rows[0]), eq(true));
+        assert_that!(Arc::ptr_eq(&frame_buffer.rows[1], &successor.rows[1]), eq(false));
         Ok(())
     }
 
@@ -931,14 +946,14 @@ mod tests {
     }
 
     #[test]
-    fn test_queue_full_redraw_start_writes_hide_and_clear_without_flushing() -> rootcause::Result<()> {
+    fn test_queue_full_redraw_start_hides_cursor_without_clearing_or_flushing() -> rootcause::Result<()> {
         let mut output = CountingWriter::default();
 
         queue_full_redraw_start(&mut output)?;
 
         let rendered = output.rendered_string()?;
         assert_that!(rendered, contains_substring("\x1b[?25l"));
-        assert_that!(rendered, contains_substring("\x1b[2J"));
+        assert_that!(rendered.contains("\x1b[2J"), eq(false));
         assert_that!(output.flushes, eq(0));
         Ok(())
     }

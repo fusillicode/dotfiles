@@ -38,6 +38,18 @@ enum LayoutPersistence {
     SnapshotOnly,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum LayoutRenderMode {
+    Baseline,
+    Diff,
+}
+
+impl LayoutRenderMode {
+    const fn forces_baseline(self) -> bool {
+        matches!(self, Self::Baseline)
+    }
+}
+
 pub fn resize_panes_to_layout(
     layout: &SessionLayout,
     runtimes: &PaneRuntimes,
@@ -180,21 +192,17 @@ fn render_input(
     damage: ClientRenderDmg,
     force_baseline: bool,
 ) -> rootcause::Result<RenderInput> {
-    let pane_snapshots = pane_layout
+    let pane_handles = pane_layout
         .regions()
         .iter()
-        .map(|region| {
-            runtimes
-                .pane_render_snapshot(region.id)
-                .map(|snapshot| (region.id, snapshot))
-        })
+        .map(|region| runtimes.handle(region.id).map(|handle| (region.id, handle)))
         .collect::<rootcause::Result<BTreeMap<_, _>>>()?;
     Ok(RenderInput::new(
         render_worker.next_generation()?,
         pane_render,
         active_pane,
         pane_layout,
-        pane_snapshots,
+        pane_handles,
         size,
         attention_panes,
         damage,
@@ -283,7 +291,6 @@ pub async fn flush_render_diff(
         render_dmg.clone(),
         false,
     )?;
-    state.pane_regions = input.pane_regions()?;
     let command = state.render_worker.stage_render(input)?;
     if crate::event_writer::send_render_with_timeout(event_writer, &command, state.config.client_write_timeout)
         .await?
@@ -433,6 +440,22 @@ pub async fn send_layout_and_baseline(
     event_writer: &mut impl crate::event_writer::ServerEventSink,
     state: &mut ClientSessionState<'_>,
 ) -> rootcause::Result<ClientSessionFlow> {
+    self::send_layout_and_render(event_writer, state, LayoutRenderMode::Baseline).await
+}
+
+/// Send changed layout metadata followed by a full comparison against the last client frame.
+pub async fn send_layout_and_render_diff(
+    event_writer: &mut impl crate::event_writer::ServerEventSink,
+    state: &mut ClientSessionState<'_>,
+) -> rootcause::Result<ClientSessionFlow> {
+    self::send_layout_and_render(event_writer, state, LayoutRenderMode::Diff).await
+}
+
+async fn send_layout_and_render(
+    event_writer: &mut impl crate::event_writer::ServerEventSink,
+    state: &mut ClientSessionState<'_>,
+    mode: LayoutRenderMode,
+) -> rootcause::Result<ClientSessionFlow> {
     let (layout_snapshot, render_input) = {
         let tracked_processes = state.pane_tracked_processes.snapshot(state.layout);
         let layout_snapshot = self::layout_snapshot_and_maybe_persist(
@@ -460,12 +483,11 @@ pub async fn send_layout_and_baseline(
             state.terminal_size.clone(),
             self::attention_pane_ids(state.layout, &state.pane_tracked_processes),
             ClientRenderDmg::Full,
-            true,
+            mode.forces_baseline(),
         )?;
         (layout_snapshot, render_input)
     };
     let layout_event = RenderWorker::stage_mandatory(ServerEvent::Layout(layout_snapshot.clone()));
-    state.pane_regions = render_input.pane_regions()?;
     let command = state.render_worker.stage_render(render_input)?;
     if crate::event_writer::send_event_and_render_with_timeout(
         event_writer,

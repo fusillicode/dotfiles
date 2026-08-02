@@ -769,10 +769,9 @@ mod tests {
         let terminal_output = output.rendered_string()?;
         assert_that!(terminal_output, starts_with("\x1b[?2026h"));
         assert_that!(terminal_output, ends_with("\x1b[?2026l"));
-        let clear_index = terminal_output.find("\x1b[2J").unwrap_or(usize::MAX);
         let tab_bar_index = terminal_output.find("tab-1").unwrap_or(usize::MAX);
         let pane_index = terminal_output.find("ab").unwrap_or(usize::MAX);
-        assert_that!(clear_index, lt(tab_bar_index));
+        assert_that!(terminal_output, not(contains_substring("\x1b[2J")));
         assert_that!(tab_bar_index, lt(pane_index));
         Ok(())
     }
@@ -896,7 +895,7 @@ mod tests {
         let terminal_output = String::from_utf8(transaction)?;
 
         assert_that!(terminal_output, starts_with("\x1b[?1003h\x1b[?2026h"));
-        assert_that!(terminal_output, contains_substring("\x1b[2J"));
+        assert_that!(terminal_output, not(contains_substring("\x1b[2J")));
         Ok(())
     }
 

@@ -129,44 +129,24 @@ impl RenderComposer {
         Ok(RenderUpdate::Baseline(baseline))
     }
 
-    pub fn render_diff_snapshots(
+    pub fn render_baseline_with_snapshot(
         &mut self,
         pane_render: PaneRenderConfig,
         pane_layout: PaneRenderLayout<'_>,
         size: &TerminalSize,
         attention_panes: &[PaneId],
-        damage: &ClientRenderDmg,
-        snapshots: &BTreeMap<PaneId, PtyRenderSnapshot>,
-    ) -> rootcause::Result<Option<RenderUpdate>> {
-        self.render_diff_with(pane_render, pane_layout, size, attention_panes, damage, |pane_id| {
-            snapshots.get(&pane_id).cloned().ok_or_else(|| {
-                report!("muxr render command is missing a pane snapshot").attach(format!("pane={pane_id}"))
-            })
-        })
-    }
-
-    pub fn render_baseline_snapshots(
-        &mut self,
-        pane_render: PaneRenderConfig,
-        pane_layout: PaneRenderLayout<'_>,
-        size: &TerminalSize,
-        attention_panes: &[PaneId],
-        snapshots: &BTreeMap<PaneId, PtyRenderSnapshot>,
+        mut snapshot: impl FnMut(PaneId) -> rootcause::Result<PtyRenderSnapshot>,
     ) -> rootcause::Result<RenderUpdate> {
         self.render_frame_baseline(Self::current_frame_with(
             pane_render,
             pane_layout,
             size,
             attention_panes,
-            &mut |pane_id| {
-                snapshots.get(&pane_id).cloned().ok_or_else(|| {
-                    report!("muxr render command is missing a pane snapshot").attach(format!("pane={pane_id}"))
-                })
-            },
+            &mut snapshot,
         )?)
     }
 
-    fn render_diff_with(
+    pub fn render_diff_with_snapshot(
         &mut self,
         pane_render: PaneRenderConfig,
         pane_layout: PaneRenderLayout<'_>,
