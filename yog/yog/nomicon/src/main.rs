@@ -14,7 +14,7 @@ use std::path::Path;
 use std::path::PathBuf;
 
 use askama::Template;
-use chrono::Utc;
+use jiff::Timestamp;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
 use ytil_sys::cli::Args;
@@ -91,7 +91,7 @@ fn main() -> rootcause::Result<()> {
     }
     crates.sort_by(|a, b| a.name.cmp(&b.name));
 
-    let generated_at = Utc::now();
+    let generated_at = Timestamp::now();
     let footer = Footer { generated_at };
 
     let index_page = IndexPage {

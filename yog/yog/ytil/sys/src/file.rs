@@ -7,7 +7,8 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::process::Stdio;
 
-use chrono::Utc;
+use jiff::Timestamp;
+use jiff::tz::Offset;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
 use serde::Serialize;
@@ -224,7 +225,7 @@ pub fn atomic_cp(from: &Path, to: &Path) -> rootcause::Result<()> {
             .attach_with(|| format!("path={}", to.display()))?
             .to_string_lossy(),
         std::process::id(),
-        Utc::now().to_rfc3339()
+        Timestamp::now().display_with_offset(Offset::UTC)
     );
     let tmp_path = to
         .parent()

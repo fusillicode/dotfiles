@@ -1,8 +1,6 @@
 use std::path::PathBuf;
 
-use chrono::DateTime;
-use chrono::Utc;
-use rootcause::option_ext::OptionExt;
+use jiff::Timestamp;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
 use serde::Deserialize;
@@ -18,8 +16,7 @@ use crate::agent::session::Session;
 pub fn parse(meta_hex: &str, workspace_dir: PathBuf) -> rootcause::Result<CursorSession> {
     let doc = parse_meta(meta_hex)?;
 
-    let created_at = DateTime::from_timestamp_millis(doc.created_at)
-        .map(|datetime| datetime.to_utc())
+    let created_at = Timestamp::from_millisecond(doc.created_at)
         .context("Cursor createdAt is out of range".to_owned())
         .attach(format!("session_id={}", doc.agent_id))
         .attach(format!("created_at_ms={}", doc.created_at))?;
@@ -65,8 +62,8 @@ pub struct CursorSession {
     pub name: String,
     pub search_text: String,
     pub workspace: PathBuf,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
+    pub created_at: Timestamp,
+    pub updated_at: Timestamp,
 }
 
 impl CursorSession {

@@ -7,6 +7,7 @@ use std::path::Path;
 use std::process::Command;
 use std::process::Stdio;
 
+use jiff::Timestamp;
 use owo_colors::OwoColorize;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
@@ -142,8 +143,8 @@ impl RenderableSession {
     fn plain_summary(&self, home_dir: &Path) -> String {
         let path_label = ytil_tui::short_path(&self.session.workspace, home_dir);
         let session_name = ytil_tui::display_fixed_width(&self.session.name, 42);
-        let updated_label = self.session.updated_at.format("%d/%m/%Y-%H:%M").to_string();
-        let created_label = self.session.created_at.format("%d/%m/%Y-%H:%M").to_string();
+        let updated_label = self.session.updated_at.strftime("%d/%m/%Y-%H:%M").to_string();
+        let created_label = self.session.created_at.strftime("%d/%m/%Y-%H:%M").to_string();
         let agent = self.session.agent.short_name();
 
         self.branch().map_or_else(
@@ -169,8 +170,8 @@ impl Display for RenderableSession {
                 .map_or_else(|| std::path::Path::new("/"), std::path::Path::new),
         );
         let session_name = ytil_tui::display_fixed_width(&self.session.name, 42);
-        let updated_label = self.session.updated_at.format("%d/%m/%Y-%H:%M").to_string();
-        let created_label = self.session.created_at.format("%d/%m/%Y-%H:%M").to_string();
+        let updated_label = self.session.updated_at.strftime("%d/%m/%Y-%H:%M").to_string();
+        let created_label = self.session.created_at.strftime("%d/%m/%Y-%H:%M").to_string();
 
         if let Some(branch) = self.branch() {
             write!(
@@ -203,7 +204,7 @@ struct JsonSession {
     summary: String,
     display: String,
     search: String,
-    updated_at: chrono::DateTime<chrono::Utc>,
+    updated_at: Timestamp,
     resume_program: String,
     resume_args: Vec<String>,
 }
@@ -317,7 +318,7 @@ fn delete_session(session: &RenderableSession) -> rootcause::Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use chrono::DateTime;
+    use jiff::Timestamp;
     use tempfile::tempdir;
     use test_that::prelude::*;
 
@@ -341,8 +342,8 @@ mod tests {
         let dir = tempdir().expect("tempdir should be created");
         let workspace = dir.path().join("repo");
         std::fs::create_dir_all(&workspace).expect("workspace should be created");
-        let created_at = DateTime::from_timestamp(1_700_000_000, 0).expect("test timestamp should be valid");
-        let updated_at = DateTime::from_timestamp(1_700_000_100, 0).expect("test timestamp should be valid");
+        let created_at = Timestamp::from_second(1_700_000_000).expect("test timestamp should be valid");
+        let updated_at = Timestamp::from_second(1_700_000_100).expect("test timestamp should be valid");
         let session = Session {
             id: "session-id".to_string(),
             agent: Agent::Codex,
@@ -350,8 +351,8 @@ mod tests {
             search_text: "hidden prompt".to_string(),
             workspace: workspace.clone(),
             path: dir.path().join("session.jsonl"),
-            created_at: created_at.to_utc(),
-            updated_at: updated_at.to_utc(),
+            created_at,
+            updated_at,
         };
         let renderable = RenderableSession::from(session);
 
@@ -370,7 +371,7 @@ mod tests {
                 result_of!(|row: &JsonSession| &row.workspace, points_to(eq(workspace))),
                 result_of!(|row: &JsonSession| row.session_id.as_str(), eq("session-id")),
                 result_of!(|row: &JsonSession| row.summary.as_str(), eq("fix issue")),
-                result_of!(|row: &JsonSession| row.updated_at, eq(updated_at.to_utc())),
+                result_of!(|row: &JsonSession| row.updated_at, eq(updated_at)),
                 result_of!(|row: &JsonSession| row.resume_program.as_str(), eq("codex")),
                 result_of!(
                     |row: &JsonSession| row.resume_args.first().map(String::as_str),

@@ -5,9 +5,8 @@ use std::path::Path;
 use std::time::Duration;
 use std::time::SystemTime;
 
-use chrono::DateTime;
-use chrono::Local;
 use crossterm::style::Stylize;
+use jiff::Zoned;
 use muxr_core::ClientRequest;
 use muxr_core::ServerEvent;
 use muxr_core::SessionName;
@@ -155,9 +154,10 @@ fn created_at_text(created_at: Option<SystemTime>) -> String {
     created_at.map_or_else(
         || "unknown".to_owned(),
         |created_at| {
-            DateTime::<Local>::from(created_at)
-                .format("%d-%m-%Y %H:%M:%S")
-                .to_string()
+            Zoned::try_from(created_at).map_or_else(
+                |_| "unknown".to_owned(),
+                |created_at| created_at.strftime("%d-%m-%Y %H:%M:%S").to_string(),
+            )
         },
     )
 }

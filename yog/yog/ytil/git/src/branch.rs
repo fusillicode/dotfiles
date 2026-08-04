@@ -7,12 +7,11 @@ use std::collections::HashSet;
 use std::path::Path;
 use std::process::Command;
 
-use chrono::DateTime;
-use chrono::Utc;
 use git2::BranchType;
 use git2::Cred;
 use git2::RemoteCallbacks;
 use git2::Repository;
+use jiff::Timestamp;
 use rootcause::bail;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
@@ -84,10 +83,10 @@ pub fn get_current() -> rootcause::Result<String> {
 ///
 /// Returns [`None`] when `path` is not in a repository, `HEAD` has no usable
 /// reflog, or no checkout/switch entry exists before the timestamp.
-pub fn get_at(path: &Path, timestamp: DateTime<Utc>) -> Option<String> {
+pub fn get_at(path: &Path, timestamp: Timestamp) -> Option<String> {
     let repo = crate::repo::discover(path).ok()?;
     let reflog = repo.reflog("HEAD").ok()?;
-    let timestamp = timestamp.timestamp();
+    let timestamp = timestamp.as_second();
     reflog
         .iter()
         .filter_map(|entry| {
@@ -276,7 +275,7 @@ pub fn switch(branch_name: &str) -> Result<(), Box<CmdError>> {
 /// - Enumerating branches fails.
 /// - A branch name is not valid UTF-8.
 /// - Resolving the branch tip commit fails.
-/// - Converting the committer timestamp into a [`DateTime`] fails.
+/// - Converting the committer timestamp into a [`Timestamp`] fails.
 pub fn get_all(repo: &Repository) -> rootcause::Result<Vec<Branch>> {
     fetch_with_repo(repo, &[]).context("error fetching branches")?;
 
@@ -299,7 +298,7 @@ pub fn get_all(repo: &Repository) -> rootcause::Result<Vec<Branch>> {
 /// - Enumerating branches fails.
 /// - A branch name is not valid UTF-8.
 /// - Resolving the branch tip commit fails.
-/// - Converting the committer timestamp into a [`DateTime`] fails.
+/// - Converting the committer timestamp into a [`Timestamp`] fails.
 pub fn get_all_no_redundant(repo: &Repository) -> rootcause::Result<Vec<Branch>> {
     let mut branches = get_all(repo)?;
     remove_redundant_remotes(&mut branches);
@@ -365,7 +364,7 @@ pub enum Branch {
         /// The email address of the last committer.
         committer_email: String,
         /// The date and time when the last commit was made.
-        committer_date_time: DateTime<Utc>,
+        committer_date_time: Timestamp,
     },
     /// Remote tracking branch (under `refs/remotes/`).
     Remote {
@@ -374,7 +373,7 @@ pub enum Branch {
         /// The email address of the last committer.
         committer_email: String,
         /// The date and time when the last commit was made.
-        committer_date_time: DateTime<Utc>,
+        committer_date_time: Timestamp,
     },
 }
 
@@ -399,7 +398,7 @@ impl Branch {
     }
 
     /// Returns the timestamp of the last commit on this branch.
-    pub const fn committer_date_time(&self) -> &DateTime<Utc> {
+    pub const fn committer_date_time(&self) -> &Timestamp {
         match self {
             Self::Local {
                 committer_date_time, ..
@@ -419,7 +418,7 @@ impl Branch {
 /// - Branch name is not valid UTF-8.
 /// - Resolving the branch tip commit fails.
 /// - Committer email is not valid UTF-8.
-/// - Converting the committer timestamp into a [`DateTime`] fails.
+/// - Converting the committer timestamp into a [`Timestamp`] fails.
 impl<'a> TryFrom<(git2::Branch<'a>, git2::BranchType)> for Branch {
     type Error = rootcause::Report;
 
@@ -434,8 +433,8 @@ impl<'a> TryFrom<(git2::Branch<'a>, git2::BranchType)> for Branch {
             .context("error invalid committer email UTF-8")
             .attach_with(|| format!("branch_name={branch_name:?}"))?
             .to_string();
-        let committer_date_time = DateTime::from_timestamp(committer.when().seconds(), 0)
-            .ok_or_else(|| report!("error invalid commit timestamp"))
+        let committer_date_time = Timestamp::from_second(committer.when().seconds())
+            .map_err(|_| report!("error invalid commit timestamp"))
             .attach_with(|| format!("seconds={}", committer.when().seconds()))?;
 
         Ok(match branch_type {
@@ -534,7 +533,7 @@ mod tests {
             eq(Branch::Local {
                 name: "test-branch".to_string(),
                 committer_email: "test@example.com".to_string(),
-                committer_date_time: DateTime::from_timestamp(42, 0).unwrap(),
+                committer_date_time: Timestamp::from_second(42).unwrap(),
             })
         );
     }
@@ -569,7 +568,7 @@ mod tests {
     #[test]
     fn test_get_at_when_path_is_not_git_repo_returns_none() {
         let temp_dir = tempfile::TempDir::new().unwrap();
-        let timestamp = DateTime::from_timestamp(10, 0).unwrap();
+        let timestamp = Timestamp::from_second(10).unwrap();
 
         let actual = get_at(temp_dir.path(), timestamp);
 
@@ -583,7 +582,7 @@ mod tests {
         append_head_reflog(&repo, 20, "checkout: moving from feature/a to feature/b");
         append_head_reflog(&repo, 30, "checkout: moving from feature/b to feature/c");
 
-        let actual = get_at(repo.workdir().unwrap(), DateTime::from_timestamp(25, 0).unwrap());
+        let actual = get_at(repo.workdir().unwrap(), Timestamp::from_second(25).unwrap());
 
         assert_that!(actual, eq(Some("feature/b".to_string())));
     }
@@ -593,7 +592,7 @@ mod tests {
         let (_temp_dir, repo) = crate::tests::init_test_repo(None);
         append_head_reflog(&repo, 10, "switch: moving from feature/a to main");
 
-        let actual = get_at(repo.workdir().unwrap(), DateTime::from_timestamp(10, 0).unwrap());
+        let actual = get_at(repo.workdir().unwrap(), Timestamp::from_second(10).unwrap());
 
         assert_that!(actual, eq(Some("main".to_string())));
     }
@@ -605,7 +604,7 @@ mod tests {
         append_head_reflog(&repo, 20, "checkout: moving from main");
         append_head_reflog(&repo, 30, "switch: moving from main to ");
 
-        let actual = get_at(repo.workdir().unwrap(), DateTime::from_timestamp(30, 0).unwrap());
+        let actual = get_at(repo.workdir().unwrap(), Timestamp::from_second(30).unwrap());
 
         assert_that!(actual, eq(None));
     }
@@ -630,22 +629,19 @@ mod tests {
         Branch::Local {
             name: "test".to_string(),
             committer_email: "a@b.com".to_string(),
-            committer_date_time: DateTime::from_timestamp(123_456, 0).unwrap(),
+            committer_date_time: Timestamp::from_second(123_456).unwrap(),
         },
-        DateTime::from_timestamp(123_456, 0).unwrap()
+        Timestamp::from_second(123_456).unwrap()
     )]
     #[case::remote_variant(
         Branch::Remote {
             name: "origin/test".to_string(),
             committer_email: "a@b.com".to_string(),
-            committer_date_time: DateTime::from_timestamp(654_321, 0).unwrap(),
+            committer_date_time: Timestamp::from_second(654_321).unwrap(),
         },
-        DateTime::from_timestamp(654_321, 0).unwrap()
+        Timestamp::from_second(654_321).unwrap()
     )]
-    fn branch_committer_date_time_when_variant_returns_date_time(
-        #[case] branch: Branch,
-        #[case] expected: DateTime<Utc>,
-    ) {
+    fn branch_committer_date_time_when_variant_returns_date_time(#[case] branch: Branch, #[case] expected: Timestamp) {
         assert_that!(branch.committer_date_time(), eq(&expected));
     }
 
@@ -653,7 +649,7 @@ mod tests {
         Branch::Local {
             name: name.into(),
             committer_email: String::new(),
-            committer_date_time: DateTime::from_timestamp(0, 0).unwrap(),
+            committer_date_time: Timestamp::from_second(0).unwrap(),
         }
     }
 
@@ -661,7 +657,7 @@ mod tests {
         Branch::Remote {
             name: name.into(),
             committer_email: String::new(),
-            committer_date_time: DateTime::from_timestamp(0, 0).unwrap(),
+            committer_date_time: Timestamp::from_second(0).unwrap(),
         }
     }
 

@@ -6,7 +6,7 @@
 use std::io::Write;
 use std::path::Path;
 
-use chrono::Utc;
+use jiff::Timestamp;
 use rootcause::prelude::ResultExt;
 use ytil_sys::cli::Args;
 
@@ -32,7 +32,7 @@ fn main() -> rootcause::Result<()> {
     let short_hash = hash.get(..SHORT_HASH_LEN).unwrap_or(&hash);
 
     let commit_epoch = commit.time().seconds();
-    let commit_seconds_delta = u64::try_from(Utc::now().timestamp().saturating_sub(commit_epoch).max(0))
+    let commit_seconds_delta = u64::try_from(Timestamp::now().as_second().saturating_sub(commit_epoch).max(0))
         .context("negative time delta after clamp")?;
 
     let out = std::io::stdout();

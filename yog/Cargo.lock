@@ -12,7 +12,7 @@ checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 name = "agg"
 version = "0.1.0"
 dependencies = [
- "chrono",
+ "jiff",
  "owo-colors",
  "rootcause",
  "rstest",
@@ -507,7 +507,6 @@ checksum = "1aa79e62e7697b8e29b513a68abacf485adcd1fe8284a4316c5ae868e6633327"
 dependencies = [
  "iana-time-zone",
  "num-traits",
- "serde",
  "windows-link",
 ]
 
@@ -1443,7 +1442,7 @@ dependencies = [
 name = "gbm"
 version = "0.1.0"
 dependencies = [
- "chrono",
+ "jiff",
  "owo-colors",
  "rootcause",
  "rstest",
@@ -1954,6 +1953,7 @@ dependencies = [
  "portable-atomic",
  "portable-atomic-util",
  "serde_core",
+ "windows-link",
 ]
 
 [[package]]
@@ -2435,8 +2435,8 @@ dependencies = [
 name = "muxr-client"
 version = "0.1.0"
 dependencies = [
- "chrono",
  "crossterm",
+ "jiff",
  "muxr-config",
  "muxr-core",
  "muxr-transport",
@@ -2478,7 +2478,7 @@ dependencies = [
 name = "muxr-server"
 version = "0.1.0"
 dependencies = [
- "chrono",
+ "jiff",
  "kanal",
  "libproc",
  "muxr-config",
@@ -2580,7 +2580,7 @@ name = "nomicon"
 version = "0.1.0"
 dependencies = [
  "askama",
- "chrono",
+ "jiff",
  "lightningcss",
  "rootcause",
  "test-that",
@@ -2688,9 +2688,9 @@ dependencies = [
 name = "nvrim"
 version = "0.1.0"
 dependencies = [
- "chrono",
  "convert_case 0.11.0",
  "fkr",
+ "jiff",
  "lit2",
  "nvim-oxi",
  "rootcause",
@@ -4100,7 +4100,7 @@ checksum = "2b2231b7c3057d5e4ad0156fb3dc807d900806020c5ffa3ee6ff2c8c76fb8520"
 name = "strgci"
 version = "0.1.0"
 dependencies = [
- "chrono",
+ "jiff",
  "rootcause",
  "rstest",
  "test-that",
@@ -5416,7 +5416,7 @@ dependencies = [
 name = "ytil_agents"
 version = "0.1.0"
 dependencies = [
- "chrono",
+ "jiff",
  "rootcause",
  "rstest",
  "rusqlite",
@@ -5450,8 +5450,8 @@ dependencies = [
 name = "ytil_gh"
 version = "0.1.0"
 dependencies = [
- "chrono",
  "convert_case 0.11.0",
+ "jiff",
  "rootcause",
  "rstest",
  "serde",
@@ -5467,8 +5467,8 @@ dependencies = [
 name = "ytil_git"
 version = "0.1.0"
 dependencies = [
- "chrono",
  "git2",
+ "jiff",
  "rootcause",
  "rstest",
  "tempfile",
@@ -5511,9 +5511,9 @@ dependencies = [
 name = "ytil_sys"
 version = "0.1.0"
 dependencies = [
- "chrono",
  "home",
  "itertools 0.15.0",
+ "jiff",
  "owo-colors",
  "pico-args",
  "rootcause",
@@ -5529,7 +5529,7 @@ dependencies = [
 name = "ytil_tui"
 version = "0.1.0"
 dependencies = [
- "chrono",
+ "jiff",
  "owo-colors",
  "ratatui",
  "rootcause",

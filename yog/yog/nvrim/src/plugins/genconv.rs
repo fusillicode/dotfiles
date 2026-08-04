@@ -5,10 +5,11 @@
 
 use std::str::Split;
 
-use chrono::DateTime;
-use chrono::NaiveDate;
-use chrono::NaiveDateTime;
-use chrono::NaiveTime;
+use jiff::Timestamp;
+use jiff::civil::Date;
+use jiff::civil::DateTime;
+use jiff::civil::Time;
+use jiff::tz::Offset;
 use nvim_oxi::Dictionary;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
@@ -128,28 +129,28 @@ fn rgb_to_hex(input: &str) -> rootcause::Result<String> {
 /// Converts a date/time string to the appropriate chrono `parse_from_str` code snippet.
 ///
 /// Attempts to parse the input with various chrono types and formats:
-/// - [`DateTime`] with offset
-/// - [`NaiveDateTime`]
-/// - [`NaiveDate`]
-/// - [`NaiveTime`]
+/// - `DateTime` with offset
+/// - `NaiveDateTime`
+/// - `NaiveDate`
+/// - `NaiveTime`
 ///
 /// # Errors
 /// Returns an error if the input cannot be parsed with any supported format.
 fn date_time_str_to_chrono_parse_from_str(input: &str) -> rootcause::Result<String> {
-    if DateTime::parse_from_str(input, "%d-%m-%Y,%H:%M:%S%z").is_ok() {
+    if Timestamp::strptime("%d-%m-%Y,%H:%M:%S%:z", input).is_ok() {
         return Ok(format!(
             r#"DateTime::parse_from_str("{input}", "%d-%m-%Y,%H:%M:%S%Z").unwrap()"#
         ));
     }
-    if NaiveDateTime::parse_from_str(input, "%d-%m-%Y,%H:%M:%S").is_ok() {
+    if DateTime::strptime("%d-%m-%Y,%H:%M:%S", input).is_ok() {
         return Ok(format!(
             r#"NaiveDateTime::parse_from_str("{input}", "%d-%m-%Y,%H:%M:%S").unwrap()"#
         ));
     }
-    if NaiveDate::parse_from_str(input, "%d-%m-%Y").is_ok() {
+    if Date::strptime("%d-%m-%Y", input).is_ok() {
         return Ok(format!(r#"NaiveDate::parse_from_str("{input}", "%d-%m-%Y").unwrap()"#));
     }
-    if NaiveTime::parse_from_str(input, "%H:%M:%S").is_ok() {
+    if Time::strptime("%H:%M:%S", input).is_ok() {
         return Ok(format!(r#"NaiveTime::parse_from_str("{input}", "%H:%M:%S").unwrap()"#));
     }
     Err(report!("cannot get chrono parse_from_str for supplied input").attach(format!("input={input:?}")))
@@ -160,10 +161,10 @@ fn unix_timestamp_to_iso_8601_date_time(input: &str) -> rootcause::Result<String
         .parse::<i64>()
         .context("cannot convert input to i64")
         .attach_with(|| format!("input={input:?}"))?;
-    let dt = DateTime::from_timestamp_secs(timestamp)
-        .ok_or_else(|| report!("cannot convert timestamp to DateTime<Utc>"))
+    let dt = Timestamp::from_second(timestamp)
+        .map_err(|_| report!("cannot convert timestamp to DateTime<Utc>"))
         .attach_with(|| format!("timestamp={timestamp}"))?;
-    Ok(dt.to_rfc3339())
+    Ok(dt.display_with_offset(Offset::UTC).to_string())
 }
 
 #[cfg(test)]
@@ -226,6 +227,14 @@ mod tests {
                 |err: &rootcause::Report| err.format_current_context().to_string(),
                 eq("cannot get chrono parse_from_str for supplied input")
             ))
+        );
+    }
+
+    #[test]
+    fn unix_timestamp_to_iso_8601_date_time_when_epoch_returns_rfc_3339_offset() {
+        assert_that!(
+            unix_timestamp_to_iso_8601_date_time("0"),
+            ok(eq("1970-01-01T00:00:00+00:00"))
         );
     }
 

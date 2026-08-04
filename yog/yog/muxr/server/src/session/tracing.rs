@@ -276,8 +276,8 @@ pub fn collect_test_log(
 }
 
 fn current_server_log_timestamp() -> rootcause::Result<ServerLogTimestamp> {
-    chrono::Local::now()
-        .format(SERVER_LOG_TIMESTAMP_FORMAT)
+    jiff::Zoned::now()
+        .strftime(SERVER_LOG_TIMESTAMP_FORMAT)
         .to_string()
         .parse()
 }

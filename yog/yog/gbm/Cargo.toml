@@ -11,7 +11,7 @@ keywords = ["cli", "git", "branch", "rename"]
 categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
-chrono = { workspace = true }
+jiff = { workspace = true }
 owo-colors = { workspace = true }
 rootcause = { workspace = true }
 ytil_git = { workspace = true }

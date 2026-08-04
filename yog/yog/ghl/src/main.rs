@@ -132,7 +132,7 @@ impl Display for RenderablePullRequest {
             f,
             "{} {} ",
             self.author.login.blue().bold(),
-            self.updated_at.format("%d-%m-%Y %H:%M UTC")
+            self.updated_at.strftime("%d-%m-%Y %H:%M UTC")
         )?;
         match self.merge_state {
             PullRequestMergeState::Behind => write!(f, "{} ", "Behind".yellow().bold())?,
@@ -166,7 +166,7 @@ impl Display for RenderableListedIssue {
             // The spacing before the title is required to align it with the first line.
             "{} {} {}",
             self.author.login.blue().bold(),
-            self.updated_at.format("%d-%m-%Y %H:%M UTC"),
+            self.updated_at.strftime("%d-%m-%Y %H:%M UTC"),
             self.title
         )
     }

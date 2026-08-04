@@ -14,9 +14,9 @@ categories = ["command-line-utilities", "development-tools"]
 crate-type = ["cdylib"]
 
 [dependencies]
-chrono = { workspace = true }
 convert_case = { workspace = true }
 fkr = { path = "../fkr" }
+jiff = { workspace = true }
 lit2 = { version = "1.0" }
 nvim-oxi = { workspace = true }
 rootcause = { workspace = true }

@@ -11,8 +11,8 @@ keywords = ["github", "api", "repository", "refs", "cli"]
 categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
-chrono = { workspace = true, features = ["serde"] }
 convert_case = { workspace = true }
+jiff = { workspace = true }
 rootcause = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

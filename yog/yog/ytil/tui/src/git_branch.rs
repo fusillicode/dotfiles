@@ -84,8 +84,7 @@ fn prioritize_branches(branches: Vec<Branch>, previous_branch: Option<&str>, use
 
 #[cfg(test)]
 mod tests {
-    use chrono::DateTime;
-    use chrono::Utc;
+    use jiff::Timestamp;
     use rstest::rstest;
     use test_that::prelude::*;
     use ytil_git::branch::Branch;
@@ -248,7 +247,7 @@ mod tests {
         Branch::Local {
             name: name.to_string(),
             committer_email: email.to_string(),
-            committer_date_time: DateTime::<Utc>::from_timestamp(timestamp, 0).unwrap(),
+            committer_date_time: Timestamp::from_second(timestamp).unwrap(),
         }
     }
 
@@ -256,7 +255,7 @@ mod tests {
         Branch::Remote {
             name: name.to_string(),
             committer_email: email.to_string(),
-            committer_date_time: DateTime::<Utc>::from_timestamp(timestamp, 0).unwrap(),
+            committer_date_time: Timestamp::from_second(timestamp).unwrap(),
         }
     }
 }

@@ -3,8 +3,7 @@ use std::fmt::Formatter;
 use std::path::PathBuf;
 use std::str::FromStr;
 
-use chrono::DateTime;
-use chrono::Utc;
+use jiff::Timestamp;
 use rootcause::option_ext::OptionExt;
 use rootcause::report;
 
@@ -62,8 +61,8 @@ pub struct Session {
     pub search_text: String,
     pub workspace: PathBuf,
     pub path: PathBuf,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
+    pub created_at: Timestamp,
+    pub updated_at: Timestamp,
 }
 
 impl Session {
@@ -73,7 +72,7 @@ impl Session {
         workspace_dir: PathBuf,
         path: PathBuf,
         name: Option<String>,
-        created_at: DateTime<Utc>,
+        created_at: Timestamp,
     ) -> Self {
         let name = name.filter(|name| !name.trim().is_empty()).unwrap_or_else(|| {
             workspace_dir
@@ -245,7 +244,7 @@ fn truncate_to_boundary(text: &str, max_bytes: usize) -> Option<&str> {
 
 #[cfg(test)]
 mod tests {
-    use chrono::DateTime;
+    use jiff::Timestamp;
     use tempfile::tempdir;
     use test_that::prelude::*;
 
@@ -267,7 +266,7 @@ mod tests {
         let workspace = tempdir.path().join("workspace");
         let path = tempdir.path().join("session.jsonl");
         std::fs::create_dir_all(&workspace).expect("workspace should be created");
-        let created_at = DateTime::from_timestamp_millis(1).expect("test timestamp should be valid");
+        let created_at = Timestamp::from_millisecond(1).expect("test timestamp should be valid");
 
         let claude = Session {
             agent: Agent::Claude,
@@ -276,8 +275,8 @@ mod tests {
             name: "session-name".into(),
             search_text: "session-name".into(),
             path,
-            created_at: created_at.to_utc(),
-            updated_at: created_at.to_utc(),
+            created_at,
+            updated_at: created_at,
         };
         let codex = Session {
             agent: Agent::Codex,
@@ -331,7 +330,7 @@ mod tests {
         let tempdir = tempdir().expect("tempdir should be created");
         let workspace = tempdir.path().join("workspace");
         std::fs::create_dir_all(&workspace).expect("workspace should be created");
-        let created_at = DateTime::from_timestamp_millis(1).expect("test timestamp should be valid");
+        let created_at = Timestamp::from_millisecond(1).expect("test timestamp should be valid");
 
         let session = Session::new(
             Agent::Codex,
@@ -339,7 +338,7 @@ mod tests {
             workspace,
             PathBuf::from("session.jsonl"),
             Some("hello world".into()),
-            created_at.to_utc(),
+            created_at,
         );
 
         assert_that!(session.name, eq("hello world"));

@@ -11,7 +11,7 @@ keywords = ["agents", "sessions", "hooks", "cli", "tools"]
 categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
-chrono = { workspace = true }
+jiff = { workspace = true }
 rootcause = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

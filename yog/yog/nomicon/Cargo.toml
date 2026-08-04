@@ -16,7 +16,7 @@ ignored = ["lightningcss"]
 
 [dependencies]
 askama = { version = "0.16" }
-chrono = { workspace = true }
+jiff = { workspace = true }
 rootcause = { workspace = true }
 ytil_cmd = { workspace = true }
 ytil_sys = { workspace = true }

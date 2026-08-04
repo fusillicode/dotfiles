@@ -1,7 +1,6 @@
-use chrono::DateTime;
-use chrono::Utc;
+use jiff::Timestamp;
 
 #[derive(Clone)]
 pub struct Footer {
-    pub generated_at: DateTime<Utc>,
+    pub generated_at: Timestamp,
 }
