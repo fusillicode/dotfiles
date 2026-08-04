@@ -11,7 +11,7 @@ keywords = ["agents", "sessions", "cli", "terminal", "tools"]
 categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
-chrono = { workspace = true }
+jiff = { workspace = true }
 owo-colors = { workspace = true }
 rootcause = { workspace = true }
 rusqlite = { workspace = true }

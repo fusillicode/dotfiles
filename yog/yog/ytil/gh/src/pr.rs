@@ -1,7 +1,6 @@
 use std::process::Command;
 
-use chrono::DateTime;
-use chrono::Utc;
+use jiff::Timestamp;
 use rootcause::bail;
 use serde::Deserialize;
 use strum::EnumIter;
@@ -18,7 +17,7 @@ pub struct PullRequest {
     #[serde(rename = "mergeStateStatus")]
     pub merge_state: PullRequestMergeState,
     #[serde(rename = "updatedAt")]
-    pub updated_at: DateTime<Utc>,
+    pub updated_at: Timestamp,
 }
 
 /// Author metadata for a pull request.

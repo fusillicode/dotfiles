@@ -6,8 +6,7 @@ use std::fs::ReadDir;
 use std::path::Path;
 use std::path::PathBuf;
 
-use chrono::DateTime;
-use chrono::Local;
+use jiff::Zoned;
 use nvim_oxi::Dictionary;
 use rootcause::report;
 
@@ -80,12 +79,12 @@ impl Scratch {
     /// Generates the destination file path for the scratch.
     ///
     /// The path is constructed as `{dest_dir}/{base_name}-{timestamp}.{extension}` where timestamp is a provided
-    /// [`Local`] [`DateTime`].
-    pub fn dest_file_path(&self, dest_dir: &Path, date_time: DateTime<Local>) -> PathBuf {
+    /// [`Zoned`] date time.
+    pub fn dest_file_path(&self, dest_dir: &Path, date_time: &Zoned) -> PathBuf {
         dest_dir.join(format!(
             "{}-{}.{}",
             self.base_name,
-            date_time.format("%Y%m%d-%H%M%S"),
+            date_time.strftime("%Y%m%d-%H%M%S"),
             self.extension
         ))
     }
@@ -127,7 +126,7 @@ fn create_scratch_file(_: ()) {
             let Some(scratch): Option<&Scratch> = scratches.get(choice_idx) else {
                 return;
             };
-            let dest = scratch.dest_file_path(&dest_dir, Local::now());
+            let dest = scratch.dest_file_path(&dest_dir, &Zoned::now());
             if let Err(err) = std::fs::copy(&scratch.path, &dest) {
                 ytil_noxi::notify::error(format!(
                     "cannot copy file | from={} to={} error={err:#?}",
@@ -168,7 +167,7 @@ fn get_scratches_dir_content() -> rootcause::Result<ReadDir> {
 
 #[cfg(test)]
 mod tests {
-    use chrono::TimeZone;
+    use jiff::Zoned;
     use rstest::rstest;
     use tempfile::TempDir;
     use test_that::prelude::*;
@@ -263,8 +262,18 @@ mod tests {
             path: PathBuf::from("/some/path/test.txt"),
         };
 
-        let date_time = Local.with_ymd_and_hms(2023, 1, 1, 12, 0, 0).unwrap();
-        let result = scratch.dest_file_path(Path::new("/tmp"), date_time);
+        let date_time = Zoned::now()
+            .with()
+            .year(2023)
+            .month(1)
+            .day(1)
+            .hour(12)
+            .minute(0)
+            .second(0)
+            .subsec_nanosecond(0)
+            .build()
+            .unwrap();
+        let result = scratch.dest_file_path(Path::new("/tmp"), &date_time);
 
         assert_that!(result, eq(PathBuf::from("/tmp/test-20230101-120000.txt")));
     }

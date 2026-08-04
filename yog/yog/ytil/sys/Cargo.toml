@@ -11,8 +11,8 @@ keywords = ["system", "time", "io", "environment", "platform"]
 categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
-chrono = { workspace = true }
 itertools = { version = "0.15" }
+jiff = { workspace = true }
 owo-colors = { workspace = true }
 pico-args = { version = "0.5" }
 rootcause = { workspace = true }

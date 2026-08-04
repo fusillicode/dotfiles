@@ -1,9 +1,8 @@
 use std::process::Command;
 
-use chrono::DateTime;
-use chrono::Utc;
 use convert_case::Case;
 use convert_case::Casing;
+use jiff::Timestamp;
 use rootcause::bail;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
@@ -69,7 +68,7 @@ pub struct ListedIssue {
     pub title: String,
     pub number: usize,
     #[serde(rename = "updatedAt")]
-    pub updated_at: DateTime<Utc>,
+    pub updated_at: Timestamp,
 }
 
 #[derive(Debug, Deserialize)]

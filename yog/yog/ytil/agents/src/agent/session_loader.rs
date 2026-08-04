@@ -55,14 +55,14 @@ fn find_session_paths(
     ytil_sys::file::find_matching_recursively_in_dir(root, matching_file_fn, skip_dir_fn)
 }
 
-fn file_updated_at(path: &Path) -> rootcause::Result<Option<chrono::DateTime<chrono::Utc>>> {
+fn file_updated_at(path: &Path) -> rootcause::Result<Option<jiff::Timestamp>> {
     let modified = std::fs::metadata(path)
         .context("failed to read session metadata")
         .attach_with(|| format!("path={}", path.display()))?
         .modified()
         .context("failed to read session modified time")
         .attach_with(|| format!("path={}", path.display()))?;
-    Ok(Some(chrono::DateTime::<chrono::Utc>::from(modified)))
+    Ok(Some(jiff::Timestamp::try_from(modified)?))
 }
 
 #[cfg(test)]

@@ -9,23 +9,19 @@
     reason = "askama filter signature is framework-defined"
 )]
 
-use chrono::DateTime;
-use chrono::SecondsFormat;
-use chrono::Utc;
+use jiff::Timestamp;
 
-/// Format a [`DateTime<Utc>`] as ISO-8601 / RFC3339 (UTC, whole seconds).
+/// Format a [`Timestamp`] as ISO-8601 / RFC3339 (UTC, whole seconds).
 #[askama::filter_fn]
-pub fn format_to_iso_8601(dt: &DateTime<Utc>, _args: &dyn askama::Values) -> askama::Result<String> {
-    Ok(dt.to_rfc3339_opts(SecondsFormat::Secs, true))
+pub fn format_to_iso_8601(timestamp: &Timestamp, _args: &dyn askama::Values) -> askama::Result<String> {
+    Ok(timestamp.strftime("%Y-%m-%dT%H:%M:%SZ").to_string())
 }
 
 #[cfg(test)]
 mod tests {
     use askama::Template;
-    use chrono::TimeZone;
+    use jiff::Timestamp;
     use test_that::prelude::*;
-
-    use super::*;
 
     mod filters {
         pub use crate::templates::filters::format_to_iso_8601;
@@ -36,11 +32,11 @@ mod tests {
         #[derive(Template)]
         #[template(source = "{{ value | format_to_iso_8601 }}", ext = "txt")]
         struct DummyFilterTemplate {
-            value: DateTime<Utc>,
+            value: Timestamp,
         }
 
         let dummy_filter_template = DummyFilterTemplate {
-            value: Utc.with_ymd_and_hms(2025, 1, 2, 3, 4, 5).unwrap(),
+            value: Timestamp::from_second(1_735_787_045).unwrap(),
         };
         assert_that!(dummy_filter_template.render(), ok(eq("2025-01-02T03:04:05Z")));
     }

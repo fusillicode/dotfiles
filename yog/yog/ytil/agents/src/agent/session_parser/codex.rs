@@ -1,7 +1,6 @@
 use std::path::PathBuf;
 
-use chrono::DateTime;
-use chrono::Utc;
+use jiff::Timestamp;
 use rootcause::option_ext::OptionExt;
 use rootcause::prelude::ResultExt;
 use serde::Deserialize;
@@ -82,8 +81,8 @@ pub struct CodexSession {
     pub name: String,
     pub search_text: String,
     pub workspace: PathBuf,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
+    pub created_at: Timestamp,
+    pub updated_at: Timestamp,
     pub is_subagent: bool,
 }
 
@@ -114,7 +113,7 @@ enum CodexLine {
 }
 
 impl CodexLine {
-    const fn timestamp(&self) -> Option<DateTime<Utc>> {
+    const fn timestamp(&self) -> Option<Timestamp> {
         match self {
             Self::SessionMeta(line) => Some(line.timestamp),
             Self::EventMsg(line) => Some(line.timestamp),
@@ -149,7 +148,7 @@ impl CodexLine {
 #[derive(Debug, Deserialize)]
 struct CodexSessionMetaLine {
     #[serde(rename = "timestamp")]
-    timestamp: DateTime<Utc>,
+    timestamp: Timestamp,
     payload: CodexSessionMetaPayload,
 }
 
@@ -157,7 +156,7 @@ struct CodexSessionMetaLine {
 struct CodexSessionMetaPayload {
     id: String,
     cwd: String,
-    timestamp: DateTime<Utc>,
+    timestamp: Timestamp,
     source: Option<serde_json::Value>,
 }
 
@@ -172,7 +171,7 @@ impl CodexSessionMetaPayload {
 #[derive(Debug, Deserialize)]
 struct CodexEventMsgLine {
     #[serde(rename = "timestamp")]
-    timestamp: DateTime<Utc>,
+    timestamp: Timestamp,
     payload: CodexEventPayload,
 }
 
@@ -196,7 +195,7 @@ enum CodexEventPayload {
 
 #[derive(Debug, Deserialize)]
 struct CodexResponseItemLine {
-    timestamp: DateTime<Utc>,
+    timestamp: Timestamp,
     payload: CodexResponseItemPayload,
 }
 
@@ -261,7 +260,7 @@ impl CodexMessageContentPart {
 
 #[derive(Debug, Deserialize)]
 struct CodexTimestampedLine {
-    timestamp: DateTime<Utc>,
+    timestamp: Timestamp,
 }
 
 #[cfg(test)]
@@ -320,9 +319,7 @@ mod tests {
         );
         assert_that!(
             session.updated_at,
-            eq(chrono::DateTime::parse_from_rfc3339("2026-03-20T06:33:20.312Z")
-                .unwrap()
-                .to_utc())
+            eq("2026-03-20T06:33:20.312Z".parse::<Timestamp>().unwrap())
         );
     }
 

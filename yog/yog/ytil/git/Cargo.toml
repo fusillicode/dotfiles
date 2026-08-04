@@ -14,8 +14,8 @@ categories = ["command-line-utilities", "development-tools"]
 test-utils = []
 
 [dependencies]
-chrono = { workspace = true }
 git2 = { workspace = true, features = ["ssh"] }
+jiff = { workspace = true }
 rootcause = { workspace = true }
 ureq = { workspace = true }
 ytil_cmd = { workspace = true }

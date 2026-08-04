@@ -1,7 +1,6 @@
 use std::path::PathBuf;
 
-use chrono::DateTime;
-use chrono::Utc;
+use jiff::Timestamp;
 use rootcause::option_ext::OptionExt;
 use rootcause::prelude::ResultExt;
 use serde::Deserialize;
@@ -79,8 +78,8 @@ pub struct ClaudeSession {
     pub name: String,
     pub search_text: String,
     pub workspace: PathBuf,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
+    pub created_at: Timestamp,
+    pub updated_at: Timestamp,
 }
 
 impl ClaudeSession {
@@ -111,7 +110,7 @@ enum ClaudeSessionLine {
 }
 
 impl ClaudeSessionLine {
-    const fn timestamp(&self) -> Option<DateTime<Utc>> {
+    const fn timestamp(&self) -> Option<Timestamp> {
         match self {
             Self::User(line) => Some(line.timestamp),
             Self::Assistant(line) => Some(line.timestamp),
@@ -148,7 +147,7 @@ impl ClaudeSessionLine {
 struct ClaudeSessionMeta<'a> {
     session_id: &'a str,
     cwd: &'a str,
-    timestamp: DateTime<Utc>,
+    timestamp: Timestamp,
 }
 
 #[derive(Debug, Deserialize)]
@@ -156,7 +155,7 @@ struct ClaudeUserLine {
     #[serde(rename = "sessionId")]
     session_id: String,
     cwd: String,
-    timestamp: DateTime<Utc>,
+    timestamp: Timestamp,
     #[serde(default, rename = "isMeta")]
     is_meta: bool,
     message: ClaudeUserMessage,
@@ -167,7 +166,7 @@ struct ClaudeAssistantLine {
     #[serde(rename = "sessionId")]
     session_id: String,
     cwd: String,
-    timestamp: DateTime<Utc>,
+    timestamp: Timestamp,
     message: ClaudeAssistantMessage,
 }
 
@@ -176,7 +175,7 @@ struct ClaudeMetadataLine {
     #[serde(rename = "sessionId")]
     session_id: String,
     cwd: String,
-    timestamp: DateTime<Utc>,
+    timestamp: Timestamp,
 }
 
 impl<'a> From<&'a ClaudeUserLine> for ClaudeSessionMeta<'a> {
@@ -211,7 +210,7 @@ impl<'a> From<&'a ClaudeMetadataLine> for ClaudeSessionMeta<'a> {
 
 #[derive(Debug, Deserialize)]
 struct ClaudeTimestampedLine {
-    timestamp: DateTime<Utc>,
+    timestamp: Timestamp,
 }
 
 #[derive(Debug, Deserialize)]
@@ -467,9 +466,7 @@ mod tests {
         );
         assert_that!(
             session.updated_at,
-            eq(chrono::DateTime::parse_from_rfc3339("2026-03-26T16:53:02.119Z")
-                .unwrap()
-                .to_utc())
+            eq("2026-03-26T16:53:02.119Z".parse::<Timestamp>().unwrap())
         );
     }
 
