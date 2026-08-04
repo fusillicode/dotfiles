@@ -1,4 +1,6 @@
+use std::collections::BTreeMap;
 use std::collections::BTreeSet;
+use std::collections::btree_map::Entry;
 use std::pin::Pin;
 use std::time::Duration;
 use std::time::Instant;
@@ -12,6 +14,7 @@ use crate::server::ServerConfig;
 use crate::state::SessionLayout;
 
 const CMD_HANDOFF_SAMPLE_DELAY: Duration = Duration::from_millis(50);
+const OUTPUT_ACTIVITY_SAMPLE_DELAY: Duration = Duration::from_millis(500);
 const INTERACTIVE_RENDER_BOOST_FOR: Duration = Duration::from_millis(250);
 const INTERACTIVE_RENDER_FRAME_INTERVAL: Duration = Duration::from_millis(10);
 const RENDER_FRAME_INTERVAL: Duration = Duration::from_millis(16);
@@ -21,6 +24,8 @@ const TRACKED_PROCESS_QUIET_SETTLE_DELAY: Duration = Duration::from_millis(10);
 pub struct ClientTimers {
     pub cmd_handoff_sample: Pin<Box<tokio::time::Sleep>>,
     cmd_handoff_sample_panes: BTreeSet<PaneId>,
+    pub(crate) output_activity_sample: Pin<Box<tokio::time::Sleep>>,
+    output_activity_sample_panes: BTreeMap<PaneId, tokio::time::Instant>,
     interactive_render_until: Option<tokio::time::Instant>,
     last_render_at: Option<tokio::time::Instant>,
     render_deadline: Option<tokio::time::Instant>,
@@ -39,6 +44,8 @@ impl ClientTimers {
         Ok(Self {
             cmd_handoff_sample: Box::pin(tokio::time::sleep_until(self::disabled_sleep_deadline()?)),
             cmd_handoff_sample_panes: BTreeSet::new(),
+            output_activity_sample: Box::pin(tokio::time::sleep_until(self::disabled_sleep_deadline()?)),
+            output_activity_sample_panes: BTreeMap::new(),
             interactive_render_until: None,
             last_render_at: None,
             render_deadline: None,
@@ -71,6 +78,52 @@ impl ClientTimers {
         // `tokio::time::Sleep` stays ready after it fires. Disable the one-shot immediately after consuming it so
         // the attached-client select loop cannot hot-spin and starve PTY rendering after a prompt submit.
         self.cmd_handoff_sample.as_mut().reset(self::disabled_sleep_deadline()?);
+        Ok(pane_ids)
+    }
+
+    pub(crate) fn schedule_output_activity_samples(&mut self, pane_ids: &[PaneId]) -> rootcause::Result<()> {
+        let deadline = tokio::time::Instant::now()
+            .checked_add(OUTPUT_ACTIVITY_SAMPLE_DELAY)
+            .ok_or_else(|| report!("muxr output activity sample deadline overflowed"))?;
+        let mut added = false;
+        for pane_id in pane_ids {
+            if let Entry::Vacant(entry) = self.output_activity_sample_panes.entry(*pane_id) {
+                entry.insert(deadline);
+                added = true;
+            }
+        }
+        if added {
+            self.sync_output_activity_sample_sleep()?;
+        }
+        Ok(())
+    }
+
+    pub(crate) fn remove_output_activity_sample_pane(&mut self, pane_id: PaneId) -> rootcause::Result<()> {
+        self.remove_output_activity_sample_panes(&[pane_id])
+    }
+
+    pub(crate) fn remove_output_activity_sample_panes(&mut self, pane_ids: &[PaneId]) -> rootcause::Result<()> {
+        let mut removed = false;
+        for pane_id in pane_ids {
+            removed |= self.output_activity_sample_panes.remove(pane_id).is_some();
+        }
+        if removed {
+            self.sync_output_activity_sample_sleep()?;
+        }
+        Ok(())
+    }
+
+    pub(crate) fn take_due_output_activity_sample_panes(&mut self) -> rootcause::Result<Vec<PaneId>> {
+        let now = tokio::time::Instant::now();
+        let pane_ids = self
+            .output_activity_sample_panes
+            .iter()
+            .filter_map(|(pane_id, deadline)| (*deadline <= now).then_some(*pane_id))
+            .collect();
+        for pane_id in &pane_ids {
+            let _removed = self.output_activity_sample_panes.remove(pane_id);
+        }
+        self.sync_output_activity_sample_sleep()?;
         Ok(pane_ids)
     }
 
@@ -201,6 +254,14 @@ impl ClientTimers {
             QuietDeadline::Pending
         }
     }
+
+    fn sync_output_activity_sample_sleep(&mut self) -> rootcause::Result<()> {
+        let deadline = self.output_activity_sample_panes.values().copied().min();
+        self.output_activity_sample
+            .as_mut()
+            .reset(deadline.map_or_else(self::disabled_sleep_deadline, Ok)?);
+        Ok(())
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -268,6 +329,67 @@ mod tests {
 
         assert_that!(timers.take_cmd_handoff_sample_panes()?, eq(vec![pane_2]));
         assert_that!(timers.cmd_handoff_sample_panes, empty());
+        Ok(())
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn test_client_timers_when_output_stays_dirty_preserves_first_sample_deadline() -> rootcause::Result<()> {
+        let tempdir = tempfile::tempdir()?;
+        let config = crate::server::test_helpers::server_config(tempdir.path(), "work")?;
+        let pane_id = PaneId::new(1)?;
+        let mut timers = ClientTimers::new(&config)?;
+
+        timers.schedule_output_activity_samples(&[pane_id])?;
+        let deadline = timers.output_activity_sample.deadline();
+        for _ in 0..1_000 {
+            timers.schedule_output_activity_samples(&[pane_id])?;
+        }
+
+        assert_that!(timers.output_activity_sample.deadline(), eq(deadline));
+        tokio::time::advance(OUTPUT_ACTIVITY_SAMPLE_DELAY).await;
+        assert_that!(timers.take_due_output_activity_sample_panes()?, eq(vec![pane_id]));
+        assert_that!(timers.output_activity_sample.deadline(), gt(deadline));
+        Ok(())
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn test_client_timers_when_output_samples_have_distinct_deadlines_keeps_future_pane_pending()
+    -> rootcause::Result<()> {
+        let tempdir = tempfile::tempdir()?;
+        let config = crate::server::test_helpers::server_config(tempdir.path(), "work")?;
+        let pane_1 = PaneId::new(1)?;
+        let pane_2 = PaneId::new(2)?;
+        let mut timers = ClientTimers::new(&config)?;
+
+        timers.schedule_output_activity_samples(&[pane_1])?;
+        let first_deadline = timers.output_activity_sample.deadline();
+        tokio::time::advance(Duration::from_millis(100)).await;
+        timers.schedule_output_activity_samples(&[pane_2])?;
+
+        assert_that!(timers.output_activity_sample.deadline(), eq(first_deadline));
+        tokio::time::advance(Duration::from_millis(400)).await;
+        assert_that!(timers.take_due_output_activity_sample_panes()?, eq(vec![pane_1]));
+        let second_deadline = timers.output_activity_sample.deadline();
+        assert_that!(second_deadline, gt(first_deadline));
+        tokio::time::advance(Duration::from_millis(100)).await;
+        assert_that!(timers.take_due_output_activity_sample_panes()?, eq(vec![pane_2]));
+        assert_that!(timers.output_activity_sample.deadline(), gt(second_deadline));
+        Ok(())
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn test_client_timers_when_output_sample_is_removed_disables_its_sleep() -> rootcause::Result<()> {
+        let tempdir = tempfile::tempdir()?;
+        let config = crate::server::test_helpers::server_config(tempdir.path(), "work")?;
+        let pane_id = PaneId::new(1)?;
+        let mut timers = ClientTimers::new(&config)?;
+
+        timers.schedule_output_activity_samples(&[pane_id])?;
+        let scheduled_deadline = timers.output_activity_sample.deadline();
+        timers.remove_output_activity_sample_panes(&[pane_id])?;
+
+        assert_that!(timers.output_activity_sample_panes, empty());
+        assert_that!(timers.output_activity_sample.deadline(), gt(scheduled_deadline));
         Ok(())
     }
 

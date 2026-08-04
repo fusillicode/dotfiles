@@ -53,12 +53,11 @@ pub async fn handle_pane_output_message(
             timers.sync_render_deadline(render_dmg)?;
             let now = Instant::now();
             let tracked_process_changes = if screen_dirty {
-                state.pane_tracked_processes.observe_runtime_visible_activity(
-                    state.config.user_config.as_ref(),
-                    state.runtimes,
-                    &screen_dirty_panes,
-                    now,
-                )?
+                let changes = state
+                    .pane_tracked_processes
+                    .record_cached_visible_activity(&screen_dirty_panes, now);
+                timers.schedule_output_activity_samples(&screen_dirty_panes)?;
+                changes
             } else {
                 TrackedProcessChanges::default()
             };

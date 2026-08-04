@@ -200,7 +200,8 @@ fn remove_live_pane_tracking(
     // Prompt-submit sampling fires after a short delay, so live pane removal must clear the timer entry before the
     // runtime disappears; otherwise a later sample can ask for a stale pane handle and tear down the client session.
     state.pane_tracked_processes.remove_pane(pane_id);
-    timers.remove_cmd_handoff_sample_pane(pane_id)
+    timers.remove_cmd_handoff_sample_pane(pane_id)?;
+    timers.remove_output_activity_sample_pane(pane_id)
 }
 
 pub fn remove_pane_from_client_state(
@@ -511,6 +512,11 @@ async fn run_client_session_loop(
                         return Ok(());
                     }
                 },
+                () = timers.output_activity_sample.as_mut() => {
+                    if crate::screen_render::handle_output_activity_sample(&mut timers, event_writer, state, &mut render_dmg).await? == ClientSessionFlow::Disconnect {
+                        return Ok(());
+                    }
+                },
                 request = request_reader.recv_request() => {
                     let message = SessionClientMessage::from_request(request?);
                     if crate::request_router::handle_client_message(message, event_writer, state, &mut timers, &mut heartbeat, &mut render_dmg).await? == ClientSessionFlow::Disconnect {
@@ -575,6 +581,11 @@ async fn run_client_session_loop(
                         &mut heartbeat,
                         &mut render_dmg,
                     ).await? == ClientSessionFlow::Disconnect {
+                        return Ok(());
+                    }
+                },
+                () = timers.output_activity_sample.as_mut() => {
+                    if crate::screen_render::handle_output_activity_sample(&mut timers, event_writer, state, &mut render_dmg).await? == ClientSessionFlow::Disconnect {
                         return Ok(());
                     }
                 },
@@ -989,7 +1000,7 @@ mod tests {
         Ok(())
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     #[expect(
         clippy::too_many_lines,
         reason = "the test keeps the multi-pane reap, client-resource cleanup, and stale tracked-state assertions together"
@@ -1023,6 +1034,7 @@ mod tests {
         timers.schedule_cmd_handoff_sample(first_exited_pane)?;
         timers.schedule_cmd_handoff_sample(second_exited_pane)?;
         timers.schedule_cmd_handoff_sample(surviving_pane)?;
+        timers.schedule_output_activity_samples(&[first_exited_pane, second_exited_pane, surviving_pane])?;
 
         let mut runtimes = PaneRuntimes::spawn_for_start_seed(
             &config,
@@ -1082,6 +1094,7 @@ mod tests {
             state.pane_tracked_processes.remove_pane(first_exited_pane),
             state.pane_tracked_processes.remove_pane(second_exited_pane),
         );
+        tokio::time::advance(Duration::from_millis(500)).await;
         // Batch reap returns every removed pane; this end-to-end assertion keeps all related client resources in sync.
         assert_that!(
             (
@@ -1093,6 +1106,7 @@ mod tests {
                 removed_tracked_processes,
                 self::tracked_process_snapshot_state(&snapshot, surviving_pane)?,
                 timers.take_cmd_handoff_sample_panes()?,
+                timers.take_due_output_activity_sample_panes()?,
             ),
             eq((
                 ClientSessionFlow::Continue,
@@ -1102,6 +1116,7 @@ mod tests {
                 vec![surviving_pane],
                 (TrackedProcessChanges::default(), TrackedProcessChanges::default()),
                 TrackedProcessState::Busy,
+                vec![surviving_pane],
                 vec![surviving_pane],
             ))
         );
@@ -1568,6 +1583,118 @@ mod tests {
             self::tracked_process_snapshot_state(&state.pane_tracked_processes.snapshot(state.layout), pane_id)?,
             eq(TrackedProcessState::Seen)
         );
+        self::abort_client_drain(client_drain).await;
+        Ok(())
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn test_handle_cmd_handoff_sample_when_output_sample_is_pending_removes_stale_sample() -> rootcause::Result<()>
+    {
+        let mut fixture = self::tracked_cat_runtime_fixture()?;
+        let mut timers = ClientTimers::new(&fixture.config)?;
+        timers.schedule_output_activity_samples(&[fixture.pane_id])?;
+        timers.schedule_cmd_handoff_sample(fixture.pane_id)?;
+        let pane_tracked_processes = PaneTrackedProcesses::default();
+        let (layout_snapshot, mut render_worker) = crate::screen_render::initial_client_render(
+            &fixture.config,
+            &mut fixture.layout,
+            &fixture.runtimes,
+            &pane_tracked_processes,
+            &fixture.terminal_size,
+        )?;
+        let (mut event_writer, client_drain) =
+            self::connect_client_event_drain(&fixture.config, &mut render_worker).await?;
+        let delete_sessions = DeleteSessions::default();
+        let (pty_event_sender, _pty_event_receiver) = self::pty_event_channel();
+        let mut sink_guards = Vec::new();
+        let mut state = ClientSessionState {
+            pane_tracked_processes,
+            config: &fixture.config,
+            delete_sessions: &delete_sessions,
+            input_mode: ServerInputMode::Normal,
+            last_layout_snapshot: layout_snapshot,
+            layout: &mut fixture.layout,
+            pane_fullscreen: PaneFullscreen::default(),
+            pty_event_sender: &pty_event_sender,
+            render_worker: &mut render_worker,
+            runtimes: &mut fixture.runtimes,
+            scrollback_editor: None,
+            sink_guards: &mut sink_guards,
+            terminal_size: fixture.terminal_size,
+        };
+        let mut render_dmg = ClientRenderDmg::Clean;
+
+        assert_that!(
+            crate::screen_render::handle_cmd_handoff_sample(
+                &mut timers,
+                &mut event_writer,
+                &mut state,
+                &mut render_dmg,
+            )
+            .await?,
+            eq(ClientSessionFlow::Continue)
+        );
+        tokio::time::advance(Duration::from_millis(500)).await;
+        assert_that!(timers.take_due_output_activity_sample_panes()?, eq(Vec::new()));
+
+        self::abort_client_drain(client_drain).await;
+        Ok(())
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn test_handle_output_activity_sample_when_runtime_process_is_tracked_marks_busy() -> rootcause::Result<()> {
+        let mut fixture = self::tracked_cat_runtime_fixture()?;
+        let mut timers = ClientTimers::new(&fixture.config)?;
+        timers.schedule_output_activity_samples(&[fixture.pane_id])?;
+        let pane_tracked_processes = PaneTrackedProcesses::default();
+        let (layout_snapshot, mut render_worker) = crate::screen_render::initial_client_render(
+            &fixture.config,
+            &mut fixture.layout,
+            &fixture.runtimes,
+            &pane_tracked_processes,
+            &fixture.terminal_size,
+        )?;
+        let (mut event_writer, client_drain) =
+            self::connect_client_event_drain(&fixture.config, &mut render_worker).await?;
+        let delete_sessions = DeleteSessions::default();
+        let (pty_event_sender, _pty_event_receiver) = self::pty_event_channel();
+        let mut sink_guards = Vec::new();
+        let mut state = ClientSessionState {
+            pane_tracked_processes,
+            config: &fixture.config,
+            delete_sessions: &delete_sessions,
+            input_mode: ServerInputMode::Normal,
+            last_layout_snapshot: layout_snapshot,
+            layout: &mut fixture.layout,
+            pane_fullscreen: PaneFullscreen::default(),
+            pty_event_sender: &pty_event_sender,
+            render_worker: &mut render_worker,
+            runtimes: &mut fixture.runtimes,
+            scrollback_editor: None,
+            sink_guards: &mut sink_guards,
+            terminal_size: fixture.terminal_size,
+        };
+        let mut render_dmg = ClientRenderDmg::Clean;
+
+        tokio::time::advance(Duration::from_millis(500)).await;
+        assert_that!(
+            crate::screen_render::handle_output_activity_sample(
+                &mut timers,
+                &mut event_writer,
+                &mut state,
+                &mut render_dmg,
+            )
+            .await?,
+            eq(ClientSessionFlow::Continue)
+        );
+        assert_that!(
+            self::tracked_process_snapshot_state(
+                &state.pane_tracked_processes.snapshot(state.layout),
+                fixture.pane_id
+            )?,
+            eq(TrackedProcessState::Busy)
+        );
+
         self::abort_client_drain(client_drain).await;
         Ok(())
     }
@@ -2327,7 +2454,7 @@ mod tests {
         Ok(())
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn test_handle_pane_output_message_when_output_arrives_after_quiet_deadline_keeps_busy()
     -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
@@ -2335,8 +2462,8 @@ mod tests {
         Arc::make_mut(&mut config.user_config)
             .tracked_processes
             .push(TrackedProcess {
-                id: TrackedProcessId::Codex,
-                label: "cx",
+                id: TrackedProcessId::Claude,
+                label: "ct",
                 matchers: vec![ProcessMatcher::ExactExecutable("cat")],
                 quiet_threshold: Duration::from_secs(3),
             });
@@ -2352,7 +2479,7 @@ mod tests {
         pane_tracked_processes.observe_pane_cmd(
             config.user_config.as_ref(),
             pane_id,
-            &self::fg_tracked_process("cat"),
+            &self::fg_tracked_process("codex"),
             then,
         );
         let mut timers = ClientTimers::new(&config)?;
@@ -2411,6 +2538,14 @@ mod tests {
         .await?;
 
         assert_that!(keep_attached, eq(ClientSessionFlow::Continue));
+        self::assert_output_sample_defers_runtime_process_discovery(
+            &mut timers,
+            &mut event_writer,
+            &mut state,
+            &mut render_dmg,
+            pane_id,
+        )
+        .await?;
         assert_that!(
             self::tracked_process_snapshot_state(&state.pane_tracked_processes.snapshot(state.layout), pane_id)?,
             eq(TrackedProcessState::Busy)
@@ -2424,6 +2559,29 @@ mod tests {
             eq(crate::pane::tracked_process::TrackedProcessAttention::Seen)
         );
         self::abort_client_drain(client_drain).await;
+        Ok(())
+    }
+
+    async fn assert_output_sample_defers_runtime_process_discovery(
+        timers: &mut ClientTimers,
+        event_writer: &mut impl crate::event_writer::ServerEventSink,
+        state: &mut ClientSessionState<'_>,
+        render_dmg: &mut ClientRenderDmg,
+        pane_id: PaneId,
+    ) -> rootcause::Result<()> {
+        assert_that!(
+            self::tracked_process_snapshot_label(&state.pane_tracked_processes.snapshot(state.layout), pane_id)?,
+            eq("cx")
+        );
+        tokio::time::advance(Duration::from_millis(500)).await;
+        assert_that!(
+            crate::screen_render::handle_output_activity_sample(timers, event_writer, state, render_dmg).await?,
+            eq(ClientSessionFlow::Continue)
+        );
+        assert_that!(
+            self::tracked_process_snapshot_label(&state.pane_tracked_processes.snapshot(state.layout), pane_id)?,
+            eq("ct")
+        );
         Ok(())
     }
 
@@ -2985,6 +3143,52 @@ mod tests {
         Ok(layout)
     }
 
+    struct TrackedCatRuntimeFixture {
+        _tempdir: tempfile::TempDir,
+        config: ServerConfig,
+        terminal_size: TerminalSize,
+        layout: SessionLayout,
+        pane_id: PaneId,
+        runtimes: PaneRuntimes,
+    }
+
+    fn tracked_cat_runtime_fixture() -> rootcause::Result<TrackedCatRuntimeFixture> {
+        let tempdir = tempfile::tempdir()?;
+        let mut config = crate::server::test_helpers::server_config(tempdir.path(), "work")?;
+        Arc::make_mut(&mut config.user_config)
+            .tracked_processes
+            .push(TrackedProcess {
+                id: TrackedProcessId::Codex,
+                label: "cx",
+                matchers: vec![ProcessMatcher::ExactExecutable("cat")],
+                quiet_threshold: Duration::from_secs(3),
+            });
+        crate::session::files::prepare_session_dirs(&config.paths)?;
+        let terminal_size = TerminalSize::new(80, 24)?;
+        let mut layout = self::layout(&config)?;
+        let pane_id = PaneId::new(1)?;
+        layout.active_tab_mut()?.focus_pane(pane_id)?;
+        let runtimes = PaneRuntimes::spawn_for_start_seed(
+            &config,
+            &SessionStartSeed {
+                layout: layout.clone(),
+                startup_cmds: vec![(pane_id, ShellCmd::with_args("/bin/cat", Vec::<String>::new())?)],
+            },
+            &terminal_size,
+            Arc::new(tokio::sync::Notify::new()),
+        )?;
+        crate::screen_render::resize_panes_to_layout(&layout, &runtimes, &terminal_size)?;
+        self::wait_for_runtime_fg_cmd(&runtimes, pane_id, "cat")?;
+        Ok(TrackedCatRuntimeFixture {
+            _tempdir: tempdir,
+            config,
+            terminal_size,
+            layout,
+            pane_id,
+            runtimes,
+        })
+    }
+
     fn utf8_path(path: &std::path::Path) -> rootcause::Result<&str> {
         path.to_str()
             .ok_or_else(|| rootcause::report!("muxr test path is not UTF-8"))
@@ -3146,6 +3350,19 @@ mod tests {
             .panes()
             .find(|(snapshot_pane_id, _pane)| *snapshot_pane_id == pane_id)
             .map(|(_pane_id, pane)| pane.state())
+            .ok_or_else(|| {
+                rootcause::report!("expected muxr tracked process snapshot").attach(format!("pane_id={pane_id}"))
+            })
+    }
+
+    fn tracked_process_snapshot_label(
+        snapshot: &crate::pane::tracked_process::PaneTrackedProcessSnapshot,
+        pane_id: PaneId,
+    ) -> rootcause::Result<&str> {
+        snapshot
+            .panes()
+            .find(|(snapshot_pane_id, _pane)| *snapshot_pane_id == pane_id)
+            .map(|(_pane_id, pane)| pane.label())
             .ok_or_else(|| {
                 rootcause::report!("expected muxr tracked process snapshot").attach(format!("pane_id={pane_id}"))
             })
