@@ -340,6 +340,37 @@ pub async fn handle_cmd_handoff_sample(
         &pane_ids,
         Instant::now(),
     )?;
+    timers.remove_output_activity_sample_panes(&pane_ids)?;
+    timers.sync_tracked_process_quiet_deadline_for_layout(&state.pane_tracked_processes, state.layout)?;
+    if changes.state_change() == crate::pane::tracked_process::TrackedProcessStateChange::Changed {
+        let pane_surface_dirty =
+            self::pane_ids_visible_render_dmg(state.layout, &state.pane_fullscreen, &state.terminal_size, &pane_ids)?;
+        return self::flush_tracked_process_runtime_layout(timers, event_writer, state, render_dmg, pane_surface_dirty)
+            .await;
+    }
+    Ok(ClientSessionFlow::Continue)
+}
+
+pub async fn handle_output_activity_sample(
+    timers: &mut ClientTimers,
+    event_writer: &mut impl crate::event_writer::ServerEventSink,
+    state: &mut ClientSessionState<'_>,
+    render_dmg: &mut ClientRenderDmg,
+) -> rootcause::Result<ClientSessionFlow> {
+    let pane_ids = timers.take_due_output_activity_sample_panes()?;
+    if pane_ids.is_empty() {
+        return Ok(ClientSessionFlow::Continue);
+    }
+
+    // The PTY-output turn already recorded activity at the time the bytes arrived. This delayed sample only refreshes
+    // foreground-process discovery; recording visible activity again would let local-echo suppression expire and
+    // extend Busy for output that was already attributed to the user.
+    let changes = state.pane_tracked_processes.observe_runtime_pane_cmds(
+        state.config.user_config.as_ref(),
+        state.runtimes,
+        &pane_ids,
+        Instant::now(),
+    )?;
     timers.sync_tracked_process_quiet_deadline_for_layout(&state.pane_tracked_processes, state.layout)?;
     if changes.state_change() == crate::pane::tracked_process::TrackedProcessStateChange::Changed {
         let pane_surface_dirty =
