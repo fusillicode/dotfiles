@@ -61,7 +61,7 @@ pub async fn handle_client_delete(
 }
 
 pub fn remove_session_files(paths: &SessionPaths) -> rootcause::Result<()> {
-    // Live deletion is server-owned so pane processes and history writers are dropped before state removal.
+    // Live deletion is server-owned so pane processes are dropped before their persisted state is removed.
     match fs::remove_dir_all(&paths.root) {
         Ok(()) => {}
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}

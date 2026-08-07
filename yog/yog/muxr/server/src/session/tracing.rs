@@ -287,7 +287,6 @@ mod tests {
     use std::fs;
     use std::path::Path;
 
-    use muxr_core::PaneId;
     use muxr_core::SessionPaths;
     use test_that::prelude::*;
 
@@ -349,8 +348,6 @@ mod tests {
         prepare_session_dirs(&paths)?;
         let (session_tracing, dispatch) = SessionTracing::new(&paths, &session, &timestamp, 12345)?;
         let log_path = session_tracing.log_path.clone();
-        let pane_id = PaneId::new(7)?;
-
         tracing::dispatcher::with_default(&dispatch, || {
             let span = tracing::info_span!("muxr_session", session = %session);
             let _guard = span.enter();
@@ -365,12 +362,6 @@ mod tests {
                 "remove_socket",
                 Path::new("/tmp/muxr.sock"),
                 &std::io::Error::other("socket busy"),
-            );
-            scrollback::cleanup_failed(
-                "remove_editor_history",
-                Some(pane_id),
-                Path::new("/tmp/muxr/panes/7"),
-                &std::io::Error::other("history busy"),
             );
             scrollback::cleanup_failed(
                 "remove_dump_after_error",
@@ -410,10 +401,6 @@ mod tests {
         assert_that!(log, contains_substring("event=\"remove_socket\""));
         assert_that!(log, contains_substring("path=/tmp/muxr.sock"));
         assert_that!(log, contains_substring("socket busy"));
-        assert_that!(log, contains_substring("kind=\"scrollback_cleanup_failed\""));
-        assert_that!(log, contains_substring("event=\"remove_editor_history\""));
-        assert_that!(log, contains_substring("pane_id=pane-7"));
-        assert_that!(log, contains_substring("history busy"));
         assert_that!(log, contains_substring("event=\"remove_dump_after_error\""));
         assert_that!(log, contains_substring("dump busy"));
         assert_that!(log, contains_substring("kind=\"pty_shutdown_failed\""));

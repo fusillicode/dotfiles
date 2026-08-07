@@ -24,6 +24,7 @@ use crate::pane::render::RenderComposer;
 use crate::pty::PtyHandle;
 use crate::render_state::ClientRenderDmg;
 use crate::session::tracing::ClientEventSendFailure;
+use crate::terminal::TerminalSnapshotScope;
 
 const MANDATORY_EVENT_LIMIT: usize = 128;
 
@@ -119,13 +120,17 @@ impl RenderInput {
         PaneRegionsSnapshot::new(regions)
     }
 
-    fn pane_render_snapshot(&self, pane_id: PaneId) -> rootcause::Result<crate::pty::PtyRenderSnapshot> {
+    fn pane_render_snapshot(
+        &self,
+        pane_id: PaneId,
+        scope: TerminalSnapshotScope,
+    ) -> rootcause::Result<crate::pty::PtyRenderSnapshot> {
         self.pane_handles
             .get(&pane_id)
             .ok_or_else(|| {
                 rootcause::report!("muxr render command is missing a pane handle").attach(format!("pane={pane_id}"))
             })?
-            .pane_render_snapshot()
+            .pane_render_snapshot(scope)
     }
 
     fn with_complete_damage(mut self) -> Self {
@@ -338,7 +343,7 @@ impl RenderWorker {
                     layout,
                     &input.size,
                     &input.attention_panes,
-                    |pane_id| input.pane_render_snapshot(pane_id),
+                    |pane_id, scope| input.pane_render_snapshot(pane_id, scope),
                 )
                 .map(Some);
         }
@@ -348,7 +353,7 @@ impl RenderWorker {
             &input.size,
             &input.attention_panes,
             &input.damage,
-            |pane_id| input.pane_render_snapshot(pane_id),
+            |pane_id, scope| input.pane_render_snapshot(pane_id, scope),
         )
     }
 
