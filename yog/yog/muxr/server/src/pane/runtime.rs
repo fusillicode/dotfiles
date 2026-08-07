@@ -9,7 +9,6 @@ use muxr_core::TrackedProcessState;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
 
-use crate::history::pane_output_path;
 use crate::pane::layout::PaneRegion;
 use crate::pane::tracked_process::PaneTrackedProcessSnapshot;
 use crate::pty::PtyExitStatus;
@@ -141,7 +140,6 @@ impl PaneRuntimes {
                     &config.shell_cmd,
                     &pane.cwd,
                     size,
-                    &self::pane_output_path(&config.paths.panes, pane.id),
                     config.user_config.scrollback,
                     Arc::clone(&pane_exit_notify),
                 )?,
@@ -170,7 +168,6 @@ impl PaneRuntimes {
         config: &ServerConfig,
         size: &TerminalSize,
     ) -> rootcause::Result<()> {
-        let history_path = self::pane_output_path(&config.paths.panes, pane_id);
         self.panes.push(PaneRuntime {
             id: pane_id,
             startup_cmd_label: None,
@@ -178,7 +175,6 @@ impl PaneRuntimes {
                 &config.shell_cmd,
                 cwd,
                 size,
-                &history_path,
                 config.user_config.scrollback,
                 Arc::clone(&self.pane_exit_notify),
             )?,
@@ -195,7 +191,6 @@ impl PaneRuntimes {
         config: &ServerConfig,
         size: &TerminalSize,
     ) -> rootcause::Result<()> {
-        let history_path = self::pane_output_path(&config.paths.panes, pane_id);
         self.panes.push(PaneRuntime {
             id: pane_id,
             startup_cmd_label,
@@ -203,7 +198,6 @@ impl PaneRuntimes {
                 cmd,
                 cwd,
                 size,
-                &history_path,
                 config.user_config.scrollback,
                 Arc::clone(&self.pane_exit_notify),
             )?,

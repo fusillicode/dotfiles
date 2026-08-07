@@ -1,6 +1,5 @@
 use std::io::Read;
 use std::io::Write;
-use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
@@ -33,7 +32,6 @@ use super::event::PtyEvent;
 use super::event::PtyExitStatus;
 use super::writer;
 use super::writer::PtyWriter;
-use crate::history::PaneHistory;
 use crate::render_state::OutputFreshness;
 use crate::terminal::TerminalApplicationMode;
 use crate::terminal::TerminalCursorKeyMode;
@@ -42,6 +40,7 @@ use crate::terminal::TerminalMouseProtocol;
 use crate::terminal::TerminalReplies;
 use crate::terminal::TerminalScrollMove;
 use crate::terminal::TerminalSnapshot;
+use crate::terminal::TerminalSnapshotScope;
 use crate::terminal::TerminalState;
 
 const READ_BUFFER_SIZE: usize = 8192;
@@ -61,16 +60,10 @@ impl PtySession {
         cmd: &ShellCmd,
         cwd: &str,
         size: &TerminalSize,
-        history_path: &Path,
         scrollback: ScrollbackConfig,
         pane_exit_notify: Arc<tokio::sync::Notify>,
     ) -> rootcause::Result<Self> {
-        let state = Arc::new(PtyState::with_history(
-            size,
-            history_path,
-            scrollback,
-            pane_exit_notify,
-        )?);
+        let state = Arc::new(PtyState::new(size, scrollback, pane_exit_notify));
         let pty_pair = native_pty_system()
             .openpty(pty_size(size))
             .map_err(|error| report!("failed to open muxr shell pty").attach(format!("error={error:#}")))?;
@@ -197,6 +190,10 @@ impl PtyRenderSnapshot {
     pub const fn terminal(&self) -> &TerminalSnapshot {
         &self.terminal
     }
+
+    pub fn apply_update(&mut self, update: Self) -> rootcause::Result<Vec<u16>> {
+        self.terminal.apply_update(update.terminal)
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -265,7 +262,9 @@ impl PtyHandle {
             .lock()
             .resize(pty_size(size))
             .map_err(|error| report!("failed to resize muxr shell pty").attach(format!("error={error:#}")))?;
-        self.state.terminal.lock().resize(size);
+        let mut terminal = self.state.terminal.lock();
+        terminal.resize(size);
+        drop(terminal);
         Ok(())
     }
 
@@ -419,10 +418,10 @@ impl PtyHandle {
         }
     }
 
-    pub fn pane_render_snapshot(&self) -> rootcause::Result<PtyRenderSnapshot> {
-        let terminal = self.state.terminal.lock();
+    pub fn pane_render_snapshot(&self, scope: TerminalSnapshotScope) -> rootcause::Result<PtyRenderSnapshot> {
+        let mut terminal = self.state.terminal.lock();
         Ok(PtyRenderSnapshot {
-            terminal: terminal.snapshot()?,
+            terminal: terminal.render_snapshot(scope)?,
         })
     }
 
@@ -440,12 +439,7 @@ impl PtyHandle {
     }
 
     pub fn write_scrollback_dump(&self, style: ScrollbackDumpStyle, writer: &mut impl Write) -> rootcause::Result<()> {
-        let dump = self
-            .state
-            .terminal
-            .lock()
-            .scrollback_dump(style)
-            .context("failed to build muxr scrollback dump")?;
+        let dump = self.state.terminal.lock().scrollback_dump(style);
         Ok(writer
             .write_all(&dump)
             .context("failed to write muxr scrollback dump")?)
@@ -484,7 +478,6 @@ struct PtyState {
     active_sink: Mutex<Option<ActivePtySink>>,
     exited: AtomicBool,
     exit_status: Mutex<Option<PtyExitStatus>>,
-    history: Mutex<Option<PaneHistory>>,
     pane_exit_notify: Arc<tokio::sync::Notify>,
     #[cfg(test)]
     output_waiter: (Mutex<u64>, Condvar),
@@ -494,32 +487,18 @@ struct PtyState {
 }
 
 impl PtyState {
-    fn with_history(
-        size: &TerminalSize,
-        history_path: &Path,
-        scrollback: ScrollbackConfig,
-        pane_exit_notify: Arc<tokio::sync::Notify>,
-    ) -> rootcause::Result<Self> {
-        let (history, replay) = PaneHistory::open(history_path)?;
-        let mut terminal = TerminalState::with_scrollback(size, scrollback);
-        let _ = terminal.process(&replay);
-        // History replay rebuilds visible cells only; metadata and app-owned modes must come from live PTY output
-        // after spawn.
-        terminal.clear_title_metadata();
-        terminal.clear_replayed_application_state();
-
-        Ok(Self {
+    fn new(size: &TerminalSize, scrollback: ScrollbackConfig, pane_exit_notify: Arc<tokio::sync::Notify>) -> Self {
+        Self {
             active_sink: Mutex::new(None),
             exited: AtomicBool::new(false),
             exit_status: Mutex::new(None),
-            history: Mutex::new(Some(history)),
             pane_exit_notify,
             #[cfg(test)]
             output_waiter: (Mutex::new(0), Condvar::new()),
             screen_dirty: AtomicBool::new(false),
-            terminal: Mutex::new(terminal),
+            terminal: Mutex::new(TerminalState::with_scrollback(size, scrollback)),
             title_changes: Mutex::new(Vec::new()),
-        })
+        }
     }
 
     #[cfg(test)]
@@ -549,9 +528,6 @@ impl PtyState {
     }
 
     fn append_output(&self, bytes: &[u8]) -> rootcause::Result<TerminalReplies> {
-        if let Some(history) = self.history.lock().as_mut() {
-            history.append(bytes)?;
-        }
         let terminal_replies = {
             let mut terminal = self.terminal.lock();
             let process_outcome = terminal.process(bytes);
@@ -865,7 +841,6 @@ mod tests {
 
     use super::super::event::PtyExitResult;
     use super::*;
-    use crate::terminal::TerminalFocusReporting;
 
     fn assert_replies_eq(replies: &TerminalReplies, expected: &[Vec<u8>]) {
         assert_that!(replies.as_slice(), eq(expected));
@@ -876,7 +851,6 @@ mod tests {
             active_sink: Mutex::new(None),
             exited: AtomicBool::new(false),
             exit_status: Mutex::new(None),
-            history: Mutex::new(None),
             pane_exit_notify: Arc::new(tokio::sync::Notify::new()),
             output_waiter: (Mutex::new(0), Condvar::new()),
             screen_dirty: AtomicBool::new(false),
@@ -1019,18 +993,10 @@ mod tests {
 
     #[test]
     fn test_pty_session_when_child_exits_sends_exit_event() -> rootcause::Result<()> {
-        let tempdir = tempfile::tempdir()?;
-        let history_path = tempdir.path().join("1").join("output.raw");
-        std::fs::create_dir_all(
-            history_path
-                .parent()
-                .ok_or_else(|| report!("expected history parent"))?,
-        )?;
         let session = PtySession::spawn(
             &ShellCmd::with_args("/bin/sh", ["-c", "sleep 0.1; exit 7"])?,
             "/tmp",
             &terminal_size()?,
-            &history_path,
             MuxrConfig::default().scrollback,
             Arc::new(tokio::sync::Notify::new()),
         )?;
@@ -1301,48 +1267,12 @@ mod tests {
     }
 
     #[test]
-    fn test_with_history_when_history_contains_title_does_not_restore_live_title() -> rootcause::Result<()> {
-        let tempdir = tempfile::tempdir()?;
-        let history_path = tempdir.path().join("1").join("output.raw");
-        std::fs::create_dir_all(
-            history_path
-                .parent()
-                .ok_or_else(|| report!("expected history parent"))?,
-        )?;
-        std::fs::write(&history_path, b"\x1b]2;~\x07history")?;
+    fn test_append_output_when_only_mouse_mode_changes_marks_render_dirty() -> rootcause::Result<()> {
+        let state = pty_state(&terminal_size()?);
 
-        let state = PtyState::with_history(
-            &terminal_size()?,
-            &history_path,
-            MuxrConfig::default().scrollback,
-            Arc::new(tokio::sync::Notify::new()),
-        )?;
+        self::assert_replies_eq(&(state.append_output(b"\x1b[?1002h\x1b[?1006h")?), &[]);
 
-        assert_that!(state.terminal.lock().title(), eq(None));
-        assert_that!(state.take_title_changes(), eq(Vec::<Option<String>>::new()));
-        Ok(())
-    }
-
-    #[test]
-    fn test_with_history_when_history_contains_focus_reporting_does_not_restore_live_mode() -> rootcause::Result<()> {
-        let tempdir = tempfile::tempdir()?;
-        let history_path = tempdir.path().join("1").join("output.raw");
-        std::fs::create_dir_all(
-            history_path
-                .parent()
-                .ok_or_else(|| report!("expected history parent"))?,
-        )?;
-        std::fs::write(&history_path, b"\x1b[?1004h")?;
-
-        let state = PtyState::with_history(
-            &terminal_size()?,
-            &history_path,
-            MuxrConfig::default().scrollback,
-            Arc::new(tokio::sync::Notify::new()),
-        )?;
-        let mode = state.terminal.lock().application_mode();
-
-        assert_that!(mode.focus_reporting, eq(TerminalFocusReporting::Disabled));
+        assert_that!(state.take_screen_dirty(), eq(PtyScreenDmg::Dirty));
         Ok(())
     }
 
@@ -1418,30 +1348,6 @@ mod tests {
         assert_that!(log, contains_substring("event=\"write_batch\""));
         assert_that!(log, contains_substring("session=work"));
         assert_that!(log, contains_substring("test pty writer failed"));
-        Ok(())
-    }
-
-    #[test]
-    fn test_pty_state_with_history_when_output_exists_replays_terminal_state() -> rootcause::Result<()> {
-        let tempdir = tempfile::tempdir()?;
-        let path = tempdir.path().join("1").join("output.raw");
-        std::fs::create_dir_all(path.parent().ok_or_else(|| report!("expected history parent"))?)?;
-        std::fs::write(&path, b"history").context("failed to write muxr test history")?;
-
-        let state = PtyState::with_history(
-            &terminal_size()?,
-            &path,
-            MuxrConfig::default().scrollback,
-            Arc::new(tokio::sync::Notify::new()),
-        )?;
-        let snapshot = state.terminal.lock().snapshot()?;
-        let rendered = snapshot
-            .rows()
-            .iter()
-            .flat_map(|row| row.cells().iter().map(muxr_core::RenderCell::text))
-            .collect::<String>();
-
-        assert_that!(rendered, contains_substring("history"));
         Ok(())
     }
 

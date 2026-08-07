@@ -14,7 +14,6 @@ use rootcause::prelude::ResultExt;
 use rootcause::report;
 
 use crate::client::session::ClientSessionState;
-use crate::history::pane_output_path;
 use crate::keyboard_input::ClientCmd;
 use crate::keyboard_input::ServerInputMode;
 use crate::pane::fullscreen::PaneFullscreen;
@@ -345,7 +344,6 @@ fn restore(
     let editor_pane_id = editor.editor_pane_id;
     runtimes.remove(editor_pane_id);
     self::remove_scrollback_dump_file(&editor.dump_path);
-    self::remove_editor_pane_history(config, editor_pane_id);
 
     let mut original_layout = editor.original_layout;
     let _synced = runtimes.sync_layout_terminal_titles(&mut original_layout);
@@ -461,22 +459,6 @@ fn remove_scrollback_dump_file_with_event(event: &str, path: &Path) {
         // Temporary files may already be gone after editor/process cleanup; only other errors leave stale state.
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
         Err(error) => crate::session::tracing::scrollback::cleanup_failed(event, None, path, &error),
-    }
-}
-
-fn remove_editor_pane_history(config: &ServerConfig, editor_pane_id: PaneId) {
-    let path = self::pane_output_path(&config.paths.panes, editor_pane_id);
-    if let Some(parent) = path.parent() {
-        match fs::remove_dir_all(parent) {
-            Ok(()) => {}
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-            Err(error) => crate::session::tracing::scrollback::cleanup_failed(
-                "remove_editor_history",
-                Some(editor_pane_id),
-                parent,
-                &error,
-            ),
-        }
     }
 }
 
@@ -618,11 +600,9 @@ mod tests {
     fn test_scrollback_cleanup_when_paths_are_missing_is_silent() -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
         let config = server_test_helpers::server_config(tempdir.path(), "work")?;
-        let pane_id = PaneId::new(99)?;
 
         let log = crate::session::tracing::collect_test_log(&config.session, || {
             self::remove_scrollback_dump_file(&tempdir.path().join("missing.txt"));
-            self::remove_editor_pane_history(&config, pane_id);
             Ok(())
         })?;
 

@@ -61,25 +61,35 @@ pub fn spawn_client_session_task(
 }
 
 pub async fn join_client_tasks(handles: Vec<tokio::task::JoinHandle<rootcause::Result<()>>>) -> rootcause::Result<()> {
+    let mut first_error = None;
     for handle in handles {
-        self::join_client_task(handle).await?;
+        if let Err(error) = self::join_client_task(handle).await
+            && first_error.is_none()
+        {
+            first_error = Some(error);
+        }
     }
-    Ok(())
+    first_error.map_or(Ok(()), Err)
 }
 
 pub async fn join_finished_client_tasks(
     handles: &mut Vec<tokio::task::JoinHandle<rootcause::Result<()>>>,
 ) -> rootcause::Result<()> {
     let mut pending_handles = Vec::new();
+    let mut first_error = None;
     for handle in handles.drain(..) {
         if handle.is_finished() {
-            self::join_client_task(handle).await?;
+            if let Err(error) = self::join_client_task(handle).await
+                && first_error.is_none()
+            {
+                first_error = Some(error);
+            }
         } else {
             pending_handles.push(handle);
         }
     }
     *handles = pending_handles;
-    Ok(())
+    first_error.map_or(Ok(()), Err)
 }
 
 async fn read_client_handshake(connection: &mut ServerConnection) -> rootcause::Result<SessionHandshakeMessage> {

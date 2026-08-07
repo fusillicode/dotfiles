@@ -24,6 +24,7 @@ use crate::pane::layout::PaneRegion;
 use crate::pty::PtyRenderSnapshot;
 use crate::render_state::ClientRenderDmg;
 use crate::terminal::TerminalSnapshot;
+use crate::terminal::TerminalSnapshotScope;
 
 struct CompositeFrame {
     active_pane: PaneId,
@@ -135,7 +136,7 @@ impl RenderComposer {
         pane_layout: PaneRenderLayout<'_>,
         size: &TerminalSize,
         attention_panes: &[PaneId],
-        mut snapshot: impl FnMut(PaneId) -> rootcause::Result<PtyRenderSnapshot>,
+        mut snapshot: impl FnMut(PaneId, TerminalSnapshotScope) -> rootcause::Result<PtyRenderSnapshot>,
     ) -> rootcause::Result<RenderUpdate> {
         self.render_frame_baseline(Self::current_frame_with(
             pane_render,
@@ -153,7 +154,7 @@ impl RenderComposer {
         size: &TerminalSize,
         attention_panes: &[PaneId],
         damage: &ClientRenderDmg,
-        mut snapshot: impl FnMut(PaneId) -> rootcause::Result<PtyRenderSnapshot>,
+        mut snapshot: impl FnMut(PaneId, TerminalSnapshotScope) -> rootcause::Result<PtyRenderSnapshot>,
     ) -> rootcause::Result<Option<RenderUpdate>> {
         let Some(previous) = self.last_sent.as_ref() else {
             let frame = Self::current_frame_with(pane_render, pane_layout, size, attention_panes, &mut snapshot)?;
@@ -247,18 +248,8 @@ impl RenderComposer {
         &mut self,
         pane_ids: &[PaneId],
         reason: RenderDiffReason,
-        mut snapshot: impl FnMut(PaneId) -> rootcause::Result<PtyRenderSnapshot>,
+        mut snapshot: impl FnMut(PaneId, TerminalSnapshotScope) -> rootcause::Result<PtyRenderSnapshot>,
     ) -> rootcause::Result<Option<RenderUpdate>> {
-        let use_cached_full = {
-            let frame = self
-                .last_sent
-                .as_ref()
-                .ok_or_else(|| report!("muxr partial render is missing its baseline"))?;
-            AffectedRows::for_panes(&frame.pane_layout, pane_ids)?.spans_all(frame.size.rows())
-        };
-        if use_cached_full {
-            return self.render_cached_full_diff_with(pane_ids, reason, snapshot);
-        }
         let (previous_seq, cursor, rows, size) = {
             let frame = self
                 .last_sent
@@ -297,7 +288,7 @@ impl RenderComposer {
         &mut self,
         pane_ids: &[PaneId],
         reason: RenderDiffReason,
-        mut snapshot: impl FnMut(PaneId) -> rootcause::Result<PtyRenderSnapshot>,
+        mut snapshot: impl FnMut(PaneId, TerminalSnapshotScope) -> rootcause::Result<PtyRenderSnapshot>,
     ) -> rootcause::Result<Option<RenderUpdate>> {
         let (active_pane, attention_panes, pane_layout, pane_render, mut pane_snapshots, size) = {
             let frame = self
@@ -314,7 +305,11 @@ impl RenderComposer {
             )
         };
         for pane_id in pane_ids {
-            pane_snapshots.insert(*pane_id, snapshot(*pane_id)?);
+            let update = snapshot(*pane_id, TerminalSnapshotScope::ChangedRows)?;
+            pane_snapshots
+                .get_mut(pane_id)
+                .ok_or_else(|| report!("muxr cached full render is missing a pane snapshot"))?
+                .apply_update(update)?;
         }
         let frame = Self::frame_from_snapshots(
             pane_render,
@@ -332,7 +327,7 @@ impl RenderComposer {
         pane_layout: PaneRenderLayout<'_>,
         size: &TerminalSize,
         attention_panes: &[PaneId],
-        snapshot: &mut impl FnMut(PaneId) -> rootcause::Result<PtyRenderSnapshot>,
+        snapshot: &mut impl FnMut(PaneId, TerminalSnapshotScope) -> rootcause::Result<PtyRenderSnapshot>,
     ) -> rootcause::Result<CompositeFrame> {
         Self::current_frame_with_layout(
             pane_render,
@@ -350,11 +345,11 @@ impl RenderComposer {
         pane_layout: Arc<PaneLayout>,
         size: &TerminalSize,
         attention_panes: &[PaneId],
-        snapshot: &mut impl FnMut(PaneId) -> rootcause::Result<PtyRenderSnapshot>,
+        snapshot: &mut impl FnMut(PaneId, TerminalSnapshotScope) -> rootcause::Result<PtyRenderSnapshot>,
     ) -> rootcause::Result<CompositeFrame> {
         let mut pane_snapshots = BTreeMap::new();
         for region in pane_layout.regions() {
-            pane_snapshots.insert(region.id, snapshot(region.id)?);
+            pane_snapshots.insert(region.id, snapshot(region.id, TerminalSnapshotScope::Full)?);
         }
         Self::frame_from_snapshots(
             pane_render,
@@ -423,54 +418,80 @@ impl RenderComposer {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct AffectedRows {
-    ranges: SmallVec<[(u16, u16); 4]>,
+    len: usize,
+    rows: Vec<AffectedRow>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum AffectedRow {
+    Affected,
+    Unaffected,
 }
 
 impl AffectedRows {
-    fn for_panes(pane_layout: &PaneLayout, pane_ids: &[PaneId]) -> rootcause::Result<Self> {
-        let mut ranges = SmallVec::<[(u16, u16); 4]>::new();
-        for pane_id in pane_ids {
+    fn for_pane_rows(
+        pane_layout: &PaneLayout,
+        pane_rows: &[(PaneId, Vec<u16>)],
+        frame_rows: usize,
+    ) -> rootcause::Result<Self> {
+        let mut affected_rows = vec![AffectedRow::Unaffected; frame_rows];
+        let mut len = 0_usize;
+        for (pane_id, changed_rows) in pane_rows {
             let region = pane_layout
                 .regions()
                 .iter()
                 .find(|region| region.id == *pane_id)
                 .ok_or_else(|| report!("muxr pane damage is outside the cached visible layout"))?;
-            ranges.push((
-                region.area.origin.row,
-                region.area.origin.row.saturating_add(region.area.size.rows),
-            ));
-        }
-        ranges.sort_by_key(|(start, _end)| *start);
-        let mut merged = SmallVec::<[(u16, u16); 4]>::new();
-        for (start, end) in ranges {
-            if let Some((_previous_start, previous_end)) = merged.last_mut()
-                && start <= *previous_end
-            {
-                *previous_end = (*previous_end).max(end);
-            } else {
-                merged.push((start, end));
+            for pane_row in changed_rows {
+                let start = region
+                    .area
+                    .origin
+                    .row
+                    .checked_add(*pane_row)
+                    .ok_or_else(|| report!("muxr pane damage row overflowed"))?;
+                let row = affected_rows
+                    .get_mut(usize::from(start))
+                    .ok_or_else(|| report!("muxr pane damage row is outside the composite frame"))?;
+                if *row == AffectedRow::Unaffected {
+                    *row = AffectedRow::Affected;
+                    len = len.saturating_add(1);
+                }
             }
         }
-        Ok(Self { ranges: merged })
+        Ok(Self {
+            len,
+            rows: affected_rows,
+        })
     }
 
     fn contains(&self, row: u16) -> bool {
-        self.ranges.iter().any(|(start, end)| row >= *start && row < *end)
+        self.rows.get(usize::from(row)) == Some(&AffectedRow::Affected)
     }
 
     fn iter(&self) -> impl Iterator<Item = u16> + '_ {
-        self.ranges.iter().flat_map(|(start, end)| *start..*end)
+        self.rows.iter().enumerate().filter_map(|(row, state)| {
+            (*state == AffectedRow::Affected)
+                .then(|| u16::try_from(row).ok())
+                .flatten()
+        })
     }
 
-    fn len(&self) -> usize {
-        self.ranges
-            .iter()
-            .map(|(start, end)| usize::from(end.saturating_sub(*start)))
-            .sum()
+    const fn len(&self) -> usize {
+        self.len
     }
 
-    fn spans_all(&self, rows: u16) -> bool {
-        self.ranges.as_slice() == [(0, rows)]
+    fn pane_rows(&self, region: &PaneRegion) -> rootcause::Result<Vec<u16>> {
+        let start = region.area.origin.row;
+        let end = start
+            .checked_add(region.area.size.rows)
+            .ok_or_else(|| report!("muxr pane affected-row range overflowed"))?;
+        self.iter()
+            .filter(|row| *row >= start && *row < end)
+            .map(|row| {
+                row.checked_sub(start)
+                    .ok_or_else(|| report!("muxr pane affected-row offset underflowed"))
+            })
+            .collect()
     }
 }
 
@@ -483,13 +504,38 @@ struct PartialFrameBefore {
 fn refresh_pane_rows_with(
     frame: &mut CompositeFrame,
     pane_ids: &[PaneId],
-    snapshot: &mut impl FnMut(PaneId) -> rootcause::Result<PtyRenderSnapshot>,
+    snapshot: &mut impl FnMut(PaneId, TerminalSnapshotScope) -> rootcause::Result<PtyRenderSnapshot>,
 ) -> rootcause::Result<PartialFrameBefore> {
-    let affected_rows = AffectedRows::for_panes(&frame.pane_layout, pane_ids)?;
+    let mut pane_rows = Vec::with_capacity(pane_ids.len());
     for pane_id in pane_ids {
-        let snapshot = snapshot(*pane_id)?;
-        frame.pane_snapshots.insert(*pane_id, snapshot);
+        let update = snapshot(*pane_id, TerminalSnapshotScope::ChangedRows)?;
+        let changed_rows = update
+            .terminal()
+            .rows()
+            .iter()
+            .map(muxr_core::RenderRowSpan::row)
+            .collect::<Vec<_>>();
+        let pane_snapshot = frame
+            .pane_snapshots
+            .get_mut(pane_id)
+            .ok_or_else(|| report!("muxr partial composer is missing a cached pane snapshot"))?;
+        let mut affected_pane_rows = crate::pane::url_links::expand_visible_url_rows(
+            pane_snapshot.terminal().rows(),
+            pane_snapshot.terminal().row_wraps(),
+            &changed_rows,
+        );
+        let applied_rows = pane_snapshot.apply_update(update)?;
+        affected_pane_rows.extend(crate::pane::url_links::expand_visible_url_rows(
+            pane_snapshot.terminal().rows(),
+            pane_snapshot.terminal().row_wraps(),
+            &applied_rows,
+        ));
+        affected_pane_rows.extend(applied_rows);
+        affected_pane_rows.sort_unstable();
+        affected_pane_rows.dedup();
+        pane_rows.push((*pane_id, affected_pane_rows));
     }
+    let affected_rows = AffectedRows::for_pane_rows(&frame.pane_layout, &pane_rows, frame.rows.len())?;
     let mut previous_rows = Vec::with_capacity(affected_rows.len());
     let blank = RenderCell::narrow(" ", RenderStyle::default());
     for row in affected_rows.iter() {
@@ -511,6 +557,10 @@ fn refresh_pane_rows_with(
     // Pane regions can overlap at shared edges. Recompose only the affected rows, in canonical layout order,
     // so a changed pane cannot overwrite a later pane or its border without snapshotting unchanged panes.
     for region in frame.pane_layout.regions() {
+        let selected_rows = previous.affected_rows.pane_rows(region)?;
+        if selected_rows.is_empty() {
+            continue;
+        }
         let snapshot = frame
             .pane_snapshots
             .get(&region.id)
@@ -521,7 +571,7 @@ fn refresh_pane_rows_with(
             region,
             snapshot.terminal(),
             visual_role.style(frame.pane_render.pane_dim, frame.pane_render.pane_attention),
-            Some(&previous.affected_rows),
+            Some(&selected_rows),
         )?;
     }
     crate::pane::borders::paste_borders_in_rows(
@@ -625,7 +675,7 @@ fn paste_snapshot_rows(
     region: &PaneRegion,
     snapshot: &TerminalSnapshot,
     visual_style: PaneVisualStyle,
-    affected_rows: Option<&AffectedRows>,
+    selected_rows: Option<&[u16]>,
 ) -> rootcause::Result<()> {
     if snapshot.size().cols() != region.area.size.cols || snapshot.size().rows() != region.area.size.rows {
         return Err(report!("muxr pane snapshot size does not match region")
@@ -636,53 +686,76 @@ fn paste_snapshot_rows(
             .attach(format!("region_rows={}", region.area.size.rows)));
     }
 
-    let mut url_links = crate::pane::url_links::detect_visible_url_links(snapshot.rows())?
-        .into_iter()
-        .peekable();
+    let url_links = if let Some(selected_rows) = selected_rows {
+        crate::pane::url_links::detect_visible_url_links_for_rows(snapshot.rows(), snapshot.row_wraps(), selected_rows)?
+    } else {
+        crate::pane::url_links::detect_visible_url_links(snapshot.rows(), snapshot.row_wraps())?
+    };
+    let mut url_links = url_links.into_iter().peekable();
+    if let Some(selected_rows) = selected_rows {
+        for selected_row in selected_rows {
+            let span_index = usize::from(*selected_row);
+            let span = snapshot
+                .rows()
+                .get(span_index)
+                .ok_or_else(|| report!("muxr selected pane row is outside its cached snapshot"))?;
+            self::paste_snapshot_row(rows, region, span, span_index, visual_style, &mut url_links)?;
+        }
+        return Ok(());
+    }
     for (span_index, span) in snapshot.rows().iter().enumerate() {
-        let row = region
-            .area
-            .origin
-            .row
-            .checked_add(span.row())
-            .ok_or_else(|| report!("muxr pane row offset overflowed"))?;
-        if affected_rows.is_some_and(|affected| !affected.contains(row)) {
-            while url_links.peek().is_some_and(|link| link.row() == span_index) {
-                let _skipped = url_links.next();
-            }
-            continue;
+        self::paste_snapshot_row(rows, region, span, span_index, visual_style, &mut url_links)?;
+    }
+    Ok(())
+}
+
+fn paste_snapshot_row(
+    rows: &mut [Vec<RenderCell>],
+    region: &PaneRegion,
+    span: &RenderRowSpan,
+    span_index: usize,
+    visual_style: PaneVisualStyle,
+    url_links: &mut std::iter::Peekable<std::vec::IntoIter<crate::pane::url_links::PaneUrlLink>>,
+) -> rootcause::Result<()> {
+    while url_links.peek().is_some_and(|link| link.row() < span_index) {
+        let _skipped = url_links.next();
+    }
+    let row = region
+        .area
+        .origin
+        .row
+        .checked_add(span.row())
+        .ok_or_else(|| report!("muxr pane row offset overflowed"))?;
+    let col = region
+        .area
+        .origin
+        .col
+        .checked_add(span.col())
+        .ok_or_else(|| report!("muxr pane col offset overflowed"))?;
+    let target_row = rows
+        .get_mut(usize::from(row))
+        .ok_or_else(|| report!("muxr pane row outside composite frame"))?;
+    let col = usize::from(col);
+    let end_col = col
+        .checked_add(span.cells().len())
+        .ok_or_else(|| report!("muxr pane span end overflowed"))?;
+    if end_col > target_row.len() {
+        return Err(report!("muxr pane span outside composite frame").attach(format!("pane_id={}", region.id)));
+    }
+    for (cell_index, (target, cell)) in target_row.iter_mut().skip(col).zip(span.cells().iter()).enumerate() {
+        let mut cell = cell
+            .clone()
+            .with_style(self::pane_visual_render_style(cell.style(), visual_style));
+        if url_links
+            .peek()
+            .is_some_and(|link| link.row() == span_index && link.cell() == cell_index)
+        {
+            let link = url_links
+                .next()
+                .ok_or_else(|| report!("muxr pane url link disappeared while pasting snapshot"))?;
+            cell = cell.with_hyperlink(link.into_hyperlink());
         }
-        let col = region
-            .area
-            .origin
-            .col
-            .checked_add(span.col())
-            .ok_or_else(|| report!("muxr pane col offset overflowed"))?;
-        let target_row = rows
-            .get_mut(usize::from(row))
-            .ok_or_else(|| report!("muxr pane row outside composite frame"))?;
-        let col = usize::from(col);
-        let end_col = col
-            .checked_add(span.cells().len())
-            .ok_or_else(|| report!("muxr pane span end overflowed"))?;
-        if end_col > target_row.len() {
-            return Err(report!("muxr pane span outside composite frame").attach(format!("pane_id={}", region.id)));
-        }
-        for (cell_index, (target, cell)) in target_row.iter_mut().skip(col).zip(span.cells().iter()).enumerate() {
-            let mut cell = cell
-                .clone()
-                .with_style(self::pane_visual_render_style(cell.style(), visual_style));
-            if url_links
-                .peek()
-                .is_some_and(|link| link.row() == span_index && link.cell() == cell_index)
-            {
-                let link = url_links
-                    .next()
-                    .ok_or_else(|| report!("muxr pane url link disappeared while pasting snapshot"))?;
-                cell = cell.with_hyperlink(link.into_hyperlink());
-            }
-            *target = cell;
-        }
+        *target = cell;
     }
     Ok(())
 }
@@ -808,6 +881,17 @@ mod tests {
     }
 
     #[test]
+    fn test_affected_rows_when_one_pane_row_changes_covers_only_changed_row() -> rootcause::Result<()> {
+        let pane_id = PaneId::new(1)?;
+        let layout = PaneLayout::single_pane(pane_id, 1, &TerminalSize::new(8, 5)?);
+
+        let affected = AffectedRows::for_pane_rows(&layout, &[(pane_id, vec![2])], 5)?;
+
+        assert_that!(affected.iter().collect::<Vec<_>>(), eq(vec![2]));
+        Ok(())
+    }
+
+    #[test]
     fn test_pane_visual_render_style_when_normal_keeps_style_unchanged() {
         let style = RenderStyle {
             attrs: muxr_core::RenderTextStyle::empty().set_bold(true),
@@ -892,5 +976,71 @@ mod tests {
             );
         }
         Ok(())
+    }
+
+    #[test]
+    fn test_paste_snapshot_when_osc8_label_is_url_preserves_explicit_target() -> rootcause::Result<()> {
+        let row =
+            self::paste_terminal_row(b"\x1b]8;;https://redirect.example/id\x1b\\https://docs.example\x1b]8;;\x1b\\")?;
+
+        let linked_cells = row.iter().filter(|cell| cell.hyperlink().is_some()).collect::<Vec<_>>();
+        assert_that!(
+            linked_cells.iter().map(|cell| cell.text()).collect::<String>(),
+            eq("https://docs.example")
+        );
+        assert_that!(
+            linked_cells.iter().all(|cell| {
+                cell.hyperlink().map(muxr_core::RenderHyperlink::uri) == Some("https://redirect.example/id")
+            }),
+            eq(true)
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_paste_snapshot_when_osc8_overlaps_url_does_not_auto_link_remainder() -> rootcause::Result<()> {
+        let row =
+            self::paste_terminal_row(b"\x1b]8;;https://redirect.example/id\x1b\\https\x1b]8;;\x1b\\://docs.example")?;
+
+        let linked_cells = row.iter().filter(|cell| cell.hyperlink().is_some()).collect::<Vec<_>>();
+        assert_that!(
+            linked_cells.iter().map(|cell| cell.text()).collect::<String>(),
+            eq("https")
+        );
+        assert_that!(
+            linked_cells.iter().all(|cell| {
+                cell.hyperlink().map(muxr_core::RenderHyperlink::uri) == Some("https://redirect.example/id")
+            }),
+            eq(true)
+        );
+        Ok(())
+    }
+
+    fn paste_terminal_row(bytes: &[u8]) -> rootcause::Result<Vec<RenderCell>> {
+        let size = TerminalSize::new(24, 1)?;
+        let mut terminal = crate::terminal::TerminalState::with_scrollback(&size, MuxrConfig::default().scrollback);
+        let _ = terminal.process(bytes);
+        let snapshot = terminal.snapshot()?;
+        let region = PaneRegion {
+            area: PaneArea {
+                origin: PanePosition { row: 0, col: 0 },
+                size: PaneSize { rows: 1, cols: 24 },
+            },
+            focus_seq: 1,
+            id: PaneId::new(1)?,
+        };
+        let mut rows = empty_render_rows(&size);
+        paste_snapshot(
+            &mut rows,
+            &region,
+            &snapshot,
+            PaneVisualStyle {
+                attention_bg_tint: None,
+                dim: None,
+            },
+        )?;
+        rows.into_iter()
+            .next()
+            .ok_or_else(|| report!("expected muxr composite row"))
     }
 }
