@@ -674,8 +674,11 @@ mod tests {
     ) -> rootcause::Result<()> {
         let started_at = Instant::now();
         loop {
-            let snapshot = runtimes.handle(pane_id)?.render_snapshot()?;
+            let snapshot = runtimes
+                .handle(pane_id)?
+                .pane_render_snapshot(crate::terminal::TerminalSnapshotScope::Full)?;
             let rendered = snapshot
+                .terminal()
                 .rows()
                 .iter()
                 .flat_map(|row| row.cells().iter().map(muxr_core::RenderCell::text))

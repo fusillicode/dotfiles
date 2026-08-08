@@ -1,75 +1,43 @@
-use std::collections::HashMap;
-
 use muxr_config::ScrollbackConfig;
 use muxr_config::ScrollbackDumpStyle;
 use muxr_core::ClientMouseEvent;
 use muxr_core::ClientMouseEventPhase;
 use muxr_core::PaneMouseMode;
 use muxr_core::PaneScrollDirection;
-use muxr_core::RenderCell;
-use muxr_core::RenderCellWidth;
-use muxr_core::RenderColor;
 use muxr_core::RenderCursor;
-use muxr_core::RenderCursorShape;
-use muxr_core::RenderHyperlink;
 use muxr_core::RenderRowSpan;
-use muxr_core::RenderStyle;
-use muxr_core::RenderTextStyle;
 use muxr_core::RowWrap;
 use muxr_core::TerminalSize;
-use rio_vt::ansi::CursorShape as RioCursorShape;
-use rio_vt::config::colors::AnsiColor;
-use rio_vt::config::colors::NamedColor;
-use rio_vt::crosswords::Crosswords;
 use rio_vt::crosswords::Mode;
 use rio_vt::crosswords::grid::Dimensions;
-use rio_vt::crosswords::grid::Grid;
 use rio_vt::crosswords::grid::Scroll;
-use rio_vt::crosswords::grid::row::Row;
-use rio_vt::crosswords::pos::Column;
-use rio_vt::crosswords::pos::Line;
-use rio_vt::crosswords::pos::Pos;
-use rio_vt::crosswords::square::CellFlags;
-use rio_vt::crosswords::square::ContentTag;
-use rio_vt::crosswords::square::ExtrasId;
-use rio_vt::crosswords::square::Square;
-use rio_vt::crosswords::square::Wide;
-use rio_vt::crosswords::style::StyleFlags;
-use rio_vt::event::EventListener;
 use rio_vt::event::TerminalDamage;
 use rootcause::prelude::ResultExt;
 use smallvec::SmallVec;
 
+use self::control::ControlParser;
+use self::control::CursorControl;
 use self::rio::RioInputFilter;
 use self::rio::RioTerminal;
 
+mod control;
+mod render;
 mod rio;
 
 const SCROLL_LINES_PER_WHEEL_EVENT: usize = 5;
 const BRACKETED_PASTE_END: &[u8] = b"\x1b[201~";
 const BRACKETED_PASTE_START: &[u8] = b"\x1b[200~";
-#[cfg(test)]
-const KITTY_KEYBOARD_PROTOCOL_DISABLED_REPLY: &[u8] = b"\x1b[?0u";
-#[cfg(test)]
-const KITTY_KEYBOARD_PROTOCOL_ENABLED_REPLY: &[u8] = b"\x1b[?1u";
 const KITTY_KEYBOARD_PROTOCOL_DISAMBIGUATE_ESC_CODES_MODE: u16 = 1;
-const OSC_CURSOR_SHAPE_PREFIX: &[u8] = b"CursorShape=";
-const RENDER_CELL_TEXT_INLINE_BYTES: usize = 24;
 
 /// Terminal replies generated while parsing PTY output.
 ///
 /// Reply batches are normally empty or a single terminal-generated response, such as DSR/CPR or keyboard protocol
-/// status, so the outer buffer stays inline while callers use [`Self::as_slice`] or [`AsRef`] at writer boundaries that
-/// still accept `&[Vec<u8>]`.
+/// status, so the outer buffer stays inline while callers use [`AsRef`] at writer boundaries that still accept
+/// `&[Vec<u8>]`.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct TerminalReplies(SmallVec<[Vec<u8>; 2]>);
 
 impl TerminalReplies {
-    #[must_use]
-    pub fn as_slice(&self) -> &[Vec<u8>] {
-        self.0.as_slice()
-    }
-
     fn push(&mut self, reply: Vec<u8>) {
         self.0.push(reply);
     }
@@ -77,7 +45,7 @@ impl TerminalReplies {
 
 impl AsRef<[Vec<u8>]> for TerminalReplies {
     fn as_ref(&self) -> &[Vec<u8>] {
-        self.as_slice()
+        self.0.as_slice()
     }
 }
 
@@ -145,345 +113,15 @@ enum CursorShapeSource {
     Explicit,
 }
 
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-enum CursorControl {
-    #[default]
-    Unchanged,
-    DefaultShape,
-    ExplicitShape,
-    Reset,
-}
-
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-enum CursorControlState {
-    #[default]
-    Ground,
-    Escape,
-    CsiParameter(CursorParameter),
-    CsiPrivateParameter {
-        alternate_screen: AlternateScreenParameter,
-        parameter: CursorParameter,
-    },
-    CsiSpace(CursorParameter),
-    CsiInvalid,
-    OscCursorShape(OscCursorShapeState),
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum OscCursorShapeState {
-    CommandStart,
-    CommandFive,
-    CommandFifty,
-    Prefix(usize),
-    Value,
-    Valid,
-    Invalid,
-}
-
-impl OscCursorShapeState {
-    fn observe(self, byte: u8) -> Self {
-        match self {
-            Self::CommandStart if byte == b'5' => Self::CommandFive,
-            Self::CommandFive if byte == b'0' => Self::CommandFifty,
-            Self::CommandFifty if byte == b';' => Self::Prefix(0),
-            Self::Prefix(index) if OSC_CURSOR_SHAPE_PREFIX.get(index) == Some(&byte) => {
-                let next = index.saturating_add(1);
-                if next == OSC_CURSOR_SHAPE_PREFIX.len() {
-                    Self::Value
-                } else {
-                    Self::Prefix(next)
-                }
-            }
-            Self::Value if matches!(byte, b'0'..=b'2') => Self::Valid,
-            Self::Valid => Self::Valid,
-            Self::CommandStart
-            | Self::CommandFive
-            | Self::CommandFifty
-            | Self::Prefix(_)
-            | Self::Value
-            | Self::Invalid => Self::Invalid,
-        }
-    }
-
-    const fn cursor_control(self) -> CursorControl {
-        if matches!(self, Self::Valid) {
-            CursorControl::ExplicitShape
-        } else {
-            CursorControl::Unchanged
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum CursorParameter {
-    Empty,
-    Value(u16),
-    Invalid,
-}
-
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-enum TerminalControlAction {
-    AlternateScreen(AlternateScreenControl),
-    Cursor(CursorControl),
-    Reset,
-    #[default]
-    Unchanged,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum AlternateScreenControl {
-    EnterLegacy,
-    ExitLegacy,
-    InvalidatePreserved,
-}
-
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-enum AlternateScreenParameter {
-    #[default]
-    Absent,
-    Legacy,
-    Native,
-}
-
-impl AlternateScreenParameter {
-    const fn record(self, parameter: CursorParameter) -> Self {
-        match (self, parameter) {
-            (_, CursorParameter::Value(1049)) => Self::Native,
-            (Self::Absent, CursorParameter::Value(47)) => Self::Legacy,
-            (current, _) => current,
-        }
-    }
-}
-
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum RenderedViewport {
     Live,
     Scrolled { top_row: u64 },
 }
 
-#[derive(Default)]
-struct TerminalControlOutcome {
-    alternate_screen: SmallVec<[(usize, AlternateScreenControl); 2]>,
-    cursor: CursorControl,
-}
-
-#[derive(Default)]
-struct TerminalControlTracker {
-    state: CursorControlState,
-}
-
-impl TerminalControlTracker {
-    fn process(&mut self, bytes: &[u8]) -> TerminalControlOutcome {
-        let mut outcome = TerminalControlOutcome::default();
-        for (index, byte) in bytes.iter().enumerate() {
-            match self.observe_byte(*byte) {
-                TerminalControlAction::AlternateScreen(control) => {
-                    outcome.alternate_screen.push((index.saturating_add(1), control));
-                }
-                TerminalControlAction::Cursor(cursor) => outcome.cursor = cursor,
-                TerminalControlAction::Reset => {
-                    outcome.cursor = CursorControl::Reset;
-                    outcome
-                        .alternate_screen
-                        .push((index.saturating_add(1), AlternateScreenControl::InvalidatePreserved));
-                }
-                TerminalControlAction::Unchanged => {}
-            }
-        }
-        outcome
-    }
-
-    fn observe_byte(&mut self, byte: u8) -> TerminalControlAction {
-        match self.state {
-            CursorControlState::Ground => self.observe_ground(byte),
-            CursorControlState::Escape => self.observe_escape(byte),
-            CursorControlState::CsiParameter(parameter) => self.observe_csi_parameter(byte, parameter),
-            CursorControlState::CsiPrivateParameter {
-                alternate_screen,
-                parameter,
-            } => self.observe_csi_private_parameter(byte, parameter, alternate_screen),
-            CursorControlState::CsiSpace(parameter) => self.observe_csi_space(byte, parameter),
-            CursorControlState::CsiInvalid => self.observe_csi_invalid(byte),
-            CursorControlState::OscCursorShape(state) => self.observe_osc_cursor_shape(byte, state),
-        }
-    }
-
-    const fn observe_ground(&mut self, byte: u8) -> TerminalControlAction {
-        self.state = match byte {
-            b'\x1b' => CursorControlState::Escape,
-            _ => CursorControlState::Ground,
-        };
-        TerminalControlAction::Unchanged
-    }
-
-    const fn observe_escape(&mut self, byte: u8) -> TerminalControlAction {
-        match byte {
-            b'\x1b' => self.state = CursorControlState::Escape,
-            b'[' => self.state = CursorControlState::CsiParameter(CursorParameter::Empty),
-            b']' => self.state = CursorControlState::OscCursorShape(OscCursorShapeState::CommandStart),
-            b'c' => {
-                self.state = CursorControlState::Ground;
-                return TerminalControlAction::Reset;
-            }
-            _ => self.state = CursorControlState::Ground,
-        }
-        TerminalControlAction::Unchanged
-    }
-
-    fn observe_csi_parameter(&mut self, byte: u8, parameter: CursorParameter) -> TerminalControlAction {
-        self.state = match byte {
-            b'0'..=b'9' => CursorControlState::CsiParameter(Self::append_cursor_parameter(parameter, byte)),
-            b'?' if parameter == CursorParameter::Empty => CursorControlState::CsiPrivateParameter {
-                alternate_screen: AlternateScreenParameter::Absent,
-                parameter: CursorParameter::Empty,
-            },
-            b' ' => CursorControlState::CsiSpace(parameter),
-            0x00..=0x17 | 0x19 | 0x1c..=0x1f | 0x7f => CursorControlState::CsiParameter(parameter),
-            b'\x18' | b'\x1a' | 0x40..=0x7e => CursorControlState::Ground,
-            b'\x1b' => CursorControlState::Escape,
-            _ => CursorControlState::CsiInvalid,
-        };
-        TerminalControlAction::Unchanged
-    }
-
-    fn observe_csi_private_parameter(
-        &mut self,
-        byte: u8,
-        parameter: CursorParameter,
-        alternate_screen: AlternateScreenParameter,
-    ) -> TerminalControlAction {
-        match byte {
-            b'0'..=b'9' => {
-                self.state = CursorControlState::CsiPrivateParameter {
-                    alternate_screen,
-                    parameter: Self::append_cursor_parameter(parameter, byte),
-                };
-                TerminalControlAction::Unchanged
-            }
-            b';' => {
-                self.state = CursorControlState::CsiPrivateParameter {
-                    alternate_screen: alternate_screen.record(parameter),
-                    parameter: CursorParameter::Empty,
-                };
-                TerminalControlAction::Unchanged
-            }
-            0x00..=0x17 | 0x19 | 0x1c..=0x1f | 0x7f => {
-                self.state = CursorControlState::CsiPrivateParameter {
-                    alternate_screen,
-                    parameter,
-                };
-                TerminalControlAction::Unchanged
-            }
-            b'h' | b'l' => {
-                self.state = CursorControlState::Ground;
-                match (alternate_screen.record(parameter), byte) {
-                    (AlternateScreenParameter::Legacy, b'h') => {
-                        TerminalControlAction::AlternateScreen(AlternateScreenControl::EnterLegacy)
-                    }
-                    (AlternateScreenParameter::Legacy, b'l') => {
-                        TerminalControlAction::AlternateScreen(AlternateScreenControl::ExitLegacy)
-                    }
-                    (AlternateScreenParameter::Native, b'h' | b'l') => {
-                        TerminalControlAction::AlternateScreen(AlternateScreenControl::InvalidatePreserved)
-                    }
-                    (AlternateScreenParameter::Absent, _) => TerminalControlAction::Unchanged,
-                    (AlternateScreenParameter::Legacy | AlternateScreenParameter::Native, _) => {
-                        TerminalControlAction::Unchanged
-                    }
-                }
-            }
-            b'\x18' | b'\x1a' | 0x40..=0x7e => {
-                self.state = CursorControlState::Ground;
-                TerminalControlAction::Unchanged
-            }
-            b'\x1b' => {
-                self.state = CursorControlState::Escape;
-                TerminalControlAction::Unchanged
-            }
-            _ => {
-                self.state = CursorControlState::CsiInvalid;
-                TerminalControlAction::Unchanged
-            }
-        }
-    }
-
-    const fn observe_csi_space(&mut self, byte: u8, parameter: CursorParameter) -> TerminalControlAction {
-        match byte {
-            b'q' => {
-                self.state = CursorControlState::Ground;
-                match parameter {
-                    CursorParameter::Empty | CursorParameter::Value(0) => {
-                        TerminalControlAction::Cursor(CursorControl::DefaultShape)
-                    }
-                    CursorParameter::Value(1..=6) => TerminalControlAction::Cursor(CursorControl::ExplicitShape),
-                    CursorParameter::Value(_) | CursorParameter::Invalid => TerminalControlAction::Unchanged,
-                }
-            }
-            0x00..=0x17 | 0x19 | 0x1c..=0x1f | 0x7f => {
-                self.state = CursorControlState::CsiSpace(parameter);
-                TerminalControlAction::Unchanged
-            }
-            b'\x18' | b'\x1a' | 0x40..=0x7e => {
-                self.state = CursorControlState::Ground;
-                TerminalControlAction::Unchanged
-            }
-            b'\x1b' => {
-                self.state = CursorControlState::Escape;
-                TerminalControlAction::Unchanged
-            }
-            _ => {
-                self.state = CursorControlState::CsiInvalid;
-                TerminalControlAction::Unchanged
-            }
-        }
-    }
-
-    const fn observe_csi_invalid(&mut self, byte: u8) -> TerminalControlAction {
-        self.state = match byte {
-            b'\x18' | b'\x1a' | 0x40..=0x7e => CursorControlState::Ground,
-            b'\x1b' => CursorControlState::Escape,
-            _ => CursorControlState::CsiInvalid,
-        };
-        TerminalControlAction::Unchanged
-    }
-
-    fn observe_osc_cursor_shape(&mut self, byte: u8, state: OscCursorShapeState) -> TerminalControlAction {
-        match byte {
-            b'\x07' | b'\x18' | b'\x1a' => {
-                self.state = CursorControlState::Ground;
-                TerminalControlAction::Cursor(state.cursor_control())
-            }
-            b'\x1b' => {
-                self.state = CursorControlState::Escape;
-                TerminalControlAction::Cursor(state.cursor_control())
-            }
-            0x00..=0x06 | 0x08..=0x17 | 0x19 | 0x1c..=0x1f => {
-                self.state = CursorControlState::OscCursorShape(state);
-                TerminalControlAction::Unchanged
-            }
-            _ => {
-                self.state = CursorControlState::OscCursorShape(state.observe(byte));
-                TerminalControlAction::Unchanged
-            }
-        }
-    }
-
-    fn append_cursor_parameter(parameter: CursorParameter, byte: u8) -> CursorParameter {
-        let digit = u16::from(byte.saturating_sub(b'0'));
-        match parameter {
-            CursorParameter::Empty => CursorParameter::Value(digit),
-            CursorParameter::Value(value) => value
-                .checked_mul(10)
-                .and_then(|value| value.checked_add(digit))
-                .map_or(CursorParameter::Invalid, CursorParameter::Value),
-            CursorParameter::Invalid => CursorParameter::Invalid,
-        }
-    }
-}
-
 pub struct TerminalState {
     input_filter: RioInputFilter,
-    terminal_control_tracker: TerminalControlTracker,
+    control_parser: ControlParser,
     cursor_shape_source: CursorShapeSource,
     rendered_viewport: Option<RenderedViewport>,
     rio: RioTerminal,
@@ -688,7 +326,7 @@ impl TerminalState {
     pub fn with_scrollback(size: &TerminalSize, scrollback: ScrollbackConfig) -> Self {
         Self {
             input_filter: RioInputFilter::default(),
-            terminal_control_tracker: TerminalControlTracker::default(),
+            control_parser: ControlParser::default(),
             cursor_shape_source: CursorShapeSource::Default,
             rendered_viewport: None,
             rio: RioTerminal::new(usize::from(size.cols()), usize::from(size.rows()), scrollback.rows),
@@ -708,15 +346,18 @@ impl TerminalState {
         let blinking_before = self.rio.terminal().blinking_cursor;
         let cursor_visibility_before = self.rio.terminal().cursor().is_visible();
         let mouse_protocol_before = self.mouse_protocol();
+
         let filtered_input = self.input_filter.process(bytes);
         let bytes = filtered_input.as_ref();
-        let terminal_control = self.terminal_control_tracker.process(bytes);
+        let terminal_control = self.control_parser.process(bytes);
         let events = self
             .rio
             .advance_with_alternate_screen_controls(bytes, &terminal_control.alternate_screen);
+
         let terminal = self.rio.terminal();
         let cursor_values_changed =
             terminal.cursor_shape != cursor_before || terminal.blinking_cursor != blinking_before;
+
         self.cursor_shape_source = match terminal_control.cursor {
             CursorControl::DefaultShape | CursorControl::Reset => CursorShapeSource::Default,
             CursorControl::ExplicitShape => CursorShapeSource::Explicit,
@@ -729,21 +370,26 @@ impl TerminalState {
             }
             CursorControl::Unchanged => self.cursor_shape_source,
         };
+
         let mut replies = TerminalReplies::default();
         for reply in events.replies {
             replies.push(reply);
         }
+
         for title in events.titles {
             if self.title != title {
                 self.title.clone_from(&title);
                 self.title_changes.push(title);
             }
         }
+
         let cursor_changed = terminal_control.cursor != CursorControl::Unchanged
             || cursor_values_changed
             || events.cursor_change == self::rio::CursorChange::Changed;
+
         let metadata_changed = cursor_visibility_before != terminal.cursor().is_visible()
             || mouse_protocol_before != self.mouse_protocol();
+
         if self.rio.terminal().peek_damage_event().is_some() {
             TerminalProcessOutcome::ScreenDirty { replies }
         } else if cursor_changed || metadata_changed {
@@ -810,7 +456,7 @@ impl TerminalState {
     pub fn visible_row_wraps(&self) -> Vec<RowWrap> {
         let terminal = self.rio.terminal();
         (0..terminal.screen_lines())
-            .map(|row| self::row_wrap(&terminal.grid[self::visible_line(terminal, row)]))
+            .map(|row| render::row_wrap(&terminal.grid[render::visible_line(terminal, row)]))
             .collect()
     }
 
@@ -825,6 +471,7 @@ impl TerminalState {
     pub fn application_mode(&self) -> TerminalApplicationMode {
         let terminal = self.rio.terminal();
         let mode = terminal.mode();
+
         TerminalApplicationMode {
             screen_mode: if mode.contains(Mode::ALT_SCREEN) {
                 TerminalScreenMode::Alternate
@@ -859,6 +506,7 @@ impl TerminalState {
         } else {
             return None;
         };
+
         let encoding = if terminal_mode.contains(Mode::SGR_MOUSE) {
             TerminalMouseProtocolEncoding::Sgr
         } else if terminal_mode.contains(Mode::UTF8_MOUSE) {
@@ -866,12 +514,8 @@ impl TerminalState {
         } else {
             TerminalMouseProtocolEncoding::Default
         };
-        Some(TerminalMouseProtocol { encoding, mode })
-    }
 
-    #[cfg(test)]
-    pub fn snapshot(&self) -> rootcause::Result<TerminalSnapshot> {
-        self.snapshot_rows(TerminalSnapshotScope::Full)
+        Some(TerminalMouseProtocol { encoding, mode })
     }
 
     pub fn render_snapshot(&mut self, requested_scope: TerminalSnapshotScope) -> rootcause::Result<TerminalSnapshot> {
@@ -879,6 +523,7 @@ impl TerminalState {
         let viewport_changed = self
             .rendered_viewport
             .is_none_or(|previous_viewport| previous_viewport != rendered_viewport);
+
         let scope = if matches!(requested_scope, TerminalSnapshotScope::Full)
             || matches!(self.rio.terminal().peek_damage_event(), Some(TerminalDamage::Full))
             || viewport_changed
@@ -887,64 +532,21 @@ impl TerminalState {
         } else {
             TerminalSnapshotScope::ChangedRows
         };
+
         let snapshot = self.snapshot_rows(scope)?;
         let terminal = self.rio.terminal_mut();
         for row in snapshot.rows() {
-            let line = visible_line(terminal, usize::from(row.row()));
+            let line = render::visible_line(terminal, usize::from(row.row()));
             terminal.grid[line].dirty = false;
         }
         terminal.reset_damage();
         self.rendered_viewport = Some(rendered_viewport);
+
         Ok(snapshot)
     }
 
     fn snapshot_rows(&self, scope: TerminalSnapshotScope) -> rootcause::Result<TerminalSnapshot> {
-        let terminal = self.rio.terminal();
-        let screen_rows = u16::try_from(terminal.screen_lines()).context("muxr terminal row count overflowed")?;
-        let screen_cols = u16::try_from(terminal.columns()).context("muxr terminal column count overflowed")?;
-        let size = TerminalSize::new(screen_cols, screen_rows)?;
-        let rio_cursor = terminal.cursor();
-        let cursor_row = u16::try_from(rio_cursor.pos.row.0).context("muxr terminal cursor row overflowed")?;
-        let cursor_col = u16::try_from(rio_cursor.pos.col.0).context("muxr terminal cursor column overflowed")?;
-        let cursor_visible = terminal.display_offset() == 0
-            && rio_cursor.is_visible()
-            && cursor_row < screen_rows
-            && cursor_col < screen_cols;
-        let cursor = RenderCursor {
-            row: cursor_row,
-            col: cursor_col,
-            shape: self::render_cursor_shape(rio_cursor.content, terminal.blinking_cursor, self.cursor_shape_source),
-            visibility: if cursor_visible {
-                muxr_core::RenderCursorVisibility::Visible
-            } else {
-                muxr_core::RenderCursorVisibility::Hidden
-            },
-        };
-        let row_wraps = (0..terminal.screen_lines())
-            .map(|row| self::row_wrap(&terminal.grid[self::visible_line(terminal, row)]))
-            .collect();
-        let mut hyperlink_cache = HashMap::new();
-        let rows = (0..terminal.screen_lines())
-            .filter(|row| {
-                matches!(scope, TerminalSnapshotScope::Full) || terminal.grid[visible_line(terminal, *row)].dirty
-            })
-            .map(|row| {
-                let line = self::visible_line(terminal, row);
-                RenderRowSpan::new(
-                    u16::try_from(row).context("muxr terminal snapshot row index overflowed")?,
-                    0,
-                    self::render_row(&terminal.grid, line, usize::from(screen_cols), &mut hyperlink_cache),
-                )
-            })
-            .collect::<rootcause::Result<Vec<_>>>()?;
-
-        Ok(TerminalSnapshot {
-            cursor,
-            row_wraps,
-            rows,
-            scope,
-            size,
-        })
+        render::snapshot_rows(self.rio.terminal(), scope, self.cursor_shape_source)
     }
 
     pub fn scrollback_dump(&mut self, style: ScrollbackDumpStyle) -> Vec<u8> {
@@ -952,21 +554,16 @@ impl TerminalState {
         let history = i32::try_from(terminal.grid.history_size()).unwrap_or(i32::MAX);
         let screen_lines = i32::try_from(terminal.screen_lines()).unwrap_or(i32::MAX);
         if !terminal.mode().contains(Mode::ALT_SCREEN) {
-            return self::scrollback_grid_dump(terminal, history.saturating_neg()..screen_lines, style);
+            return render::scrollback_grid_dump(terminal, history.saturating_neg()..screen_lines, style);
         }
 
-        let alternate_dump = self::scrollback_grid_dump(terminal, 0..screen_lines, style);
+        let alternate_dump = render::scrollback_grid_dump(terminal, 0..screen_lines, style);
         let mut dump = self.rio.with_primary_screen(|primary| {
             let history = i32::try_from(primary.grid.history_size()).unwrap_or(i32::MAX);
-            self::scrollback_grid_dump(primary, history.saturating_neg()..0, style)
+            render::scrollback_grid_dump(primary, history.saturating_neg()..0, style)
         });
         dump.extend_from_slice(&alternate_dump);
         dump
-    }
-
-    #[cfg(test)]
-    fn total_scrollback_len(&self) -> usize {
-        self.rio.terminal().grid.history_size()
     }
 
     const fn scroll_move(before: usize, after: usize) -> TerminalScrollMove {
@@ -996,288 +593,13 @@ pub fn paste_input_bytes(bytes: &[u8], paste_mode: TerminalPasteMode) -> Vec<u8>
     }
 }
 
-fn visible_line<U: EventListener>(terminal: &Crosswords<U>, row: usize) -> Line {
-    let row = i32::try_from(row).unwrap_or(i32::MAX);
-    let offset = i32::try_from(terminal.display_offset()).unwrap_or(i32::MAX);
-    Line(row.saturating_sub(offset))
-}
-
-fn scrollback_grid_dump<U: EventListener>(
-    terminal: &Crosswords<U>,
-    lines: std::ops::Range<i32>,
-    style: ScrollbackDumpStyle,
-) -> Vec<u8> {
-    let mut dump = Vec::new();
-    let mut hyperlink_cache = HashMap::new();
-    for line in lines {
-        let row = self::render_row(&terminal.grid, Line(line), terminal.columns(), &mut hyperlink_cache);
-        self::append_scrollback_dump_row(&row, style, &mut dump);
-    }
-    dump
-}
-
-fn row_wrap(row: &Row<Square>) -> RowWrap {
-    if row
-        .inner
-        .last()
-        .is_some_and(|square| square.contains_cell_flag(CellFlags::WRAPLINE))
-    {
-        RowWrap::EndsWithSoftWrap
-    } else {
-        RowWrap::EndsBeforeSoftWrap
-    }
-}
-
-fn render_row(
-    grid: &Grid<Square>,
-    line: Line,
-    columns: usize,
-    hyperlink_cache: &mut HashMap<ExtrasId, Option<RenderHyperlink>>,
-) -> Vec<RenderCell> {
-    let row = &grid[line];
-    (0..columns)
-        .map(|col| {
-            row.inner.get(col).map_or_else(
-                || RenderCell::narrow(" ", RenderStyle::default()),
-                |square| self::render_cell(grid, line, Column(col), *square, hyperlink_cache),
-            )
-        })
-        .collect()
-}
-
-fn render_cell(
-    grid: &Grid<Square>,
-    line: Line,
-    col: Column,
-    square: Square,
-    hyperlink_cache: &mut HashMap<ExtrasId, Option<RenderHyperlink>>,
-) -> RenderCell {
-    let style = self::render_style(grid, square);
-    let width = square.wide();
-    let mut cell = match width {
-        Wide::Spacer => RenderCell::wide_continuation(style),
-        Wide::Wide | Wide::LeadingSpacer | Wide::Narrow if square.is_bg_only() => {
-            self::render_text_cell(width, " ", style)
-        }
-        Wide::Wide | Wide::LeadingSpacer | Wide::Narrow if square.has_grapheme() => {
-            let text = self::square_text(grid, line, col);
-            self::render_text_cell(
-                width,
-                std::str::from_utf8(text.as_slice()).map_or(" ", |text| text),
-                style,
-            )
-        }
-        Wide::Wide | Wide::LeadingSpacer | Wide::Narrow => {
-            let character = normalized_render_character(square.c());
-            let mut encoded = [0_u8; char::MAX_LEN_UTF8];
-            self::render_text_cell(width, character.encode_utf8(&mut encoded), style)
-        }
-    };
-    if square.content_tag() == ContentTag::Codepoint {
-        let hyperlink = square.extras_id().and_then(|id| {
-            grid.extras_table
-                .get(id)
-                .and_then(|extras| extras.hyperlink.as_ref())
-                .map(|hyperlink| (id, hyperlink))
-        });
-        if let Some((id, hyperlink)) = hyperlink {
-            let render_hyperlink = hyperlink_cache
-                .entry(id)
-                .or_insert_with(|| RenderHyperlink::new(hyperlink.uri().to_owned()).ok());
-            if let Some(render_hyperlink) = render_hyperlink {
-                cell = cell.with_hyperlink(render_hyperlink.clone());
-            }
-        }
-    }
-    cell
-}
-
-fn render_text_cell(width: Wide, text: &str, style: RenderStyle) -> RenderCell {
-    match width {
-        Wide::Wide => RenderCell::wide(text, style),
-        Wide::Spacer => RenderCell::wide_continuation(style),
-        Wide::LeadingSpacer | Wide::Narrow => RenderCell::narrow(text, style),
-    }
-}
-
-fn square_text(grid: &Grid<Square>, line: Line, col: Column) -> SmallVec<[u8; RENDER_CELL_TEXT_INLINE_BYTES]> {
-    let mut text = SmallVec::new();
-    for character in grid.cell_text(Pos::new(line, col)) {
-        let character = self::normalized_render_character(character);
-        let mut encoded = [0_u8; char::MAX_LEN_UTF8];
-        text.extend_from_slice(character.encode_utf8(&mut encoded).as_bytes());
-    }
-    if text.is_empty() {
-        text.push(b' ');
-    }
-    text
-}
-
-const fn normalized_render_character(character: char) -> char {
-    if matches!(character, '\0' | '\t') {
-        ' '
-    } else {
-        character
-    }
-}
-
-fn render_style(grid: &Grid<Square>, square: Square) -> RenderStyle {
-    if square.is_bg_only() {
-        return RenderStyle {
-            attrs: RenderTextStyle::empty(),
-            bg: match square.content_tag() {
-                ContentTag::BgPalette => RenderColor::Indexed(square.bg_palette_index()),
-                ContentTag::BgRgb => {
-                    let (r, g, b) = square.bg_rgb();
-                    RenderColor::Rgb { r, g, b }
-                }
-                ContentTag::Codepoint => RenderColor::Default,
-            },
-            fg: RenderColor::Default,
-        };
-    }
-    let style = grid.style_of(&square);
-    RenderStyle {
-        attrs: RenderTextStyle::empty()
-            .set_bold(style.flags.contains(StyleFlags::BOLD))
-            .set_dim(style.flags.contains(StyleFlags::DIM))
-            .set_italic(style.flags.contains(StyleFlags::ITALIC))
-            .set_underline(style.flags.intersects(StyleFlags::ALL_UNDERLINES))
-            .set_inverse(style.flags.contains(StyleFlags::INVERSE)),
-        bg: self::render_color(style.bg),
-        fg: self::render_color(style.fg),
-    }
-}
-
-fn render_color(color: AnsiColor) -> RenderColor {
-    match color {
-        AnsiColor::Indexed(index) => RenderColor::Indexed(index),
-        AnsiColor::Spec(rgb) => RenderColor::Rgb {
-            r: rgb.r,
-            g: rgb.g,
-            b: rgb.b,
-        },
-        AnsiColor::Named(named) => self::render_named_color(named),
-    }
-}
-
-fn render_named_color(color: NamedColor) -> RenderColor {
-    let index = color as u16;
-    u8::try_from(index)
-        .ok()
-        .filter(|index| *index <= 15)
-        .map_or(RenderColor::Default, RenderColor::Indexed)
-}
-
-const fn render_cursor_shape(shape: RioCursorShape, blinking: bool, source: CursorShapeSource) -> RenderCursorShape {
-    match source {
-        CursorShapeSource::Default => RenderCursorShape::Default,
-        CursorShapeSource::Explicit => match (shape, blinking) {
-            (RioCursorShape::Beam, false) => RenderCursorShape::SteadyBar,
-            (RioCursorShape::Beam, true) => RenderCursorShape::BlinkingBar,
-            (RioCursorShape::Block, false) => RenderCursorShape::SteadyBlock,
-            (RioCursorShape::Block, true) => RenderCursorShape::BlinkingBlock,
-            (RioCursorShape::Underline, false) => RenderCursorShape::SteadyUnderline,
-            (RioCursorShape::Underline, true) => RenderCursorShape::BlinkingUnderline,
-            (RioCursorShape::Hidden, _) => RenderCursorShape::Default,
-        },
-    }
-}
-
-fn append_scrollback_dump_row(row: &[RenderCell], style: ScrollbackDumpStyle, bytes: &mut Vec<u8>) {
-    match style {
-        ScrollbackDumpStyle::PlainText => self::encode_plain_scrollback_dump_row(row, bytes),
-        ScrollbackDumpStyle::Ansi => self::encode_ansi_scrollback_dump_row(row, bytes),
-    }
-    bytes.push(b'\n');
-}
-
-fn encode_plain_scrollback_dump_row(row: &[RenderCell], bytes: &mut Vec<u8>) {
-    for cell in self::trimmed_dump_cells(row) {
-        if cell.width() == RenderCellWidth::WideContinuation {
-            continue;
-        }
-        bytes.extend_from_slice(cell.text().as_bytes());
-    }
-}
-
-fn encode_ansi_scrollback_dump_row(row: &[RenderCell], bytes: &mut Vec<u8>) {
-    let mut active_style = RenderStyle::default();
-    for cell in self::trimmed_dump_cells(row) {
-        if cell.width() == RenderCellWidth::WideContinuation {
-            continue;
-        }
-        if cell.style() != active_style {
-            self::push_sgr(cell.style(), bytes);
-            active_style = cell.style();
-        }
-        bytes.extend_from_slice(cell.text().as_bytes());
-    }
-    if active_style != RenderStyle::default() {
-        bytes.extend_from_slice(b"\x1b[0m");
-    }
-}
-
-fn trimmed_dump_cells(row: &[RenderCell]) -> &[RenderCell] {
-    let mut cells = row;
-    while let Some((last, rest)) = cells.split_last() {
-        if last.width() == RenderCellWidth::WideContinuation || last.text() != " " {
-            break;
-        }
-        cells = rest;
-    }
-    cells
-}
-
-fn push_sgr(style: RenderStyle, bytes: &mut Vec<u8>) {
-    bytes.extend_from_slice(b"\x1b[0");
-    self::push_text_style_sgr(style.attrs, bytes);
-    self::push_color_sgr(38, style.fg, bytes);
-    self::push_color_sgr(48, style.bg, bytes);
-    bytes.push(b'm');
-}
-
-fn push_text_style_sgr(attrs: RenderTextStyle, bytes: &mut Vec<u8>) {
-    for (enabled, code) in [
-        (attrs.bold(), "1"),
-        (attrs.dim(), "2"),
-        (attrs.italic(), "3"),
-        (attrs.underline(), "4"),
-        (attrs.inverse(), "7"),
-    ] {
-        if enabled {
-            bytes.push(b';');
-            bytes.extend_from_slice(code.as_bytes());
-        }
-    }
-}
-
-fn push_color_sgr(prefix: u8, color: RenderColor, bytes: &mut Vec<u8>) {
-    match color {
-        RenderColor::Default => {}
-        RenderColor::Indexed(index) => {
-            bytes.push(b';');
-            bytes.extend_from_slice(prefix.to_string().as_bytes());
-            bytes.extend_from_slice(b";5;");
-            bytes.extend_from_slice(index.to_string().as_bytes());
-        }
-        RenderColor::Rgb { r, g, b } => {
-            bytes.push(b';');
-            bytes.extend_from_slice(prefix.to_string().as_bytes());
-            bytes.extend_from_slice(b";2;");
-            bytes.extend_from_slice(r.to_string().as_bytes());
-            bytes.push(b';');
-            bytes.extend_from_slice(g.to_string().as_bytes());
-            bytes.push(b';');
-            bytes.extend_from_slice(b.to_string().as_bytes());
-        }
-    }
-}
 #[cfg(test)]
 mod tests {
     use std::fmt::Write as _;
 
     use muxr_config::MuxrConfig;
+    use muxr_core::RenderCell;
+    use muxr_core::RenderCursorShape;
     use rootcause::report;
     use rstest::rstest;
     use test_that::prelude::*;
@@ -1285,7 +607,7 @@ mod tests {
     use super::*;
 
     fn assert_replies_eq(replies: &TerminalReplies, expected: &[Vec<u8>]) {
-        assert_that!(replies.as_slice(), eq(expected));
+        assert_that!(replies.as_ref(), eq(expected));
     }
 
     #[test]
@@ -1310,7 +632,7 @@ mod tests {
 
         let outcome = terminal.process(b"hi");
         self::assert_replies_eq(&outcome.into_replies(), &[]);
-        let snapshot = terminal.snapshot()?;
+        let snapshot = terminal.render_snapshot(TerminalSnapshotScope::Full)?;
         let Some(row) = snapshot.rows().first() else {
             return Err(report!("expected first render row"));
         };
@@ -1324,7 +646,7 @@ mod tests {
     fn test_terminal_state_snapshot_when_osc8_span_is_rendered_shares_uri_allocation() -> rootcause::Result<()> {
         let mut terminal = self::terminal_state(&TerminalSize::new(8, 1)?);
         let _outcome = terminal.process(b"\x1b]8;;https://example.com\x07click\x1b]8;;\x07");
-        let snapshot = terminal.snapshot()?;
+        let snapshot = terminal.render_snapshot(TerminalSnapshotScope::Full)?;
         let Some(row) = snapshot.rows().first() else {
             return Err(report!("expected first render row"));
         };
@@ -1345,7 +667,7 @@ mod tests {
         let mut terminal = self::terminal_state(&TerminalSize::new(16, 1)?);
 
         let _outcome = terminal.process(b"\tmodified");
-        let rendered = self::snapshot_text(&terminal.snapshot()?);
+        let rendered = self::snapshot_text(&terminal.render_snapshot(TerminalSnapshotScope::Full)?);
 
         assert_that!(rendered, starts_with("        modified"));
         Ok(())
@@ -1357,7 +679,7 @@ mod tests {
         let mut terminal = self::terminal_state(&TerminalSize::new(16, 1)?);
 
         let _outcome = terminal.process("\u{301}\tmodified".as_bytes());
-        let rendered = self::snapshot_text(&terminal.snapshot()?);
+        let rendered = self::snapshot_text(&terminal.render_snapshot(TerminalSnapshotScope::Full)?);
 
         assert_that!(rendered, not(contains_substring("\t")));
         assert_that!(rendered, starts_with(" \u{301}       modified"));
@@ -1393,7 +715,10 @@ mod tests {
 
         self::assert_replies_eq(&terminal.process(b"\x1b[6 q").into_replies(), &[]);
 
-        assert_that!(terminal.snapshot()?.cursor().shape, eq(RenderCursorShape::SteadyBar));
+        assert_that!(
+            terminal.render_snapshot(TerminalSnapshotScope::Full)?.cursor().shape,
+            eq(RenderCursorShape::SteadyBar)
+        );
         Ok(())
     }
 
@@ -1427,7 +752,10 @@ mod tests {
 
         let _outcome = terminal.process(b"\x1b[2 q");
 
-        assert_that!(terminal.snapshot()?.cursor().shape, eq(RenderCursorShape::SteadyBlock));
+        assert_that!(
+            terminal.render_snapshot(TerminalSnapshotScope::Full)?.cursor().shape,
+            eq(RenderCursorShape::SteadyBlock)
+        );
         Ok(())
     }
 
@@ -1438,7 +766,10 @@ mod tests {
         let outcome = terminal.process(b"\x1b]50;CursorShape=0\x07");
 
         assert_that!(outcome.screen_dmg(), eq(TerminalScreenDmg::Dirty));
-        assert_that!(terminal.snapshot()?.cursor().shape, eq(RenderCursorShape::SteadyBlock));
+        assert_that!(
+            terminal.render_snapshot(TerminalSnapshotScope::Full)?.cursor().shape,
+            eq(RenderCursorShape::SteadyBlock)
+        );
         Ok(())
     }
 
@@ -1447,12 +778,18 @@ mod tests {
     {
         let mut terminal = self::terminal_state(&terminal_size()?);
         let _beam = terminal.process(b"\x1b]50;CursorShape=1\x07");
-        assert_that!(terminal.snapshot()?.cursor().shape, eq(RenderCursorShape::SteadyBar));
+        assert_that!(
+            terminal.render_snapshot(TerminalSnapshotScope::Full)?.cursor().shape,
+            eq(RenderCursorShape::SteadyBar)
+        );
 
         let block = terminal.process(b"\x1b]50;CursorShape=0\x07");
 
         assert_that!(block.screen_dmg(), eq(TerminalScreenDmg::Dirty));
-        assert_that!(terminal.snapshot()?.cursor().shape, eq(RenderCursorShape::SteadyBlock));
+        assert_that!(
+            terminal.render_snapshot(TerminalSnapshotScope::Full)?.cursor().shape,
+            eq(RenderCursorShape::SteadyBlock)
+        );
         Ok(())
     }
 
@@ -1465,7 +802,10 @@ mod tests {
 
         assert_that!(first.screen_dmg(), eq(TerminalScreenDmg::Clean));
         assert_that!(second.screen_dmg(), eq(TerminalScreenDmg::Dirty));
-        assert_that!(terminal.snapshot()?.cursor().shape, eq(RenderCursorShape::SteadyBlock));
+        assert_that!(
+            terminal.render_snapshot(TerminalSnapshotScope::Full)?.cursor().shape,
+            eq(RenderCursorShape::SteadyBlock)
+        );
         Ok(())
     }
 
@@ -1477,7 +817,10 @@ mod tests {
         let second = terminal.process(b"q");
 
         assert_that!(second.screen_dmg(), eq(TerminalScreenDmg::Dirty));
-        assert_that!(terminal.snapshot()?.cursor().shape, eq(RenderCursorShape::SteadyBlock));
+        assert_that!(
+            terminal.render_snapshot(TerminalSnapshotScope::Full)?.cursor().shape,
+            eq(RenderCursorShape::SteadyBlock)
+        );
         Ok(())
     }
 
@@ -1489,7 +832,10 @@ mod tests {
         let _outcome = terminal.process("ś?47h".as_bytes());
 
         assert_that!(terminal.application_mode().screen_mode, eq(TerminalScreenMode::Normal));
-        assert_that!(self::snapshot_text(&terminal.snapshot()?), contains_substring("ś?47h"));
+        assert_that!(
+            self::snapshot_text(&terminal.render_snapshot(TerminalSnapshotScope::Full)?),
+            contains_substring("ś?47h")
+        );
         Ok(())
     }
 
@@ -1502,7 +848,10 @@ mod tests {
         let _second = terminal.process(b"\x9b?47h");
 
         assert_that!(terminal.application_mode().screen_mode, eq(TerminalScreenMode::Normal));
-        assert_that!(self::snapshot_text(&terminal.snapshot()?), contains_substring("ś?47h"));
+        assert_that!(
+            self::snapshot_text(&terminal.render_snapshot(TerminalSnapshotScope::Full)?),
+            contains_substring("ś?47h")
+        );
         Ok(())
     }
 
@@ -1512,7 +861,10 @@ mod tests {
 
         self::assert_replies_eq(&terminal.process(b"\x1b[6 q\x1bc").into_replies(), &[]);
 
-        assert_that!(terminal.snapshot()?.cursor().shape, eq(RenderCursorShape::Default));
+        assert_that!(
+            terminal.render_snapshot(TerminalSnapshotScope::Full)?.cursor().shape,
+            eq(RenderCursorShape::Default)
+        );
         Ok(())
     }
 
@@ -1666,7 +1018,7 @@ mod tests {
         let _ = terminal.process(b"one\ntwo\nthree");
 
         assert_that!(terminal.scroll(PaneScrollDirection::Up), eq(TerminalScrollMove::Moved));
-        let rendered = self::snapshot_text(&terminal.snapshot()?);
+        let rendered = self::snapshot_text(&terminal.render_snapshot(TerminalSnapshotScope::Full)?);
         assert_that!(rendered, contains_substring("one"));
         Ok(())
     }
@@ -1681,13 +1033,19 @@ mod tests {
             eq(TerminalScrollMove::Moved)
         );
         assert_that!(
-            terminal.snapshot()?.cursor().visibility,
+            terminal
+                .render_snapshot(TerminalSnapshotScope::Full)?
+                .cursor()
+                .visibility,
             eq(muxr_core::RenderCursorVisibility::Hidden)
         );
 
         assert_that!(terminal.scroll_to_bottom(), eq(TerminalScrollMove::Moved));
         assert_that!(
-            terminal.snapshot()?.cursor().visibility,
+            terminal
+                .render_snapshot(TerminalSnapshotScope::Full)?
+                .cursor()
+                .visibility,
             eq(muxr_core::RenderCursorVisibility::Visible)
         );
         Ok(())
@@ -1709,7 +1067,7 @@ mod tests {
             terminal.scroll_one_line(PaneScrollDirection::Up),
             eq(TerminalScrollMove::Moved)
         );
-        let rendered = self::snapshot_text(&terminal.snapshot()?);
+        let rendered = self::snapshot_text(&terminal.render_snapshot(TerminalSnapshotScope::Full)?);
 
         assert_that!(rendered, contains_substring("row-16"));
         Ok(())
@@ -1729,7 +1087,7 @@ mod tests {
         for _ in 0..20 {
             let _movement = terminal.scroll_one_line(PaneScrollDirection::Up);
         }
-        let rendered = self::snapshot_text(&terminal.snapshot()?);
+        let rendered = self::snapshot_text(&terminal.render_snapshot(TerminalSnapshotScope::Full)?);
 
         assert_that!(rendered, contains_substring("row-00"));
         assert_that!(rendered, contains_substring("row-03"));
@@ -1743,7 +1101,7 @@ mod tests {
         let _ = terminal.process(b"one\r\ntwo\r\nthree");
         assert_that!(terminal.scroll(PaneScrollDirection::Up), eq(TerminalScrollMove::Moved));
 
-        let before = terminal.snapshot()?;
+        let before = terminal.render_snapshot(TerminalSnapshotScope::Full)?;
         let before_widths = before
             .rows()
             .iter()
@@ -1752,7 +1110,7 @@ mod tests {
         assert_that!(before_widths, eq(vec![8, 8]));
 
         terminal.resize(&TerminalSize::new(4, 2)?);
-        let after = terminal.snapshot()?;
+        let after = terminal.render_snapshot(TerminalSnapshotScope::Full)?;
         let after_widths = after
             .rows()
             .iter()
@@ -1770,9 +1128,13 @@ mod tests {
         let _ = terminal.process(b"|abcdefghij|\r\n|klmnopqrst|\r\npsql> ");
 
         let mut rendered = Vec::new();
-        rendered.push(self::snapshot_text(&terminal.snapshot()?));
+        rendered.push(self::snapshot_text(
+            &terminal.render_snapshot(TerminalSnapshotScope::Full)?,
+        ));
         while terminal.scroll_one_line(PaneScrollDirection::Up) == TerminalScrollMove::Moved {
-            rendered.push(self::snapshot_text(&terminal.snapshot()?));
+            rendered.push(self::snapshot_text(
+                &terminal.render_snapshot(TerminalSnapshotScope::Full)?,
+            ));
         }
         let rendered = rendered.join("\n");
 
@@ -1802,7 +1164,7 @@ mod tests {
             terminal.scroll_one_line(PaneScrollDirection::Up),
             eq(TerminalScrollMove::Moved)
         );
-        let rendered = self::snapshot_text(&terminal.snapshot()?);
+        let rendered = self::snapshot_text(&terminal.render_snapshot(TerminalSnapshotScope::Full)?);
         assert_that!(rendered, contains_substring("top"));
         Ok(())
     }
@@ -1818,7 +1180,7 @@ mod tests {
             terminal.scroll_one_line(PaneScrollDirection::Up),
             eq(TerminalScrollMove::Moved)
         );
-        let rendered = self::snapshot_text(&terminal.snapshot()?);
+        let rendered = self::snapshot_text(&terminal.render_snapshot(TerminalSnapshotScope::Full)?);
         assert_that!(rendered, contains_substring("top"));
         Ok(())
     }
@@ -1835,7 +1197,7 @@ mod tests {
             terminal.scroll_one_line(PaneScrollDirection::Up),
             eq(TerminalScrollMove::Moved)
         );
-        let rendered = self::snapshot_text(&terminal.snapshot()?);
+        let rendered = self::snapshot_text(&terminal.render_snapshot(TerminalSnapshotScope::Full)?);
         assert_that!(rendered, contains_substring("one"));
         Ok(())
     }
@@ -1886,7 +1248,7 @@ mod tests {
     {
         let mut terminal = self::terminal_state(&TerminalSize::new(8, 2)?);
         let _output = terminal.process(b"one\r\ntwo\r\nthree\x1b[?1049halt");
-        let before = terminal.snapshot()?;
+        let before = terminal.render_snapshot(TerminalSnapshotScope::Full)?;
         let mode_before = terminal.application_mode();
 
         let dump = String::from_utf8(self::test_scrollback_dump(
@@ -1896,7 +1258,7 @@ mod tests {
 
         assert_that!(dump.as_str(), contains_substring("one"));
         assert_that!(dump.as_str(), contains_substring("alt"));
-        assert_that!(terminal.snapshot()?, eq(before));
+        assert_that!(terminal.render_snapshot(TerminalSnapshotScope::Full)?, eq(before));
         assert_that!(terminal.application_mode(), eq(mode_before));
         Ok(())
     }
@@ -1906,10 +1268,10 @@ mod tests {
         let mut terminal = self::terminal_state(&TerminalSize::new(8, 2)?);
         let _ = terminal.process(b"one\r\ntwo\r\nthree");
         assert_that!(terminal.scroll(PaneScrollDirection::Up), eq(TerminalScrollMove::Moved));
-        let before = terminal.snapshot()?;
+        let before = terminal.render_snapshot(TerminalSnapshotScope::Full)?;
 
         let _dump = self::test_scrollback_dump(&mut terminal, ScrollbackDumpStyle::PlainText);
-        let after = terminal.snapshot()?;
+        let after = terminal.render_snapshot(TerminalSnapshotScope::Full)?;
 
         assert_that!(after, eq(before));
         Ok(())
@@ -1955,7 +1317,7 @@ mod tests {
         assert_that!(terminal.scroll(PaneScrollDirection::Up), eq(TerminalScrollMove::Moved));
 
         assert_that!(terminal.scroll_to_bottom(), eq(TerminalScrollMove::Moved));
-        let rendered = self::snapshot_text(&terminal.snapshot()?);
+        let rendered = self::snapshot_text(&terminal.render_snapshot(TerminalSnapshotScope::Full)?);
 
         assert_that!(rendered, contains_substring("three"));
         assert_that!(terminal.scroll_to_bottom(), eq(TerminalScrollMove::Unchanged));
@@ -1971,7 +1333,7 @@ mod tests {
         let _ = terminal.process(b"\x1b[1;3r\x1b[2S\x1b[r");
 
         assert_that!(terminal.scroll(PaneScrollDirection::Up), eq(TerminalScrollMove::Moved));
-        let rendered = self::snapshot_text(&terminal.snapshot()?);
+        let rendered = self::snapshot_text(&terminal.render_snapshot(TerminalSnapshotScope::Full)?);
 
         assert_that!(rendered, contains_substring("one"));
         assert_that!(rendered, contains_substring("two"));
@@ -1989,7 +1351,7 @@ mod tests {
             let _ = terminal.process(b"\x1b[1;3r\x1b[1S\x1b[r");
         }
 
-        assert_that!(terminal.total_scrollback_len(), eq(2));
+        assert_that!(terminal.rio.terminal().grid.history_size(), eq(2));
         let retained_text = String::from_utf8(terminal.scrollback_dump(ScrollbackDumpStyle::PlainText))?;
         assert_that!(retained_text.as_str(), not(contains_substring("row-0")));
         assert_that!(retained_text.as_str(), not(contains_substring("row-1")));
@@ -2007,7 +1369,7 @@ mod tests {
         let _ = terminal.process(b"2S\x1b[r");
 
         assert_that!(terminal.scroll(PaneScrollDirection::Up), eq(TerminalScrollMove::Moved));
-        let rendered = self::snapshot_text(&terminal.snapshot()?);
+        let rendered = self::snapshot_text(&terminal.render_snapshot(TerminalSnapshotScope::Full)?);
 
         assert_that!(rendered, contains_substring("one"));
         assert_that!(rendered, contains_substring("two"));
@@ -2027,7 +1389,7 @@ mod tests {
             terminal.scroll_one_line(PaneScrollDirection::Up),
             eq(TerminalScrollMove::Moved)
         );
-        let rendered = self::snapshot_text(&terminal.snapshot()?);
+        let rendered = self::snapshot_text(&terminal.render_snapshot(TerminalSnapshotScope::Full)?);
 
         assert_that!(rendered, contains_substring("cod-0"));
         assert_that!(rendered, not(contains_substring("old-")));
@@ -2058,7 +1420,7 @@ mod tests {
         let _ = terminal.process(b"\x1b[1;3r\x1b[1;1H\x1b[2M\x1b[r");
 
         assert_that!(terminal.scroll(PaneScrollDirection::Up), eq(TerminalScrollMove::Moved));
-        let rendered = self::snapshot_text(&terminal.snapshot()?);
+        let rendered = self::snapshot_text(&terminal.render_snapshot(TerminalSnapshotScope::Full)?);
 
         assert_that!(rendered, contains_substring("one"));
         assert_that!(rendered, contains_substring("two"));
@@ -2074,7 +1436,7 @@ mod tests {
         let _ = terminal.process(b"\x1b[1;4r\x1b[1;1H\x1b[2M\x1b[r");
 
         assert_that!(terminal.scroll(PaneScrollDirection::Up), eq(TerminalScrollMove::Moved));
-        let rendered = self::snapshot_text(&terminal.snapshot()?);
+        let rendered = self::snapshot_text(&terminal.render_snapshot(TerminalSnapshotScope::Full)?);
 
         assert_that!(rendered, contains_substring("one"));
         assert_that!(rendered, contains_substring("two"));
@@ -2149,9 +1511,9 @@ mod tests {
         let _ = terminal.process(b"\x1b[1;1Hone\x1b[2;1Htwo\x1b[3;1Hthree\x1b[4;1Hprompt");
         let _ = terminal.process(b"\x1b[1;4r\x1b[2S\x1b[r");
 
-        assert_that!(terminal.total_scrollback_len(), eq(2));
+        assert_that!(terminal.rio.terminal().grid.history_size(), eq(2));
         assert_that!(terminal.scroll(PaneScrollDirection::Up), eq(TerminalScrollMove::Moved));
-        let rendered = self::snapshot_text(&terminal.snapshot()?);
+        let rendered = self::snapshot_text(&terminal.render_snapshot(TerminalSnapshotScope::Full)?);
 
         assert_that!(rendered, contains_substring("one"));
         assert_that!(rendered, contains_substring("two"));
@@ -2165,11 +1527,14 @@ mod tests {
         let _ = terminal.process(b"one\ntwo\nthree");
         let bottom_top_row = terminal.visible_top_row()?;
         assert_that!(terminal.scroll(PaneScrollDirection::Up), eq(TerminalScrollMove::Moved));
-        let scrolled_snapshot = self::snapshot_text(&terminal.snapshot()?);
+        let scrolled_snapshot = self::snapshot_text(&terminal.render_snapshot(TerminalSnapshotScope::Full)?);
 
         let scrolled_top_row = terminal.visible_top_row()?;
 
-        assert_that!(self::snapshot_text(&terminal.snapshot()?), eq(scrolled_snapshot));
+        assert_that!(
+            self::snapshot_text(&terminal.render_snapshot(TerminalSnapshotScope::Full)?),
+            eq(scrolled_snapshot)
+        );
         assert_that!(scrolled_top_row, lt(bottom_top_row));
         Ok(())
     }
@@ -2333,17 +1698,23 @@ mod tests {
 
         let _ = terminal.process(b"normal\x1b[?47halt");
 
-        assert_that!(self::snapshot_text(&terminal.snapshot()?), contains_substring("alt"));
         assert_that!(
-            self::snapshot_text(&terminal.snapshot()?),
+            self::snapshot_text(&terminal.render_snapshot(TerminalSnapshotScope::Full)?),
+            contains_substring("alt")
+        );
+        assert_that!(
+            self::snapshot_text(&terminal.render_snapshot(TerminalSnapshotScope::Full)?),
             not(contains_substring("normal"))
         );
 
         let _ = terminal.process(b"\x1b[?47l");
 
-        assert_that!(self::snapshot_text(&terminal.snapshot()?), contains_substring("normal"));
         assert_that!(
-            self::snapshot_text(&terminal.snapshot()?),
+            self::snapshot_text(&terminal.render_snapshot(TerminalSnapshotScope::Full)?),
+            contains_substring("normal")
+        );
+        assert_that!(
+            self::snapshot_text(&terminal.render_snapshot(TerminalSnapshotScope::Full)?),
             not(contains_substring("alt"))
         );
         Ok(())
@@ -2356,9 +1727,12 @@ mod tests {
 
         let _ = terminal.process(b"normal\x1b[?47halt\x1b[?47l\x1b[?47h");
 
-        assert_that!(self::snapshot_text(&terminal.snapshot()?), contains_substring("alt"));
         assert_that!(
-            self::snapshot_text(&terminal.snapshot()?),
+            self::snapshot_text(&terminal.render_snapshot(TerminalSnapshotScope::Full)?),
+            contains_substring("alt")
+        );
+        assert_that!(
+            self::snapshot_text(&terminal.render_snapshot(TerminalSnapshotScope::Full)?),
             not(contains_substring("normal"))
         );
         Ok(())
@@ -2373,7 +1747,7 @@ mod tests {
         let _reset_and_reenter = terminal.process(b"\x1bc\x1b[?47h");
 
         assert_that!(
-            self::snapshot_text(&terminal.snapshot()?),
+            self::snapshot_text(&terminal.render_snapshot(TerminalSnapshotScope::Full)?),
             not(contains_substring("legacy"))
         );
         Ok(())
@@ -2389,7 +1763,7 @@ mod tests {
         let _legacy_reentry = terminal.process(b"\x1b[?47h");
 
         assert_that!(
-            self::snapshot_text(&terminal.snapshot()?),
+            self::snapshot_text(&terminal.render_snapshot(TerminalSnapshotScope::Full)?),
             not(contains_substring("legacy"))
         );
         Ok(())
@@ -2402,9 +1776,12 @@ mod tests {
 
         let _alternate = terminal.process(b"normal\x9b?47halt");
 
-        assert_that!(self::snapshot_text(&terminal.snapshot()?), contains_substring("alt"));
         assert_that!(
-            self::snapshot_text(&terminal.snapshot()?),
+            self::snapshot_text(&terminal.render_snapshot(TerminalSnapshotScope::Full)?),
+            contains_substring("alt")
+        );
+        assert_that!(
+            self::snapshot_text(&terminal.render_snapshot(TerminalSnapshotScope::Full)?),
             not(contains_substring("normal"))
         );
         Ok(())
@@ -2420,7 +1797,7 @@ mod tests {
         let _legacy_reentry = terminal.process(b"\x1b[?47h");
 
         assert_that!(
-            self::snapshot_text(&terminal.snapshot()?),
+            self::snapshot_text(&terminal.render_snapshot(TerminalSnapshotScope::Full)?),
             not(contains_substring("legacy"))
         );
         Ok(())
@@ -2510,20 +1887,11 @@ mod tests {
     fn test_terminal_state_process_when_keyboard_protocol_is_queried_returns_status() -> rootcause::Result<()> {
         let mut terminal = self::terminal_state(&terminal_size()?);
 
-        self::assert_replies_eq(
-            &terminal.process(b"\x1b[?u").into_replies(),
-            &[KITTY_KEYBOARD_PROTOCOL_DISABLED_REPLY.to_vec()],
-        );
+        self::assert_replies_eq(&terminal.process(b"\x1b[?u").into_replies(), &[b"\x1b[?0u".to_vec()]);
         let _ = terminal.process(b"\x1b[>1u");
-        self::assert_replies_eq(
-            &terminal.process(b"\x1b[?u").into_replies(),
-            &[KITTY_KEYBOARD_PROTOCOL_ENABLED_REPLY.to_vec()],
-        );
+        self::assert_replies_eq(&terminal.process(b"\x1b[?u").into_replies(), &[b"\x1b[?1u".to_vec()]);
         let _ = terminal.process(b"\x1b[<u");
-        self::assert_replies_eq(
-            &terminal.process(b"\x1b[?u").into_replies(),
-            &[KITTY_KEYBOARD_PROTOCOL_DISABLED_REPLY.to_vec()],
-        );
+        self::assert_replies_eq(&terminal.process(b"\x1b[?u").into_replies(), &[b"\x1b[?0u".to_vec()]);
         Ok(())
     }
 
@@ -2617,7 +1985,7 @@ mod tests {
             eq(vec![0, 1])
         );
         let _changed_rows = cached.apply_update(update)?;
-        assert_that!(cached, eq(terminal.snapshot()?));
+        assert_that!(cached, eq(terminal.render_snapshot(TerminalSnapshotScope::Full)?));
         Ok(())
     }
 
@@ -2676,7 +2044,7 @@ mod tests {
         assert_that!(update.rows().len(), eq(usize::from(size.rows())));
         let _changed_rows = cached.apply_update(update)?;
 
-        assert_that!(cached, eq(terminal.snapshot()?));
+        assert_that!(cached, eq(terminal.render_snapshot(TerminalSnapshotScope::Full)?));
         Ok(())
     }
 

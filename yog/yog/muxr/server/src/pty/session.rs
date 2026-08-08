@@ -64,23 +64,28 @@ impl PtySession {
         pane_exit_notify: Arc<tokio::sync::Notify>,
     ) -> rootcause::Result<Self> {
         let state = Arc::new(PtyState::new(size, scrollback, pane_exit_notify));
+
         let pty_pair = native_pty_system()
             .openpty(pty_size(size))
             .map_err(|error| report!("failed to open muxr shell pty").attach(format!("error={error:#}")))?;
+
         let mut child = pty_pair
             .slave
             .spawn_command(cmd.cmd_builder(cwd)?)
             .map_err(|error| report!("failed to spawn muxr shell process").attach(format!("error={error:#}")))?;
         let child_process_id = child.process_id();
         let child_killer = Arc::new(Mutex::new(child.clone_killer()));
+
         let reader = pty_pair
             .master
             .try_clone_reader()
             .map_err(|error| report!("failed to clone muxr pty reader").attach(format!("error={error:#}")))?;
+
         let writer = pty_pair
             .master
             .take_writer()
             .map_err(|error| report!("failed to take muxr pty writer").attach(format!("error={error:#}")))?;
+
         drop(pty_pair.slave);
 
         let (writer, writer_handle) = match writer::spawn(writer) {
@@ -90,6 +95,7 @@ impl PtySession {
                 return Err(error);
             }
         };
+
         let handle = PtyHandle {
             child_killer,
             child_process_id,
@@ -97,12 +103,14 @@ impl PtySession {
             state: Arc::clone(&state),
             writer: writer.clone(),
         };
+
         let mut session = Self {
             child_wait_handle: None,
             handle,
             reader_handle: None,
             writer_handle: Some(writer_handle),
         };
+
         // Own started resources before each later fallible thread spawn so normal drop cleanup runs on those error
         // paths.
         session.child_wait_handle = Some(spawn_child_wait_thread(child, &state)?);
@@ -127,6 +135,7 @@ impl Drop for PtySession {
         {
             crate::session::tracing::pty::shutdown_failed("join_child_wait", "child wait thread panicked");
         }
+
         let writer_shutdown = self
             .handle
             .writer
@@ -135,11 +144,13 @@ impl Drop for PtySession {
                 crate::session::tracing::pty::shutdown_failed("queue_writer_shutdown", error);
             })
             .is_ok();
+
         if let Some(reader_handle) = self.reader_handle.take()
             && reader_handle.join().is_err()
         {
             crate::session::tracing::pty::shutdown_failed("join_reader", "reader thread panicked");
         }
+
         if writer_shutdown
             && let Some(writer_handle) = self.writer_handle.take()
             && writer_handle.join().is_err()
@@ -262,9 +273,11 @@ impl PtyHandle {
             .lock()
             .resize(pty_size(size))
             .map_err(|error| report!("failed to resize muxr shell pty").attach(format!("error={error:#}")))?;
+
         let mut terminal = self.state.terminal.lock();
         terminal.resize(size);
         drop(terminal);
+
         Ok(())
     }
 
@@ -281,6 +294,7 @@ impl PtyHandle {
             "failed to write client input to muxr shell pty",
             "failed to flush muxr shell pty input",
         )?;
+
         Ok(viewport_move)
     }
 
@@ -300,6 +314,7 @@ impl PtyHandle {
             "failed to write client paste to muxr shell pty",
             "failed to flush muxr shell pty paste",
         )?;
+
         Ok(viewport_move)
     }
 
@@ -312,6 +327,7 @@ impl PtyHandle {
         let Some(bytes) = crate::pane::mouse::encode_pty_mouse_event(event, region, protocol)? else {
             return Ok(PtyMouseWrite::Ignored);
         };
+
         // Scrollback follows only events that reach the PTY, so filtered motion does not hide history.
         let viewport_move = PtyViewportMove::from(self.state.terminal.lock().scroll_to_bottom());
         self.writer.write_bytes(
@@ -319,6 +335,7 @@ impl PtyHandle {
             "failed to write client mouse event to muxr shell pty",
             "failed to flush muxr shell pty mouse event",
         )?;
+
         Ok(PtyMouseWrite::Sent(viewport_move))
     }
 
@@ -398,11 +415,6 @@ impl PtyHandle {
     /// Retry a sticky output wakeup after another PTY event made capacity available.
     pub fn retry_output_wakeup(&self) -> rootcause::Result<()> {
         self.state.retry_output_wakeup()
-    }
-
-    #[cfg(test)]
-    pub fn render_snapshot(&self) -> rootcause::Result<TerminalSnapshot> {
-        self.state.terminal.lock().snapshot()
     }
 
     #[cfg(test)]
@@ -539,6 +551,7 @@ impl PtyState {
             let terminal_replies = process_outcome.into_replies();
             let title_changes = terminal.take_title_changes();
             drop(terminal);
+
             // Title changes are queued separately from coalesced output events so cmd->cwd title transitions are
             // not collapsed before the server can emit matching tab bar updates.
             let active_sink = self.active_sink.lock();
@@ -546,6 +559,7 @@ impl PtyState {
                 self.title_changes.lock().extend(title_changes);
             }
             drop(active_sink);
+
             terminal_replies
         };
 
@@ -612,10 +626,12 @@ impl PtyState {
         if !self.screen_dirty.load(Ordering::Acquire) && self.title_changes.lock().is_empty() {
             return Ok(());
         }
+
         let mut active_sink = self.active_sink.lock();
         let Some(sink) = active_sink.as_ref() else {
             return Ok(());
         };
+
         if sink
             .output_wakeup_pending
             .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
@@ -623,6 +639,7 @@ impl PtyState {
         {
             return Ok(());
         }
+
         match self::try_send_pty_event(&sink.sender, PtyEvent::OutputReady)? {
             PtyEventSendOutcome::Sent => {}
             PtyEventSendOutcome::Full(PtyEvent::OutputReady) => {
@@ -637,6 +654,7 @@ impl PtyState {
             }
         }
         drop(active_sink);
+
         Ok(())
     }
 
@@ -751,11 +769,13 @@ fn spawn_child_wait_thread(child: PtyChild, state: &Arc<PtyState>) -> rootcause:
     // Raw OS threads do not inherit thread-local tracing state, so carry both the dispatcher and span explicitly.
     let span = tracing::Span::current();
     let dispatch = tracing::dispatcher::get_default(Clone::clone);
+
     // Keep the child recoverable until the wait thread is successfully spawned. Exactly one side takes it: the wait
     // thread on success, or the spawn-error cleanup path before any reaper exists.
     let child = Arc::new(Mutex::new(Some(child)));
     let thread_child = Arc::clone(&child);
     let thread_state = Arc::clone(state);
+
     match thread::Builder::new()
         .name("muxr-pty-child-wait".to_owned())
         .spawn(move || {
@@ -764,6 +784,7 @@ fn spawn_child_wait_thread(child: PtyChild, state: &Arc<PtyState>) -> rootcause:
                 let Some(mut child) = self::take_child_wait_handle(&thread_child) else {
                     return;
                 };
+
                 match child.wait() {
                     Ok(exit_status) => {
                         let _ = thread_state
@@ -818,7 +839,7 @@ fn run_reader_loop(reader: &mut dyn Read, state: &PtyState, writer: &PtyWriter) 
                     }
                 };
                 if writer
-                    .write_terminal_replies(terminal_replies.as_slice())
+                    .write_terminal_replies(terminal_replies.as_ref())
                     .inspect_err(|error| {
                         crate::session::tracing::pty::reader_stopped_after_error("write_terminal_replies", error);
                     })
@@ -843,7 +864,7 @@ mod tests {
     use super::*;
 
     fn assert_replies_eq(replies: &TerminalReplies, expected: &[Vec<u8>]) {
-        assert_that!(replies.as_slice(), eq(expected));
+        assert_that!(replies.as_ref(), eq(expected));
     }
 
     fn pty_state(size: &TerminalSize) -> PtyState {
