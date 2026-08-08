@@ -130,6 +130,14 @@ impl From<Session> for RenderableSession {
 }
 
 impl RenderableSession {
+    fn can_resume(&self) -> bool {
+        self.session.workspace.is_dir()
+    }
+
+    fn workspace_status(&self) -> &'static str {
+        if self.can_resume() { "" } else { " [missing workspace]" }
+    }
+
     fn branch(&self) -> Option<String> {
         if let Some(branch) = self.branch.borrow().as_ref() {
             return Some(branch.to_owned());
@@ -148,8 +156,18 @@ impl RenderableSession {
         let agent = self.session.agent.short_name();
 
         self.branch().map_or_else(
-            || format!("{agent} {path_label} {session_name} {updated_label} {created_label}"),
-            |branch| format!("{agent} {path_label} {branch} {session_name} {updated_label} {created_label}"),
+            || {
+                format!(
+                    "{agent} {path_label}{} {session_name} {updated_label} {created_label}",
+                    self.workspace_status()
+                )
+            },
+            |branch| {
+                format!(
+                    "{agent} {path_label} {branch}{} {session_name} {updated_label} {created_label}",
+                    self.workspace_status()
+                )
+            },
         )
     }
 }
@@ -176,9 +194,10 @@ impl Display for RenderableSession {
         if let Some(branch) = self.branch() {
             write!(
                 f,
-                "{agent_name} {} {} {} {} {}",
+                "{agent_name} {} {}{} {} {} {}",
                 path_label.cyan().bold(),
                 branch.white(),
+                self.workspace_status().yellow(),
                 session_name.dimmed().bold(),
                 updated_label.blue(),
                 created_label.blue(),
@@ -186,8 +205,9 @@ impl Display for RenderableSession {
         } else {
             write!(
                 f,
-                "{agent_name} {} {} {} {}",
+                "{agent_name} {}{} {} {} {}",
                 path_label.cyan().bold(),
+                self.workspace_status().yellow(),
                 session_name.dimmed().bold(),
                 updated_label.blue(),
                 created_label.blue(),
@@ -258,6 +278,12 @@ impl Display for Op {
 }
 
 fn launch_session(session: &RenderableSession) -> rootcause::Result<()> {
+    if !session.can_resume() {
+        return Err(report!("cannot resume session because its workspace is missing")
+            .attach(format!("workspace={}", session.session.workspace.display()))
+            .attach(format!("session_id={}", session.session.id)));
+    }
+
     let session = &session.session;
     let (program, args) = session.build_resume_command()?;
 

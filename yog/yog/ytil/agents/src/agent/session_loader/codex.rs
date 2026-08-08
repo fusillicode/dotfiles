@@ -66,7 +66,7 @@ fn load_sessions_from_paths(
             continue;
         }
         let session = codex_session.into_session(session_path);
-        if session.workspace.is_dir() && keep_session(&session) {
+        if keep_session(&session) {
             sessions.push(session);
         }
     }
@@ -111,6 +111,20 @@ mod tests {
 
         assert_that!(sessions.len(), eq(1));
         assert_that!(sessions[0].id, eq("target"));
+    }
+
+    #[test]
+    fn load_sessions_from_paths_when_workspace_is_missing_keeps_session_for_deletion() {
+        let dir = tempdir().expect("tempdir should be created");
+        let session_path = dir.path().join("rollout-2026-01-01-target.jsonl");
+        let missing_workspace = dir.path().join("missing-workspace");
+        std::fs::write(&session_path, codex_content("target", &missing_workspace))
+            .expect("session fixture should be written");
+
+        let sessions = load_sessions_from_paths(vec![session_path], |_| true).expect("session should load");
+
+        assert_that!(sessions.len(), eq(1));
+        assert_that!(sessions[0].workspace, eq(missing_workspace));
     }
 
     fn codex_content(id: &str, workspace: &Path) -> String {
