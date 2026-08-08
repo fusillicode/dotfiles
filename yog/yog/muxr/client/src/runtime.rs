@@ -166,24 +166,32 @@ async fn run_interactive(
     initial_size: TerminalSize,
 ) -> rootcause::Result<()> {
     let _terminal_guard = TerminalGuard::enable_if_terminal()?;
+
     let (control_sender, control_receiver) = tokio::sync::mpsc::channel(CONTROL_REQUEST_CHANNEL_LIMIT);
+
     let (input_cmd_sender, mut input_cmd_receiver) = tokio::sync::mpsc::channel(INPUT_REQUEST_CHANNEL_LIMIT);
+
     let (input_request_sender, input_receiver) = tokio::sync::mpsc::channel(INPUT_REQUEST_CHANNEL_LIMIT);
+
     let stdin_handle = self::spawn_stdin_forwarder(input_cmd_sender, input_request_sender.clone());
     let resize_handle = self::spawn_resize_forwarder(control_sender.clone(), muxr_config.tab_bar.width, initial_size);
+
     let writer = attached_session.writer;
     let writer_handle =
         tokio::spawn(async move { self::forward_client_requests(writer, control_receiver, input_receiver).await });
     let (stdout_sender, _stdout_worker, mut stdout_failure_receiver, mut stdout_completion_receiver) =
         StdoutWorker::spawn();
+
     let mut renderer = ClientRenderer::new(muxr_config, attached_session.layout, attached_session.pane_regions);
     renderer.sync_mouse_capture_logical();
     let mut render_coordinator = RenderCoordinator::new();
+
     let edge_scroll_tick_start = tokio::time::Instant::now()
         .checked_add(SELECTION_EDGE_SCROLL_INTERVAL)
         .ok_or_else(|| report!("muxr selection edge scroll interval overflowed"))?;
     let mut edge_scroll_tick = tokio::time::interval_at(edge_scroll_tick_start, SELECTION_EDGE_SCROLL_INTERVAL);
     edge_scroll_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+
     let mut input_cmd_receiver_state = InputCmdReceiverState::Open;
 
     loop {

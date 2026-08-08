@@ -940,7 +940,7 @@ mod tests {
         let size = TerminalSize::new(24, 1)?;
         let mut terminal = crate::terminal::TerminalState::with_scrollback(&size, MuxrConfig::default().scrollback);
         let _ = terminal.process(b"https://example.com");
-        let snapshot = terminal.snapshot()?;
+        let snapshot = terminal.render_snapshot(TerminalSnapshotScope::Full)?;
         let region = PaneRegion {
             area: PaneArea {
                 origin: PanePosition { row: 0, col: 0 },
@@ -1020,7 +1020,7 @@ mod tests {
         let size = TerminalSize::new(24, 1)?;
         let mut terminal = crate::terminal::TerminalState::with_scrollback(&size, MuxrConfig::default().scrollback);
         let _ = terminal.process(bytes);
-        let snapshot = terminal.snapshot()?;
+        let snapshot = terminal.render_snapshot(TerminalSnapshotScope::Full)?;
         let region = PaneRegion {
             area: PaneArea {
                 origin: PanePosition { row: 0, col: 0 },

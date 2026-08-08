@@ -1703,7 +1703,7 @@ mod tests {
     async fn test_handle_client_message_when_mouse_forward_precedes_quiet_deadline_extends_busy()
     -> rootcause::Result<()> {
         self::assert_mouse_request_precedes_quiet_deadline_extends_busy(
-            "printf '\\033[?1002h\\033[?1006hready\\n'; exec /bin/cat",
+            "printf '\\033[?1002h\\033[?1006h%s%s\\n' re ady; exec /bin/cat",
             |mode| {
                 assert_that!(mode.mouse_protocol.as_ref(), some(anything()));
                 Ok(())
@@ -1716,7 +1716,7 @@ mod tests {
     async fn test_handle_client_message_when_faux_scroll_precedes_quiet_deadline_extends_busy() -> rootcause::Result<()>
     {
         self::assert_mouse_request_precedes_quiet_deadline_extends_busy(
-            "printf '\\033[?1049hready\\n'; exec /bin/cat",
+            "printf '\\033[?1049h%s%s\\n' re ady; exec /bin/cat",
             |mode| {
                 assert_that!(mode.screen_mode, eq(TerminalScreenMode::Alternate));
                 assert_that!(mode.mouse_protocol, eq(None));
@@ -3415,8 +3415,8 @@ mod tests {
         loop {
             let handle = runtimes.handle(pane_id)?;
             let output_generation = handle.output_generation();
-            let snapshot = handle.render_snapshot()?;
-            if self::snapshot_text(&snapshot).contains(needle) {
+            let snapshot = handle.pane_render_snapshot(crate::terminal::TerminalSnapshotScope::Full)?;
+            if self::snapshot_text(snapshot.terminal()).contains(needle) {
                 return Ok(());
             }
             let remaining = TEST_RUNTIME_READY_TIMEOUT.saturating_sub(started_at.elapsed());

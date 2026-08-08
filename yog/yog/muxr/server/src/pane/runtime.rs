@@ -484,8 +484,10 @@ mod tests {
     ) -> rootcause::Result<()> {
         let started_at = Instant::now();
         loop {
-            let snapshot = runtimes.handle(pane_id)?.render_snapshot()?;
-            if self::snapshot_text(&snapshot).contains(needle) {
+            let snapshot = runtimes
+                .handle(pane_id)?
+                .pane_render_snapshot(crate::terminal::TerminalSnapshotScope::Full)?;
+            if self::snapshot_text(snapshot.terminal()).contains(needle) {
                 return Ok(());
             }
             if started_at.elapsed() > Duration::from_secs(2) {
