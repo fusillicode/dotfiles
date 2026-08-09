@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use jiff::Timestamp;
 use rootcause::option_ext::OptionExt;
 use rootcause::prelude::ResultExt;
+use rootcause::report;
 use serde::Deserialize;
 
 use crate::agent::Agent;
@@ -69,6 +70,33 @@ pub(crate) fn parse_preview(reader: impl BufRead, session_name: &str) -> rootcau
     }
 
     parser.finish(session_name)
+}
+
+/// Read the first valid Codex session metadata record.
+///
+/// # Errors
+/// Returns an error when metadata cannot be read before a valid `session_meta`
+/// record is found. Later malformed JSONL records are intentionally ignored.
+pub(crate) fn parse_metadata_for_deletion(
+    reader: impl BufRead,
+    session_name: &str,
+) -> rootcause::Result<CodexSessionMetadata> {
+    for (line_idx, line) in reader.lines().enumerate() {
+        let line = line
+            .context("failed to read Codex session json line")
+            .attach(format!("line_number={}", line_idx.saturating_add(1)))?;
+        let line = serde_json::from_str::<CodexLine>(&line)
+            .context("failed to parse Codex session json line")
+            .attach(format!("line_number={}", line_idx.saturating_add(1)))?;
+        if let Some(meta) = line.session_meta() {
+            return Ok(CodexSessionMetadata {
+                id: meta.id.clone(),
+                parent_thread_id: meta.parent_thread_id.clone(),
+            });
+        }
+    }
+
+    Err(report!("no Codex session_meta record found").attach(format!("session_name={session_name}")))
 }
 
 #[derive(Default)]
@@ -159,6 +187,12 @@ pub struct CodexSession {
     pub is_subagent: bool,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct CodexSessionMetadata {
+    pub(crate) id: String,
+    pub(crate) parent_thread_id: Option<String>,
+}
+
 impl CodexSession {
     pub fn into_session(self, path: PathBuf) -> Session {
         let mut session = Session::new(Agent::Codex, self.id, self.workspace, path, None, self.created_at);
@@ -229,6 +263,7 @@ struct CodexSessionMetaLine {
 #[derive(Debug, Deserialize)]
 struct CodexSessionMetaPayload {
     id: String,
+    parent_thread_id: Option<String>,
     cwd: String,
     timestamp: Timestamp,
     source: Option<serde_json::Value>,
