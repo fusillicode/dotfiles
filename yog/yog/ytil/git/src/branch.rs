@@ -552,7 +552,7 @@ mod tests {
         vec![local("feature-x"), remote("upstream/feature-x")],
         vec![local("feature-x")]
     )]
-    fn remove_redundant_remotes_cases(#[case] mut input: Vec<Branch>, #[case] expected: Vec<Branch>) {
+    fn test_remove_redundant_remotes_cases(#[case] mut input: Vec<Branch>, #[case] expected: Vec<Branch>) {
         remove_redundant_remotes(&mut input);
         assert_eq!(input, expected);
     }
@@ -701,7 +701,10 @@ mod tests {
         },
         Timestamp::from_second(654_321).unwrap()
     )]
-    fn branch_committer_date_time_when_variant_returns_date_time(#[case] branch: Branch, #[case] expected: Timestamp) {
+    fn test_branch_committer_date_time_when_variant_returns_date_time(
+        #[case] branch: Branch,
+        #[case] expected: Timestamp,
+    ) {
         assert_that!(branch.committer_date_time(), eq(&expected));
     }
 

@@ -127,7 +127,11 @@ mod tests {
         "feat: add user authentication and…"
     )]
     #[case::unicode_safe("áéíóú_abcdef", 5, "áéíóú…")]
-    fn write_commit_truncated_msg_formats_correctly(#[case] input: &str, #[case] max: usize, #[case] expected: &str) {
+    fn test_write_commit_truncated_msg_formats_correctly(
+        #[case] input: &str,
+        #[case] max: usize,
+        #[case] expected: &str,
+    ) {
         let result = collect(|buf| write_commit_truncated_msg(buf, input, max));
         assert_that!(result, eq(expected));
     }

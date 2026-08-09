@@ -132,7 +132,7 @@ mod tests {
             branch("main", "other@example.com", 30),
         ]
     )]
-    fn prioritize_branches_prioritizes_previous_branch_cases(
+    fn test_prioritize_branches_prioritizes_previous_branch_cases(
         #[case] branches: Vec<Branch>,
         #[case] previous_branch: Option<&str>,
         #[case] user_email: Option<&str>,
@@ -232,7 +232,7 @@ mod tests {
             branch("feature-a", "other@example.com", 20),
         ]
     )]
-    fn prioritize_branches_misc_cases(
+    fn test_prioritize_branches_misc_cases(
         #[case] branches: Vec<Branch>,
         #[case] previous_branch: Option<&str>,
         #[case] user_email: Option<&str>,

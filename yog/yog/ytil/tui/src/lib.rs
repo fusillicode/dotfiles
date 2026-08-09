@@ -104,7 +104,11 @@ mod tests {
     #[case("abcdefghijklmnopqrstuvwxyz", 5, "abcd…")]
     #[case("abc", 1, "…")]
     #[case("abc", 0, "")]
-    fn display_fixed_width_trims_as_expected(#[case] value: &str, #[case] max_chars: usize, #[case] expected: &str) {
+    fn test_display_fixed_width_trims_as_expected(
+        #[case] value: &str,
+        #[case] max_chars: usize,
+        #[case] expected: &str,
+    ) {
         assert_that!(display_fixed_width(value, max_chars), eq(expected));
     }
 

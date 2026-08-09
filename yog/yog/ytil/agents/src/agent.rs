@@ -9,6 +9,8 @@ use crate::ParseError;
 
 pub mod session;
 #[cfg(not(target_arch = "wasm32"))]
+pub mod session_deletion;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod session_loader;
 pub mod session_parser;
 

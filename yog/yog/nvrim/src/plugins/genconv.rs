@@ -212,7 +212,7 @@ mod tests {
     )]
     #[case::naive_date("25-12-2023", r#"NaiveDate::parse_from_str("25-12-2023", "%d-%m-%Y").unwrap()"#)]
     #[case::naive_time("14:30:45", r#"NaiveTime::parse_from_str("14:30:45", "%H:%M:%S").unwrap()"#)]
-    fn date_time_str_to_chrono_parse_from_str_when_valid_input_returns_correct_code(
+    fn test_date_time_str_to_chrono_parse_from_str_when_valid_input_returns_correct_code(
         #[case] input: &str,
         #[case] expected: &str,
     ) {
@@ -231,7 +231,7 @@ mod tests {
     }
 
     #[test]
-    fn unix_timestamp_to_iso_8601_date_time_when_epoch_returns_rfc_3339_offset() {
+    fn test_unix_timestamp_to_iso_8601_date_time_when_epoch_returns_rfc_3339_offset() {
         assert_that!(
             unix_timestamp_to_iso_8601_date_time("0"),
             ok(eq("1970-01-01T00:00:00+00:00"))

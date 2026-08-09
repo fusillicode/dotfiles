@@ -133,7 +133,7 @@ mod tests {
         "nofile",
         true
     )]
-    fn skip_diagnostic_works_as_expected(
+    fn test_skip_diagnostic_works_as_expected(
         #[case] blacklisted_paths: &[&str],
         #[case] blacklisted_types: &[&str],
         #[case] buffer_path: &str,

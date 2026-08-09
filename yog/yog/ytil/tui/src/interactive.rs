@@ -482,7 +482,7 @@ mod tests {
     }
 
     #[rstest]
-    fn select_options_when_preview_is_requested_configures_a_preview_pane() {
+    fn test_select_options_when_preview_is_requested_configures_a_preview_pane() {
         let options = super::select_options(true, true);
 
         assert_that!(options.preview.as_deref(), eq(Some("")));

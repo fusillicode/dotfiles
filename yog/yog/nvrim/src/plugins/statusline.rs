@@ -260,7 +260,9 @@ mod tests {
         workspace_diags: std::iter::once((DiagnosticSeverity::Info, 0)).collect(),
         cursor_position: Some(CursorPosition { row: 42, col: 7 }),
     })]
-    fn statusline_draw_when_all_diagnostics_absent_or_zero_renders_plain_statusline(#[case] statusline: Statusline) {
+    fn test_statusline_draw_when_all_diagnostics_absent_or_zero_renders_plain_statusline(
+        #[case] statusline: Statusline,
+    ) {
         assert_that!(statusline.draw(), eq("%#StatusLine# foo 42:8 %#StatusLine#"));
     }
 

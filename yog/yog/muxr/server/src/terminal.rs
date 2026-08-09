@@ -663,7 +663,8 @@ mod tests {
     }
 
     #[test]
-    fn terminal_state_snapshot_when_output_contains_horizontal_tab_expands_it_to_spaces() -> rootcause::Result<()> {
+    fn test_terminal_state_snapshot_when_output_contains_horizontal_tab_expands_it_to_spaces() -> rootcause::Result<()>
+    {
         let mut terminal = self::terminal_state(&TerminalSize::new(16, 1)?);
 
         let _outcome = terminal.process(b"\tmodified");
@@ -674,7 +675,7 @@ mod tests {
     }
 
     #[test]
-    fn terminal_state_snapshot_when_combining_mark_precedes_horizontal_tab_expands_tab_to_spaces()
+    fn test_terminal_state_snapshot_when_combining_mark_precedes_horizontal_tab_expands_tab_to_spaces()
     -> rootcause::Result<()> {
         let mut terminal = self::terminal_state(&TerminalSize::new(16, 1)?);
 
@@ -1024,7 +1025,7 @@ mod tests {
     }
 
     #[test]
-    fn terminal_state_snapshot_when_viewport_is_scrolled_hides_live_cursor() -> rootcause::Result<()> {
+    fn test_terminal_state_snapshot_when_viewport_is_scrolled_hides_live_cursor() -> rootcause::Result<()> {
         let mut terminal = self::terminal_state(&TerminalSize::new(8, 2)?);
         let _output = terminal.process(b"one\r\ntwo\r\nthree");
 
@@ -1244,8 +1245,8 @@ mod tests {
     }
 
     #[test]
-    fn terminal_state_scrollback_dump_when_alternate_screen_is_active_includes_normal_history() -> rootcause::Result<()>
-    {
+    fn test_terminal_state_scrollback_dump_when_alternate_screen_is_active_includes_normal_history()
+    -> rootcause::Result<()> {
         let mut terminal = self::terminal_state(&TerminalSize::new(8, 2)?);
         let _output = terminal.process(b"one\r\ntwo\r\nthree\x1b[?1049halt");
         let before = terminal.render_snapshot(TerminalSnapshotScope::Full)?;
@@ -1970,7 +1971,7 @@ mod tests {
     }
 
     #[test]
-    fn terminal_state_render_snapshot_when_live_partial_region_scrolls_returns_only_region_rows()
+    fn test_terminal_state_render_snapshot_when_live_partial_region_scrolls_returns_only_region_rows()
     -> rootcause::Result<()> {
         let size = TerminalSize::new(8, 4)?;
         let mut terminal = self::terminal_state(&size);
