@@ -43,7 +43,7 @@ fn requested_ids(keys: &[SessionKey], agent: Agent) -> HashSet<&str> {
         .collect()
 }
 
-fn find_session_paths(
+pub(crate) fn find_session_paths(
     root: &Path,
     matching_file_fn: impl Fn(&std::fs::DirEntry) -> bool,
     skip_dir_fn: impl Fn(&std::fs::DirEntry) -> bool,

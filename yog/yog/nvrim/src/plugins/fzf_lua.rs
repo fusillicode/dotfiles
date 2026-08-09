@@ -53,7 +53,7 @@ mod tests {
     #[case(Some("dir/foo/bar"), None, None)]
     #[case(Some("dir/foo/bar:abc"), None, None)]
     #[case(None, None, None)]
-    fn parse_line_query_works(
+    fn test_parse_line_query_works(
         #[case] query: Option<&str>,
         #[case] last_query: Option<&str>,
         #[case] expected: Option<(String, Option<String>)>,

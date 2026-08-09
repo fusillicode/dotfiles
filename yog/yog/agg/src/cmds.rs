@@ -68,12 +68,11 @@ fn strings(args: Vec<OsString>) -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
-    use rstest::rstest;
     use test_that::prelude::*;
 
     use super::*;
 
-    #[rstest]
+    #[rstest::rstest]
     #[case::bare(&[], Cmd::SessionsList)]
     #[case::sessions_list(&["sessions", "list"], Cmd::SessionsList)]
     #[case::codex_compact(&["codex", "--compact"], Cmd::CodexCompact)]
@@ -93,7 +92,7 @@ mod tests {
         );
     }
 
-    #[rstest]
+    #[rstest::rstest]
     #[case::unknown(&["unknown"])]
     #[case::missing_sessions_subcommand(&["sessions"])]
     #[case::unexpected_sessions_list_arg(&["sessions", "list", "unexpected"])]

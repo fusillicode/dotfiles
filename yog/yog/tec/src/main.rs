@@ -418,7 +418,7 @@ mod tests {
         RUST_EXTENSIONS,
         "skipped"
     )]
-    fn build_conditional_lint_returns_expected_result(
+    fn test_build_conditional_lint_returns_expected_result(
         #[case] changed_paths: &[String],
         #[case] extensions: &[&str],
         #[case] expected: &str,

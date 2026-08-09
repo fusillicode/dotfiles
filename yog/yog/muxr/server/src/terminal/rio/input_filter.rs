@@ -851,7 +851,7 @@ mod tests {
     #[case::null(b'\x00')]
     #[case::bell(b'\x07')]
     #[case::delete(b'\x7f')]
-    fn rio_input_filter_when_split_xtgettcap_header_contains_ignored_control_bounds_forwarded_payload(
+    fn test_rio_input_filter_when_split_xtgettcap_header_contains_ignored_control_bounds_forwarded_payload(
         #[case] ignored: u8,
     ) {
         let mut filter = RioInputFilter::default();
@@ -879,7 +879,7 @@ mod tests {
     #[rstest::rstest]
     #[case::can(b'\x18')]
     #[case::sub(b'\x1a')]
-    fn rio_input_filter_when_split_dcs_header_is_canceled_resumes_ground_output(#[case] cancel: u8) {
+    fn test_rio_input_filter_when_split_dcs_header_is_canceled_resumes_ground_output(#[case] cancel: u8) {
         let mut filter = RioInputFilter::default();
 
         let first = filter.process(b"\x1bP+");

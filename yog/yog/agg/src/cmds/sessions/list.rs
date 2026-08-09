@@ -45,7 +45,7 @@ pub fn run(home_dir: &Path) -> rootcause::Result<()> {
 
     match op {
         Op::Resume => ytil_tui::require_single(&selected, "sessions").and_then(launch_session),
-        Op::Delete => super::delete::delete_selected_sessions(&selected),
+        Op::Delete => super::delete::delete_selected_sessions(&selected, home_dir),
     }
 }
 
@@ -364,7 +364,6 @@ fn launch_session(session: &RenderableSession) -> rootcause::Result<()> {
 #[cfg(test)]
 mod tests {
     use jiff::Timestamp;
-    use rstest::rstest;
     use tempfile::tempdir;
     use test_that::prelude::*;
 
@@ -383,7 +382,7 @@ mod tests {
         );
     }
 
-    #[rstest]
+    #[test]
     fn test_json_session_renders_plain_agg_summary_and_resume_command() {
         let dir = tempdir().expect("tempdir should be created");
         let workspace = dir.path().join("repo");

@@ -353,7 +353,7 @@ mod tests {
         "https://github.com/fusillicode/dotfiles",
         Url::parse("https://github.com/fusillicode/dotfiles").unwrap()
     )]
-    fn parse_github_url_from_git_remote_url_works_as_expected(#[case] input: &str, #[case] expected: Url) {
+    fn test_parse_github_url_from_git_remote_url_works_as_expected(#[case] input: &str, #[case] expected: Url) {
         let result = parse_github_url_from_git_remote_url(input).unwrap();
         assert_eq!(result, expected);
     }

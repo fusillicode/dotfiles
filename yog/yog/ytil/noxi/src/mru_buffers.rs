@@ -247,7 +247,7 @@ mod tests {
             kind: BufferKind::Term,
         }
     )]
-    fn from_str_when_valid_input_returns_mru_buffer(#[case] input: &str, #[case] expected: MruBuffer) {
+    fn test_from_str_when_valid_input_returns_mru_buffer(#[case] input: &str, #[case] expected: MruBuffer) {
         assert_that!(MruBuffer::from_str(input), ok(eq(expected)));
     }
 

@@ -357,7 +357,7 @@ mod tests {
             display: "simple".into(),
         },
     )]
-    fn session_new_parses_list_sessions_line(#[case] input: &str, #[case] expected: Session) {
+    fn test_session_new_parses_list_sessions_line(#[case] input: &str, #[case] expected: Session) {
         assert_that!(Session::new(input), eq(expected));
     }
 

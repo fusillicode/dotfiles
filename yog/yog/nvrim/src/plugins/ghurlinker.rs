@@ -199,7 +199,7 @@ mod tests {
         Bound { lnum: 5, col: 2 },
         "https://github.com/user/repo/tree/ghi789/README.md?plain=1#L6C2-L6C2"
     )]
-    fn build_github_file_url_works_as_expected(
+    fn test_build_github_file_url_works_as_expected(
         #[case] initial_repo_url: &str,
         #[case] url_kind: &str,
         #[case] commit_hash: &str,
@@ -245,7 +245,7 @@ mod tests {
         Bound { lnum: 5, col: 2 },
         "https://gitlab.com/user/repo/-/tree/ghi789/README.md#L6-6"
     )]
-    fn build_gitlab_file_url_works_as_expected(
+    fn test_build_gitlab_file_url_works_as_expected(
         #[case] initial_repo_url: &str,
         #[case] url_kind: &str,
         #[case] commit_hash: &str,

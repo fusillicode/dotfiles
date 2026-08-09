@@ -627,7 +627,7 @@ mod tests {
     }
 
     #[test]
-    fn parse_preview_when_parent_has_multiple_user_prompts_stops_after_the_first_prompt() {
+    fn test_parse_preview_when_parent_has_multiple_user_prompts_stops_after_the_first_prompt() {
         let content = concat!(
             "{\"timestamp\":\"2026-03-20T06:30:20.312Z\",\"type\":\"session_meta\",\"payload\":{\"id\":\"session-id\",\"timestamp\":\"2026-03-20T06:30:20.312Z\",\"cwd\":\"/tmp/workspace\"}}\n",
             "{\"timestamp\":\"2026-03-20T06:31:20.312Z\",\"type\":\"event_msg\",\"payload\":{\"type\":\"user_message\",\"message\":\"first prompt\"}}\n",
@@ -644,7 +644,7 @@ mod tests {
     }
 
     #[test]
-    fn find_last_user_prompt_when_trailing_record_exceeds_buffer_returns_latest_user_prompt() {
+    fn test_find_last_user_prompt_when_trailing_record_exceeds_buffer_returns_latest_user_prompt() {
         let large_assistant_message = "x".repeat(usize::try_from(REVERSE_SCAN_BUFFER_BYTES).unwrap_or(0));
         let content = concat!(
             "{\"timestamp\":\"2026-03-20T06:31:20.312Z\",\"type\":\"event_msg\",\"payload\":{\"type\":\"user_message\",\"message\":\"first prompt\"}}\n",
