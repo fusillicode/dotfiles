@@ -9,10 +9,12 @@ use std::sync::Arc;
 use ratatui::text::Line;
 use rootcause::report;
 use skim::DisplayContext;
+use skim::ItemPreview;
 use skim::MatchEngine;
 use skim::MatchEngineFactory;
 use skim::MatchRange;
 use skim::MatchResult;
+use skim::PreviewContext;
 use skim::Skim;
 use skim::SkimItem;
 use skim::SkimItemReceiver;
@@ -28,13 +30,45 @@ use skim::prelude::SkimItemReaderOption;
 ///
 /// # Errors
 /// - [`skim`] fails to initialize or run.
-pub fn minimal_multi_select<T, D, S>(
+pub fn minimal_multi_select<T, D, S>(opts: Vec<T>, display_text: D, search_text: S) -> rootcause::Result<Option<Vec<T>>>
+where
+    D: FnMut(&T) -> String,
+    S: FnMut(&T) -> String,
+{
+    minimal_multi_select_internal(opts, display_text, |_| None, false, search_text)
+}
+
+/// Provides an interactive multi-select prompt with a preview for each item.
+///
+/// Returns [`Option::None`] if no options are provided, the user cancels, or no items are selected.
+/// Matching uses `search_text`, while rendering uses `display_text` and `preview_text`.
+///
+/// # Errors
+/// - [`skim`] fails to initialize or run.
+pub fn minimal_multi_select_with_preview<T, D, P, S>(
+    opts: Vec<T>,
+    display_text: D,
+    mut preview_text: P,
+    search_text: S,
+) -> rootcause::Result<Option<Vec<T>>>
+where
+    D: FnMut(&T) -> String,
+    P: FnMut(&T) -> String,
+    S: FnMut(&T) -> String,
+{
+    minimal_multi_select_internal(opts, display_text, |item| Some(preview_text(item)), true, search_text)
+}
+
+fn minimal_multi_select_internal<T, D, P, S>(
     opts: Vec<T>,
     mut display_text: D,
+    mut preview_text: P,
+    has_preview: bool,
     mut search_text: S,
 ) -> rootcause::Result<Option<Vec<T>>>
 where
     D: FnMut(&T) -> String,
+    P: FnMut(&T) -> Option<String>,
     S: FnMut(&T) -> String,
 {
     if opts.is_empty() {
@@ -61,6 +95,7 @@ where
                 output: index.to_string(),
                 display_item,
                 visible_text: visible_match_text,
+                preview_text: preview_text(opt),
                 search_corpus,
             }) as Arc<dyn SkimItem>)
         })
@@ -73,7 +108,7 @@ where
         .map_err(|e| report!("failed to queue skim items").attach(e.to_string()))?;
     drop(tx_items);
 
-    let options = select_options(true);
+    let options = select_options(true, has_preview);
     let output = run_skim_with_matcher(options, rx_items)?;
 
     if output.is_abort || output.selected_items.is_empty() {
@@ -110,7 +145,7 @@ pub fn minimal_select<T: Display>(opts: Vec<T>) -> rootcause::Result<Option<T>> 
         return Ok(None);
     }
 
-    let (output, display_texts) = run_skim_prompt(&opts, select_options(false))?;
+    let (output, display_texts) = run_skim_prompt(&opts, select_options(false, false))?;
     if output.is_abort || output.selected_items.is_empty() {
         return Ok(None);
     }
@@ -210,6 +245,7 @@ struct IndexedSkimItem {
     output: String,
     display_item: Arc<dyn SkimItem>,
     visible_text: String,
+    preview_text: Option<String>,
     search_corpus: String,
 }
 
@@ -220,6 +256,12 @@ impl SkimItem for IndexedSkimItem {
 
     fn display(&self, context: DisplayContext) -> Line<'_> {
         self.display_item.display(context)
+    }
+
+    fn preview(&self, _context: PreviewContext) -> ItemPreview {
+        self.preview_text
+            .as_ref()
+            .map_or(ItemPreview::Global, |text| ItemPreview::AnsiText(text.clone()))
     }
 
     fn output(&self) -> Cow<'_, str> {
@@ -391,11 +433,19 @@ fn simple_prompt_options(prompt: &str, height: &str) -> SkimOptions {
 }
 
 /// Configures [`SkimOptions`] for single or multi-select mode with ANSI support.
-fn select_options(multi: bool) -> SkimOptions {
+fn select_options(multi: bool, has_preview: bool) -> SkimOptions {
     let mut opts = base_skim_options();
     opts.multi = multi;
     opts.ansi = true;
     opts.height = "40%".into();
+    if has_preview {
+        // Skim only creates a preview pane when a global preview is configured,
+        // even when every item provides inline preview text.
+        opts.preview = Some(String::new());
+        opts.preview_window = "down:50%:wrap".into();
+        opts.bind
+            .extend(["ctrl-d:preview-page-down".into(), "ctrl-u:preview-page-up".into()]);
+    }
     if multi {
         opts.bind.extend(["ctrl-e:toggle".into(), "ctrl-a:toggle-all".into()]);
     }
@@ -406,9 +456,14 @@ fn select_options(multi: bool) -> SkimOptions {
 mod tests {
     use std::sync::Arc;
 
+    use rstest::rstest;
     use skim::DisplayContext;
+    use skim::ItemPreview;
     use skim::MatchRange;
+    use skim::PreviewContext;
     use skim::SkimItem;
+    use skim::binds::parse_key;
+    use skim::prelude::Action;
     use test_that::prelude::*;
 
     #[test]
@@ -426,7 +481,23 @@ mod tests {
         );
     }
 
-    #[test]
+    #[rstest]
+    fn select_options_when_preview_is_requested_configures_a_preview_pane() {
+        let options = super::select_options(true, true);
+
+        assert_that!(options.preview.as_deref(), eq(Some("")));
+        assert_that!(options.preview_window.wrap, eq(true));
+        assert_that!(
+            options.keymap.get(&parse_key("ctrl-d").unwrap()),
+            eq(Some(&vec![Action::PreviewPageDown(1)]))
+        );
+        assert_that!(
+            options.keymap.get(&parse_key("ctrl-u").unwrap()),
+            eq(Some(&vec![Action::PreviewPageUp(1)]))
+        );
+    }
+
+    #[rstest]
     fn test_minimal_multi_select_line_serialization_sanitizes_fields() {
         let normalize = |value: &str| value.split_whitespace().collect::<Vec<_>>().join(" ");
         let display = normalize("\u{1b}[31mvisible\tvalue\nnext\u{1b}[0m");
@@ -441,11 +512,28 @@ mod tests {
             output: "3".to_owned(),
             display_item,
             visible_text: "visible value next".to_owned(),
+            preview_text: Some("\u{1b}[1mformatted preview\u{1b}[0m".to_owned()),
             search_corpus: match_text,
         };
 
         assert_that!(item.output(), eq("3"));
         assert_that!(item.text(), eq("visible value next"));
+        assert_that!(
+            matches!(
+                item.preview(PreviewContext {
+                    query: "",
+                    cmd_query: "",
+                    width: 0,
+                    height: 0,
+                    current_index: 0,
+                    current_selection: "",
+                    selected_indices: &[],
+                    selections: &[],
+                }),
+                ItemPreview::AnsiText(text) if text == "\u{1b}[1mformatted preview\u{1b}[0m"
+            ),
+            eq(true)
+        );
         assert_that!(
             item.display(DisplayContext::default())
                 .spans
@@ -461,6 +549,7 @@ mod tests {
             output: "3".to_owned(),
             display_item: Arc::new("visible value next".to_owned()),
             visible_text: "visible value next".to_owned(),
+            preview_text: None,
             search_corpus: "visible value next hidden value".to_owned(),
         };
 

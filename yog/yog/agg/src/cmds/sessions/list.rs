@@ -27,9 +27,12 @@ pub fn run() -> rootcause::Result<()> {
     }
 
     let renderable_sessions = RenderableSession::from_sessions(sessions);
-    let Some(selected) = ytil_tui::minimal_multi_select(renderable_sessions, ToString::to_string, |session| {
-        session.session.search_text.clone()
-    })?
+    let Some(selected) = ytil_tui::minimal_multi_select_with_preview(
+        renderable_sessions,
+        ToString::to_string,
+        RenderableSession::preview,
+        |session| session.session.search_text.clone(),
+    )?
     else {
         println!("No sessions selected");
         return Ok(());
@@ -178,6 +181,50 @@ impl RenderableSession {
             },
         )
     }
+
+    fn preview(&self) -> String {
+        let id = self.session.id.white().bold().to_string();
+        let first_prompt = self.session.name.white().to_string();
+        let last_prompt = self
+            .session
+            .last_user_prompt
+            .as_deref()
+            .unwrap_or("—")
+            .white()
+            .to_string();
+        let updated = self.session.updated_at.strftime("%d/%m/%Y-%H:%M");
+        let created = self.session.created_at.strftime("%d/%m/%Y-%H:%M");
+
+        format!(
+            "{id} {} {}\n\n{} {first_prompt}\n\n{} {last_prompt}",
+            updated.blue(),
+            created.blue(),
+            "1st prompt:".bold(),
+            "lst prompt:".bold(),
+        )
+    }
+
+    pub(super) fn deletion_summary(&self) -> String {
+        let path_label = ytil_tui::short_path(
+            &self.session.workspace,
+            std::env::var_os("HOME")
+                .as_deref()
+                .map_or_else(|| Path::new("/"), Path::new),
+        );
+        let agent = self.session.agent.short_name();
+
+        self.branch().map_or_else(
+            || format!("{agent} {} {path_label}", self.session.id),
+            |branch| format!("{agent} {} {path_label} {branch}", self.session.id),
+        )
+    }
+
+    pub(super) fn deletion_detail(&self) -> String {
+        let prompt = ytil_tui::display_fixed_width(&self.session.name, 42);
+        let updated = self.session.updated_at.strftime("%d/%m/%Y-%H:%M");
+        let created = self.session.created_at.strftime("%d/%m/%Y-%H:%M");
+        format!("{prompt} {updated} {created}")
+    }
 }
 
 impl Display for RenderableSession {
@@ -204,9 +251,9 @@ impl Display for RenderableSession {
                 f,
                 "{agent_name} {} {}{} {} {} {}",
                 path_label.cyan().bold(),
-                branch.white(),
+                branch.dimmed().bold(),
                 self.workspace_status().yellow(),
-                session_name.dimmed().bold(),
+                session_name.white(),
                 updated_label.blue(),
                 created_label.blue(),
             )
@@ -216,7 +263,7 @@ impl Display for RenderableSession {
                 "{agent_name} {}{} {} {} {}",
                 path_label.cyan().bold(),
                 self.workspace_status().yellow(),
-                session_name.dimmed().bold(),
+                session_name.white(),
                 updated_label.blue(),
                 created_label.blue(),
             )
@@ -336,6 +383,7 @@ fn launch_session(session: &RenderableSession) -> rootcause::Result<()> {
 #[cfg(test)]
 mod tests {
     use jiff::Timestamp;
+    use rstest::rstest;
     use tempfile::tempdir;
     use test_that::prelude::*;
 
@@ -354,7 +402,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[rstest]
     fn test_json_session_renders_plain_agg_summary_and_resume_command() {
         let dir = tempdir().expect("tempdir should be created");
         let workspace = dir.path().join("repo");
@@ -365,6 +413,7 @@ mod tests {
             id: "session-id".to_string(),
             agent: Agent::Codex,
             name: "fix issue".to_string(),
+            last_user_prompt: Some("finish the fix".to_string()),
             search_text: "hidden prompt".to_string(),
             workspace: workspace.clone(),
             path: dir.path().join("session.jsonl"),
@@ -397,6 +446,53 @@ mod tests {
                     eq(Some("resume"))
                 ),
             ))
+        );
+        assert_that!(
+            renderable.preview(),
+            all!(
+                contains_substring("session-id"),
+                contains_substring("1st prompt:"),
+                contains_substring("fix issue"),
+                contains_substring("lst prompt:"),
+                contains_substring("finish the fix")
+            )
+        );
+
+        let cursor_preview = RenderableSession {
+            session: Session {
+                agent: Agent::Cursor,
+                last_user_prompt: None,
+                ..renderable.session.clone()
+            },
+            branch: None,
+        }
+        .preview();
+        assert_that!(
+            cursor_preview,
+            all!(
+                contains_substring("1st prompt:"),
+                contains_substring("lst prompt:"),
+                contains_substring("—")
+            )
+        );
+
+        let prompt = "x".repeat(43);
+        let full_prompt_preview = RenderableSession {
+            session: Session {
+                name: prompt.clone(),
+                last_user_prompt: Some(prompt.clone()),
+                ..renderable.session.clone()
+            },
+            branch: None,
+        }
+        .preview();
+        assert_that!(
+            full_prompt_preview,
+            all!(
+                contains_substring("1st prompt:"),
+                contains_substring("lst prompt:"),
+                contains_substring(prompt)
+            )
         );
     }
 

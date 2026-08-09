@@ -59,16 +59,16 @@ fn delete_codex_plans(
             ));
             continue;
         };
-        println!(
-            "Deleting Codex tree for {}: 1 parent and {} descendant{}",
-            parent.session.id,
-            plan.descendant_count(),
-            if plan.descendant_count() == 1 { "" } else { "s" }
-        );
         if let Err(error) = delete_codex_plan(&plan) {
             failures.push(format!("Codex session {}: {error}", parent.session.id));
         } else {
-            println!("{} {parent}", "Deleted".red().bold());
+            println!(
+                "{} {} (subagents: {})",
+                "Deleted".red().bold(),
+                parent.deletion_summary(),
+                plan.descendant_count()
+            );
+            println!("  └─ {}", parent.deletion_detail());
         }
     }
 }
