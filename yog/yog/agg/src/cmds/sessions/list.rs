@@ -159,6 +159,15 @@ impl RenderableSession {
         self.branch.as_deref()
     }
 
+    fn colored_agent_name(&self) -> String {
+        match self.session.agent {
+            Agent::Claude => self.session.agent.short_name().red().bold().to_string(),
+            Agent::Codex => self.session.agent.short_name().green().bold().to_string(),
+            Agent::Cursor => self.session.agent.short_name().bright_black().bold().to_string(),
+            Agent::Gemini | Agent::Opencode => self.session.agent.short_name().bold().to_string(),
+        }
+    }
+
     fn plain_summary(&self, home_dir: &Path) -> String {
         let path_label = ytil_tui::short_path(&self.session.workspace, home_dir);
         let session_name = ytil_tui::display_fixed_width(&self.session.name, 42);
@@ -203,38 +212,11 @@ impl RenderableSession {
             "lst prompt:".bold(),
         )
     }
-
-    pub(super) fn deletion_summary(&self) -> String {
-        let path_label = ytil_tui::short_path(
-            &self.session.workspace,
-            std::env::var_os("HOME")
-                .as_deref()
-                .map_or_else(|| Path::new("/"), Path::new),
-        );
-        let agent = self.session.agent.short_name();
-
-        self.branch().map_or_else(
-            || format!("{agent} {} {path_label}", self.session.id),
-            |branch| format!("{agent} {} {path_label} {branch}", self.session.id),
-        )
-    }
-
-    pub(super) fn deletion_detail(&self) -> String {
-        let prompt = ytil_tui::display_fixed_width(&self.session.name, 42);
-        let updated = self.session.updated_at.strftime("%d/%m/%Y-%H:%M");
-        let created = self.session.created_at.strftime("%d/%m/%Y-%H:%M");
-        format!("{prompt} {updated} {created}")
-    }
 }
 
 impl Display for RenderableSession {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let agent_name = match self.session.agent {
-            Agent::Claude => self.session.agent.short_name().red().bold().to_string(),
-            Agent::Codex => self.session.agent.short_name().green().bold().to_string(),
-            Agent::Cursor => self.session.agent.short_name().bright_black().bold().to_string(),
-            Agent::Gemini | Agent::Opencode => self.session.agent.short_name().bold().to_string(),
-        };
+        let agent_name = self.colored_agent_name();
 
         let path_label = ytil_tui::short_path(
             &self.session.workspace,

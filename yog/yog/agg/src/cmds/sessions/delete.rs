@@ -62,13 +62,12 @@ fn delete_codex_plans(
         if let Err(error) = delete_codex_plan(&plan) {
             failures.push(format!("Codex session {}: {error}", parent.session.id));
         } else {
+            println!("{} {parent}", "Deleted".red().bold());
             println!(
-                "{} {} (subagents: {})",
-                "Deleted".red().bold(),
-                parent.deletion_summary(),
+                "  └─ {} (subagents: {})",
+                parent.session.id.white().bold(),
                 plan.descendant_count()
             );
-            println!("  └─ {}", parent.deletion_detail());
         }
     }
 }
