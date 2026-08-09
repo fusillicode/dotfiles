@@ -1,4 +1,4 @@
-use std::cell::RefCell;
+use std::collections::HashMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 #[cfg(unix)]
@@ -26,7 +26,7 @@ pub fn run() -> rootcause::Result<()> {
         return Ok(());
     }
 
-    let renderable_sessions: Vec<RenderableSession> = sessions.into_iter().map(RenderableSession::from).collect();
+    let renderable_sessions = RenderableSession::from_sessions(sessions);
     let Some(selected) = ytil_tui::minimal_multi_select(renderable_sessions, ToString::to_string, |session| {
         session.session.search_text.clone()
     })?
@@ -55,9 +55,8 @@ pub fn run_json(args: &[String]) -> rootcause::Result<()> {
     let session_keys = parse_json_session_keys(args)?;
     let sessions = load_sorted_sessions_by_key(&session_keys)?;
     let home_dir = std::env::var_os("HOME").map_or_else(|| std::path::PathBuf::from("/"), std::path::PathBuf::from);
-    let rows = sessions
+    let rows = RenderableSession::from_sessions(sessions)
         .into_iter()
-        .map(RenderableSession::from)
         .map(|session| JsonSession::new(&session, &home_dir))
         .collect::<rootcause::Result<Vec<_>>>()?;
 
@@ -117,19 +116,39 @@ fn sort_sessions(sessions: &mut [Session]) {
 
 struct RenderableSession {
     session: Session,
-    branch: RefCell<Option<String>>,
-}
-
-impl From<Session> for RenderableSession {
-    fn from(session: Session) -> Self {
-        Self {
-            session,
-            branch: RefCell::default(),
-        }
-    }
+    branch: Option<String>,
 }
 
 impl RenderableSession {
+    fn from_sessions(sessions: Vec<Session>) -> Vec<Self> {
+        let mut timestamps_by_workspace = HashMap::<std::path::PathBuf, Vec<(usize, Timestamp)>>::new();
+        for (index, session) in sessions.iter().enumerate() {
+            timestamps_by_workspace
+                .entry(session.workspace.clone())
+                .or_default()
+                .push((index, session.created_at));
+        }
+
+        let mut branches = vec![None; sessions.len()];
+        for (workspace, timestamp_entries) in timestamps_by_workspace {
+            let timestamps: Vec<Timestamp> = timestamp_entries.iter().map(|(_, timestamp)| *timestamp).collect();
+            for ((index, _), branch) in timestamp_entries
+                .into_iter()
+                .zip(ytil_git::branch::get_at_many(&workspace, &timestamps))
+            {
+                if let Some(branch_slot) = branches.get_mut(index) {
+                    *branch_slot = branch;
+                }
+            }
+        }
+
+        sessions
+            .into_iter()
+            .zip(branches)
+            .map(|(session, branch)| Self { session, branch })
+            .collect()
+    }
+
     fn can_resume(&self) -> bool {
         self.session.workspace.is_dir()
     }
@@ -138,14 +157,8 @@ impl RenderableSession {
         if self.can_resume() { "" } else { " [missing workspace]" }
     }
 
-    fn branch(&self) -> Option<String> {
-        if let Some(branch) = self.branch.borrow().as_ref() {
-            return Some(branch.to_owned());
-        }
-
-        let branch = ytil_git::branch::get_at(&self.session.workspace, self.session.created_at)?;
-        *self.branch.borrow_mut() = Some(branch.clone());
-        Some(branch)
+    fn branch(&self) -> Option<&str> {
+        self.branch.as_deref()
     }
 
     fn plain_summary(&self, home_dir: &Path) -> String {
@@ -380,10 +393,12 @@ mod tests {
             created_at,
             updated_at,
         };
-        let renderable = RenderableSession::from(session);
+        let renderable_sessions = RenderableSession::from_sessions(vec![session]);
+        assert_that!(renderable_sessions.len(), eq(1));
+        let renderable = &renderable_sessions[0];
 
         assert_that!(
-            JsonSession::new(&renderable, dir.path()),
+            JsonSession::new(renderable, dir.path()),
             ok(all!(
                 result_of!(
                     |row: &JsonSession| row.display.as_str(),
