@@ -18,7 +18,7 @@ use ytil_agents::agent::Agent;
 use ytil_agents::agent::session::Session;
 use ytil_agents::agent::session::SessionKey;
 
-pub fn run() -> rootcause::Result<()> {
+pub fn run(home_dir: &Path) -> rootcause::Result<()> {
     let sessions = load_sorted_sessions()?;
 
     if sessions.is_empty() {
@@ -26,7 +26,7 @@ pub fn run() -> rootcause::Result<()> {
         return Ok(());
     }
 
-    let renderable_sessions = RenderableSession::from_sessions(sessions);
+    let renderable_sessions = RenderableSession::from_sessions(sessions, home_dir);
     let Some(selected) = ytil_tui::minimal_multi_select_with_preview(
         renderable_sessions,
         ToString::to_string,
@@ -49,13 +49,12 @@ pub fn run() -> rootcause::Result<()> {
     }
 }
 
-pub fn run_json(args: &[String]) -> rootcause::Result<()> {
+pub fn run_json(args: &[String], home_dir: &Path) -> rootcause::Result<()> {
     let session_keys = parse_json_session_keys(args)?;
     let sessions = load_sorted_sessions_by_key(&session_keys)?;
-    let home_dir = std::env::var_os("HOME").map_or_else(|| std::path::PathBuf::from("/"), std::path::PathBuf::from);
-    let rows = RenderableSession::from_sessions(sessions)
+    let rows = RenderableSession::from_sessions(sessions, home_dir)
         .into_iter()
-        .map(|session| JsonSession::new(&session, &home_dir))
+        .map(|session| JsonSession::new(&session))
         .collect::<rootcause::Result<Vec<_>>>()?;
 
     println!(
@@ -115,10 +114,11 @@ fn sort_sessions(sessions: &mut [Session]) {
 pub(super) struct RenderableSession {
     pub(super) session: Session,
     branch: Option<String>,
+    home_dir: std::path::PathBuf,
 }
 
 impl RenderableSession {
-    fn from_sessions(sessions: Vec<Session>) -> Vec<Self> {
+    fn from_sessions(sessions: Vec<Session>, home_dir: &Path) -> Vec<Self> {
         let mut timestamps_by_workspace = HashMap::<std::path::PathBuf, Vec<(usize, Timestamp)>>::new();
         for (index, session) in sessions.iter().enumerate() {
             timestamps_by_workspace
@@ -143,7 +143,11 @@ impl RenderableSession {
         sessions
             .into_iter()
             .zip(branches)
-            .map(|(session, branch)| Self { session, branch })
+            .map(|(session, branch)| Self {
+                session,
+                branch,
+                home_dir: home_dir.to_path_buf(),
+            })
             .collect()
     }
 
@@ -168,8 +172,8 @@ impl RenderableSession {
         }
     }
 
-    fn plain_summary(&self, home_dir: &Path) -> String {
-        let path_label = ytil_tui::short_path(&self.session.workspace, home_dir);
+    fn plain_summary(&self) -> String {
+        let path_label = ytil_tui::short_path(&self.session.workspace, &self.home_dir);
         let session_name = ytil_tui::display_fixed_width(&self.session.name, 42);
         let updated_label = self.session.updated_at.strftime("%d/%m/%Y-%H:%M").to_string();
         let created_label = self.session.created_at.strftime("%d/%m/%Y-%H:%M").to_string();
@@ -218,12 +222,7 @@ impl Display for RenderableSession {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let agent_name = self.colored_agent_name();
 
-        let path_label = ytil_tui::short_path(
-            &self.session.workspace,
-            std::env::var_os("HOME")
-                .as_deref()
-                .map_or_else(|| std::path::Path::new("/"), std::path::Path::new),
-        );
+        let path_label = ytil_tui::short_path(&self.session.workspace, &self.home_dir);
         let session_name = ytil_tui::display_fixed_width(&self.session.name, 42);
         let updated_label = self.session.updated_at.strftime("%d/%m/%Y-%H:%M").to_string();
         let created_label = self.session.created_at.strftime("%d/%m/%Y-%H:%M").to_string();
@@ -267,8 +266,8 @@ struct JsonSession {
 }
 
 impl JsonSession {
-    fn new(session: &RenderableSession, home_dir: &Path) -> rootcause::Result<Self> {
-        let display = session.plain_summary(home_dir);
+    fn new(session: &RenderableSession) -> rootcause::Result<Self> {
+        let display = session.plain_summary();
         let search = search_corpus(&display, &session.session.search_text);
         let (resume_program, resume_args) = session.session.build_resume_command()?;
         Ok(Self {
@@ -402,12 +401,12 @@ mod tests {
             created_at,
             updated_at,
         };
-        let renderable_sessions = RenderableSession::from_sessions(vec![session]);
+        let renderable_sessions = RenderableSession::from_sessions(vec![session], dir.path());
         assert_that!(renderable_sessions.len(), eq(1));
         let renderable = &renderable_sessions[0];
 
         assert_that!(
-            JsonSession::new(renderable, dir.path()),
+            JsonSession::new(renderable),
             ok(all!(
                 result_of!(
                     |row: &JsonSession| row.display.as_str(),
@@ -447,6 +446,7 @@ mod tests {
                 ..renderable.session.clone()
             },
             branch: None,
+            home_dir: renderable.home_dir.clone(),
         }
         .preview();
         assert_that!(
@@ -466,6 +466,7 @@ mod tests {
                 ..renderable.session.clone()
             },
             branch: None,
+            home_dir: renderable.home_dir.clone(),
         }
         .preview();
         assert_that!(

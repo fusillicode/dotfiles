@@ -14,14 +14,15 @@ pub(super) fn delete_selected_sessions(selected: &[RenderableSession]) -> rootca
         .filter(|session| session.session.agent == Agent::Codex)
         .map(|session| session.session.id.as_str())
         .collect::<HashSet<_>>();
+
     let codex_plans = if codex_ids.is_empty() {
         Ok(Vec::new())
     } else {
         ytil_sys::dir::build_home_path(Agent::Codex.sessions_root_path())
             .and_then(|root| ytil_agents::agent::session_loader::codex::resolve_deletion_plans(&root, &codex_ids))
     };
-    let mut failures = Vec::new();
 
+    let mut failures = Vec::new();
     for session in selected.iter().filter(|session| session.session.agent != Agent::Codex) {
         if let Err(error) = delete_session_path(&session.session.path) {
             failures.push(format!("{}: {error}", session.session.id));
