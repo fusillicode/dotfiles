@@ -42,12 +42,7 @@ pub fn run() -> rootcause::Result<()> {
 
     match op {
         Op::Resume => ytil_tui::require_single(&selected, "sessions").and_then(launch_session),
-        Op::Delete => {
-            for session in &selected {
-                delete_session(session)?;
-            }
-            Ok(())
-        }
+        Op::Delete => super::delete::delete_selected_sessions(&selected),
     }
 }
 
@@ -114,8 +109,8 @@ fn sort_sessions(sessions: &mut [Session]) {
     });
 }
 
-struct RenderableSession {
-    session: Session,
+pub(super) struct RenderableSession {
+    pub(super) session: Session,
     branch: Option<String>,
 }
 
@@ -336,23 +331,6 @@ fn launch_session(session: &RenderableSession) -> rootcause::Result<()> {
 
         Ok(())
     }
-}
-
-fn delete_session(session: &RenderableSession) -> rootcause::Result<()> {
-    let delete_path = &session.session.path;
-    if delete_path.is_dir() {
-        std::fs::remove_dir_all(delete_path)
-            .context("failed to delete session directory")
-            .attach_with(|| format!("path={}", delete_path.display()))
-            .attach_with(|| format!("session_id={}", session.session.id))?;
-    } else {
-        std::fs::remove_file(delete_path)
-            .context("failed to delete session file")
-            .attach_with(|| format!("path={}", delete_path.display()))
-            .attach_with(|| format!("session_id={}", session.session.id))?;
-    }
-    println!("{} {session}", "Deleted".red().bold());
-    Ok(())
 }
 
 #[cfg(test)]
