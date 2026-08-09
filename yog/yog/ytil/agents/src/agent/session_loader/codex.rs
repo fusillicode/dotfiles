@@ -1,4 +1,6 @@
 use std::collections::HashSet;
+use std::fs::File;
+use std::io::BufReader;
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -53,19 +55,21 @@ fn load_sessions_from_paths(
 ) -> rootcause::Result<Vec<Session>> {
     let mut sessions = Vec::new();
     for session_path in session_paths {
-        let content = std::fs::read_to_string(&session_path)
-            .context("failed to read Codex session file")
-            .attach_with(|| format!("path={}", session_path.display()))?;
         let session_name = session_path
             .file_stem()
             .and_then(|name| name.to_str())
             .unwrap_or_default();
-        let codex_session = crate::agent::session_parser::codex::parse(&content, session_name)
+        let file = File::open(&session_path)
+            .context("failed to open Codex session file")
+            .attach_with(|| format!("path={}", session_path.display()))?;
+        let codex_session = crate::agent::session_parser::codex::parse_preview(BufReader::new(file), session_name)
             .attach_with(|| format!("path={}", session_path.display()))?;
         if codex_session.is_subagent {
             continue;
         }
-        let session = codex_session.into_session(session_path);
+        let mut session = codex_session.into_session(session_path.clone());
+        session.updated_at =
+            crate::agent::session_loader::file_updated_at(&session_path)?.unwrap_or(session.created_at);
         if keep_session(&session) {
             sessions.push(session);
         }

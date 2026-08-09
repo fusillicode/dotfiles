@@ -86,7 +86,31 @@ pub fn get_current() -> rootcause::Result<String> {
 pub fn get_at(path: &Path, timestamp: Timestamp) -> Option<String> {
     let repo = crate::repo::discover(path).ok()?;
     let reflog = repo.reflog("HEAD").ok()?;
-    let timestamp = timestamp.as_second();
+    let entries = reflog_entries(&reflog);
+    branch_at(&entries, timestamp)
+}
+
+/// Returns the branch checked out at or before each timestamp.
+///
+/// Opens and scans the `HEAD` reflog once for all timestamps.
+#[must_use]
+pub fn get_at_many(path: &Path, timestamps: &[Timestamp]) -> Vec<Option<String>> {
+    let Some(repo) = crate::repo::discover(path).ok() else {
+        return timestamps.iter().map(|_| None).collect();
+    };
+    let Some(reflog) = repo.reflog("HEAD").ok() else {
+        return timestamps.iter().map(|_| None).collect();
+    };
+    let mut entries = reflog_entries(&reflog);
+    entries.sort_unstable_by_key(|(entry_timestamp, _)| *entry_timestamp);
+
+    timestamps
+        .iter()
+        .map(|timestamp| branch_at_sorted(&entries, *timestamp))
+        .collect()
+}
+
+fn reflog_entries(reflog: &git2::Reflog) -> Vec<(i64, String)> {
     reflog
         .iter()
         .filter_map(|entry| {
@@ -95,9 +119,25 @@ pub fn get_at(path: &Path, timestamp: Timestamp) -> Option<String> {
             let message = entry.message().ok()??;
             Some((entry.committer().when().seconds(), branch_from_reflog_message(message)?))
         })
+        .collect()
+}
+
+fn branch_at(entries: &[(i64, String)], timestamp: Timestamp) -> Option<String> {
+    let timestamp = timestamp.as_second();
+    entries
+        .iter()
         .filter(|(entry_timestamp, _)| *entry_timestamp <= timestamp)
         .max_by_key(|(entry_timestamp, _)| *entry_timestamp)
-        .map(|(_, branch)| branch)
+        .map(|(_, branch)| branch.clone())
+}
+
+fn branch_at_sorted(entries: &[(i64, String)], timestamp: Timestamp) -> Option<String> {
+    let timestamp = timestamp.as_second();
+    let index = entries.partition_point(|(entry_timestamp, _)| *entry_timestamp <= timestamp);
+    index
+        .checked_sub(1)
+        .and_then(|index| entries.get(index))
+        .map(|(_, branch)| branch.clone())
 }
 
 /// Create a new local branch at current HEAD (no checkout).
@@ -585,6 +625,26 @@ mod tests {
         let actual = get_at(repo.workdir().unwrap(), Timestamp::from_second(25).unwrap());
 
         assert_that!(actual, eq(Some("feature/b".to_string())));
+    }
+
+    #[test]
+    fn test_get_at_many_when_checkout_reflog_exists_returns_branches_for_all_timestamps() {
+        let (_temp_dir, repo) = crate::tests::init_test_repo(None);
+        append_head_reflog(&repo, 10, "checkout: moving from master to feature/a");
+        append_head_reflog(&repo, 20, "checkout: moving from feature/a to feature/b");
+        append_head_reflog(&repo, 30, "checkout: moving from feature/b to feature/c");
+        let timestamps = [
+            Timestamp::from_second(5).unwrap(),
+            Timestamp::from_second(20).unwrap(),
+            Timestamp::from_second(35).unwrap(),
+        ];
+
+        let actual = get_at_many(repo.workdir().unwrap(), &timestamps);
+
+        assert_that!(
+            actual,
+            eq(vec![None, Some("feature/b".to_string()), Some("feature/c".to_string())])
+        );
     }
 
     #[test]

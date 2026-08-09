@@ -163,6 +163,17 @@ impl SearchTextBuilder {
         self.reached_limit = !push_normalized_snippet(&mut self.snippets_text, &mut self.last_snippet, &snippet);
     }
 
+    pub(crate) fn push_normalized(&mut self, snippet: &str) {
+        if self.reached_limit || snippet.is_empty() || self.last_snippet.as_deref() == Some(snippet) {
+            return;
+        }
+        if self.first_snippet.is_none() {
+            self.first_snippet = Some(snippet.to_owned());
+        }
+
+        self.reached_limit = !push_normalized_snippet(&mut self.snippets_text, &mut self.last_snippet, snippet);
+    }
+
     pub fn build(self, fallback: &str) -> String {
         let fallback = fallback.split_whitespace().collect::<Vec<_>>().join(" ");
         let Some(fallback) = (!fallback.is_empty()).then_some(fallback) else {
