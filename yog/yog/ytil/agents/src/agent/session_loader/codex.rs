@@ -289,6 +289,11 @@ fn load_sessions_from_paths(
             continue;
         }
         let mut session = codex_session.into_session(session_path.clone());
+        let last_prompt_file = File::open(&session_path)
+            .context("failed to open Codex session for reverse prompt scan")
+            .attach_with(|| format!("path={}", session_path.display()))?;
+        session.last_user_prompt = crate::agent::session_parser::codex::find_last_user_prompt(last_prompt_file)
+            .attach_with(|| format!("path={}", session_path.display()))?;
         session.updated_at =
             crate::agent::session_loader::file_updated_at(&session_path)?.unwrap_or(session.created_at);
         if keep_session(&session) {

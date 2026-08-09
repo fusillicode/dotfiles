@@ -1,4 +1,7 @@
 use std::io::BufRead;
+use std::io::Read;
+use std::io::Seek;
+use std::io::SeekFrom;
 use std::path::PathBuf;
 
 use jiff::Timestamp;
@@ -13,6 +16,7 @@ use crate::agent::session::Session;
 
 const AGENTS_INSTRUCTIONS_PREFIX: &str = "# AGENTS.md instructions";
 const ENVIRONMENT_CONTEXT_PREFIX: &str = "<environment_context>";
+const REVERSE_SCAN_BUFFER_BYTES: u64 = 8 * 1024;
 
 struct SearchTextSnippet {
     text: String,
@@ -54,9 +58,9 @@ pub fn parse(content: &str, session_name: &str) -> rootcause::Result<CodexSessio
     parser.finish(session_name)
 }
 
-/// Parse the metadata and first real user prompt from a Codex session reader.
+/// Parse the metadata and first user prompt from a Codex session reader.
 ///
-/// Stops reading once the list preview is complete.
+/// Stops once the list preview is complete or the session is a subagent.
 pub(crate) fn parse_preview(reader: impl BufRead, session_name: &str) -> rootcause::Result<CodexSession> {
     let mut parser = CodexSessionParser::default();
     for (line_idx, line) in reader.lines().enumerate() {
@@ -70,6 +74,46 @@ pub(crate) fn parse_preview(reader: impl BufRead, session_name: &str) -> rootcau
     }
 
     parser.finish(session_name)
+}
+
+/// Find the final real user prompt by scanning an NDJSON session reader backwards.
+///
+/// # Errors
+/// Returns an error when the reader cannot seek, read, or report its length.
+pub(crate) fn find_last_user_prompt(mut reader: impl Read + Seek) -> rootcause::Result<Option<String>> {
+    let mut remaining = reader
+        .seek(SeekFrom::End(0))
+        .context("failed to seek to end of Codex session")?;
+    let mut partial_line = Vec::new();
+
+    while remaining > 0 {
+        let chunk_len = usize::try_from(remaining.min(REVERSE_SCAN_BUFFER_BYTES))
+            .context("Codex session reverse scan chunk is too large")?;
+        let chunk_len_u64 = u64::try_from(chunk_len).context("Codex session reverse scan chunk length is invalid")?;
+        remaining = remaining.saturating_sub(chunk_len_u64);
+        reader
+            .seek(SeekFrom::Start(remaining))
+            .context("failed to seek within Codex session")?;
+
+        let mut chunk = vec![0; chunk_len];
+        reader
+            .read_exact(&mut chunk)
+            .context("failed to read Codex session reverse scan chunk")?;
+        chunk.append(&mut partial_line);
+
+        let mut lines = chunk.rsplit(|byte| *byte == b'\n').peekable();
+        while let Some(line) = lines.next() {
+            if lines.peek().is_none() {
+                partial_line = line.to_vec();
+                break;
+            }
+            if let Some(prompt) = user_prompt_from_ndjson_line(line) {
+                return Ok(Some(prompt));
+            }
+        }
+    }
+
+    Ok(user_prompt_from_ndjson_line(&partial_line))
 }
 
 /// Read the first valid Codex session metadata record.
@@ -106,6 +150,7 @@ struct CodexSessionParser {
     created_at: Option<Timestamp>,
     updated_at: Option<Timestamp>,
     first_user_message: Option<String>,
+    last_user_message: Option<String>,
     is_subagent: bool,
     search_text: SearchTextBuilder,
 }
@@ -132,6 +177,7 @@ impl CodexSessionParser {
             if self.first_user_message.is_none() {
                 self.first_user_message = Some(user_message.text.clone());
             }
+            self.last_user_message = Some(user_message.text.clone());
             user_message.push_to(&mut self.search_text);
         }
         if let Some(assistant_message) = line.assistant_search_text() {
@@ -167,6 +213,7 @@ impl CodexSessionParser {
         Ok(CodexSession {
             id: session_id,
             name,
+            last_user_prompt: self.last_user_message,
             search_text,
             workspace: workspace_dir,
             created_at,
@@ -176,10 +223,19 @@ impl CodexSessionParser {
     }
 }
 
+fn user_prompt_from_ndjson_line(line: &[u8]) -> Option<String> {
+    let line = std::str::from_utf8(line).ok()?.trim_end_matches('\r');
+    serde_json::from_str::<CodexLine>(line)
+        .ok()?
+        .user_search_text()
+        .map(|snippet| snippet.text)
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CodexSession {
     pub id: String,
     pub name: String,
+    pub last_user_prompt: Option<String>,
     pub search_text: String,
     pub workspace: PathBuf,
     pub created_at: Timestamp,
@@ -197,6 +253,7 @@ impl CodexSession {
     pub fn into_session(self, path: PathBuf) -> Session {
         let mut session = Session::new(Agent::Codex, self.id, self.workspace, path, None, self.created_at);
         session.name = self.name;
+        session.last_user_prompt = self.last_user_prompt;
         session.search_text = self.search_text;
         session.updated_at = self.updated_at;
         session
@@ -454,7 +511,8 @@ mod tests {
             "{\"timestamp\":\"2026-03-20T06:30:20.312Z\",\"type\":\"session_meta\",\"payload\":{\"id\":\"019d09f0-0d96-7e23-94cd-1f6aad7cdc09\",\"timestamp\":\"2026-03-20T06:30:20.312Z\",\"cwd\":\"/tmp/workspace\"}}\n",
             "{\"timestamp\":\"2026-03-20T06:31:20.312Z\",\"type\":\"event_msg\",\"payload\":{\"type\":\"user_message\",\"message\":\"why can't I jump with rust-analyzer to these types?\"}}\n",
             "{\"timestamp\":\"2026-03-20T06:32:20.312Z\",\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"output_text\",\"text\":\"Because that symbol is re-exported.\"},{\"type\":\"input_text\",\"text\":\"ignored\"}]}}\n",
-            "{\"timestamp\":\"2026-03-20T06:33:20.312Z\",\"type\":\"response_item\",\"payload\":{\"type\":\"reasoning\",\"text\":\"hidden\"}}\n"
+            "{\"timestamp\":\"2026-03-20T06:33:20.312Z\",\"type\":\"event_msg\",\"payload\":{\"type\":\"user_message\",\"message\":\"where is the re-export defined?\"}}\n",
+            "{\"timestamp\":\"2026-03-20T06:34:20.312Z\",\"type\":\"response_item\",\"payload\":{\"type\":\"reasoning\",\"text\":\"hidden\"}}\n"
         );
 
         let session_result = parse(content, "fallback-name");
@@ -463,11 +521,17 @@ mod tests {
         assert_that!(session.name, eq("why can't I jump with rust-analyzer to these types?"));
         assert_that!(
             session.search_text,
-            eq("why can't I jump with rust-analyzer to these types? Because that symbol is re-exported.")
+            eq(
+                "why can't I jump with rust-analyzer to these types? Because that symbol is re-exported. where is the re-export defined?"
+            )
+        );
+        assert_that!(
+            session.last_user_prompt,
+            eq(Some("where is the re-export defined?".to_owned()))
         );
         assert_that!(
             session.updated_at,
-            eq("2026-03-20T06:33:20.312Z".parse::<Timestamp>().unwrap())
+            eq("2026-03-20T06:34:20.312Z".parse::<Timestamp>().unwrap())
         );
     }
 
@@ -559,6 +623,40 @@ mod tests {
                 predicate(|is_subagent: &bool| *is_subagent)
                     .with_description("is marked as a subagent", "is not marked as a subagent")
             ))
+        );
+    }
+
+    #[test]
+    fn parse_preview_when_parent_has_multiple_user_prompts_stops_after_the_first_prompt() {
+        let content = concat!(
+            "{\"timestamp\":\"2026-03-20T06:30:20.312Z\",\"type\":\"session_meta\",\"payload\":{\"id\":\"session-id\",\"timestamp\":\"2026-03-20T06:30:20.312Z\",\"cwd\":\"/tmp/workspace\"}}\n",
+            "{\"timestamp\":\"2026-03-20T06:31:20.312Z\",\"type\":\"event_msg\",\"payload\":{\"type\":\"user_message\",\"message\":\"first prompt\"}}\n",
+            "{\"timestamp\":\"2026-03-20T06:32:20.312Z\",\"type\":\"event_msg\",\"payload\":{\"type\":\"user_message\",\"message\":\"last prompt\"}}\n"
+        );
+
+        assert_that!(
+            parse_preview(Cursor::new(content), "fallback-name"),
+            ok(result_of!(
+                |session: &CodexSession| session.last_user_prompt.as_deref(),
+                eq(Some("first prompt"))
+            ))
+        );
+    }
+
+    #[test]
+    fn find_last_user_prompt_when_trailing_record_exceeds_buffer_returns_latest_user_prompt() {
+        let large_assistant_message = "x".repeat(usize::try_from(REVERSE_SCAN_BUFFER_BYTES).unwrap_or(0));
+        let content = concat!(
+            "{\"timestamp\":\"2026-03-20T06:31:20.312Z\",\"type\":\"event_msg\",\"payload\":{\"type\":\"user_message\",\"message\":\"first prompt\"}}\n",
+            "{\"timestamp\":\"2026-03-20T06:32:20.312Z\",\"type\":\"event_msg\",\"payload\":{\"type\":\"user_message\",\"message\":\"last prompt\"}}\n",
+            "{\"timestamp\":\"2026-03-20T06:33:20.312Z\",\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"output_text\",\"text\":\"__LARGE_ASSISTANT_MESSAGE__\"}]}}\n",
+            "not json\n"
+        )
+        .replace("__LARGE_ASSISTANT_MESSAGE__", &large_assistant_message);
+
+        assert_that!(
+            find_last_user_prompt(Cursor::new(content.as_bytes())),
+            ok(eq(Some("last prompt".to_owned())))
         );
     }
 
