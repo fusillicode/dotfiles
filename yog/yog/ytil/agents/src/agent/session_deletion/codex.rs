@@ -144,3 +144,196 @@ fn unique_session<'a>(
     };
     Ok(session)
 }
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use tempfile::tempdir;
+    use test_that::prelude::*;
+
+    use super::*;
+    use crate::agent::Agent;
+
+    #[test]
+    fn test_build_deletion_plan_when_selected_parent_has_nested_children_returns_descendant_first_paths() {
+        let dir = tempdir().expect("tempdir should be created");
+        let root = dir.path().join("sessions");
+        std::fs::create_dir_all(&root).expect("session root should be created");
+        let parent = write_deletion_session(&root, "parent", None, "parent.jsonl");
+        let child = write_deletion_session(&root, "child", Some("parent"), "child.jsonl");
+        let grandchild = write_deletion_session(&root, "grandchild", Some("child"), "grandchild.jsonl");
+        let unrelated = write_deletion_session(&root, "other", None, "other.jsonl");
+        let key = SessionKey::new(Agent::Codex, "parent");
+
+        let plan = build_deletion_plan(&root, &key).expect("plan should resolve");
+
+        assert_that!(plan.related_session_count(), eq(2));
+        assert_that!(
+            plan.paths,
+            eq([
+                grandchild.canonicalize().expect("path should resolve"),
+                child.canonicalize().expect("path should resolve"),
+                parent.canonicalize().expect("path should resolve"),
+            ])
+        );
+        assert_that!(plan.paths.contains(&unrelated), eq(false));
+    }
+
+    #[test]
+    fn test_collect_descendant_paths_when_tree_is_deep_uses_iterative_post_order() {
+        let depth: usize = 10_000;
+        let mut sessions = HashMap::new();
+        for index in 0..depth {
+            let session_id = format!("session-{index}");
+            let parent_thread_id = (index > 0).then(|| format!("session-{}", index.saturating_sub(1)));
+            sessions.insert(
+                session_id.clone(),
+                vec![DeletionSession {
+                    path: PathBuf::from(&session_id),
+                    parent_thread_id,
+                }],
+            );
+        }
+        let children = children_by_parent(&sessions);
+
+        let paths = collect_descendant_paths("session-0", &children, &sessions).expect("paths should resolve");
+
+        assert_that!(paths.len(), eq(depth));
+        assert_that!(paths.first(), eq(Some(&PathBuf::from("session-9999"))));
+        assert_that!(paths.last(), eq(Some(&PathBuf::from("session-0"))));
+    }
+
+    #[test]
+    fn test_build_deletion_plan_when_store_has_duplicate_ids_returns_error() {
+        let dir = tempdir().expect("tempdir should be created");
+        let root = dir.path().join("sessions");
+        std::fs::create_dir_all(&root).expect("session root should be created");
+        write_deletion_session(&root, "parent", None, "one.jsonl");
+        write_deletion_session(&root, "parent", None, "two.jsonl");
+        let key = SessionKey::new(Agent::Codex, "parent");
+
+        let result = build_deletion_plan(&root, &key);
+
+        assert_that!(
+            result,
+            err(displays_as(contains_substring("duplicate Codex session ID")))
+        );
+    }
+
+    #[test]
+    fn test_build_deletion_plan_when_parent_graph_is_cyclic_returns_error() {
+        let dir = tempdir().expect("tempdir should be created");
+        let root = dir.path().join("sessions");
+        std::fs::create_dir_all(&root).expect("session root should be created");
+        write_deletion_session(&root, "one", Some("two"), "one.jsonl");
+        write_deletion_session(&root, "two", Some("one"), "two.jsonl");
+        let key = SessionKey::new(Agent::Codex, "one");
+
+        let result = build_deletion_plan(&root, &key);
+
+        assert_that!(
+            result,
+            err(displays_as(contains_substring("cyclic Codex session parent graph")))
+        );
+    }
+
+    #[test]
+    fn test_build_deletion_plan_when_session_metadata_is_missing_skips_the_file() {
+        let dir = tempdir().expect("tempdir should be created");
+        let root = dir.path().join("sessions");
+        std::fs::create_dir_all(&root).expect("session root should be created");
+        let invalid = root.join("invalid.jsonl");
+        std::fs::write(&invalid, "{\"type\":\"other\"}\n").expect("fixture should be written");
+        let parent = write_deletion_session(&root, "parent", None, "parent.jsonl");
+        let key = SessionKey::new(Agent::Codex, "parent");
+
+        let plan = build_deletion_plan(&root, &key).expect("plan should resolve");
+
+        assert_that!(plan.paths, eq([parent.canonicalize().expect("path should resolve")]));
+        assert_that!(
+            plan.skipped_paths,
+            eq([invalid.canonicalize().expect("path should resolve")])
+        );
+    }
+
+    #[test]
+    fn test_build_deletion_plan_when_metadata_is_invalid_skips_the_file() {
+        let dir = tempdir().expect("tempdir should be created");
+        let root = dir.path().join("sessions");
+        std::fs::create_dir_all(&root).expect("session root should be created");
+        let invalid = root.join("invalid.jsonl");
+        std::fs::write(&invalid, "not json\n").expect("fixture should be written");
+        let parent = write_deletion_session(&root, "parent", None, "parent.jsonl");
+        let key = SessionKey::new(Agent::Codex, "parent");
+
+        let plan = build_deletion_plan(&root, &key).expect("plan should resolve");
+
+        assert_that!(plan.paths, eq([parent.canonicalize().expect("path should resolve")]));
+        assert_that!(
+            plan.skipped_paths,
+            eq([invalid.canonicalize().expect("path should resolve")])
+        );
+    }
+
+    #[test]
+    fn test_build_deletion_plan_when_jsonl_is_malformed_after_metadata_keeps_plan_valid() {
+        let dir = tempdir().expect("tempdir should be created");
+        let root = dir.path().join("sessions");
+        std::fs::create_dir_all(&root).expect("session root should be created");
+        let parent = write_deletion_session(&root, "parent", None, "parent.jsonl");
+        std::fs::write(
+            &parent,
+            format!(
+                "{}not json\n",
+                std::fs::read_to_string(&parent).expect("fixture should be read")
+            ),
+        )
+        .expect("fixture should be updated");
+        let key = SessionKey::new(Agent::Codex, "parent");
+
+        let plan = build_deletion_plan(&root, &key).expect("plan should resolve");
+
+        assert_that!(plan.paths, eq([parent.canonicalize().expect("path should resolve")]));
+    }
+
+    #[test]
+    fn test_scan_deletion_sessions_when_path_is_outside_store_skips_the_file() {
+        let dir = tempdir().expect("tempdir should be created");
+        let root = dir.path().join("sessions");
+        std::fs::create_dir_all(&root).expect("session root should be created");
+        let outside = write_deletion_session(dir.path(), "parent", None, "outside.jsonl");
+        let canonical_root = root.canonicalize().expect("root should resolve");
+
+        let (sessions, skipped_paths) = scan_deletion_sessions(&canonical_root, vec![outside.clone()]);
+
+        assert_that!(sessions.is_empty(), eq(true));
+        assert_that!(skipped_paths, eq([outside]));
+    }
+
+    #[test]
+    fn test_scan_deletion_sessions_when_a_session_path_is_unreadable_skips_the_file() {
+        let dir = tempdir().expect("tempdir should be created");
+        let root = dir.path().join("sessions");
+        std::fs::create_dir_all(root.join("unreadable.jsonl")).expect("fixture directory should be created");
+        let canonical_root = root.canonicalize().expect("root should resolve");
+        let unreadable = root.join("unreadable.jsonl");
+
+        let (sessions, skipped_paths) = scan_deletion_sessions(&canonical_root, vec![unreadable.clone()]);
+
+        assert_that!(sessions.is_empty(), eq(true));
+        assert_that!(skipped_paths, eq([unreadable]));
+    }
+
+    fn write_deletion_session(root: &Path, id: &str, parent_id: Option<&str>, filename: &str) -> PathBuf {
+        let path = root.join(filename);
+        let parent = parent_id.map_or_else(String::new, |parent_id| {
+            format!(",\"parent_thread_id\":\"{parent_id}\"")
+        });
+        let content = format!(
+            "{{\"timestamp\":\"2026-03-20T06:30:20.312Z\",\"type\":\"session_meta\",\"payload\":{{\"id\":\"{id}\"{parent},\"timestamp\":\"2026-03-20T06:30:20.312Z\",\"cwd\":\"/tmp/workspace\"}}}}\n"
+        );
+        std::fs::write(&path, content).expect("session fixture should be written");
+        path
+    }
+}
