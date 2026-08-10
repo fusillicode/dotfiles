@@ -221,32 +221,26 @@ impl RenderableSession {
 impl Display for RenderableSession {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let agent_name = self.colored_agent_name();
-
         let path_label = ytil_tui::short_path(&self.session.workspace, &self.home_dir);
-        let session_name = ytil_tui::display_fixed_width(&self.session.name, 42);
         let updated_label = self.session.updated_at.strftime("%d/%m/%Y-%H:%M").to_string();
         let created_label = self.session.created_at.strftime("%d/%m/%Y-%H:%M").to_string();
 
         if let Some(branch) = self.branch() {
             write!(
                 f,
-                "{agent_name} {} {}{} {} {} {}",
+                "{agent_name} {} {} {} {}",
                 path_label.cyan().bold(),
                 branch.dimmed().bold(),
-                self.workspace_status().yellow(),
-                session_name.white(),
                 updated_label.blue(),
                 created_label.blue(),
             )
         } else {
             write!(
                 f,
-                "{agent_name} {}{} {} {} {}",
+                "{agent_name} {} {} {}",
                 path_label.cyan().bold(),
-                self.workspace_status().yellow(),
-                session_name.white(),
                 updated_label.blue(),
-                created_label.blue(),
+                created_label.blue()
             )
         }
     }
@@ -404,29 +398,9 @@ mod tests {
         assert_that!(renderable_sessions.len(), eq(1));
         let renderable = &renderable_sessions[0];
 
-        assert_that!(
-            JsonSession::new(renderable),
-            ok(all!(
-                result_of!(
-                    |row: &JsonSession| row.display.as_str(),
-                    starts_with("cx ~/repo fix issue")
-                ),
-                result_of!(
-                    |row: &JsonSession| row.search.as_str(),
-                    contains_substring("hidden prompt")
-                ),
-                result_of!(|row: &JsonSession| row.agent, eq("codex")),
-                result_of!(|row: &JsonSession| &row.workspace, points_to(eq(workspace))),
-                result_of!(|row: &JsonSession| row.session_id.as_str(), eq("session-id")),
-                result_of!(|row: &JsonSession| row.summary.as_str(), eq("fix issue")),
-                result_of!(|row: &JsonSession| row.updated_at, eq(updated_at)),
-                result_of!(|row: &JsonSession| row.resume_program.as_str(), eq("codex")),
-                result_of!(
-                    |row: &JsonSession| row.resume_args.first().map(String::as_str),
-                    eq(Some("resume"))
-                ),
-            ))
-        );
+        assert_renderable_session_agg_listing(renderable);
+        assert_renderable_session_agg_json_listing(workspace, updated_at, renderable);
+
         assert_that!(
             renderable.preview(),
             all!(
@@ -468,6 +442,7 @@ mod tests {
             home_dir: renderable.home_dir.clone(),
         }
         .preview();
+
         assert_that!(
             full_prompt_preview,
             all!(
@@ -496,6 +471,56 @@ mod tests {
                 String::from("codex:target"),
             ]),
             ok(eq([SessionKey::new(Agent::Codex, "target")]))
+        );
+    }
+
+    fn assert_renderable_session_agg_listing(renderable: &RenderableSession) {
+        let display = RenderableSession {
+            session: renderable.session.clone(),
+            branch: Some("main".to_string()),
+            home_dir: renderable.home_dir.clone(),
+        }
+        .to_string();
+        assert_that!(
+            display,
+            all!(
+                contains_substring("cx"),
+                contains_substring("main"),
+                contains_substring("14/11/2023-22:15"),
+                contains_substring("14/11/2023-22:13"),
+                contains_substring("~/repo"),
+                not(contains_substring("fix issue"))
+            )
+        );
+    }
+
+    fn assert_renderable_session_agg_json_listing(
+        workspace: std::path::PathBuf,
+        updated_at: Timestamp,
+        renderable: &RenderableSession,
+    ) {
+        assert_that!(
+            JsonSession::new(renderable),
+            ok(all!(
+                result_of!(
+                    |row: &JsonSession| row.display.as_str(),
+                    starts_with("cx ~/repo fix issue")
+                ),
+                result_of!(
+                    |row: &JsonSession| row.search.as_str(),
+                    contains_substring("hidden prompt")
+                ),
+                result_of!(|row: &JsonSession| row.agent, eq("codex")),
+                result_of!(|row: &JsonSession| &row.workspace, points_to(eq(workspace))),
+                result_of!(|row: &JsonSession| row.session_id.as_str(), eq("session-id")),
+                result_of!(|row: &JsonSession| row.summary.as_str(), eq("fix issue")),
+                result_of!(|row: &JsonSession| row.updated_at, eq(updated_at)),
+                result_of!(|row: &JsonSession| row.resume_program.as_str(), eq("codex")),
+                result_of!(
+                    |row: &JsonSession| row.resume_args.first().map(String::as_str),
+                    eq(Some("resume"))
+                ),
+            ))
         );
     }
 }

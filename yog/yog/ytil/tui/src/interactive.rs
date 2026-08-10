@@ -442,7 +442,7 @@ fn select_options(multi: bool, has_preview: bool) -> SkimOptions {
         // Skim only creates a preview pane when a global preview is configured,
         // even when every item provides inline preview text.
         opts.preview = Some(String::new());
-        opts.preview_window = "down:50%:wrap".into();
+        opts.preview_window = "right:45%:wrap".into();
         opts.bind
             .extend(["ctrl-d:preview-page-down".into(), "ctrl-u:preview-page-up".into()]);
     }
@@ -486,6 +486,7 @@ mod tests {
         let options = super::select_options(true, true);
 
         assert_that!(options.preview.as_deref(), eq(Some("")));
+        assert_that!(options.preview_window.direction, eq(skim::tui::Direction::Right));
         assert_that!(options.preview_window.wrap, eq(true));
         assert_that!(
             options.keymap.get(&parse_key("ctrl-d").unwrap()),
