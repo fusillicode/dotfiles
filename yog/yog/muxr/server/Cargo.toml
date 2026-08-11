@@ -19,7 +19,7 @@ muxr_core = { workspace = true }
 muxr_transport = { workspace = true }
 parking_lot = { workspace = true }
 portable-pty = { version = "0.9" }
-rio-vt = { version = "=0.5.10", default-features = false }
+rio-vt = { version = "=0.5.19", default-features = false }
 rootcause = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
