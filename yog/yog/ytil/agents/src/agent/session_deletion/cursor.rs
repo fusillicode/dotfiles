@@ -2,31 +2,35 @@ use std::path::Path;
 
 use rootcause::prelude::ResultExt;
 use rootcause::report;
-use rusqlite::Connection;
-use rusqlite::OpenFlags;
-use rusqlite::OptionalExtension;
 
 use super::DeletionPlan;
 use crate::agent::session::SessionKey;
 
-pub(super) fn build_deletion_plan(root: &Path, key: &SessionKey) -> rootcause::Result<DeletionPlan> {
+pub(super) fn build_deletion_plan(
+    root: &Path,
+    key: &SessionKey,
+    selected_path: Option<&Path>,
+) -> rootcause::Result<DeletionPlan> {
+    if let Some(selected_path) = selected_path {
+        return plan_for_selected_path(root, key, selected_path);
+    }
+
     let session_paths = crate::agent::session_loader::find_session_paths(
         root,
-        |entry| entry.path().file_name().is_some_and(|name| name == "store.db"),
+        crate::agent::session_loader::cursor::is_session_file,
         |_| false,
     )?;
     let mut matches = Vec::new();
-    for store_db in session_paths {
-        let meta_hex = read_meta_hex(&store_db)?;
-        let Some(meta_hex) = meta_hex.filter(|value| !value.trim().is_empty()) else {
+    for meta_path in session_paths {
+        let Some(session_dir) = meta_path.parent() else {
             continue;
         };
-        let session_id = crate::agent::session_parser::cursor::parse_session_id(&meta_hex)
-            .attach_with(|| format!("store_db={}", store_db.display()))?;
-        if session_id == key.id() {
-            matches.push(store_db.parent().map_or_else(|| store_db.clone(), Path::to_path_buf));
+        if session_dir.file_name().and_then(|name| name.to_str()) == Some(key.id()) {
+            matches.push(session_dir.to_path_buf());
         }
     }
+    matches.sort();
+    matches.dedup();
     let [path] = matches.as_slice() else {
         return Err(
             report!("selected Cursor session was not found uniquely in the session store")
@@ -37,13 +41,30 @@ pub(super) fn build_deletion_plan(root: &Path, key: &SessionKey) -> rootcause::R
     Ok(DeletionPlan::new(key.clone(), vec![path.clone()], 0, Vec::new()))
 }
 
-fn read_meta_hex(store_db: &Path) -> rootcause::Result<Option<String>> {
-    let connection = Connection::open_with_flags(store_db, OpenFlags::SQLITE_OPEN_READ_ONLY)
-        .context("failed to open Cursor store db")
-        .attach_with(|| format!("store_db={}", store_db.display()))?;
-    Ok(connection
-        .query_row("select value from meta limit 1", [], |row| row.get::<_, String>(0))
-        .optional()
-        .context("failed to query Cursor session metadata")
-        .attach_with(|| format!("store_db={}", store_db.display()))?)
+fn plan_for_selected_path(root: &Path, key: &SessionKey, selected_path: &Path) -> rootcause::Result<DeletionPlan> {
+    let root = root
+        .canonicalize()
+        .context("failed to resolve Cursor session store")
+        .attach_with(|| format!("path={}", root.display()))?;
+    let selected_path = selected_path
+        .canonicalize()
+        .context("failed to resolve selected Cursor session path")
+        .attach_with(|| format!("path={}", selected_path.display()))?;
+    if !selected_path.starts_with(&root) {
+        return Err(report!("selected Cursor session path is outside the session store")
+            .attach(format!("path={}", selected_path.display()))
+            .attach(format!("root={}", root.display())));
+    }
+    if selected_path.file_name().and_then(|name| name.to_str()) != Some(key.id()) {
+        return Err(report!("selected Cursor session path does not match the session id")
+            .attach(format!("path={}", selected_path.display()))
+            .attach(format!("session_id={}", key.id())));
+    }
+    if !selected_path.join("meta.json").is_file() {
+        return Err(report!("selected Cursor session is missing meta.json")
+            .attach(format!("path={}", selected_path.display()))
+            .attach(format!("session_id={}", key.id())));
+    }
+
+    Ok(DeletionPlan::new(key.clone(), vec![selected_path], 0, Vec::new()))
 }
