@@ -5447,7 +5447,6 @@ dependencies = [
  "jiff",
  "rootcause",
  "rstest",
- "rusqlite",
  "serde",
  "serde_json",
  "strum",

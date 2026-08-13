@@ -1,216 +1,210 @@
+use std::collections::HashSet;
 use std::path::Path;
 use std::path::PathBuf;
-use std::process::Command;
-
-use rootcause::prelude::ResultExt;
-use rootcause::report;
-use rusqlite::Connection;
-use rusqlite::OpenFlags;
-use rusqlite::OptionalExtension;
 
 use crate::agent::Agent;
 use crate::agent::session::Session;
 use crate::agent::session::SessionKey;
 
-/// Load Cursor agent sessions from local Cursor chat databases.
+/// Load Cursor agent sessions from local Cursor chat metadata.
+///
+/// Unreadable or invalid `meta.json` files are skipped.
 ///
 /// # Errors
-/// Returns an error when Cursor metadata cannot be read or parsed.
+/// Returns an error when the Cursor session store cannot be enumerated.
 pub fn load_sessions() -> rootcause::Result<Vec<Session>> {
     let chats_root = ytil_sys::dir::build_home_path(Agent::Cursor.sessions_root_path())?;
-    let session_paths = crate::agent::session_loader::find_session_paths(
-        &chats_root,
-        |entry| entry.path().file_name().is_some_and(|name| name == "store.db"),
-        |_| false,
-    )?;
+    let session_paths = crate::agent::session_loader::find_session_paths(&chats_root, is_session_file, |_| false)?;
 
-    load_sessions_from_paths(session_paths, read_strings_output, None)
+    Ok(load_sessions_from_paths(&session_paths, None))
 }
 
-/// Load only requested Cursor sessions from local Cursor chat databases.
+/// Load only requested Cursor sessions from local Cursor chat metadata.
+///
+/// Unreadable or invalid matching `meta.json` files are skipped.
 ///
 /// # Errors
-/// Returns an error when a matching Cursor session cannot be read or parsed.
+/// Returns an error when the Cursor session store cannot be enumerated.
 pub fn load_sessions_by_key(keys: &[SessionKey]) -> rootcause::Result<Vec<Session>> {
     let requested_ids = crate::agent::session_loader::requested_ids(keys, Agent::Cursor);
     if requested_ids.is_empty() {
         return Ok(Vec::new());
     }
     let chats_root = ytil_sys::dir::build_home_path(Agent::Cursor.sessions_root_path())?;
-    let session_paths = crate::agent::session_loader::find_session_paths(
-        &chats_root,
-        |entry| entry.path().file_name().is_some_and(|name| name == "store.db"),
-        |_| false,
-    )?;
+    let session_paths = crate::agent::session_loader::find_session_paths(&chats_root, is_session_file, |_| false)?;
 
-    load_sessions_from_paths(session_paths, read_strings_output, Some(&requested_ids))
+    Ok(load_sessions_from_paths(&session_paths, Some(&requested_ids)))
 }
 
-fn load_sessions_from_paths(
-    session_paths: Vec<PathBuf>,
-    mut read_strings: impl FnMut(&Path) -> rootcause::Result<String>,
-    requested_ids: Option<&std::collections::HashSet<&str>>,
-) -> rootcause::Result<Vec<Session>> {
-    let known_workspaces = load_known_workspaces()?;
-    let ignored_roots = vec![ytil_sys::dir::build_home_path(Agent::Cursor.root_path())?];
+pub(crate) fn is_session_file(entry: &std::fs::DirEntry) -> bool {
+    entry.path().file_name().is_some_and(|name| name == "meta.json")
+}
 
-    let mut sessions = Vec::new();
-    for store_db in session_paths {
-        let meta_hex = read_meta_hex(&store_db)?;
-        let Some(meta_hex) = meta_hex.filter(|value| !value.trim().is_empty()) else {
-            continue;
-        };
-        if let Some(requested_ids) = requested_ids {
-            let session_id = crate::agent::session_parser::cursor::parse_session_id(&meta_hex)
-                .attach_with(|| format!("store_db={}", store_db.display()))?;
-            if !requested_ids.contains(session_id.as_str()) {
-                continue;
-            }
-        }
-        let strings_output = read_strings(&store_db)?;
-        let Some(workspace) = crate::agent::session_parser::cursor::extract_cursor_workspace_from_strings(
-            &strings_output,
-            &known_workspaces,
-            &ignored_roots,
-        ) else {
-            continue;
-        };
-        if !workspace.is_dir() {
-            continue;
-        }
-        let mut cursor_session = crate::agent::session_parser::cursor::parse(&meta_hex, workspace)
-            .attach_with(|| format!("store_db={}", store_db.display()))?;
-        cursor_session.search_text =
-            crate::agent::session_parser::cursor::build_search_text_from_strings(&cursor_session.name, &strings_output);
-        cursor_session.updated_at =
-            crate::agent::session_loader::file_updated_at(&store_db)?.unwrap_or(cursor_session.created_at);
-        let path = store_db.parent().map_or_else(|| store_db.clone(), Path::to_path_buf);
-        sessions.push(cursor_session.into_session(path));
+fn load_sessions_from_paths(session_paths: &[PathBuf], requested_ids: Option<&HashSet<&str>>) -> Vec<Session> {
+    session_paths
+        .iter()
+        .filter_map(|meta_path| load_session_from_meta_json(meta_path, requested_ids))
+        .collect()
+}
+
+fn load_session_from_meta_json(meta_path: &Path, requested_ids: Option<&HashSet<&str>>) -> Option<Session> {
+    let session_dir = meta_path
+        .parent()
+        .map_or_else(|| meta_path.to_path_buf(), Path::to_path_buf);
+    let session_id = session_dir.file_name().and_then(|name| name.to_str())?;
+    if requested_ids.is_some_and(|ids| !ids.contains(session_id)) {
+        return None;
     }
 
-    Ok(sessions)
-}
-
-fn load_known_workspaces() -> rootcause::Result<Vec<PathBuf>> {
-    let root = ytil_sys::dir::build_home_path(&[".cursor", "projects"])?;
-
-    let mut workspaces = Vec::new();
-    for path in crate::agent::session_loader::find_session_paths(
-        &root,
-        |entry| {
-            entry
-                .path()
-                .file_name()
-                .is_some_and(|name| name == ".workspace-trusted")
-        },
-        |_| false,
-    )? {
-        let content = std::fs::read_to_string(&path)
-            .context("failed to read Cursor workspace marker")
-            .attach_with(|| format!("path={}", path.display()))?;
-        let trimmed = content.trim();
-        if trimmed.is_empty() {
-            continue;
-        }
-        let candidate = PathBuf::from(trimmed);
-        if candidate.is_dir() {
-            workspaces.push(candidate);
-        }
+    let json = std::fs::read_to_string(meta_path).ok()?;
+    let mut cursor_session =
+        crate::agent::session_parser::cursor::parse_chat_meta(&json, session_id.to_owned()).ok()?;
+    if !cursor_session.has_conversation || !cursor_session.workspace.is_dir() {
+        return None;
     }
 
-    workspaces.sort();
-    workspaces.dedup();
-
-    Ok(workspaces)
+    let prompts = read_prompt_history(&session_dir);
+    cursor_session.search_text =
+        crate::agent::session_parser::cursor::build_search_text_from_prompts(&cursor_session.name, &prompts);
+    let mut session = cursor_session.into_session(session_dir);
+    // Cursor writes `prompt_history.json` newest-first.
+    session.last_user_prompt = prompts.iter().find(|prompt| !prompt.trim().is_empty()).cloned();
+    Some(session)
 }
 
-fn read_meta_hex(store_db: &Path) -> rootcause::Result<Option<String>> {
-    let connection = Connection::open_with_flags(store_db, OpenFlags::SQLITE_OPEN_READ_ONLY)
-        .context("failed to open Cursor store db")
-        .attach_with(|| format!("store_db={}", store_db.display()))?;
-    Ok(connection
-        .query_row("select value from meta limit 1", [], |row| row.get::<_, String>(0))
-        .optional()
-        .context("failed to query Cursor session metadata")
-        .attach_with(|| format!("store_db={}", store_db.display()))?)
-}
-
-fn read_strings_output(store_db: &Path) -> rootcause::Result<String> {
-    let output = Command::new("strings")
-        .arg(store_db)
-        .output()
-        .context("failed to run strings for Cursor store db")
-        .attach_with(|| format!("store_db={}", store_db.display()))?;
-
-    if !output.status.success() {
-        return Err(report!("strings exited with non-zero status")
-            .attach(format!("store_db={}", store_db.display()))
-            .attach(format!("status={}", output.status)));
-    }
-
-    Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+fn read_prompt_history(session_dir: &Path) -> Vec<String> {
+    let path = session_dir.join("prompt_history.json");
+    let Ok(content) = std::fs::read_to_string(path) else {
+        return Vec::new();
+    };
+    serde_json::from_str(&content).unwrap_or_default()
 }
 
 #[cfg(test)]
 mod tests {
-    use std::cell::Cell;
-    use std::fmt::Write;
-
-    use rusqlite::Connection;
     use tempfile::tempdir;
     use test_that::prelude::*;
 
     use super::*;
 
     #[test]
-    fn test_load_sessions_from_paths_by_key_runs_strings_only_for_matching_cursor_db() {
+    fn test_load_sessions_from_paths_by_key_when_invoked_loads_only_matching_cursor_meta() {
         let dir = tempdir().expect("tempdir should be created");
         let workspace = dir.path().join("workspace");
         std::fs::create_dir_all(&workspace).expect("workspace should be created");
-        let target_db = dir.path().join("target").join("store.db");
-        let other_db = dir.path().join("other").join("store.db");
-        create_store_db(&target_db, "target");
-        create_store_db(&other_db, "other");
+        let target_meta = dir.path().join("target").join("meta.json");
+        let other_meta = dir.path().join("other").join("meta.json");
+        write_meta_json(&target_meta, &workspace, true, "Target");
+        write_meta_json(&other_meta, &workspace, true, "Other");
         let keys = vec![SessionKey::new(Agent::Cursor, "target")];
         let requested_ids = crate::agent::session_loader::requested_ids(&keys, Agent::Cursor);
-        let strings_calls = Cell::new(0);
 
-        let sessions_result = load_sessions_from_paths(
-            vec![target_db, other_db],
-            |_| {
-                strings_calls.set(strings_calls.get() + 1);
-                Ok(workspace.display().to_string())
-            },
-            Some(&requested_ids),
-        );
-        assert_that!(sessions_result.as_ref().map(|_| ()), ok(eq(())));
-        let sessions = sessions_result.expect("target Cursor session should load");
+        let sessions = load_sessions_from_paths(&[target_meta, other_meta], Some(&requested_ids));
 
-        assert_that!(strings_calls.get(), eq(1));
         assert_that!(sessions.len(), eq(1));
         assert_that!(sessions[0].id, eq("target"));
+        assert_that!(sessions[0].name, eq("Target"));
     }
 
-    fn create_store_db(path: &Path, session_id: &str) {
-        let parent = path.parent().expect("test db path should have parent");
-        std::fs::create_dir_all(parent).expect("test db parent should be created");
-        let connection = Connection::open(path).expect("test db should open");
-        connection
-            .execute("create table meta (value text)", [])
-            .expect("meta table should be created");
-        let meta = hex(&format!(
-            r#"{{"agentId":"{session_id}","name":"Cursor Session","createdAt":1774877738013}}"#
-        ));
-        connection
-            .execute("insert into meta (value) values (?1)", [&meta])
-            .expect("meta row should be inserted");
+    #[test]
+    fn test_load_sessions_from_paths_when_meta_json_has_cwd_uses_workspace() {
+        let dir = tempdir().expect("tempdir should be created");
+        let workspace = dir.path().join("work").join("pws-api");
+        std::fs::create_dir_all(&workspace).expect("workspace should be created");
+        let meta_path = dir
+            .path()
+            .join("chats")
+            .join("hash")
+            .join("session-id")
+            .join("meta.json");
+        write_meta_json(&meta_path, &workspace, true, "Status Line");
+        std::fs::write(
+            meta_path
+                .parent()
+                .expect("meta.json should have a parent")
+                .join("prompt_history.json"),
+            r#"["first prompt"]"#,
+        )
+        .expect("prompt history should be written");
+
+        let sessions = load_sessions_from_paths(&[meta_path], None);
+
+        assert_that!(sessions.len(), eq(1));
+        assert_that!(sessions[0].id, eq("session-id"));
+        assert_that!(sessions[0].name, eq("Status Line"));
+        assert_that!(sessions[0].workspace, eq(workspace));
+        assert_that!(sessions[0].last_user_prompt.as_deref(), eq(Some("first prompt")));
     }
 
-    fn hex(value: &str) -> String {
-        let mut out = String::with_capacity(value.len().saturating_mul(2));
-        for byte in value.as_bytes() {
-            write!(&mut out, "{byte:02x}").expect("writing to string should not fail");
-        }
-        out
+    #[test]
+    fn test_load_sessions_from_paths_when_prompt_history_is_newest_first_sets_last_user_prompt_to_newest() {
+        let dir = tempdir().expect("tempdir should be created");
+        let workspace = dir.path().join("work").join("pws-api");
+        std::fs::create_dir_all(&workspace).expect("workspace should be created");
+        let meta_path = dir.path().join("session-id").join("meta.json");
+        write_meta_json(&meta_path, &workspace, true, "Status Line");
+        std::fs::write(
+            meta_path
+                .parent()
+                .expect("meta.json should have a parent")
+                .join("prompt_history.json"),
+            r#"["newest", "oldest"]"#,
+        )
+        .expect("prompt history should be written");
+
+        let sessions = load_sessions_from_paths(&[meta_path], None);
+
+        assert_that!(sessions.len(), eq(1));
+        assert_that!(sessions[0].last_user_prompt.as_deref(), eq(Some("newest")));
+    }
+
+    #[test]
+    fn test_load_sessions_from_paths_when_meta_json_has_no_conversation_skips_session() {
+        let dir = tempdir().expect("tempdir should be created");
+        let workspace = dir.path().join("work").join("pws-api");
+        std::fs::create_dir_all(&workspace).expect("workspace should be created");
+        let meta_path = dir
+            .path()
+            .join("chats")
+            .join("hash")
+            .join("session-id")
+            .join("meta.json");
+        write_meta_json(&meta_path, &workspace, false, "Empty");
+
+        let sessions = load_sessions_from_paths(&[meta_path], None);
+
+        assert_that!(sessions.len(), eq(0));
+    }
+
+    #[test]
+    fn test_load_sessions_from_paths_when_one_meta_json_is_invalid_skips_and_loads_valid() {
+        let dir = tempdir().expect("tempdir should be created");
+        let workspace = dir.path().join("work").join("pws-api");
+        std::fs::create_dir_all(&workspace).expect("workspace should be created");
+        let invalid_meta = dir.path().join("invalid").join("meta.json");
+        let valid_meta = dir.path().join("valid").join("meta.json");
+        let parent = invalid_meta.parent().expect("invalid meta.json should have a parent");
+        std::fs::create_dir_all(parent).expect("invalid session dir should be created");
+        std::fs::write(&invalid_meta, r#"{"hasConversation":false}"#).expect("invalid meta.json should be written");
+        write_meta_json(&valid_meta, &workspace, true, "Valid");
+
+        let sessions = load_sessions_from_paths(&[invalid_meta, valid_meta], None);
+
+        assert_that!(sessions.len(), eq(1));
+        assert_that!(sessions[0].id, eq("valid"));
+        assert_that!(sessions[0].name, eq("Valid"));
+    }
+
+    fn write_meta_json(path: &Path, workspace: &Path, has_conversation: bool, title: &str) {
+        let parent = path.parent().expect("meta.json should have a parent");
+        std::fs::create_dir_all(parent).expect("session dir should be created");
+        std::fs::write(
+            path,
+            format!(
+                r#"{{"schemaVersion":1,"createdAtMs":1774877738013,"hasConversation":{has_conversation},"title":"{title}","updatedAtMs":1774877739013,"cwd":"{}"}}"#,
+                workspace.display()
+            ),
+        )
+        .expect("meta.json should be written");
     }
 }
