@@ -118,6 +118,15 @@ pub(super) struct RenderableSession {
 }
 
 impl RenderableSession {
+    #[cfg(test)]
+    pub(super) const fn for_test(session: Session, home_dir: std::path::PathBuf) -> Self {
+        Self {
+            session,
+            branch: None,
+            home_dir,
+        }
+    }
+
     fn from_sessions(sessions: Vec<Session>, home_dir: &Path) -> Vec<Self> {
         let mut timestamps_by_workspace = HashMap::<std::path::PathBuf, Vec<(usize, Timestamp)>>::new();
         for (index, session) in sessions.iter().enumerate() {

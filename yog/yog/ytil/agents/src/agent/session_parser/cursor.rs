@@ -9,51 +9,58 @@ use crate::agent::Agent;
 use crate::agent::session::SearchTextBuilder;
 use crate::agent::session::Session;
 
-/// Parse Cursor session metadata into a session.
+/// Parse Cursor chat `meta.json` into a session.
 ///
 /// # Errors
-/// Returns an error when the encoded metadata is invalid or contains an invalid timestamp.
-pub fn parse(meta_hex: &str, workspace_dir: PathBuf) -> rootcause::Result<CursorSession> {
-    let doc = parse_meta(meta_hex)?;
+/// Returns an error when the JSON is invalid, `cwd` is empty, or a timestamp is out of range.
+pub fn parse_chat_meta(json: &str, session_id: String) -> rootcause::Result<CursorSession> {
+    let doc = serde_json::from_str::<CursorChatMeta>(json)
+        .context("failed to parse Cursor chat metadata".to_owned())
+        .attach(format!("meta_json={json}"))?;
 
-    let created_at = Timestamp::from_millisecond(doc.created_at)
-        .context("Cursor createdAt is out of range".to_owned())
-        .attach(format!("session_id={}", doc.agent_id))
-        .attach(format!("created_at_ms={}", doc.created_at))?;
+    let cwd = doc.cwd.trim();
+    if cwd.is_empty() {
+        return Err(report!("Cursor chat meta cwd is empty").attach(format!("session_id={session_id}")));
+    }
+    let workspace_dir = PathBuf::from(cwd);
 
-    let name = doc.name.unwrap_or_else(|| {
+    let created_at = Timestamp::from_millisecond(doc.created_at_ms)
+        .context("Cursor createdAtMs is out of range".to_owned())
+        .attach(format!("session_id={session_id}"))
+        .attach(format!("created_at_ms={}", doc.created_at_ms))?;
+    let updated_at = match doc.updated_at_ms {
+        Some(updated_at_ms) => Timestamp::from_millisecond(updated_at_ms)
+            .context("Cursor updatedAtMs is out of range".to_owned())
+            .attach(format!("session_id={session_id}"))
+            .attach(format!("updated_at_ms={updated_at_ms}"))?,
+        None => created_at,
+    };
+
+    let name = doc.title.filter(|title| !title.trim().is_empty()).unwrap_or_else(|| {
         workspace_dir
             .file_name()
             .and_then(|name| name.to_str())
             .filter(|name| !name.is_empty())
-            .map_or_else(|| doc.agent_id.clone(), str::to_owned)
+            .map_or_else(|| session_id.clone(), str::to_owned)
     });
 
     Ok(CursorSession {
-        id: doc.agent_id,
+        id: session_id,
         name: name.clone(),
         search_text: name,
         workspace: workspace_dir,
         created_at,
-        updated_at: created_at,
+        updated_at,
+        has_conversation: doc.has_conversation.unwrap_or(true),
     })
 }
 
-/// Parse only the session id from Cursor metadata.
-///
-/// # Errors
-/// Returns an error when the encoded metadata is invalid or missing required fields.
-pub fn parse_session_id(meta_hex: &str) -> rootcause::Result<String> {
-    parse_meta(meta_hex).map(|meta| meta.agent_id)
-}
-
-fn parse_meta(meta_hex: &str) -> rootcause::Result<CursorMeta> {
-    let meta_json = decode_hex_string(meta_hex)
-        .context("failed to decode Cursor meta payload".to_owned())
-        .attach(format!("meta_hex={meta_hex}"))?;
-    Ok(serde_json::from_str::<CursorMeta>(&meta_json)
-        .context("failed to parse Cursor session metadata".to_owned())
-        .attach(format!("meta_json={meta_json}"))?)
+pub fn build_search_text_from_prompts(session_name: &str, prompts: &[String]) -> String {
+    let mut search_text = SearchTextBuilder::default();
+    for prompt in prompts {
+        search_text.push(prompt);
+    }
+    search_text.build(session_name)
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -64,6 +71,7 @@ pub struct CursorSession {
     pub workspace: PathBuf,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
+    pub has_conversation: bool,
 }
 
 impl CursorSession {
@@ -76,221 +84,63 @@ impl CursorSession {
     }
 }
 
-fn decode_hex_string(raw: &str) -> rootcause::Result<String> {
-    let hex = raw.trim();
-
-    if !hex.len().is_multiple_of(2) {
-        return Err(report!("hex string has odd length").attach(format!("len={}", hex.len())));
-    }
-
-    let mut bytes = Vec::with_capacity(hex.len() / 2);
-    for pair in hex.as_bytes().as_chunks::<2>().0 {
-        let pair = std::str::from_utf8(pair).context("hex chunk is not utf8".to_owned())?;
-        let byte = u8::from_str_radix(pair, 16).context("invalid hex byte".to_owned())?;
-        bytes.push(byte);
-    }
-
-    Ok(String::from_utf8(bytes).context("decoded hex string is not utf8".to_owned())?)
-}
-
-pub fn build_search_text_from_strings(session_name: &str, strings_output: &str) -> String {
-    let mut search_text = SearchTextBuilder::default();
-    for line in strings_output.lines().filter_map(searchable_cursor_strings_line) {
-        search_text.push(&line);
-    }
-    search_text.build(session_name)
-}
-
-pub fn extract_cursor_workspace_from_strings(
-    strings_output: &str,
-    known_workspaces: &[PathBuf],
-    ignored_roots: &[PathBuf],
-) -> Option<PathBuf> {
-    let mut known_matches: Vec<PathBuf> = known_workspaces
-        .iter()
-        .filter(|workspace| workspace.to_str().is_some_and(|value| strings_output.contains(value)))
-        .cloned()
-        .collect();
-    known_matches.sort_by_key(|workspace| std::cmp::Reverse(workspace.components().count()));
-    if let Some(workspace) = known_matches.into_iter().next() {
-        return Some(workspace);
-    }
-
-    for line in strings_output.lines() {
-        for candidate in extract_absolute_path_candidates(line) {
-            let Some(existing_path) = longest_existing_path(&candidate) else {
-                continue;
-            };
-            let workspace_dir = if existing_path.is_dir() {
-                existing_path
-            } else if let Some(parent) = existing_path.parent() {
-                parent.to_path_buf()
-            } else {
-                continue;
-            };
-            if ignored_roots.iter().any(|root| workspace_dir.starts_with(root)) {
-                continue;
-            }
-            return Some(workspace_dir);
-        }
-    }
-
-    None
-}
-
 #[derive(Debug, Deserialize)]
-struct CursorMeta {
-    #[serde(rename = "agentId")]
-    agent_id: String,
-    name: Option<String>,
-    #[serde(rename = "createdAt")]
-    created_at: i64,
-}
-
-fn extract_absolute_path_candidates(line: &str) -> Vec<String> {
-    let mut candidates = Vec::new();
-    candidates.extend(extract_prefixed_candidates(line, "file:///"));
-    candidates.extend(extract_prefixed_candidates(line, "/"));
-    candidates
-}
-
-fn searchable_cursor_strings_line(line: &str) -> Option<String> {
-    let normalized = line.split_whitespace().collect::<Vec<_>>().join(" ");
-    let normalized = (!normalized.is_empty()).then_some(normalized)?;
-    if normalized.len() < 8 {
-        return None;
-    }
-    if !normalized.chars().any(char::is_alphabetic) || !normalized.chars().any(char::is_whitespace) {
-        return None;
-    }
-    if normalized.chars().all(|ch| ch.is_ascii_hexdigit()) {
-        return None;
-    }
-    if !extract_absolute_path_candidates(&normalized).is_empty() {
-        return None;
-    }
-
-    let lower = normalized.to_ascii_lowercase();
-    if lower.contains("create table")
-        || lower.contains("sqlite_")
-        || lower.contains("indexsqlite_")
-        || lower.starts_with("file:///")
-    {
-        return None;
-    }
-
-    Some(normalized)
-}
-
-fn extract_prefixed_candidates(line: &str, prefix: &str) -> Vec<String> {
-    let mut candidates = Vec::new();
-    let mut start = 0;
-    while let Some(search_area) = line.get(start..) {
-        let Some(offset) = search_area.find(prefix) else {
-            break;
-        };
-        let absolute_start = start.saturating_add(offset);
-        let Some(suffix) = line.get(absolute_start..) else {
-            break;
-        };
-        let candidate: String = suffix.chars().take_while(|ch| is_path_char(*ch)).collect();
-        if !candidate.is_empty() {
-            candidates.push(candidate);
-        }
-        start = absolute_start.saturating_add(prefix.len());
-    }
-    candidates
-}
-
-const fn is_path_char(ch: char) -> bool {
-    ch.is_ascii_alphanumeric() || matches!(ch, '/' | '.' | '_' | '-' | '~')
-}
-
-fn longest_existing_path(candidate: &str) -> Option<PathBuf> {
-    let normalized = candidate.strip_prefix("file://").unwrap_or(candidate);
-    let mut path = PathBuf::from(normalized);
-
-    while !path.exists() {
-        if !path.pop() {
-            return None;
-        }
-    }
-
-    Some(path)
+struct CursorChatMeta {
+    #[serde(rename = "createdAtMs")]
+    created_at_ms: i64,
+    #[serde(rename = "updatedAtMs")]
+    updated_at_ms: Option<i64>,
+    title: Option<String>,
+    cwd: String,
+    #[serde(rename = "hasConversation")]
+    has_conversation: Option<bool>,
 }
 
 #[cfg(test)]
 mod tests {
-    use tempfile::tempdir;
     use test_that::prelude::*;
 
     use super::*;
 
     #[test]
-    fn test_decodes_cursor_meta_hex_payload() {
-        assert_that!(
-            decode_hex_string("7b226e616d65223a225361666520526562617365227d"),
-            ok(eq("{\"name\":\"Safe Rebase\"}"))
-        );
-    }
+    fn test_parse_chat_meta_when_json_has_cwd_returns_workspace_and_title() {
+        let json = r#"{"schemaVersion":1,"createdAtMs":1774877738013,"hasConversation":true,"title":"Status Line","updatedAtMs":1774877739013,"cwd":"/Users/gianlu/data/dev/work/pws-api/pws-api"}"#;
 
-    #[test]
-    fn test_parses_cursor_session_from_meta_json() {
-        let tempdir = tempdir().unwrap();
-        let workspace = tempdir.path().join("workspace");
-        std::fs::create_dir_all(&workspace).unwrap();
-
-        let meta_hex = "7b226167656e744964223a2266626364393632362d623065642d343739632d623838372d376132633264313531376636222c226e616d65223a225361666520526562617365222c22637265617465644174223a313737343837373733383031337d";
-        let cursor_session_result = parse(meta_hex, workspace.clone());
+        let cursor_session_result = parse_chat_meta(json, "session-id".to_owned());
         assert_that!(cursor_session_result.as_ref().map(|_| ()), ok(eq(())));
-        let cursor_session = cursor_session_result.expect("Cursor metadata should parse");
-        let session = cursor_session.into_session(workspace.join("store.db"));
+        let cursor_session = cursor_session_result.expect("Cursor chat metadata should parse");
+        let session = cursor_session.into_session(PathBuf::from("session-id"));
+
         assert_that!(session.agent, eq(Agent::Cursor));
-        assert_that!(session.workspace, eq(workspace));
-        assert_that!(session.name, eq("Safe Rebase"));
-    }
-
-    #[test]
-    fn test_extracts_cursor_workspace_from_known_workspaces_first() {
-        let tempdir = tempdir().unwrap();
-        let workspace = tempdir.path().join("work").join("dotfiles");
-        std::fs::create_dir_all(&workspace).unwrap();
-
-        let strings_output = format!("file://{}/README.md\n{}\n", workspace.display(), workspace.display());
-        let extracted = extract_cursor_workspace_from_strings(&strings_output, std::slice::from_ref(&workspace), &[]);
-        assert_that!(extracted, eq(Some(workspace)));
-    }
-
-    #[test]
-    fn test_extracts_cursor_workspace_from_generic_path_candidates() {
-        let tempdir = tempdir().unwrap();
-        let workspace = tempdir.path().join("work").join("repo");
-        let ignored = tempdir.path().join("home").join(".cursor");
-        std::fs::create_dir_all(workspace.join("src")).unwrap();
-        std::fs::create_dir_all(&ignored).unwrap();
-
-        let strings_output = format!("garbage file://{}/src/main.rs trailing", workspace.display());
-        let extracted = extract_cursor_workspace_from_strings(&strings_output, &[], &[ignored]);
-        assert_that!(extracted, eq(Some(workspace.join("src"))));
-    }
-
-    #[test]
-    fn test_build_search_text_from_strings_keeps_human_lines_and_filters_noise() {
-        let strings_output = concat!(
-            "CREATE TABLE blobs (id TEXT PRIMARY KEY, data BLOB);\n",
-            "indexsqlite_autoindex_blobs_1blobs\n",
-            "/Users/foo/bar/baz\n",
-            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\n",
-            "user asked about stalled sync job\n",
-            "user asked about stalled sync job\n",
-            "assistant suggested retrying the worker\n"
+        assert_that!(session.id, eq("session-id"));
+        assert_that!(session.name, eq("Status Line"));
+        assert_that!(
+            session.workspace,
+            eq(PathBuf::from("/Users/gianlu/data/dev/work/pws-api/pws-api"))
         );
+    }
 
-        let search_text = build_search_text_from_strings("Cursor Session", strings_output);
+    #[test]
+    fn test_parse_chat_meta_when_cwd_is_empty_returns_error() {
+        let json = r#"{"schemaVersion":1,"createdAtMs":1774877738013,"hasConversation":true,"title":"Status Line","cwd":"  "}"#;
 
         assert_that!(
-            search_text,
-            eq("Cursor Session user asked about stalled sync job assistant suggested retrying the worker")
+            (parse_chat_meta(json, "session-id".to_owned())).map(|_| ()),
+            err(displays_as(contains_substring("Cursor chat meta cwd is empty")))
         );
+    }
+
+    #[test]
+    fn test_build_search_text_from_prompts_when_prompts_repeat_keeps_unique_snippets() {
+        let search_text = build_search_text_from_prompts(
+            "Status Line",
+            &[
+                "first prompt".to_owned(),
+                "first prompt".to_owned(),
+                "second prompt".to_owned(),
+            ],
+        );
+
+        assert_that!(search_text, eq("Status Line first prompt second prompt"));
     }
 }
