@@ -17,6 +17,7 @@ use strum::IntoEnumIterator;
 use ytil_agents::agent::Agent;
 use ytil_agents::agent::session::Session;
 use ytil_agents::agent::session::SessionKey;
+use ytil_ext::path_ext::PathExt;
 use ytil_ext::string_ext::StringExt as _;
 
 pub fn run(home_dir: &Path) -> rootcause::Result<()> {
@@ -183,7 +184,7 @@ impl RenderableSession {
     }
 
     fn plain_summary(&self) -> String {
-        let path_label = ytil_sys::dir::short_path(&self.session.workspace, &self.home_dir);
+        let path_label = self.session.workspace.short_path(&self.home_dir);
         let session_name = self.session.name.trim_end_at_with(42, None);
         let updated_label = self.session.updated_at.strftime("%d/%m/%Y-%H:%M").to_string();
         let created_label = self.session.created_at.strftime("%d/%m/%Y-%H:%M").to_string();
@@ -230,7 +231,7 @@ impl RenderableSession {
 impl Display for RenderableSession {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let agent_name = self.colored_agent_name();
-        let path_label = ytil_sys::dir::short_path(&self.session.workspace, &self.home_dir);
+        let path_label = self.session.workspace.short_path(&self.home_dir);
         let updated_label = self.session.updated_at.strftime("%d/%m/%Y-%H:%M").to_string();
         let created_label = self.session.created_at.strftime("%d/%m/%Y-%H:%M").to_string();
 

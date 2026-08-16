@@ -1,4 +1,4 @@
-//! Extensions for String and &str
+//! Extensions for [`String`] and [`str`]
 
 pub trait StringExt {
     fn trim_end_at_with(&self, at: usize, with: Option<&str>) -> String;
