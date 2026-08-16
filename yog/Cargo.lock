@@ -23,6 +23,7 @@ dependencies = [
  "tempfile",
  "test-that",
  "ytil_agents",
+ "ytil_ext",
  "ytil_git",
  "ytil_sys",
  "ytil_tui",
@@ -5472,6 +5473,14 @@ dependencies = [
  "rootcause",
  "test-that",
  "ytil_wezterm",
+]
+
+[[package]]
+name = "ytil_ext"
+version = "0.1.0"
+dependencies = [
+ "rstest",
+ "test-that",
 ]
 
 [[package]]

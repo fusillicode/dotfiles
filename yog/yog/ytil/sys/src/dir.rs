@@ -42,6 +42,63 @@ pub fn get_workspace_root() -> rootcause::Result<PathBuf> {
         .to_path_buf())
 }
 
+pub fn short_path(path: &Path, home: &Path) -> String {
+    if home != Path::new("/") {
+        if path == home {
+            return "~".into();
+        }
+        if let Ok(rel) = path.strip_prefix(home) {
+            let names = path_dir_names(rel);
+            return if names.is_empty() {
+                "~".into()
+            } else {
+                format!("~/{}", abbrev_path_dirs(&names))
+            };
+        }
+    }
+
+    let names = path_dir_names(path);
+    if names.is_empty() {
+        "/".into()
+    } else {
+        format!("/{}", abbrev_path_dirs(&names))
+    }
+}
+
+fn path_dir_names(path: &Path) -> Vec<String> {
+    path.components()
+        .filter_map(|component| match component {
+            std::path::Component::Normal(segment) => Some(segment.to_string_lossy().into_owned()),
+            std::path::Component::Prefix(_)
+            | std::path::Component::RootDir
+            | std::path::Component::CurDir
+            | std::path::Component::ParentDir => None,
+        })
+        .collect()
+}
+
+fn abbrev_path_dirs(names: &[String]) -> String {
+    match names.len() {
+        0 => String::new(),
+        1 => names.first().cloned().unwrap_or_default(),
+        total => {
+            let mut out = String::new();
+            for (idx, name) in names.iter().enumerate() {
+                if idx > 0 {
+                    out.push('/');
+                }
+                let is_last = idx == total.saturating_sub(1);
+                if is_last {
+                    out.push_str(name);
+                } else {
+                    out.push(name.chars().next().unwrap_or('·'));
+                }
+            }
+            out
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use test_that::prelude::*;
@@ -80,5 +137,32 @@ mod tests {
         assert_that!(root.is_dir(), eq(true));
         // The workspace root should contain Cargo.toml
         assert_that!(root.join("Cargo.toml").exists(), eq(true));
+    }
+
+    #[test]
+    fn test_short_path_under_home_abbreviates_parent_directories() {
+        let home = Path::new("/home/user");
+
+        assert_that!(
+            short_path(Path::new("/home/user/src/pkg/myproject"), home),
+            eq("~/s/p/myproject")
+        );
+    }
+
+    #[test]
+    fn test_short_path_many_dirs_abbreviates_all_but_last() {
+        let home = Path::new("/home/user");
+
+        assert_that!(
+            short_path(Path::new("/home/user/one/two/three/four/five"), home),
+            eq("~/o/t/t/f/five")
+        );
+    }
+
+    #[test]
+    fn test_short_path_outside_home_renders_absolute_abbrev() {
+        let home = Path::new("/home/user");
+
+        assert_that!(short_path(Path::new("/opt/pkg/foo"), home), eq("/o/p/foo"));
     }
 }
