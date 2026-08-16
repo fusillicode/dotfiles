@@ -32,6 +32,7 @@ members = [
     "yog/ytil/agents",
     "yog/ytil/cmd",
     "yog/ytil/editor",
+    "yog/ytil/ext",
     "yog/ytil/gh",
     "yog/ytil/git",
     "yog/ytil/hx",
@@ -87,6 +88,7 @@ url = { version = "2.5" }
 ytil_agents = { path = "./yog/ytil/agents" }
 ytil_cmd = { path = "./yog/ytil/cmd" }
 ytil_editor = { path = "./yog/ytil/editor" }
+ytil_ext = { path = "./yog/ytil/ext" }
 ytil_gh = { path = "./yog/ytil/gh" }
 ytil_git = { path = "./yog/ytil/git" }
 ytil_hx = { path = "./yog/ytil/hx" }

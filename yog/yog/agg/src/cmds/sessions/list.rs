@@ -17,6 +17,7 @@ use strum::IntoEnumIterator;
 use ytil_agents::agent::Agent;
 use ytil_agents::agent::session::Session;
 use ytil_agents::agent::session::SessionKey;
+use ytil_ext::string_ext::StringExt as _;
 
 pub fn run(home_dir: &Path) -> rootcause::Result<()> {
     let sessions = load_sorted_sessions()?;
@@ -182,8 +183,8 @@ impl RenderableSession {
     }
 
     fn plain_summary(&self) -> String {
-        let path_label = ytil_tui::short_path(&self.session.workspace, &self.home_dir);
-        let session_name = ytil_tui::display_fixed_width(&self.session.name, 42);
+        let path_label = ytil_sys::dir::short_path(&self.session.workspace, &self.home_dir);
+        let session_name = self.session.name.trim_end_at_with(42, None);
         let updated_label = self.session.updated_at.strftime("%d/%m/%Y-%H:%M").to_string();
         let created_label = self.session.created_at.strftime("%d/%m/%Y-%H:%M").to_string();
         let agent = self.session.agent.short_name();
@@ -205,8 +206,13 @@ impl RenderableSession {
     }
 
     fn preview(&self) -> String {
-        let first_prompt = ytil_tui::display_fixed_width(self.session.name.as_str(), 256);
-        let last_prompt = ytil_tui::display_fixed_width(self.session.last_user_prompt.as_deref().unwrap_or("—"), 256);
+        let first_prompt = self.session.name.trim_end_at_with(256, None);
+        let last_prompt = self
+            .session
+            .last_user_prompt
+            .as_deref()
+            .unwrap_or("—")
+            .trim_end_at_with(256, None);
         let updated = self.session.updated_at.strftime("%d/%m/%Y-%H:%M");
         let created = self.session.created_at.strftime("%d/%m/%Y-%H:%M");
 
@@ -224,7 +230,7 @@ impl RenderableSession {
 impl Display for RenderableSession {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let agent_name = self.colored_agent_name();
-        let path_label = ytil_tui::short_path(&self.session.workspace, &self.home_dir);
+        let path_label = ytil_sys::dir::short_path(&self.session.workspace, &self.home_dir);
         let updated_label = self.session.updated_at.strftime("%d/%m/%Y-%H:%M").to_string();
         let created_label = self.session.created_at.strftime("%d/%m/%Y-%H:%M").to_string();
 
