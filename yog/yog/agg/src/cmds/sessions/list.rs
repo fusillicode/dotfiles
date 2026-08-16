@@ -205,24 +205,18 @@ impl RenderableSession {
     }
 
     fn preview(&self) -> String {
-        let id = self.session.id.white().bold().to_string();
-        let first_prompt = self.session.name.white().to_string();
-        let last_prompt = self
-            .session
-            .last_user_prompt
-            .as_deref()
-            .unwrap_or("—")
-            .white()
-            .to_string();
+        let first_prompt = ytil_tui::display_fixed_width(self.session.name.as_str(), 256);
+        let last_prompt = ytil_tui::display_fixed_width(self.session.last_user_prompt.as_deref().unwrap_or("—"), 256);
         let updated = self.session.updated_at.strftime("%d/%m/%Y-%H:%M");
         let created = self.session.created_at.strftime("%d/%m/%Y-%H:%M");
 
         format!(
-            "{id} {} {}\n\n{} {first_prompt}\n\n{} {last_prompt}",
+            "\n{}\n{}\n{}\n\n{}\n\n{}",
+            self.session.id.white().bold(),
             updated.blue(),
             created.blue(),
-            "1st prompt:".bold(),
-            "lst prompt:".bold(),
+            first_prompt.white(),
+            last_prompt.white()
         )
     }
 }
@@ -414,9 +408,7 @@ mod tests {
             renderable.preview(),
             all!(
                 contains_substring("session-id"),
-                contains_substring("1st prompt:"),
                 contains_substring("fix issue"),
-                contains_substring("lst prompt:"),
                 contains_substring("finish the fix")
             )
         );
@@ -431,14 +423,7 @@ mod tests {
             home_dir: renderable.home_dir.clone(),
         }
         .preview();
-        assert_that!(
-            cursor_preview,
-            all!(
-                contains_substring("1st prompt:"),
-                contains_substring("lst prompt:"),
-                contains_substring("—")
-            )
-        );
+        assert_that!(cursor_preview, all!(contains_substring("—")));
 
         let prompt = "x".repeat(43);
         let full_prompt_preview = RenderableSession {
@@ -452,14 +437,7 @@ mod tests {
         }
         .preview();
 
-        assert_that!(
-            full_prompt_preview,
-            all!(
-                contains_substring("1st prompt:"),
-                contains_substring("lst prompt:"),
-                contains_substring(prompt)
-            )
-        );
+        assert_that!(full_prompt_preview, all!(contains_substring(prompt)));
     }
 
     #[test]
