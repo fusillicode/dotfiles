@@ -1,3 +1,54 @@
+-- Neovim nightly regression introduced by:
+-- https://github.com/neovim/neovim/commit/1f18ea1cf7 (#40569)
+-- https://github.com/neovim/neovim/commit/44d5593afd (#40691)
+--
+-- The capability migration made workspace/inlayHint/refresh clear all
+-- extmarks before replacements arrive. Invalid positions can also abort
+-- the shared decoration provider during redraw. Either path flickers.
+local function workaround_for_inlay_hints_flickering()
+
+  -- https://vinnymeller.com/posts/neovim_nightly_inlay_hints/#globally
+  vim.api.nvim_create_autocmd('LspAttach', {
+    group = vim.api.nvim_create_augroup('LspAttachInlayHints', { clear = true, }),
+    callback = function(args)
+      if not (args.data and args.data.client_id) then
+        return
+      end
+
+      local client = vim.lsp.get_client_by_id(args.data.client_id)
+      if client.server_capabilities.inlayHintProvider then
+        vim.lsp.inlay_hint.enable(true, { bufnr = args.buf, })
+      end
+    end,
+  })
+
+  -- Keep current hints visible while replacement hints are computed.
+  vim.lsp.handlers['workspace/inlayHint/refresh'] = function()
+    return vim.NIL
+  end
+
+  -- Ignore stale or malformed positions instead of aborting the provider.
+  local orig_inlay_hint_handler = vim.lsp.handlers['textDocument/inlayHint']
+  vim.lsp.handlers['textDocument/inlayHint'] = function(err, result, ctx)
+    if not err and result and ctx and ctx.bufnr and ctx.client_id then
+      local client = vim.lsp.get_client_by_id(ctx.client_id)
+      if client then
+        local lines = vim.api.nvim_buf_get_lines(ctx.bufnr, 0, -1, false)
+        result = vim.tbl_filter(function(hint)
+          local position = hint.position
+          local line = position and lines[position.line + 1]
+          if not line or type(position.character) ~= 'number' or position.character < 0 then
+            return false
+          end
+          local col = vim.str_byteindex(line, client.offset_encoding, position.character, false)
+          return col >= 0 and col <= #line
+        end, result)
+      end
+    end
+    return orig_inlay_hint_handler(err, result, ctx)
+  end
+end
+
 local function get_custom_lsps_configs()
   local schemastore = require('schemastore')
 
@@ -168,20 +219,7 @@ return {
       return orig_lsp_util_open_floating_preview(contents, syntax, opts, ...)
     end
 
-    -- https://vinnymeller.com/posts/neovim_nightly_inlay_hints/#globally
-    vim.api.nvim_create_autocmd('LspAttach', {
-      group = vim.api.nvim_create_augroup('LspAttachInlayHints', { clear = true, }),
-      callback = function(args)
-        if not (args.data and args.data.client_id) then
-          return
-        end
-
-        local client = vim.lsp.get_client_by_id(args.data.client_id)
-        if client.server_capabilities.inlayHintProvider then
-          vim.lsp.inlay_hint.enable(true, { args.buf, })
-        end
-      end,
-    })
+    workaround_for_inlay_hints_flickering()
 
     vim.api.nvim_create_autocmd('BufWritePre', {
       group = vim.api.nvim_create_augroup('LspFormatOnSave', { clear = true, }),
