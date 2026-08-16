@@ -437,6 +437,8 @@ fn select_options(multi: bool, has_preview: bool) -> SkimOptions {
     let mut opts = base_skim_options();
     opts.multi = multi;
     opts.ansi = true;
+    opts.no_info = false;
+    opts.inline_info = true;
     opts.height = "40%".into();
     if has_preview {
         // Skim only creates a preview pane when a global preview is configured,
