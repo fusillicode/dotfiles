@@ -9,6 +9,21 @@ function M.escape_regex(str)
   return vim.fn.escape(str, [[\.^$*+?()[]{}|]])
 end
 
+-- Select the inner word under the cursor. Reset visual mode first so an existing
+-- selection cannot affect the result. In operator-pending mode, return `iw` so
+-- the pending operator can consume the text object.
+function M.select_word_under_cursor()
+  local mode = vim.fn.mode(1)
+  if mode == 'v' or mode == 'V' or mode == '\22' then
+    vim.cmd.normal({ '\27', bang = true, })
+    vim.cmd.normal({ 'viw', bang = true, })
+  elseif mode:sub(1, 2) == 'no' then
+    return 'iw'
+  else
+    vim.cmd.normal({ 'viw', bang = true, })
+  end
+end
+
 function M.log(value)
   local log_path = vim.fn.stdpath('log') .. '/log'
   local file = io.open(log_path, 'a')
