@@ -15,6 +15,8 @@ enum InputFilterState {
     Csi,
     DiscardCsi,
     DcsHeader,
+    DcsSyncMarker,
+    DcsSyncMarkerEscape,
     OscPrefix,
     BufferedOsc {
         remaining: usize,
@@ -206,6 +208,8 @@ impl RioInputFilter {
             InputFilterState::Csi => self.process_csi(byte),
             InputFilterState::DiscardCsi => self.process_discard_csi(byte),
             InputFilterState::DcsHeader => self.process_dcs_header(byte),
+            InputFilterState::DcsSyncMarker => self.process_dcs_sync_marker(byte),
+            InputFilterState::DcsSyncMarkerEscape => self.process_dcs_sync_marker_escape(byte),
             InputFilterState::OscPrefix => self.process_osc_prefix(byte),
             InputFilterState::BufferedOsc { remaining } => self.process_buffered_osc(byte, remaining),
             InputFilterState::BufferedOscEscape { remaining } => {
@@ -279,7 +283,7 @@ impl RioInputFilter {
             return;
         }
         if (0x40..=0x7e).contains(&byte) {
-            if !self.strip_sync_update_mode() {
+            if !self.strip_unsupported_private_modes() {
                 self.flush_pending();
             }
             self.pending.clear();
@@ -303,7 +307,7 @@ impl RioInputFilter {
         }
     }
 
-    fn strip_sync_update_mode(&mut self) -> bool {
+    fn strip_unsupported_private_modes(&mut self) -> bool {
         let Some(sequence) = self.pending.strip_prefix(b"\x1b[?") else {
             return false;
         };
@@ -321,14 +325,14 @@ impl RioInputFilter {
         let parameters = parameters.split(|byte| *byte == b';').collect::<SmallVec<[&[u8]; 8]>>();
         if !parameters
             .iter()
-            .any(|parameter| self::is_sync_update_parameter(parameter))
+            .any(|parameter| self::is_unsupported_private_mode_parameter(parameter))
         {
             return false;
         }
 
         let mut kept = parameters
             .into_iter()
-            .filter(|parameter| !self::is_sync_update_parameter(parameter))
+            .filter(|parameter| !self::is_unsupported_private_mode_parameter(parameter))
             .peekable();
         if kept.peek().is_none() {
             return true;
@@ -366,6 +370,10 @@ impl RioInputFilter {
         }
 
         if (0x40..=0x7e).contains(&byte) {
+            if self.is_sync_update_dcs_header() {
+                self.state = InputFilterState::DcsSyncMarker;
+                return;
+            }
             if self.is_sixel_header() {
                 self.pending.clear();
                 self.state = InputFilterState::DiscardString(StringTerminator::StringTerminator);
@@ -387,6 +395,41 @@ impl RioInputFilter {
                 terminator: StringTerminator::StringTerminator,
             };
         }
+    }
+
+    fn process_dcs_sync_marker(&mut self, byte: u8) {
+        if byte == ESCAPE {
+            self.pending.push(byte);
+            self.state = InputFilterState::DcsSyncMarkerEscape;
+            return;
+        }
+
+        self.flush_pending();
+        self.state = InputFilterState::PassthroughString {
+            limit: StringPassthroughLimit::Unlimited,
+            terminator: StringTerminator::StringTerminator,
+        };
+        self.process_passthrough_string(
+            byte,
+            StringTerminator::StringTerminator,
+            StringPassthroughLimit::Unlimited,
+        );
+    }
+
+    fn process_dcs_sync_marker_escape(&mut self, byte: u8) {
+        if byte == b'\\' {
+            self.pending.clear();
+            self.state = InputFilterState::Ground;
+            return;
+        }
+
+        let _escape = self.pending.pop();
+        self.flush_pending();
+        self.process_passthrough_string_escape(
+            byte,
+            StringTerminator::StringTerminator,
+            StringPassthroughLimit::Unlimited,
+        );
     }
 
     fn process_osc_prefix(&mut self, byte: u8) {
@@ -617,6 +660,10 @@ impl RioInputFilter {
         };
         *final_byte == b'q' && *intermediate == b'+' && parameters.iter().all(|byte| matches!(byte, 0x30..=0x3f))
     }
+
+    fn is_sync_update_dcs_header(&self) -> bool {
+        matches!(self.pending.as_slice(), b"\x1bP=1s" | b"\x1bP=2s")
+    }
 }
 
 const fn is_bell_terminator(byte: u8, terminator: StringTerminator) -> bool {
@@ -631,16 +678,23 @@ const fn is_dcs_header_ignored(byte: u8) -> bool {
     matches!(byte, 0x00..=0x17 | 0x19 | 0x1c..=0x1f | 0x7f)
 }
 
-fn is_sync_update_parameter(parameter: &[u8]) -> bool {
+fn is_unsupported_private_mode_parameter(parameter: &[u8]) -> bool {
     let Some(primary) = parameter.split(|byte| *byte == b':').next() else {
         return false;
     };
     if primary.is_empty() {
         return false;
     }
-    primary.iter().try_fold(0_u16, |value, byte| {
+    let Some(mode) = primary.iter().try_fold(0_u16, |value, byte| {
         value.checked_mul(10)?.checked_add(u16::from(byte.saturating_sub(b'0')))
-    }) == Some(2026)
+    }) else {
+        return false;
+    };
+
+    // Muxr renders into Alacritty, whose grid advances one codepoint at a time. Keep Rio's
+    // synchronized-output and grapheme-cluster modes out of the child terminal state: both
+    // modes would make Rio's logical cells differ from the cells Alacritty displays.
+    matches!(mode, 2026 | 2027)
 }
 
 #[cfg(test)]
@@ -786,6 +840,53 @@ mod tests {
         let mut filter = RioInputFilter::default();
 
         let filtered = filter.process(b"before\x9b?2026hpayload\x9b?2026lafter");
+
+        std::assert_eq!(filtered.as_ref(), b"beforepayloadafter");
+    }
+
+    #[test]
+    fn test_rio_input_filter_when_grapheme_mode_is_requested_discards_mode_changes() {
+        let mut filter = RioInputFilter::default();
+
+        let filtered = filter.process(b"before\x1b[?2027hpayload\x1b[?2027lafter");
+
+        std::assert_eq!(filtered.as_ref(), b"beforepayloadafter");
+    }
+
+    #[test]
+    fn test_rio_input_filter_when_grapheme_mode_is_grouped_discards_only_that_mode() {
+        let mut filter = RioInputFilter::default();
+
+        let filtered = filter.process(b"\x1b[?2027;2004hpayload\x1b[?2027l");
+
+        std::assert_eq!(filtered.as_ref(), b"\x1b[?2004hpayload");
+    }
+
+    #[test]
+    fn test_rio_input_filter_when_sync_update_uses_dcs_processes_payload_immediately() {
+        let mut filter = RioInputFilter::default();
+
+        let filtered = filter.process(b"before\x1bP=1s\x1b\\payload\x1bP=2s\x1b\\after");
+
+        std::assert_eq!(filtered.as_ref(), b"beforepayloadafter");
+    }
+
+    #[test]
+    fn test_rio_input_filter_when_sync_update_dcs_is_split_processes_payload_immediately() {
+        let mut filter = RioInputFilter::default();
+
+        let first = filter.process(b"before\x1bP=1s");
+        std::assert_eq!(first.as_ref(), b"before");
+        let second = filter.process(b"\x1b\\payload\x1bP=2s\x1b\\after");
+
+        std::assert_eq!(second.as_ref(), b"payloadafter");
+    }
+
+    #[test]
+    fn test_rio_input_filter_when_sync_update_uses_c1_dcs_processes_payload_immediately() {
+        let mut filter = RioInputFilter::default();
+
+        let filtered = filter.process(b"before\x90=1s\x9cpayload\x90=2s\x9cafter");
 
         std::assert_eq!(filtered.as_ref(), b"beforepayloadafter");
     }

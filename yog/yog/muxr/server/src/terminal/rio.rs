@@ -117,9 +117,8 @@ impl EventListener for Listener {
 pub(super) struct RioTerminal {
     legacy_alternate_grid: Option<Grid<Square>>,
     listener: Listener,
-    // rio-vt 0.5.10 eagerly reserves a 2 MiB synchronized-update buffer for every Processor. Muxr strips mode
-    // 2026, so this is an accepted per-pane cost until an unpatched upstream release offers lazy
-    // allocation.
+    // rio-vt eagerly reserves a 2 MiB synchronized-update buffer for every Processor. Muxr strips
+    // modes 2026 and 2027, so this is an accepted per-pane cost until upstream offers lazy allocation.
     parser: Processor,
     terminal: Crosswords<Listener>,
 }
@@ -135,6 +134,13 @@ impl RioTerminal {
             0,
             scrollback_rows,
         );
+        // Muxr emits ANSI text to Alacritty, whose terminal grid measures each codepoint with
+        // `unicode-width` and stores wide characters as two cells. Rio's mode-2027 grapheme
+        // clustering would instead collapse sequences such as `👩‍🌾` into one two-cell
+        // grapheme. That makes Rio's logical cursor disagree with Alacritty's cursor after the
+        // raw sequence is printed. Keep the original Unicode text, but use Alacritty's
+        // codepoint-cell contract so pane borders, cursor positions, and redraws stay aligned.
+        terminal.set_grapheme_clustering(false);
         terminal.reset_damage();
         Self {
             legacy_alternate_grid: None,
