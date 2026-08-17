@@ -62,8 +62,7 @@ compact_str = { version = "0.10", features = ["rkyv", "serde"] }
 convert_case = { version = "0.11" }
 fake = { version = "5.1", features = ["derive"] }
 git2 = { version = "0.21", default-features = false }
-jiff = { version = "0.2.35", default-features = false, features = ["serde", "std", "tz-system", "tzdb-zoneinfo"] }
-kanal = { version = "0.1.1", default-features = false }
+jiff = { version = "0.2", default-features = false, features = ["serde", "std", "tz-system", "tzdb-zoneinfo"] }
 muxr_config = { package = "muxr-config", path = "./yog/muxr/config" }
 muxr_core = { package = "muxr-core", path = "./yog/muxr/core" }
 muxr_transport = { package = "muxr-transport", path = "./yog/muxr/transport" }

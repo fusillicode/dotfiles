@@ -12,14 +12,14 @@ categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
 jiff = { workspace = true }
-kanal = { workspace = true }
-libproc = { version = "0.14.11" }
+kanal = { version = "0.1", default-features = false }
+libproc = { version = "0.14" }
 muxr_config = { workspace = true }
 muxr_core = { workspace = true }
 muxr_transport = { workspace = true }
 parking_lot = { workspace = true }
 portable-pty = { version = "0.9" }
-rio-vt = { version = "=0.5.19", default-features = false }
+rio-vt = { version = "0.5", default-features = false }
 rootcause = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -27,7 +27,7 @@ smallvec = { workspace = true }
 tokio = { workspace = true }
 tracing = { version = "0.1" }
 tracing-appender = { version = "0.2" }
-tracing-panic = { version = "0.1.2" }
+tracing-panic = { version = "0.1" }
 tracing-subscriber = { version = "0.3" }
 url = { workspace = true }
 
