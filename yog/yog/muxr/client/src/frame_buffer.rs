@@ -759,6 +759,46 @@ mod tests {
     }
 
     #[test]
+    fn test_terminal_update_encoder_when_legacy_wide_cells_are_followed_by_text_preserves_logical_order()
+    -> rootcause::Result<()> {
+        let baseline = muxr_core::RenderBaseline::new(
+            1,
+            TerminalSize::new(6, 1)?,
+            RenderCursor {
+                row: 0,
+                col: 0,
+                shape: RenderCursorShape::Default,
+                visibility: muxr_core::RenderCursorVisibility::Hidden,
+            },
+            vec![RenderRowSpan::new(
+                0,
+                0,
+                vec![
+                    RenderCell::wide("👩‍", RenderStyle::default()),
+                    RenderCell::wide_continuation(RenderStyle::default()),
+                    RenderCell::wide("🌾", RenderStyle::default()),
+                    RenderCell::wide_continuation(RenderStyle::default()),
+                    render_cell("X"),
+                    render_cell("|"),
+                ],
+            )?],
+        )?;
+        let mut frame_buffer = FrameBuffer::default();
+        let ApplyOutcome::Applied(changes) = frame_buffer.apply(RenderUpdate::Baseline(baseline))? else {
+            return Err(report!("expected applied baseline"));
+        };
+        let mut output = Vec::new();
+
+        encode_terminal_render(&mut output, terminal_render(&frame_buffer, &changes))?;
+
+        let rendered = String::from_utf8(output).context("muxr render test output was not utf8")?;
+        assert_that!(rendered, contains_substring("👩‍🌾"));
+        assert_that!(rendered, contains_substring("X|"));
+        assert_that!(rendered, not(contains_substring("\x1b[1;3H")));
+        Ok(())
+    }
+
+    #[test]
     fn test_terminal_update_encoder_when_cursor_shape_is_bar_emits_shape() -> rootcause::Result<()> {
         let mut frame_buffer = FrameBuffer::default();
         let ApplyOutcome::Applied(changes) = frame_buffer.apply(RenderUpdate::Baseline(

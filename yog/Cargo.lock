@@ -2441,6 +2441,7 @@ dependencies = [
  "tempfile",
  "test-that",
  "tokio",
+ "unicode-width",
  "ytil_sys",
 ]
 

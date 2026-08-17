@@ -18,6 +18,7 @@ muxr_core = { workspace = true }
 muxr_transport = { workspace = true }
 rootcause = { workspace = true }
 tokio = { workspace = true }
+unicode-width = { version = "0.2", default-features = false }
 ytil_sys = { workspace = true }
 
 [dev-dependencies]
