@@ -12,7 +12,7 @@ categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
 bytes = { workspace = true }
-compact_str = { workspace = true }
+compact_str = { version = "0.10", features = ["rkyv", "serde"] }
 rkyv = { version = "0.8" }
 rootcause = { workspace = true }
 serde = { workspace = true }

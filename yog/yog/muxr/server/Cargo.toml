@@ -17,13 +17,13 @@ libproc = { version = "0.14" }
 muxr_config = { workspace = true }
 muxr_core = { workspace = true }
 muxr_transport = { workspace = true }
-parking_lot = { workspace = true }
+parking_lot = { version = "0.12" }
 portable-pty = { version = "0.9" }
 rio-vt = { version = "0.5", default-features = false }
 rootcause = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-smallvec = { workspace = true }
+smallvec = { version = "1.15" }
 tokio = { workspace = true }
 tracing = { version = "0.1" }
 tracing-appender = { version = "0.2" }
