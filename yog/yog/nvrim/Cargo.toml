@@ -26,7 +26,7 @@ strum = { workspace = true }
 url = { workspace = true }
 ytil_cmd = { workspace = true }
 ytil_git = { workspace = true }
-ytil_noxi = { path = "../ytil/noxi" }
+ytil_noxi = { workspace = true }
 ytil_sys = { workspace = true }
 ytil_wezterm = { workspace = true }
 ytil_zellij = { workspace = true }
@@ -35,7 +35,7 @@ ytil_zellij = { workspace = true }
 rstest = { workspace = true }
 tempfile = { workspace = true }
 test-that = { workspace = true }
-ytil_noxi = { path = "../ytil/noxi", features = ["mockall", "testing"] }
+ytil_noxi = { workspace = true, features = ["mockall", "testing"] }
 
 [lints]
 workspace = true
