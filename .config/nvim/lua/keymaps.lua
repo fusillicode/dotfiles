@@ -1,6 +1,7 @@
 local M = {}
 
 local nvrim = require('nvrim')
+local utils = require('utils')
 
 local function keymap_set(mode, lhs, rhs, opts)
   vim.keymap.set(mode, lhs, rhs, vim.tbl_extend('error', { silent = true, }, opts or {}))
@@ -202,6 +203,10 @@ function M.nvim_spider(plugin)
 end
 
 function M.nvim_tree_sitter()
+  local function has_selection_range_lsp()
+    return #vim.lsp.get_clients({ bufnr = 0, method = 'textDocument/selectionRange', }) > 0
+  end
+
   return {
     {
       '<cr>',
@@ -209,8 +214,10 @@ function M.nvim_tree_sitter()
       { function()
         if vim.treesitter.get_parser(nil, nil, { error = false, }) then
           require('vim.treesitter._select').select_parent(vim.v.count1)
-        else
+        elseif has_selection_range_lsp() then
           vim.lsp.buf.selection_range(vim.v.count1)
+        else
+          utils.select_word_under_cursor()
         end
       end,
       },
@@ -221,8 +228,10 @@ function M.nvim_tree_sitter()
       { function()
         if vim.treesitter.get_parser(nil, nil, { error = false, }) then
           require('vim.treesitter._select').select_child(vim.v.count1)
-        else
+        elseif has_selection_range_lsp() then
           vim.lsp.buf.selection_range(-vim.v.count1)
+        else
+          utils.select_word_under_cursor()
         end
       end,
       },
