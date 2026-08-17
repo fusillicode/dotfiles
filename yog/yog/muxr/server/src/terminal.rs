@@ -599,6 +599,7 @@ mod tests {
 
     use muxr_config::MuxrConfig;
     use muxr_core::RenderCell;
+    use muxr_core::RenderCellWidth;
     use muxr_core::RenderCursorShape;
     use rootcause::report;
     use rstest::rstest;
@@ -675,7 +676,7 @@ mod tests {
     }
 
     #[test]
-    fn test_terminal_state_snapshot_when_combining_mark_precedes_horizontal_tab_expands_tab_to_spaces()
+    fn test_terminal_state_snapshot_when_orphan_combining_mark_precedes_horizontal_tab_keeps_alacritty_cell_width()
     -> rootcause::Result<()> {
         let mut terminal = self::terminal_state(&TerminalSize::new(16, 1)?);
 
@@ -684,6 +685,65 @@ mod tests {
 
         assert_that!(rendered, not(contains_substring("\t")));
         assert_that!(rendered, starts_with(" \u{301}       modified"));
+        Ok(())
+    }
+
+    #[test]
+    fn test_terminal_state_snapshot_when_zwj_emoji_uses_alacritty_cell_width_keeps_following_text_at_column_four()
+    -> rootcause::Result<()> {
+        let mut terminal = self::terminal_state(&TerminalSize::new(8, 1)?);
+
+        let _outcome = terminal.process("\x1b[?2027h🥨‍🍙X".as_bytes());
+        let snapshot = terminal.render_snapshot(TerminalSnapshotScope::Full)?;
+        let Some(row) = snapshot.rows().first() else {
+            return Err(report!("expected first render row"));
+        };
+        let Some(first_emoji) = row.cells().first() else {
+            return Err(report!("expected first emoji cell"));
+        };
+        let Some(first_continuation) = row.cells().get(1) else {
+            return Err(report!("expected first emoji continuation cell"));
+        };
+        let Some(second_emoji) = row.cells().get(2) else {
+            return Err(report!("expected second emoji cell"));
+        };
+        let Some(second_continuation) = row.cells().get(3) else {
+            return Err(report!("expected second emoji continuation cell"));
+        };
+        let Some(following) = row.cells().get(4) else {
+            return Err(report!("expected following text cell"));
+        };
+
+        assert_that!(first_emoji.text(), eq("🥨‍"));
+        assert_that!(first_emoji.width(), eq(RenderCellWidth::Wide));
+        assert_that!(first_continuation.width(), eq(RenderCellWidth::WideContinuation));
+        assert_that!(second_emoji.text(), eq("🍙"));
+        assert_that!(second_emoji.width(), eq(RenderCellWidth::Wide));
+        assert_that!(second_continuation.width(), eq(RenderCellWidth::WideContinuation));
+        assert_that!(following.text(), eq("X"));
+        Ok(())
+    }
+
+    #[test]
+    fn test_terminal_state_snapshot_when_variation_selector_uses_alacritty_cell_width_keeps_following_text_at_column_one()
+    -> rootcause::Result<()> {
+        let mut terminal = self::terminal_state(&TerminalSize::new(8, 1)?);
+
+        let _outcome = terminal.process("❤️X".as_bytes());
+        let snapshot = terminal.render_snapshot(TerminalSnapshotScope::Full)?;
+        let Some(row) = snapshot.rows().first() else {
+            return Err(report!("expected first render row"));
+        };
+        let Some(emoji) = row.cells().first() else {
+            return Err(report!("expected variation-selector emoji cell"));
+        };
+        let Some(following) = row.cells().get(1) else {
+            return Err(report!("expected following text cell"));
+        };
+
+        assert_that!(emoji.text(), eq("❤️"));
+        assert_that!(emoji.width(), eq(RenderCellWidth::Narrow));
+        assert_that!(following.text(), eq("X"));
         Ok(())
     }
 

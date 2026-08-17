@@ -20,6 +20,7 @@ use muxr_core::TabId;
 use muxr_core::TabSnapshot;
 use muxr_core::TrackedProcessState;
 use rootcause::prelude::ResultExt;
+use unicode_width::UnicodeWidthChar;
 
 const ROWS_PER_TAB: u16 = 3;
 const SEPARATOR: &str = "\u{2502}";
@@ -142,11 +143,10 @@ fn queue_sidebar_row(
     } else {
         0
     };
-    let label = text
-        .chars()
-        .take(content_width.saturating_sub(marker_width))
-        .collect::<String>();
-    let used_width = label.chars().count().saturating_add(marker_width);
+    // Alacritty advances its grid per codepoint using `unicode-width`, so a Rust character
+    // count is not a terminal width. Use the same cell contract for truncation and padding.
+    let label = self::take_terminal_cells(text, content_width.saturating_sub(marker_width));
+    let used_width = self::terminal_cell_width(&label).saturating_add(marker_width);
     self::queue_tracked_process_state_marker(stdout, config, state, tracked_process_state)?;
     queue_cmd(stdout, Print(&label))?;
     self::queue_sidebar_text_style(stdout, config, state)?;
@@ -346,14 +346,46 @@ fn push_path_segment(out: &mut String, segment: &str) {
 }
 
 fn pad(text: &str, width: usize) -> String {
-    let mut out = String::new();
-    for ch in text.chars().take(width) {
-        out.push(ch);
-    }
-    for _ in out.chars().count()..width {
+    let mut out = self::take_terminal_cells(text, width);
+    let used_width = self::terminal_cell_width(&out);
+    for _ in used_width..width {
         out.push(' ');
     }
     out
+}
+
+fn take_terminal_cells(text: &str, max_width: usize) -> String {
+    let mut out = String::new();
+    let mut width = 0_usize;
+    let mut pending_zero_width = String::new();
+    for character in text.chars() {
+        let character_width = character.width().unwrap_or(0);
+        if character_width == 0 {
+            pending_zero_width.push(character);
+            continue;
+        }
+        let Some(next_width) = width.checked_add(character_width) else {
+            pending_zero_width.clear();
+            break;
+        };
+        if next_width > max_width {
+            pending_zero_width.clear();
+            break;
+        }
+        out.push_str(&pending_zero_width);
+        pending_zero_width.clear();
+        out.push(character);
+        width = next_width;
+    }
+    // Do not leave a zero-width suffix dangling when truncation dropped its following base.
+    if !out.is_empty() {
+        out.push_str(&pending_zero_width);
+    }
+    out
+}
+
+fn terminal_cell_width(text: &str) -> usize {
+    text.chars().map(|character| character.width().unwrap_or(0)).sum()
 }
 
 fn queue_cmd<W, C>(stdout: &mut W, cmd: C) -> rootcause::Result<()>
@@ -368,6 +400,7 @@ where
 mod tests {
     use muxr_config::MuxrConfig;
     use muxr_core::PaneId;
+    use rootcause::report;
     use rstest::rstest;
     use test_that::prelude::*;
 
@@ -624,6 +657,49 @@ mod tests {
         #[case] expected: &str,
     ) {
         assert_that!(short_cwd_with_home(cwd, home), eq(expected));
+    }
+
+    #[test]
+    fn test_take_terminal_cells_when_text_contains_zwj_emoji_uses_alacritty_codepoint_width() {
+        let text = "👩‍🌾X";
+
+        assert_that!(terminal_cell_width(text), eq(5));
+        assert_that!(take_terminal_cells(text, 2), eq("👩"));
+        assert_that!(take_terminal_cells(text, 3), eq("👩"));
+        assert_that!(take_terminal_cells(text, 4), eq("👩‍🌾"));
+        assert_that!(take_terminal_cells(text, 5), eq(text));
+    }
+
+    #[test]
+    fn test_pad_when_text_contains_wide_codepoints_fills_remaining_terminal_cells() {
+        assert_that!(pad("👩‍🌾", 6), eq("👩‍🌾  "));
+    }
+
+    #[test]
+    fn test_queue_sidebar_row_when_path_contains_zwj_emoji_keeps_label_flush_after_rail() -> rootcause::Result<()> {
+        let mut output = CountingWriter::default();
+        let config = MuxrConfig::default().tab_bar;
+
+        queue_sidebar_row(
+            &mut output,
+            config,
+            0,
+            TabBarItemState::Active,
+            TrackedProcessState::None,
+            "/t/👩‍🌾",
+        )?;
+
+        let visible = self::strip_ansi(&output.rendered_string()?);
+        assert_that!(visible, starts_with("\u{258e}/t/👩‍🌾"));
+        let Some((before_separator, _)) = visible.split_once(SEPARATOR) else {
+            return Err(report!("expected tab-bar separator"));
+        };
+        assert_that!(
+            self::terminal_cell_width(before_separator),
+            eq(usize::from(config.width.saturating_sub(1)))
+        );
+        assert_that!(self::terminal_cell_width(&visible), eq(usize::from(config.width)));
+        Ok(())
     }
 
     #[test]
