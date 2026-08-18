@@ -10,3 +10,5 @@ pub use interactive::*;
 pub mod git_branch;
 #[cfg(not(target_arch = "wasm32"))]
 mod interactive;
+#[cfg(not(target_arch = "wasm32"))]
+mod preview;
