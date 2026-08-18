@@ -439,7 +439,7 @@ fn select_options(multi: bool, has_preview: bool) -> SkimOptions {
     opts.ansi = true;
     opts.no_info = false;
     opts.inline_info = true;
-    opts.height = "40%".into();
+    opts.height = "100%".into();
     if has_preview {
         // Skim only creates a preview pane when a global preview is configured,
         // even when every item provides inline preview text.
