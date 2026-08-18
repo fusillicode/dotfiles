@@ -207,13 +207,8 @@ impl RenderableSession {
     }
 
     fn preview(&self) -> String {
-        let first_prompt = self.session.name.trim_end_at_with(256, None);
-        let last_prompt = self
-            .session
-            .last_user_prompt
-            .as_deref()
-            .unwrap_or("—")
-            .trim_end_at_with(256, None);
+        let first_prompt = self.session.name.as_str();
+        let last_prompt = self.session.last_user_prompt.as_deref().unwrap_or("—");
         let updated = self.session.updated_at.strftime("%d/%m/%Y-%H:%M");
         let created = self.session.created_at.strftime("%d/%m/%Y-%H:%M");
 
