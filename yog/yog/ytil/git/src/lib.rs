@@ -34,11 +34,10 @@ pub fn get_status() -> rootcause::Result<Vec<GitStatusEntry>> {
     opts.include_ignored(false);
 
     let mut out = vec![];
-    for status_entry in repo
+    for status_entry in &repo
         .statuses(Some(&mut opts))
         .context("error getting statuses")
         .attach_with(|| format!("repo_root={}", repo_root.display()))?
-        .iter()
     {
         out.push(
             GitStatusEntry::try_from((Arc::clone(&repo_root), &status_entry))
