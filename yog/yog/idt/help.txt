@@ -8,6 +8,6 @@ Arguments:
   [tool_names...]  Optional specific tools to install (default: all). Use `cargo` for the declared Cargo/Git inventory only.
 
 Examples:
-  idt ~/.dev/tools ~/.local/bin              Install all tools.
+  idt ~/.dev/tools ~/.local/bin               Install all tools.
   idt ~/.dev/tools ~/.local/bin cargo         Install declared Cargo/Git tools only.
   idt ~/.dev/tools ~/.local/bin ruff_lsp rust_analyzer  Subset.
