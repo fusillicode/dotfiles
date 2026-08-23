@@ -1,6 +1,6 @@
 # Directory jump widget.
 #
-# Tab opens an fzf directory browser from an empty prompt or single path token.
+# Shift+Enter opens an fzf directory browser from an empty prompt or single path token.
 # Command/argument contexts fall back to normal completion.
 
 ## Trim leading and trailing whitespace from one string.
@@ -21,7 +21,7 @@ function _dir_jump_input() {
   _dir_jump_trim "$LBUFFER"
 }
 
-## True when Tab should open dir-jump instead of normal completion.
+## True when Shift+Enter should open dir-jump instead of normal completion.
 function _dir_jump_is_path_context() {
   [[ -z "$RBUFFER" ]] || return 1
   [[ "$(_dir_jump_input)" != *[[:space:]]* ]]
@@ -162,7 +162,7 @@ function _dir_jump_fallback_completion() {
   fi
 }
 
-## Main zle widget bound to Tab.
+## Main zle widget bound to Shift+Enter.
 function _dir_jump() {
   if ! _dir_jump_is_path_context || ! (( $+commands[fzf] )); then
     _dir_jump_fallback_completion
@@ -232,4 +232,4 @@ function _dir_jump() {
 }
 
 zle -N _dir_jump
-bindkey '^I' _dir_jump
+bindkey '^[[13;2u' _dir_jump
