@@ -42,6 +42,8 @@ save_to_clipboard = false
 
 [keyboard]
 bindings = [
+  # Keep Shift+Enter distinct from Enter for shell key bindings.
+  { key = "Enter", mods = "Shift", chars = "\u001B[13;2u" },
   # Apparently `option_as_alt = "Both"` is not enough
   { key = "Left", mods = "Alt", chars = "\u001Bb" },
   { key = "Right", mods = "Alt", chars = "\u001Bf" },
