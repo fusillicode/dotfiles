@@ -146,6 +146,12 @@ fn legacy_key_input_bytes(key: &ClientKey) -> Option<Vec<u8>> {
         (ClientKeyCode::Tab, ClientKeyModifiers::NONE) => Some(b"\t".to_vec()),
         (ClientKeyCode::Tab, ClientKeyModifiers::SHIFT) => Some(b"\x1b[Z".to_vec()),
         (ClientKeyCode::Up, ClientKeyModifiers::NONE) => Some(b"\x1b[A".to_vec()),
+        (ClientKeyCode::Enter, ClientKeyModifiers::SHIFT)
+            if KittyKeyboardSequence::from_raw_bytes(&key.raw_bytes) == KittyKeyboardSequence::Kitty =>
+        {
+            // Preserve Shift-Enter for legacy shells that bind the Kitty sequence in ZLE.
+            Some(key.raw_bytes.clone())
+        }
         (ClientKeyCode::Char(character), _)
             if KittyKeyboardSequence::from_raw_bytes(&key.raw_bytes) == KittyKeyboardSequence::Kitty =>
         {
@@ -343,7 +349,7 @@ mod tests {
     #[case::legacy_shift_enter(
         TerminalKeyboardProtocol::Legacy,
         self::key(ClientKeyCode::Enter, ClientKeyModifiers::SHIFT, b"\x1b[13;2u"),
-        None
+        Some(b"\x1b[13;2u".to_vec())
     )]
     #[case::legacy_shift_tab(
         TerminalKeyboardProtocol::Legacy,
