@@ -79,7 +79,7 @@ impl SelectionClickTracker {
         }
     }
 
-    const fn reset(&mut self) {
+    pub(crate) const fn reset(&mut self) {
         self.count = 0;
         self.previous = None;
     }
@@ -577,7 +577,7 @@ impl SelectionState {
             .retain(|content_row, _| selected.contains_content_row(*content_row));
     }
 
-    fn clear(&mut self) {
+    pub(crate) fn clear(&mut self) {
         self.cached_rows.clear();
         self.drag = None;
         self.selected = None;
