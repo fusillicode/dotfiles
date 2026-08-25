@@ -341,6 +341,13 @@ impl ClientRenderer {
         self.apply_selection_input_at_logical(input, Instant::now())
     }
 
+    pub(crate) fn clear_selection(&mut self) {
+        self.clicks.reset();
+        self.selection.clear();
+        self.selection_edge_scroll.clear();
+        self.edge_scroll_render_generation = None;
+    }
+
     pub(crate) fn apply_selection_input_at_logical(
         &mut self,
         input: SelectionInput,
@@ -857,6 +864,24 @@ mod tests {
         assert_that!(terminal_output, starts_with("\x1b[?2026h"));
         assert_that!(terminal_output, not(contains_substring("tab-0")));
         assert_that!(terminal_output, not(contains_substring("\x1b[2J")));
+        Ok(())
+    }
+
+    #[test]
+    fn test_client_renderer_clear_selection_when_selection_exists_removes_selection() -> rootcause::Result<()> {
+        let mut renderer = ClientRenderer::with_synchronized_output(
+            layout_snapshot()?,
+            pane_regions_snapshot()?,
+            SynchronizedOutput::Csi,
+        );
+        renderer.apply_render_logical(muxr_core::RenderUpdate::Baseline(render_baseline()?))?;
+        renderer.apply_selection_input_logical(SelectionInput::Start(ClientMousePosition { row: 0, col: 0 }))?;
+        renderer.apply_selection_input_logical(SelectionInput::Update(ClientMousePosition { row: 0, col: 1 }))?;
+
+        renderer.clear_selection();
+
+        assert_that!(test_helpers::selection_contains(&renderer, 0, 0), eq(false));
+        assert_that!(test_helpers::selected_text(&renderer), eq(None));
         Ok(())
     }
 
