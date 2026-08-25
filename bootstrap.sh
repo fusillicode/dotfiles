@@ -123,9 +123,13 @@ if [[ -f "$HOME/.cargo/env" ]]; then
   source "$HOME/.cargo/env"
 fi
 
+# Setup ~/.local/bin & ~/.dev-tools
+info "Evoking yog..."
+cd yog && cargo run --bin evoke && cd -
+
 # Cargo bins
 info "Installing cargo binaries..."
-/bin/bash "$script_dir"/bin/provision_cargo_bins.sh
+"$HOME/.local/bin/idt" "$HOME/.dev-tools" "$HOME/.local/bin" cargo
 
 # mise (installed via cargo, now available)
 info "Updating mise..."
@@ -135,10 +139,6 @@ if command_exists mise; then
 else
   warn "mise not found, skipping mise update..."
 fi
-
-# Setup ~/.local/bin & ~/.dev_tools
-info "Running evoke setup..."
-cd yog && cargo run --bin evoke && cd -
 
 # Update & cleanup brew
 info "Cleaning up Homebrew..."

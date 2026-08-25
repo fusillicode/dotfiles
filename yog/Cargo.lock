@@ -1157,7 +1157,6 @@ dependencies = [
  "rstest",
  "serde",
  "serde_json",
- "tempfile",
  "test-that",
  "ytil_cmd",
  "ytil_sys",

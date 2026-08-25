@@ -33,7 +33,7 @@ Bunch of _personal_ command-line utilities built-in [Rust](https://www.rust-lang
 Managed Cargo and Git developer tools are installed only through the declared `idt` inventory:
 
 ```console
-idt ~/.dev/tools ~/.local/bin cargo
+idt ~/.dev-tools ~/.local/bin cargo
 ```
 
 > [!NOTE]

@@ -20,7 +20,6 @@ ytil_sys = { workspace = true }
 
 [dev-dependencies]
 rstest = { workspace = true }
-tempfile = { workspace = true }
 test-that = { workspace = true }
 
 [lints]
