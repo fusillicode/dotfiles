@@ -42,6 +42,7 @@ enum StdinRead {
 enum ClientInputAction {
     CopySelection,
     CopySelectionInline,
+    ClearSelection,
     Mouse(ClientMouseEvent),
 }
 
@@ -341,6 +342,10 @@ async fn handle_client_input_action(
             renderer.copy_selection_inline()?;
             Ok(ClientInputSend::Accepted)
         }
+        ClientInputAction::ClearSelection => {
+            renderer.clear_selection();
+            Ok(ClientInputSend::Accepted)
+        }
         ClientInputAction::Mouse(event) => {
             crate::pane::mouse::handle_mouse_input_action(muxr_config, event, input_sender, renderer).await
         }
@@ -540,19 +545,31 @@ fn send_decoded_input_with_ordering(
     decoded: Vec<DecodedInput>,
     local_action_completion: LocalActionCompletion,
 ) -> ClientInputSend {
+    let mut selection_reset_sent = false;
+
     for decoded in decoded {
         let action = match decoded {
             DecodedInput::CopySelection => ClientInputAction::CopySelection,
             DecodedInput::CopySelectionInline => ClientInputAction::CopySelectionInline,
-            // These requests do not need local renderer state. Send them directly to the sole request writer so
-            // terminal encoding and selection rebuilding cannot delay PTY input while another pane is repainting.
+            // Keep pane input on the sole request writer. Clear local selection first so keyboard and paste input
+            // cannot leave stale highlight state while another pane is repainting.
             DecodedInput::Input(bytes) => {
+                if self::clear_selection_before_input(cmd_sender, local_action_completion, &mut selection_reset_sent)
+                    == ClientInputSend::Closed
+                {
+                    return ClientInputSend::Closed;
+                }
                 if request_sender.blocking_send(ClientRequest::Input(bytes)).is_err() {
                     return ClientInputSend::Closed;
                 }
                 continue;
             }
             DecodedInput::Key(key) => {
+                if self::clear_selection_before_input(cmd_sender, local_action_completion, &mut selection_reset_sent)
+                    == ClientInputSend::Closed
+                {
+                    return ClientInputSend::Closed;
+                }
                 if request_sender.blocking_send(ClientRequest::Key(key)).is_err() {
                     return ClientInputSend::Closed;
                 }
@@ -569,10 +586,19 @@ fn send_decoded_input_with_ordering(
                 {
                     return ClientInputSend::Closed;
                 }
+                selection_reset_sent = false;
                 continue;
             }
-            DecodedInput::Mouse(event) => ClientInputAction::Mouse(event),
+            DecodedInput::Mouse(event) => {
+                selection_reset_sent = false;
+                ClientInputAction::Mouse(event)
+            }
             DecodedInput::Paste(bytes) => {
+                if self::clear_selection_before_input(cmd_sender, local_action_completion, &mut selection_reset_sent)
+                    == ClientInputSend::Closed
+                {
+                    return ClientInputSend::Closed;
+                }
                 if request_sender.blocking_send(ClientRequest::Paste(bytes)).is_err() {
                     return ClientInputSend::Closed;
                 }
@@ -585,6 +611,22 @@ fn send_decoded_input_with_ordering(
     }
 
     ClientInputSend::Accepted
+}
+
+fn clear_selection_before_input(
+    cmd_sender: &tokio::sync::mpsc::Sender<ClientInputCmd>,
+    local_action_completion: LocalActionCompletion,
+    selection_reset_sent: &mut bool,
+) -> ClientInputSend {
+    if *selection_reset_sent {
+        return ClientInputSend::Accepted;
+    }
+
+    let result = self::send_input_action(cmd_sender, ClientInputAction::ClearSelection, local_action_completion);
+    if result == ClientInputSend::Accepted {
+        *selection_reset_sent = true;
+    }
+    result
 }
 
 fn send_droppable_input_action(
@@ -897,7 +939,7 @@ mod tests {
     }
 
     #[test]
-    fn test_send_decoded_input_when_key_arrives_bypasses_the_renderer_action_queue_in_order() {
+    fn test_send_decoded_input_when_key_arrives_clears_selection_once_and_preserves_request_order() {
         let (cmd_sender, mut cmd_receiver) = tokio::sync::mpsc::channel(1);
         let (request_sender, mut request_receiver) = tokio::sync::mpsc::channel(3);
         let key = ClientKey {
@@ -928,7 +970,50 @@ mod tests {
             request_receiver.blocking_recv(),
             eq(Some(ClientRequest::Input(b"b".to_vec())))
         );
+        assert_that!(
+            matches!(
+                cmd_receiver.blocking_recv(),
+                Some(ClientInputCmd::Action(ClientInputAction::ClearSelection))
+            ),
+            eq(true)
+        );
         assert_that!(cmd_receiver.try_recv().is_err(), eq(true));
+    }
+
+    #[test]
+    fn test_send_decoded_input_when_copy_precedes_key_keeps_copy_before_selection_reset() {
+        let (cmd_sender, mut cmd_receiver) = tokio::sync::mpsc::channel(2);
+        let (request_sender, mut request_receiver) = tokio::sync::mpsc::channel(1);
+        let key = ClientKey {
+            code: ClientKeyCode::Char('E'),
+            modifiers: ClientKeyModifiers::SHIFT_ALT,
+            raw_bytes: b"\x1bE".to_vec(),
+        };
+
+        assert_that!(
+            send_decoded_input(
+                &cmd_sender,
+                &request_sender,
+                vec![DecodedInput::CopySelection, DecodedInput::Key(key.clone())],
+            ),
+            eq(ClientInputSend::Accepted)
+        );
+
+        assert_that!(
+            matches!(
+                cmd_receiver.blocking_recv(),
+                Some(ClientInputCmd::Action(ClientInputAction::CopySelection))
+            ),
+            eq(true)
+        );
+        assert_that!(
+            matches!(
+                cmd_receiver.blocking_recv(),
+                Some(ClientInputCmd::Action(ClientInputAction::ClearSelection))
+            ),
+            eq(true)
+        );
+        assert_that!(request_receiver.blocking_recv(), eq(Some(ClientRequest::Key(key))));
     }
 
     #[test]
