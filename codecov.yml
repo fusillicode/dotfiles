@@ -28,8 +28,8 @@ coverage:
         informational: true
 
 ignore:
-  - "yog/nomicon/templates/"
-  - "yog/nomicon/assets/"
+  - "yog/crates/nomicon/templates/"
+  - "yog/crates/nomicon/assets/"
   - "**/build.rs"
 
 comment:
@@ -46,100 +46,100 @@ component_management:
     - component_id: catl
       name: catl
       paths:
-        - yog/catl/**
+        - yog/crates/catl/**
     - component_id: evoke
       name: evoke
       paths:
-        - yog/evoke/**
+        - yog/crates/evoke/**
     - component_id: fkr
       name: fkr
       paths:
-        - yog/fkr/**
+        - yog/crates/fkr/**
     - component_id: gch
       name: gch
       paths:
-        - yog/gch/**
+        - yog/crates/gch/**
     - component_id: gcu
       name: gcu
       paths:
-        - yog/gcu/**
+        - yog/crates/gcu/**
     - component_id: ghl
       name: ghl
       paths:
-        - yog/ghl/**
+        - yog/crates/ghl/**
     - component_id: idt
       name: idt
       paths:
-        - yog/idt/**
+        - yog/crates/idt/**
     - component_id: miskatonic
       name: miskatonic
       paths:
-        - yog/miskatonic/**
+        - yog/crates/miskatonic/**
     - component_id: nomicon
       name: nomicon
       paths:
-        - yog/nomicon/**
+        - yog/crates/nomicon/**
     - component_id: nvrim
       name: nvrim
       paths:
-        - yog/nvrim/**
+        - yog/crates/nvrim/**
     - component_id: oe
       name: oe
       paths:
-        - yog/oe/**
+        - yog/crates/oe/**
     - component_id: rmr
       name: rmr
       paths:
-        - yog/rmr/**
+        - yog/crates/rmr/**
     - component_id: tec
       name: tec
       paths:
-        - yog/tec/**
+        - yog/crates/tec/**
     - component_id: try
       name: try
       paths:
-        - yog/try/**
+        - yog/crates/try/**
     - component_id: vpg
       name: vpg
       paths:
-        - yog/vpg/**
+        - yog/crates/vpg/**
     - component_id: yghfl
       name: yghfl
       paths:
-        - yog/yghfl/**
+        - yog/crates/yghfl/**
     - component_id: yhfp
       name: yhfp
       paths:
-        - yog/yhfp/**
+        - yog/crates/yhfp/**
     - component_id: ytil_cmd
       name: ytil_cmd
       paths:
-        - yog/ytil/cmd/**
+        - yog/crates/ytil/cmd/**
     - component_id: ytil_editor
       name: ytil_editor
       paths:
-        - yog/ytil/editor/**
+        - yog/crates/ytil/editor/**
     - component_id: ytil_git
       name: ytil_git
       paths:
-        - yog/ytil/git/**
+        - yog/crates/ytil/git/**
     - component_id: ytil_github
       name: ytil_github
       paths:
-        - yog/ytil/github/**
+        - yog/crates/ytil/github/**
     - component_id: ytil_hx
       name: ytil_hx
       paths:
-        - yog/ytil/hx/**
+        - yog/crates/ytil/hx/**
     - component_id: ytil_system
       name: ytil_system
       paths:
-        - yog/ytil/system/**
+        - yog/crates/ytil/system/**
     - component_id: ytil_tui
       name: ytil_tui
       paths:
-        - yog/ytil/tui/**
+        - yog/crates/ytil/tui/**
     - component_id: ytil_wezterm
       name: ytil_wezterm
       paths:
-        - yog/ytil/wezterm/**
+        - yog/crates/ytil/wezterm/**
