@@ -107,7 +107,7 @@ mod tests {
               "packages": [
                 {
                   "dependencies": [],
-                  "manifest_path": "/repo/yog/evoke/Cargo.toml",
+                  "manifest_path": "/repo/yog/crates/evoke/Cargo.toml",
                   "name": "evoke",
                   "targets": [
                     { "kind": ["bin"], "name": "evoke" },
@@ -116,7 +116,7 @@ mod tests {
                 },
                 {
                   "dependencies": [],
-                  "manifest_path": "/repo/yog/helper-cli/Cargo.toml",
+                  "manifest_path": "/repo/yog/crates/helper-cli/Cargo.toml",
                   "name": "helper-cli",
                   "targets": [
                     { "kind": ["bin"], "name": "helper-cli" }
@@ -124,7 +124,7 @@ mod tests {
                 },
                 {
                   "dependencies": [],
-                  "manifest_path": "/repo/yog/feature-bin/Cargo.toml",
+                  "manifest_path": "/repo/yog/crates/feature-bin/Cargo.toml",
                   "name": "feature-bin",
                   "targets": [
                     {
@@ -138,7 +138,7 @@ mod tests {
                   "dependencies": [
                     { "kind": "dev", "name": "fixture-dev-dep" }
                   ],
-                  "manifest_path": "/repo/yog/fixture-tool/Cargo.toml",
+                  "manifest_path": "/repo/yog/crates/fixture-tool/Cargo.toml",
                   "name": "fixture-tool",
                   "targets": [
                     { "kind": ["bin"], "name": "fixture-tool" }

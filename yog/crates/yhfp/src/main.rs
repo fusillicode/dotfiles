@@ -73,7 +73,7 @@ mod tests {
 
     #[rstest]
     #[case("src/main.rs", 42, 7, "src/main.rs:42")]
-    #[case("yog/ytil/cmd/src/lib.rs", 1, 1, "yog/ytil/cmd/src/lib.rs:1")]
+    #[case("crates/ytil/cmd/src/lib.rs", 1, 1, "crates/ytil/cmd/src/lib.rs:1")]
     #[case("file.txt", 100, 50, "file.txt:100")]
     fn test_format_hx_status_line_returns_path_with_line_number(
         #[case] path: &str,

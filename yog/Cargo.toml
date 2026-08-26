@@ -1,47 +1,47 @@
 [workspace]
 resolver = "2"
 members = [
-    "yog/agg",
-    "yog/catl",
-    "yog/evoke",
-    "yog/fkr",
-    "yog/frs",
-    "yog/gbm",
-    "yog/gch",
-    "yog/gcu",
-    "yog/ghl",
-    "yog/idt",
-    "yog/miskatonic",
-    "yog/muxr/cli",
-    "yog/muxr/client",
-    "yog/muxr/config",
-    "yog/muxr/core",
-    "yog/muxr/server",
-    "yog/muxr/transport",
-    "yog/nomicon",
-    "yog/nvrim",
-    "yog/oe",
-    "yog/rmr",
-    "yog/strgci",
-    "yog/tec",
-    "yog/try",
-    "yog/vpg",
-    "yog/yghfl",
-    "yog/yhfp",
+    "crates/agg",
+    "crates/catl",
+    "crates/evoke",
+    "crates/fkr",
+    "crates/frs",
+    "crates/gbm",
+    "crates/gch",
+    "crates/gcu",
+    "crates/ghl",
+    "crates/idt",
+    "crates/miskatonic",
+    "crates/muxr/cli",
+    "crates/muxr/client",
+    "crates/muxr/config",
+    "crates/muxr/core",
+    "crates/muxr/server",
+    "crates/muxr/transport",
+    "crates/nomicon",
+    "crates/nvrim",
+    "crates/oe",
+    "crates/rmr",
+    "crates/strgci",
+    "crates/tec",
+    "crates/try",
+    "crates/vpg",
+    "crates/yghfl",
+    "crates/yhfp",
     # Utility libraries (ytil)
-    "yog/ytil/agents",
-    "yog/ytil/cmd",
-    "yog/ytil/editor",
-    "yog/ytil/ext",
-    "yog/ytil/gh",
-    "yog/ytil/git",
-    "yog/ytil/hx",
-    "yog/ytil/macros",
-    "yog/ytil/noxi",
-    "yog/ytil/sys",
-    "yog/ytil/tui",
-    "yog/ytil/wezterm",
-    "yog/ytil/zellij",
+    "crates/ytil/agents",
+    "crates/ytil/cmd",
+    "crates/ytil/editor",
+    "crates/ytil/ext",
+    "crates/ytil/gh",
+    "crates/ytil/git",
+    "crates/ytil/hx",
+    "crates/ytil/macros",
+    "crates/ytil/noxi",
+    "crates/ytil/sys",
+    "crates/ytil/tui",
+    "crates/ytil/wezterm",
+    "crates/ytil/zellij",
 ]
 
 [workspace.package]
@@ -62,10 +62,10 @@ convert_case = { version = "0.11" }
 fake = { version = "5.1", features = ["derive"] }
 git2 = { version = "0.21", default-features = false }
 jiff = { version = "0.2", default-features = false, features = ["serde", "std", "tz-system", "tzdb-zoneinfo"] }
-muxr_config = { package = "muxr-config", path = "./yog/muxr/config" }
-muxr_core = { package = "muxr-core", path = "./yog/muxr/core" }
-muxr_transport = { package = "muxr-transport", path = "./yog/muxr/transport" }
-nomicon = { path = "./yog/nomicon" }
+muxr_config = { package = "muxr-config", path = "./crates/muxr/config" }
+muxr_core = { package = "muxr-core", path = "./crates/muxr/core" }
+muxr_transport = { package = "muxr-transport", path = "./crates/muxr/transport" }
+nomicon = { path = "./crates/nomicon" }
 nvim-oxi = { path = "../third_party/nvim-oxi", features = ["neovim-nightly", "mlua"] }
 owo-colors = { version = "4" }
 rootcause = { version = "0.13" }
@@ -80,19 +80,19 @@ tokio = { version = "1.48", default-features = false, features = ["io-util", "ma
 ureq = { version = "3.3", default-features = false, features = ["rustls"] }
 url = { version = "2.5" }
 
-ytil_agents = { path = "./yog/ytil/agents" }
-ytil_cmd = { path = "./yog/ytil/cmd" }
-ytil_editor = { path = "./yog/ytil/editor" }
-ytil_ext = { path = "./yog/ytil/ext" }
-ytil_gh = { path = "./yog/ytil/gh" }
-ytil_git = { path = "./yog/ytil/git" }
-ytil_hx = { path = "./yog/ytil/hx" }
-ytil_macros = { path = "./yog/ytil/macros" }
-ytil_noxi = { path = "./yog/ytil/noxi" }
-ytil_sys = { path = "./yog/ytil/sys" }
-ytil_tui = { path = "./yog/ytil/tui" }
-ytil_wezterm = { path = "./yog/ytil/wezterm" }
-ytil_zellij = { path = "./yog/ytil/zellij" }
+ytil_agents = { path = "./crates/ytil/agents" }
+ytil_cmd = { path = "./crates/ytil/cmd" }
+ytil_editor = { path = "./crates/ytil/editor" }
+ytil_ext = { path = "./crates/ytil/ext" }
+ytil_gh = { path = "./crates/ytil/gh" }
+ytil_git = { path = "./crates/ytil/git" }
+ytil_hx = { path = "./crates/ytil/hx" }
+ytil_macros = { path = "./crates/ytil/macros" }
+ytil_noxi = { path = "./crates/ytil/noxi" }
+ytil_sys = { path = "./crates/ytil/sys" }
+ytil_tui = { path = "./crates/ytil/tui" }
+ytil_wezterm = { path = "./crates/ytil/wezterm" }
+ytil_zellij = { path = "./crates/ytil/zellij" }
 
 [workspace.lints.clippy]
 all = { level = "deny", priority = -1 }

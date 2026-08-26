@@ -409,7 +409,7 @@ mod tests {
         "skipped"
     )]
     #[case::cargo_toml_change_triggers_rust_extensions(
-        &["yog/yog/tec/Cargo.toml".to_string()],
+        &["crates/tec/Cargo.toml".to_string()],
         RUST_EXTENSIONS,
         "dummy success"
     )]
