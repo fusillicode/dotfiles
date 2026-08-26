@@ -25,6 +25,7 @@ pub enum ClientCmd {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TabCmd {
     Create,
+    FocusAt(usize),
     FocusNext,
     FocusPrevious,
     MoveNext,
@@ -88,6 +89,10 @@ pub fn pane_key_input_bytes(key: &ClientKey, keyboard_protocol: TerminalKeyboard
 }
 
 const fn resolve_normal_key(input_mode: &mut ServerInputMode, key: &ClientKey) -> KeyResolution {
+    if let Some(tab_index) = self::tab_index_for_key(key) {
+        return KeyResolution::Cmd(ClientCmd::Tab(TabCmd::FocusAt(tab_index)));
+    }
+
     match (&key.code, key.modifiers) {
         (ClientKeyCode::Char('E'), ClientKeyModifiers::SHIFT_ALT) => KeyResolution::Cmd(ClientCmd::Tab(TabCmd::Create)),
         (ClientKeyCode::Char('P'), ClientKeyModifiers::SHIFT_ALT) => {
@@ -132,6 +137,29 @@ const fn resolve_normal_key(input_mode: &mut ServerInputMode, key: &ClientKey) -
             KeyResolution::Cmd(ClientCmd::OpenScrollbackEditor)
         }
         _ => KeyResolution::Raw,
+    }
+}
+
+const fn tab_index_for_key(key: &ClientKey) -> Option<usize> {
+    if !key.modifiers.shift || !key.modifiers.alt || key.modifiers.ctrl {
+        return None;
+    }
+
+    let ClientKeyCode::Char(character) = key.code else {
+        return None;
+    };
+
+    match character {
+        '1' => Some(0),
+        '2' => Some(1),
+        '3' => Some(2),
+        '4' => Some(3),
+        '5' => Some(4),
+        '6' => Some(5),
+        '7' => Some(6),
+        '8' => Some(7),
+        '9' => Some(8),
+        _ => None,
     }
 }
 
@@ -570,6 +598,43 @@ mod tests {
         assert_that!(input_mode, eq(ServerInputMode::Normal));
     }
 
+    #[rstest::rstest]
+    #[case::tab_one('1', 0)]
+    #[case::tab_two('2', 1)]
+    #[case::tab_three('3', 2)]
+    #[case::tab_four('4', 3)]
+    #[case::tab_five('5', 4)]
+    #[case::tab_six('6', 5)]
+    #[case::tab_seven('7', 6)]
+    #[case::tab_eight('8', 7)]
+    #[case::tab_nine('9', 8)]
+    fn test_resolve_key_when_shift_alt_digit_arrives_returns_ordinal_tab_cmd(
+        #[case] character: char,
+        #[case] tab_index: usize,
+    ) {
+        let mut input_mode = ServerInputMode::Normal;
+        let key = self::key(ClientKeyCode::Char(character), ClientKeyModifiers::SHIFT_ALT, &[]);
+
+        assert_that!(
+            self::resolve_key(&mut input_mode, &key),
+            eq(KeyResolution::Cmd(ClientCmd::Tab(TabCmd::FocusAt(tab_index))))
+        );
+        assert_that!(input_mode, eq(ServerInputMode::Normal));
+    }
+
+    #[test]
+    fn test_resolve_key_when_ctrl_digit_arrives_returns_raw() {
+        let mut input_mode = ServerInputMode::Normal;
+        let key = self::key(
+            ClientKeyCode::Char('1'),
+            self::modifiers(false, false, true),
+            b"\x1b[49;5u",
+        );
+
+        assert_that!(self::resolve_key(&mut input_mode, &key), eq(KeyResolution::Raw));
+        assert_that!(input_mode, eq(ServerInputMode::Normal));
+    }
+
     #[test]
     fn test_resolve_key_when_unbound_key_arrives_returns_raw() {
         let mut input_mode = ServerInputMode::Normal;
@@ -631,6 +696,19 @@ mod tests {
             eq(KeyResolution::Cmd(ClientCmd::ExitMode))
         );
         assert_that!(input_mode, eq(ServerInputMode::Normal));
+    }
+
+    #[test]
+    fn test_resolve_key_when_resize_mode_ctrl_digit_arrives_returns_raw() {
+        let mut input_mode = ServerInputMode::Resize;
+        let key = self::key(
+            ClientKeyCode::Char('1'),
+            self::modifiers(false, false, true),
+            b"\x1b[49;5u",
+        );
+
+        assert_that!(self::resolve_key(&mut input_mode, &key), eq(KeyResolution::Raw));
+        assert_that!(input_mode, eq(ServerInputMode::Resize));
     }
 
     fn key(code: ClientKeyCode, modifiers: ClientKeyModifiers, raw_bytes: &[u8]) -> ClientKey {

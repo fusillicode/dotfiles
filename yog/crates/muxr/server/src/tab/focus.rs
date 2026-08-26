@@ -36,6 +36,14 @@ impl SessionLayout {
         Ok(TabFocusChange::Changed)
     }
 
+    pub fn focus_tab_at(&mut self, tab_index: usize) -> rootcause::Result<TabFocusChange> {
+        let Some(tab_id) = self.entries.get(tab_index).map(|tab| tab.id) else {
+            return Ok(TabFocusChange::Unchanged);
+        };
+
+        self.focus_tab(tab_id)
+    }
+
     pub fn focus_previous_tab(&mut self) -> rootcause::Result<TabFocusChange> {
         let tab_index = self.active_tab_index()?;
         let previous_index = if tab_index == 0 {
@@ -76,18 +84,6 @@ impl SessionLayout {
     }
 }
 
-fn handle_focus_tab_request(
-    tab_id: TabId,
-    config: &ServerConfig,
-    layout: &mut SessionLayout,
-) -> rootcause::Result<TabFocusChange> {
-    let tab_focus = layout.focus_tab(tab_id)?;
-    if tab_focus == TabFocusChange::Changed {
-        crate::state::persisted::write_metadata(&config.paths, layout)?;
-    }
-    Ok(tab_focus)
-}
-
 fn handle_focus_tab_request_with_tracked_process_ack(
     tab_id: TabId,
     config: &ServerConfig,
@@ -96,8 +92,46 @@ fn handle_focus_tab_request_with_tracked_process_ack(
     pane_tracked_processes: &mut PaneTrackedProcesses,
     now: Instant,
 ) -> rootcause::Result<TabFocusChange> {
-    let tab_focus = self::handle_focus_tab_request(tab_id, config, layout)?;
+    let tab_focus = layout.focus_tab(tab_id)?;
+    self::handle_tab_focus_change_with_tracked_process_ack(
+        tab_focus,
+        config,
+        layout,
+        runtimes,
+        pane_tracked_processes,
+        now,
+    )
+}
+
+fn handle_focus_tab_at_index_request_with_tracked_process_ack(
+    tab_index: usize,
+    config: &ServerConfig,
+    layout: &mut SessionLayout,
+    runtimes: &PaneRuntimes,
+    pane_tracked_processes: &mut PaneTrackedProcesses,
+    now: Instant,
+) -> rootcause::Result<TabFocusChange> {
+    let tab_focus = layout.focus_tab_at(tab_index)?;
+    self::handle_tab_focus_change_with_tracked_process_ack(
+        tab_focus,
+        config,
+        layout,
+        runtimes,
+        pane_tracked_processes,
+        now,
+    )
+}
+
+fn handle_tab_focus_change_with_tracked_process_ack(
+    tab_focus: TabFocusChange,
+    config: &ServerConfig,
+    layout: &SessionLayout,
+    runtimes: &PaneRuntimes,
+    pane_tracked_processes: &mut PaneTrackedProcesses,
+    now: Instant,
+) -> rootcause::Result<TabFocusChange> {
     if tab_focus == TabFocusChange::Changed {
+        crate::state::persisted::write_metadata(&config.paths, layout)?;
         let _acknowledged = pane_tracked_processes.acknowledge_active_pane_attention(
             config.user_config.as_ref(),
             layout,
@@ -170,6 +204,28 @@ pub fn handle_focus_tab_client_request(
     Ok(TabFocusClientOutcome::Render { previous_pane })
 }
 
+pub fn handle_focus_tab_at_index_cmd_client(
+    tab_index: usize,
+    state: &mut ClientSessionState<'_>,
+) -> rootcause::Result<TabFocusClientOutcome> {
+    if state.scrollback_editor.is_some() {
+        return Ok(TabFocusClientOutcome::Unchanged);
+    }
+    let previous_pane = state.layout.active_pane_id()?;
+    if self::handle_focus_tab_at_index_request_with_tracked_process_ack(
+        tab_index,
+        state.config,
+        state.layout,
+        state.runtimes,
+        &mut state.pane_tracked_processes,
+        Instant::now(),
+    )? != TabFocusChange::Changed
+    {
+        return Ok(TabFocusClientOutcome::Unchanged);
+    }
+    Ok(TabFocusClientOutcome::Render { previous_pane })
+}
+
 pub fn handle_focus_previous_tab_cmd_client(
     state: &mut ClientSessionState<'_>,
 ) -> rootcause::Result<TabFocusClientOutcome> {
@@ -228,6 +284,31 @@ mod tests {
 
         assert_that!(layout.focus_tab(TabId::new(3)?)?, eq(TabFocusChange::Unchanged));
 
+        assert_that!(layout.active_tab.get(), eq(1));
+        Ok(())
+    }
+
+    #[test]
+    fn test_focus_tab_at_when_layout_order_differs_from_ids_focuses_ordinal_tab() -> rootcause::Result<()> {
+        let session: SessionName = "work".parse()?;
+        let tab_1 = TabId::new(1)?;
+        let tab_4 = TabId::new(4)?;
+        let mut layout = SessionLayout {
+            active_tab: tab_1,
+            entries: vec![self::tab(tab_4, PaneId::new(4)?), self::tab(tab_1, PaneId::new(1)?)],
+            session,
+        };
+
+        assert_that!(layout.focus_tab_at(0)?, eq(TabFocusChange::Changed));
+        assert_that!(layout.active_tab.get(), eq(4));
+        Ok(())
+    }
+
+    #[test]
+    fn test_focus_tab_at_when_index_is_missing_keeps_active_tab() -> rootcause::Result<()> {
+        let mut layout = self::layout()?;
+
+        assert_that!(layout.focus_tab_at(2)?, eq(TabFocusChange::Unchanged));
         assert_that!(layout.active_tab.get(), eq(1));
         Ok(())
     }

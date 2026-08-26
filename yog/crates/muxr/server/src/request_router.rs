@@ -646,6 +646,15 @@ async fn handle_tab_cmd_request(
             )
             .await
         }
+        TabCmd::FocusAt(tab_index) => {
+            self::apply_tab_focus_outcome(
+                crate::tab::focus::handle_focus_tab_at_index_cmd_client(tab_index, state)?,
+                event_writer,
+                state,
+                timers,
+            )
+            .await
+        }
         TabCmd::FocusPrevious => {
             self::apply_tab_focus_outcome(
                 crate::tab::focus::handle_focus_previous_tab_cmd_client(state)?,

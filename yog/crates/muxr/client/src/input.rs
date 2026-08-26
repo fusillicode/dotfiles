@@ -243,6 +243,15 @@ fn key_for_escaped_byte(byte: u8) -> Option<ClientKey> {
     let (code, modifiers) = match byte {
         CTRL_N => (ClientKeyCode::Char('n'), ClientKeyModifiers::CTRL_ALT),
         CTRL_P => (ClientKeyCode::Char('p'), ClientKeyModifiers::CTRL_ALT),
+        b'!' => (ClientKeyCode::Char('1'), ClientKeyModifiers::SHIFT_ALT),
+        b'@' => (ClientKeyCode::Char('2'), ClientKeyModifiers::SHIFT_ALT),
+        b'#' => (ClientKeyCode::Char('3'), ClientKeyModifiers::SHIFT_ALT),
+        b'$' => (ClientKeyCode::Char('4'), ClientKeyModifiers::SHIFT_ALT),
+        b'%' => (ClientKeyCode::Char('5'), ClientKeyModifiers::SHIFT_ALT),
+        b'^' => (ClientKeyCode::Char('6'), ClientKeyModifiers::SHIFT_ALT),
+        b'&' => (ClientKeyCode::Char('7'), ClientKeyModifiers::SHIFT_ALT),
+        b'*' => (ClientKeyCode::Char('8'), ClientKeyModifiers::SHIFT_ALT),
+        b'(' => (ClientKeyCode::Char('9'), ClientKeyModifiers::SHIFT_ALT),
         b'D' | b'E' | b'F' | b'H' | b'J' | b'K' | b'L' | b'N' | b'P' | b'R' | b'S' | b'V' | b'W' => {
             (ClientKeyCode::Char(char::from(byte)), ClientKeyModifiers::SHIFT_ALT)
         }
@@ -584,6 +593,7 @@ mod tests {
     #[case::shift_backspace(b"\x1b[127;2u", ClientKeyCode::Backspace, ClientKeyModifiers::SHIFT)]
     #[case::ctrl_l(b"\x1b[108;5u", ClientKeyCode::Char('l'), self::modifiers(false, false, true))]
     #[case::ctrl_k(b"\x1b[107;5u", ClientKeyCode::Char('k'), self::modifiers(false, false, true))]
+    #[case::shift_alt_one(b"\x1b[49;4u", ClientKeyCode::Char('1'), ClientKeyModifiers::SHIFT_ALT)]
     #[case::unknown_modified_key(b"\x1b[999;2u", ClientKeyCode::Unknown, ClientKeyModifiers::SHIFT)]
     #[case::unsupported_modifier_bits(b"\x1b[118;12u", ClientKeyCode::Unknown, ClientKeyModifiers::NONE)]
     fn test_input_decoder_decode_when_kitty_key_arrives_returns_key(
@@ -596,6 +606,32 @@ mod tests {
         assert_that!(
             decoder.decode(bytes),
             eq(vec![DecodedInput::Key(key(code, modifiers, bytes))])
+        );
+    }
+
+    #[rstest]
+    #[case::one(b"\x1b!", '1')]
+    #[case::two(b"\x1b@", '2')]
+    #[case::three(b"\x1b#", '3')]
+    #[case::four(b"\x1b$", '4')]
+    #[case::five(b"\x1b%", '5')]
+    #[case::six(b"\x1b^", '6')]
+    #[case::seven(b"\x1b&", '7')]
+    #[case::eight(b"\x1b*", '8')]
+    #[case::nine(b"\x1b(", '9')]
+    fn test_input_decoder_decode_when_legacy_shift_alt_digit_arrives_returns_key(
+        #[case] bytes: &[u8],
+        #[case] character: char,
+    ) {
+        let mut decoder = InputDecoder::default();
+
+        assert_that!(
+            decoder.decode(bytes),
+            eq(vec![DecodedInput::Key(key(
+                ClientKeyCode::Char(character),
+                ClientKeyModifiers::SHIFT_ALT,
+                bytes,
+            ))])
         );
     }
 
