@@ -10,12 +10,20 @@ use rootcause::report;
 
 use super::DeletionPlan;
 use crate::agent::session::SessionKey;
+use crate::agent::session_parser::codex::CodexSessionMetadata;
 
-pub(super) fn build_deletion_plan(root: &Path, key: &SessionKey) -> rootcause::Result<DeletionPlan> {
+pub(super) fn build_deletion_plan(
+    root: &Path,
+    key: &SessionKey,
+    selected_path: Option<&Path>,
+) -> rootcause::Result<DeletionPlan> {
     let root = root
         .canonicalize()
         .context("failed to resolve Codex session store")
         .attach_with(|| format!("path={}", root.display()))?;
+    let selected_path = selected_path
+        .map(|path| canonicalize_selected_path(&root, path))
+        .transpose()?;
     let session_paths = crate::agent::session_loader::find_session_paths(
         &root,
         |entry| entry.path().extension().is_some_and(|ext| ext == "jsonl"),
@@ -23,6 +31,9 @@ pub(super) fn build_deletion_plan(root: &Path, key: &SessionKey) -> rootcause::R
     )?;
 
     let (sessions, skipped_paths) = scan_deletion_sessions(&root, session_paths);
+    if let Some(selected_path) = selected_path.as_deref() {
+        validate_selected_path(&sessions, key, selected_path)?;
+    }
     let children_by_parent = children_by_parent(&sessions);
     let paths = collect_descendant_paths(key.id(), &children_by_parent, &sessions)?;
     let related_session_count = paths.len().saturating_sub(1);
@@ -38,6 +49,7 @@ pub(super) fn build_deletion_plan(root: &Path, key: &SessionKey) -> rootcause::R
 struct DeletionSession {
     path: PathBuf,
     parent_thread_id: Option<String>,
+    is_subagent: bool,
 }
 
 fn scan_deletion_sessions(
@@ -68,14 +80,17 @@ fn scan_deletion_sessions(
             skipped_paths.push(session_path);
             continue;
         };
+        let CodexSessionMetadata {
+            id,
+            parent_thread_id,
+            is_subagent,
+        } = metadata;
         let deletion_session = DeletionSession {
             path: resolved_path,
-            parent_thread_id: metadata.parent_thread_id,
+            parent_thread_id,
+            is_subagent,
         };
-        sessions
-            .entry(metadata.id)
-            .or_insert_with(Vec::new)
-            .push(deletion_session);
+        sessions.entry(id).or_insert_with(Vec::new).push(deletion_session);
     }
     (sessions, skipped_paths)
 }
@@ -84,7 +99,9 @@ fn children_by_parent(sessions: &HashMap<String, Vec<DeletionSession>>) -> HashM
     let mut children = HashMap::new();
     for (session_id, matches) in sessions {
         for session in matches {
-            if let Some(parent_id) = &session.parent_thread_id {
+            if session.is_subagent
+                && let Some(parent_id) = &session.parent_thread_id
+            {
                 children
                     .entry(parent_id.as_str())
                     .or_insert_with(Vec::new)
@@ -93,6 +110,42 @@ fn children_by_parent(sessions: &HashMap<String, Vec<DeletionSession>>) -> HashM
         }
     }
     children
+}
+
+fn canonicalize_selected_path(root: &Path, selected_path: &Path) -> rootcause::Result<PathBuf> {
+    let selected_path = selected_path
+        .canonicalize()
+        .context("failed to resolve selected Codex session path")
+        .attach_with(|| format!("path={}", selected_path.display()))?;
+    if !selected_path.starts_with(root) {
+        return Err(report!("selected Codex session path is outside the session store")
+            .attach(format!("path={}", selected_path.display()))
+            .attach(format!("root={}", root.display())));
+    }
+    if !selected_path.is_file() || selected_path.extension().is_none_or(|extension| extension != "jsonl") {
+        return Err(report!("selected Codex session path is not a JSONL file")
+            .attach(format!("path={}", selected_path.display())));
+    }
+    Ok(selected_path)
+}
+
+fn validate_selected_path(
+    sessions: &HashMap<String, Vec<DeletionSession>>,
+    key: &SessionKey,
+    selected_path: &Path,
+) -> rootcause::Result<()> {
+    let Some(matches) = sessions.get(key.id()) else {
+        return Err(report!("selected Codex session path does not match the session id")
+            .attach(format!("path={}", selected_path.display()))
+            .attach(format!("session_id={}", key.id())));
+    };
+    if matches.iter().any(|session| session.path == selected_path) {
+        Ok(())
+    } else {
+        Err(report!("selected Codex session path does not match the session id")
+            .attach(format!("path={}", selected_path.display()))
+            .attach(format!("session_id={}", key.id())))
+    }
 }
 
 fn collect_descendant_paths(
@@ -166,7 +219,7 @@ mod tests {
         let unrelated = write_deletion_session(&root, "other", None, "other.jsonl");
         let key = SessionKey::new(Agent::Codex, "parent");
 
-        let plan = build_deletion_plan(&root, &key).expect("plan should resolve");
+        let plan = build_deletion_plan(&root, &key, None).expect("plan should resolve");
 
         assert_that!(plan.related_session_count(), eq(2));
         assert_that!(
@@ -181,6 +234,41 @@ mod tests {
     }
 
     #[test]
+    fn test_build_deletion_plan_when_parent_id_lacks_subagent_marker_ignores_session() {
+        let dir = tempdir().expect("tempdir should be created");
+        let root = dir.path().join("sessions");
+        std::fs::create_dir_all(&root).expect("session root should be created");
+        let parent = write_deletion_session(&root, "parent", None, "parent.jsonl");
+        let unrelated = write_deletion_session_with_subagent(&root, "child", Some("parent"), "child.jsonl", false);
+        let key = SessionKey::new(Agent::Codex, "parent");
+
+        let plan = build_deletion_plan(&root, &key, None).expect("plan should resolve");
+
+        assert_that!(plan.related_session_count(), eq(0));
+        assert_that!(plan.paths, eq([parent.canonicalize().expect("path should resolve")]));
+        assert_that!(plan.paths.contains(&unrelated), eq(false));
+    }
+
+    #[test]
+    fn test_build_deletion_plan_when_selected_path_metadata_differs_from_key_rejects_path() {
+        let dir = tempdir().expect("tempdir should be created");
+        let root = dir.path().join("sessions");
+        std::fs::create_dir_all(&root).expect("session root should be created");
+        let selected_path = write_deletion_session(&root, "other", None, "selected.jsonl");
+        write_deletion_session(&root, "target", None, "target.jsonl");
+        let key = SessionKey::new(Agent::Codex, "target");
+
+        let result = build_deletion_plan(&root, &key, Some(&selected_path));
+
+        assert_that!(
+            result,
+            err(displays_as(contains_substring(
+                "selected Codex session path does not match the session id"
+            )))
+        );
+    }
+
+    #[test]
     fn test_collect_descendant_paths_when_tree_is_deep_uses_iterative_post_order() {
         let depth: usize = 10_000;
         let mut sessions = HashMap::new();
@@ -192,6 +280,7 @@ mod tests {
                 vec![DeletionSession {
                     path: PathBuf::from(&session_id),
                     parent_thread_id,
+                    is_subagent: index > 0,
                 }],
             );
         }
@@ -213,7 +302,7 @@ mod tests {
         write_deletion_session(&root, "parent", None, "two.jsonl");
         let key = SessionKey::new(Agent::Codex, "parent");
 
-        let result = build_deletion_plan(&root, &key);
+        let result = build_deletion_plan(&root, &key, None);
 
         assert_that!(
             result,
@@ -230,7 +319,7 @@ mod tests {
         write_deletion_session(&root, "two", Some("one"), "two.jsonl");
         let key = SessionKey::new(Agent::Codex, "one");
 
-        let result = build_deletion_plan(&root, &key);
+        let result = build_deletion_plan(&root, &key, None);
 
         assert_that!(
             result,
@@ -248,7 +337,7 @@ mod tests {
         let parent = write_deletion_session(&root, "parent", None, "parent.jsonl");
         let key = SessionKey::new(Agent::Codex, "parent");
 
-        let plan = build_deletion_plan(&root, &key).expect("plan should resolve");
+        let plan = build_deletion_plan(&root, &key, None).expect("plan should resolve");
 
         assert_that!(plan.paths, eq([parent.canonicalize().expect("path should resolve")]));
         assert_that!(
@@ -267,7 +356,7 @@ mod tests {
         let parent = write_deletion_session(&root, "parent", None, "parent.jsonl");
         let key = SessionKey::new(Agent::Codex, "parent");
 
-        let plan = build_deletion_plan(&root, &key).expect("plan should resolve");
+        let plan = build_deletion_plan(&root, &key, None).expect("plan should resolve");
 
         assert_that!(plan.paths, eq([parent.canonicalize().expect("path should resolve")]));
         assert_that!(
@@ -292,7 +381,7 @@ mod tests {
         .expect("fixture should be updated");
         let key = SessionKey::new(Agent::Codex, "parent");
 
-        let plan = build_deletion_plan(&root, &key).expect("plan should resolve");
+        let plan = build_deletion_plan(&root, &key, None).expect("plan should resolve");
 
         assert_that!(plan.paths, eq([parent.canonicalize().expect("path should resolve")]));
     }
@@ -326,12 +415,27 @@ mod tests {
     }
 
     fn write_deletion_session(root: &Path, id: &str, parent_id: Option<&str>, filename: &str) -> PathBuf {
+        write_deletion_session_with_subagent(root, id, parent_id, filename, parent_id.is_some())
+    }
+
+    fn write_deletion_session_with_subagent(
+        root: &Path,
+        id: &str,
+        parent_id: Option<&str>,
+        filename: &str,
+        is_subagent: bool,
+    ) -> PathBuf {
         let path = root.join(filename);
         let parent = parent_id.map_or_else(String::new, |parent_id| {
             format!(",\"parent_thread_id\":\"{parent_id}\"")
         });
+        let source = if is_subagent {
+            ",\"source\":{\"subagent\":{}}".to_owned()
+        } else {
+            String::new()
+        };
         let content = format!(
-            "{{\"timestamp\":\"2026-03-20T06:30:20.312Z\",\"type\":\"session_meta\",\"payload\":{{\"id\":\"{id}\"{parent},\"timestamp\":\"2026-03-20T06:30:20.312Z\",\"cwd\":\"/tmp/workspace\"}}}}\n"
+            "{{\"timestamp\":\"2026-03-20T06:30:20.312Z\",\"type\":\"session_meta\",\"payload\":{{\"id\":\"{id}\"{parent},\"timestamp\":\"2026-03-20T06:30:20.312Z\",\"cwd\":\"/tmp/workspace\"{source}}}}}\n"
         );
         std::fs::write(&path, content).expect("session fixture should be written");
         path

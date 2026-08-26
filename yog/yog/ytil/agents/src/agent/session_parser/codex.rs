@@ -136,6 +136,7 @@ pub(crate) fn parse_metadata_for_deletion(
             return Ok(CodexSessionMetadata {
                 id: meta.id.clone(),
                 parent_thread_id: meta.parent_thread_id.clone(),
+                is_subagent: meta.is_subagent(),
             });
         }
     }
@@ -247,6 +248,7 @@ pub struct CodexSession {
 pub(crate) struct CodexSessionMetadata {
     pub(crate) id: String,
     pub(crate) parent_thread_id: Option<String>,
+    pub(crate) is_subagent: bool,
 }
 
 impl CodexSession {
