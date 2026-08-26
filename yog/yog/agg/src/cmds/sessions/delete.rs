@@ -30,7 +30,7 @@ pub(super) fn delete_selected_sessions(selected: &[RenderableSession], home_dir:
                 related_session_count,
             } => {
                 if let Some(session) = selected.get(index) {
-                    render_deleted_session(session, key, *related_session_count);
+                    println!("{}", deleted_session_output(session, key, *related_session_count));
                 }
             }
             DeletionOutcome::Failed { key, error } => failures.push(format!("{key}: {error}")),
@@ -51,14 +51,17 @@ pub(super) fn delete_selected_sessions(selected: &[RenderableSession], home_dir:
     }
 }
 
-fn render_deleted_session(session: &RenderableSession, key: &SessionKey, related_session_count: usize) {
-    println!("{} {session}", "Deleted".red().bold());
-    if related_session_count > 0 {
-        println!(
-            "  └─ {} (related sessions: {related_session_count})",
-            key.id().white().bold()
-        );
-    }
+fn deleted_session_output(session: &RenderableSession, key: &SessionKey, related_session_count: usize) -> String {
+    let related_sessions = if related_session_count > 0 {
+        format!(" ({related_session_count} related sessions)")
+    } else {
+        String::new()
+    };
+    format!(
+        "{} {session}\n  └─ {}{related_sessions}",
+        "Deleted".red().bold(),
+        key.id().white().bold()
+    )
 }
 
 #[cfg(test)]
@@ -69,8 +72,36 @@ mod tests {
     use test_that::prelude::*;
     use ytil_agents::agent::Agent;
     use ytil_agents::agent::session::Session;
+    use ytil_agents::agent::session::SessionKey;
 
     use super::super::list::RenderableSession;
+    use super::*;
+
+    #[test]
+    fn test_render_deleted_session_when_no_related_sessions_prints_id_without_count() {
+        let session = render_test_session();
+        let key = SessionKey::new(Agent::Claude, "session-id");
+
+        let output = rendered_output(&session, &key, 0);
+
+        assert_that!(
+            output,
+            eq("Deleted cl /workspace 01/01/1970-00:00 01/01/1970-00:00\n  └─ session-id")
+        );
+    }
+
+    #[test]
+    fn test_render_deleted_session_when_related_sessions_exist_prints_id_and_count() {
+        let session = render_test_session();
+        let key = SessionKey::new(Agent::Claude, "session-id");
+
+        let output = rendered_output(&session, &key, 2);
+
+        assert_that!(
+            output,
+            eq("Deleted cl /workspace 01/01/1970-00:00 01/01/1970-00:00\n  └─ session-id (2 related sessions)")
+        );
+    }
 
     #[test]
     fn test_session_for_deletion_outcome_when_cursor_ids_duplicate_uses_outcome_index_path() {
@@ -116,5 +147,44 @@ mod tests {
         assert_that!(first.session.path, eq(first_path));
         assert_that!(second.session.path, eq(second_path));
         assert_that!(first.session.id.as_str(), eq(second.session.id.as_str()));
+    }
+
+    fn rendered_output(session: &RenderableSession, key: &SessionKey, related_session_count: usize) -> String {
+        strip_ansi(&deleted_session_output(session, key, related_session_count))
+    }
+
+    fn strip_ansi(output: &str) -> String {
+        let mut plain = String::new();
+        let mut chars = output.chars();
+        while let Some(character) = chars.next() {
+            if character != '\x1b' {
+                plain.push(character);
+                continue;
+            }
+            for escaped in chars.by_ref() {
+                if escaped.is_ascii_alphabetic() {
+                    break;
+                }
+            }
+        }
+        plain
+    }
+
+    fn render_test_session() -> RenderableSession {
+        let created_at = Timestamp::from_millisecond(1).expect("test timestamp should be valid");
+        RenderableSession::for_test(
+            Session {
+                id: "session-id".to_owned(),
+                agent: Agent::Claude,
+                name: "session-name".to_owned(),
+                last_user_prompt: None,
+                search_text: "session-name".to_owned(),
+                workspace: PathBuf::from("/workspace"),
+                path: PathBuf::from("/sessions/session.jsonl"),
+                created_at,
+                updated_at: created_at,
+            },
+            PathBuf::from("/"),
+        )
     }
 }

@@ -149,8 +149,8 @@ fn build_deletion_plan(
     selected_path: Option<&Path>,
 ) -> rootcause::Result<DeletionPlan> {
     match key.agent() {
-        Agent::Claude => claude::build_deletion_plan(&session_root(home_dir, Agent::Claude), key),
-        Agent::Codex => codex::build_deletion_plan(&session_root(home_dir, Agent::Codex), key),
+        Agent::Claude => claude::build_deletion_plan(&session_root(home_dir, Agent::Claude), key, selected_path),
+        Agent::Codex => codex::build_deletion_plan(&session_root(home_dir, Agent::Codex), key, selected_path),
         Agent::Cursor => cursor::build_deletion_plan(&session_root(home_dir, Agent::Cursor), key, selected_path),
         Agent::Gemini | Agent::Opencode => {
             Err(report!("session deletion is not supported").attach(format!("agent={}", key.agent())))
