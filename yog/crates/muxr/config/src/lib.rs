@@ -8,10 +8,15 @@ use std::time::Duration;
 
 use muxr_core::RenderColor;
 
+pub use self::keybindings::KeybindingAction;
+pub use self::keybindings::KeybindingMode;
+pub use self::keybindings::KeybindingsConfig;
+pub use self::keybindings::LocalKeybindingAction;
 pub use self::session_layout::ExternalLayoutPane;
 pub use self::session_layout::ExternalLayoutTab;
 pub use self::session_layout::ExternalSessionLayout;
 
+mod keybindings;
 mod session_layout;
 
 pub const SPLIT_RATIO_MIN_PER_MILLE: u16 = 50;
@@ -22,6 +27,9 @@ const SPLIT_RESIZE_STEP_MAX: u16 = 950;
 /// Full hardcoded muxr config.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct MuxrConfig {
+    /// These tables are compiled into both muxr binaries. Edit the default in `keybindings.rs` and rebuild muxr to
+    /// change a key.
+    pub keybindings: KeybindingsConfig,
     pub layout: LayoutConfig,
     pub pane_attention: PaneAttentionConfig,
     pub pane_borders: PaneBorderStyles,
@@ -39,6 +47,7 @@ impl Default for MuxrConfig {
     )]
     fn default() -> Self {
         Self {
+            keybindings: KeybindingsConfig::default(),
             layout: LayoutConfig {
                 horizontal_split_ratio: SplitRatio(500),
                 resize_step: SplitResizeStep(50),

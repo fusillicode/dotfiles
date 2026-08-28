@@ -424,8 +424,11 @@ async fn handle_key_request(
     timers: &mut ClientTimers,
     render_dmg: &mut ClientRenderDmg,
 ) -> rootcause::Result<ClientSessionFlow> {
-    match crate::keyboard_input::resolve_key(&mut state.input_mode, &key) {
-        KeyResolution::Cmd(cmd) => self::handle_cmd_request(cmd, event_writer, state, timers).await,
+    match crate::keyboard_input::resolve_key(&state.config.user_config.keybindings, state.input_mode, &key) {
+        KeyResolution::Cmd { cmd, next_mode } => {
+            state.input_mode = next_mode;
+            self::handle_cmd_request(cmd, event_writer, state, timers).await
+        }
         KeyResolution::Raw => {
             self::apply_pane_input_outcome(
                 crate::pane::input::handle_client_key(&key, state)?,
