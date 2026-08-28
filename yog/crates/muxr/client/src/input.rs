@@ -1,3 +1,5 @@
+use muxr_config::KeybindingMode;
+use muxr_config::KeybindingsConfig;
 use muxr_core::ClientKey;
 use muxr_core::ClientKeyCode;
 use muxr_core::ClientKeyModifiers;
@@ -9,13 +11,12 @@ const CTRL_N: u8 = 0x0e;
 const CTRL_P: u8 = 0x10;
 const ESC: u8 = 0x1b;
 const MAX_PENDING_ESCAPE_BYTES: usize = 64;
+const MAX_PENDING_CONTROL_STRING_BYTES: usize = 4096;
 const BRACKETED_PASTE_END: &[u8] = b"\x1b[201~";
 const BRACKETED_PASTE_START: &[u8] = b"\x1b[200~";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum DecodedInput {
-    CopySelection,
-    CopySelectionInline,
     Input(Vec<u8>),
     Key(ClientKey),
     Mouse(ClientMouseEvent),
@@ -27,7 +28,40 @@ enum PendingInput {
     #[default]
     None,
     EscapeSequence(Vec<u8>),
+    AmbiguousControlString(Vec<u8>),
+    ControlString {
+        bytes: Vec<u8>,
+        kind: ControlStringKind,
+    },
     Paste(Vec<u8>),
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ControlStringKind {
+    Osc,
+    Other,
+}
+
+impl ControlStringKind {
+    const fn from_prefix(byte: u8) -> Option<Self> {
+        match byte {
+            b']' => Some(Self::Osc),
+            b'P' | b'X' | b'^' | b'_' => Some(Self::Other),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ControlStringStatus {
+    Complete,
+    Incomplete,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum LegacyAltCharacter {
+    Shifted(char),
+    Unshifted(char),
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -82,12 +116,26 @@ impl KittyKeyModifiers {
     }
 }
 
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InputDecoder {
     pending: PendingInput,
+    keybindings: KeybindingsConfig,
+}
+
+impl Default for InputDecoder {
+    fn default() -> Self {
+        Self::with_keybindings(KeybindingsConfig::default())
+    }
 }
 
 impl InputDecoder {
+    pub(crate) const fn with_keybindings(keybindings: KeybindingsConfig) -> Self {
+        Self {
+            pending: PendingInput::None,
+            keybindings,
+        }
+    }
+
     #[must_use]
     pub fn decode(&mut self, bytes: &[u8]) -> Vec<DecodedInput> {
         let mut decoded = Vec::new();
@@ -106,21 +154,7 @@ impl InputDecoder {
         let mut decoded = Vec::new();
         let mut input = Vec::new();
 
-        match std::mem::take(&mut self.pending) {
-            PendingInput::None => {}
-            PendingInput::EscapeSequence(bytes) if bytes.as_slice() == [ESC] => {
-                self::push_key(
-                    &mut decoded,
-                    &mut input,
-                    self::key(ClientKeyCode::Esc, ClientKeyModifiers::NONE, &bytes),
-                );
-            }
-            PendingInput::EscapeSequence(bytes) => input.extend(bytes),
-            PendingInput::Paste(bytes) => {
-                input.extend(BRACKETED_PASTE_START);
-                input.extend(bytes);
-            }
-        }
+        self::finalize_pending_input(self, &mut input, &mut decoded);
 
         self::push_input(&mut decoded, &mut input);
         decoded
@@ -129,92 +163,163 @@ impl InputDecoder {
     #[must_use]
     pub const fn idle_timeout(&self) -> InputIdleTimeout {
         match self.pending {
-            PendingInput::EscapeSequence(_) => InputIdleTimeout::Needed,
-            PendingInput::None | PendingInput::Paste(_) => InputIdleTimeout::NotNeeded,
+            PendingInput::EscapeSequence(_) | PendingInput::AmbiguousControlString(_) => InputIdleTimeout::Needed,
+            PendingInput::None | PendingInput::ControlString { .. } | PendingInput::Paste(_) => {
+                InputIdleTimeout::NotNeeded
+            }
         }
     }
 
     fn push_byte(&mut self, byte: u8, input: &mut Vec<u8>, decoded: &mut Vec<DecodedInput>) {
-        if let PendingInput::Paste(bytes) = &mut self.pending {
-            bytes.push(byte);
-            if bytes.ends_with(BRACKETED_PASTE_END) {
-                let paste_len = bytes.len().saturating_sub(BRACKETED_PASTE_END.len());
-                bytes.truncate(paste_len);
-                let PendingInput::Paste(bytes) = std::mem::take(&mut self.pending) else {
-                    return;
-                };
-                decoded.push(DecodedInput::Paste(bytes));
+        match std::mem::take(&mut self.pending) {
+            PendingInput::None => {
+                if byte == ESC {
+                    self.pending = PendingInput::EscapeSequence(vec![ESC]);
+                } else if let Some(key) = self::key_for_plain_byte(byte) {
+                    self::push_key(decoded, input, key);
+                } else {
+                    input.push(byte);
+                }
             }
-            return;
-        }
-
-        if let PendingInput::EscapeSequence(bytes) = &mut self.pending {
-            bytes.push(byte);
-            if PendingEscapeStatus::from(bytes.as_slice()) == PendingEscapeStatus::Incomplete {
-                return;
+            PendingInput::EscapeSequence(mut bytes) => {
+                bytes.push(byte);
+                if bytes.len() == 2
+                    && let Some(kind) = ControlStringKind::from_prefix(byte)
+                {
+                    self.pending = if self::key_for_escaped_byte(byte, &self.keybindings).is_some() {
+                        PendingInput::AmbiguousControlString(bytes)
+                    } else {
+                        PendingInput::ControlString { bytes, kind }
+                    };
+                } else if PendingEscapeStatus::from(bytes.as_slice()) == PendingEscapeStatus::Incomplete {
+                    self.pending = PendingInput::EscapeSequence(bytes);
+                } else if bytes == BRACKETED_PASTE_START {
+                    self::push_input(decoded, input);
+                    self.pending = PendingInput::Paste(Vec::new());
+                } else {
+                    self::finish_escape_sequence(bytes, &self.keybindings, input, decoded);
+                }
             }
-
-            let PendingInput::EscapeSequence(bytes) = std::mem::take(&mut self.pending) else {
-                return;
-            };
-            if bytes == BRACKETED_PASTE_START {
-                self::push_input(decoded, input);
-                self.pending = PendingInput::Paste(Vec::new());
-            } else {
-                self::finish_escape_sequence(bytes, input, decoded);
+            PendingInput::AmbiguousControlString(mut bytes) => {
+                bytes.push(byte);
+                if let Some(&prefix) = bytes.get(1)
+                    && let Some(kind) = ControlStringKind::from_prefix(prefix)
+                {
+                    match self::control_string_status(&bytes, kind) {
+                        ControlStringStatus::Complete => input.extend(bytes),
+                        ControlStringStatus::Incomplete if bytes.len() >= MAX_PENDING_CONTROL_STRING_BYTES => {
+                            self::flush_control_string(bytes, input, decoded);
+                            self.pending = PendingInput::ControlString {
+                                bytes: Vec::new(),
+                                kind,
+                            };
+                        }
+                        ControlStringStatus::Incomplete => {
+                            self.pending = PendingInput::AmbiguousControlString(bytes);
+                        }
+                    }
+                } else {
+                    self.pending = PendingInput::AmbiguousControlString(bytes);
+                }
             }
-            return;
+            PendingInput::ControlString { mut bytes, kind } => {
+                bytes.push(byte);
+                match self::control_string_status(&bytes, kind) {
+                    ControlStringStatus::Complete => input.extend(bytes),
+                    ControlStringStatus::Incomplete if bytes.len() >= MAX_PENDING_CONTROL_STRING_BYTES => {
+                        self::flush_control_string(bytes, input, decoded);
+                        self.pending = PendingInput::ControlString {
+                            bytes: Vec::new(),
+                            kind,
+                        };
+                    }
+                    ControlStringStatus::Incomplete => {
+                        self.pending = PendingInput::ControlString { bytes, kind };
+                    }
+                }
+            }
+            PendingInput::Paste(mut bytes) => {
+                bytes.push(byte);
+                if bytes.ends_with(BRACKETED_PASTE_END) {
+                    let paste_len = bytes.len().saturating_sub(BRACKETED_PASTE_END.len());
+                    bytes.truncate(paste_len);
+                    decoded.push(DecodedInput::Paste(bytes));
+                } else {
+                    self.pending = PendingInput::Paste(bytes);
+                }
+            }
         }
-
-        if byte == ESC {
-            self.pending = PendingInput::EscapeSequence(vec![ESC]);
-            return;
-        }
-
-        if let Some(key) = self::key_for_plain_byte(byte) {
-            self::push_key(decoded, input, key);
-            return;
-        }
-
-        input.push(byte);
     }
 }
 
-fn finish_escape_sequence(bytes: Vec<u8>, input: &mut Vec<u8>, decoded: &mut Vec<DecodedInput>) {
-    if let [ESC, byte] = bytes.as_slice()
-        && let Some(selection_input) = match *byte {
-            b'C' => Some(DecodedInput::CopySelection),
-            b'X' => Some(DecodedInput::CopySelectionInline),
-            _ => None,
-        }
-    {
-        self::push_input(decoded, input);
-        decoded.push(selection_input);
+fn finish_ambiguous_control_string(
+    decoder: &mut InputDecoder,
+    bytes: Vec<u8>,
+    input: &mut Vec<u8>,
+    events: &mut Vec<DecodedInput>,
+) {
+    let Some(&byte) = bytes.get(1) else {
+        input.extend(bytes);
         return;
-    }
+    };
+    let Some(rest) = bytes.get(2..) else {
+        input.extend(bytes);
+        return;
+    };
+    let Some(key) = self::key_for_escaped_byte(byte, &decoder.keybindings) else {
+        input.extend(bytes);
+        return;
+    };
 
+    self::push_key(events, input, key);
+    for byte in rest {
+        decoder.push_byte(*byte, input, events);
+    }
+}
+
+fn finalize_pending_input(decoder: &mut InputDecoder, input: &mut Vec<u8>, events: &mut Vec<DecodedInput>) {
+    loop {
+        match std::mem::take(&mut decoder.pending) {
+            PendingInput::None => return,
+            PendingInput::EscapeSequence(bytes) if bytes.as_slice() == [ESC] => {
+                self::push_key(
+                    events,
+                    input,
+                    self::key(ClientKeyCode::Esc, ClientKeyModifiers::NONE, &bytes),
+                );
+                return;
+            }
+            PendingInput::AmbiguousControlString(bytes) => {
+                self::finish_ambiguous_control_string(decoder, bytes, input, events);
+            }
+            PendingInput::EscapeSequence(bytes) | PendingInput::ControlString { bytes, .. } => {
+                input.extend(bytes);
+                return;
+            }
+            PendingInput::Paste(bytes) => {
+                input.extend(BRACKETED_PASTE_START);
+                input.extend(bytes);
+                return;
+            }
+        }
+    }
+}
+
+fn finish_escape_sequence(
+    bytes: Vec<u8>,
+    keybindings: &KeybindingsConfig,
+    input: &mut Vec<u8>,
+    decoded: &mut Vec<DecodedInput>,
+) {
     if let [ESC, byte] = bytes.as_slice()
-        && let Some(key) = self::key_for_escaped_byte(*byte)
+        && let Some(key) = self::key_for_escaped_byte(*byte, keybindings)
     {
         self::push_key(decoded, input, key);
         return;
     }
 
     if let Some(key) = self::key_for_csi_sequence(&bytes) {
-        let selection_input =
-            if key.modifiers == ClientKeyModifiers::SHIFT_ALT && matches!(key.code, ClientKeyCode::Char('C')) {
-                Some(DecodedInput::CopySelection)
-            } else if key.modifiers == ClientKeyModifiers::SHIFT_ALT && matches!(key.code, ClientKeyCode::Char('X')) {
-                Some(DecodedInput::CopySelectionInline)
-            } else {
-                None
-            };
-        if let Some(selection_input) = selection_input {
-            self::push_input(decoded, input);
-            decoded.push(selection_input);
-        } else {
-            self::push_key(decoded, input, key);
-        }
+        self::push_key(decoded, input, key);
         return;
     }
 
@@ -231,34 +336,81 @@ fn finish_escape_sequence(bytes: Vec<u8>, input: &mut Vec<u8>, decoded: &mut Vec
 }
 
 fn key_for_plain_byte(byte: u8) -> Option<ClientKey> {
-    let code = match byte {
-        b'h' | b'j' | b'k' | b'l' => ClientKeyCode::Char(char::from(byte)),
-        _ => return None,
-    };
-
-    Some(self::key(code, ClientKeyModifiers::NONE, &[byte]))
+    (byte.is_ascii() && !byte.is_ascii_control())
+        .then(|| self::key(ClientKeyCode::Char(char::from(byte)), ClientKeyModifiers::NONE, &[byte]))
 }
 
-fn key_for_escaped_byte(byte: u8) -> Option<ClientKey> {
+fn key_for_escaped_byte(byte: u8, keybindings: &KeybindingsConfig) -> Option<ClientKey> {
     let (code, modifiers) = match byte {
         CTRL_N => (ClientKeyCode::Char('n'), ClientKeyModifiers::CTRL_ALT),
         CTRL_P => (ClientKeyCode::Char('p'), ClientKeyModifiers::CTRL_ALT),
-        b'!' => (ClientKeyCode::Char('1'), ClientKeyModifiers::SHIFT_ALT),
-        b'@' => (ClientKeyCode::Char('2'), ClientKeyModifiers::SHIFT_ALT),
-        b'#' => (ClientKeyCode::Char('3'), ClientKeyModifiers::SHIFT_ALT),
-        b'$' => (ClientKeyCode::Char('4'), ClientKeyModifiers::SHIFT_ALT),
-        b'%' => (ClientKeyCode::Char('5'), ClientKeyModifiers::SHIFT_ALT),
-        b'^' => (ClientKeyCode::Char('6'), ClientKeyModifiers::SHIFT_ALT),
-        b'&' => (ClientKeyCode::Char('7'), ClientKeyModifiers::SHIFT_ALT),
-        b'*' => (ClientKeyCode::Char('8'), ClientKeyModifiers::SHIFT_ALT),
-        b'(' => (ClientKeyCode::Char('9'), ClientKeyModifiers::SHIFT_ALT),
-        b'D' | b'E' | b'F' | b'H' | b'J' | b'K' | b'L' | b'N' | b'P' | b'R' | b'S' | b'V' | b'W' => {
-            (ClientKeyCode::Char(char::from(byte)), ClientKeyModifiers::SHIFT_ALT)
-        }
-        _ => return None,
+        _ => match self::legacy_alt_character(byte)? {
+            LegacyAltCharacter::Shifted(character) => (ClientKeyCode::Char(character), ClientKeyModifiers::SHIFT_ALT),
+            LegacyAltCharacter::Unshifted(character) => (ClientKeyCode::Char(character), ClientKeyModifiers::ALT),
+        },
     };
 
-    Some(self::key(code, modifiers, &[ESC, byte]))
+    if byte == b']' {
+        return None;
+    }
+
+    let key = self::key(code, modifiers, &[ESC, byte]);
+    (keybindings.resolve_local(&key).is_some()
+        || keybindings.resolve(KeybindingMode::Normal, &key).is_some()
+        || keybindings.resolve(KeybindingMode::Resize, &key).is_some())
+    .then_some(key)
+}
+
+fn control_string_status(bytes: &[u8], kind: ControlStringKind) -> ControlStringStatus {
+    if bytes.ends_with(b"\x1b\\") || (kind == ControlStringKind::Osc && bytes.last() == Some(&b'\x07')) {
+        ControlStringStatus::Complete
+    } else {
+        ControlStringStatus::Incomplete
+    }
+}
+
+fn flush_control_string(bytes: Vec<u8>, input: &mut Vec<u8>, decoded: &mut Vec<DecodedInput>) {
+    self::push_input(decoded, input);
+    decoded.push(DecodedInput::Input(bytes));
+}
+
+fn legacy_alt_character(byte: u8) -> Option<LegacyAltCharacter> {
+    let shifted_character = match byte {
+        b'!' => Some(LegacyAltCharacter::Shifted('1')),
+        b'@' => Some(LegacyAltCharacter::Shifted('2')),
+        b'#' => Some(LegacyAltCharacter::Shifted('3')),
+        b'$' => Some(LegacyAltCharacter::Shifted('4')),
+        b'%' => Some(LegacyAltCharacter::Shifted('5')),
+        b'^' => Some(LegacyAltCharacter::Shifted('6')),
+        b'&' => Some(LegacyAltCharacter::Shifted('7')),
+        b'*' => Some(LegacyAltCharacter::Shifted('8')),
+        b'(' => Some(LegacyAltCharacter::Shifted('9')),
+        b')' => Some(LegacyAltCharacter::Shifted('0')),
+        b'_' => Some(LegacyAltCharacter::Shifted('-')),
+        b'+' => Some(LegacyAltCharacter::Shifted('=')),
+        b'{' => Some(LegacyAltCharacter::Shifted('[')),
+        b'}' => Some(LegacyAltCharacter::Shifted(']')),
+        b'|' => Some(LegacyAltCharacter::Shifted('\\')),
+        b':' => Some(LegacyAltCharacter::Shifted(';')),
+        b'"' => Some(LegacyAltCharacter::Shifted('\'')),
+        b'<' => Some(LegacyAltCharacter::Shifted(',')),
+        b'>' => Some(LegacyAltCharacter::Shifted('.')),
+        b'?' => Some(LegacyAltCharacter::Shifted('/')),
+        b'~' => Some(LegacyAltCharacter::Shifted('`')),
+        _ => None,
+    };
+    if shifted_character.is_some() {
+        return shifted_character;
+    }
+    if byte.is_ascii_graphic() || byte == b' ' {
+        let character = char::from(byte);
+        return Some(if character.is_ascii_uppercase() {
+            LegacyAltCharacter::Shifted(character)
+        } else {
+            LegacyAltCharacter::Unshifted(character)
+        });
+    }
+    None
 }
 
 fn key_for_csi_sequence(bytes: &[u8]) -> Option<ClientKey> {
@@ -416,10 +568,17 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_input_decoder_decode_when_bytes_are_plain_returns_input() {
+    fn test_input_decoder_decode_when_printable_bytes_are_plain_returns_keys() {
         let mut decoder = InputDecoder::default();
 
-        assert_that!(decoder.decode(b"abc"), eq(vec![DecodedInput::Input(b"abc".to_vec())]));
+        assert_that!(
+            decoder.decode(b"abc"),
+            eq(vec![
+                DecodedInput::Key(key(ClientKeyCode::Char('a'), ClientKeyModifiers::NONE, b"a")),
+                DecodedInput::Key(key(ClientKeyCode::Char('b'), ClientKeyModifiers::NONE, b"b")),
+                DecodedInput::Key(key(ClientKeyCode::Char('c'), ClientKeyModifiers::NONE, b"c")),
+            ])
+        );
     }
 
     #[test]
@@ -456,27 +615,30 @@ mod tests {
         let mut decoder = InputDecoder::default();
 
         assert_that!(
-            decoder.decode(bytes),
+            self::decode_and_finalize(&mut decoder, bytes),
             eq(vec![DecodedInput::Key(key(code, modifiers, bytes))])
         );
     }
 
     #[rstest]
-    #[case::legacy(b"\x1bC")]
-    #[case::kitty(b"\x1b[99;4u")]
-    fn test_input_decoder_decode_when_copy_shortcut_arrives_returns_copy_selection(#[case] bytes: &[u8]) {
+    #[case::legacy_copy(b"\x1bC", 'C')]
+    #[case::kitty_copy(b"\x1b[99;4u", 'C')]
+    #[case::legacy_inline_copy(b"\x1bX", 'X')]
+    #[case::kitty_inline_copy(b"\x1b[120;4u", 'X')]
+    fn test_input_decoder_decode_when_local_shortcut_arrives_returns_key(
+        #[case] bytes: &[u8],
+        #[case] character: char,
+    ) {
         let mut decoder = InputDecoder::default();
 
-        assert_that!(decoder.decode(bytes), eq(vec![DecodedInput::CopySelection]));
-    }
-
-    #[rstest]
-    #[case::legacy(b"\x1bX")]
-    #[case::kitty(b"\x1b[120;4u")]
-    fn test_input_decoder_decode_when_inline_copy_shortcut_arrives_returns_inline_copy_selection(#[case] bytes: &[u8]) {
-        let mut decoder = InputDecoder::default();
-
-        assert_that!(decoder.decode(bytes), eq(vec![DecodedInput::CopySelectionInline]));
+        assert_that!(
+            self::decode_and_finalize(&mut decoder, bytes),
+            eq(vec![DecodedInput::Key(key(
+                ClientKeyCode::Char(character),
+                ClientKeyModifiers::SHIFT_ALT,
+                bytes,
+            ))])
+        );
     }
 
     #[test]
@@ -486,18 +648,142 @@ mod tests {
         assert_that!(
             decoder.decode(b"a\x1bEb"),
             eq(vec![
-                DecodedInput::Input(b"a".to_vec()),
+                DecodedInput::Key(key(ClientKeyCode::Char('a'), ClientKeyModifiers::NONE, b"a")),
                 DecodedInput::Key(key(ClientKeyCode::Char('E'), ClientKeyModifiers::SHIFT_ALT, b"\x1bE",)),
-                DecodedInput::Input(b"b".to_vec()),
+                DecodedInput::Key(key(ClientKeyCode::Char('b'), ClientKeyModifiers::NONE, b"b")),
             ])
         );
     }
 
-    #[rstest]
-    #[case::unknown_escape(b"\x1bY")]
-    #[case::unknown_csi(b"\x1b[1~")]
-    fn test_input_decoder_decode_when_escape_is_not_muxr_cmd_preserves_bytes(#[case] bytes: &[u8]) {
+    #[test]
+    fn test_input_decoder_decode_when_unknown_legacy_alt_key_arrives_preserves_input_bytes() {
         let mut decoder = InputDecoder::default();
+        let bytes = b"\x1bY";
+
+        assert_that!(decoder.decode(bytes), eq(vec![DecodedInput::Input(bytes.to_vec())]));
+    }
+
+    #[rstest]
+    #[case::bel_terminated(b"\x1b]0;title\x07")]
+    #[case::st_terminated(b"\x1b]0;title\x1b\\")]
+    #[case::contains_muxr_prefix(b"\x1b]0;\x1bC\x1b\\")]
+    fn test_input_decoder_decode_when_osc_arrives_preserves_control_string_bytes(#[case] bytes: &[u8]) {
+        let mut decoder = InputDecoder::default();
+
+        assert_that!(decoder.decode(bytes), eq(vec![DecodedInput::Input(bytes.to_vec())]));
+    }
+
+    #[rstest::rstest]
+    #[case::dcs(b"\x1bP1;2\x1b\\")]
+    #[case::sos(b"\x1bX1;2\x1b\\")]
+    #[case::pm(b"\x1b^1;2\x1b\\")]
+    fn test_input_decoder_decode_when_legacy_shortcut_prefix_is_control_string_preserves_bytes(#[case] bytes: &[u8]) {
+        let mut decoder = InputDecoder::default();
+
+        assert_that!(decoder.decode(bytes), eq(vec![DecodedInput::Input(bytes.to_vec())]));
+        assert_that!(decoder.idle_timeout(), eq(InputIdleTimeout::NotNeeded));
+    }
+
+    #[test]
+    fn test_input_decoder_finalize_when_ambiguous_legacy_shortcut_arrives_returns_key() {
+        let mut decoder = InputDecoder::default();
+        let bytes = b"\x1bP";
+
+        assert_that!(decoder.decode(bytes), eq(Vec::<DecodedInput>::new()));
+        assert_that!(decoder.idle_timeout(), eq(InputIdleTimeout::Needed));
+        assert_that!(
+            decoder.finalize(),
+            eq(vec![DecodedInput::Key(key(
+                ClientKeyCode::Char('P'),
+                ClientKeyModifiers::SHIFT_ALT,
+                bytes,
+            ))])
+        );
+    }
+
+    #[test]
+    fn test_input_decoder_finalize_when_ambiguous_legacy_shortcut_has_suffix_replays_suffix() {
+        let mut decoder = InputDecoder::default();
+
+        assert_that!(decoder.decode(b"\x1bPa"), eq(Vec::<DecodedInput>::new()));
+        assert_that!(
+            decoder.finalize(),
+            eq(vec![
+                DecodedInput::Key(key(ClientKeyCode::Char('P'), ClientKeyModifiers::SHIFT_ALT, b"\x1bP")),
+                DecodedInput::Key(key(ClientKeyCode::Char('a'), ClientKeyModifiers::NONE, b"a")),
+            ])
+        );
+    }
+
+    #[test]
+    fn test_input_decoder_finalize_when_ambiguous_suffix_ends_in_escape_drains_pending_key() {
+        let mut decoder = InputDecoder::default();
+
+        assert_that!(decoder.decode(b"\x1bP\x1b"), eq(Vec::<DecodedInput>::new()));
+        assert_that!(
+            decoder.finalize(),
+            eq(vec![
+                DecodedInput::Key(key(ClientKeyCode::Char('P'), ClientKeyModifiers::SHIFT_ALT, b"\x1bP")),
+                DecodedInput::Key(key(ClientKeyCode::Esc, ClientKeyModifiers::NONE, b"\x1b")),
+            ])
+        );
+    }
+
+    #[test]
+    fn test_input_decoder_decode_when_control_string_exceeds_buffer_limit_flushes_raw_chunks() {
+        let mut decoder = InputDecoder::default();
+        let mut bytes = vec![ESC, b']'];
+        bytes.extend(std::iter::repeat_n(b'a', MAX_PENDING_CONTROL_STRING_BYTES));
+
+        let mut events = decoder.decode(&bytes);
+        assert_that!(events.len(), eq(1));
+        assert_that!(
+            events.first(),
+            some(eq(&DecodedInput::Input(
+                bytes[..MAX_PENDING_CONTROL_STRING_BYTES].to_vec()
+            )))
+        );
+        assert_that!(decoder.idle_timeout(), eq(InputIdleTimeout::NotNeeded));
+        events.extend(decoder.finalize());
+        assert_that!(
+            events.iter().all(|event| matches!(event, DecodedInput::Input(_))),
+            eq(true)
+        );
+        let preserved = events
+            .into_iter()
+            .flat_map(|decoded| match decoded {
+                DecodedInput::Input(bytes) => bytes,
+                DecodedInput::Key(_) | DecodedInput::Mouse(_) | DecodedInput::Paste(_) => Vec::new(),
+            })
+            .collect::<Vec<_>>();
+        assert_that!(preserved, eq(bytes));
+        assert_that!(decoder.idle_timeout(), eq(InputIdleTimeout::NotNeeded));
+    }
+
+    #[test]
+    fn test_input_decoder_decode_when_flushed_osc_reaches_bel_terminator_returns_following_key() {
+        let mut decoder = InputDecoder::default();
+        let mut bytes = vec![ESC, b']'];
+        bytes.extend(std::iter::repeat_n(b'a', MAX_PENDING_CONTROL_STRING_BYTES));
+        bytes.extend(*b"\x07z");
+
+        assert_that!(
+            decoder.decode(&bytes),
+            eq(vec![
+                DecodedInput::Input(bytes[..MAX_PENDING_CONTROL_STRING_BYTES].to_vec()),
+                DecodedInput::Input(
+                    bytes[MAX_PENDING_CONTROL_STRING_BYTES..MAX_PENDING_CONTROL_STRING_BYTES + 3].to_vec()
+                ),
+                DecodedInput::Key(key(ClientKeyCode::Char('z'), ClientKeyModifiers::NONE, b"z")),
+            ])
+        );
+        assert_that!(decoder.idle_timeout(), eq(InputIdleTimeout::NotNeeded));
+    }
+
+    #[test]
+    fn test_input_decoder_decode_when_unknown_csi_arrives_preserves_bytes() {
+        let mut decoder = InputDecoder::default();
+        let bytes = b"\x1b[1~";
 
         assert_that!(decoder.decode(bytes), eq(vec![DecodedInput::Input(bytes.to_vec())]));
     }
@@ -626,7 +912,7 @@ mod tests {
         let mut decoder = InputDecoder::default();
 
         assert_that!(
-            decoder.decode(bytes),
+            self::decode_and_finalize(&mut decoder, bytes),
             eq(vec![DecodedInput::Key(key(
                 ClientKeyCode::Char(character),
                 ClientKeyModifiers::SHIFT_ALT,
@@ -684,6 +970,19 @@ mod tests {
         assert_that!(decoder.decode(bytes), eq(Vec::<DecodedInput>::new()));
 
         assert_that!(decoder.idle_timeout(), eq(InputIdleTimeout::Needed));
+    }
+
+    #[test]
+    fn test_input_decoder_when_osc_payload_is_split_after_idle_preserves_payload() {
+        let mut decoder = InputDecoder::default();
+
+        assert_that!(decoder.decode(b"\x1b]0;"), eq(Vec::<DecodedInput>::new()));
+        assert_that!(decoder.idle_timeout(), eq(InputIdleTimeout::NotNeeded));
+        assert_that!(
+            decoder.decode(b"\x1bC\x07"),
+            eq(vec![DecodedInput::Input(b"\x1b]0;\x1bC\x07".to_vec())])
+        );
+        assert_that!(decoder.idle_timeout(), eq(InputIdleTimeout::NotNeeded));
     }
 
     #[rstest]
@@ -773,6 +1072,12 @@ mod tests {
                 position: ClientMousePosition { row: 4, col: 9 },
             })])
         );
+    }
+
+    fn decode_and_finalize(decoder: &mut InputDecoder, bytes: &[u8]) -> Vec<DecodedInput> {
+        let mut events = decoder.decode(bytes);
+        events.extend(decoder.finalize());
+        events
     }
 
     const fn modifiers(shift: bool, alt: bool, ctrl: bool) -> ClientKeyModifiers {

@@ -1,3 +1,6 @@
+use muxr_config::KeybindingAction;
+use muxr_config::KeybindingMode;
+use muxr_config::KeybindingsConfig;
 use muxr_core::ClientKey;
 use muxr_core::ClientKeyCode;
 use muxr_core::ClientKeyModifiers;
@@ -39,17 +42,89 @@ pub enum ServerInputMode {
     Resize,
 }
 
+impl From<ServerInputMode> for KeybindingMode {
+    fn from(mode: ServerInputMode) -> Self {
+        match mode {
+            ServerInputMode::Normal => Self::Normal,
+            ServerInputMode::Resize => Self::Resize,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum KeyResolution {
-    Cmd(ClientCmd),
+    Cmd { cmd: ClientCmd, next_mode: ServerInputMode },
     Raw,
 }
 
-pub const fn resolve_key(input_mode: &mut ServerInputMode, key: &ClientKey) -> KeyResolution {
-    match input_mode {
-        ServerInputMode::Normal => self::resolve_normal_key(input_mode, key),
-        ServerInputMode::Resize => self::resolve_resize_key(input_mode, key),
-    }
+pub fn resolve_key(keybindings: &KeybindingsConfig, input_mode: ServerInputMode, key: &ClientKey) -> KeyResolution {
+    let mode = KeybindingMode::from(input_mode);
+    let Some(action) = keybindings.resolve(mode, key) else {
+        return KeyResolution::Raw;
+    };
+    let next_mode = match action {
+        KeybindingAction::EnterResizeMode => ServerInputMode::Resize,
+        KeybindingAction::ExitResizeMode => ServerInputMode::Normal,
+        KeybindingAction::ClosePane
+        | KeybindingAction::CreateTab
+        | KeybindingAction::FocusNextTab
+        | KeybindingAction::FocusPaneDown
+        | KeybindingAction::FocusPaneLeft
+        | KeybindingAction::FocusPaneRight
+        | KeybindingAction::FocusPaneUp
+        | KeybindingAction::FocusPreviousTab
+        | KeybindingAction::FocusTab1
+        | KeybindingAction::FocusTab2
+        | KeybindingAction::FocusTab3
+        | KeybindingAction::FocusTab4
+        | KeybindingAction::FocusTab5
+        | KeybindingAction::FocusTab6
+        | KeybindingAction::FocusTab7
+        | KeybindingAction::FocusTab8
+        | KeybindingAction::FocusTab9
+        | KeybindingAction::MoveTabLeft
+        | KeybindingAction::MoveTabRight
+        | KeybindingAction::OpenScrollbackEditor
+        | KeybindingAction::ResizePaneDown
+        | KeybindingAction::ResizePaneLeft
+        | KeybindingAction::ResizePaneRight
+        | KeybindingAction::ResizePaneUp
+        | KeybindingAction::SplitPaneBottom
+        | KeybindingAction::SplitPaneRight
+        | KeybindingAction::TogglePaneFullscreen => input_mode,
+    };
+    let cmd = match action {
+        KeybindingAction::ClosePane => ClientCmd::ClosePane,
+        KeybindingAction::CreateTab => ClientCmd::Tab(TabCmd::Create),
+        KeybindingAction::EnterResizeMode => ClientCmd::EnterResizeMode,
+        KeybindingAction::ExitResizeMode => ClientCmd::ExitMode,
+        KeybindingAction::FocusNextTab => ClientCmd::Tab(TabCmd::FocusNext),
+        KeybindingAction::FocusPaneDown => ClientCmd::FocusPane(PaneFocusDirection::Down),
+        KeybindingAction::FocusPaneLeft => ClientCmd::FocusPane(PaneFocusDirection::Left),
+        KeybindingAction::FocusPaneRight => ClientCmd::FocusPane(PaneFocusDirection::Right),
+        KeybindingAction::FocusPaneUp => ClientCmd::FocusPane(PaneFocusDirection::Up),
+        KeybindingAction::FocusPreviousTab => ClientCmd::Tab(TabCmd::FocusPrevious),
+        KeybindingAction::FocusTab1 => ClientCmd::Tab(TabCmd::FocusAt(0)),
+        KeybindingAction::FocusTab2 => ClientCmd::Tab(TabCmd::FocusAt(1)),
+        KeybindingAction::FocusTab3 => ClientCmd::Tab(TabCmd::FocusAt(2)),
+        KeybindingAction::FocusTab4 => ClientCmd::Tab(TabCmd::FocusAt(3)),
+        KeybindingAction::FocusTab5 => ClientCmd::Tab(TabCmd::FocusAt(4)),
+        KeybindingAction::FocusTab6 => ClientCmd::Tab(TabCmd::FocusAt(5)),
+        KeybindingAction::FocusTab7 => ClientCmd::Tab(TabCmd::FocusAt(6)),
+        KeybindingAction::FocusTab8 => ClientCmd::Tab(TabCmd::FocusAt(7)),
+        KeybindingAction::FocusTab9 => ClientCmd::Tab(TabCmd::FocusAt(8)),
+        KeybindingAction::MoveTabLeft => ClientCmd::Tab(TabCmd::MovePrevious),
+        KeybindingAction::MoveTabRight => ClientCmd::Tab(TabCmd::MoveNext),
+        KeybindingAction::OpenScrollbackEditor => ClientCmd::OpenScrollbackEditor,
+        KeybindingAction::ResizePaneDown => ClientCmd::ResizePane(PaneResizeDirection::Down),
+        KeybindingAction::ResizePaneLeft => ClientCmd::ResizePane(PaneResizeDirection::Left),
+        KeybindingAction::ResizePaneRight => ClientCmd::ResizePane(PaneResizeDirection::Right),
+        KeybindingAction::ResizePaneUp => ClientCmd::ResizePane(PaneResizeDirection::Up),
+        KeybindingAction::SplitPaneBottom => ClientCmd::SplitPane(PaneSplitAxis::Horizontal),
+        KeybindingAction::SplitPaneRight => ClientCmd::SplitPane(PaneSplitAxis::Vertical),
+        KeybindingAction::TogglePaneFullscreen => ClientCmd::TogglePaneFullscreen,
+    };
+    KeyResolution::Cmd { cmd, next_mode }
 }
 
 impl From<ServerInputMode> for BorderRenderMode {
@@ -85,81 +160,6 @@ pub fn pane_key_input_bytes(key: &ClientKey, keyboard_protocol: TerminalKeyboard
     match keyboard_protocol {
         TerminalKeyboardProtocol::Legacy => self::legacy_key_input_bytes(key),
         TerminalKeyboardProtocol::KittyLevelOne => self::kitty_key_input_bytes(key),
-    }
-}
-
-const fn resolve_normal_key(input_mode: &mut ServerInputMode, key: &ClientKey) -> KeyResolution {
-    if let Some(tab_index) = self::tab_index_for_key(key) {
-        return KeyResolution::Cmd(ClientCmd::Tab(TabCmd::FocusAt(tab_index)));
-    }
-
-    match (&key.code, key.modifiers) {
-        (ClientKeyCode::Char('E'), ClientKeyModifiers::SHIFT_ALT) => KeyResolution::Cmd(ClientCmd::Tab(TabCmd::Create)),
-        (ClientKeyCode::Char('P'), ClientKeyModifiers::SHIFT_ALT) => {
-            KeyResolution::Cmd(ClientCmd::Tab(TabCmd::FocusPrevious))
-        }
-        (ClientKeyCode::Char('N'), ClientKeyModifiers::SHIFT_ALT) => {
-            KeyResolution::Cmd(ClientCmd::Tab(TabCmd::FocusNext))
-        }
-        (ClientKeyCode::Char('p'), ClientKeyModifiers::CTRL_ALT) => {
-            KeyResolution::Cmd(ClientCmd::Tab(TabCmd::MovePrevious))
-        }
-        (ClientKeyCode::Char('n'), ClientKeyModifiers::CTRL_ALT) => {
-            KeyResolution::Cmd(ClientCmd::Tab(TabCmd::MoveNext))
-        }
-        (ClientKeyCode::Char('H'), ClientKeyModifiers::SHIFT_ALT) => {
-            KeyResolution::Cmd(ClientCmd::FocusPane(PaneFocusDirection::Left))
-        }
-        (ClientKeyCode::Char('J'), ClientKeyModifiers::SHIFT_ALT) => {
-            KeyResolution::Cmd(ClientCmd::FocusPane(PaneFocusDirection::Down))
-        }
-        (ClientKeyCode::Char('K'), ClientKeyModifiers::SHIFT_ALT) => {
-            KeyResolution::Cmd(ClientCmd::FocusPane(PaneFocusDirection::Up))
-        }
-        (ClientKeyCode::Char('L'), ClientKeyModifiers::SHIFT_ALT) => {
-            KeyResolution::Cmd(ClientCmd::FocusPane(PaneFocusDirection::Right))
-        }
-        (ClientKeyCode::Char('V'), ClientKeyModifiers::SHIFT_ALT) => {
-            KeyResolution::Cmd(ClientCmd::SplitPane(PaneSplitAxis::Vertical))
-        }
-        (ClientKeyCode::Char('D'), ClientKeyModifiers::SHIFT_ALT) => {
-            KeyResolution::Cmd(ClientCmd::SplitPane(PaneSplitAxis::Horizontal))
-        }
-        (ClientKeyCode::Char('F'), ClientKeyModifiers::SHIFT_ALT) => {
-            KeyResolution::Cmd(ClientCmd::TogglePaneFullscreen)
-        }
-        (ClientKeyCode::Char('W'), ClientKeyModifiers::SHIFT_ALT) => KeyResolution::Cmd(ClientCmd::ClosePane),
-        (ClientKeyCode::Char('R'), ClientKeyModifiers::SHIFT_ALT) => {
-            *input_mode = ServerInputMode::Resize;
-            KeyResolution::Cmd(ClientCmd::EnterResizeMode)
-        }
-        (ClientKeyCode::Char('S'), ClientKeyModifiers::SHIFT_ALT) => {
-            KeyResolution::Cmd(ClientCmd::OpenScrollbackEditor)
-        }
-        _ => KeyResolution::Raw,
-    }
-}
-
-const fn tab_index_for_key(key: &ClientKey) -> Option<usize> {
-    if !key.modifiers.shift || !key.modifiers.alt || key.modifiers.ctrl {
-        return None;
-    }
-
-    let ClientKeyCode::Char(character) = key.code else {
-        return None;
-    };
-
-    match character {
-        '1' => Some(0),
-        '2' => Some(1),
-        '3' => Some(2),
-        '4' => Some(3),
-        '5' => Some(4),
-        '6' => Some(5),
-        '7' => Some(6),
-        '8' => Some(7),
-        '9' => Some(8),
-        _ => None,
     }
 }
 
@@ -329,30 +329,9 @@ fn parse_ascii_u16(raw: &[u8]) -> Option<u16> {
     Some(value)
 }
 
-const fn resolve_resize_key(input_mode: &mut ServerInputMode, key: &ClientKey) -> KeyResolution {
-    match (&key.code, key.modifiers) {
-        (ClientKeyCode::Esc, ClientKeyModifiers::NONE) => {
-            *input_mode = ServerInputMode::Normal;
-            KeyResolution::Cmd(ClientCmd::ExitMode)
-        }
-        (ClientKeyCode::Char('h') | ClientKeyCode::Left, ClientKeyModifiers::NONE) => {
-            KeyResolution::Cmd(ClientCmd::ResizePane(PaneResizeDirection::Left))
-        }
-        (ClientKeyCode::Char('j') | ClientKeyCode::Down, ClientKeyModifiers::NONE) => {
-            KeyResolution::Cmd(ClientCmd::ResizePane(PaneResizeDirection::Down))
-        }
-        (ClientKeyCode::Char('k') | ClientKeyCode::Up, ClientKeyModifiers::NONE) => {
-            KeyResolution::Cmd(ClientCmd::ResizePane(PaneResizeDirection::Up))
-        }
-        (ClientKeyCode::Char('l') | ClientKeyCode::Right, ClientKeyModifiers::NONE) => {
-            KeyResolution::Cmd(ClientCmd::ResizePane(PaneResizeDirection::Right))
-        }
-        _ => KeyResolution::Raw,
-    }
-}
-
 #[cfg(test)]
 mod tests {
+    use muxr_config::MuxrConfig;
     use test_that::prelude::*;
 
     use super::*;
@@ -587,15 +566,20 @@ mod tests {
         #[case] raw_bytes: &[u8],
         #[case] cmd: ClientCmd,
     ) {
-        let mut input_mode = ServerInputMode::Normal;
+        let input_mode = ServerInputMode::Normal;
         let key = ClientKey {
             code,
             modifiers,
             raw_bytes: raw_bytes.to_vec(),
         };
 
-        assert_that!(self::resolve_key(&mut input_mode, &key), eq(KeyResolution::Cmd(cmd)));
-        assert_that!(input_mode, eq(ServerInputMode::Normal));
+        assert_that!(
+            self::resolve_key(&MuxrConfig::default().keybindings, input_mode, &key),
+            eq(KeyResolution::Cmd {
+                cmd,
+                next_mode: ServerInputMode::Normal,
+            })
+        );
     }
 
     #[rstest::rstest]
@@ -612,40 +596,46 @@ mod tests {
         #[case] character: char,
         #[case] tab_index: usize,
     ) {
-        let mut input_mode = ServerInputMode::Normal;
+        let input_mode = ServerInputMode::Normal;
         let key = self::key(ClientKeyCode::Char(character), ClientKeyModifiers::SHIFT_ALT, &[]);
 
         assert_that!(
-            self::resolve_key(&mut input_mode, &key),
-            eq(KeyResolution::Cmd(ClientCmd::Tab(TabCmd::FocusAt(tab_index))))
+            self::resolve_key(&MuxrConfig::default().keybindings, input_mode, &key),
+            eq(KeyResolution::Cmd {
+                cmd: ClientCmd::Tab(TabCmd::FocusAt(tab_index)),
+                next_mode: ServerInputMode::Normal,
+            }),
         );
-        assert_that!(input_mode, eq(ServerInputMode::Normal));
     }
 
     #[test]
     fn test_resolve_key_when_ctrl_digit_arrives_returns_raw() {
-        let mut input_mode = ServerInputMode::Normal;
+        let input_mode = ServerInputMode::Normal;
         let key = self::key(
             ClientKeyCode::Char('1'),
             self::modifiers(false, false, true),
             b"\x1b[49;5u",
         );
 
-        assert_that!(self::resolve_key(&mut input_mode, &key), eq(KeyResolution::Raw));
-        assert_that!(input_mode, eq(ServerInputMode::Normal));
+        assert_that!(
+            self::resolve_key(&MuxrConfig::default().keybindings, input_mode, &key),
+            eq(KeyResolution::Raw)
+        );
     }
 
     #[test]
     fn test_resolve_key_when_unbound_key_arrives_returns_raw() {
-        let mut input_mode = ServerInputMode::Normal;
+        let input_mode = ServerInputMode::Normal;
         let key = ClientKey {
             code: ClientKeyCode::Char('x'),
             modifiers: ClientKeyModifiers::NONE,
             raw_bytes: b"x".to_vec(),
         };
 
-        assert_that!(self::resolve_key(&mut input_mode, &key), eq(KeyResolution::Raw));
-        assert_that!(input_mode, eq(ServerInputMode::Normal));
+        assert_that!(
+            self::resolve_key(&MuxrConfig::default().keybindings, input_mode, &key),
+            eq(KeyResolution::Raw)
+        );
     }
 
     #[rstest::rstest]
@@ -661,20 +651,24 @@ mod tests {
         #[case] code: ClientKeyCode,
         #[case] cmd: ClientCmd,
     ) {
-        let mut input_mode = ServerInputMode::Resize;
+        let input_mode = ServerInputMode::Resize;
         let key = ClientKey {
             code,
             modifiers: ClientKeyModifiers::NONE,
             raw_bytes: b"x".to_vec(),
         };
 
-        assert_that!(self::resolve_key(&mut input_mode, &key), eq(KeyResolution::Cmd(cmd)));
-        assert_that!(input_mode, eq(ServerInputMode::Resize));
+        assert_that!(
+            self::resolve_key(&MuxrConfig::default().keybindings, input_mode, &key),
+            eq(KeyResolution::Cmd {
+                cmd,
+                next_mode: ServerInputMode::Resize,
+            })
+        );
     }
 
     #[test]
-    fn test_resolve_key_when_resize_mode_enter_and_exit_arrive_updates_server_mode() {
-        let mut input_mode = ServerInputMode::Normal;
+    fn test_resolve_key_when_resize_mode_enter_and_exit_arrive_returns_next_server_mode() {
         let enter = ClientKey {
             code: ClientKeyCode::Char('R'),
             modifiers: ClientKeyModifiers::SHIFT_ALT,
@@ -687,28 +681,34 @@ mod tests {
         };
 
         assert_that!(
-            self::resolve_key(&mut input_mode, &enter),
-            eq(KeyResolution::Cmd(ClientCmd::EnterResizeMode))
+            self::resolve_key(&MuxrConfig::default().keybindings, ServerInputMode::Normal, &enter),
+            eq(KeyResolution::Cmd {
+                cmd: ClientCmd::EnterResizeMode,
+                next_mode: ServerInputMode::Resize,
+            })
         );
-        assert_that!(input_mode, eq(ServerInputMode::Resize));
         assert_that!(
-            self::resolve_key(&mut input_mode, &exit),
-            eq(KeyResolution::Cmd(ClientCmd::ExitMode))
+            self::resolve_key(&MuxrConfig::default().keybindings, ServerInputMode::Resize, &exit),
+            eq(KeyResolution::Cmd {
+                cmd: ClientCmd::ExitMode,
+                next_mode: ServerInputMode::Normal,
+            })
         );
-        assert_that!(input_mode, eq(ServerInputMode::Normal));
     }
 
     #[test]
     fn test_resolve_key_when_resize_mode_ctrl_digit_arrives_returns_raw() {
-        let mut input_mode = ServerInputMode::Resize;
+        let input_mode = ServerInputMode::Resize;
         let key = self::key(
             ClientKeyCode::Char('1'),
             self::modifiers(false, false, true),
             b"\x1b[49;5u",
         );
 
-        assert_that!(self::resolve_key(&mut input_mode, &key), eq(KeyResolution::Raw));
-        assert_that!(input_mode, eq(ServerInputMode::Resize));
+        assert_that!(
+            self::resolve_key(&MuxrConfig::default().keybindings, input_mode, &key),
+            eq(KeyResolution::Raw)
+        );
     }
 
     fn key(code: ClientKeyCode, modifiers: ClientKeyModifiers, raw_bytes: &[u8]) -> ClientKey {

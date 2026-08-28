@@ -3,7 +3,13 @@ use std::path::Path;
 use std::thread;
 use std::time::Duration;
 
+use muxr_config::KeybindingMode;
+use muxr_config::KeybindingsConfig;
+use muxr_config::LocalKeybindingAction;
 use muxr_config::MuxrConfig;
+use muxr_core::ClientKey;
+use muxr_core::ClientKeyCode;
+use muxr_core::ClientKeyModifiers;
 use muxr_core::ClientMouseEvent;
 use muxr_core::ClientRequest;
 use muxr_core::ServerEvent;
@@ -58,27 +64,11 @@ enum InputCmdReceiverState {
     Closed,
 }
 
-impl InputCmdReceiverState {
-    const fn is_open(self) -> bool {
-        matches!(self, Self::Open)
-    }
-}
-
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum LocalActionCompletion {
     Wait,
     #[cfg(test)]
     Skip,
-}
-
-impl LocalActionCompletion {
-    const fn waits(self) -> bool {
-        match self {
-            Self::Wait => true,
-            #[cfg(test)]
-            Self::Skip => false,
-        }
-    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -174,7 +164,11 @@ async fn run_interactive(
 
     let (input_request_sender, input_receiver) = tokio::sync::mpsc::channel(INPUT_REQUEST_CHANNEL_LIMIT);
 
-    let stdin_handle = self::spawn_stdin_forwarder(input_cmd_sender, input_request_sender.clone());
+    let stdin_handle = self::spawn_stdin_forwarder(
+        muxr_config.keybindings.clone(),
+        input_cmd_sender,
+        input_request_sender.clone(),
+    );
     let resize_handle = self::spawn_resize_forwarder(control_sender.clone(), muxr_config.tab_bar.width, initial_size);
 
     let writer = attached_session.writer;
@@ -213,7 +207,7 @@ async fn run_interactive(
                     break;
                 }
             },
-            cmd = input_cmd_receiver.recv(), if input_cmd_receiver_state.is_open() => {
+            cmd = input_cmd_receiver.recv(), if input_cmd_receiver_state == InputCmdReceiverState::Open => {
                 let Some(cmd) = cmd else {
                     input_cmd_receiver_state = InputCmdReceiverState::Closed;
                     continue;
@@ -442,22 +436,24 @@ async fn forward_client_requests(
 }
 
 fn spawn_stdin_forwarder(
+    keybindings: KeybindingsConfig,
     cmd_sender: tokio::sync::mpsc::Sender<ClientInputCmd>,
     request_sender: tokio::sync::mpsc::Sender<ClientRequest>,
 ) -> thread::JoinHandle<()> {
     thread::spawn(move || {
         let (read_sender, read_receiver) = std::sync::mpsc::channel();
         drop(self::spawn_stdin_reader(read_sender));
-        let mut decoder = InputDecoder::default();
+        let mut decoder = InputDecoder::with_keybindings(keybindings.clone());
 
         loop {
-            // Ambiguous escape prefixes need an idle timeout for bare Esc. Bracketed paste waits for its terminator so
-            // slow multi-chunk paste cannot leak raw paste markers into the PTY.
+            // Ambiguous escape prefixes need an idle timeout. Bracketed paste waits for its terminator so slow
+            // multi-chunk paste cannot leak raw paste markers into the PTY.
             let read = if decoder.idle_timeout() == InputIdleTimeout::Needed {
                 match read_receiver.recv_timeout(AMBIGUOUS_INPUT_TIMEOUT) {
                     Ok(read) => read,
                     Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
                         if self::send_decoded_input_with_ordering(
+                            &keybindings,
                             &cmd_sender,
                             &request_sender,
                             decoder.finalize(),
@@ -477,6 +473,7 @@ fn spawn_stdin_forwarder(
             match read {
                 StdinRead::Bytes(bytes) => {
                     if self::send_decoded_input_with_ordering(
+                        &keybindings,
                         &cmd_sender,
                         &request_sender,
                         decoder.decode(&bytes),
@@ -488,6 +485,7 @@ fn spawn_stdin_forwarder(
                 }
                 StdinRead::Eof => {
                     if self::send_decoded_input_with_ordering(
+                        &keybindings,
                         &cmd_sender,
                         &request_sender,
                         decoder.finalize(),
@@ -536,81 +534,246 @@ fn send_decoded_input(
     request_sender: &tokio::sync::mpsc::Sender<ClientRequest>,
     decoded: Vec<DecodedInput>,
 ) -> ClientInputSend {
-    self::send_decoded_input_with_ordering(cmd_sender, request_sender, decoded, LocalActionCompletion::Skip)
+    let keybindings = MuxrConfig::default().keybindings;
+    self::send_decoded_input_with_ordering(
+        &keybindings,
+        cmd_sender,
+        request_sender,
+        decoded,
+        LocalActionCompletion::Skip,
+    )
 }
 
 fn send_decoded_input_with_ordering(
+    keybindings: &KeybindingsConfig,
     cmd_sender: &tokio::sync::mpsc::Sender<ClientInputCmd>,
     request_sender: &tokio::sync::mpsc::Sender<ClientRequest>,
     decoded: Vec<DecodedInput>,
     local_action_completion: LocalActionCompletion,
 ) -> ClientInputSend {
     let mut selection_reset_sent = false;
+    let mut pending_input = Vec::new();
 
     for decoded in decoded {
-        let action = match decoded {
-            DecodedInput::CopySelection => ClientInputAction::CopySelection,
-            DecodedInput::CopySelectionInline => ClientInputAction::CopySelectionInline,
-            // Keep pane input on the sole request writer. Clear local selection first so keyboard and paste input
-            // cannot leave stale highlight state while another pane is repainting.
-            DecodedInput::Input(bytes) => {
-                if self::clear_selection_before_input(cmd_sender, local_action_completion, &mut selection_reset_sent)
-                    == ClientInputSend::Closed
-                {
-                    return ClientInputSend::Closed;
-                }
-                if request_sender.blocking_send(ClientRequest::Input(bytes)).is_err() {
-                    return ClientInputSend::Closed;
-                }
-                continue;
-            }
-            DecodedInput::Key(key) => {
-                if self::clear_selection_before_input(cmd_sender, local_action_completion, &mut selection_reset_sent)
-                    == ClientInputSend::Closed
-                {
-                    return ClientInputSend::Closed;
-                }
-                if request_sender.blocking_send(ClientRequest::Key(key)).is_err() {
-                    return ClientInputSend::Closed;
-                }
-                continue;
-            }
-            DecodedInput::Mouse(event)
-                if crate::pane::mouse::MouseEventDrop::from(event) == crate::pane::mouse::MouseEventDrop::Droppable =>
-            {
-                if self::send_droppable_input_action(
-                    cmd_sender,
-                    ClientInputAction::Mouse(event),
-                    local_action_completion,
-                ) == ClientInputSend::Closed
-                {
-                    return ClientInputSend::Closed;
-                }
-                selection_reset_sent = false;
-                continue;
-            }
-            DecodedInput::Mouse(event) => {
-                selection_reset_sent = false;
-                ClientInputAction::Mouse(event)
-            }
-            DecodedInput::Paste(bytes) => {
-                if self::clear_selection_before_input(cmd_sender, local_action_completion, &mut selection_reset_sent)
-                    == ClientInputSend::Closed
-                {
-                    return ClientInputSend::Closed;
-                }
-                if request_sender.blocking_send(ClientRequest::Paste(bytes)).is_err() {
-                    return ClientInputSend::Closed;
-                }
-                continue;
-            }
-        };
-        if self::send_input_action(cmd_sender, action, local_action_completion) == ClientInputSend::Closed {
+        if self::send_decoded_event(
+            keybindings,
+            cmd_sender,
+            request_sender,
+            decoded,
+            &mut pending_input,
+            local_action_completion,
+            &mut selection_reset_sent,
+        ) == ClientInputSend::Closed
+        {
             return ClientInputSend::Closed;
         }
     }
 
+    self::send_pending_input(
+        cmd_sender,
+        request_sender,
+        &mut pending_input,
+        local_action_completion,
+        &mut selection_reset_sent,
+    )
+}
+
+fn send_decoded_event(
+    keybindings: &KeybindingsConfig,
+    cmd_sender: &tokio::sync::mpsc::Sender<ClientInputCmd>,
+    request_sender: &tokio::sync::mpsc::Sender<ClientRequest>,
+    decoded: DecodedInput,
+    pending_input: &mut Vec<u8>,
+    local_action_completion: LocalActionCompletion,
+    selection_reset_sent: &mut bool,
+) -> ClientInputSend {
+    match decoded {
+        DecodedInput::Input(bytes) => pending_input.extend(bytes),
+        DecodedInput::Key(key) => {
+            return self::send_key_input(
+                keybindings,
+                cmd_sender,
+                request_sender,
+                key,
+                pending_input,
+                local_action_completion,
+                selection_reset_sent,
+            );
+        }
+        DecodedInput::Mouse(event) => {
+            return self::send_mouse_input(
+                cmd_sender,
+                event,
+                pending_input,
+                request_sender,
+                local_action_completion,
+                selection_reset_sent,
+            );
+        }
+        DecodedInput::Paste(bytes) => {
+            return self::send_paste_input(
+                cmd_sender,
+                request_sender,
+                bytes,
+                pending_input,
+                local_action_completion,
+                selection_reset_sent,
+            );
+        }
+    }
     ClientInputSend::Accepted
+}
+
+fn send_key_input(
+    keybindings: &KeybindingsConfig,
+    cmd_sender: &tokio::sync::mpsc::Sender<ClientInputCmd>,
+    request_sender: &tokio::sync::mpsc::Sender<ClientRequest>,
+    key: ClientKey,
+    pending_input: &mut Vec<u8>,
+    local_action_completion: LocalActionCompletion,
+    selection_reset_sent: &mut bool,
+) -> ClientInputSend {
+    if let Some(action) = keybindings.resolve_local(&key) {
+        if self::send_pending_input(
+            cmd_sender,
+            request_sender,
+            pending_input,
+            local_action_completion,
+            selection_reset_sent,
+        ) == ClientInputSend::Closed
+        {
+            return ClientInputSend::Closed;
+        }
+        let action = match action {
+            LocalKeybindingAction::CopySelection => ClientInputAction::CopySelection,
+            LocalKeybindingAction::CopySelectionInline => ClientInputAction::CopySelectionInline,
+        };
+        return self::send_input_action(cmd_sender, action, local_action_completion);
+    }
+    if let Some(byte) = self::plain_input_byte(keybindings, &key) {
+        pending_input.push(byte);
+        return ClientInputSend::Accepted;
+    }
+    if self::send_pending_input(
+        cmd_sender,
+        request_sender,
+        pending_input,
+        local_action_completion,
+        selection_reset_sent,
+    ) == ClientInputSend::Closed
+    {
+        return ClientInputSend::Closed;
+    }
+    if self::clear_selection_before_input(cmd_sender, local_action_completion, selection_reset_sent)
+        == ClientInputSend::Closed
+    {
+        return ClientInputSend::Closed;
+    }
+    if request_sender.blocking_send(ClientRequest::Key(key)).is_err() {
+        return ClientInputSend::Closed;
+    }
+    ClientInputSend::Accepted
+}
+
+fn send_mouse_input(
+    cmd_sender: &tokio::sync::mpsc::Sender<ClientInputCmd>,
+    event: ClientMouseEvent,
+    pending_input: &mut Vec<u8>,
+    request_sender: &tokio::sync::mpsc::Sender<ClientRequest>,
+    local_action_completion: LocalActionCompletion,
+    selection_reset_sent: &mut bool,
+) -> ClientInputSend {
+    if self::send_pending_input(
+        cmd_sender,
+        request_sender,
+        pending_input,
+        local_action_completion,
+        selection_reset_sent,
+    ) == ClientInputSend::Closed
+    {
+        return ClientInputSend::Closed;
+    }
+    *selection_reset_sent = false;
+    let action = ClientInputAction::Mouse(event);
+    if crate::pane::mouse::MouseEventDrop::from(event) == crate::pane::mouse::MouseEventDrop::Droppable {
+        self::send_droppable_input_action(cmd_sender, action, local_action_completion)
+    } else {
+        self::send_input_action(cmd_sender, action, local_action_completion)
+    }
+}
+
+fn send_paste_input(
+    cmd_sender: &tokio::sync::mpsc::Sender<ClientInputCmd>,
+    request_sender: &tokio::sync::mpsc::Sender<ClientRequest>,
+    bytes: Vec<u8>,
+    pending_input: &mut Vec<u8>,
+    local_action_completion: LocalActionCompletion,
+    selection_reset_sent: &mut bool,
+) -> ClientInputSend {
+    if self::send_pending_input(
+        cmd_sender,
+        request_sender,
+        pending_input,
+        local_action_completion,
+        selection_reset_sent,
+    ) == ClientInputSend::Closed
+    {
+        return ClientInputSend::Closed;
+    }
+    if self::clear_selection_before_input(cmd_sender, local_action_completion, selection_reset_sent)
+        == ClientInputSend::Closed
+    {
+        return ClientInputSend::Closed;
+    }
+    if request_sender.blocking_send(ClientRequest::Paste(bytes)).is_err() {
+        return ClientInputSend::Closed;
+    }
+    ClientInputSend::Accepted
+}
+
+fn send_pending_input(
+    cmd_sender: &tokio::sync::mpsc::Sender<ClientInputCmd>,
+    request_sender: &tokio::sync::mpsc::Sender<ClientRequest>,
+    pending_input: &mut Vec<u8>,
+    local_action_completion: LocalActionCompletion,
+    selection_reset_sent: &mut bool,
+) -> ClientInputSend {
+    if pending_input.is_empty() {
+        return ClientInputSend::Accepted;
+    }
+
+    if self::clear_selection_before_input(cmd_sender, local_action_completion, selection_reset_sent)
+        == ClientInputSend::Closed
+    {
+        return ClientInputSend::Closed;
+    }
+    if request_sender
+        .blocking_send(ClientRequest::Input(std::mem::take(pending_input)))
+        .is_err()
+    {
+        return ClientInputSend::Closed;
+    }
+    ClientInputSend::Accepted
+}
+
+fn plain_input_byte(keybindings: &KeybindingsConfig, key: &ClientKey) -> Option<u8> {
+    if keybindings.resolve(KeybindingMode::Normal, key).is_some()
+        || keybindings.resolve(KeybindingMode::Resize, key).is_some()
+    {
+        return None;
+    }
+
+    if key.modifiers != ClientKeyModifiers::NONE {
+        return None;
+    }
+    let ClientKeyCode::Char(character) = key.code else {
+        return None;
+    };
+    if !character.is_ascii() || character.is_ascii_control() {
+        return None;
+    }
+    let byte = u8::try_from(u32::from(character)).ok()?;
+    (key.raw_bytes.as_slice() == std::slice::from_ref(&byte)).then_some(byte)
 }
 
 fn clear_selection_before_input(
@@ -635,8 +798,11 @@ fn send_droppable_input_action(
     local_action_completion: LocalActionCompletion,
 ) -> ClientInputSend {
     match cmd_sender.try_send(ClientInputCmd::Action(action)) {
-        Ok(()) if local_action_completion.waits() => self::send_input_action_barrier(cmd_sender),
-        Ok(()) => ClientInputSend::Accepted,
+        Ok(()) => match local_action_completion {
+            LocalActionCompletion::Wait => self::send_input_action_barrier(cmd_sender),
+            #[cfg(test)]
+            LocalActionCompletion::Skip => ClientInputSend::Accepted,
+        },
         Err(tokio::sync::mpsc::error::TrySendError::Full(action)) => {
             drop(action);
             ClientInputSend::Accepted
@@ -656,10 +822,10 @@ fn send_input_action(
     if cmd_sender.blocking_send(ClientInputCmd::Action(action)).is_err() {
         return ClientInputSend::Closed;
     }
-    if local_action_completion.waits() {
-        self::send_input_action_barrier(cmd_sender)
-    } else {
-        ClientInputSend::Accepted
+    match local_action_completion {
+        LocalActionCompletion::Wait => self::send_input_action_barrier(cmd_sender),
+        #[cfg(test)]
+        LocalActionCompletion::Skip => ClientInputSend::Accepted,
     }
 }
 
@@ -981,6 +1147,53 @@ mod tests {
     }
 
     #[test]
+    fn test_send_decoded_input_when_contiguous_plain_keys_arrive_batches_input() {
+        let (cmd_sender, _cmd_receiver) = tokio::sync::mpsc::channel(1);
+        let (request_sender, mut request_receiver) = tokio::sync::mpsc::channel(1);
+        let key = |character| ClientKey {
+            code: ClientKeyCode::Char(character),
+            modifiers: ClientKeyModifiers::NONE,
+            raw_bytes: vec![character as u8],
+        };
+
+        assert_that!(
+            send_decoded_input(
+                &cmd_sender,
+                &request_sender,
+                vec![
+                    DecodedInput::Key(key('a')),
+                    DecodedInput::Key(key('b')),
+                    DecodedInput::Key(key('c')),
+                ],
+            ),
+            eq(ClientInputSend::Accepted)
+        );
+
+        assert_that!(
+            request_receiver.blocking_recv(),
+            eq(Some(ClientRequest::Input(b"abc".to_vec())))
+        );
+    }
+
+    #[test]
+    fn test_send_decoded_input_when_server_bound_plain_key_arrives_preserves_key_request() {
+        let (cmd_sender, _cmd_receiver) = tokio::sync::mpsc::channel(1);
+        let (request_sender, mut request_receiver) = tokio::sync::mpsc::channel(1);
+        let key = ClientKey {
+            code: ClientKeyCode::Char('h'),
+            modifiers: ClientKeyModifiers::NONE,
+            raw_bytes: b"h".to_vec(),
+        };
+
+        assert_that!(
+            send_decoded_input(&cmd_sender, &request_sender, vec![DecodedInput::Key(key.clone())]),
+            eq(ClientInputSend::Accepted)
+        );
+
+        assert_that!(request_receiver.blocking_recv(), eq(Some(ClientRequest::Key(key))));
+    }
+
+    #[test]
     fn test_send_decoded_input_when_copy_precedes_key_keeps_copy_before_selection_reset() {
         let (cmd_sender, mut cmd_receiver) = tokio::sync::mpsc::channel(2);
         let (request_sender, mut request_receiver) = tokio::sync::mpsc::channel(1);
@@ -994,7 +1207,14 @@ mod tests {
             send_decoded_input(
                 &cmd_sender,
                 &request_sender,
-                vec![DecodedInput::CopySelection, DecodedInput::Key(key.clone())],
+                vec![
+                    DecodedInput::Key(ClientKey {
+                        code: ClientKeyCode::Char('C'),
+                        modifiers: ClientKeyModifiers::SHIFT_ALT,
+                        raw_bytes: b"\x1bC".to_vec(),
+                    }),
+                    DecodedInput::Key(key.clone()),
+                ],
             ),
             eq(ClientInputSend::Accepted)
         );
@@ -1174,12 +1394,17 @@ mod tests {
     }
 
     #[test]
-    fn test_send_decoded_input_when_copy_selection_arrives_emits_local_action() {
+    fn test_send_decoded_input_when_copy_selection_key_arrives_emits_local_action() {
         let (cmd_sender, mut cmd_receiver) = tokio::sync::mpsc::channel(1);
         let (request_sender, _request_receiver) = tokio::sync::mpsc::channel(1);
+        let key = ClientKey {
+            code: ClientKeyCode::Char('C'),
+            modifiers: ClientKeyModifiers::SHIFT_ALT,
+            raw_bytes: b"\x1bC".to_vec(),
+        };
 
         assert_that!(
-            send_decoded_input(&cmd_sender, &request_sender, vec![DecodedInput::CopySelection]),
+            send_decoded_input(&cmd_sender, &request_sender, vec![DecodedInput::Key(key)]),
             eq(ClientInputSend::Accepted)
         );
 
@@ -1193,12 +1418,17 @@ mod tests {
     }
 
     #[test]
-    fn test_send_decoded_input_when_inline_copy_selection_arrives_emits_local_action() {
+    fn test_send_decoded_input_when_inline_copy_selection_key_arrives_emits_local_action() {
         let (cmd_sender, mut cmd_receiver) = tokio::sync::mpsc::channel(1);
         let (request_sender, _request_receiver) = tokio::sync::mpsc::channel(1);
+        let key = ClientKey {
+            code: ClientKeyCode::Char('X'),
+            modifiers: ClientKeyModifiers::SHIFT_ALT,
+            raw_bytes: b"\x1bX".to_vec(),
+        };
 
         assert_that!(
-            send_decoded_input(&cmd_sender, &request_sender, vec![DecodedInput::CopySelectionInline]),
+            send_decoded_input(&cmd_sender, &request_sender, vec![DecodedInput::Key(key)]),
             eq(ClientInputSend::Accepted)
         );
 
