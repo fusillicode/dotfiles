@@ -220,7 +220,8 @@ impl Installer for Cargo<'_> {
             .context("failed to spawn cargo install")?
             .exit_ok()
             .context("cargo install failed")
-            .attach_with(|| format!("tool={}", self.bin_name()))?;
+            .attach_with(|| format!("tool={}", self.bin_name()))
+            .attach_with(|| format!("command={command:?}"))?;
 
         let cargo_binary = self
             .source_bin_dir

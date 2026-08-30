@@ -77,10 +77,7 @@ impl DiagnosticsFilter for RelatedInfoFilter {
         }
         // All LSPs diagnostics should be deserializable into [`RelatedInfo`]
         let rel_info = RelatedInfo::from_lsp_diagnostic(lsp_diag)?;
-        if self.rel_infos.contains(&rel_info) {
-            return Ok(true);
-        }
-        Ok(false)
+        Ok(self.rel_infos.contains(&rel_info))
     }
 }
 
