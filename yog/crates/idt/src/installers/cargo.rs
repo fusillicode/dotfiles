@@ -4,6 +4,7 @@ use std::process::Command;
 
 use rootcause::bail;
 use rootcause::prelude::ResultExt;
+use ytil_sys::rustup::RequestedRustToolchain;
 
 use crate::installers::Installer;
 use crate::installers::run_health_check;
@@ -20,7 +21,6 @@ pub struct Cargo<'a> {
     source: Source,
 }
 
-#[derive(Clone, Copy)]
 enum Source {
     Registry {
         crate_name: &'static str,
@@ -32,7 +32,7 @@ enum Source {
         repository: &'static str,
         branch: Option<&'static str>,
         locked: bool,
-        toolchain: Option<&'static str>,
+        requested_toolchain: Option<RequestedRustToolchain>,
         package_name: Option<&'static str>,
     },
 }
@@ -110,7 +110,7 @@ impl<'a> Cargo<'a> {
                 repository,
                 branch: None,
                 locked: false,
-                toolchain: None,
+                requested_toolchain: None,
                 package_name: None,
             },
         }
@@ -150,7 +150,7 @@ impl<'a> Cargo<'a> {
                 repository,
                 branch: Some(branch),
                 locked: true,
-                toolchain: Some("nightly"),
+                requested_toolchain: Some(RequestedRustToolchain::Nightly(None)),
                 package_name: Some(bin_name),
             },
         }
@@ -167,31 +167,40 @@ impl Installer for Cargo<'_> {
     }
 
     fn install(&self) -> rootcause::Result<()> {
+        let toolchain = match &self.source {
+            Source::Git {
+                requested_toolchain: Some(requested_toolchain),
+                ..
+            } => Some(ytil_sys::rustup::find_latest_installed_rust_toolchain(
+                requested_toolchain,
+            )?),
+            Source::Registry { .. }
+            | Source::Git {
+                requested_toolchain: None,
+                ..
+            } => None,
+        };
         let mut command = ytil_cmd::silent_cmd("cargo");
-        if let Source::Git {
-            toolchain: Some(toolchain),
-            ..
-        } = self.source
-        {
+        if let Some(toolchain) = toolchain {
             command.arg(format!("+{toolchain}"));
         }
         command.args(["install", "--force"]);
 
-        match self.source {
+        match &self.source {
             Source::Registry {
                 crate_name,
                 features,
                 all_features,
                 locked,
             } => {
-                command.arg(crate_name);
+                command.arg(*crate_name);
                 if let Some(features) = features {
-                    command.args(["--features", features]);
+                    command.args(["--features", *features]);
                 }
-                if all_features {
+                if *all_features {
                     command.arg("--all-features");
                 }
-                if locked {
+                if *locked {
                     command.arg("--locked");
                 }
             }
@@ -202,15 +211,15 @@ impl Installer for Cargo<'_> {
                 package_name,
                 ..
             } => {
-                command.args(["--git", repository]);
+                command.args(["--git", *repository]);
                 if let Some(branch) = branch {
-                    command.args(["--branch", branch]);
+                    command.args(["--branch", *branch]);
                 }
-                if locked {
+                if *locked {
                     command.arg("--locked");
                 }
                 if let Some(package_name) = package_name {
-                    command.arg(package_name);
+                    command.arg(*package_name);
                 }
             }
         }

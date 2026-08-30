@@ -58,7 +58,7 @@ categories = ["command-line-utilities", "development-tools"]
 # Centralized shared dependencies (including those used only as dev-deps in member crates).
 # Member crates reference them with `{ workspace = true }` under their own [dev-dependencies].
 bytes = { version = "1.11" }
-convert_case = { version = "0.11" }
+convert_case = { version = "0.12" }
 fake = { version = "5.1", features = ["derive"] }
 git2 = { version = "0.21", default-features = false }
 jiff = { version = "0.2", default-features = false, features = ["serde", "std", "tz-system", "tzdb-zoneinfo"] }

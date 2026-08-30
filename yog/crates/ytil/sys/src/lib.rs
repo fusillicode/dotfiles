@@ -17,6 +17,7 @@ pub mod dir;
 pub mod file;
 pub mod lsof;
 pub mod rm;
+pub mod rustup;
 
 /// Runs `f` and, on error, prints the report in bold red to stderr then exits with code 1.
 pub fn run(f: impl FnOnce() -> rootcause::Result<()>) {
