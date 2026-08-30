@@ -142,10 +142,7 @@ impl GitStatusEntry {
 
     /// Returns `true` if the entry is newly added (in index or worktree).
     pub fn is_new(&self) -> bool {
-        if self.is_new_in_index() || self.worktree_state.as_ref().is_some_and(WorktreeState::is_new) {
-            return true;
-        }
-        false
+        self.is_new_in_index() || self.worktree_state.as_ref().is_some_and(WorktreeState::is_new)
     }
 
     pub fn is_new_in_index(&self) -> bool {

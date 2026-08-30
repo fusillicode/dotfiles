@@ -31,6 +31,6 @@ module-item-order-groupings = [
   ["global_asm", ["global_asm"]],
   ["constants", ["const", "static"]],
   ["aliases", ["ty_alias"]],
-  ["items", ["macro", "enum", "struct", "union", "trait", "trait_alias", "impl", "fn"]],
+  ["items", ["macro", "enum", "struct", "union", "trait", "trait_alias", "impl", "fn", "test_binder_constraints"]],
 ]
 source-item-ordering = ["module"]

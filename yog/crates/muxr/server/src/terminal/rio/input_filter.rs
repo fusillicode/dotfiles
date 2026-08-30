@@ -784,7 +784,7 @@ mod tests {
         let mut filter = RioInputFilter::default();
 
         let first = filter.process(b"\x1b]2;\xc3");
-        std::assert!(first.as_ref().is_empty());
+        std::assert_eq!(first.as_ref(), b"");
         let second = filter.process(b"\x9c\x9cafter");
 
         std::assert_eq!(second.as_ref(), b"\x1b]2;\xc3\x9c\x1b\\after");
@@ -960,7 +960,7 @@ mod tests {
         header.push(ignored);
 
         let first = filter.process(&header);
-        std::assert!(first.as_ref().is_empty());
+        std::assert_eq!(first.as_ref(), b"");
         let mut payload = b"q".to_vec();
         payload.extend(std::iter::repeat_n(b'A', XTGETTCAP_PAYLOAD_LIMIT.saturating_add(1)));
         let second = filter.process(&payload);
@@ -984,7 +984,7 @@ mod tests {
         let mut filter = RioInputFilter::default();
 
         let first = filter.process(b"\x1bP+");
-        std::assert!(first.as_ref().is_empty());
+        std::assert_eq!(first.as_ref(), b"");
         let cancel_input = [cancel];
         let canceled = filter.process(&cancel_input);
         let mut expected = b"\x1bP+".to_vec();
@@ -1002,7 +1002,7 @@ mod tests {
         std::assert_eq!(first.as_ref(), b"before");
         let payload = vec![b'x'; 64 * 1024];
         let middle = filter.process(&payload);
-        std::assert!(middle.as_ref().is_empty());
+        std::assert_eq!(middle.as_ref(), b"");
         let last = filter.process(b"\x1b\\after");
         std::assert_eq!(last.as_ref(), b"after");
     }
