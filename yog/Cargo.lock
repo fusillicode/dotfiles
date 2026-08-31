@@ -3518,9 +3518,9 @@ dependencies = [
 
 [[package]]
 name = "rio-grapheme-width"
-version = "0.5.26"
+version = "0.5.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f6b193490a94a1273f093c3cc38ac936b56a6d035b106834df3885bd9386403a"
+checksum = "f3d03598bb9bae51d4c91b67167b6e348adf893fa2ecc3466754d776109b8526"
 dependencies = [
  "phf 0.13.1",
  "ucd-trie",
@@ -3528,9 +3528,9 @@ dependencies = [
 
 [[package]]
 name = "rio-graphics"
-version = "0.5.26"
+version = "0.5.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1b088ba47933b5e9f0c96596a8ccf91fb689682dcbcee16fd0e08ff5bf42a05f"
+checksum = "ae16923db8d9ff3901f4077568a53ef6323beff12f8a18700eeae1abcf4ac03f"
 dependencies = [
  "rustc-hash",
  "tracing",
@@ -3539,9 +3539,9 @@ dependencies = [
 
 [[package]]
 name = "rio-unicode"
-version = "0.5.26"
+version = "0.5.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cc82053a58d5488dee8f14c7279f8c905d935e58a309aa32f2ec5b311694229d"
+checksum = "e85bdb66b7d6c0c5bd80ec6dcfaadd45b3379a2439a43648b6bff2d7ecd2f8ba"
 
 [[package]]
 name = "rio-vt"
@@ -4660,9 +4660,9 @@ dependencies = [
 
 [[package]]
 name = "tree-sitter-language"
-version = "0.1.7"
+version = "0.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "009994f150cc0cd50ff54917d5bc8bffe8cad10ca10d81c34da2ec421ae61782"
+checksum = "ca0d1bf6fdd806e43ae5198f82f527056d359def39e54e67a0f478ac09dac081"
 
 [[package]]
 name = "tree-sitter-rust"
