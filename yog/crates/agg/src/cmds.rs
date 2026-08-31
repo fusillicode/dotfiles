@@ -3,8 +3,11 @@ use std::ffi::OsString;
 use rootcause::report;
 use ytil_sys::pico_args::Arguments;
 
+use crate::cmds::tok::Opts;
+
 pub mod codex;
 pub mod sessions;
+pub mod tok;
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum Cmd {
@@ -12,6 +15,7 @@ pub enum Cmd {
     SessionsList,
     SessionsListJson(Vec<String>),
     CodexCompact,
+    Tok(Opts),
 }
 
 impl Cmd {
@@ -57,6 +61,7 @@ impl TryFrom<Arguments> for Cmd {
         match command.as_str() {
             "sessions" => Self::parse_sessions(args),
             "codex" => Self::parse_codex(args),
+            "tok" => Ok(Self::Tok(Opts::try_from(args.finish())?)),
             _ => Err(report!("unsupported agg command")),
         }
     }
@@ -71,12 +76,34 @@ mod tests {
     use test_that::prelude::*;
 
     use super::*;
+    use crate::cmds::tok::Input;
+    use crate::cmds::tok::OutputFmt;
 
     #[rstest::rstest]
     #[case::bare(&[], Cmd::SessionsList)]
     #[case::sessions_list(&["sessions", "list"], Cmd::SessionsList)]
     #[case::codex_compact(&["codex", "--compact"], Cmd::CodexCompact)]
     #[case::help(&["sessions", "--help"], Cmd::Help)]
+    #[case::tok_file(&["tok", "prompt.txt"], Cmd::Tok(Opts {
+        encoding: "o200k_base".to_owned(),
+        input: Input::File(std::path::PathBuf::from("prompt.txt")),
+        output_fmt: OutputFmt::Json,
+    }))]
+    #[case::tok_text(&["tok", "--text", "hello"], Cmd::Tok(Opts {
+        encoding: "o200k_base".to_owned(),
+        input: Input::Text("hello".to_owned()),
+        output_fmt: OutputFmt::Json,
+    }))]
+    #[case::tok_encoding(&["tok", "--encoding", "cl100k_base", "-"], Cmd::Tok(Opts {
+        encoding: "cl100k_base".to_owned(),
+        input: Input::Stdin,
+        output_fmt: OutputFmt::Json,
+    }))]
+    #[case::tok_plain(&["tok", "--plain", "prompt.txt"], Cmd::Tok(Opts {
+        encoding: "o200k_base".to_owned(),
+        input: Input::File(std::path::PathBuf::from("prompt.txt")),
+        output_fmt: OutputFmt::Plain,
+    }))]
     fn test_parse_known_commands(#[case] args: &[&str], #[case] expected: Cmd) {
         assert_that!(parse(args), ok(eq(expected)));
     }
