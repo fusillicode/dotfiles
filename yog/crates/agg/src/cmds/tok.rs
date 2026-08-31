@@ -4,22 +4,14 @@ use std::path::PathBuf;
 
 use rootcause::prelude::ResultExt;
 use rootcause::report;
-use serde::Serialize;
 use ytil_sys::pico_args::Arguments;
 
 const DEFAULT_ENCODING: &str = "o200k_base";
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum OutputFmt {
-    Json,
-    Plain,
-}
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct Opts {
     pub encoding: String,
     pub input: Input,
-    pub output_fmt: OutputFmt,
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -38,11 +30,6 @@ impl TryFrom<Vec<OsString>> for Opts {
             .opt_value_from_str::<_, String>("--encoding")?
             .unwrap_or_else(|| DEFAULT_ENCODING.to_owned());
         let text = args.opt_value_from_str::<_, String>("--text")?;
-        let output_fmt = if args.contains("--plain") {
-            OutputFmt::Plain
-        } else {
-            OutputFmt::Json
-        };
         let positionals = args.finish();
 
         if let Some(argument) = positionals
@@ -61,11 +48,7 @@ impl TryFrom<Vec<OsString>> for Opts {
             (None, _) => return Err(report!("agg tok accepts exactly one file or stdin input")),
         };
 
-        Ok(Self {
-            encoding,
-            input,
-            output_fmt,
-        })
+        Ok(Self { encoding, input })
     }
 }
 
@@ -95,28 +78,8 @@ pub fn run(options: &Opts) -> rootcause::Result<()> {
     let text = options.input.read_to_string()?;
     let tokens = encoding.count(&text);
 
-    let token_count = TokenCount {
-        encoding: &options.encoding,
-        tokens,
-    };
-
-    println!("{}", token_count.render(options.output_fmt)?);
+    println!("{tokens}");
     Ok(())
-}
-
-#[derive(Serialize)]
-struct TokenCount<'a> {
-    encoding: &'a str,
-    tokens: usize,
-}
-
-impl TokenCount<'_> {
-    fn render(&self, output: OutputFmt) -> rootcause::Result<String> {
-        match output {
-            OutputFmt::Json => Ok(serde_json::to_string(&self).context("failed to serialize token count")?),
-            OutputFmt::Plain => Ok(self.tokens.to_string()),
-        }
-    }
 }
 
 #[cfg(test)]
@@ -168,7 +131,6 @@ mod tests {
         let options = Opts {
             encoding: "unknown".to_owned(),
             input: Input::Text("hello".to_owned()),
-            output_fmt: OutputFmt::Json,
         };
 
         assert_that!(
@@ -178,23 +140,6 @@ mod tests {
                 contains_substring("encoding=unknown"),
                 contains_substring(DEFAULT_ENCODING)
             )))
-        );
-    }
-
-    #[rstest::rstest]
-    #[case::json(OutputFmt::Json, r#"{"encoding":"o200k_base","tokens":2}"#)]
-    #[case::plain(OutputFmt::Plain, "2")]
-    fn test_render_output_when_format_is_selected_returns_expected_text(
-        #[case] output_fmt: OutputFmt,
-        #[case] expected: &str,
-    ) {
-        assert_that!(
-            TokenCount {
-                encoding: DEFAULT_ENCODING,
-                tokens: 2
-            }
-            .render(output_fmt),
-            ok(eq(expected))
         );
     }
 

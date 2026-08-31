@@ -5,13 +5,13 @@ USAGE:
     agg sessions list
     agg sessions list --json --session <agent>:<session-id>...
     agg codex --compact
-    agg tok [--encoding <name>] [--plain] <file>
-    agg tok [--encoding <name>] [--plain] --text <text>
-    agg tok [--encoding <name>] [--plain] -
+    agg tok [--encoding <name>] <file>
+    agg tok [--encoding <name>] --text <text>
+    agg tok [--encoding <name>] -
 
 COMMANDS:
     sessions list     Show resumable AI agent sessions.
     codex --compact   Compact the local Codex log database.
-    tok               Count text tokens as JSON (default encoding: o200k_base; --plain prints only the count).
+    tok               Count text tokens (default encoding: o200k_base).
 
 Without a command, shows Claude, Codex, and Cursor resumable sessions in a picker, then resumes or deletes the selected session.
