@@ -149,6 +149,7 @@ function M.gitsigns(plugin)
     { '<leader>hs', mode = 'v', plugin and { function() plugin.stage_hunk({ vim.fn.line('.'), vim.fn.line('v'), }) end, }, },
     { '<leader>hr', mode = 'v', plugin and { function() plugin.reset_hunk({ vim.fn.line('.'), vim.fn.line('v'), }) end, }, },
     { '<leader>hu', mode = 'n', plugin and { plugin.undo_stage_hunk, }, },
+    { '<leader>ho', mode = 'n', plugin and { function() plugin.diffthis(nil, { vertical = true, }) end, }, },
   }
 end
 
