@@ -1,13 +1,13 @@
 {
   "blink-cmp-words": { "branch": "main", "commit": "d6a56f532a1826b4f3aeed4d5e2fe7b8743a9244" },
-  "blink.cmp": { "branch": "main", "commit": "05c1798b48d8440358e59342b77fee84c8a8f18e" },
+  "blink.cmp": { "branch": "main", "commit": "2befba190e0ffa3692ab364f75604c9c2d248adf" },
   "blink.compat": { "branch": "main", "commit": "2ed6d9a28b07fa6f3bface818470605f8896408c" },
   "blink.lib": { "branch": "main", "commit": "c8fdc12c8a2fab6cf786dd7141a283f8079f902b" },
   "blink.pairs": { "branch": "main", "commit": "dd57684daf1297e854e46c85511e7875efb4de75" },
   "canola.nvim": { "branch": "main", "commit": "608cd79544c3adc853d0400f1f540e4f2aa4c024" },
   "conform.nvim": { "branch": "master", "commit": "016802de402556da54c36bd7359b441266b01cdd" },
   "crates.nvim": { "branch": "main", "commit": "694357861ec9ebf12475ddcdd04ea45a0923c32d" },
-  "fidget.nvim": { "branch": "main", "commit": "6f793b2bcd2d35e201c09520f698bb763220908a" },
+  "fidget.nvim": { "branch": "main", "commit": "9e0201673e08e997e7cf52afca5565c70bd117f3" },
   "flatten.nvim": { "branch": "main", "commit": "d92ca41e9c330f45c1b854a80c89c8488a9d730c" },
   "fzf": { "branch": "master", "commit": "52f4319a72c17e123396cc3a2e6abf2e96e9d753" },
   "fzf-lua": { "branch": "main", "commit": "05e44d38de0a79c11fba5f7bf8138791b1dbdd1e" },
@@ -21,7 +21,7 @@
   "nvim-surround": { "branch": "main", "commit": "8b47db616ef658b8fc27e61db2896aa2f40134de" },
   "nvim-treesitter": { "branch": "main", "commit": "427e9222363d07c32d6db6169e4049c28d58d141" },
   "nvim-treesitter-context": { "branch": "master", "commit": "f3061339b8eaf9fda873600bc425b8d2d8502533" },
-  "nvim-treesitter-textobjects": { "branch": "main", "commit": "898ee307df58f854d11cd7edd06472574d48014e" },
+  "nvim-treesitter-textobjects": { "branch": "main", "commit": "9dcbdb021b8056751c287a15ff8969d5be662438" },
   "render-markdown.nvim": { "branch": "main", "commit": "4663eb3ecd538bd5062628fb6d95bbe6bdca78f6" },
   "schemastore.nvim": { "branch": "main", "commit": "6a1a2daf151dd742d5ff2f64eb2cc049d7e5ab4a" }
 }
