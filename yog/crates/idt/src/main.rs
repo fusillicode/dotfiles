@@ -158,11 +158,12 @@ fn parallel_installers<'a>(
 /// Construct the declared Cargo and Git tool inventory.
 fn managed_cargo_installers<'a>(cargo_bin_dir: &'a Path, bin_dir: &'a Path) -> Vec<Box<dyn Installer + 'a>> {
     vec![
-        Box::new(Cargo::registry(
+        Box::new(Cargo::registry_with_cargo_subcommand(
             cargo_bin_dir,
             bin_dir,
             "cargo-auditable",
             "cargo-auditable",
+            "auditable",
         )),
         Box::new(Cargo::registry_with_features(
             cargo_bin_dir,
@@ -177,19 +178,32 @@ fn managed_cargo_installers<'a>(cargo_bin_dir: &'a Path, bin_dir: &'a Path) -> V
             "cargo-machete",
             "cargo-machete",
         )),
-        Box::new(Cargo::registry(cargo_bin_dir, bin_dir, "cargo-make", "cargo-make")),
+        Box::new(Cargo::registry_with_cargo_subcommand(
+            cargo_bin_dir,
+            bin_dir,
+            "cargo-make",
+            "cargo-make",
+            "make",
+        )),
         Box::new(Cargo::registry(cargo_bin_dir, bin_dir, "cargo-sort", "cargo-sort")),
-        Box::new(Cargo::registry(
+        Box::new(Cargo::registry_with_cargo_subcommand(
             cargo_bin_dir,
             bin_dir,
             "cargo-sort-derives",
             "cargo-sort-derives",
+            "sort-derives",
         )),
         Box::new(Cargo::registry(cargo_bin_dir, bin_dir, "ccase", "ccase")),
         Box::new(Cargo::registry(cargo_bin_dir, bin_dir, "fd", "fd-find")),
         Box::new(Cargo::registry(cargo_bin_dir, bin_dir, "jnv", "jnv")),
         Box::new(Cargo::registry(cargo_bin_dir, bin_dir, "mise", "mise")),
-        Box::new(Cargo::registry(cargo_bin_dir, bin_dir, "pv", "pv")),
+        Box::new(Cargo::registry_with_health_check_args(
+            cargo_bin_dir,
+            bin_dir,
+            "pv",
+            "pv",
+            &["--help"],
+        )),
         Box::new(Cargo::registry(cargo_bin_dir, bin_dir, "qj", "qj")),
         Box::new(Cargo::registry(cargo_bin_dir, bin_dir, "rg", "ripgrep")),
         Box::new(Cargo::registry(cargo_bin_dir, bin_dir, "sd", "sd")),
@@ -221,11 +235,12 @@ fn managed_cargo_installers<'a>(cargo_bin_dir: &'a Path, bin_dir: &'a Path) -> V
             "cargo-nextest",
             "cargo-nextest",
         )),
-        Box::new(Cargo::registry(
+        Box::new(Cargo::registry_with_cargo_subcommand(
             cargo_bin_dir,
             bin_dir,
             "cargo-llvm-cov",
             "cargo-llvm-cov",
+            "llvm-cov",
         )),
         Box::new(Cargo::git(
             cargo_bin_dir,

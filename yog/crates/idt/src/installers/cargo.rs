@@ -19,6 +19,7 @@ pub struct Cargo<'a> {
     bin_dir: &'a Path,
     bin_name: &'static str,
     source: Source,
+    health_check: HealthCheck,
 }
 
 enum Source {
@@ -35,6 +36,14 @@ enum Source {
         requested_toolchain: Option<RequestedRustToolchain>,
         package_name: Option<&'static str>,
     },
+}
+
+#[derive(Clone, Copy)]
+enum HealthCheck {
+    /// Run the installed binary directly with its health-check arguments.
+    Binary(&'static [&'static str]),
+    /// Run a Cargo subcommand because the installed binary expects Cargo's dispatch prefix.
+    CargoSubcommand(&'static str),
 }
 
 impl<'a> Cargo<'a> {
@@ -54,6 +63,7 @@ impl<'a> Cargo<'a> {
                 all_features: false,
                 locked: false,
             },
+            health_check: HealthCheck::Binary(&["--version"]),
         }
     }
 
@@ -74,6 +84,7 @@ impl<'a> Cargo<'a> {
                 all_features: false,
                 locked: false,
             },
+            health_check: HealthCheck::Binary(&["--version"]),
         }
     }
 
@@ -93,6 +104,7 @@ impl<'a> Cargo<'a> {
                 all_features: false,
                 locked: true,
             },
+            health_check: HealthCheck::Binary(&["--version"]),
         }
     }
 
@@ -113,6 +125,7 @@ impl<'a> Cargo<'a> {
                 requested_toolchain: None,
                 package_name: None,
             },
+            health_check: HealthCheck::Binary(&["--version"]),
         }
     }
 
@@ -132,7 +145,32 @@ impl<'a> Cargo<'a> {
                 all_features: true,
                 locked: false,
             },
+            health_check: HealthCheck::Binary(&["--version"]),
         }
+    }
+
+    pub const fn registry_with_cargo_subcommand(
+        source_bin_dir: &'a Path,
+        bin_dir: &'a Path,
+        bin_name: &'static str,
+        crate_name: &'static str,
+        cargo_subcommand: &'static str,
+    ) -> Self {
+        let mut installer = Self::registry(source_bin_dir, bin_dir, bin_name, crate_name);
+        installer.health_check = HealthCheck::CargoSubcommand(cargo_subcommand);
+        installer
+    }
+
+    pub const fn registry_with_health_check_args(
+        source_bin_dir: &'a Path,
+        bin_dir: &'a Path,
+        bin_name: &'static str,
+        crate_name: &'static str,
+        health_check_args: &'static [&'static str],
+    ) -> Self {
+        let mut installer = Self::registry(source_bin_dir, bin_dir, bin_name, crate_name);
+        installer.health_check = HealthCheck::Binary(health_check_args);
+        installer
     }
 
     pub const fn nightly_git(
@@ -153,6 +191,7 @@ impl<'a> Cargo<'a> {
                 requested_toolchain: Some(RequestedRustToolchain::Nightly(None)),
                 package_name: Some(bin_name),
             },
+            health_check: HealthCheck::Binary(&["--version"]),
         }
     }
 }
@@ -244,10 +283,25 @@ impl Installer for Cargo<'_> {
     }
 
     fn health_check(&self) -> Option<rootcause::Result<String>> {
-        let args = self.health_check_args()?;
-        let mut command = Command::new(self.bin_dir.join(self.bin_name()));
-        command.args(args);
+        let command = self.health_check_command();
         Some(run_health_check(command))
+    }
+}
+
+impl Cargo<'_> {
+    fn health_check_command(&self) -> Command {
+        match self.health_check {
+            HealthCheck::Binary(args) => {
+                let mut command = Command::new(self.bin_dir.join(self.bin_name()));
+                command.args(args);
+                command
+            }
+            HealthCheck::CargoSubcommand(subcommand) => {
+                let mut command = Command::new("cargo");
+                command.args([subcommand, "--version"]);
+                command
+            }
+        }
     }
 }
 
@@ -314,4 +368,44 @@ fn resolve_config_path(config_path: &Path, install_root: &str) -> rootcause::Res
         bail!("Cargo configuration path has no parent: {}", config_path.display());
     };
     Ok(config_dir.join(install_root))
+}
+
+#[cfg(test)]
+mod tests {
+    use std::ffi::OsStr;
+
+    use super::*;
+
+    #[test]
+    fn test_cargo_health_check_command_when_cargo_subcommand_is_selected_uses_cargo_dispatch() {
+        let source_bin_dir = Path::new("/source/bin");
+        let bin_dir = Path::new("/target/bin");
+        let installer = Cargo::registry_with_cargo_subcommand(
+            source_bin_dir,
+            bin_dir,
+            "cargo-llvm-cov",
+            "cargo-llvm-cov",
+            "llvm-cov",
+        );
+
+        let command = installer.health_check_command();
+
+        assert_eq!(command.get_program(), OsStr::new("cargo"));
+        assert_eq!(
+            command.get_args().collect::<Vec<_>>(),
+            vec![OsStr::new("llvm-cov"), OsStr::new("--version")]
+        );
+    }
+
+    #[test]
+    fn test_cargo_health_check_command_when_custom_args_are_selected_uses_direct_binary() {
+        let source_bin_dir = Path::new("/source/bin");
+        let bin_dir = Path::new("/target/bin");
+        let installer = Cargo::registry_with_health_check_args(source_bin_dir, bin_dir, "pv", "pv", &["--help"]);
+
+        let command = installer.health_check_command();
+
+        assert_eq!(command.get_program(), bin_dir.join("pv"));
+        assert_eq!(command.get_args().collect::<Vec<_>>(), vec![OsStr::new("--help")]);
+    }
 }
