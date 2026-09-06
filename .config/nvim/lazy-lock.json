@@ -1,6 +1,6 @@
 {
   "blink-cmp-words": { "branch": "main", "commit": "d6a56f532a1826b4f3aeed4d5e2fe7b8743a9244" },
-  "blink.cmp": { "branch": "main", "commit": "8e5e03f1ef7991d74950c245910e6118f6d95e3b" },
+  "blink.cmp": { "branch": "main", "commit": "49d39fda6350d7f789d1da1053e86c9e256f8108" },
   "blink.compat": { "branch": "main", "commit": "2ed6d9a28b07fa6f3bface818470605f8896408c" },
   "blink.lib": { "branch": "main", "commit": "f55df8a6e0a7acccf45ef0ffbb4ce46110fcf7d0" },
   "blink.pairs": { "branch": "main", "commit": "21c2ac9164b36ae5e22f84a2dd0f02eaf107f8fe" },
