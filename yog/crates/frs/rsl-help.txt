@@ -1,0 +1,16 @@
+Run Rust source lint rules on explicitly supplied Rust files.
+
+Usage:
+  frs rsl FILE...
+
+Each file is checked as a root module. Inline module bodies are checked
+recursively. External module files are not read unless supplied separately.
+
+The built-in rules check item groups, visibility order, impl adjacency, function order, and qualification.
+
+Qualification requires self:: for same-module calls, crate:: for other-module calls,
+imports for qualified non-function paths, and allows only `as _` import aliases.
+
+The required item groups are:
+  extern_crate -> use -> foreign_mod/mod -> global_asm -> const/static
+  -> ty_alias -> macro/enum/struct/union/trait/trait_alias/impl/fn

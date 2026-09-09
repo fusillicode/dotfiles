@@ -15,13 +15,13 @@ pub fn run(mut cli_args: Arguments) -> rootcause::Result<()> {
     match command.as_deref() {
         None => {
             if cli_args.contains("--help") || cli_args.finish().is_empty() {
-                print!("{}", include_str!("../help.txt"));
+                print!(include_str!("../help.txt"));
                 Ok(())
             } else {
                 Err(report!("missing repo subcommand"))
             }
         }
-        Some("fix") => fix::run(cli_args),
+        Some("fix") => crate::repo::fix::run(cli_args),
         Some(command) => Err(report!("unsupported repo command").attach(format!("command={command}"))),
     }
 }
