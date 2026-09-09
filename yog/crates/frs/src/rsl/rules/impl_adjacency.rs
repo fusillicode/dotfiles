@@ -1,5 +1,8 @@
 //! Impl-adjacency rule.
 
+use std::fmt::Display;
+use std::fmt::Formatter;
+use std::fmt::Result;
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -78,7 +81,7 @@ impl ImplAdjacencyViolation {
             file: path.to_path_buf(),
             line: location.line,
             column: location.column.saturating_add(1),
-            message: "impl block is not adjacent to its type",
+            message: "impl must follow its type",
             details: ImplAdjacencyDetails { expected_after, item },
         }
     }
@@ -86,6 +89,18 @@ impl ImplAdjacencyViolation {
 
 impl TypedRuleViolation for ImplAdjacencyViolation {
     type Rule = ImplAdjacencyRule;
+}
+
+impl Display for ImplAdjacencyViolation {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> Result {
+        formatter.write_str(&crate::rsl::rules::format_compact_violation(
+            &self.file,
+            self.line,
+            self.column,
+            self.message,
+            &format!("{} -> after {}", self.details.item.label(), self.details.expected_after),
+        ))
+    }
 }
 
 #[cfg_attr(test, derive(Eq, PartialEq))]
@@ -126,7 +141,7 @@ mod tests {
                 file: PathBuf::from("test.rs"),
                 line: 4,
                 column: 13,
-                message: "impl block is not adjacent to its type",
+                message: "impl must follow its type",
                 details: ImplAdjacencyDetails {
                     expected_after: "struct Data".to_owned(),
                     item: ItemKind::Impl,
@@ -155,7 +170,7 @@ mod tests {
                     file: PathBuf::from("test.rs"),
                     line: 4,
                     column: 13,
-                    message: "impl block is not adjacent to its type",
+                    message: "impl must follow its type",
                     details: ImplAdjacencyDetails {
                         expected_after: "struct Data".to_owned(),
                         item: ItemKind::Impl,
@@ -165,13 +180,32 @@ mod tests {
                     file: PathBuf::from("test.rs"),
                     line: 3,
                     column: 13,
-                    message: "impl block is not adjacent to its type",
+                    message: "impl must follow its type",
                     details: ImplAdjacencyDetails {
                         expected_after: "inherent impl Data".to_owned(),
                         item: ItemKind::Impl,
                     },
                 },
             ])
+        );
+    }
+
+    #[test]
+    fn test_impl_adjacency_violation_when_details_are_present_formats_compact_output() {
+        let violation = ImplAdjacencyViolation {
+            file: PathBuf::from("test.rs"),
+            line: 4,
+            column: 13,
+            message: "impl must follow its type",
+            details: ImplAdjacencyDetails {
+                expected_after: "struct Data".to_owned(),
+                item: ItemKind::Impl,
+            },
+        };
+
+        assert_eq!(
+            violation.to_string(),
+            "test.rs:4:13 impl must follow its type - impl -> after struct Data"
         );
     }
 
@@ -195,7 +229,7 @@ mod tests {
                 file: PathBuf::from("test.rs"),
                 line: 5,
                 column: 13,
-                message: "impl block is not adjacent to its type",
+                message: "impl must follow its type",
                 details: ImplAdjacencyDetails {
                     expected_after: "struct Data".to_owned(),
                     item: ItemKind::Impl,

@@ -1,7 +1,9 @@
 Run Rust source lint rules on explicitly supplied Rust files.
 
 Usage:
-  frs rsl FILE...
+  frs rsl [--json] FILE...
+
+Output defaults to `file:line:column message - details`. Use --json for JSON output.
 
 Each file is checked as a root module. Inline module bodies are checked
 recursively. External module files are not read unless supplied separately.

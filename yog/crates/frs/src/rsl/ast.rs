@@ -10,8 +10,9 @@ use serde::Serialize;
 use syn::Item;
 use syn::spanned::Spanned;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, strum::Display, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
 pub enum ItemGroup {
     ExternCrate,
     Use,
@@ -78,15 +79,19 @@ impl ItemKind {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[derive(Clone, Copy, Debug, strum::Display, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 pub enum VisibilityClass {
     #[serde(rename = "pub")]
+    #[strum(to_string = "pub")]
     Public,
     #[serde(rename = "pub(crate)")]
+    #[strum(to_string = "pub(crate)")]
     Crate,
     #[serde(rename = "restricted")]
+    #[strum(to_string = "restricted")]
     Restricted,
     #[serde(rename = "private")]
+    #[strum(to_string = "private")]
     Private,
 }
 

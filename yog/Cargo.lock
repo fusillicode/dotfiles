@@ -1332,6 +1332,7 @@ dependencies = [
  "owo-colors",
  "proc-macro2",
  "rootcause",
+ "rstest",
  "serde",
  "serde_json",
  "strum",

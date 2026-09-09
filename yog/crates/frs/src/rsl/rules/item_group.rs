@@ -1,5 +1,8 @@
 //! Item-group ordering rule.
 
+use std::fmt::Display;
+use std::fmt::Formatter;
+use std::fmt::Result;
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -63,7 +66,7 @@ impl TypedRule for ItemGroupRule {
                                 ItemGroup::Modules,
                                 ItemGroup::Items,
                                 classified.kind,
-                                "test module must be the last source item",
+                                "test module must be last",
                             ));
                         }
                         continue;
@@ -79,7 +82,7 @@ impl TypedRule for ItemGroupRule {
                             actual_group,
                             expected_group,
                             classified.kind,
-                            "source item group is out of order",
+                            "item group out of order",
                         ));
                     }
                     previous_group = Some(actual_group);
@@ -127,6 +130,23 @@ impl ItemGroupViolation {
 
 impl TypedRuleViolation for ItemGroupViolation {
     type Rule = ItemGroupRule;
+}
+
+impl Display for ItemGroupViolation {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> Result {
+        formatter.write_str(&crate::rsl::rules::format_compact_violation(
+            &self.file,
+            self.line,
+            self.column,
+            self.message,
+            &format!(
+                "{} -> {} [{}]",
+                self.details.actual_group,
+                self.details.expected_group,
+                self.details.item.label()
+            ),
+        ))
+    }
 }
 
 #[cfg_attr(test, derive(Eq, PartialEq))]
@@ -216,7 +236,7 @@ mod tests {
                 file: PathBuf::from("test.rs"),
                 line: 4,
                 column: 13,
-                message: "source item group is out of order",
+                message: "item group out of order",
                 details: ViolationDetails {
                     actual_group: ItemGroup::Use,
                     expected_group: ItemGroup::Items,
@@ -280,7 +300,7 @@ mod tests {
                 file: PathBuf::from("test.rs"),
                 line: 3,
                 column: 13,
-                message: "test module must be the last source item",
+                message: "test module must be last",
                 details: ViolationDetails {
                     actual_group: ItemGroup::Modules,
                     expected_group: ItemGroup::Items,
@@ -324,7 +344,7 @@ mod tests {
                 file: PathBuf::from("test.rs"),
                 line: 3,
                 column: 13,
-                message: "source item group is out of order",
+                message: "item group out of order",
                 details: ViolationDetails {
                     actual_group: ItemGroup::Constants,
                     expected_group: ItemGroup::Items,
@@ -366,13 +386,33 @@ mod tests {
                 file: PathBuf::from("test.rs"),
                 line: 4,
                 column: 17,
-                message: "source item group is out of order",
+                message: "item group out of order",
                 details: ViolationDetails {
                     actual_group: ItemGroup::Constants,
                     expected_group: ItemGroup::Items,
                     item: crate::rsl::ast::ItemKind::Const,
                 },
             }])
+        );
+    }
+
+    #[test]
+    fn test_item_group_violation_when_details_are_present_formats_compact_output() {
+        let violation = ItemGroupViolation {
+            file: PathBuf::from("test.rs"),
+            line: 4,
+            column: 13,
+            message: "item group out of order",
+            details: ViolationDetails {
+                actual_group: ItemGroup::Constants,
+                expected_group: ItemGroup::Items,
+                item: crate::rsl::ast::ItemKind::Const,
+            },
+        };
+
+        assert_eq!(
+            violation.to_string(),
+            "test.rs:4:13 item group out of order - constants -> items [const]"
         );
     }
 

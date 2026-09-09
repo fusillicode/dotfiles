@@ -3,6 +3,9 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::VecDeque;
+use std::fmt::Display;
+use std::fmt::Formatter;
+use std::fmt::Result;
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -67,6 +70,16 @@ impl TypedRuleViolation for QualificationViolation {
     type Rule = QualificationRule;
 }
 
+impl Display for QualificationViolation {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> Result {
+        match self {
+            Self::Function(violation) => violation.fmt(formatter),
+            Self::NonFunction(violation) => violation.fmt(formatter),
+            Self::ForbiddenAlias(violation) => violation.fmt(formatter),
+        }
+    }
+}
+
 #[cfg_attr(test, derive(Debug, Eq, PartialEq))]
 #[derive(Serialize)]
 pub(super) struct FunctionQualificationViolation {
@@ -84,12 +97,24 @@ impl FunctionQualificationViolation {
             file: path.to_path_buf(),
             line: location.line,
             column: location.column.saturating_add(1),
-            message: "free function call is not properly qualified",
+            message: "call needs qualification",
             details: FunctionQualificationDetails {
                 actual_path,
                 expected_path,
             },
         }
+    }
+}
+
+impl Display for FunctionQualificationViolation {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> Result {
+        formatter.write_str(&crate::rsl::rules::format_compact_violation(
+            &self.file,
+            self.line,
+            self.column,
+            self.message,
+            &format!("{} -> {}", self.details.actual_path, self.details.expected_path),
+        ))
     }
 }
 
@@ -110,12 +135,24 @@ impl NonFunctionQualificationViolation {
             file: path.to_path_buf(),
             line: location.line,
             column: location.column.saturating_add(1),
-            message: "non-function item should be imported",
+            message: "import this item",
             details: NonFunctionQualificationDetails {
                 actual_path,
                 expected_import,
             },
         }
+    }
+}
+
+impl Display for NonFunctionQualificationViolation {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> Result {
+        formatter.write_str(&crate::rsl::rules::format_compact_violation(
+            &self.file,
+            self.line,
+            self.column,
+            self.message,
+            &format!("{} -> {}", self.details.actual_path, self.details.expected_import),
+        ))
     }
 }
 
@@ -136,9 +173,21 @@ impl ForbiddenAliasViolation {
             file: path.to_path_buf(),
             line: location.line,
             column: location.column.saturating_add(1),
-            message: "import alias is forbidden",
+            message: "alias not allowed",
             details: ForbiddenAliasDetails { alias },
         }
+    }
+}
+
+impl Display for ForbiddenAliasViolation {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> Result {
+        formatter.write_str(&crate::rsl::rules::format_compact_violation(
+            &self.file,
+            self.line,
+            self.column,
+            self.message,
+            &format!("alias: {} [allowed: as _]", self.details.alias),
+        ))
     }
 }
 
@@ -681,7 +730,7 @@ mod tests {
                 file: PathBuf::from("test.rs"),
                 line: 4,
                 column: 17,
-                message: "free function call is not properly qualified",
+                message: "call needs qualification",
                 details: FunctionQualificationDetails {
                     actual_path: "helper".to_owned(),
                     expected_path: "self::helper".to_owned(),
@@ -728,7 +777,7 @@ mod tests {
                 file: PathBuf::from("test.rs"),
                 line: 5,
                 column: 17,
-                message: "free function call is not properly qualified",
+                message: "call needs qualification",
                 details: FunctionQualificationDetails {
                     actual_path: "run".to_owned(),
                     expected_path: "crate::external::run".to_owned(),
@@ -759,7 +808,7 @@ mod tests {
                 file: PathBuf::from("test.rs"),
                 line: 6,
                 column: 17,
-                message: "free function call is not properly qualified",
+                message: "call needs qualification",
                 details: FunctionQualificationDetails {
                     actual_path: "helper::run".to_owned(),
                     expected_path: "crate::helper::run".to_owned(),
@@ -810,7 +859,7 @@ mod tests {
                     file: PathBuf::from("test.rs"),
                     line: 6,
                     column: 17,
-                    message: "non-function item should be imported",
+                    message: "import this item",
                     details: NonFunctionQualificationDetails {
                         actual_path: "crate::values::VALUE".to_owned(),
                         expected_import: "use crate::values::VALUE;".to_owned(),
@@ -880,7 +929,7 @@ mod tests {
                 file: PathBuf::from("test.rs"),
                 line: 2,
                 column: 38,
-                message: "import alias is forbidden",
+                message: "alias not allowed",
                 details: ForbiddenAliasDetails {
                     alias: "Formatter".to_owned(),
                 },
@@ -919,7 +968,7 @@ mod tests {
                 file: PathBuf::from("test.rs"),
                 line: 2,
                 column: 40,
-                message: "import alias is forbidden",
+                message: "alias not allowed",
                 details: ForbiddenAliasDetails {
                     alias: "Formatter".to_owned(),
                 },
@@ -944,12 +993,58 @@ mod tests {
                 file: PathBuf::from("test.rs"),
                 line: 2,
                 column: 47,
-                message: "import alias is forbidden",
+                message: "alias not allowed",
                 details: ForbiddenAliasDetails {
                     alias: "Formatter".to_owned(),
                 },
             })])
         );
+    }
+
+    #[rstest::rstest]
+    #[case(
+        QualificationViolation::Function(FunctionQualificationViolation {
+            file: PathBuf::from("test.rs"),
+            line: 2,
+            column: 13,
+            message: "call needs qualification",
+            details: FunctionQualificationDetails {
+                actual_path: "run()".to_owned(),
+                expected_path: "self::run()".to_owned(),
+            },
+        }),
+        "test.rs:2:13 call needs qualification - run() -> self::run()"
+    )]
+    #[case(
+        QualificationViolation::NonFunction(NonFunctionQualificationViolation {
+            file: PathBuf::from("test.rs"),
+            line: 3,
+            column: 13,
+            message: "import this item",
+            details: NonFunctionQualificationDetails {
+                actual_path: "external::Thing".to_owned(),
+                expected_import: "use external::Thing;".to_owned(),
+            },
+        }),
+        "test.rs:3:13 import this item - external::Thing -> use external::Thing;"
+    )]
+    #[case(
+        QualificationViolation::ForbiddenAlias(ForbiddenAliasViolation {
+            file: PathBuf::from("test.rs"),
+            line: 4,
+            column: 13,
+            message: "alias not allowed",
+            details: ForbiddenAliasDetails {
+                alias: "Thing".to_owned(),
+            },
+        }),
+        "test.rs:4:13 alias not allowed - alias: Thing [allowed: as _]"
+    )]
+    fn test_qualification_violation_when_each_variant_is_present_formats_compact_output(
+        #[case] violation: QualificationViolation,
+        #[case] expected: &str,
+    ) {
+        assert_eq!(violation.to_string(), expected);
     }
 
     #[test]
@@ -982,7 +1077,7 @@ mod tests {
                     file: PathBuf::from("test.rs"),
                     line: 13,
                     column: 17,
-                    message: "free function call is not properly qualified",
+                    message: "call needs qualification",
                     details: FunctionQualificationDetails {
                         actual_path: "external::Thing::new".to_owned(),
                         expected_path: "crate::external::Thing::new".to_owned(),
@@ -992,7 +1087,7 @@ mod tests {
                     file: PathBuf::from("test.rs"),
                     line: 12,
                     column: 26,
-                    message: "non-function item should be imported",
+                    message: "import this item",
                     details: NonFunctionQualificationDetails {
                         actual_path: "external::Thing".to_owned(),
                         expected_import: "use external::Thing;".to_owned(),
@@ -1077,7 +1172,7 @@ mod tests {
                 file: PathBuf::from("test.rs"),
                 line: 5,
                 column: 21,
-                message: "free function call is not properly qualified",
+                message: "call needs qualification",
                 details: FunctionQualificationDetails {
                     actual_path: "helper".to_owned(),
                     expected_path: "self::helper".to_owned(),
