@@ -2,6 +2,9 @@
 
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::fmt::Display;
+use std::fmt::Formatter;
+use std::fmt::Result;
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -62,7 +65,7 @@ impl FnOrderViolation {
             file: path.to_path_buf(),
             line: location.line,
             column: location.column.saturating_add(1),
-            message: "private helper is before its earliest caller",
+            message: "helper must follow its caller",
             details: FnOrderDetails { expected_after, item },
         }
     }
@@ -70,6 +73,18 @@ impl FnOrderViolation {
 
 impl TypedRuleViolation for FnOrderViolation {
     type Rule = FnOrderRule;
+}
+
+impl Display for FnOrderViolation {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> Result {
+        formatter.write_str(&crate::rsl::rules::format_compact_violation(
+            &self.file,
+            self.line,
+            self.column,
+            self.message,
+            &format!("{} -> after {}", self.details.item.label(), self.details.expected_after),
+        ))
+    }
 }
 
 #[cfg_attr(test, derive(Eq, PartialEq))]
@@ -535,7 +550,7 @@ mod tests {
                 file: PathBuf::from("test.rs"),
                 line: 2,
                 column: 13,
-                message: "private helper is before its earliest caller",
+                message: "helper must follow its caller",
                 details: FnOrderDetails {
                     expected_after: "fn caller".to_owned(),
                     item: ItemKind::Fn,
@@ -567,12 +582,31 @@ mod tests {
                 file: PathBuf::from("test.rs"),
                 line: 6,
                 column: 13,
-                message: "private helper is before its earliest caller",
+                message: "helper must follow its caller",
                 details: FnOrderDetails {
                     expected_after: "fn first".to_owned(),
                     item: ItemKind::Fn,
                 },
             }])
+        );
+    }
+
+    #[test]
+    fn test_fn_order_violation_when_details_are_present_formats_compact_output() {
+        let violation = FnOrderViolation {
+            file: PathBuf::from("test.rs"),
+            line: 2,
+            column: 13,
+            message: "helper must follow its caller",
+            details: FnOrderDetails {
+                expected_after: "fn caller".to_owned(),
+                item: ItemKind::Fn,
+            },
+        };
+
+        assert_eq!(
+            violation.to_string(),
+            "test.rs:2:13 helper must follow its caller - fn -> after fn caller"
         );
     }
 

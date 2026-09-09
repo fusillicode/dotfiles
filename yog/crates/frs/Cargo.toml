@@ -22,6 +22,7 @@ syn = { version = "3", features = ["full", "visit"] }
 ytil_sys = { workspace = true }
 
 [dev-dependencies]
+rstest = { workspace = true }
 tempfile = { workspace = true }
 test-that = { workspace = true }
 

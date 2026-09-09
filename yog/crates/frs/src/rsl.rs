@@ -6,30 +6,74 @@ use std::path::PathBuf;
 use rootcause::report;
 use ytil_sys::pico_args::Arguments;
 
+use crate::rsl::rules::RuleViolation;
+
 mod ast;
 mod engine;
 mod rules;
 
 /// Runs `frs rsl`.
 ///
-/// Returns the JSON-ready lint violations for the supplied files.
+/// Returns the lint violations for the supplied files.
 ///
 /// # Errors
 ///
 /// Returns an error when the arguments are invalid or a source file cannot be read or parsed.
-pub fn run(mut cli_args: Arguments) -> rootcause::Result<Vec<serde_json::Value>> {
+pub fn run(mut cli_args: Arguments) -> rootcause::Result<RslOutput> {
     if cli_args.contains("--help") {
         print!(include_str!("../rsl-help.txt"));
-        return Ok(Vec::new());
+        return Ok(RslOutput::Compact { violations: Vec::new() });
     }
 
     let opts = RslOpts::try_from(cli_args.finish())?;
-    crate::rsl::engine::check_paths(&opts.paths)
+    let violations = crate::rsl::engine::check_paths(&opts.paths)?;
+
+    Ok(match opts.format {
+        OutputFormat::Compact => RslOutput::Compact { violations },
+        OutputFormat::Json => RslOutput::Json { violations },
+    })
 }
 
 #[derive(Debug)]
 struct RslOpts {
     paths: Vec<PathBuf>,
+    format: OutputFormat,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum OutputFormat {
+    Compact,
+    Json,
+}
+
+pub enum RslOutput {
+    Compact { violations: Vec<Box<dyn RuleViolation>> },
+    Json { violations: Vec<Box<dyn RuleViolation>> },
+}
+
+impl RslOutput {
+    pub const fn is_empty(&self) -> bool {
+        match self {
+            Self::Compact { violations } | Self::Json { violations } => violations.is_empty(),
+        }
+    }
+
+    pub fn render(&self) -> serde_json::Result<String> {
+        match self {
+            Self::Compact { violations } => Ok(violations
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join("\n")),
+            Self::Json { violations } => {
+                let serialized = violations
+                    .iter()
+                    .map(|violation| violation.to_json())
+                    .collect::<serde_json::Result<Vec<_>>>()?;
+                serde_json::to_string(&serialized)
+            }
+        }
+    }
 }
 
 impl TryFrom<Vec<OsString>> for RslOpts {
@@ -50,7 +94,12 @@ impl TryFrom<Vec<OsString>> for RslOpts {
             }
         }
 
-        let cli_args = Arguments::from_vec(before_separator);
+        let mut cli_args = Arguments::from_vec(before_separator);
+        let format = if cli_args.contains("--json") {
+            OutputFormat::Json
+        } else {
+            OutputFormat::Compact
+        };
         let mut paths = cli_args.finish();
         if let Some(option) = paths.iter().find(|path| path.to_string_lossy().starts_with('-')) {
             return Err(report!("unknown rsl option").attach(format!("option={}", option.to_string_lossy())));
@@ -63,6 +112,7 @@ impl TryFrom<Vec<OsString>> for RslOpts {
 
         Ok(Self {
             paths: paths.into_iter().map(PathBuf::from).collect(),
+            format,
         })
     }
 }
@@ -108,7 +158,7 @@ mod tests {
     }
 
     #[test]
-    fn test_rsl_when_file_has_violation_returns_json_violations() {
+    fn test_rsl_when_file_has_violation_returns_compact_violations() {
         let directory = require(tempfile::tempdir());
         let source = require(write_source(
             &directory,
@@ -120,28 +170,18 @@ mod tests {
         ));
 
         let output = require(run_rsl(vec![source.clone().into_os_string()]));
-        let json: Value = require(serde_json::from_str(&output));
-        let expected_file = source.to_string_lossy().into_owned();
+        let expected_file = source.to_string_lossy();
 
         assert_that!(
-            json,
-            eq(serde_json::json!([{
-                "rule": "item_group",
-                "file": expected_file,
-                "line": 3,
-                "column": 13,
-                "message": "source item group is out of order",
-                "details": {
-                    "actual_group": "constants",
-                    "expected_group": "items",
-                    "item": "const"
-                }
-            }]))
+            output,
+            eq(format!(
+                "{expected_file}:3:13 item group out of order - constants -> items [const]\n"
+            ))
         );
     }
 
     #[test]
-    fn test_rsl_when_file_has_use_after_fn_returns_json_violations() {
+    fn test_rsl_when_json_flag_is_supplied_returns_json_violations() {
         let directory = require(tempfile::tempdir());
         let source = require(write_source(
             &directory,
@@ -152,7 +192,7 @@ mod tests {
             ",
         ));
 
-        let output = require(run_rsl(vec![source.clone().into_os_string()]));
+        let output = require(run_rsl(vec![OsString::from("--json"), source.clone().into_os_string()]));
         let json: Value = require(serde_json::from_str(&output));
         let expected_file = source.to_string_lossy().into_owned();
 
@@ -163,7 +203,7 @@ mod tests {
                 "file": expected_file,
                 "line": 3,
                 "column": 13,
-                "message": "source item group is out of order",
+                "message": "item group out of order",
                 "details": {
                     "actual_group": "use",
                     "expected_group": "items",
@@ -217,12 +257,12 @@ mod tests {
     }
 
     fn run_rsl(arguments: impl IntoIterator<Item = OsString>) -> rootcause::Result<String> {
-        let violations = crate::rsl::run(Arguments::from_vec(arguments.into_iter().collect()))?;
-        if violations.is_empty() {
+        let output = crate::rsl::run(Arguments::from_vec(arguments.into_iter().collect()))?;
+        if output.is_empty() {
             return Ok(String::new());
         }
 
-        Ok(format!("{}\n", serde_json::to_string(&violations)?))
+        Ok(format!("{}\n", output.render()?))
     }
 
     fn require<T, E: Display>(result: Result<T, E>) -> T {

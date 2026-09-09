@@ -1,5 +1,8 @@
 //! Visibility-order rule.
 
+use std::fmt::Display;
+use std::fmt::Formatter;
+use std::fmt::Result;
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -129,7 +132,7 @@ impl VisibilityOrderViolation {
             file: path.to_path_buf(),
             line: location.line,
             column: location.column.saturating_add(1),
-            message: "item visibility is out of order",
+            message: "visibility out of order",
             details: VisibilityDetails {
                 actual_visibility,
                 expected_before,
@@ -141,6 +144,23 @@ impl VisibilityOrderViolation {
 
 impl TypedRuleViolation for VisibilityOrderViolation {
     type Rule = VisibilityOrderRule;
+}
+
+impl Display for VisibilityOrderViolation {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> Result {
+        formatter.write_str(&crate::rsl::rules::format_compact_violation(
+            &self.file,
+            self.line,
+            self.column,
+            self.message,
+            &format!(
+                "{} -> before {} [{}]",
+                self.details.actual_visibility,
+                self.details.expected_before,
+                self.details.item.label()
+            ),
+        ))
+    }
 }
 
 #[cfg_attr(test, derive(Eq, PartialEq))]
@@ -182,7 +202,7 @@ mod tests {
                 file: PathBuf::from("test.rs"),
                 line: 3,
                 column: 17,
-                message: "item visibility is out of order",
+                message: "visibility out of order",
                 details: VisibilityDetails {
                     actual_visibility: VisibilityClass::Public,
                     expected_before: "fn private".to_owned(),
@@ -211,7 +231,7 @@ mod tests {
                 file: PathBuf::from("test.rs"),
                 line: 3,
                 column: 17,
-                message: "item visibility is out of order",
+                message: "visibility out of order",
                 details: VisibilityDetails {
                     actual_visibility: VisibilityClass::Public,
                     expected_before: "fn private".to_owned(),
@@ -242,13 +262,33 @@ mod tests {
                 file: PathBuf::from("test.rs"),
                 line: 5,
                 column: 21,
-                message: "item visibility is out of order",
+                message: "visibility out of order",
                 details: VisibilityDetails {
                     actual_visibility: VisibilityClass::Public,
                     expected_before: "fn helper".to_owned(),
                     item: ItemKind::Fn,
                 },
             }])
+        );
+    }
+
+    #[test]
+    fn test_visibility_order_violation_when_details_are_present_formats_compact_output() {
+        let violation = VisibilityOrderViolation {
+            file: PathBuf::from("test.rs"),
+            line: 3,
+            column: 17,
+            message: "visibility out of order",
+            details: VisibilityDetails {
+                actual_visibility: VisibilityClass::Public,
+                expected_before: "fn private".to_owned(),
+                item: ItemKind::Fn,
+            },
+        };
+
+        assert_eq!(
+            violation.to_string(),
+            "test.rs:3:17 visibility out of order - pub -> before fn private [fn]"
         );
     }
 }
