@@ -17,7 +17,7 @@ pub struct RepoCleanup {
 
 /// Removes quarantine metadata from every repo while skipping nested repos and symbolic links.
 pub fn clean(repos: &[PathBuf], jobs: usize) -> Vec<RepoCleanup> {
-    repos.iter().map(|repo| clean_repo(repo, repos, jobs)).collect()
+    repos.iter().map(|repo| self::clean_repo(repo, repos, jobs)).collect()
 }
 
 fn clean_repo(repo: &Path, repos: &[PathBuf], jobs: usize) -> RepoCleanup {
@@ -25,7 +25,7 @@ fn clean_repo(repo: &Path, repos: &[PathBuf], jobs: usize) -> RepoCleanup {
     let mut workers = std::collections::VecDeque::new();
     workers.push_back(thread::spawn({
         let repo = repo.to_path_buf();
-        move || clean_path(&repo)
+        move || self::clean_path(&repo)
     }));
     let mut directories = match std::fs::read_dir(repo) {
         Ok(entries) => vec![(repo.to_path_buf(), entries)],
@@ -85,18 +85,18 @@ fn clean_repo(repo: &Path, repos: &[PathBuf], jobs: usize) -> RepoCleanup {
         };
         if workers.len() >= jobs
             && let Some(worker) = workers.pop_front()
-            && let Some(failure) = collect_cleanup(worker)
+            && let Some(failure) = self::collect_cleanup(worker)
         {
             failures.push(failure);
         }
         if let Some(entries) = child_entries {
             directories.push((path.clone(), entries));
         }
-        workers.push_back(thread::spawn(move || clean_path(&path)));
+        workers.push_back(thread::spawn(move || self::clean_path(&path)));
     }
 
     for worker in workers {
-        if let Some(failure) = collect_cleanup(worker) {
+        if let Some(failure) = self::collect_cleanup(worker) {
             failures.push(failure);
         }
     }

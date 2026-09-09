@@ -25,10 +25,10 @@ const DEFAULT_JOBS: usize = 7;
 /// - Repo maintenance fails.
 pub fn run(mut cli_args: Arguments) -> rootcause::Result<()> {
     if cli_args.contains("--help") {
-        print!("{}", include_str!("../../repo-fix-help.txt"));
+        print!(include_str!("../../repo-fix-help.txt"));
         return Ok(());
     }
-    fix(&RepoFixOpts::try_from(cli_args.finish())?)
+    self::fix(&RepoFixOpts::try_from(cli_args.finish())?)
 }
 
 #[derive(Debug)]
@@ -138,10 +138,10 @@ struct RepoDiscovery {
 /// - The directory or a required macOS/Cargo command is unavailable.
 /// - Confirmation input cannot be read, discovery is incomplete, or any repo operation fails.
 fn fix(opts: &RepoFixOpts) -> rootcause::Result<()> {
-    let directory = validate_directory(&opts.directory)?;
-    require_command("cargo")?;
-    require_command("tmutil")?;
-    require_command("xattr")?;
+    let directory = self::validate_directory(&opts.directory)?;
+    self::require_command("cargo")?;
+    self::require_command("tmutil")?;
+    self::require_command("xattr")?;
 
     println!(
         "{} below: {}",
@@ -164,8 +164,8 @@ fn fix(opts: &RepoFixOpts) -> rootcause::Result<()> {
         return Ok(());
     }
 
-    let manifest_discovery = collect_manifest_paths(&directory);
-    let repo_discovery = discover_repos(&manifest_discovery.manifests);
+    let manifest_discovery = self::collect_manifest_paths(&directory);
+    let repo_discovery = self::discover_repos(&manifest_discovery.manifests);
     let mut failures = Vec::new();
     failures.extend(manifest_discovery.failures);
     failures.extend(repo_discovery.failures);
@@ -189,7 +189,7 @@ fn fix(opts: &RepoFixOpts) -> rootcause::Result<()> {
         for workspace in &repo_discovery.workspaces {
             println!("{} {}", "Running cargo clean".blue().bold(), workspace.root.display());
         }
-        for cleanup in clean_workspaces(&repo_discovery.workspaces, opts.jobs) {
+        for cleanup in self::clean_workspaces(&repo_discovery.workspaces, opts.jobs) {
             match cleanup {
                 Ok(workspace) => println!("{} {}", "Cargo clean complete".green().bold(), workspace.root.display()),
                 Err(failure) => failures.push(failure),
@@ -198,7 +198,7 @@ fn fix(opts: &RepoFixOpts) -> rootcause::Result<()> {
     }
 
     for workspace in &repo_discovery.workspaces {
-        match configure_workspace_target(workspace) {
+        match self::configure_workspace_target(workspace) {
             Ok(target) => println!("{} {}", "Configured workspace target".green().bold(), target.display()),
             Err(error) => failures.push(Failure::repo(workspace.repo.clone(), error.to_string())),
         }
@@ -208,14 +208,14 @@ fn fix(opts: &RepoFixOpts) -> rootcause::Result<()> {
         println!("{} {}", "Removing quarantine metadata in".blue().bold(), repo.display());
     }
 
-    for cleanup in quarantine::clean(&repo_discovery.repos, opts.jobs) {
+    for cleanup in crate::repo::fix::quarantine::clean(&repo_discovery.repos, opts.jobs) {
         failures.extend(cleanup.failures.into_iter().map(|failure| Failure::Quarantine {
             repo: cleanup.repo.clone(),
             failure,
         }));
     }
 
-    summarize_repos(repo_discovery.repos.len(), &failures)
+    self::summarize_repos(repo_discovery.repos.len(), &failures)
 }
 
 fn validate_directory(directory: &Path) -> rootcause::Result<PathBuf> {
@@ -243,7 +243,7 @@ fn require_command(command: &str) -> rootcause::Result<()> {
 fn collect_manifest_paths(directory: &Path) -> ManifestDiscovery {
     let mut manifests = Vec::new();
     let mut failures = Vec::new();
-    collect_manifest_paths_recursive(directory, &mut manifests, &mut failures);
+    self::collect_manifest_paths_recursive(directory, &mut manifests, &mut failures);
     ManifestDiscovery { manifests, failures }
 }
 
@@ -282,7 +282,7 @@ fn collect_manifest_paths_recursive(directory: &Path, manifests: &mut Vec<PathBu
             continue;
         }
         if file_type.is_dir() {
-            collect_manifest_paths_recursive(&path, manifests, failures);
+            self::collect_manifest_paths_recursive(&path, manifests, failures);
         } else if file_type.is_file() && path.file_name() == Some(OsStr::new("Cargo.toml")) {
             manifests.push(path);
         }
@@ -302,7 +302,7 @@ fn discover_repos(manifests: &[PathBuf]) -> RepoDiscovery {
         let Some(manifest_directory) = manifest.parent() else {
             continue;
         };
-        let Some(repo) = repo_root(manifest_directory) else {
+        let Some(repo) = self::repo_root(manifest_directory) else {
             skipped_manifests.push(manifest.clone());
             continue;
         };
@@ -311,7 +311,7 @@ fn discover_repos(manifests: &[PathBuf]) -> RepoDiscovery {
         if repo_set.insert(repo.clone()) {
             repos.push(repo.clone());
         }
-        let metadata = match cargo_metadata(manifest) {
+        let metadata = match self::cargo_metadata(manifest) {
             Ok(metadata) => metadata,
             Err(error) => {
                 failures.push(Failure::repo(
@@ -340,7 +340,7 @@ fn discover_repos(manifests: &[PathBuf]) -> RepoDiscovery {
             continue;
         }
         let workspace_manifest = root.join("Cargo.toml");
-        let metadata = match cargo_metadata(&workspace_manifest) {
+        let metadata = match self::cargo_metadata(&workspace_manifest) {
             Ok(metadata) => metadata,
             Err(error) => {
                 failures.push(Failure::repo(
@@ -409,14 +409,14 @@ fn clean_workspaces(workspaces: &[Workspace], jobs: usize) -> Vec<Result<Workspa
     let mut cleanups = Vec::new();
 
     for workspace in workspaces {
-        pending.push((workspace.clone(), spawn_cargo_clean(workspace)));
+        pending.push((workspace.clone(), self::spawn_cargo_clean(workspace)));
         if pending.len() >= jobs {
-            cleanups.push(collect_cargo_cleanup(pending.remove(0)));
+            cleanups.push(self::collect_cargo_cleanup(pending.remove(0)));
         }
     }
 
     for cleanup in pending {
-        cleanups.push(collect_cargo_cleanup(cleanup));
+        cleanups.push(self::collect_cargo_cleanup(cleanup));
     }
     cleanups
 }
