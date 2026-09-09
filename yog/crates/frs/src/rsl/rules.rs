@@ -1,5 +1,8 @@
 //! Built-in rsl rules.
 
+use std::fmt::Display;
+use std::path::Path;
+
 use serde::Serialize;
 
 use crate::rsl::engine::FileContext;
@@ -36,13 +39,13 @@ where
 }
 
 /// Object-safe violation interface used after the dispatcher erases types.
-trait RuleViolation: Send + Sync {
+pub trait RuleViolation: Display + Send + Sync {
     fn to_json(&self) -> serde_json::Result<serde_json::Value>;
 }
 
 impl<T> RuleViolation for T
 where
-    T: crate::rsl::rules::TypedRuleViolation,
+    T: crate::rsl::rules::TypedRuleViolation + Display,
 {
     fn to_json(&self) -> serde_json::Result<serde_json::Value> {
         serde_json::to_value(SerializedViolation {
@@ -57,7 +60,7 @@ where
 /// Keeping the associated violation here prevents a rule from returning the
 /// violation type owned by another rule, while still allowing `dyn Rule`.
 trait TypedRule: Send + Sync + 'static {
-    type Violation: crate::rsl::rules::TypedRuleViolation<Rule = Self> + 'static;
+    type Violation: crate::rsl::rules::TypedRuleViolation<Rule = Self> + Display + 'static;
 
     fn name() -> &'static str;
 
@@ -67,6 +70,20 @@ trait TypedRule: Send + Sync + 'static {
 /// Typed link between a concrete violation and its owning rule.
 trait TypedRuleViolation: Serialize + Send + Sync + 'static {
     type Rule: crate::rsl::rules::TypedRule<Violation = Self>;
+}
+
+pub(super) fn format_compact_violation(
+    file: &Path,
+    line: usize,
+    column: usize,
+    message: &str,
+    details: &str,
+) -> String {
+    if details.is_empty() {
+        format!("{}:{line}:{column} {message}", file.display())
+    } else {
+        format!("{}:{line}:{column} {message} - {details}", file.display())
+    }
 }
 
 /// Serialization-only adapter for the CLI output.
@@ -82,7 +99,7 @@ struct SerializedViolation<'rule, V: ?Sized> {
     violation: &'rule V,
 }
 
-pub(super) fn check(ctx: &FileContext<'_>) -> serde_json::Result<Vec<serde_json::Value>> {
+pub(super) fn check(ctx: &FileContext<'_>) -> Vec<Box<dyn RuleViolation>> {
     let rules: Vec<Box<dyn Rule>> = vec![
         Box::new(ItemGroupRule::new(None)),
         Box::new(VisibilityOrderRule::new(None)),
@@ -93,12 +110,10 @@ pub(super) fn check(ctx: &FileContext<'_>) -> serde_json::Result<Vec<serde_json:
 
     let mut violations = Vec::new();
     for rule in rules {
-        for violation in rule.check(ctx) {
-            violations.push(violation.to_json()?);
-        }
+        violations.extend(rule.check(ctx));
     }
 
-    Ok(violations)
+    violations
 }
 
 #[cfg(test)]

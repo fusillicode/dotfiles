@@ -20,11 +20,11 @@ fn main() -> rootcause::Result<()> {
         }
         Some("repo") => crate::repo::run(cli_args)?,
         Some("rsl") => {
-            let violations = crate::rsl::run(cli_args)?;
-            if violations.is_empty() {
+            let output = crate::rsl::run(cli_args)?;
+            if output.is_empty() {
                 return Ok(());
             }
-            println!("{}", serde_json::to_string(&violations)?);
+            println!("{}", output.render()?);
             std::process::exit(1);
         }
         Some(command) => return Err(report!("unsupported frs command").attach(format!("command={command}"))),
