@@ -9,11 +9,17 @@ end
 
 function M.set_lua_defined()
   local base_opts = { expr = true, }
+  -- Let multicursor handle <Esc> so its primary cursor is not relocated.
+  local function visual_esc()
+    local plugin = package.loaded['multicursor-nvim']
+    if plugin and plugin.hasCursors() then return '<Esc>' end
+    return nvrim.keymaps.visual_esc()
+  end
 
   keymap_set('n', 'i', nvrim.keymaps.smart_ident_on_blank_line, base_opts)
   keymap_set('n', 'dd', nvrim.keymaps.smart_dd_no_yank_empty_line, base_opts)
   -- TODO: is this really needed?
-  keymap_set('v', '<esc>', nvrim.keymaps.visual_esc, base_opts)
+  keymap_set('v', '<esc>', visual_esc, base_opts)
   keymap_set({ 'n', 'v', }, '<leader>t', function() nvrim.plugins.truster.run_test('Nvim') end)
   keymap_set('n', 'gx', nvrim.plugins.opener.open_token_under_cursor)
   keymap_set({ 'n', 'v', }, '<leader>ye', nvrim.plugins.opener.copy_enclosing_function)
