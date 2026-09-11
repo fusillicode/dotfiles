@@ -306,7 +306,7 @@ impl Cargo<'_> {
 }
 
 /// Resolve Cargo's binary directory once before installers begin running.
-pub fn cargo_bin_dir() -> rootcause::Result<PathBuf> {
+pub fn bin_dir() -> rootcause::Result<PathBuf> {
     Ok(cargo_install_root()?.join("bin"))
 }
 
