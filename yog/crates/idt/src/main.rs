@@ -23,7 +23,6 @@ use crate::installers::Installer;
 use crate::installers::alacritty::Alacritty;
 use crate::installers::bash_language_server::BashLanguageServer;
 use crate::installers::cargo::Cargo;
-use crate::installers::cargo::cargo_bin_dir;
 use crate::installers::commitlint::Commitlint;
 use crate::installers::deno::Deno;
 use crate::installers::docker_langserver::DockerLangServer;
@@ -86,7 +85,7 @@ fn main() -> rootcause::Result<()> {
     std::fs::create_dir_all(dev_tools_path)?;
     std::fs::create_dir_all(bin_path)?;
 
-    let cargo_bin_dir = cargo_bin_dir()?;
+    let cargo_bin_dir = crate::installers::cargo::bin_dir()?;
     let parallel_installers = parallel_installers(dev_tools_path, bin_path, &sys_info);
     let managed_cargo_installers = managed_cargo_installers(&cargo_bin_dir, bin_path);
     let (selected_parallel_installers, selected_cargo_installers, unknown_bin_names) =
@@ -248,6 +247,7 @@ fn managed_cargo_installers<'a>(cargo_bin_dir: &'a Path, bin_dir: &'a Path) -> V
             "rtk",
             "https://github.com/rtk-ai/rtk",
         )),
+        Box::new(Cargo::registry(cargo_bin_dir, bin_dir, "kache", "kache")),
     ]
 }
 
