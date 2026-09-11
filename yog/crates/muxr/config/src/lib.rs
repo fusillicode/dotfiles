@@ -116,7 +116,7 @@ impl Default for MuxrConfig {
                     busy_fg: RenderColor::Rgb { r: 140, g: 228, b: 121 },
                     unseen_fg: RenderColor::Rgb { r: 255, g: 0, b: 0 },
                 },
-                width: 24,
+                width: 21,
             },
             tracked_processes: vec![
                 TrackedProcess {
