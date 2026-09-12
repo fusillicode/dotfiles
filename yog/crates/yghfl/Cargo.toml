@@ -9,6 +9,7 @@ readme.workspace = true
 description = "Generate GitHub links for files open in Helix."
 keywords = ["cli", "github", "helix", "editor", "links"]
 categories = ["command-line-utilities", "development-tools"]
+include = ["src/main.rs", "help.txt"]
 
 [dependencies]
 rootcause = { workspace = true }

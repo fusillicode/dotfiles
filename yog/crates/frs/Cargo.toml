@@ -9,6 +9,7 @@ readme.workspace = true
 description = "Maintain Rust repositories and lint Rust source code."
 keywords = ["rust", "cargo", "maintenance", "cli"]
 categories = ["command-line-utilities", "development-tools"]
+include = ["src/**/*", "help.txt"]
 
 [dependencies]
 git2 = { workspace = true }

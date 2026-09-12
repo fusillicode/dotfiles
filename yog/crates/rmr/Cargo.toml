@@ -9,6 +9,7 @@ readme.workspace = true
 description = "Remove files or directories, stripping path metadata suffixes (path:line:col)."
 keywords = ["cli", "rm", "command"]
 categories = ["command-line-utilities", "development-tools"]
+include = ["src/main.rs", "help.txt"]
 
 [dependencies]
 owo-colors = { workspace = true }

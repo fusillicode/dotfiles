@@ -171,6 +171,13 @@ fn managed_cargo_installers<'a>(cargo_bin_dir: &'a Path, bin_dir: &'a Path) -> V
             "cargo-audit",
             "fix",
         )),
+        Box::new(Cargo::registry_with_cargo_subcommand(
+            cargo_bin_dir,
+            bin_dir,
+            "cargo-diet",
+            "cargo-diet",
+            "diet",
+        )),
         Box::new(Cargo::registry(
             cargo_bin_dir,
             bin_dir,
