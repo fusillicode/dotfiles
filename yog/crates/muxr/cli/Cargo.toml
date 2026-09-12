@@ -9,6 +9,7 @@ readme.workspace = true
 description = "muxr CLI."
 keywords = ["muxr", "terminal", "multiplexer", "client", "cli"]
 categories = ["command-line-utilities", "development-tools"]
+include = ["src/main.rs", "help.txt"]
 
 [[bin]]
 name = "muxr"
