@@ -10,6 +10,7 @@ description = "Generate a consolidated styled workspace documentation."
 keywords = ["docs", "documentation", "html", "generator"]
 categories = ["command-line-utilities", "development-tools"]
 build = "build.rs"
+include = ["src/**/*", "help.txt", "assets/*", "build.rs", "!**/*.png", "!**/*.gif"]
 
 [package.metadata.cargo-machete]
 ignored = ["lightningcss"]
