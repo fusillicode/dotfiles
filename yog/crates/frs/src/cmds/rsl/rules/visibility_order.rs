@@ -91,12 +91,13 @@ impl TypedRule for VisibilityOrderRule {
     fn check(&self, ctx: &FileContext<'_>) -> Vec<Self::Violation> {
         let mut violations = Vec::new();
 
-        for items in crate::cmds::rsl::ast::module_scopes(ctx.file) {
+        for items in &ctx.module_item_lists {
             let nodes = crate::cmds::rsl::ast::module_nodes(items);
             let order_nodes: Vec<_> = nodes.iter().map(|node| node.order.clone()).collect();
             self.check_visibility_order(&order_nodes, ctx.path, &mut violations);
 
-            for item in items.iter().rev() {
+            for module_item in items.iter().rev() {
+                let item = module_item.item();
                 if let Item::Impl(item_impl) = item
                     && item_impl.trait_.is_none()
                 {

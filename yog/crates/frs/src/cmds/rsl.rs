@@ -1,6 +1,7 @@
 //! The `frs rsl` command and its command-line interface.
 
 use std::ffi::OsString;
+use std::fmt::Write as _;
 use std::path::PathBuf;
 
 use rootcause::report;
@@ -60,17 +61,31 @@ impl RslOutput {
 
     pub fn render(&self) -> serde_json::Result<String> {
         match self {
-            Self::Compact { violations } => Ok(violations
-                .iter()
-                .map(ToString::to_string)
-                .collect::<Vec<_>>()
-                .join("\n")),
+            Self::Compact { violations } => {
+                let mut rendered = String::new();
+                for (index, violation) in violations.iter().enumerate() {
+                    if index > 0 {
+                        rendered.push('\n');
+                    }
+                    write!(&mut rendered, "{violation}")
+                        .map_err(|_| serde_json::Error::io(std::io::Error::other("could not render compact output")))?;
+                }
+                Ok(rendered)
+            }
             Self::Json { violations } => {
-                let serialized = violations
-                    .iter()
-                    .map(|violation| violation.to_json())
-                    .collect::<serde_json::Result<Vec<_>>>()?;
-                serde_json::to_string(&serialized)
+                // Write directly into the final array to avoid `violation -> Value -> String`
+                // serialization and its intermediate JSON tree.
+                let mut serialized = Vec::new();
+                serialized.push(b'[');
+                for (index, violation) in violations.iter().enumerate() {
+                    if index > 0 {
+                        serialized.push(b',');
+                    }
+                    violation.write_json(&mut serialized)?;
+                }
+                serialized.push(b']');
+                String::from_utf8(serialized)
+                    .map_err(|error| serde_json::Error::io(std::io::Error::new(std::io::ErrorKind::InvalidData, error)))
             }
         }
     }
@@ -158,6 +173,41 @@ mod tests {
     }
 
     #[test]
+    fn test_rsl_when_multiple_files_have_violations_preserves_input_file_order() {
+        let directory = require(tempfile::tempdir());
+        let first = require(write_source(
+            &directory,
+            "first.rs",
+            r"
+            fn first() {}
+            const FIRST: usize = 1;
+            ",
+        ));
+        let second = require(write_source(
+            &directory,
+            "second.rs",
+            r"
+            fn second() {}
+            const SECOND: usize = 2;
+            ",
+        ));
+
+        let output = require(run_rsl(vec![
+            first.clone().into_os_string(),
+            second.clone().into_os_string(),
+        ]));
+
+        assert_that!(
+            output,
+            eq(format!(
+                "{}:3:13 item group out of order - constants -> items [const]\n{}:3:13 item group out of order - constants -> items [const]\n",
+                first.display(),
+                second.display(),
+            ))
+        );
+    }
+
+    #[test]
     fn test_rsl_when_file_has_violation_returns_compact_violations() {
         let directory = require(tempfile::tempdir());
         let source = require(write_source(
@@ -191,25 +241,52 @@ mod tests {
             use std::fmt;
             ",
         ));
+        let second_source = require(write_source(
+            &directory,
+            "second.rs",
+            r"
+            fn run() {}
+            use std::io;
+            ",
+        ));
 
-        let output = require(run_rsl(vec![OsString::from("--json"), source.clone().into_os_string()]));
+        let output = require(run_rsl(vec![
+            OsString::from("--json"),
+            source.clone().into_os_string(),
+            second_source.clone().into_os_string(),
+        ]));
         let json: Value = require(serde_json::from_str(&output));
         let expected_file = source.to_string_lossy().into_owned();
+        let expected_second_file = second_source.to_string_lossy().into_owned();
 
         assert_that!(
             json,
-            eq(serde_json::json!([{
-                "rule": "item_group",
-                "file": expected_file,
-                "line": 3,
-                "column": 13,
-                "message": "item group out of order",
-                "details": {
-                    "actual_group": "use",
-                    "expected_group": "items",
-                    "item": "use"
+            eq(serde_json::json!([
+                {
+                    "rule": "item_group",
+                    "file": expected_file,
+                    "line": 3,
+                    "column": 13,
+                    "message": "item group out of order",
+                    "details": {
+                        "actual_group": "use",
+                        "expected_group": "items",
+                        "item": "use"
+                    }
+                },
+                {
+                    "rule": "item_group",
+                    "file": expected_second_file,
+                    "line": 3,
+                    "column": 13,
+                    "message": "item group out of order",
+                    "details": {
+                        "actual_group": "use",
+                        "expected_group": "items",
+                        "item": "use"
+                    }
                 }
-            }]))
+            ]))
         );
     }
 

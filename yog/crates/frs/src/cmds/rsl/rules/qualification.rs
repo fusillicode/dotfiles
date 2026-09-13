@@ -39,7 +39,7 @@ impl TypedRule for QualificationRule {
             let mut visitor = QualificationVisitor {
                 index: &index,
                 current_module: &scope.path,
-                source_path: ctx.path.to_path_buf(),
+                source_path: ctx.path,
                 findings: &mut findings,
                 skip_call_path: false,
             };
@@ -245,7 +245,7 @@ struct Findings {
 struct QualificationVisitor<'index, 'ast, 'output> {
     index: &'index ModuleIndex<'ast>,
     current_module: &'index [String],
-    source_path: PathBuf,
+    source_path: &'index Path,
     findings: &'output mut Findings,
     skip_call_path: bool,
 }
@@ -262,7 +262,7 @@ impl<'ast> Visit<'ast> for QualificationVisitor<'_, '_, '_> {
                 self.findings
                     .functions
                     .push(QualificationViolation::Function(FunctionQualificationViolation::new(
-                        &self.source_path,
+                        self.source_path,
                         path.span(),
                         actual_path,
                         expected_path,
@@ -287,7 +287,7 @@ impl<'ast> Visit<'ast> for QualificationVisitor<'_, '_, '_> {
             let actual_path = self::path_label(path);
             self.findings.non_functions.push(QualificationViolation::NonFunction(
                 NonFunctionQualificationViolation::new(
-                    &self.source_path,
+                    self.source_path,
                     path.span(),
                     actual_path,
                     format!("use {};", self::path_label(path)),
@@ -321,7 +321,7 @@ impl QualificationVisitor<'_, '_, '_> {
                     self.findings
                         .aliases
                         .push(QualificationViolation::ForbiddenAlias(ForbiddenAliasViolation::new(
-                            &self.source_path,
+                            self.source_path,
                             rename.rename.span(),
                             rename.rename.to_string(),
                         )));
