@@ -1,4 +1,9 @@
 //! Qualification and import-style rule for `frs rsl`.
+//!
+//! This rule deliberately uses Rust naming conventions as syntactic guarantees.
+//! A lowercase path segment before a call is a module, while an uppercase segment
+//! is a type or another associated-item receiver. The rule does not resolve Cargo
+//! packages or modules from other files.
 
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -268,6 +273,10 @@ impl<'ast> Visit<'ast> for QualificationVisitor<'_, '_, '_> {
                         expected_path,
                     )));
             }
+
+            if let Some(parts) = self::associated_receiver_parts(&path.path) {
+                self::check_non_function_path(self, &parts, path.path.span());
+            }
         }
 
         let previous = self.skip_call_path;
@@ -279,20 +288,8 @@ impl<'ast> Visit<'ast> for QualificationVisitor<'_, '_, '_> {
     fn visit_path(&mut self, path: &'ast syn::Path) {
         if self.skip_call_path {
             self.skip_call_path = false;
-        } else if path.segments.len() > 1
-            && !self::is_self_path(path)
-            && self::is_local_qualified_path(self.index, self.current_module, path)
-            && !self::has_name_clash(self.index, self.current_module, path)
-        {
-            let actual_path = self::path_label(path);
-            self.findings.non_functions.push(QualificationViolation::NonFunction(
-                NonFunctionQualificationViolation::new(
-                    self.source_path,
-                    path.span(),
-                    actual_path,
-                    format!("use {};", self::path_label(path)),
-                ),
-            ));
+        } else if let Some(parts) = self::path_parts(path) {
+            self::check_non_function_path(self, &parts, path.span());
         }
 
         syn::visit::visit_path(self, path);
@@ -307,6 +304,25 @@ impl<'ast> Visit<'ast> for QualificationVisitor<'_, '_, '_> {
     fn visit_attribute(&mut self, _attribute: &'ast syn::Attribute) {}
 
     fn visit_macro(&mut self, _mac: &'ast syn::Macro) {}
+}
+
+fn check_non_function_path(visitor: &mut QualificationVisitor<'_, '_, '_>, parts: &[String], span: Span) {
+    if parts.len() <= 1
+        || !self::is_import_style_path(parts)
+        || self::has_name_clash_parts(visitor.index, visitor.current_module, parts)
+    {
+        return;
+    }
+
+    let actual_path = parts.join("::");
+    visitor.findings.non_functions.push(QualificationViolation::NonFunction(
+        NonFunctionQualificationViolation::new(
+            visitor.source_path,
+            span,
+            actual_path.clone(),
+            format!("use {actual_path};"),
+        ),
+    ));
 }
 
 impl QualificationVisitor<'_, '_, '_> {
@@ -457,70 +473,7 @@ fn path_parts(path: &syn::Path) -> Option<Vec<String>> {
     Some(parts)
 }
 
-fn expected_foreign_call_path(index: &ModuleIndex<'_>, current_module: &[String], path: &syn::Path) -> Option<String> {
-    let parts = self::path_parts(path)?;
-    if parts.len() <= 1 {
-        return self::expected_imported_call_path(index, current_module, &parts);
-    }
-
-    let mut base = current_module.to_vec();
-    let mut first_item = 0;
-    match parts.first()?.as_str() {
-        "crate" => return None,
-        "self" => {
-            first_item = 1;
-            let module = parts.get(first_item)?;
-            if !self::is_direct_module_name(index, current_module, module) {
-                return self::expected_imported_call_path(index, current_module, &parts);
-            }
-        }
-        "super" => {
-            while parts.get(first_item).is_some_and(|part| part == "super") {
-                base.pop()?;
-                first_item = first_item.saturating_add(1);
-            }
-            let module = parts.get(first_item)?;
-            if !self::is_direct_module_name(index, &base, module) {
-                return None;
-            }
-        }
-        _ => {
-            let module = parts.first()?;
-            if !self::is_direct_module_name(index, current_module, module) {
-                return self::expected_imported_call_path(index, current_module, &parts);
-            }
-        }
-    }
-
-    let mut absolute_parts = base;
-    absolute_parts.extend(parts.get(first_item..)?.iter().cloned());
-    Some(self::crate_path_segments(&absolute_parts))
-}
-
-fn expected_imported_call_path(index: &ModuleIndex<'_>, current_module: &[String], parts: &[String]) -> Option<String> {
-    let (binding_name, first_item) = match parts.first()?.as_str() {
-        "self" => (parts.get(1)?, 2),
-        _ => (parts.first()?, 1),
-    };
-    let binding = self::imported_binding(index, current_module, binding_name)?;
-    let source_item = binding.path.last()?;
-    let source_module = binding.path.get(..binding.path.len().saturating_sub(1))?;
-    if !self::is_local_module_path(index, source_module) {
-        return None;
-    }
-
-    let mut suffix = vec![source_item.clone()];
-    suffix.extend(parts.get(first_item..)?.iter().cloned());
-    if source_module == current_module {
-        return Some(format!("self::{}", suffix.join("::")));
-    }
-
-    let mut absolute_parts = source_module.to_vec();
-    absolute_parts.extend(suffix);
-    Some(self::crate_path_segments(&absolute_parts))
-}
-
-fn has_name_clash(index: &ModuleIndex<'_>, current_module: &[String], path: &syn::Path) -> bool {
+fn has_name_clash_parts(index: &ModuleIndex<'_>, current_module: &[String], parts: &[String]) -> bool {
     let Some(scope) = index.info.get(current_module) else {
         return true;
     };
@@ -528,9 +481,6 @@ fn has_name_clash(index: &ModuleIndex<'_>, current_module: &[String], path: &syn
         return true;
     }
 
-    let Some(parts) = self::path_parts(path) else {
-        return true;
-    };
     let Some(name) = parts.last() else {
         return true;
     };
@@ -538,7 +488,7 @@ fn has_name_clash(index: &ModuleIndex<'_>, current_module: &[String], path: &syn
         return true;
     };
     let target_module = self::normalize_path(current_module, target_module_parts);
-    let target_path = self::normalize_path(current_module, &parts);
+    let target_path = self::normalize_path(current_module, parts);
 
     if target_module != current_module && scope.definitions.contains(name) {
         return true;
@@ -550,29 +500,74 @@ fn has_name_clash(index: &ModuleIndex<'_>, current_module: &[String], path: &syn
         .any(|binding| binding.name == *name && binding.path != target_path)
 }
 
-fn is_local_qualified_path(index: &ModuleIndex<'_>, current_module: &[String], path: &syn::Path) -> bool {
-    match path
-        .segments
-        .first()
-        .map(|segment| segment.ident.to_string())
-        .as_deref()
-    {
-        Some("crate" | "self" | "super") => true,
-        Some(name) => self::is_direct_module_name(index, current_module, name),
-        None => false,
+fn expected_function_path(index: &ModuleIndex<'_>, current_module: &[String], path: &syn::Path) -> Option<String> {
+    let parts = self::path_parts(path)?;
+    if self::is_associated_function_path(&parts) {
+        return None;
     }
+
+    if self::local_function(index, current_module, path).is_some() && self::function_path_tail(&parts).len() <= 2 {
+        return None;
+    }
+
+    let name = parts.last()?;
+    if parts.len() == 1 {
+        return self::imported_function_path(index, current_module, name).or_else(|| Some(format!("module::{name}")));
+    }
+
+    let qualified = self::function_path_tail(&parts);
+    if qualified.len() <= 2 {
+        return None;
+    }
+
+    qualified
+        .get(qualified.len().saturating_sub(2)..)
+        .map(|parts| parts.join("::"))
 }
 
-fn expected_function_path(index: &ModuleIndex<'_>, current_module: &[String], path: &syn::Path) -> Option<String> {
-    if let Some((module_path, name)) = self::local_function(index, current_module, path) {
-        return Some(if module_path == current_module {
-            format!("self::{name}")
-        } else {
-            self::crate_path(&module_path, &name)
-        });
-    }
+fn imported_function_path(index: &ModuleIndex<'_>, current_module: &[String], name: &str) -> Option<String> {
+    let binding = self::imported_binding(index, current_module, name)?;
+    let source_path = &binding.path;
+    (source_path.len() >= 2)
+        .then(|| source_path.get(source_path.len().saturating_sub(2)..))
+        .flatten()
+        .map(|parts| parts.join("::"))
+}
 
-    self::expected_foreign_call_path(index, current_module, path)
+fn associated_receiver_parts(path: &syn::Path) -> Option<Vec<String>> {
+    let parts = self::path_parts(path)?;
+    self::is_associated_function_path(&parts)
+        .then(|| parts.get(..parts.len().saturating_sub(1)))
+        .flatten()
+        .map(ToOwned::to_owned)
+}
+
+fn is_associated_function_path(parts: &[String]) -> bool {
+    parts
+        .get(..parts.len().saturating_sub(1))
+        .is_some_and(|prefix| prefix.iter().any(|part| self::is_type_name(part)))
+}
+
+fn is_import_style_path(parts: &[String]) -> bool {
+    parts
+        .first()
+        .is_some_and(|part| matches!(part.as_str(), "crate" | "self" | "super") || self::is_module_name(part))
+}
+
+fn is_module_name(name: &str) -> bool {
+    name.chars().next().is_some_and(char::is_lowercase)
+}
+
+fn is_type_name(name: &str) -> bool {
+    name.chars().next().is_some_and(char::is_uppercase)
+}
+
+fn function_path_tail(parts: &[String]) -> &[String] {
+    let mut first = 0;
+    while matches!(parts.get(first).map(String::as_str), Some("crate" | "self" | "super")) {
+        first = first.saturating_add(1);
+    }
+    parts.get(first..).unwrap_or_default()
 }
 
 fn local_function(
@@ -620,16 +615,6 @@ fn is_local_module_path(index: &ModuleIndex<'_>, path: &[String]) -> bool {
     path.is_empty() || index.modules.contains(path)
 }
 
-fn is_direct_module_name(index: &ModuleIndex<'_>, current_module: &[String], name: &str) -> bool {
-    let mut path = current_module.to_vec();
-    path.push(name.to_owned());
-    index.modules.contains(&path)
-        && index
-            .info
-            .get(current_module)
-            .is_some_and(|scope| !scope.imports.iter().any(|binding| binding.name == name))
-}
-
 fn imported_binding<'index>(
     index: &'index ModuleIndex<'_>,
     current_module: &[String],
@@ -642,21 +627,6 @@ fn imported_binding<'index>(
     let mut bindings = scope.imports.iter().filter(|binding| binding.name == name);
     let binding = bindings.next()?;
     bindings.next().is_none().then_some(binding)
-}
-
-fn crate_path(module_path: &[String], name: &str) -> String {
-    let mut parts = Vec::with_capacity(module_path.len().saturating_add(2));
-    parts.push("crate".to_owned());
-    parts.extend(module_path.iter().cloned());
-    parts.push(name.to_owned());
-    parts.join("::")
-}
-
-fn crate_path_segments(segments: &[String]) -> String {
-    let mut parts = Vec::with_capacity(segments.len().saturating_add(1));
-    parts.push("crate".to_owned());
-    parts.extend(segments.iter().cloned());
-    parts.join("::")
 }
 
 fn normalize_path(current_module: &[String], parts: &[String]) -> Vec<String> {
@@ -686,10 +656,6 @@ fn normalize_path(current_module: &[String], parts: &[String]) -> Vec<String> {
     absolute_parts
 }
 
-fn is_self_path(path: &syn::Path) -> bool {
-    path.segments.first().is_some_and(|segment| segment.ident == "Self")
-}
-
 fn path_label(path: &syn::Path) -> String {
     self::path_parts(path).map_or_else(|| "qualified path".to_owned(), |parts| parts.join("::"))
 }
@@ -711,7 +677,7 @@ mod tests {
     use crate::cmds::rsl::rules::TypedRule;
 
     #[test]
-    fn test_qualification_rule_check_when_same_module_call_is_bare_reports_call() {
+    fn test_qualification_rule_check_when_same_module_call_is_bare_returns_no_violations() {
         let syntax = syn::parse_file(
             r"
             fn helper() {}
@@ -724,19 +690,7 @@ mod tests {
 
         let result = QualificationRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
 
-        assert_that!(
-            result,
-            eq(vec![QualificationViolation::Function(FunctionQualificationViolation {
-                file: PathBuf::from("test.rs"),
-                line: 4,
-                column: 17,
-                message: "call needs qualification",
-                details: FunctionQualificationDetails {
-                    actual_path: "helper".to_owned(),
-                    expected_path: "self::helper".to_owned(),
-                },
-            })])
-        );
+        assert_that!(result, empty());
     }
 
     #[test]
@@ -780,14 +734,14 @@ mod tests {
                 message: "call needs qualification",
                 details: FunctionQualificationDetails {
                     actual_path: "run".to_owned(),
-                    expected_path: "crate::external::run".to_owned(),
+                    expected_path: "external::run".to_owned(),
                 },
             })])
         );
     }
 
     #[test]
-    fn test_qualification_rule_check_when_foreign_module_call_is_relative_reports_call() {
+    fn test_qualification_rule_check_when_foreign_module_call_has_one_module_prefix_returns_no_violations() {
         let syntax = syn::parse_file(
             r"
             mod helper {
@@ -802,19 +756,7 @@ mod tests {
 
         let result = QualificationRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
 
-        assert_that!(
-            result,
-            eq(vec![QualificationViolation::Function(FunctionQualificationViolation {
-                file: PathBuf::from("test.rs"),
-                line: 6,
-                column: 17,
-                message: "call needs qualification",
-                details: FunctionQualificationDetails {
-                    actual_path: "helper::run".to_owned(),
-                    expected_path: "crate::helper::run".to_owned(),
-                },
-            })])
-        );
+        assert_that!(result, empty());
     }
 
     #[test]
@@ -834,6 +776,94 @@ mod tests {
         let result = QualificationRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
 
         assert_that!(result, empty());
+    }
+
+    #[test]
+    fn test_qualification_rule_check_when_free_function_call_has_one_module_prefix_returns_no_violations() {
+        let syntax = syn::parse_file(
+            r#"
+            fn read() {
+                fs::read_to_string("foo.md");
+            }
+            "#,
+        )
+        .unwrap();
+
+        let result = QualificationRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
+
+        assert_that!(result, empty());
+    }
+
+    #[test]
+    fn test_qualification_rule_check_when_free_function_call_has_multiple_module_prefixes_reports_call() {
+        let syntax = syn::parse_file(
+            r#"
+            fn read() {
+                std::fs::read_to_string("foo.md");
+            }
+            "#,
+        )
+        .unwrap();
+
+        let result = QualificationRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
+
+        assert_that!(
+            result,
+            eq(vec![QualificationViolation::Function(FunctionQualificationViolation {
+                file: PathBuf::from("test.rs"),
+                line: 3,
+                column: 17,
+                message: "call needs qualification",
+                details: FunctionQualificationDetails {
+                    actual_path: "std::fs::read_to_string".to_owned(),
+                    expected_path: "fs::read_to_string".to_owned(),
+                },
+            })])
+        );
+    }
+
+    #[test]
+    fn test_qualification_rule_check_when_associated_function_receiver_is_uppercase_returns_no_violations() {
+        let syntax = syn::parse_file(
+            r#"
+            fn open() {
+                File::open("foo.md");
+            }
+            "#,
+        )
+        .unwrap();
+
+        let result = QualificationRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
+
+        assert_that!(result, empty());
+    }
+
+    #[test]
+    fn test_qualification_rule_check_when_unknown_bare_function_call_reports_module_qualification() {
+        let syntax = syn::parse_file(
+            r#"
+            fn read() {
+                read_to_string("foo.md");
+            }
+            "#,
+        )
+        .unwrap();
+
+        let result = QualificationRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
+
+        assert_that!(
+            result,
+            eq(vec![QualificationViolation::Function(FunctionQualificationViolation {
+                file: PathBuf::from("test.rs"),
+                line: 3,
+                column: 17,
+                message: "call needs qualification",
+                details: FunctionQualificationDetails {
+                    actual_path: "read_to_string".to_owned(),
+                    expected_path: "module::read_to_string".to_owned(),
+                },
+            })])
+        );
     }
 
     #[test]
@@ -1073,20 +1103,20 @@ mod tests {
         assert_that!(
             result,
             eq(vec![
-                QualificationViolation::Function(FunctionQualificationViolation {
-                    file: PathBuf::from("test.rs"),
-                    line: 13,
-                    column: 17,
-                    message: "call needs qualification",
-                    details: FunctionQualificationDetails {
-                        actual_path: "external::Thing::new".to_owned(),
-                        expected_path: "crate::external::Thing::new".to_owned(),
-                    },
-                }),
                 QualificationViolation::NonFunction(NonFunctionQualificationViolation {
                     file: PathBuf::from("test.rs"),
                     line: 12,
                     column: 26,
+                    message: "import this item",
+                    details: NonFunctionQualificationDetails {
+                        actual_path: "external::Thing".to_owned(),
+                        expected_import: "use external::Thing;".to_owned(),
+                    },
+                }),
+                QualificationViolation::NonFunction(NonFunctionQualificationViolation {
+                    file: PathBuf::from("test.rs"),
+                    line: 13,
+                    column: 17,
                     message: "import this item",
                     details: NonFunctionQualificationDetails {
                         actual_path: "external::Thing".to_owned(),
@@ -1098,7 +1128,7 @@ mod tests {
     }
 
     #[test]
-    fn test_qualification_rule_check_when_unknown_external_type_is_qualified_ignores_path() {
+    fn test_qualification_rule_check_when_unknown_external_type_is_qualified_reports_import() {
         let syntax = syn::parse_file(
             r"
             fn inspect(_: syn::ExprCall) {}
@@ -1108,7 +1138,21 @@ mod tests {
 
         let result = QualificationRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
 
-        assert_that!(result, empty());
+        assert_that!(
+            result,
+            eq(vec![QualificationViolation::NonFunction(
+                NonFunctionQualificationViolation {
+                    file: PathBuf::from("test.rs"),
+                    line: 2,
+                    column: 27,
+                    message: "import this item",
+                    details: NonFunctionQualificationDetails {
+                        actual_path: "syn::ExprCall".to_owned(),
+                        expected_import: "use syn::ExprCall;".to_owned(),
+                    },
+                }
+            )])
+        );
     }
 
     #[test]
@@ -1151,7 +1195,7 @@ mod tests {
     }
 
     #[test]
-    fn test_qualification_rule_check_when_nested_module_call_is_bare_reports_nested_call() {
+    fn test_qualification_rule_check_when_nested_module_call_is_bare_returns_no_violations() {
         let syntax = syn::parse_file(
             r"
             mod outer {
@@ -1166,18 +1210,6 @@ mod tests {
 
         let result = QualificationRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
 
-        assert_that!(
-            result,
-            eq(vec![QualificationViolation::Function(FunctionQualificationViolation {
-                file: PathBuf::from("test.rs"),
-                line: 5,
-                column: 21,
-                message: "call needs qualification",
-                details: FunctionQualificationDetails {
-                    actual_path: "helper".to_owned(),
-                    expected_path: "self::helper".to_owned(),
-                },
-            })])
-        );
+        assert_that!(result, empty());
     }
 }
