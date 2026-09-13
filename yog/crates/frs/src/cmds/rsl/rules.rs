@@ -2,6 +2,7 @@
 
 use std::fmt::Display;
 use std::path::Path;
+use std::sync::OnceLock;
 
 use serde::Serialize;
 
@@ -17,6 +18,8 @@ mod impl_adjacency;
 mod item_group;
 mod qualification;
 mod visibility_order;
+
+static RULES: OnceLock<[Box<dyn Rule>; 5]> = OnceLock::new();
 
 /// Object-safe rule interface used by the dispatcher.
 ///
@@ -40,18 +43,21 @@ where
 
 /// Object-safe violation interface used after the dispatcher erases types.
 pub trait RuleViolation: Display + Send + Sync {
-    fn to_json(&self) -> serde_json::Result<serde_json::Value>;
+    fn write_json(&self, output: &mut Vec<u8>) -> serde_json::Result<()>;
 }
 
 impl<T> RuleViolation for T
 where
     T: crate::cmds::rsl::rules::TypedRuleViolation + Display,
 {
-    fn to_json(&self) -> serde_json::Result<serde_json::Value> {
-        serde_json::to_value(SerializedViolation {
-            rule: <T::Rule as crate::cmds::rsl::rules::TypedRule>::name(),
-            violation: self,
-        })
+    fn write_json(&self, output: &mut Vec<u8>) -> serde_json::Result<()> {
+        serde_json::to_writer(
+            output,
+            &SerializedViolation {
+                rule: <T::Rule as crate::cmds::rsl::rules::TypedRule>::name(),
+                violation: self,
+            },
+        )
     }
 }
 
@@ -100,20 +106,26 @@ struct SerializedViolation<'rule, V: ?Sized> {
 }
 
 pub(super) fn check(ctx: &FileContext<'_>) -> Vec<Box<dyn RuleViolation>> {
-    let rules: Vec<Box<dyn Rule>> = vec![
-        Box::new(ItemGroupRule::new(None)),
-        Box::new(VisibilityOrderRule::new(None)),
-        Box::new(ImplAdjacencyRule),
-        Box::new(FnOrderRule),
-        Box::new(QualificationRule),
-    ];
-
     let mut violations = Vec::new();
-    for rule in rules {
+    for rule in self::rules() {
         violations.extend(rule.check(ctx));
     }
 
     violations
+}
+
+fn rules() -> &'static [Box<dyn Rule>] {
+    RULES
+        .get_or_init(|| {
+            [
+                Box::new(ItemGroupRule::new(None)) as Box<dyn Rule>,
+                Box::new(VisibilityOrderRule::new(None)),
+                Box::new(ImplAdjacencyRule),
+                Box::new(FnOrderRule),
+                Box::new(QualificationRule),
+            ]
+        })
+        .as_slice()
 }
 
 #[cfg(test)]
@@ -121,5 +133,6 @@ pub(super) fn test_ctx(file: &syn::File) -> FileContext<'_> {
     FileContext {
         path: std::path::Path::new("test.rs"),
         file,
+        module_item_lists: crate::cmds::rsl::ast::module_item_lists(file),
     }
 }

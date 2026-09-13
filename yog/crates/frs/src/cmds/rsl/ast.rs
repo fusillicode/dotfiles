@@ -346,12 +346,103 @@ struct TypeCluster {
     trait_impls: Vec<usize>,
 }
 
-pub(super) fn module_scopes(file: &syn::File) -> Vec<&[Item]> {
+#[derive(Clone, Copy, Debug)]
+pub(super) enum ItemVisibility {
+    Known(VisibilityClass),
+    NotApplicable,
+}
+
+#[derive(Debug)]
+pub(super) enum ItemMetadata {
+    Unclassified,
+    Classified {
+        item: ClassifiedItem,
+        visibility: ItemVisibility,
+    },
+    TestModule {
+        item: ClassifiedItem,
+        visibility: VisibilityClass,
+    },
+}
+
+impl ItemMetadata {
+    fn from_item(item: &Item) -> Self {
+        let Some(classified) = self::classify_item(item) else {
+            return Self::Unclassified;
+        };
+        if self::is_test_module(item)
+            && let Item::Mod(module) = item
+        {
+            return Self::TestModule {
+                item: classified,
+                visibility: VisibilityClass::from(&module.vis),
+            };
+        }
+
+        let visibility = self::item_visibility(item).map_or(ItemVisibility::NotApplicable, ItemVisibility::Known);
+        Self::Classified {
+            item: classified,
+            visibility,
+        }
+    }
+
+    pub(super) const fn classified(&self) -> Option<&ClassifiedItem> {
+        match self {
+            Self::Unclassified => None,
+            Self::Classified { item, .. } | Self::TestModule { item, .. } => Some(item),
+        }
+    }
+
+    pub(super) const fn is_test_module(&self) -> bool {
+        matches!(self, Self::TestModule { .. })
+    }
+
+    pub(super) const fn visibility(&self) -> Option<VisibilityClass> {
+        match self {
+            Self::Unclassified => None,
+            Self::Classified { visibility, .. } => visibility.value(),
+            Self::TestModule { visibility, .. } => Some(*visibility),
+        }
+    }
+}
+
+impl ItemVisibility {
+    const fn value(self) -> Option<VisibilityClass> {
+        match self {
+            Self::Known(visibility) => Some(visibility),
+            Self::NotApplicable => None,
+        }
+    }
+}
+
+pub(super) struct ModuleItem<'ast> {
+    item: &'ast Item,
+    metadata: ItemMetadata,
+}
+
+impl<'ast> ModuleItem<'ast> {
+    pub(super) const fn item(&self) -> &'ast Item {
+        self.item
+    }
+
+    pub(super) const fn metadata(&self) -> &ItemMetadata {
+        &self.metadata
+    }
+}
+
+pub(super) fn module_item_lists(file: &syn::File) -> Vec<Vec<ModuleItem<'_>>> {
     let mut pending = VecDeque::from([file.items.as_slice()]);
     let mut scopes = Vec::new();
 
     while let Some(items) = pending.pop_front() {
-        scopes.push(items);
+        let module_items = items
+            .iter()
+            .map(|item| ModuleItem {
+                item,
+                metadata: ItemMetadata::from_item(item),
+            })
+            .collect();
+        scopes.push(module_items);
         for item in items {
             if let Item::Mod(module) = item
                 && let Some((_, nested_items)) = &module.content
@@ -364,11 +455,12 @@ pub(super) fn module_scopes(file: &syn::File) -> Vec<&[Item]> {
     scopes
 }
 
-pub(super) fn module_nodes(items: &[Item]) -> Vec<ModuleNode> {
+pub(super) fn module_nodes(items: &[ModuleItem<'_>]) -> Vec<ModuleNode> {
     let mut type_indices = HashMap::new();
     let mut clusters = HashMap::new();
 
-    for (index, item) in items.iter().enumerate() {
+    for (index, module_item) in items.iter().enumerate() {
+        let item = module_item.item();
         let Some((name, kind, visibility)) = self::type_definition(item) else {
             continue;
         };
@@ -389,7 +481,8 @@ pub(super) fn module_nodes(items: &[Item]) -> Vec<ModuleNode> {
         );
     }
 
-    for (index, item) in items.iter().enumerate() {
+    for (index, module_item) in items.iter().enumerate() {
+        let item = module_item.item();
         let Item::Impl(item_impl) = item else {
             continue;
         };
@@ -419,7 +512,8 @@ pub(super) fn module_nodes(items: &[Item]) -> Vec<ModuleNode> {
 
     let mut emitted_clusters = HashSet::new();
     let mut nodes = Vec::new();
-    for (index, item) in items.iter().enumerate() {
+    for (index, module_item) in items.iter().enumerate() {
+        let item = module_item.item();
         if let Some(&type_index) = item_to_cluster.get(&index) {
             if !emitted_clusters.insert(type_index) {
                 continue;
@@ -437,7 +531,7 @@ pub(super) fn module_nodes(items: &[Item]) -> Vec<ModuleNode> {
             nodes.push(ModuleNode {
                 order: OrderNode {
                     source_index,
-                    span: self::item_span(type_item),
+                    span: self::item_span(type_item.item()),
                     kind: cluster.kind,
                     group: Some(cluster.kind.group()),
                     visibility: Some(cluster.visibility),
@@ -445,14 +539,14 @@ pub(super) fn module_nodes(items: &[Item]) -> Vec<ModuleNode> {
                 },
                 indices,
             });
-        } else if let Some(classified) = self::classify_item(item) {
+        } else if let Some(classified) = module_item.metadata().classified() {
             nodes.push(ModuleNode {
                 order: OrderNode {
                     source_index: index,
                     span: classified.span,
                     kind: classified.kind,
                     group: Some(classified.kind.group()),
-                    visibility: item_visibility(item),
+                    visibility: module_item.metadata().visibility(),
                     label: self::item_label(item, classified.kind),
                 },
                 indices: vec![index],
@@ -506,5 +600,60 @@ fn impl_item_span(item: &syn::ImplItem) -> Span {
         syn::ImplItem::Macro(item) => item.mac.path.span(),
         syn::ImplItem::Verbatim(tokens) => tokens.span(),
         _ => item.span(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_module_item_lists_when_metadata_is_requested_returns_cached_item_details() {
+        let file = syn::parse_file(
+            r"
+            fn run() {}
+            #[cfg(test)]
+            mod tests {}
+            ",
+        )
+        .expect("source should parse");
+
+        let item_lists = module_item_lists(&file);
+        let root = item_lists.first().expect("root item list should exist");
+        let first_metadata = root.first().expect("root item should exist").metadata();
+
+        assert_eq!(root.len(), 2);
+        assert_eq!(first_metadata.classified().map(|item| item.kind), Some(ItemKind::Fn));
+        assert!(!first_metadata.is_test_module());
+        assert_eq!(first_metadata.visibility(), Some(VisibilityClass::Private));
+        let second_item = root.get(1).expect("second root item should exist");
+        assert_eq!(
+            second_item.metadata().classified().map(|item| item.kind),
+            Some(ItemKind::Mod)
+        );
+        assert!(second_item.metadata().is_test_module());
+    }
+
+    #[test]
+    fn test_item_metadata_when_item_has_no_module_visibility_marks_it_not_applicable() {
+        let file = syn::parse_file(
+            r"
+            struct Data;
+            impl Data {}
+            ",
+        )
+        .expect("source should parse");
+
+        let item_lists = module_item_lists(&file);
+        let root = item_lists.first().expect("root item list should exist");
+        let metadata = root.get(1).expect("impl item should exist").metadata();
+
+        assert!(matches!(
+            metadata,
+            ItemMetadata::Classified {
+                visibility: ItemVisibility::NotApplicable,
+                ..
+            }
+        ));
     }
 }
