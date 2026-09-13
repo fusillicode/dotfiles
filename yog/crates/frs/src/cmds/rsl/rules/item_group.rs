@@ -1,4 +1,4 @@
-//! Item-group ordering rule.
+//! Item-group ordering rule for `frs rsl`.
 
 use std::fmt::Display;
 use std::fmt::Formatter;
@@ -9,11 +9,11 @@ use std::path::PathBuf;
 use proc_macro2::Span;
 use serde::Serialize;
 
-use crate::rsl::ast::ItemGroup;
-use crate::rsl::ast::ItemKind;
-use crate::rsl::engine::FileContext;
-use crate::rsl::rules::TypedRule;
-use crate::rsl::rules::TypedRuleViolation;
+use crate::cmds::rsl::ast::ItemGroup;
+use crate::cmds::rsl::ast::ItemKind;
+use crate::cmds::rsl::engine::FileContext;
+use crate::cmds::rsl::rules::TypedRule;
+use crate::cmds::rsl::rules::TypedRuleViolation;
 
 pub struct ItemGroupRule {
     group_order: [ItemGroup; 7],
@@ -52,13 +52,13 @@ impl TypedRule for ItemGroupRule {
     fn check(&self, ctx: &FileContext<'_>) -> Vec<Self::Violation> {
         let mut violations = Vec::new();
 
-        for items in crate::rsl::ast::module_scopes(ctx.file) {
+        for items in crate::cmds::rsl::ast::module_scopes(ctx.file) {
             // Keep unknown macro invocations transparent here to preserve the original group rule.
             let mut previous_group: Option<ItemGroup> = None;
 
             for (index, item) in items.iter().enumerate() {
-                if let Some(classified) = crate::rsl::ast::classify_item(item) {
-                    if crate::rsl::ast::is_test_module(item) {
+                if let Some(classified) = crate::cmds::rsl::ast::classify_item(item) {
+                    if crate::cmds::rsl::ast::is_test_module(item) {
                         if index != items.len().saturating_sub(1) {
                             violations.push(ItemGroupViolation::new(
                                 ctx.path,
@@ -134,7 +134,7 @@ impl TypedRuleViolation for ItemGroupViolation {
 
 impl Display for ItemGroupViolation {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> Result {
-        formatter.write_str(&crate::rsl::rules::format_compact_violation(
+        formatter.write_str(&crate::cmds::rsl::rules::format_compact_violation(
             &self.file,
             self.line,
             self.column,
@@ -166,8 +166,8 @@ mod tests {
     use super::ItemGroupRule;
     use super::ItemGroupViolation;
     use super::ViolationDetails;
-    use crate::rsl::ast::ItemGroup;
-    use crate::rsl::rules::TypedRule;
+    use crate::cmds::rsl::ast::ItemGroup;
+    use crate::cmds::rsl::rules::TypedRule;
 
     #[test]
     fn test_classify_item_when_each_group_is_present_returns_expected_groups() {
@@ -228,7 +228,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = ItemGroupRule::new(None).check(&crate::rsl::rules::test_ctx(&syntax));
+        let result = ItemGroupRule::new(None).check(&crate::cmds::rsl::rules::test_ctx(&syntax));
 
         assert_that!(
             result,
@@ -240,7 +240,7 @@ mod tests {
                 details: ViolationDetails {
                     actual_group: ItemGroup::Use,
                     expected_group: ItemGroup::Items,
-                    item: crate::rsl::ast::ItemKind::Use,
+                    item: crate::cmds::rsl::ast::ItemKind::Use,
                 },
             }])
         );
@@ -258,7 +258,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = ItemGroupRule::new(None).check(&crate::rsl::rules::test_ctx(&syntax));
+        let result = ItemGroupRule::new(None).check(&crate::cmds::rsl::rules::test_ctx(&syntax));
 
         assert_that!(result, empty());
     }
@@ -275,7 +275,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = ItemGroupRule::new(None).check(&crate::rsl::rules::test_ctx(&syntax));
+        let result = ItemGroupRule::new(None).check(&crate::cmds::rsl::rules::test_ctx(&syntax));
 
         assert_that!(result, empty());
     }
@@ -292,7 +292,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = ItemGroupRule::new(None).check(&crate::rsl::rules::test_ctx(&syntax));
+        let result = ItemGroupRule::new(None).check(&crate::cmds::rsl::rules::test_ctx(&syntax));
 
         assert_that!(
             result,
@@ -304,7 +304,7 @@ mod tests {
                 details: ViolationDetails {
                     actual_group: ItemGroup::Modules,
                     expected_group: ItemGroup::Items,
-                    item: crate::rsl::ast::ItemKind::Mod,
+                    item: crate::cmds::rsl::ast::ItemKind::Mod,
                 },
             }])
         );
@@ -321,7 +321,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = ItemGroupRule::new(None).check(&crate::rsl::rules::test_ctx(&syntax));
+        let result = ItemGroupRule::new(None).check(&crate::cmds::rsl::rules::test_ctx(&syntax));
 
         assert_that!(result, empty());
     }
@@ -336,7 +336,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = ItemGroupRule::new(None).check(&crate::rsl::rules::test_ctx(&syntax));
+        let result = ItemGroupRule::new(None).check(&crate::cmds::rsl::rules::test_ctx(&syntax));
 
         assert_that!(
             result,
@@ -348,7 +348,7 @@ mod tests {
                 details: ViolationDetails {
                     actual_group: ItemGroup::Constants,
                     expected_group: ItemGroup::Items,
-                    item: crate::rsl::ast::ItemKind::Const,
+                    item: crate::cmds::rsl::ast::ItemKind::Const,
                 },
             }])
         );
@@ -378,7 +378,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = ItemGroupRule::new(None).check(&crate::rsl::rules::test_ctx(&syntax));
+        let result = ItemGroupRule::new(None).check(&crate::cmds::rsl::rules::test_ctx(&syntax));
 
         assert_that!(
             result,
@@ -390,7 +390,7 @@ mod tests {
                 details: ViolationDetails {
                     actual_group: ItemGroup::Constants,
                     expected_group: ItemGroup::Items,
-                    item: crate::rsl::ast::ItemKind::Const,
+                    item: crate::cmds::rsl::ast::ItemKind::Const,
                 },
             }])
         );
@@ -406,7 +406,7 @@ mod tests {
             details: ViolationDetails {
                 actual_group: ItemGroup::Constants,
                 expected_group: ItemGroup::Items,
-                item: crate::rsl::ast::ItemKind::Const,
+                item: crate::cmds::rsl::ast::ItemKind::Const,
             },
         };
 
@@ -416,12 +416,12 @@ mod tests {
         );
     }
 
-    fn groups(source: &str) -> Vec<Option<crate::rsl::ast::ItemGroup>> {
+    fn groups(source: &str) -> Vec<Option<crate::cmds::rsl::ast::ItemGroup>> {
         syn::parse_file(source)
             .unwrap()
             .items
             .iter()
-            .map(crate::rsl::ast::classify_item)
+            .map(crate::cmds::rsl::ast::classify_item)
             .map(|item| item.map(|item| item.kind.group()))
             .collect()
     }

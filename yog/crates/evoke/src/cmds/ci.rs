@@ -6,7 +6,7 @@ use rootcause::prelude::ResultExt;
 
 use crate::cargo_metadata::Metadata;
 
-/// Usage summary for CI subcommands.
+/// Usage summary for `evoke ci` subcommands.
 const CI_USAGE: &str = "Usage: evoke ci [all | lint | test | release-native | audit]";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
