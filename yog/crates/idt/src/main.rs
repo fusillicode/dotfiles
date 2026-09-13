@@ -221,7 +221,8 @@ fn managed_cargo_installers<'a>(cargo_bin_dir: &'a Path, bin_dir: &'a Path) -> V
             "tree-sitter-cli",
         )),
         Box::new(Cargo::registry(cargo_bin_dir, bin_dir, "typos", "typos-cli")),
-        Box::new(Cargo::registry(cargo_bin_dir, bin_dir, "harper-ls", "harper-ls")),
+        // Let's just use typos for now
+        // Box::new(Cargo::registry(cargo_bin_dir, bin_dir, "harper-ls", "harper-ls")),
         Box::new(Cargo::registry_with_all_features(
             cargo_bin_dir,
             bin_dir,
