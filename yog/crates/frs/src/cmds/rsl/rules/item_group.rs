@@ -52,41 +52,43 @@ impl TypedRule for ItemGroupRule {
     fn check(&self, ctx: &FileContext<'_>) -> Vec<Self::Violation> {
         let mut violations = Vec::new();
 
-        for items in crate::cmds::rsl::ast::module_scopes(ctx.file) {
+        for items in &ctx.module_item_lists {
             // Keep unknown macro invocations transparent here to preserve the original group rule.
             let mut previous_group: Option<ItemGroup> = None;
 
-            for (index, item) in items.iter().enumerate() {
-                if let Some(classified) = crate::cmds::rsl::ast::classify_item(item) {
-                    if crate::cmds::rsl::ast::is_test_module(item) {
-                        if index != items.len().saturating_sub(1) {
-                            violations.push(ItemGroupViolation::new(
-                                ctx.path,
-                                classified.span,
-                                ItemGroup::Modules,
-                                ItemGroup::Items,
-                                classified.kind,
-                                "test module must be last",
-                            ));
-                        }
-                        continue;
-                    }
-
-                    let actual_group = classified.kind.group();
-                    if let Some(expected_group) = previous_group
-                        && self.group_rank(actual_group) < self.group_rank(expected_group)
-                    {
+            for (index, module_item) in items.iter().enumerate() {
+                let metadata = module_item.metadata();
+                let Some(classified) = metadata.classified() else {
+                    continue;
+                };
+                if metadata.is_test_module() {
+                    if index != items.len().saturating_sub(1) {
                         violations.push(ItemGroupViolation::new(
                             ctx.path,
                             classified.span,
-                            actual_group,
-                            expected_group,
+                            ItemGroup::Modules,
+                            ItemGroup::Items,
                             classified.kind,
-                            "item group out of order",
+                            "test module must be last",
                         ));
                     }
-                    previous_group = Some(actual_group);
+                    continue;
                 }
+
+                let actual_group = classified.kind.group();
+                if let Some(expected_group) = previous_group
+                    && self.group_rank(actual_group) < self.group_rank(expected_group)
+                {
+                    violations.push(ItemGroupViolation::new(
+                        ctx.path,
+                        classified.span,
+                        actual_group,
+                        expected_group,
+                        classified.kind,
+                        "item group out of order",
+                    ));
+                }
+                previous_group = Some(actual_group);
             }
         }
 

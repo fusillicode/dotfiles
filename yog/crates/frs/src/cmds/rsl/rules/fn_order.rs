@@ -15,6 +15,7 @@ use syn::Item;
 use syn::visit::Visit;
 
 use crate::cmds::rsl::ast::ItemKind;
+use crate::cmds::rsl::ast::ModuleItem;
 use crate::cmds::rsl::ast::VisibilityClass;
 use crate::cmds::rsl::engine::FileContext;
 use crate::cmds::rsl::rules::TypedRule;
@@ -32,10 +33,11 @@ impl TypedRule for FnOrderRule {
     fn check(&self, ctx: &FileContext<'_>) -> Vec<Self::Violation> {
         let mut violations = Vec::new();
 
-        for items in crate::cmds::rsl::ast::module_scopes(ctx.file) {
+        for items in &ctx.module_item_lists {
             self::check_fn_order(&self::module_functions(items), ctx.path, &mut violations);
 
-            for item in items.iter().rev() {
+            for module_item in items.iter().rev() {
+                let item = module_item.item();
                 if let Item::Impl(item_impl) = item
                     && item_impl.trait_.is_none()
                 {
@@ -448,12 +450,12 @@ fn collect_graph_component(node: usize, graph: &[Vec<usize>], visited: &mut [boo
     }
 }
 
-fn module_functions(items: &[Item]) -> Vec<FunctionInfo> {
+fn module_functions(items: &[ModuleItem<'_>]) -> Vec<FunctionInfo> {
     items
         .iter()
         .enumerate()
-        .filter_map(|(source_index, item)| {
-            let Item::Fn(function) = item else {
+        .filter_map(|(source_index, module_item)| {
+            let Item::Fn(function) = module_item.item() else {
                 return None;
             };
             Some(FunctionInfo {

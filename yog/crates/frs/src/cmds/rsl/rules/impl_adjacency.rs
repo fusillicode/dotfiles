@@ -26,7 +26,7 @@ impl TypedRule for ImplAdjacencyRule {
     fn check(&self, ctx: &FileContext<'_>) -> Vec<Self::Violation> {
         let mut violations = Vec::new();
 
-        for items in crate::cmds::rsl::ast::module_scopes(ctx.file) {
+        for items in &ctx.module_item_lists {
             // Raw AST positions make opaque macros and cfg-decorated items break physical adjacency.
             for node in &crate::cmds::rsl::ast::module_nodes(items) {
                 if node.indices.len() < 2 {
@@ -41,13 +41,14 @@ impl TypedRule for ImplAdjacencyRule {
                         continue;
                     }
 
-                    let Some(current_item) = items.get(*current) else {
+                    let Some(previous_item) = items.get(*previous).map(crate::cmds::rsl::ast::ModuleItem::item) else {
                         continue;
                     };
-                    let Some(previous_item) = items.get(*previous) else {
-                        continue;
-                    };
-                    let Some(classified) = crate::cmds::rsl::ast::classify_item(current_item) else {
+                    let Some(classified) = items
+                        .get(*current)
+                        .map(crate::cmds::rsl::ast::ModuleItem::metadata)
+                        .and_then(crate::cmds::rsl::ast::ItemMetadata::classified)
+                    else {
                         continue;
                     };
                     violations.push(ImplAdjacencyViolation::new(
