@@ -1,4 +1,4 @@
-//! Impl-adjacency rule.
+//! Impl-adjacency rule for `frs rsl`.
 
 use std::fmt::Display;
 use std::fmt::Formatter;
@@ -9,10 +9,10 @@ use std::path::PathBuf;
 use proc_macro2::Span;
 use serde::Serialize;
 
-use crate::rsl::ast::ItemKind;
-use crate::rsl::engine::FileContext;
-use crate::rsl::rules::TypedRule;
-use crate::rsl::rules::TypedRuleViolation;
+use crate::cmds::rsl::ast::ItemKind;
+use crate::cmds::rsl::engine::FileContext;
+use crate::cmds::rsl::rules::TypedRule;
+use crate::cmds::rsl::rules::TypedRuleViolation;
 
 pub struct ImplAdjacencyRule;
 
@@ -26,9 +26,9 @@ impl TypedRule for ImplAdjacencyRule {
     fn check(&self, ctx: &FileContext<'_>) -> Vec<Self::Violation> {
         let mut violations = Vec::new();
 
-        for items in crate::rsl::ast::module_scopes(ctx.file) {
+        for items in crate::cmds::rsl::ast::module_scopes(ctx.file) {
             // Raw AST positions make opaque macros and cfg-decorated items break physical adjacency.
-            for node in &crate::rsl::ast::module_nodes(items) {
+            for node in &crate::cmds::rsl::ast::module_nodes(items) {
                 if node.indices.len() < 2 {
                     continue;
                 }
@@ -47,13 +47,13 @@ impl TypedRule for ImplAdjacencyRule {
                     let Some(previous_item) = items.get(*previous) else {
                         continue;
                     };
-                    let Some(classified) = crate::rsl::ast::classify_item(current_item) else {
+                    let Some(classified) = crate::cmds::rsl::ast::classify_item(current_item) else {
                         continue;
                     };
                     violations.push(ImplAdjacencyViolation::new(
                         ctx.path,
                         classified.span,
-                        crate::rsl::ast::impl_order_label(previous_item),
+                        crate::cmds::rsl::ast::impl_order_label(previous_item),
                         classified.kind,
                     ));
                 }
@@ -93,7 +93,7 @@ impl TypedRuleViolation for ImplAdjacencyViolation {
 
 impl Display for ImplAdjacencyViolation {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> Result {
-        formatter.write_str(&crate::rsl::rules::format_compact_violation(
+        formatter.write_str(&crate::cmds::rsl::rules::format_compact_violation(
             &self.file,
             self.line,
             self.column,
@@ -119,8 +119,8 @@ mod tests {
     use super::ImplAdjacencyDetails;
     use super::ImplAdjacencyRule;
     use super::ImplAdjacencyViolation;
-    use crate::rsl::ast::ItemKind;
-    use crate::rsl::rules::TypedRule;
+    use crate::cmds::rsl::ast::ItemKind;
+    use crate::cmds::rsl::rules::TypedRule;
 
     #[test]
     fn test_impl_adjacency_rule_check_when_impl_is_not_adjacent_to_type_reports_impl() {
@@ -133,7 +133,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = ImplAdjacencyRule.check(&crate::rsl::rules::test_ctx(&syntax));
+        let result = ImplAdjacencyRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
 
         assert_that!(
             result,
@@ -161,7 +161,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = ImplAdjacencyRule.check(&crate::rsl::rules::test_ctx(&syntax));
+        let result = ImplAdjacencyRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
 
         assert_that!(
             result,
@@ -221,7 +221,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = ImplAdjacencyRule.check(&crate::rsl::rules::test_ctx(&syntax));
+        let result = ImplAdjacencyRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
 
         assert_that!(
             result,

@@ -1,4 +1,4 @@
-//! Qualification and import-style rule.
+//! Qualification and import-style rule for `frs rsl`.
 
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -18,9 +18,9 @@ use syn::UseTree;
 use syn::spanned::Spanned;
 use syn::visit::Visit;
 
-use crate::rsl::engine::FileContext;
-use crate::rsl::rules::TypedRule;
-use crate::rsl::rules::TypedRuleViolation;
+use crate::cmds::rsl::engine::FileContext;
+use crate::cmds::rsl::rules::TypedRule;
+use crate::cmds::rsl::rules::TypedRuleViolation;
 
 pub struct QualificationRule;
 
@@ -108,7 +108,7 @@ impl FunctionQualificationViolation {
 
 impl Display for FunctionQualificationViolation {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> Result {
-        formatter.write_str(&crate::rsl::rules::format_compact_violation(
+        formatter.write_str(&crate::cmds::rsl::rules::format_compact_violation(
             &self.file,
             self.line,
             self.column,
@@ -146,7 +146,7 @@ impl NonFunctionQualificationViolation {
 
 impl Display for NonFunctionQualificationViolation {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> Result {
-        formatter.write_str(&crate::rsl::rules::format_compact_violation(
+        formatter.write_str(&crate::cmds::rsl::rules::format_compact_violation(
             &self.file,
             self.line,
             self.column,
@@ -181,7 +181,7 @@ impl ForbiddenAliasViolation {
 
 impl Display for ForbiddenAliasViolation {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> Result {
-        formatter.write_str(&crate::rsl::rules::format_compact_violation(
+        formatter.write_str(&crate::cmds::rsl::rules::format_compact_violation(
             &self.file,
             self.line,
             self.column,
@@ -708,7 +708,7 @@ mod tests {
     use super::NonFunctionQualificationViolation;
     use super::QualificationRule;
     use super::QualificationViolation;
-    use crate::rsl::rules::TypedRule;
+    use crate::cmds::rsl::rules::TypedRule;
 
     #[test]
     fn test_qualification_rule_check_when_same_module_call_is_bare_reports_call() {
@@ -722,7 +722,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = QualificationRule.check(&crate::rsl::rules::test_ctx(&syntax));
+        let result = QualificationRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
 
         assert_that!(
             result,
@@ -751,7 +751,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = QualificationRule.check(&crate::rsl::rules::test_ctx(&syntax));
+        let result = QualificationRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
 
         assert_that!(result, empty());
     }
@@ -769,7 +769,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = QualificationRule.check(&crate::rsl::rules::test_ctx(&syntax));
+        let result = QualificationRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
 
         assert_that!(
             result,
@@ -800,7 +800,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = QualificationRule.check(&crate::rsl::rules::test_ctx(&syntax));
+        let result = QualificationRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
 
         assert_that!(
             result,
@@ -831,7 +831,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = QualificationRule.check(&crate::rsl::rules::test_ctx(&syntax));
+        let result = QualificationRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
 
         assert_that!(result, empty());
     }
@@ -850,7 +850,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = QualificationRule.check(&crate::rsl::rules::test_ctx(&syntax));
+        let result = QualificationRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
 
         assert_that!(
             result,
@@ -884,7 +884,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = QualificationRule.check(&crate::rsl::rules::test_ctx(&syntax));
+        let result = QualificationRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
 
         assert_that!(result, empty());
     }
@@ -907,7 +907,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = QualificationRule.check(&crate::rsl::rules::test_ctx(&syntax));
+        let result = QualificationRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
 
         assert_that!(result, empty());
     }
@@ -921,7 +921,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = QualificationRule.check(&crate::rsl::rules::test_ctx(&syntax));
+        let result = QualificationRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
 
         assert_that!(
             result,
@@ -946,7 +946,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = QualificationRule.check(&crate::rsl::rules::test_ctx(&syntax));
+        let result = QualificationRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
 
         assert_that!(result, empty());
     }
@@ -960,7 +960,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = QualificationRule.check(&crate::rsl::rules::test_ctx(&syntax));
+        let result = QualificationRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
 
         assert_that!(
             result,
@@ -985,7 +985,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = QualificationRule.check(&crate::rsl::rules::test_ctx(&syntax));
+        let result = QualificationRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
 
         assert_that!(
             result,
@@ -1068,7 +1068,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = QualificationRule.check(&crate::rsl::rules::test_ctx(&syntax));
+        let result = QualificationRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
 
         assert_that!(
             result,
@@ -1106,7 +1106,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = QualificationRule.check(&crate::rsl::rules::test_ctx(&syntax));
+        let result = QualificationRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
 
         assert_that!(result, empty());
     }
@@ -1129,7 +1129,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = QualificationRule.check(&crate::rsl::rules::test_ctx(&syntax));
+        let result = QualificationRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
 
         assert_that!(result, empty());
     }
@@ -1145,7 +1145,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = QualificationRule.check(&crate::rsl::rules::test_ctx(&syntax));
+        let result = QualificationRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
 
         assert_that!(result, empty());
     }
@@ -1164,7 +1164,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = QualificationRule.check(&crate::rsl::rules::test_ctx(&syntax));
+        let result = QualificationRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
 
         assert_that!(
             result,

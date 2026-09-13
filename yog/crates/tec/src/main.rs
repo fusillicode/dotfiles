@@ -211,7 +211,7 @@ enum LintScope {
 fn main() -> rootcause::Result<()> {
     let args = ytil_sys::cli::get();
     if args.has_help() {
-        println!("{}", include_str!("../help.txt"));
+        println!(include_str!("../help.txt"));
         return Ok(());
     }
     let fix_mode = args.iter().any(|s| matches!(s.as_str(), "--fix" | "fix"));

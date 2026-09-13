@@ -1,4 +1,4 @@
-//! Shared syntax classification helpers for rsl rules.
+//! Shared syntax classification helpers for the rsl rules.
 
 use std::collections::HashMap;
 use std::collections::HashSet;

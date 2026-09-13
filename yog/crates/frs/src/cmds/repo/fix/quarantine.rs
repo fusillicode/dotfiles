@@ -1,4 +1,4 @@
-//! macOS quarantine extended-attribute cleanup.
+//! macOS quarantine extended-attribute cleanup for repositories.
 
 use std::path::Path;
 use std::path::PathBuf;
