@@ -25,7 +25,7 @@ const DEFAULT_JOBS: usize = 7;
 /// - Repo maintenance fails.
 pub fn run(mut cli_args: Arguments) -> rootcause::Result<()> {
     if cli_args.contains("--help") {
-        print!(include_str!("../../repo-fix-help.txt"));
+        print!(include_str!("../../../repo-fix-help.txt"));
         return Ok(());
     }
     self::fix(&RepoFixOpts::try_from(cli_args.finish())?)
@@ -208,7 +208,7 @@ fn fix(opts: &RepoFixOpts) -> rootcause::Result<()> {
         println!("{} {}", "Removing quarantine metadata in".blue().bold(), repo.display());
     }
 
-    for cleanup in crate::repo::fix::quarantine::clean(&repo_discovery.repos, opts.jobs) {
+    for cleanup in quarantine::clean(&repo_discovery.repos, opts.jobs) {
         failures.extend(cleanup.failures.into_iter().map(|failure| Failure::Quarantine {
             repo: cleanup.repo.clone(),
             failure,

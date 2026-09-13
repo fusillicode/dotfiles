@@ -1,4 +1,4 @@
-//! Function-order rule.
+//! Function-order rule for `frs rsl`.
 
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -14,11 +14,11 @@ use syn::Expr;
 use syn::Item;
 use syn::visit::Visit;
 
-use crate::rsl::ast::ItemKind;
-use crate::rsl::ast::VisibilityClass;
-use crate::rsl::engine::FileContext;
-use crate::rsl::rules::TypedRule;
-use crate::rsl::rules::TypedRuleViolation;
+use crate::cmds::rsl::ast::ItemKind;
+use crate::cmds::rsl::ast::VisibilityClass;
+use crate::cmds::rsl::engine::FileContext;
+use crate::cmds::rsl::rules::TypedRule;
+use crate::cmds::rsl::rules::TypedRuleViolation;
 
 pub struct FnOrderRule;
 
@@ -32,7 +32,7 @@ impl TypedRule for FnOrderRule {
     fn check(&self, ctx: &FileContext<'_>) -> Vec<Self::Violation> {
         let mut violations = Vec::new();
 
-        for items in crate::rsl::ast::module_scopes(ctx.file) {
+        for items in crate::cmds::rsl::ast::module_scopes(ctx.file) {
             self::check_fn_order(&self::module_functions(items), ctx.path, &mut violations);
 
             for item in items.iter().rev() {
@@ -77,7 +77,7 @@ impl TypedRuleViolation for FnOrderViolation {
 
 impl Display for FnOrderViolation {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> Result {
-        formatter.write_str(&crate::rsl::rules::format_compact_violation(
+        formatter.write_str(&crate::cmds::rsl::rules::format_compact_violation(
             &self.file,
             self.line,
             self.column,
@@ -527,8 +527,8 @@ mod tests {
     use super::FnOrderDetails;
     use super::FnOrderRule;
     use super::FnOrderViolation;
-    use crate::rsl::ast::ItemKind;
-    use crate::rsl::rules::TypedRule;
+    use crate::cmds::rsl::ast::ItemKind;
+    use crate::cmds::rsl::rules::TypedRule;
 
     #[test]
     fn test_fn_order_check_when_private_helper_precedes_caller_reports_helper() {
@@ -542,7 +542,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = FnOrderRule.check(&crate::rsl::rules::test_ctx(&syntax));
+        let result = FnOrderRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
 
         assert_that!(
             result,
@@ -574,7 +574,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = FnOrderRule.check(&crate::rsl::rules::test_ctx(&syntax));
+        let result = FnOrderRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
 
         assert_that!(
             result,
@@ -620,7 +620,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = FnOrderRule.check(&crate::rsl::rules::test_ctx(&syntax));
+        let result = FnOrderRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
 
         assert_that!(result, empty());
     }

@@ -18,7 +18,7 @@ fn main() {
     let files = ytil_sys::cli::get();
 
     if files.has_help() {
-        println!("{}", include_str!("../help.txt"));
+        println!(include_str!("../help.txt"));
         return;
     }
 

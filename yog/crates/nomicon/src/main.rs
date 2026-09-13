@@ -31,7 +31,7 @@ mod templates;
 fn main() -> rootcause::Result<()> {
     let args = ytil_sys::cli::get();
     if args.has_help() {
-        println!("{}", include_str!("../help.txt"));
+        println!(include_str!("../help.txt"));
         return Ok(());
     }
 

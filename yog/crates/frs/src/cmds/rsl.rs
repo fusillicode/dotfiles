@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use rootcause::report;
 use ytil_sys::pico_args::Arguments;
 
-use crate::rsl::rules::RuleViolation;
+use crate::cmds::rsl::rules::RuleViolation;
 
 mod ast;
 mod engine;
@@ -21,12 +21,12 @@ mod rules;
 /// Returns an error when the arguments are invalid or a source file cannot be read or parsed.
 pub fn run(mut cli_args: Arguments) -> rootcause::Result<RslOutput> {
     if cli_args.contains("--help") {
-        print!(include_str!("../rsl-help.txt"));
+        print!(include_str!("../../rsl-help.txt"));
         return Ok(RslOutput::Compact { violations: Vec::new() });
     }
 
     let opts = RslOpts::try_from(cli_args.finish())?;
-    let violations = crate::rsl::engine::check_paths(&opts.paths)?;
+    let violations = crate::cmds::rsl::engine::check_paths(&opts.paths)?;
 
     Ok(match opts.format {
         OutputFormat::Compact => RslOutput::Compact { violations },
@@ -257,7 +257,7 @@ mod tests {
     }
 
     fn run_rsl(arguments: impl IntoIterator<Item = OsString>) -> rootcause::Result<String> {
-        let output = crate::rsl::run(Arguments::from_vec(arguments.into_iter().collect()))?;
+        let output = crate::cmds::rsl::run(Arguments::from_vec(arguments.into_iter().collect()))?;
         if output.is_empty() {
             return Ok(String::new());
         }

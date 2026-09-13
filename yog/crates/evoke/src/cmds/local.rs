@@ -135,8 +135,8 @@ mod tests {
     use rstest::rstest;
     use test_that::prelude::*;
 
-    use crate::local::drop_element;
-    use crate::local::remove_last_n_dirs;
+    use crate::cmds::local::drop_element;
+    use crate::cmds::local::remove_last_n_dirs;
 
     #[test]
     fn test_drop_element_returns_true_and_removes_the_element_from_the_vec() {

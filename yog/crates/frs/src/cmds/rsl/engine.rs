@@ -1,4 +1,4 @@
-//! Rule engine for `frs rsl`.
+//! Rule engine for the `frs rsl` command.
 
 use std::path::Path;
 use std::path::PathBuf;
@@ -10,7 +10,9 @@ pub struct FileContext<'ast> {
     pub file: &'ast syn::File,
 }
 
-pub(super) fn check_paths(paths: &[PathBuf]) -> rootcause::Result<Vec<Box<dyn crate::rsl::rules::RuleViolation>>> {
+pub(super) fn check_paths(
+    paths: &[PathBuf],
+) -> rootcause::Result<Vec<Box<dyn crate::cmds::rsl::rules::RuleViolation>>> {
     let mut violations = Vec::new();
 
     for path in paths {
@@ -25,7 +27,7 @@ pub(super) fn check_paths(paths: &[PathBuf]) -> rootcause::Result<Vec<Box<dyn cr
                 .attach(format!("error={error}"))
         })?;
 
-        let file_violations = crate::rsl::rules::check(&FileContext { path, file: &syntax });
+        let file_violations = crate::cmds::rsl::rules::check(&FileContext { path, file: &syntax });
 
         violations.extend(file_violations);
     }

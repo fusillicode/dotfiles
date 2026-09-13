@@ -1,16 +1,16 @@
-//! Built-in rsl rules.
+//! Built-in rules for `frs rsl`.
 
 use std::fmt::Display;
 use std::path::Path;
 
 use serde::Serialize;
 
-use crate::rsl::engine::FileContext;
-use crate::rsl::rules::fn_order::FnOrderRule;
-use crate::rsl::rules::impl_adjacency::ImplAdjacencyRule;
-use crate::rsl::rules::item_group::ItemGroupRule;
-use crate::rsl::rules::qualification::QualificationRule;
-use crate::rsl::rules::visibility_order::VisibilityOrderRule;
+use crate::cmds::rsl::engine::FileContext;
+use crate::cmds::rsl::rules::fn_order::FnOrderRule;
+use crate::cmds::rsl::rules::impl_adjacency::ImplAdjacencyRule;
+use crate::cmds::rsl::rules::item_group::ItemGroupRule;
+use crate::cmds::rsl::rules::qualification::QualificationRule;
+use crate::cmds::rsl::rules::visibility_order::VisibilityOrderRule;
 
 mod fn_order;
 mod impl_adjacency;
@@ -28,10 +28,10 @@ trait Rule: Send + Sync {
 
 impl<T> Rule for T
 where
-    T: crate::rsl::rules::TypedRule,
+    T: crate::cmds::rsl::rules::TypedRule,
 {
     fn check(&self, ctx: &FileContext<'_>) -> Vec<Box<dyn RuleViolation>> {
-        <T as crate::rsl::rules::TypedRule>::check(self, ctx)
+        <T as crate::cmds::rsl::rules::TypedRule>::check(self, ctx)
             .into_iter()
             .map(|violation| Box::new(violation) as Box<dyn RuleViolation>)
             .collect()
@@ -45,11 +45,11 @@ pub trait RuleViolation: Display + Send + Sync {
 
 impl<T> RuleViolation for T
 where
-    T: crate::rsl::rules::TypedRuleViolation + Display,
+    T: crate::cmds::rsl::rules::TypedRuleViolation + Display,
 {
     fn to_json(&self) -> serde_json::Result<serde_json::Value> {
         serde_json::to_value(SerializedViolation {
-            rule: <T::Rule as crate::rsl::rules::TypedRule>::name(),
+            rule: <T::Rule as crate::cmds::rsl::rules::TypedRule>::name(),
             violation: self,
         })
     }
@@ -60,7 +60,7 @@ where
 /// Keeping the associated violation here prevents a rule from returning the
 /// violation type owned by another rule, while still allowing `dyn Rule`.
 trait TypedRule: Send + Sync + 'static {
-    type Violation: crate::rsl::rules::TypedRuleViolation<Rule = Self> + Display + 'static;
+    type Violation: crate::cmds::rsl::rules::TypedRuleViolation<Rule = Self> + Display + 'static;
 
     fn name() -> &'static str;
 
@@ -69,7 +69,7 @@ trait TypedRule: Send + Sync + 'static {
 
 /// Typed link between a concrete violation and its owning rule.
 trait TypedRuleViolation: Serialize + Send + Sync + 'static {
-    type Rule: crate::rsl::rules::TypedRule<Violation = Self>;
+    type Rule: crate::cmds::rsl::rules::TypedRule<Violation = Self>;
 }
 
 pub(super) fn format_compact_violation(

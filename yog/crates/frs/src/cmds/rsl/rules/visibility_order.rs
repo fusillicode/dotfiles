@@ -1,4 +1,4 @@
-//! Visibility-order rule.
+//! Visibility-order rule for `frs rsl`.
 
 use std::fmt::Display;
 use std::fmt::Formatter;
@@ -10,11 +10,11 @@ use proc_macro2::Span;
 use serde::Serialize;
 use syn::Item;
 
-use crate::rsl::ast::ItemKind;
-use crate::rsl::ast::VisibilityClass;
-use crate::rsl::engine::FileContext;
-use crate::rsl::rules::TypedRule;
-use crate::rsl::rules::TypedRuleViolation;
+use crate::cmds::rsl::ast::ItemKind;
+use crate::cmds::rsl::ast::VisibilityClass;
+use crate::cmds::rsl::engine::FileContext;
+use crate::cmds::rsl::rules::TypedRule;
+use crate::cmds::rsl::rules::TypedRuleViolation;
 
 pub struct VisibilityOrderRule {
     visibility_order: [VisibilityClass; 4],
@@ -34,12 +34,12 @@ impl VisibilityOrderRule {
 
     fn check_visibility_order(
         &self,
-        nodes: &[crate::rsl::ast::OrderNode],
+        nodes: &[crate::cmds::rsl::ast::OrderNode],
         path: &Path,
         violations: &mut Vec<VisibilityOrderViolation>,
     ) {
         let mut current_group = None;
-        let mut highest_visibility: Option<&crate::rsl::ast::OrderNode> = None;
+        let mut highest_visibility: Option<&crate::cmds::rsl::ast::OrderNode> = None;
 
         for node in nodes {
             if node.group != current_group {
@@ -91,8 +91,8 @@ impl TypedRule for VisibilityOrderRule {
     fn check(&self, ctx: &FileContext<'_>) -> Vec<Self::Violation> {
         let mut violations = Vec::new();
 
-        for items in crate::rsl::ast::module_scopes(ctx.file) {
-            let nodes = crate::rsl::ast::module_nodes(items);
+        for items in crate::cmds::rsl::ast::module_scopes(ctx.file) {
+            let nodes = crate::cmds::rsl::ast::module_nodes(items);
             let order_nodes: Vec<_> = nodes.iter().map(|node| node.order.clone()).collect();
             self.check_visibility_order(&order_nodes, ctx.path, &mut violations);
 
@@ -100,7 +100,11 @@ impl TypedRule for VisibilityOrderRule {
                 if let Item::Impl(item_impl) = item
                     && item_impl.trait_.is_none()
                 {
-                    self.check_visibility_order(&crate::rsl::ast::impl_nodes(item_impl), ctx.path, &mut violations);
+                    self.check_visibility_order(
+                        &crate::cmds::rsl::ast::impl_nodes(item_impl),
+                        ctx.path,
+                        &mut violations,
+                    );
                 }
             }
         }
@@ -148,7 +152,7 @@ impl TypedRuleViolation for VisibilityOrderViolation {
 
 impl Display for VisibilityOrderViolation {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> Result {
-        formatter.write_str(&crate::rsl::rules::format_compact_violation(
+        formatter.write_str(&crate::cmds::rsl::rules::format_compact_violation(
             &self.file,
             self.line,
             self.column,
@@ -180,9 +184,9 @@ mod tests {
     use super::VisibilityDetails;
     use super::VisibilityOrderRule;
     use super::VisibilityOrderViolation;
-    use crate::rsl::ast::ItemKind;
-    use crate::rsl::ast::VisibilityClass;
-    use crate::rsl::rules::TypedRule;
+    use crate::cmds::rsl::ast::ItemKind;
+    use crate::cmds::rsl::ast::VisibilityClass;
+    use crate::cmds::rsl::rules::TypedRule;
 
     #[test]
     fn test_visibility_order_rule_check_when_visibility_decreases_reports_public_item() {
@@ -194,7 +198,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = VisibilityOrderRule::new(None).check(&crate::rsl::rules::test_ctx(&syntax));
+        let result = VisibilityOrderRule::new(None).check(&crate::cmds::rsl::rules::test_ctx(&syntax));
 
         assert_that!(
             result,
@@ -223,7 +227,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = VisibilityOrderRule::new(None).check(&crate::rsl::rules::test_ctx(&syntax));
+        let result = VisibilityOrderRule::new(None).check(&crate::cmds::rsl::rules::test_ctx(&syntax));
 
         assert_that!(
             result,
@@ -254,7 +258,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = VisibilityOrderRule::new(None).check(&crate::rsl::rules::test_ctx(&syntax));
+        let result = VisibilityOrderRule::new(None).check(&crate::cmds::rsl::rules::test_ctx(&syntax));
 
         assert_that!(
             result,
