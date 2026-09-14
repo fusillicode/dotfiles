@@ -36,7 +36,7 @@ return {
         title       = '',
         title_flags = false,
         backdrop    = 100,
-        width       = 0.7,
+        width       = 1,
         height      = 0.99,
         row         = 0,
         col         = vim.o.columns,
