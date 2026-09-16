@@ -12,8 +12,8 @@ offset = { x = 0, y = 1 }
 normal = { family = "Monaco" }
 
 [colors]
-primary.background = "#001300"
-primary.foreground = "#b9b9b9"
+primary.background = "#001500"
+primary.foreground = "#b3b3b3"
 cursor = { text = "#000000", cursor = "#ffffff" }
 selection = { text = "CellForeground", background = "#505257" }
 normal.black = "#505257"
@@ -23,7 +23,7 @@ normal.yellow = "#ffaa33"
 normal.blue = "#6a6adf"
 normal.magenta = "#ff00ff"
 normal.cyan = "#00ffff"
-normal.white = "#b9b9b9"
+normal.white = "#b3b3b3"
 bright.black = "#505257"
 bright.red = "#ec635c"
 bright.green = "#8ce479"
@@ -31,7 +31,7 @@ bright.yellow = "#ffaa33"
 bright.blue = "#6a6adf"
 bright.magenta = "#ff00ff"
 bright.cyan = "#00ffff"
-bright.white = "#b9b9b9"
+bright.white = "#b3b3b3"
 
 [cursor]
 style = { shape = "Block" }

@@ -11,8 +11,8 @@ use nvim_oxi::api::types::GetHlInfos;
 use nvim_oxi::api::types::HighlightInfos;
 use rootcause::report;
 
-const GLOBAL_BG: &str = "#001300";
-const GLOBAL_FG: &str = "#b9b9b9";
+const GLOBAL_BG: &str = "#001500";
+const GLOBAL_FG: &str = "#b3b3b3";
 
 const CURSOR_BG: &str = "white";
 const CURSOR_FG: &str = "black";
