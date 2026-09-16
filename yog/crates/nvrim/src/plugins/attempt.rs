@@ -10,7 +10,7 @@ use jiff::Zoned;
 use nvim_oxi::Dictionary;
 use rootcause::report;
 
-const SCRATCHES_PATH_PARTS: &[&str] = &["yog", "nvrim", "src", "plugins", "attempt"];
+const SCRATCHES_PATH_PARTS: &[&str] = &["crates", "nvrim", "src", "plugins", "attempt"];
 
 /// [`Dictionary`] of scratch file utilities.
 pub fn dict() -> Dictionary {
