@@ -1,0 +1,9 @@
+Rust repository maintenance commands.
+
+Usage:
+  frs repo fix [--clean] [--jobs N] DIRECTORY
+
+Subcommands:
+  fix                      Configure workspace build directories and clean quarantine metadata.
+
+Run `frs repo fix --help` for command details.

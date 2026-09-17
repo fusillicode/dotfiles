@@ -1,0 +1,7 @@
+Manage the local Codex log database.
+
+Usage:
+  agg codex --compact
+
+Options:
+  --compact              Checkpoint, vacuum, and verify the Codex log database.

@@ -1,0 +1,6 @@
+Create a GitHub branch from a selected issue.
+
+Usage:
+  ghl branch
+
+The command prompts for an issue and whether to check out the created branch.

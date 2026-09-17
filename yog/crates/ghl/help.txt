@@ -21,3 +21,5 @@ Options:
    ghl issue                                Create issue and branch interactively.
    ghl pr                                   Create PR interactively.
    ghl branch                               Create branch from issue interactively.
+
+Run `ghl issue --help`, `ghl pr --help`, or `ghl branch --help` for command details.

@@ -1,0 +1,6 @@
+Create a GitHub issue and its associated branch.
+
+Usage:
+  ghl issue
+
+The command prompts for the issue title and whether to check out the created branch.

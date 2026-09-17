@@ -7,7 +7,7 @@ mod cmds;
 #[ytil_sys::main]
 fn main() -> rootcause::Result<()> {
     match Cmd::from_env()? {
-        Cmd::Help => println!(include_str!("../help.txt")),
+        Cmd::Help(help) => print!("{}", help.text()),
         Cmd::Pick => cmds::pick::run()?,
         Cmd::Install => cmds::install::run()?,
         Cmd::InitZsh => cmds::init::run(),

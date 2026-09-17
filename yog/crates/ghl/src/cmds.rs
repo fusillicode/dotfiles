@@ -8,8 +8,46 @@ pub mod issue;
 pub mod list;
 pub mod pr;
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Help {
+    Root,
+    List,
+    Issue,
+    Pr,
+    Branch,
+}
+
+impl Help {
+    pub(crate) fn from_args(args: &[OsString]) -> Self {
+        if has_command(args, "issue") {
+            return Self::Issue;
+        }
+        if has_command(args, "pr") {
+            return Self::Pr;
+        }
+        if has_command(args, "branch") {
+            return Self::Branch;
+        }
+        if args.is_empty() || args.iter().all(|arg| arg == "--help") {
+            Self::Root
+        } else {
+            Self::List
+        }
+    }
+
+    pub const fn text(self) -> &'static str {
+        match self {
+            Self::Root => include_str!("../help.txt"),
+            Self::List => include_str!("../help/list/help.txt"),
+            Self::Issue => include_str!("../help/issue/help.txt"),
+            Self::Pr => include_str!("../help/pr/help.txt"),
+            Self::Branch => include_str!("../help/branch/help.txt"),
+        }
+    }
+}
+
 pub enum Cmd {
-    Help,
+    Help(Help),
     List(Arguments),
     Issue,
     Pr,
@@ -18,7 +56,9 @@ pub enum Cmd {
 
 impl Cmd {
     pub fn from_env() -> rootcause::Result<Self> {
-        Self::try_from(Arguments::from_env())
+        let args = Arguments::from_env();
+        let help = Help::from_args(&args.clone().finish());
+        Self::try_from(args).inspect_err(|_| eprintln!("{}", help.text()))
     }
 }
 
@@ -26,11 +66,11 @@ impl TryFrom<Arguments> for Cmd {
     type Error = rootcause::Report;
 
     fn try_from(args: Arguments) -> Result<Self, Self::Error> {
+        let raw_args = args.clone().finish();
         if args.has_help() {
-            return Ok(Self::Help);
+            return Ok(Self::Help(Help::from_args(&raw_args)));
         }
 
-        let raw_args = args.clone().finish();
         if has_command(&raw_args, "issue") {
             return Ok(Self::Issue);
         }
@@ -75,13 +115,14 @@ fn has_command(args: &[OsString], command: &str) -> bool {
 mod tests {
     use std::ffi::OsString;
 
+    use test_that::prelude::*;
     use ytil_sys::pico_args::Arguments;
 
     use super::*;
 
     #[test]
     fn test_parse_when_help_is_requested_returns_help() {
-        assert!(matches!(parse(&["--help"]), Ok(Cmd::Help)));
+        assert!(matches!(parse(&["--help"]), Ok(Cmd::Help(Help::Root))));
     }
 
     #[rstest::rstest]
@@ -104,6 +145,17 @@ mod tests {
     #[test]
     fn test_parse_when_command_name_is_search_value_returns_list_command() {
         assert!(matches!(parse(&["--search", "issue"]), Ok(Cmd::List(_))));
+    }
+
+    #[rstest::rstest]
+    #[case::root(&["--help"], Help::Root)]
+    #[case::list(&["--search", "lint", "--help"], Help::List)]
+    #[case::issue(&["issue", "--help"], Help::Issue)]
+    #[case::pull_request(&["pr", "--help"], Help::Pr)]
+    #[case::branch(&["branch", "--help"], Help::Branch)]
+    fn test_help_when_command_varies_selects_the_matching_command(#[case] raw: &[&str], #[case] expected: Help) {
+        let args = raw.iter().map(OsString::from).collect::<Vec<_>>();
+        assert_that!(Help::from_args(&args), eq(expected));
     }
 
     fn parse(args: &[&str]) -> rootcause::Result<Cmd> {

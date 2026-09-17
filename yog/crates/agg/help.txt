@@ -14,4 +14,7 @@ COMMANDS:
     codex --compact   Compact the local Codex log database.
     tok               Count text tokens (default encoding: o200k_base).
 
+Run `agg sessions --help`, `agg sessions list --help`, `agg codex --help`, or
+`agg tok --help` for command details.
+
 Without a command, shows Claude, Codex, and Cursor resumable sessions in a picker, then resumes or deletes the selected session.

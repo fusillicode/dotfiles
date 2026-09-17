@@ -1,0 +1,6 @@
+Run all CI-equivalent workspace checks.
+
+Usage:
+  evoke ci all
+
+This runs lint, test, release-native, and audit checks in sequence.

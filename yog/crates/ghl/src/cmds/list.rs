@@ -22,9 +22,13 @@ use ytil_sys::pico_args::Arguments;
 ///   via [`ytil_gh::pr::merge`], commenting via [`ytil_gh::pr::dependabot_rebase`]).
 /// - TUI interaction fails (PR selection or operation selection).
 pub fn run(mut pargs: Arguments) -> rootcause::Result<()> {
-    let repo_name_with_owner = ytil_gh::get_repo_view_field(&RepoViewField::NameWithOwner)?;
-
-    let search_filter: Option<String> = pargs.opt_value_from_str("--search")?;
+    let search_filter: Option<String> = match pargs.opt_value_from_str("--search") {
+        Ok(search_filter) => search_filter,
+        Err(error) => {
+            eprintln!("{}", crate::cmds::Help::List.text());
+            return Err(error.into());
+        }
+    };
     let merge_state = pargs
         .opt_value_from_fn("--merge-state", PullRequestMergeState::from_str)
         .attach_with(|| {
@@ -32,7 +36,17 @@ pub fn run(mut pargs: Arguments) -> rootcause::Result<()> {
                 "accepted values are {:#?}",
                 PullRequestMergeState::iter().collect::<Vec<_>>()
             )
-        })?;
+        });
+    let merge_state = match merge_state {
+        Ok(merge_state) => merge_state,
+        Err(error) => {
+            eprintln!("{}", crate::cmds::Help::List.text());
+            return Err(error.into());
+        }
+    };
+
+    ytil_gh::log_into_github()?;
+    let repo_name_with_owner = ytil_gh::get_repo_view_field(&RepoViewField::NameWithOwner)?;
 
     let params = format!(
         "search_filter={search_filter:?}{}",

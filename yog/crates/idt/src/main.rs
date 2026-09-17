@@ -68,12 +68,18 @@ fn main() -> rootcause::Result<()> {
 
     let dev_tools_dir = args
         .first()
-        .ok_or_else(|| report!("missing dev_tools_dir arg"))
+        .ok_or_else(|| {
+            eprintln!("{}", include_str!("../help.txt"));
+            report!("missing dev_tools_dir arg")
+        })
         .attach_with(|| format!("args={args:#?}"))?
         .trim_end_matches('/');
     let bin_dir = args
         .get(1)
-        .ok_or_else(|| report!("missing bin_dir arg"))
+        .ok_or_else(|| {
+            eprintln!("{}", include_str!("../help.txt"));
+            report!("missing bin_dir arg")
+        })
         .attach_with(|| format!("args={args:#?}"))?
         .trim_end_matches('/');
     let supplied_bin_names: Vec<&str> = args.iter().skip(2).map(AsRef::as_ref).collect();

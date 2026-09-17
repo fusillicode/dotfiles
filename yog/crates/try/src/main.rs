@@ -25,6 +25,7 @@ fn main() -> rootcause::Result<()> {
     }
 
     let Some((cooldown_secs, args)) = args.split_first() else {
+        eprintln!("{}", include_str!("../help.txt"));
         return Err(report!("missing cooldown arg")).attach_with(|| format!("args={args:#?}"));
     };
     let cooldown = Duration::from_secs(
@@ -35,6 +36,7 @@ fn main() -> rootcause::Result<()> {
     );
 
     let Some((exit_cond, args)) = args.split_first() else {
+        eprintln!("{}", include_str!("../help.txt"));
         return Err(report!("missing exit condition arg")).attach_with(|| format!("args={args:#?}"));
     };
     let exit_cond = ExitCond::from_str(exit_cond)
@@ -42,6 +44,7 @@ fn main() -> rootcause::Result<()> {
         .attach_with(|| format!("args={args:#?}"))?;
 
     let Some((program, program_args)) = args.split_first() else {
+        eprintln!("{}", include_str!("../help.txt"));
         return Err(report!("missing command arg")).attach_with(|| format!("args={args:#?}"));
     };
 

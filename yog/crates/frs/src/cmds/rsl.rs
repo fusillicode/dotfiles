@@ -22,11 +22,17 @@ mod rules;
 /// Returns an error when the arguments are invalid or a source file cannot be read or parsed.
 pub fn run(mut cli_args: Arguments) -> rootcause::Result<RslOutput> {
     if cli_args.contains("--help") {
-        print!(include_str!("../../rsl-help.txt"));
+        print!("{}", crate::cmds::Help::Rsl.text());
         return Ok(RslOutput::Compact { violations: Vec::new() });
     }
 
-    let opts = RslOpts::try_from(cli_args.finish())?;
+    let opts = match RslOpts::try_from(cli_args.finish()) {
+        Ok(opts) => opts,
+        Err(error) => {
+            eprintln!("{}", crate::cmds::Help::Rsl.text());
+            return Err(error);
+        }
+    };
     let violations = crate::cmds::rsl::engine::check_paths(&opts.paths)?;
 
     Ok(match opts.format {

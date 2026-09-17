@@ -9,9 +9,40 @@ pub mod codex;
 pub mod sessions;
 pub mod tok;
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Help {
+    Root,
+    Sessions,
+    SessionsList,
+    Codex,
+    Tok,
+}
+
+impl Help {
+    pub fn from_args(args: &[OsString]) -> Self {
+        match args.first().map(|arg| arg.to_string_lossy()).as_deref() {
+            Some("sessions") if args.get(1).is_some_and(|arg| arg == "list") => Self::SessionsList,
+            Some("sessions") => Self::Sessions,
+            Some("codex") => Self::Codex,
+            Some("tok") => Self::Tok,
+            _ => Self::Root,
+        }
+    }
+
+    pub const fn text(self) -> &'static str {
+        match self {
+            Self::Root => include_str!("../help.txt"),
+            Self::Sessions => include_str!("../help/sessions/help.txt"),
+            Self::SessionsList => include_str!("../help/sessions/list/help.txt"),
+            Self::Codex => include_str!("../help/codex/help.txt"),
+            Self::Tok => include_str!("../help/tok/help.txt"),
+        }
+    }
+}
+
 #[derive(Debug, Eq, PartialEq)]
 pub enum Cmd {
-    Help,
+    Help(Help),
     SessionsList,
     SessionsListJson(Vec<String>),
     CodexCompact,
@@ -20,7 +51,9 @@ pub enum Cmd {
 
 impl Cmd {
     pub fn from_env() -> rootcause::Result<Self> {
-        Self::try_from(Arguments::from_env())
+        let args = Arguments::from_env();
+        let help = Help::from_args(&args.clone().finish());
+        Self::try_from(args).inspect_err(|_| eprintln!("{}", help.text()))
     }
 
     fn parse_sessions(mut args: Arguments) -> rootcause::Result<Self> {
@@ -47,7 +80,7 @@ impl TryFrom<Arguments> for Cmd {
 
     fn try_from(mut args: Arguments) -> Result<Self, Self::Error> {
         if args.contains("--help") {
-            return Ok(Self::Help);
+            return Ok(Self::Help(Help::from_args(&args.clone().finish())));
         }
 
         let Some(command) = args.subcommand()? else {
@@ -82,7 +115,7 @@ mod tests {
     #[case::bare(&[], Cmd::SessionsList)]
     #[case::sessions_list(&["sessions", "list"], Cmd::SessionsList)]
     #[case::codex_compact(&["codex", "--compact"], Cmd::CodexCompact)]
-    #[case::help(&["sessions", "--help"], Cmd::Help)]
+    #[case::help(&["sessions", "--help"], Cmd::Help(Help::Sessions))]
     #[case::tok_file(&["tok", "prompt.txt"], Cmd::Tok(Opts {
         encoding: "o200k_base".to_owned(),
         input: Input::File(std::path::PathBuf::from("prompt.txt")),
@@ -117,6 +150,17 @@ mod tests {
     #[case::missing_codex_flag(&["codex"])]
     fn test_parse_rejects_invalid_commands(#[case] args: &[&str]) {
         assert_that!(parse(args), err(anything()));
+    }
+
+    #[rstest::rstest]
+    #[case::root(&["--help"], Help::Root)]
+    #[case::sessions(&["sessions", "--help"], Help::Sessions)]
+    #[case::sessions_list(&["sessions", "list", "--help"], Help::SessionsList)]
+    #[case::codex(&["codex", "--help"], Help::Codex)]
+    #[case::tok(&["tok", "--help"], Help::Tok)]
+    fn test_help_when_command_path_varies_selects_the_deepest_command(#[case] args: &[&str], #[case] expected: Help) {
+        let raw = args.iter().map(OsString::from).collect::<Vec<_>>();
+        assert_that!(Help::from_args(&raw), eq(expected));
     }
 
     fn parse(args: &[&str]) -> rootcause::Result<Cmd> {
