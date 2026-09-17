@@ -1,0 +1,11 @@
+List and optionally batch-merge GitHub pull requests interactively.
+
+Usage:
+  ghl
+  ghl [--search <FILTER>] [--merge-state <STATE>]
+
+Options:
+  --search <FILTER>     Forward the filter to `gh pr list --search`.
+  --merge-state <STATE> Filter by merge state after listing pull requests.
+
+The command prompts for pull requests and the operation to apply to them.

@@ -1,0 +1,6 @@
+Run the CI test and coverage checks.
+
+Usage:
+  evoke ci test
+
+This installs the coverage toolchain component when needed, then runs the workspace test suite with coverage.

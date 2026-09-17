@@ -4,16 +4,8 @@ mod cmds;
 
 #[ytil_sys::main]
 fn main() -> rootcause::Result<()> {
-    let command = match Cmd::from_env() {
-        Ok(command) => command,
-        Err(error) => {
-            print!(include_str!("../help.txt"));
-            return Err(error);
-        }
-    };
-
-    match command {
-        Cmd::Help => print!(include_str!("../help.txt")),
+    match Cmd::from_env()? {
+        Cmd::Help(help) => print!("{}", help.text()),
         Cmd::Sessions => cmds::sessions::run()?,
         Cmd::Start {
             session,

@@ -1,0 +1,6 @@
+Pick a recent Git branch.
+
+Usage:
+  gbm --pick
+
+Print the selected branch name without renaming the current branch.

@@ -1,0 +1,6 @@
+Create a GitHub pull request from a selected branch.
+
+Usage:
+  ghl pr
+
+The command prompts for a branch, derives the pull request title, and creates the pull request.

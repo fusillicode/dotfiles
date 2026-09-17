@@ -1,0 +1,12 @@
+Start or attach to a muxr session.
+
+Usage:
+  muxr start [session] [--layout <PATH_TO_LAYOUT_FILE>]
+
+Arguments:
+  session                 Session name (default: default).
+
+Options:
+  --layout <PATH>         Create the session from a JSON layout file.
+
+The command creates the session if it does not exist, then attaches to it.

@@ -7,9 +7,31 @@ use rootcause::report;
 pub mod sessions;
 pub mod start;
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Help {
+    Root,
+    Start,
+}
+
+impl Help {
+    pub(crate) fn from_args(args: &[String]) -> Self {
+        match args.first().map(String::as_str) {
+            Some("start") => Self::Start,
+            _ => Self::Root,
+        }
+    }
+
+    pub const fn text(self) -> &'static str {
+        match self {
+            Self::Root => include_str!("../help.txt"),
+            Self::Start => include_str!("../help/start/help.txt"),
+        }
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Cmd {
-    Help,
+    Help(Help),
     Sessions,
     Start {
         session: SessionName,
@@ -19,12 +41,14 @@ pub enum Cmd {
 
 impl Cmd {
     pub fn from_env() -> rootcause::Result<Self> {
-        Self::parse(&ytil_sys::cli::get())
+        let args = ytil_sys::cli::get();
+        let help = Help::from_args(&args);
+        Self::parse(&args).inspect_err(|_| eprintln!("{}", help.text()))
     }
 
     fn parse(args: &[String]) -> rootcause::Result<Self> {
         if args.iter().any(|arg| arg == "--help") {
-            return Ok(Self::Help);
+            return Ok(Self::Help(Help::from_args(args)));
         }
 
         match args {
@@ -111,10 +135,13 @@ mod tests {
     }
 
     #[rstest]
-    #[case::help_arg(&["--help"])]
-    #[case::help_among_args(&["start", "--help"])]
-    fn test_parse_when_help_requested_returns_help(#[case] raw: &[&str]) -> rootcause::Result<()> {
-        assert_that!(Cmd::parse(&args(raw))?, eq(Cmd::Help));
+    #[case::help_arg(&["--help"], Help::Root)]
+    #[case::help_among_args(&["start", "--help"], Help::Start)]
+    fn test_parse_when_help_requested_returns_help(
+        #[case] raw: &[&str],
+        #[case] expected: Help,
+    ) -> rootcause::Result<()> {
+        assert_that!(Cmd::parse(&args(raw))?, eq(Cmd::Help(expected)));
         Ok(())
     }
 

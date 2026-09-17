@@ -25,10 +25,17 @@ const DEFAULT_JOBS: usize = 7;
 /// - Repo maintenance fails.
 pub fn run(mut cli_args: Arguments) -> rootcause::Result<()> {
     if cli_args.contains("--help") {
-        print!(include_str!("../../../repo-fix-help.txt"));
+        print!("{}", crate::cmds::Help::RepoFix.text());
         return Ok(());
     }
-    self::fix(&RepoFixOpts::try_from(cli_args.finish())?)
+    let options = match RepoFixOpts::try_from(cli_args.finish()) {
+        Ok(options) => options,
+        Err(error) => {
+            eprintln!("{}", crate::cmds::Help::RepoFix.text());
+            return Err(error);
+        }
+    };
+    self::fix(&options)
 }
 
 #[derive(Debug)]

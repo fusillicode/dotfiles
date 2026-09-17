@@ -5,7 +5,7 @@ mod cmds;
 #[ytil_sys::main]
 fn main() -> rootcause::Result<()> {
     match Cmd::from_env()? {
-        Cmd::Help => println!(include_str!("../help.txt")),
+        Cmd::Help(help) => print!("{}", help.text()),
         Cmd::Issue => {
             ytil_gh::log_into_github()?;
             cmds::issue::run()?;
@@ -18,10 +18,7 @@ fn main() -> rootcause::Result<()> {
             ytil_gh::log_into_github()?;
             cmds::branch::run()?;
         }
-        Cmd::List(args) => {
-            ytil_gh::log_into_github()?;
-            cmds::list::run(args)?;
-        }
+        Cmd::List(args) => cmds::list::run(args)?,
     }
     Ok(())
 }

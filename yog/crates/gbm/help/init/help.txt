@@ -1,0 +1,6 @@
+Print the `gbm` zsh wrapper.
+
+Usage:
+  gbm init zsh
+
+The only supported shell is `zsh`.

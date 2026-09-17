@@ -8,3 +8,5 @@ Modes:
   gbm install         Add the one-line zsh wrapper setup to ~/.zshrc.
   gbm init zsh        Print the zsh wrapper.
   gbm --pick          Pick recent branch and print its name.
+
+Run `gbm install --help`, `gbm init --help`, or `gbm --pick --help` for command details.

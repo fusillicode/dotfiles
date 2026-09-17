@@ -23,10 +23,12 @@ fn main() -> rootcause::Result<()> {
     }
 
     let Some(editor) = args.first().map(|x| Editor::from_str(x)).transpose()? else {
+        eprintln!("{}", include_str!("../help.txt"));
         return Err(report!("missing editor arg")).attach_with(|| format!("args={args:#?}"));
     };
 
     let Some(file_to_open) = args.get(1) else {
+        eprintln!("{}", include_str!("../help.txt"));
         return Err(report!("missing file arg")).attach_with(|| format!("args={args:#?}"));
     };
 
