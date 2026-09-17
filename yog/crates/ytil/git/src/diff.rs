@@ -1,11 +1,26 @@
 use std::path::Path;
+use std::path::PathBuf;
 use std::process::Command;
 
+use git2::DiffOptions;
+use git2::Patch;
+use git2::Repository;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
 use ytil_cmd::CmdExt;
 
 const PATH_LINE_PREFIX: &str = "diff --git ";
+
+/// Line additions and removals for one changed file.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct FileDiffStats {
+    /// Path relative to the repository root.
+    pub path: PathBuf,
+    /// Number of added lines.
+    pub added: usize,
+    /// Number of removed lines.
+    pub removed: usize,
+}
 
 /// Retrieves the current `git diff` raw output with `-U0` as a single `String`.
 ///
@@ -24,6 +39,57 @@ pub fn get_raw(path: Option<&Path>) -> rootcause::Result<String> {
     let output = Command::new("git").args(args).exec()?;
 
     ytil_cmd::extract_success_output(&output)
+}
+
+/// Retrieves line additions and removals for tracked files changed from `HEAD`.
+///
+/// The repository's `HEAD` tree is compared with its index and working tree. Staged and unstaged
+/// changes are included. Untracked files and binary files do not produce line statistics.
+///
+/// # Errors
+/// - The repository, its `HEAD` tree, or its working tree diff cannot be read.
+pub fn get_line_stats(repo_root: &Path) -> rootcause::Result<Vec<FileDiffStats>> {
+    let repo = Repository::open(repo_root)
+        .context("error opening repository")
+        .attach_with(|| format!("repo_root={}", repo_root.display()))?;
+    let head_tree = repo
+        .head()
+        .context("error reading repository HEAD")
+        .attach_with(|| format!("repo_root={}", repo_root.display()))?
+        .peel_to_tree()
+        .context("error reading repository HEAD tree")
+        .attach_with(|| format!("repo_root={}", repo_root.display()))?;
+    let diff = repo
+        .diff_tree_to_workdir_with_index(Some(&head_tree), Some(&mut DiffOptions::new()))
+        .context("error creating repository worktree diff")
+        .attach_with(|| format!("repo_root={}", repo_root.display()))?;
+
+    let mut out = Vec::with_capacity(diff.deltas().len());
+    for (idx, delta) in diff.deltas().enumerate() {
+        let Some(file_patch) = Patch::from_diff(&diff, idx)
+            .context("error creating file diff patch")
+            .attach_with(|| format!("repo_root={} diff_idx={idx}", repo_root.display()))?
+        else {
+            // Binary and unchanged files have no line statistics.
+            continue;
+        };
+
+        let Some(changed_path) = delta.new_file().path().or_else(|| delta.old_file().path()) else {
+            continue;
+        };
+        let (_, added, removed) = file_patch
+            .line_stats()
+            .context("error reading file diff line statistics")
+            .attach_with(|| format!("repo_root={} path={}", repo_root.display(), changed_path.display()))?;
+
+        out.push(FileDiffStats {
+            path: changed_path.to_path_buf(),
+            added,
+            removed,
+        });
+    }
+
+    Ok(out)
 }
 
 /// Extracts file paths and starting line numbers of hunks from raw `git diff` output.
@@ -112,6 +178,8 @@ fn extract_new_lnum_value(lnum_line: &str) -> rootcause::Result<usize> {
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
+
     use rstest::rstest;
     use test_that::prelude::*;
 
@@ -184,5 +252,45 @@ mod tests {
             (extract_new_lnum_value(input)).map(|_| ()),
             err(displays_as(contains_substring(expected_error_contains)))
         );
+    }
+
+    #[test]
+    fn test_get_line_stats_when_staged_and_unstaged_changes_exist_includes_both() {
+        let (temp_dir, repo) = crate::tests::init_test_repo(None);
+        let relative_path = Path::new("src/main.rs");
+        let absolute_path = temp_dir.path().join(relative_path);
+
+        fs::create_dir_all(absolute_path.parent().unwrap()).unwrap();
+        fs::write(&absolute_path, "one\n").unwrap();
+        commit_file(&repo, relative_path);
+
+        fs::write(&absolute_path, "one\ntwo\n").unwrap();
+        stage_file(&repo, relative_path);
+        fs::write(&absolute_path, "one\ntwo\nthree\n").unwrap();
+
+        assert_that!(
+            get_line_stats(temp_dir.path()),
+            ok(eq(vec![FileDiffStats {
+                path: relative_path.into(),
+                added: 2,
+                removed: 0,
+            }]))
+        );
+    }
+
+    fn commit_file(repo: &Repository, relative_path: &Path) {
+        stage_file(repo, relative_path);
+        let tree_id = repo.index().unwrap().write_tree().unwrap();
+        let tree = repo.find_tree(tree_id).unwrap();
+        let signature = git2::Signature::now("test", "test@example.com").unwrap();
+        let parent = repo.head().unwrap().peel_to_commit().unwrap();
+        repo.commit(Some("HEAD"), &signature, &signature, "add file", &tree, &[&parent])
+            .unwrap();
+    }
+
+    fn stage_file(repo: &Repository, relative_path: &Path) {
+        let mut index = repo.index().unwrap();
+        index.add_path(relative_path).unwrap();
+        index.write().unwrap();
     }
 }
