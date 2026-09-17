@@ -1,0 +1,6 @@
+Build and audit native workspace binaries.
+
+Usage:
+  evoke ci audit
+
+This performs an auditable native release build, then audits the native binary dependencies.

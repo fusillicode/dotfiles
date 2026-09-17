@@ -1,0 +1,6 @@
+Manage resumable AI agent sessions.
+
+Usage:
+  agg sessions list
+
+Run `agg sessions list --help` for command details.

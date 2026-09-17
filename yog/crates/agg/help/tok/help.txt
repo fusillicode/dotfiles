@@ -1,0 +1,16 @@
+Count text tokens.
+
+Usage:
+  agg tok [--encoding <name>] <file>
+  agg tok [--encoding <name>] --text <text>
+  agg tok [--encoding <name>] -
+
+Input:
+  <file>                 Read UTF-8 text from a file.
+  --text <text>          Count the supplied text directly.
+  -                      Read UTF-8 text from standard input.
+
+Options:
+  --encoding <name>      Token encoding (default: o200k_base).
+
+Pass exactly one input: a file, --text, or -.

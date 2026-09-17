@@ -1,0 +1,6 @@
+Install the `gbm` zsh wrapper.
+
+Usage:
+  gbm install
+
+This adds the guarded wrapper setup line to `~/.zshrc`.

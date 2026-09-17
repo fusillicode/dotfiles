@@ -52,7 +52,13 @@ pub fn run(home_dir: &Path) -> rootcause::Result<()> {
 }
 
 pub fn run_json(args: &[String], home_dir: &Path) -> rootcause::Result<()> {
-    let session_keys = parse_json_session_keys(args)?;
+    let session_keys = match parse_json_session_keys(args) {
+        Ok(session_keys) => session_keys,
+        Err(error) => {
+            eprintln!("{}", crate::cmds::Help::SessionsList.text());
+            return Err(error);
+        }
+    };
     let sessions = load_sorted_sessions_by_key(&session_keys)?;
     let rows = RenderableSession::from_sessions(sessions, home_dir)
         .into_iter()

@@ -1,0 +1,6 @@
+Run the CI lint checks.
+
+Usage:
+  evoke ci lint
+
+This runs formatting, Clippy, dependency, manifest, and documentation checks.

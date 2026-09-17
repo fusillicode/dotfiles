@@ -1,0 +1,18 @@
+Run CI-equivalent workspace checks.
+
+Usage:
+  evoke ci
+  evoke ci all
+  evoke ci lint
+  evoke ci test
+  evoke ci release-native
+  evoke ci audit
+
+Without a command, run all checks. The named commands run one check group.
+
+Subcommands:
+  all                       Run lint, test, release, and audit checks.
+  lint                      Run formatting, lint, and manifest checks.
+  test                      Run the workspace test and coverage checks.
+  release-native            Build native binaries in release mode.
+  audit                     Build and audit native binaries.

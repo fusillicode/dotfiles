@@ -22,7 +22,10 @@ fn main() -> rootcause::Result<()> {
 
     let path = args
         .first()
-        .ok_or_else(|| report!("missing path arg"))
+        .ok_or_else(|| {
+            eprintln!("{}", include_str!("../help.txt"));
+            report!("missing path arg")
+        })
         .attach_with(|| format!("args={args:#?}"))?;
 
     let metadata = std::fs::metadata(path)?;

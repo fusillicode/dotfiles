@@ -20,3 +20,5 @@ Examples:
   evoke ~/.local/bin /tmp/target ~/.config/nvim/lua
   evoke ci lint                  Run the CI lint job locally.
   evoke ci                       Run all CI-equivalent checks, including audit.
+
+Run `evoke ci --help` or `evoke ci <command> --help` for command details.

@@ -9,7 +9,7 @@ mod cmds;
 #[ytil_sys::main]
 fn main() -> rootcause::Result<()> {
     match Cmd::from_env()? {
-        Cmd::Help => print!(include_str!("../help.txt")),
+        Cmd::Help(help) => print!("{}", help.text()),
         Cmd::Repo(args) => crate::cmds::repo::run(Arguments::from_vec(args))?,
         Cmd::Rsl(args) => {
             let output = crate::cmds::rsl::run(Arguments::from_vec(args))?;

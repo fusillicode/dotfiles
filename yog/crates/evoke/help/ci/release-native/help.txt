@@ -1,0 +1,6 @@
+Build native workspace binaries in release mode.
+
+Usage:
+  evoke ci release-native
+
+This performs the native release build without copying binaries or changing shell configuration.

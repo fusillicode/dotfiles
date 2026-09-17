@@ -1,0 +1,13 @@
+List and manage resumable AI agent sessions.
+
+Usage:
+  agg sessions list
+  agg sessions list --json --session <agent>:<session-id>...
+
+Without --json, open an interactive picker to resume or delete sessions.
+
+Options:
+  --json                 Print selected sessions as JSON instead of opening the picker.
+  --session <key>        Include a session in JSON output. Repeat for multiple sessions.
+
+The --json form requires at least one --session value.
