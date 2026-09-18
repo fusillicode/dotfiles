@@ -3385,11 +3385,12 @@ dependencies = [
 
 [[package]]
 name = "ratatui-image"
-version = "11.0.8"
+version = "11.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "399baa06251282b0c1bbb5762848cf98a6b7b84f44af7f0daf3213ace16df4f0"
+checksum = "9593d10c61ec2007f429d1fafc4f4a19fecdbae4d06b531a2d505227fb82f5ea"
 dependencies = [
  "base64-simd",
+ "flate2",
  "icy_sixel",
  "image",
  "rand 0.8.8",
@@ -3566,9 +3567,9 @@ dependencies = [
 
 [[package]]
 name = "rio-grapheme-width"
-version = "0.5.27"
+version = "0.5.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f3d03598bb9bae51d4c91b67167b6e348adf893fa2ecc3466754d776109b8526"
+checksum = "5a901dda1fe16da68fbe8788db5f2b4525f95b43f064618d2bb6c7361c4e9150"
 dependencies = [
  "phf 0.13.1",
  "ucd-trie",
@@ -3576,9 +3577,9 @@ dependencies = [
 
 [[package]]
 name = "rio-graphics"
-version = "0.5.27"
+version = "0.5.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ae16923db8d9ff3901f4077568a53ef6323beff12f8a18700eeae1abcf4ac03f"
+checksum = "40bdcb0a124c88c7e75a4f2b2953b158981bf541613b4b0146e21d07f4a104ac"
 dependencies = [
  "rustc-hash",
  "tracing",
@@ -3587,15 +3588,15 @@ dependencies = [
 
 [[package]]
 name = "rio-unicode"
-version = "0.5.27"
+version = "0.5.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e85bdb66b7d6c0c5bd80ec6dcfaadd45b3379a2439a43648b6bff2d7ecd2f8ba"
+checksum = "48266e8c525eb4fb8d3ad899e1a050404fb782f876cad2df800dd5455126a99b"
 
 [[package]]
 name = "rio-vt"
-version = "0.5.26"
+version = "0.5.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "26e0107383748c79f096674a343953ff527d13eacafc581cc123e8888679c3fd"
+checksum = "3f80220ae32041e4cef8719cab57d3579cbe0dc26dd1cb1ca0693f85491e1696"
 dependencies = [
  "base64 0.23.1",
  "bitflags 2.13.2",
