@@ -58,7 +58,7 @@ impl EventListener for Listener {
         match event {
             RioEvent::PtyWrite(_, reply) => events.replies.push(reply.into_bytes()),
             RioEvent::ResetTitle => events.titles.push(None),
-            RioEvent::Title(title) | RioEvent::TitleWithSubtitle(title, _) => {
+            RioEvent::Title(_, title) | RioEvent::TitleWithSubtitle(title, _) => {
                 let title = title.trim().to_owned();
                 events.titles.push((!title.is_empty()).then_some(title));
             }
@@ -98,8 +98,10 @@ impl EventListener for Listener {
             | RioEvent::ClipboardLoad(..)
             | RioEvent::ColorRequest(..)
             | RioEvent::TextAreaSizeRequest(..)
+            | RioEvent::CurrentDirectoryChanged(_)
+            | RioEvent::SyncWindowTitle
             | RioEvent::ProgressReport(_)
-            | RioEvent::Bell
+            | RioEvent::Bell(_)
             | RioEvent::DesktopNotification { .. }
             | RioEvent::Exit
             | RioEvent::Quit
@@ -107,7 +109,6 @@ impl EventListener for Listener {
             | RioEvent::ChildExited(..)
             | RioEvent::BlinkCursor(..)
             | RioEvent::SelectionScrollTick
-            | RioEvent::UpdateTitles
             | RioEvent::ColorChange(..)
             | RioEvent::Noop => {}
         }
