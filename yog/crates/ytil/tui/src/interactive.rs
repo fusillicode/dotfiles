@@ -461,7 +461,7 @@ mod tests {
 
         assert_that!(
             super::clip_match_range(MatchRange::Chars(vec![20, 21]), &item),
-            matches_pattern!(MatchRange::Chars(empty()))
+            matches_pattern!(MatchRange::Chars(is_empty()))
         );
     }
 }

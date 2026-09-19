@@ -624,6 +624,6 @@ mod tests {
 
         let result = FnOrderRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
 
-        assert_that!(result, empty());
+        assert_that!(result, is_empty());
     }
 }

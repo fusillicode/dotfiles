@@ -605,7 +605,7 @@ mod tests {
 
         let links = self::detect_visible_url_links(&rows, &self::soft_wraps(&rows))?;
 
-        assert_that!(links, empty());
+        assert_that!(links, is_empty());
         Ok(())
     }
 
@@ -617,8 +617,8 @@ mod tests {
         let left_pane_links = self::detect_visible_url_links(&left_rows, &self::soft_wraps(&left_rows))?;
         let right_pane_links = self::detect_visible_url_links(&right_rows, &self::soft_wraps(&right_rows))?;
 
-        assert_that!(left_pane_links, empty());
-        assert_that!(right_pane_links, empty());
+        assert_that!(left_pane_links, is_empty());
+        assert_that!(right_pane_links, is_empty());
         Ok(())
     }
 
