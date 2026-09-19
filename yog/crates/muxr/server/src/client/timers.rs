@@ -294,7 +294,7 @@ mod tests {
 
         assert_that!(timers.take_cmd_handoff_sample_panes()?, eq(vec![pane_id]));
 
-        assert_that!(timers.cmd_handoff_sample_panes, empty());
+        assert_that!(timers.cmd_handoff_sample_panes, is_empty());
         assert_that!(timers.cmd_handoff_sample.deadline(), gt(scheduled_deadline));
         Ok(())
     }
@@ -311,7 +311,7 @@ mod tests {
         timers.schedule_cmd_handoff_sample(pane_1)?;
 
         assert_that!(timers.take_cmd_handoff_sample_panes()?, eq(vec![pane_1, pane_2]));
-        assert_that!(timers.cmd_handoff_sample_panes, empty());
+        assert_that!(timers.cmd_handoff_sample_panes, is_empty());
         Ok(())
     }
 
@@ -328,7 +328,7 @@ mod tests {
         timers.remove_cmd_handoff_sample_pane(pane_1)?;
 
         assert_that!(timers.take_cmd_handoff_sample_panes()?, eq(vec![pane_2]));
-        assert_that!(timers.cmd_handoff_sample_panes, empty());
+        assert_that!(timers.cmd_handoff_sample_panes, is_empty());
         Ok(())
     }
 
@@ -388,7 +388,7 @@ mod tests {
         let scheduled_deadline = timers.output_activity_sample.deadline();
         timers.remove_output_activity_sample_panes(&[pane_id])?;
 
-        assert_that!(timers.output_activity_sample_panes, empty());
+        assert_that!(timers.output_activity_sample_panes, is_empty());
         assert_that!(timers.output_activity_sample.deadline(), gt(scheduled_deadline));
         Ok(())
     }

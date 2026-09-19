@@ -156,7 +156,7 @@ mod tests {
     fn test_drop_element_returns_false_and_does_nothing_to_an_empty_vec() {
         let mut input: Vec<usize> = vec![];
         assert_that!(drop_element(&mut input, &3), eq(false));
-        assert_that!(input, empty());
+        assert_that!(input, is_empty());
     }
 
     #[rstest]
