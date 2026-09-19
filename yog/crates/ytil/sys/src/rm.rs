@@ -178,7 +178,7 @@ mod tests {
         let RmFilesOutcome { removed, errors } = rm_matching_files(dir.path(), ".DS_Store", &[], true);
 
         assert_eq!(removed, vec![ds_store.clone()]);
-        assert_that!(errors, empty());
+        assert_that!(errors, is_empty());
         assert_that!(ds_store.exists(), eq(true)); // Should not be removed
     }
 
@@ -191,7 +191,7 @@ mod tests {
         let RmFilesOutcome { removed, errors } = rm_matching_files(dir.path(), ".DS_Store", &[], false);
 
         assert_eq!(removed, vec![ds_store.clone()]);
-        assert_that!(errors, empty());
+        assert_that!(errors, is_empty());
         assert_that!(ds_store.exists(), eq(false)); // Should be removed
     }
 
@@ -211,7 +211,7 @@ mod tests {
         let RmFilesOutcome { removed, errors } = rm_matching_files(dir.path(), ".DS_Store", &["node_modules"], false);
 
         assert_eq!(removed, vec![ds_store_in_regular.clone()]);
-        assert_that!(errors, empty());
+        assert_that!(errors, is_empty());
         assert_that!(ds_store_in_excluded.exists(), eq(true)); // Not removed
         assert_that!(ds_store_in_regular.exists(), eq(false)); // Removed
     }
@@ -227,7 +227,7 @@ mod tests {
         let RmFilesOutcome { removed, errors } = rm_matching_files(dir.path(), ".DS_Store", &[], false);
 
         assert_eq!(removed, vec![ds_store.clone()]);
-        assert_that!(errors, empty());
+        assert_that!(errors, is_empty());
         assert_that!(ds_store.exists(), eq(false));
     }
 
@@ -239,8 +239,8 @@ mod tests {
 
         let RmFilesOutcome { removed, errors } = rm_matching_files("/non/existent/path", ".DS_Store", &[], false);
 
-        assert_that!(removed, empty());
-        assert_that!(errors, not(empty()));
+        assert_that!(removed, is_empty());
+        assert_that!(errors, not(is_empty()));
         assert_that!(
             errors,
             contains(
@@ -261,7 +261,7 @@ mod tests {
         let RmFilesOutcome { removed, errors } = rm_matching_files(dir.path(), ".DS_Store", &[], false);
 
         assert_eq!(removed.len(), 2);
-        assert_that!(errors, empty());
+        assert_that!(errors, is_empty());
         assert_that!(removed, contains(eq(symlink.clone())));
         assert_that!(removed, contains(eq(target.clone())));
         assert_that!(symlink.exists(), eq(false));

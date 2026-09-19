@@ -848,7 +848,7 @@ mod tests {
         };
         assert_that!(diff.base_seq(), eq(1));
         assert_that!(diff.seq(), eq(2));
-        assert_that!(diff.rows(), points_to(empty()));
+        assert_that!(diff.rows(), points_to(is_empty()));
         Ok(())
     }
 
