@@ -3,7 +3,8 @@
 //! This rule deliberately uses Rust naming conventions as syntactic guarantees.
 //! A lowercase path segment before a call is a module, while an uppercase segment
 //! is a type or another associated-item receiver. The rule does not resolve Cargo
-//! packages or modules from other files.
+//! packages or modules from other files. Bare prelude callables are exempt, while
+//! a bare uppercase call is treated as a non-function constructor or item.
 
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -46,6 +47,7 @@ impl TypedRule for QualificationRule {
                 current_module: &scope.path,
                 source_path: ctx.path,
                 findings: &mut findings,
+                local_bindings: Vec::new(),
                 skip_call_path: false,
             };
             for item in scope.items {
@@ -96,7 +98,7 @@ pub(super) struct FunctionQualificationViolation {
 }
 
 impl FunctionQualificationViolation {
-    fn new(path: &Path, span: Span, actual_path: String, expected_path: String) -> Self {
+    fn new(path: &Path, span: Span, actual_path: String, suggestion: FunctionPathSuggestion) -> Self {
         let location = span.start();
         Self {
             file: path.to_path_buf(),
@@ -105,7 +107,8 @@ impl FunctionQualificationViolation {
             message: "call needs qualification",
             details: FunctionQualificationDetails {
                 actual_path,
-                expected_path,
+                replacement_path: suggestion.expected_path,
+                add_import: suggestion.required_import,
             },
         }
     }
@@ -113,12 +116,21 @@ impl FunctionQualificationViolation {
 
 impl Display for FunctionQualificationViolation {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> Result {
+        let details = format!(
+            "replace {} with {}{}",
+            self.details.actual_path,
+            self.details.replacement_path,
+            self.details
+                .add_import
+                .as_ref()
+                .map_or_else(String::new, |import| format!("; add {import}")),
+        );
         formatter.write_str(&crate::cmds::rsl::rules::format_compact_violation(
             &self.file,
             self.line,
             self.column,
             self.message,
-            &format!("{} -> {}", self.details.actual_path, self.details.expected_path),
+            &details,
         ))
     }
 }
@@ -200,7 +212,9 @@ impl Display for ForbiddenAliasViolation {
 #[derive(Serialize)]
 struct FunctionQualificationDetails {
     actual_path: String,
-    expected_path: String,
+    replacement_path: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    add_import: Option<String>,
 }
 
 #[cfg_attr(test, derive(Debug, Eq, PartialEq))]
@@ -225,6 +239,7 @@ struct ModuleScope<'ast> {
 struct ScopeInfo {
     definitions: HashSet<String>,
     functions: HashSet<String>,
+    glob_imports: Vec<Vec<String>>,
     imports: Vec<ImportBinding>,
     unknown_imports: bool,
 }
@@ -232,6 +247,12 @@ struct ScopeInfo {
 struct ImportBinding {
     name: String,
     path: Vec<String>,
+    source_path: Vec<String>,
+}
+
+struct FunctionPathSuggestion {
+    expected_path: String,
+    required_import: Option<String>,
 }
 
 struct ModuleIndex<'ast> {
@@ -252,17 +273,19 @@ struct QualificationVisitor<'index, 'ast, 'output> {
     current_module: &'index [String],
     source_path: &'index Path,
     findings: &'output mut Findings,
+    local_bindings: Vec<HashSet<String>>,
     skip_call_path: bool,
 }
 
 impl<'ast> Visit<'ast> for QualificationVisitor<'_, '_, '_> {
     fn visit_expr_call(&mut self, expression: &'ast syn::ExprCall) {
         if let Expr::Path(path) = expression.func.as_ref() {
-            let expected_path = self::expected_function_path(self.index, self.current_module, &path.path);
+            let expected_path =
+                self::expected_function_path(self.index, self.current_module, &self.local_bindings, &path.path);
 
             let actual_path = self::path_label(&path.path);
-            if let Some(expected_path) = expected_path
-                && actual_path != expected_path
+            if let Some(suggestion) = expected_path
+                && actual_path != suggestion.expected_path
             {
                 self.findings
                     .functions
@@ -270,7 +293,7 @@ impl<'ast> Visit<'ast> for QualificationVisitor<'_, '_, '_> {
                         self.source_path,
                         path.span(),
                         actual_path,
-                        expected_path,
+                        suggestion,
                     )));
             }
 
@@ -283,6 +306,111 @@ impl<'ast> Visit<'ast> for QualificationVisitor<'_, '_, '_> {
         self.skip_call_path = matches!(expression.func.as_ref(), Expr::Path(_));
         syn::visit::visit_expr_call(self, expression);
         self.skip_call_path = previous;
+    }
+
+    fn visit_block(&mut self, block: &'ast syn::Block) {
+        self.local_bindings.push(self::block_function_bindings(block));
+        syn::visit::visit_block(self, block);
+        let _ = self.local_bindings.pop();
+    }
+
+    fn visit_expr_closure(&mut self, closure: &'ast syn::ExprClosure) {
+        self.local_bindings.push(self::closure_bindings(&closure.inputs));
+        syn::visit::visit_expr_closure(self, closure);
+        let _ = self.local_bindings.pop();
+    }
+
+    fn visit_expr_for_loop(&mut self, expression: &'ast syn::ExprForLoop) {
+        for attribute in &expression.attrs {
+            self.visit_attribute(attribute);
+        }
+        if let Some(label) = &expression.label {
+            self.visit_label(label);
+        }
+        self.visit_pat(&expression.pat);
+        self.visit_expr(&expression.expr);
+
+        self.local_bindings.push(self::pattern_bindings(&expression.pat));
+        self.visit_block(&expression.body);
+        let _ = self.local_bindings.pop();
+    }
+
+    fn visit_expr_if(&mut self, expression: &'ast syn::ExprIf) {
+        if let Expr::Let(let_expression) = expression.cond.as_ref() {
+            for attribute in &expression.attrs {
+                self.visit_attribute(attribute);
+            }
+            self.visit_expr(&expression.cond);
+            self.local_bindings.push(self::pattern_bindings(&let_expression.pat));
+            self.visit_block(&expression.then_branch);
+            let _ = self.local_bindings.pop();
+            if let Some((_, else_branch)) = &expression.else_branch {
+                self.visit_expr(else_branch);
+            }
+            return;
+        }
+
+        // TODO: Carry bindings through let chains in compound conditions.
+        syn::visit::visit_expr_if(self, expression);
+    }
+
+    fn visit_expr_while(&mut self, expression: &'ast syn::ExprWhile) {
+        if let Expr::Let(let_expression) = expression.cond.as_ref() {
+            for attribute in &expression.attrs {
+                self.visit_attribute(attribute);
+            }
+            if let Some(label) = &expression.label {
+                self.visit_label(label);
+            }
+            self.visit_expr(&expression.cond);
+            self.local_bindings.push(self::pattern_bindings(&let_expression.pat));
+            self.visit_block(&expression.body);
+            let _ = self.local_bindings.pop();
+            return;
+        }
+
+        // TODO: Carry bindings through let chains in compound conditions.
+        syn::visit::visit_expr_while(self, expression);
+    }
+
+    fn visit_impl_item_fn(&mut self, function: &'ast syn::ImplItemFn) {
+        self.local_bindings.push(self::parameter_bindings(&function.sig.inputs));
+        syn::visit::visit_impl_item_fn(self, function);
+        let _ = self.local_bindings.pop();
+    }
+
+    fn visit_item_fn(&mut self, function: &'ast syn::ItemFn) {
+        self.local_bindings.push(self::parameter_bindings(&function.sig.inputs));
+        syn::visit::visit_item_fn(self, function);
+        let _ = self.local_bindings.pop();
+    }
+
+    fn visit_local(&mut self, local: &'ast syn::Local) {
+        for attribute in &local.attrs {
+            self.visit_attribute(attribute);
+        }
+        self.visit_pat(&local.pat);
+        if let Some(init) = &local.init {
+            self.visit_expr(&init.expr);
+            if let Some((_, diverge)) = &init.diverge {
+                self.visit_expr(diverge);
+            }
+        }
+        if let Some(scope) = self.local_bindings.last_mut() {
+            self::add_pattern_bindings(scope, &local.pat);
+        }
+    }
+
+    fn visit_arm(&mut self, arm: &'ast syn::Arm) {
+        self.local_bindings.push(self::pattern_bindings(&arm.pat));
+        syn::visit::visit_arm(self, arm);
+        let _ = self.local_bindings.pop();
+    }
+
+    fn visit_trait_item_fn(&mut self, function: &'ast syn::TraitItemFn) {
+        self.local_bindings.push(self::parameter_bindings(&function.sig.inputs));
+        syn::visit::visit_trait_item_fn(self, function);
+        let _ = self.local_bindings.pop();
     }
 
     fn visit_path(&mut self, path: &'ast syn::Path) {
@@ -303,7 +431,9 @@ impl<'ast> Visit<'ast> for QualificationVisitor<'_, '_, '_> {
 
     fn visit_attribute(&mut self, _attribute: &'ast syn::Attribute) {}
 
-    fn visit_macro(&mut self, _mac: &'ast syn::Macro) {}
+    fn visit_macro(&mut self, _mac: &'ast syn::Macro) {
+        // TODO: Resolve local bindings generated by macros.
+    }
 }
 
 fn check_non_function_path(visitor: &mut QualificationVisitor<'_, '_, '_>, parts: &[String], span: Span) {
@@ -348,6 +478,60 @@ impl QualificationVisitor<'_, '_, '_> {
     }
 }
 
+struct BindingCollector<'bindings> {
+    bindings: &'bindings mut HashSet<String>,
+}
+
+impl<'ast> Visit<'ast> for BindingCollector<'_> {
+    fn visit_pat_ident(&mut self, pattern: &'ast syn::PatIdent) {
+        self.bindings.insert(pattern.ident.to_string());
+        syn::visit::visit_pat_ident(self, pattern);
+    }
+}
+
+fn add_pattern_bindings(bindings: &mut HashSet<String>, pattern: &syn::Pat) {
+    let mut collector = BindingCollector { bindings };
+    collector.visit_pat(pattern);
+}
+
+fn pattern_bindings(pattern: &syn::Pat) -> HashSet<String> {
+    let mut bindings = HashSet::new();
+    self::add_pattern_bindings(&mut bindings, pattern);
+    bindings
+}
+
+fn closure_bindings(inputs: &syn::punctuated::Punctuated<syn::Pat, syn::token::Comma>) -> HashSet<String> {
+    let mut bindings = HashSet::new();
+    for input in inputs {
+        self::add_pattern_bindings(&mut bindings, input);
+    }
+    bindings
+}
+
+fn parameter_bindings(inputs: &syn::punctuated::Punctuated<syn::FnArg, syn::token::Comma>) -> HashSet<String> {
+    let mut bindings = HashSet::new();
+    for input in inputs {
+        match input {
+            syn::FnArg::Receiver(_) => {
+                bindings.insert("self".to_owned());
+            }
+            syn::FnArg::Typed(input) => self::add_pattern_bindings(&mut bindings, &input.pat),
+        }
+    }
+    bindings
+}
+
+fn block_function_bindings(block: &syn::Block) -> HashSet<String> {
+    block
+        .stmts
+        .iter()
+        .filter_map(|statement| match statement {
+            syn::Stmt::Item(Item::Fn(function)) => Some(function.sig.ident.to_string()),
+            syn::Stmt::Expr(_, _) | syn::Stmt::Item(_) | syn::Stmt::Local(_) | syn::Stmt::Macro(_) => None,
+        })
+        .collect()
+}
+
 fn module_index(file: &syn::File) -> ModuleIndex<'_> {
     let mut index = ModuleIndex {
         scopes: Vec::new(),
@@ -376,6 +560,7 @@ fn module_index(file: &syn::File) -> ModuleIndex<'_> {
             if let Item::Use(item_use) = item {
                 let bindings = self::use_bindings(&item_use.tree, &path);
                 info.imports.extend(bindings.bindings);
+                info.glob_imports.extend(bindings.glob_imports);
                 info.unknown_imports |= bindings.unknown;
             }
         }
@@ -406,6 +591,7 @@ fn item_name(item: &Item) -> Option<String> {
 #[derive(Default)]
 struct UseBindings {
     bindings: Vec<ImportBinding>,
+    glob_imports: Vec<Vec<String>>,
     unknown: bool,
 }
 
@@ -429,6 +615,7 @@ fn use_bindings(tree: &UseTree, current_module: &[String]) -> UseBindings {
                         bindings.bindings.push(ImportBinding {
                             name: binding.clone(),
                             path: self::normalize_path(current_module, &prefix),
+                            source_path: prefix,
                         });
                     }
                 } else {
@@ -437,6 +624,7 @@ fn use_bindings(tree: &UseTree, current_module: &[String]) -> UseBindings {
                     bindings.bindings.push(ImportBinding {
                         name: name.ident.to_string(),
                         path: self::normalize_path(current_module, &path),
+                        source_path: path,
                     });
                 }
             }
@@ -447,10 +635,16 @@ fn use_bindings(tree: &UseTree, current_module: &[String]) -> UseBindings {
                     bindings.bindings.push(ImportBinding {
                         name: rename.rename.to_string(),
                         path: self::normalize_path(current_module, &path),
+                        source_path: path,
                     });
                 }
             }
-            UseTree::Glob(_) => bindings.unknown = true,
+            UseTree::Glob(_) => {
+                bindings
+                    .glob_imports
+                    .push(self::normalize_path(current_module, &prefix));
+                bindings.unknown = true;
+            }
         }
     }
 
@@ -500,9 +694,22 @@ fn has_name_clash_parts(index: &ModuleIndex<'_>, current_module: &[String], part
         .any(|binding| binding.name == *name && binding.path != target_path)
 }
 
-fn expected_function_path(index: &ModuleIndex<'_>, current_module: &[String], path: &syn::Path) -> Option<String> {
+fn expected_function_path(
+    index: &ModuleIndex<'_>,
+    current_module: &[String],
+    local_bindings: &[HashSet<String>],
+    path: &syn::Path,
+) -> Option<FunctionPathSuggestion> {
     let parts = self::path_parts(path)?;
-    if self::is_associated_function_path(&parts) {
+    if self::is_non_function_call_path(&parts) || self::is_associated_function_path(&parts) {
+        return None;
+    }
+
+    if parts.len() == 1
+        && parts
+            .first()
+            .is_some_and(|name| self::is_local_binding(local_bindings, name))
+    {
         return None;
     }
 
@@ -512,7 +719,11 @@ fn expected_function_path(index: &ModuleIndex<'_>, current_module: &[String], pa
 
     let name = parts.last()?;
     if parts.len() == 1 {
-        return self::imported_function_path(index, current_module, name).or_else(|| Some(format!("module::{name}")));
+        if self::imported_binding(index, current_module, name).is_some() {
+            return self::imported_function_path(index, current_module, name);
+        }
+        // TODO: Resolve bare calls whose definitions are outside the indexed file.
+        return None;
     }
 
     let qualified = self::function_path_tail(&parts);
@@ -520,18 +731,161 @@ fn expected_function_path(index: &ModuleIndex<'_>, current_module: &[String], pa
         return None;
     }
 
-    qualified
+    if !self::can_use_shortened_module(index, current_module, &parts) {
+        return None;
+    }
+
+    let expected_path = qualified
         .get(qualified.len().saturating_sub(2)..)
-        .map(|parts| parts.join("::"))
+        .map(|parts| parts.join("::"))?;
+    let function_index = parts.len().saturating_sub(1);
+    let target_module = self::normalize_path(current_module, parts.get(..function_index).unwrap_or_default());
+
+    Some(FunctionPathSuggestion {
+        expected_path,
+        required_import: self::required_module_import(index, current_module, &parts, &target_module),
+    })
 }
 
-fn imported_function_path(index: &ModuleIndex<'_>, current_module: &[String], name: &str) -> Option<String> {
+fn is_local_binding(local_bindings: &[HashSet<String>], name: &str) -> bool {
+    local_bindings.iter().rev().any(|bindings| bindings.contains(name))
+}
+
+fn imported_function_path(
+    index: &ModuleIndex<'_>,
+    current_module: &[String],
+    name: &str,
+) -> Option<FunctionPathSuggestion> {
     let binding = self::imported_binding(index, current_module, name)?;
     let source_path = &binding.path;
-    (source_path.len() >= 2)
+    if !self::can_use_imported_module(index, current_module, source_path) {
+        return None;
+    }
+
+    let expected_path = (source_path.len() >= 2)
         .then(|| source_path.get(source_path.len().saturating_sub(2)..))
         .flatten()
-        .map(|parts| parts.join("::"))
+        .map(|parts| parts.join("::"))?;
+    let function_index = source_path.len().saturating_sub(1);
+    let target_module = source_path.get(..function_index)?;
+
+    Some(FunctionPathSuggestion {
+        expected_path,
+        required_import: self::required_module_import(index, current_module, &binding.source_path, target_module),
+    })
+}
+
+fn required_module_import(
+    index: &ModuleIndex<'_>,
+    current_module: &[String],
+    source_path: &[String],
+    target_module: &[String],
+) -> Option<String> {
+    let module_name = target_module.last()?;
+    if self::module_is_available(index, current_module, module_name, target_module) {
+        return None;
+    }
+
+    let source_module_path = source_path.get(..source_path.len().saturating_sub(1))?;
+    let import_path = match source_module_path.first().map(String::as_str) {
+        Some("crate" | "self" | "super") => self::crate_path(target_module),
+        Some(_) if source_module_path.len() == 1 && !index.modules.contains(target_module) => return None,
+        Some(_) if index.modules.contains(target_module) => self::crate_path(target_module),
+        Some(_) => source_module_path.join("::"),
+        None => return None,
+    };
+
+    Some(format!("use {import_path};"))
+}
+
+fn module_is_available(
+    index: &ModuleIndex<'_>,
+    current_module: &[String],
+    module_name: &str,
+    target_module: &[String],
+) -> bool {
+    let Some(scope) = index.info.get(current_module) else {
+        return false;
+    };
+    if scope
+        .imports
+        .iter()
+        .any(|binding| binding.name == module_name && binding.path == target_module)
+    {
+        return true;
+    }
+
+    let mut local_module = current_module.to_vec();
+    local_module.push(module_name.to_owned());
+    scope.definitions.contains(module_name) && local_module == target_module && index.modules.contains(&local_module)
+}
+
+fn crate_path(parts: &[String]) -> String {
+    std::iter::once("crate".to_owned())
+        .chain(parts.iter().cloned())
+        .collect::<Vec<_>>()
+        .join("::")
+}
+
+fn can_use_shortened_module(index: &ModuleIndex<'_>, current_module: &[String], parts: &[String]) -> bool {
+    let Some(function_index) = parts.len().checked_sub(1) else {
+        return false;
+    };
+    let Some(module_name) = parts.get(function_index.saturating_sub(1)) else {
+        return false;
+    };
+    let target_module = self::normalize_path(current_module, parts.get(..function_index).unwrap_or_default());
+
+    self::can_use_module_name(index, current_module, module_name, &target_module)
+}
+
+fn can_use_imported_module(index: &ModuleIndex<'_>, current_module: &[String], source_path: &[String]) -> bool {
+    let Some(function_index) = source_path.len().checked_sub(1) else {
+        return false;
+    };
+    let Some(module_name) = source_path.get(function_index.saturating_sub(1)) else {
+        return false;
+    };
+    let target_module = source_path.get(..function_index).unwrap_or_default();
+
+    // The explicit function import resolves the callable; defer only the module-name conflict to future glob
+    // resolution.
+    if index
+        .info
+        .get(current_module)
+        .is_some_and(|scope| scope.unknown_imports)
+    {
+        return true;
+    }
+
+    self::can_use_module_name(index, current_module, module_name, target_module)
+}
+
+fn can_use_module_name(
+    index: &ModuleIndex<'_>,
+    current_module: &[String],
+    name: &str,
+    target_module: &[String],
+) -> bool {
+    let Some(scope) = index.info.get(current_module) else {
+        return false;
+    };
+    // TODO: Resolve glob imports before deciding whether the shortened module name conflicts.
+    if scope.unknown_imports {
+        return false;
+    }
+
+    let mut local_module = current_module.to_vec();
+    local_module.push(name.to_owned());
+    if scope.definitions.contains(name) && (!index.modules.contains(&local_module) || local_module != target_module) {
+        return false;
+    }
+
+    scope
+        .imports
+        .iter()
+        .filter(|binding| binding.name == name)
+        .all(|binding| binding.path == target_module)
 }
 
 fn associated_receiver_parts(path: &syn::Path) -> Option<Vec<String>> {
@@ -546,6 +900,10 @@ fn is_associated_function_path(parts: &[String]) -> bool {
     parts
         .get(..parts.len().saturating_sub(1))
         .is_some_and(|prefix| prefix.iter().any(|part| self::is_type_name(part)))
+}
+
+fn is_non_function_call_path(parts: &[String]) -> bool {
+    parts.last().is_some_and(|name| self::is_type_name(name))
 }
 
 fn is_import_style_path(parts: &[String]) -> bool {
@@ -605,10 +963,38 @@ fn local_function(
     }
 
     let scope = index.info.get(&module_path)?;
-    if scope.unknown_imports || scope.imports.iter().any(|binding| binding.name == name) {
+    if scope.imports.iter().any(|binding| binding.name == name) {
         return None;
     }
-    scope.functions.contains(&name).then_some((module_path, name))
+    if scope.functions.contains(&name) {
+        return Some((module_path, name));
+    }
+    if let Some(glob_module) = self::glob_imported_function(index, scope, &name) {
+        return Some((glob_module, name));
+    }
+    if scope.unknown_imports {
+        return None;
+    }
+    None
+}
+
+fn glob_imported_function(index: &ModuleIndex<'_>, scope: &ScopeInfo, name: &str) -> Option<Vec<String>> {
+    let mut candidate = None;
+    for glob_module in &scope.glob_imports {
+        let Some(glob_scope) = index.info.get(glob_module) else {
+            // TODO: Resolve glob imports from modules outside this file.
+            continue;
+        };
+        if !glob_scope.functions.contains(name) {
+            continue;
+        }
+        if candidate.is_some() {
+            // TODO: Resolve ambiguous names imported from multiple glob sources.
+            return None;
+        }
+        candidate = Some(glob_module.clone());
+    }
+    candidate
 }
 
 fn is_local_module_path(index: &ModuleIndex<'_>, path: &[String]) -> bool {
@@ -621,9 +1007,29 @@ fn imported_binding<'index>(
     name: &str,
 ) -> Option<&'index ImportBinding> {
     let scope = index.info.get(current_module)?;
-    if scope.unknown_imports {
-        return None;
+    if let Some(binding) = self::direct_imported_binding(scope, name) {
+        return Some(binding);
     }
+
+    let mut candidate = None;
+    for glob_module in &scope.glob_imports {
+        let Some(glob_scope) = index.info.get(glob_module) else {
+            // TODO: Resolve explicit imports exported by modules outside this file.
+            continue;
+        };
+        let Some(binding) = self::direct_imported_binding(glob_scope, name) else {
+            continue;
+        };
+        if candidate.is_some() {
+            // TODO: Resolve ambiguous explicit imports exported by multiple glob sources.
+            return None;
+        }
+        candidate = Some(binding);
+    }
+    candidate
+}
+
+fn direct_imported_binding<'index>(scope: &'index ScopeInfo, name: &str) -> Option<&'index ImportBinding> {
     let mut bindings = scope.imports.iter().filter(|binding| binding.name == name);
     let binding = bindings.next()?;
     bindings.next().is_none().then_some(binding)
@@ -694,12 +1100,226 @@ mod tests {
     }
 
     #[test]
+    fn test_qualification_rule_check_when_same_module_call_is_bare_with_glob_import_returns_no_violations() {
+        let syntax = syn::parse_file(
+            r"
+            mod tests {
+                use super::*;
+
+                fn helper() {}
+
+                fn run() {
+                    helper();
+                }
+            }
+            ",
+        )
+        .unwrap();
+
+        let result = QualificationRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
+
+        assert_that!(result, is_empty());
+    }
+
+    #[test]
+    fn test_qualification_rule_check_when_parent_function_is_bare_with_super_glob_import_returns_no_violations() {
+        let syntax = syn::parse_file(
+            r"
+            fn helper() {}
+
+            mod tests {
+                use super::*;
+                use test_that::prelude::*;
+
+                fn invoke() {
+                    helper();
+                }
+            }
+            ",
+        )
+        .unwrap();
+
+        let result = QualificationRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
+
+        assert_that!(result, is_empty());
+    }
+
+    #[test]
+    fn test_qualification_rule_check_when_explicit_import_is_mixed_with_glob_import_reports_imported_module() {
+        let syntax = syn::parse_file(
+            r"
+            mod external {
+                pub fn run() {}
+            }
+            mod tests {
+                use super::*;
+                use crate::external::run;
+
+                fn invoke() {
+                    run();
+                }
+            }
+            ",
+        )
+        .unwrap();
+
+        let result = QualificationRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
+
+        assert_that!(
+            result,
+            eq(vec![QualificationViolation::Function(FunctionQualificationViolation {
+                file: PathBuf::from("test.rs"),
+                line: 10,
+                column: 21,
+                message: "call needs qualification",
+                details: FunctionQualificationDetails {
+                    actual_path: "run".to_owned(),
+                    replacement_path: "external::run".to_owned(),
+                    add_import: Some("use crate::external;".to_owned()),
+                },
+            })])
+        );
+    }
+
+    #[test]
+    fn test_qualification_rule_check_when_parent_explicit_import_is_reexported_by_glob_reports_imported_module() {
+        let syntax = syn::parse_file(
+            r"
+            mod external {
+                pub fn run() {}
+            }
+            use crate::external::run;
+
+            mod tests {
+                use super::*;
+
+                fn invoke() {
+                    run();
+                }
+            }
+            ",
+        )
+        .unwrap();
+
+        let result = QualificationRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
+
+        assert_that!(
+            result,
+            eq(vec![QualificationViolation::Function(FunctionQualificationViolation {
+                file: PathBuf::from("test.rs"),
+                line: 11,
+                column: 21,
+                message: "call needs qualification",
+                details: FunctionQualificationDetails {
+                    actual_path: "run".to_owned(),
+                    replacement_path: "external::run".to_owned(),
+                    add_import: Some("use crate::external;".to_owned()),
+                },
+            })])
+        );
+    }
+
+    #[test]
+    fn test_qualification_rule_check_when_glob_imported_call_is_unresolved_returns_no_violations() {
+        let syntax = syn::parse_file(
+            r"
+            mod external {
+                pub fn imported() {}
+            }
+            mod tests {
+                use super::*;
+
+                fn run() {
+                    imported();
+                }
+            }
+            ",
+        )
+        .unwrap();
+
+        let result = QualificationRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
+
+        assert_that!(result, is_empty());
+    }
+
+    #[test]
     fn test_qualification_rule_check_when_same_module_call_uses_self_returns_no_violations() {
         let syntax = syn::parse_file(
             r"
             fn helper() {}
             fn run() {
                 self::helper();
+            }
+            ",
+        )
+        .unwrap();
+
+        let result = QualificationRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
+
+        assert_that!(result, is_empty());
+    }
+
+    #[test]
+    fn test_qualification_rule_check_when_nested_function_call_is_local_returns_no_violations() {
+        let syntax = syn::parse_file(
+            r"
+            fn run() {
+                fn helper() {}
+                helper();
+            }
+            ",
+        )
+        .unwrap();
+
+        let result = QualificationRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
+
+        assert_that!(result, is_empty());
+    }
+
+    #[test]
+    fn test_qualification_rule_check_when_callable_parameter_is_called_returns_no_violations() {
+        let syntax = syn::parse_file(
+            r"
+            fn run(check: impl Fn()) {
+                check();
+            }
+            ",
+        )
+        .unwrap();
+
+        let result = QualificationRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
+
+        assert_that!(result, is_empty());
+    }
+
+    #[test]
+    fn test_qualification_rule_check_when_closure_binding_is_called_returns_no_violations() {
+        let syntax = syn::parse_file(
+            r"
+            fn run() {
+                let check = || {};
+                check();
+            }
+            ",
+        )
+        .unwrap();
+
+        let result = QualificationRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
+
+        assert_that!(result, is_empty());
+    }
+
+    #[test]
+    fn test_qualification_rule_check_when_local_binding_shadows_imported_function_returns_no_violations() {
+        let syntax = syn::parse_file(
+            r"
+            mod external {
+                pub fn check() {}
+            }
+            use external::check;
+            fn run() {
+                let check = || {};
+                check();
             }
             ",
         )
@@ -734,7 +1354,38 @@ mod tests {
                 message: "call needs qualification",
                 details: FunctionQualificationDetails {
                     actual_path: "run".to_owned(),
-                    expected_path: "external::run".to_owned(),
+                    replacement_path: "external::run".to_owned(),
+                    add_import: None,
+                },
+            })])
+        );
+    }
+
+    #[test]
+    fn test_qualification_rule_check_when_imported_external_crate_call_is_bare_omits_import() {
+        let syntax = syn::parse_file(
+            r"
+            use tempfile::tempdir;
+            fn main() {
+                tempdir();
+            }
+            ",
+        )
+        .unwrap();
+
+        let result = QualificationRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
+
+        assert_that!(
+            result,
+            eq(vec![QualificationViolation::Function(FunctionQualificationViolation {
+                file: PathBuf::from("test.rs"),
+                line: 4,
+                column: 17,
+                message: "call needs qualification",
+                details: FunctionQualificationDetails {
+                    actual_path: "tempdir".to_owned(),
+                    replacement_path: "tempfile::tempdir".to_owned(),
+                    add_import: None,
                 },
             })])
         );
@@ -816,10 +1467,72 @@ mod tests {
                 message: "call needs qualification",
                 details: FunctionQualificationDetails {
                     actual_path: "std::fs::read_to_string".to_owned(),
-                    expected_path: "fs::read_to_string".to_owned(),
+                    replacement_path: "fs::read_to_string".to_owned(),
+                    add_import: Some("use std::fs;".to_owned()),
                 },
             })])
         );
+    }
+
+    #[test]
+    fn test_qualification_rule_check_when_shortened_module_name_conflicts_with_import_returns_no_violations() {
+        let syntax = syn::parse_file(
+            r#"
+            mod other {
+                pub mod fs {}
+            }
+            use crate::other::fs;
+            fn read() {
+                std::fs::read_to_string("foo.md");
+            }
+            "#,
+        )
+        .unwrap();
+
+        let result = QualificationRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
+
+        assert_that!(result, is_empty());
+    }
+
+    #[test]
+    fn test_qualification_rule_check_when_shortened_module_name_conflicts_with_local_module_returns_no_violations() {
+        let syntax = syn::parse_file(
+            r#"
+            mod fs {}
+            fn read() {
+                std::fs::read_to_string("foo.md");
+            }
+            "#,
+        )
+        .unwrap();
+
+        let result = QualificationRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
+
+        assert_that!(result, is_empty());
+    }
+
+    #[test]
+    fn test_qualification_rule_check_when_imported_function_module_name_conflicts_returns_no_violations() {
+        let syntax = syn::parse_file(
+            r"
+            mod source {
+                pub fn run() {}
+            }
+            mod other {
+                pub mod source {}
+            }
+            use crate::other::source;
+            use crate::source::run;
+            fn main() {
+                run();
+            }
+            ",
+        )
+        .unwrap();
+
+        let result = QualificationRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
+
+        assert_that!(result, is_empty());
     }
 
     #[test]
@@ -839,7 +1552,41 @@ mod tests {
     }
 
     #[test]
-    fn test_qualification_rule_check_when_unknown_bare_function_call_reports_module_qualification() {
+    fn test_qualification_rule_check_when_bare_uppercase_constructor_is_called_returns_no_violations() {
+        let syntax = syn::parse_file(
+            r"
+            fn read() {
+                Ok(());
+                Err(());
+                Some(1);
+            }
+            ",
+        )
+        .unwrap();
+
+        let result = QualificationRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
+
+        assert_that!(result, is_empty());
+    }
+
+    #[test]
+    fn test_qualification_rule_check_when_bare_prelude_function_is_called_returns_no_violations() {
+        let syntax = syn::parse_file(
+            r"
+            fn read(value: usize) {
+                drop(value);
+            }
+            ",
+        )
+        .unwrap();
+
+        let result = QualificationRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
+
+        assert_that!(result, is_empty());
+    }
+
+    #[test]
+    fn test_qualification_rule_check_when_unknown_bare_function_call_returns_no_violations() {
         let syntax = syn::parse_file(
             r#"
             fn read() {
@@ -851,19 +1598,7 @@ mod tests {
 
         let result = QualificationRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
 
-        assert_that!(
-            result,
-            eq(vec![QualificationViolation::Function(FunctionQualificationViolation {
-                file: PathBuf::from("test.rs"),
-                line: 3,
-                column: 17,
-                message: "call needs qualification",
-                details: FunctionQualificationDetails {
-                    actual_path: "read_to_string".to_owned(),
-                    expected_path: "module::read_to_string".to_owned(),
-                },
-            })])
-        );
+        assert_that!(result, is_empty());
     }
 
     #[test]
@@ -1040,10 +1775,25 @@ mod tests {
             message: "call needs qualification",
             details: FunctionQualificationDetails {
                 actual_path: "run()".to_owned(),
-                expected_path: "self::run()".to_owned(),
+                replacement_path: "self::run()".to_owned(),
+                add_import: None,
             },
         }),
-        "test.rs:2:13 call needs qualification - run() -> self::run()"
+        "test.rs:2:13 call needs qualification - replace run() with self::run()"
+    )]
+    #[case(
+        QualificationViolation::Function(FunctionQualificationViolation {
+            file: PathBuf::from("test.rs"),
+            line: 2,
+            column: 13,
+            message: "call needs qualification",
+            details: FunctionQualificationDetails {
+                actual_path: "run()".to_owned(),
+                replacement_path: "external::run()".to_owned(),
+                add_import: Some("use crate::external;".to_owned()),
+            },
+        }),
+        "test.rs:2:13 call needs qualification - replace run() with external::run(); add use crate::external;"
     )]
     #[case(
         QualificationViolation::NonFunction(NonFunctionQualificationViolation {
