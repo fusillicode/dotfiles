@@ -1,13 +1,10 @@
 Run Rust source lint rules on explicitly supplied files.
 
 Usage:
-  frs rsl [--json] FILE...
+  frs rsl FILE...
 
 Arguments:
   FILE                     Rust source file to check. Supply at least one file.
-
-Options:
-  --json                   Print violations as JSON.
 
 Each file is checked as a root module. Inline module bodies are checked recursively.
 External module files are not read unless supplied separately.

@@ -16,7 +16,7 @@ fn main() -> rootcause::Result<()> {
             if output.is_empty() {
                 return Ok(());
             }
-            println!("{}", output.render()?);
+            println!("{}", output.render());
             std::process::exit(1);
         }
     }

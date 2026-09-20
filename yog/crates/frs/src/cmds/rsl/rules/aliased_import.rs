@@ -1,4 +1,4 @@
-//! Import-alias rule for `frs rsl`.
+//! Aliased-import rule for `frs rsl`.
 
 use std::fmt::Display;
 use std::fmt::Formatter;
@@ -7,7 +7,6 @@ use std::path::Path;
 use std::path::PathBuf;
 
 use proc_macro2::Span;
-use serde::Serialize;
 use syn::Item;
 use syn::UseTree;
 
@@ -17,41 +16,30 @@ use crate::cmds::rsl::rules::TypedRule;
 use crate::cmds::rsl::rules::TypedRuleViolation;
 
 #[cfg_attr(test, derive(Debug, Eq, PartialEq))]
-#[derive(Serialize)]
-pub(super) struct ImportAliasViolation {
+pub(super) struct AliasedImportViolation {
     pub(super) file: PathBuf,
     pub(super) line: usize,
     pub(super) column: usize,
-    pub(super) message: &'static str,
-    pub(super) details: ImportAliasDetails,
 }
 
-impl ImportAliasViolation {
-    pub(super) fn new(path: &Path, span: Span, alias: String) -> Self {
+impl AliasedImportViolation {
+    pub(super) fn new(path: &Path, span: Span) -> Self {
         let location = span.start();
         Self {
             file: path.to_path_buf(),
             line: location.line,
             column: location.column.saturating_add(1),
-            message: "alias not allowed",
-            details: ImportAliasDetails { alias },
         }
     }
 }
 
-#[cfg_attr(test, derive(Debug, Eq, PartialEq))]
-#[derive(Serialize)]
-pub(super) struct ImportAliasDetails {
-    pub(super) alias: String,
-}
+pub struct AliasedImportRule;
 
-pub struct ImportAliasRule;
+impl TypedRule for AliasedImportRule {
+    type Violation = AliasedImportViolation;
 
-impl TypedRule for ImportAliasRule {
-    type Violation = ImportAliasViolation;
-
-    fn name() -> &'static str {
-        "import_alias"
+    fn code() -> &'static str {
+        "aliased_import"
     }
 
     fn check(&self, ctx: &FileContext<'_>) -> Vec<Self::Violation> {
@@ -70,7 +58,7 @@ impl TypedRule for ImportAliasRule {
     }
 }
 
-fn check_aliases(path: &std::path::Path, tree: &UseTree, violations: &mut Vec<ImportAliasViolation>) {
+fn check_aliases(path: &std::path::Path, tree: &UseTree, violations: &mut Vec<AliasedImportViolation>) {
     let mut pending = vec![tree];
 
     while let Some(tree) = pending.pop() {
@@ -78,29 +66,25 @@ fn check_aliases(path: &std::path::Path, tree: &UseTree, violations: &mut Vec<Im
             UseTree::Path(path) => pending.push(path.tree.as_ref()),
             UseTree::Group(group) => pending.extend(group.items.iter()),
             UseTree::Rename(rename) if rename.rename != "_" => {
-                violations.push(ImportAliasViolation::new(
-                    path,
-                    rename.rename.span(),
-                    rename.rename.to_string(),
-                ));
+                violations.push(AliasedImportViolation::new(path, rename.rename.span()));
             }
             UseTree::Name(_) | UseTree::Glob(_) | UseTree::Rename(_) => {}
         }
     }
 }
 
-impl TypedRuleViolation for ImportAliasViolation {
-    type Rule = ImportAliasRule;
+impl TypedRuleViolation for AliasedImportViolation {
+    type Rule = AliasedImportRule;
 }
 
-impl Display for ImportAliasViolation {
+impl Display for AliasedImportViolation {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> Result {
         formatter.write_str(&crate::cmds::rsl::rules::format_compact_violation(
             &self.file,
             self.line,
             self.column,
-            self.message,
-            &format!("alias: {} [allowed: as _]", self.details.alias),
+            AliasedImportRule::code(),
+            "use unaliased import if there are no clashes",
         ))
     }
 }

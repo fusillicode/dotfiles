@@ -6,12 +6,10 @@ use std::collections::VecDeque;
 
 use proc_macro2::Span;
 use proc_macro2::TokenTree;
-use serde::Serialize;
 use syn::Item;
 use syn::spanned::Spanned;
 
-#[derive(Clone, Copy, Debug, strum::Display, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
+#[derive(Clone, Copy, Debug, strum::Display, Eq, PartialEq)]
 #[strum(serialize_all = "snake_case")]
 pub enum ItemGroup {
     ExternCrate,
@@ -45,15 +43,6 @@ pub enum ItemKind {
     Fn,
 }
 
-impl Serialize for ItemKind {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        serializer.serialize_str((*self).into())
-    }
-}
-
 impl ItemKind {
     pub fn label(self) -> &'static str {
         self.into()
@@ -79,18 +68,14 @@ impl ItemKind {
     }
 }
 
-#[derive(Clone, Copy, Debug, strum::Display, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[derive(Clone, Copy, Debug, strum::Display, Eq, Ord, PartialEq, PartialOrd)]
 pub enum VisibilityClass {
-    #[serde(rename = "pub")]
     #[strum(to_string = "pub")]
     Public,
-    #[serde(rename = "pub(crate)")]
     #[strum(to_string = "pub(crate)")]
     Crate,
-    #[serde(rename = "restricted")]
     #[strum(to_string = "restricted")]
     Restricted,
-    #[serde(rename = "private")]
     #[strum(to_string = "private")]
     Private,
 }
@@ -324,7 +309,6 @@ fn explicit_macro_span(tokens: &proc_macro2::TokenStream) -> Option<Span> {
 pub(super) struct OrderNode {
     pub(super) source_index: usize,
     pub(super) span: Span,
-    pub(super) kind: ItemKind,
     pub(super) group: Option<ItemGroup>,
     pub(super) visibility: Option<VisibilityClass>,
     pub(super) label: String,
@@ -532,7 +516,6 @@ pub(super) fn module_nodes(items: &[ModuleItem<'_>]) -> Vec<ModuleNode> {
                 order: OrderNode {
                     source_index,
                     span: self::item_span(type_item.item()),
-                    kind: cluster.kind,
                     group: Some(cluster.kind.group()),
                     visibility: Some(cluster.visibility),
                     label: format!("{} {}", cluster.kind.label(), cluster.name),
@@ -544,7 +527,6 @@ pub(super) fn module_nodes(items: &[ModuleItem<'_>]) -> Vec<ModuleNode> {
                 order: OrderNode {
                     source_index: index,
                     span: classified.span,
-                    kind: classified.kind,
                     group: Some(classified.kind.group()),
                     visibility: module_item.metadata().visibility(),
                     label: self::item_label(item, classified.kind),
@@ -573,7 +555,6 @@ pub(super) fn impl_nodes(item_impl: &syn::ItemImpl) -> Vec<OrderNode> {
             Some(OrderNode {
                 source_index,
                 span: self::impl_item_span(item),
-                kind,
                 group: None,
                 visibility,
                 label: self::impl_item_label(item, kind),

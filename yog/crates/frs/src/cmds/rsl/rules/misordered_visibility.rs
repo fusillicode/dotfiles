@@ -1,4 +1,4 @@
-//! Visibility-order rule for `frs rsl`.
+//! Misordered-visibility rule for `frs rsl`.
 
 use std::fmt::Display;
 use std::fmt::Formatter;
@@ -7,20 +7,18 @@ use std::path::Path;
 use std::path::PathBuf;
 
 use proc_macro2::Span;
-use serde::Serialize;
 use syn::Item;
 
-use crate::cmds::rsl::ast::ItemKind;
 use crate::cmds::rsl::ast::VisibilityClass;
 use crate::cmds::rsl::engine::FileContext;
 use crate::cmds::rsl::rules::TypedRule;
 use crate::cmds::rsl::rules::TypedRuleViolation;
 
-pub struct VisibilityOrderRule {
+pub struct MisorderedVisibilityRule {
     visibility_order: [VisibilityClass; 4],
 }
 
-impl VisibilityOrderRule {
+impl MisorderedVisibilityRule {
     pub(super) fn new(visibility_order: Option<[VisibilityClass; 4]>) -> Self {
         Self {
             visibility_order: visibility_order.unwrap_or([
@@ -36,7 +34,7 @@ impl VisibilityOrderRule {
         &self,
         nodes: &[crate::cmds::rsl::ast::OrderNode],
         path: &Path,
-        violations: &mut Vec<VisibilityOrderViolation>,
+        violations: &mut Vec<MisorderedVisibilityViolation>,
     ) {
         let mut current_group = None;
         let mut highest_visibility: Option<&crate::cmds::rsl::ast::OrderNode> = None;
@@ -55,12 +53,11 @@ impl VisibilityOrderRule {
                 && self.visibility_rank(visibility)
                     < self.visibility_rank(previous.visibility.unwrap_or(VisibilityClass::Private))
             {
-                violations.push(VisibilityOrderViolation::new(
+                violations.push(MisorderedVisibilityViolation::new(
                     path,
                     node.span,
-                    visibility,
                     previous.label.clone(),
-                    node.kind,
+                    node.label.clone(),
                 ));
             }
 
@@ -81,11 +78,11 @@ impl VisibilityOrderRule {
     }
 }
 
-impl TypedRule for VisibilityOrderRule {
-    type Violation = VisibilityOrderViolation;
+impl TypedRule for MisorderedVisibilityRule {
+    type Violation = MisorderedVisibilityViolation;
 
-    fn name() -> &'static str {
-        "visibility_order"
+    fn code() -> &'static str {
+        "misordered_visibility"
     }
 
     fn check(&self, ctx: &FileContext<'_>) -> Vec<Self::Violation> {
@@ -115,65 +112,53 @@ impl TypedRule for VisibilityOrderRule {
 }
 
 #[cfg_attr(test, derive(Eq, PartialEq))]
-#[derive(Debug, Serialize)]
-pub(super) struct VisibilityOrderViolation {
+#[derive(Debug)]
+pub(super) struct MisorderedVisibilityViolation {
     file: PathBuf,
     line: usize,
     column: usize,
-    message: &'static str,
-    details: VisibilityDetails,
+    details: MisorderedVisibilityDetails,
 }
 
-impl VisibilityOrderViolation {
-    fn new(
-        path: &Path,
-        span: Span,
-        actual_visibility: VisibilityClass,
-        expected_before: String,
-        item: ItemKind,
-    ) -> Self {
+impl MisorderedVisibilityViolation {
+    fn new(path: &Path, span: Span, expected_before: String, item_label: String) -> Self {
         let location = span.start();
         Self {
             file: path.to_path_buf(),
             line: location.line,
             column: location.column.saturating_add(1),
-            message: "visibility out of order",
-            details: VisibilityDetails {
-                actual_visibility,
+            details: MisorderedVisibilityDetails {
                 expected_before,
-                item,
+                item_label,
             },
         }
     }
 }
 
-impl TypedRuleViolation for VisibilityOrderViolation {
-    type Rule = VisibilityOrderRule;
+impl TypedRuleViolation for MisorderedVisibilityViolation {
+    type Rule = MisorderedVisibilityRule;
 }
 
-impl Display for VisibilityOrderViolation {
+impl Display for MisorderedVisibilityViolation {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> Result {
         formatter.write_str(&crate::cmds::rsl::rules::format_compact_violation(
             &self.file,
             self.line,
             self.column,
-            self.message,
+            MisorderedVisibilityRule::code(),
             &format!(
-                "{} -> before {} [{}]",
-                self.details.actual_visibility,
-                self.details.expected_before,
-                self.details.item.label()
+                "move `{}` before `{}`",
+                self.details.item_label, self.details.expected_before
             ),
         ))
     }
 }
 
 #[cfg_attr(test, derive(Eq, PartialEq))]
-#[derive(Debug, Serialize)]
-struct VisibilityDetails {
-    actual_visibility: VisibilityClass,
+#[derive(Debug)]
+struct MisorderedVisibilityDetails {
     expected_before: String,
-    item: ItemKind,
+    item_label: String,
 }
 
 #[cfg(test)]
@@ -182,15 +167,13 @@ mod tests {
 
     use test_that::prelude::*;
 
-    use super::VisibilityDetails;
-    use super::VisibilityOrderRule;
-    use super::VisibilityOrderViolation;
-    use crate::cmds::rsl::ast::ItemKind;
-    use crate::cmds::rsl::ast::VisibilityClass;
+    use super::MisorderedVisibilityDetails;
+    use super::MisorderedVisibilityRule;
+    use super::MisorderedVisibilityViolation;
     use crate::cmds::rsl::rules::TypedRule;
 
     #[test]
-    fn test_visibility_order_rule_check_when_visibility_decreases_reports_public_item() {
+    fn test_misordered_visibility_rule_check_when_visibility_decreases_reports_public_item() {
         let syntax = syn::parse_file(
             r"
             fn private() {}
@@ -199,26 +182,24 @@ mod tests {
         )
         .unwrap();
 
-        let result = VisibilityOrderRule::new(None).check(&crate::cmds::rsl::rules::test_ctx(&syntax));
+        let result = MisorderedVisibilityRule::new(None).check(&crate::cmds::rsl::rules::test_ctx(&syntax));
 
         assert_that!(
             result,
-            eq(vec![VisibilityOrderViolation {
+            eq(vec![MisorderedVisibilityViolation {
                 file: PathBuf::from("test.rs"),
                 line: 3,
                 column: 17,
-                message: "visibility out of order",
-                details: VisibilityDetails {
-                    actual_visibility: VisibilityClass::Public,
+                details: MisorderedVisibilityDetails {
                     expected_before: "fn private".to_owned(),
-                    item: ItemKind::Fn,
+                    item_label: "fn public".to_owned(),
                 },
             }])
         );
     }
 
     #[test]
-    fn test_visibility_order_rule_check_when_type_is_more_visible_than_previous_item_reports_type() {
+    fn test_misordered_visibility_rule_check_when_type_is_more_visible_than_previous_item_reports_type() {
         let syntax = syn::parse_file(
             r"
             fn private() {}
@@ -228,26 +209,24 @@ mod tests {
         )
         .unwrap();
 
-        let result = VisibilityOrderRule::new(None).check(&crate::cmds::rsl::rules::test_ctx(&syntax));
+        let result = MisorderedVisibilityRule::new(None).check(&crate::cmds::rsl::rules::test_ctx(&syntax));
 
         assert_that!(
             result,
-            eq(vec![VisibilityOrderViolation {
+            eq(vec![MisorderedVisibilityViolation {
                 file: PathBuf::from("test.rs"),
                 line: 3,
                 column: 17,
-                message: "visibility out of order",
-                details: VisibilityDetails {
-                    actual_visibility: VisibilityClass::Public,
+                details: MisorderedVisibilityDetails {
                     expected_before: "fn private".to_owned(),
-                    item: ItemKind::Struct,
+                    item_label: "struct Data".to_owned(),
                 },
             }])
         );
     }
 
     #[test]
-    fn test_visibility_order_rule_check_when_associated_visibility_decreases_reports_public_item() {
+    fn test_misordered_visibility_rule_check_when_associated_visibility_decreases_reports_public_item() {
         let syntax = syn::parse_file(
             r"
             struct Data;
@@ -259,41 +238,37 @@ mod tests {
         )
         .unwrap();
 
-        let result = VisibilityOrderRule::new(None).check(&crate::cmds::rsl::rules::test_ctx(&syntax));
+        let result = MisorderedVisibilityRule::new(None).check(&crate::cmds::rsl::rules::test_ctx(&syntax));
 
         assert_that!(
             result,
-            eq(vec![VisibilityOrderViolation {
+            eq(vec![MisorderedVisibilityViolation {
                 file: PathBuf::from("test.rs"),
                 line: 5,
                 column: 21,
-                message: "visibility out of order",
-                details: VisibilityDetails {
-                    actual_visibility: VisibilityClass::Public,
+                details: MisorderedVisibilityDetails {
                     expected_before: "fn helper".to_owned(),
-                    item: ItemKind::Fn,
+                    item_label: "fn api".to_owned(),
                 },
             }])
         );
     }
 
     #[test]
-    fn test_visibility_order_violation_when_details_are_present_formats_compact_output() {
-        let violation = VisibilityOrderViolation {
+    fn test_misordered_visibility_violation_when_details_are_present_formats_compact_output() {
+        let violation = MisorderedVisibilityViolation {
             file: PathBuf::from("test.rs"),
             line: 3,
             column: 17,
-            message: "visibility out of order",
-            details: VisibilityDetails {
-                actual_visibility: VisibilityClass::Public,
+            details: MisorderedVisibilityDetails {
                 expected_before: "fn private".to_owned(),
-                item: ItemKind::Fn,
+                item_label: "fn public".to_owned(),
             },
         };
 
         assert_eq!(
             violation.to_string(),
-            "test.rs:3:17 visibility out of order - pub -> before fn private [fn]"
+            "test.rs:3:17,misordered_visibility,move `fn public` before `fn private`"
         );
     }
 }
