@@ -5,7 +5,6 @@ use std::collections::HashSet;
 use std::collections::VecDeque;
 
 use proc_macro2::Span;
-use serde::Serialize;
 use syn::Expr;
 use syn::Item;
 use syn::PathArguments;
@@ -14,11 +13,9 @@ use syn::spanned::Spanned;
 use syn::visit::Visit;
 
 #[cfg_attr(test, derive(Debug, Eq, PartialEq))]
-#[derive(Serialize)]
 pub(super) struct CallDetails {
     pub(super) actual_path: String,
     pub(super) replacement_path: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub(super) add_import: Option<String>,
 }
 
@@ -814,15 +811,14 @@ mod tests {
 
     use test_that::prelude::*;
 
+    use super::super::aliased_import::AliasedImportRule;
+    use super::super::aliased_import::AliasedImportViolation;
     use super::super::common::CallDetails;
-    use super::super::import_alias::ImportAliasDetails;
-    use super::super::import_alias::ImportAliasRule;
-    use super::super::import_alias::ImportAliasViolation;
     use super::super::overqualified_call::OverqualifiedCallRule;
     use super::super::overqualified_call::OverqualifiedCallViolation;
-    use super::super::qualified_item_path::QualifiedItemPathDetails;
-    use super::super::qualified_item_path::QualifiedItemPathRule;
-    use super::super::qualified_item_path::QualifiedItemPathViolation;
+    use super::super::qualified_item::QualifiedItemDetails;
+    use super::super::qualified_item::QualifiedItemRule;
+    use super::super::qualified_item::QualifiedItemViolation;
     use super::super::unqualified_call::UnqualifiedCallRule;
     use super::super::unqualified_call::UnqualifiedCallViolation;
     use crate::cmds::rsl::rules::TypedRule;
@@ -916,7 +912,6 @@ mod tests {
                 file: PathBuf::from("test.rs"),
                 line: 10,
                 column: 21,
-                message: "call needs qualification",
                 details: CallDetails {
                     actual_path: "run".to_owned(),
                     replacement_path: "external::run".to_owned(),
@@ -954,7 +949,6 @@ mod tests {
                 file: PathBuf::from("test.rs"),
                 line: 11,
                 column: 21,
-                message: "call needs qualification",
                 details: CallDetails {
                     actual_path: "run".to_owned(),
                     replacement_path: "external::run".to_owned(),
@@ -1096,7 +1090,6 @@ mod tests {
                 file: PathBuf::from("test.rs"),
                 line: 5,
                 column: 17,
-                message: "call needs qualification",
                 details: CallDetails {
                     actual_path: "run".to_owned(),
                     replacement_path: "external::run".to_owned(),
@@ -1126,7 +1119,6 @@ mod tests {
                 file: PathBuf::from("test.rs"),
                 line: 4,
                 column: 17,
-                message: "call needs qualification",
                 details: CallDetails {
                     actual_path: "tempdir".to_owned(),
                     replacement_path: "tempfile::tempdir".to_owned(),
@@ -1209,7 +1201,6 @@ mod tests {
                 file: PathBuf::from("test.rs"),
                 line: 3,
                 column: 17,
-                message: "call needs qualification",
                 details: CallDetails {
                     actual_path: "std::fs::read_to_string".to_owned(),
                     replacement_path: "fs::read_to_string".to_owned(),
@@ -1347,7 +1338,7 @@ mod tests {
     }
 
     #[test]
-    fn test_qualified_item_path_check_when_non_function_path_is_fully_qualified_reports_import() {
+    fn test_qualified_item_check_when_non_function_path_is_fully_qualified_reports_import() {
         let syntax = syn::parse_file(
             r"
             mod values {
@@ -1360,16 +1351,15 @@ mod tests {
         )
         .unwrap();
 
-        let result = QualifiedItemPathRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
+        let result = QualifiedItemRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
 
         assert_that!(
             result,
-            eq(vec![QualifiedItemPathViolation {
+            eq(vec![QualifiedItemViolation {
                 file: PathBuf::from("test.rs"),
                 line: 6,
                 column: 17,
-                message: "import this item",
-                details: QualifiedItemPathDetails {
+                details: QualifiedItemDetails {
                     actual_path: "crate::values::VALUE".to_owned(),
                     expected_import: "use crate::values::VALUE;".to_owned(),
                 },
@@ -1378,7 +1368,7 @@ mod tests {
     }
 
     #[test]
-    fn test_qualified_item_path_check_when_non_function_name_clashes_allows_qualified_path() {
+    fn test_qualified_item_check_when_non_function_name_clashes_allows_qualified_path() {
         let syntax = syn::parse_file(
             r"
             mod values {
@@ -1392,13 +1382,13 @@ mod tests {
         )
         .unwrap();
 
-        let result = QualifiedItemPathRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
+        let result = QualifiedItemRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
 
         assert_that!(result, is_empty());
     }
 
     #[test]
-    fn test_qualified_item_path_check_when_struct_names_clash_allows_one_qualified_path() {
+    fn test_qualified_item_check_when_struct_names_clash_allows_one_qualified_path() {
         let syntax = syn::parse_file(
             r"
             mod first {
@@ -1415,13 +1405,13 @@ mod tests {
         )
         .unwrap();
 
-        let result = QualifiedItemPathRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
+        let result = QualifiedItemRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
 
         assert_that!(result, is_empty());
     }
 
     #[test]
-    fn test_import_alias_check_when_alias_is_private_reports_alias() {
+    fn test_aliased_import_check_when_alias_is_private_reports_alias() {
         let syntax = syn::parse_file(
             r"
             use std::fmt::Display as Formatter;
@@ -1429,24 +1419,20 @@ mod tests {
         )
         .unwrap();
 
-        let result = ImportAliasRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
+        let result = AliasedImportRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
 
         assert_that!(
             result,
-            eq(vec![ImportAliasViolation {
+            eq(vec![AliasedImportViolation {
                 file: PathBuf::from("test.rs"),
                 line: 2,
                 column: 38,
-                message: "alias not allowed",
-                details: ImportAliasDetails {
-                    alias: "Formatter".to_owned(),
-                },
             }])
         );
     }
 
     #[test]
-    fn test_import_alias_check_when_alias_is_wildcard_returns_no_violations() {
+    fn test_aliased_import_check_when_alias_is_wildcard_returns_no_violations() {
         let syntax = syn::parse_file(
             r"
             use std::fmt::Display as _;
@@ -1454,13 +1440,13 @@ mod tests {
         )
         .unwrap();
 
-        let result = ImportAliasRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
+        let result = AliasedImportRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
 
         assert_that!(result, is_empty());
     }
 
     #[test]
-    fn test_import_alias_check_when_public_reexport_is_renamed_reports_alias() {
+    fn test_aliased_import_check_when_public_reexport_is_renamed_reports_alias() {
         let syntax = syn::parse_file(
             r"
             pub use std::fmt::Debug as Formatter;
@@ -1468,24 +1454,20 @@ mod tests {
         )
         .unwrap();
 
-        let result = ImportAliasRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
+        let result = AliasedImportRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
 
         assert_that!(
             result,
-            eq(vec![ImportAliasViolation {
+            eq(vec![AliasedImportViolation {
                 file: PathBuf::from("test.rs"),
                 line: 2,
                 column: 40,
-                message: "alias not allowed",
-                details: ImportAliasDetails {
-                    alias: "Formatter".to_owned(),
-                },
             }])
         );
     }
 
     #[test]
-    fn test_import_alias_check_when_reexport_alias_is_restricted_reports_alias() {
+    fn test_aliased_import_check_when_reexport_alias_is_restricted_reports_alias() {
         let syntax = syn::parse_file(
             r"
             pub(crate) use std::fmt::Debug as Formatter;
@@ -1493,24 +1475,20 @@ mod tests {
         )
         .unwrap();
 
-        let result = ImportAliasRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
+        let result = AliasedImportRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
 
         assert_that!(
             result,
-            eq(vec![ImportAliasViolation {
+            eq(vec![AliasedImportViolation {
                 file: PathBuf::from("test.rs"),
                 line: 2,
                 column: 47,
-                message: "alias not allowed",
-                details: ImportAliasDetails {
-                    alias: "Formatter".to_owned(),
-                },
             }])
         );
     }
 
     #[test]
-    fn test_qualified_item_path_check_when_external_paths_are_qualified_reports_paths() {
+    fn test_qualified_item_check_when_external_paths_are_qualified_reports_paths() {
         let syntax = syn::parse_file(
             r"
             mod external;
@@ -1530,27 +1508,25 @@ mod tests {
         )
         .unwrap();
 
-        let result = QualifiedItemPathRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
+        let result = QualifiedItemRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
 
         assert_that!(
             result,
             eq(vec![
-                QualifiedItemPathViolation {
+                QualifiedItemViolation {
                     file: PathBuf::from("test.rs"),
                     line: 12,
                     column: 26,
-                    message: "import this item",
-                    details: QualifiedItemPathDetails {
+                    details: QualifiedItemDetails {
                         actual_path: "external::Thing".to_owned(),
                         expected_import: "use external::Thing;".to_owned(),
                     },
                 },
-                QualifiedItemPathViolation {
+                QualifiedItemViolation {
                     file: PathBuf::from("test.rs"),
                     line: 13,
                     column: 17,
-                    message: "import this item",
-                    details: QualifiedItemPathDetails {
+                    details: QualifiedItemDetails {
                         actual_path: "external::Thing".to_owned(),
                         expected_import: "use external::Thing;".to_owned(),
                     },
@@ -1560,7 +1536,7 @@ mod tests {
     }
 
     #[test]
-    fn test_qualified_item_path_check_when_unknown_external_type_is_qualified_reports_import() {
+    fn test_qualified_item_check_when_unknown_external_type_is_qualified_reports_import() {
         let syntax = syn::parse_file(
             r"
             fn inspect(_: syn::ExprCall) {}
@@ -1568,16 +1544,15 @@ mod tests {
         )
         .unwrap();
 
-        let result = QualifiedItemPathRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
+        let result = QualifiedItemRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
 
         assert_that!(
             result,
-            eq(vec![QualifiedItemPathViolation {
+            eq(vec![QualifiedItemViolation {
                 file: PathBuf::from("test.rs"),
                 line: 2,
                 column: 27,
-                message: "import this item",
-                details: QualifiedItemPathDetails {
+                details: QualifiedItemDetails {
                     actual_path: "syn::ExprCall".to_owned(),
                     expected_import: "use syn::ExprCall;".to_owned(),
                 },
@@ -1586,7 +1561,7 @@ mod tests {
     }
 
     #[test]
-    fn test_qualified_item_path_check_when_enum_variant_is_qualified_ignores_path() {
+    fn test_qualified_item_check_when_enum_variant_is_qualified_ignores_path() {
         let syntax = syn::parse_file(
             r"
             enum Kind {
@@ -1603,13 +1578,13 @@ mod tests {
         )
         .unwrap();
 
-        let result = QualifiedItemPathRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
+        let result = QualifiedItemRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
 
         assert_that!(result, is_empty());
     }
 
     #[test]
-    fn test_qualified_item_path_check_when_associated_function_is_referenced_ignores_path() {
+    fn test_qualified_item_check_when_associated_function_is_referenced_ignores_path() {
         let syntax = syn::parse_file(
             r"
             fn converter() -> fn(&String) -> &str {
@@ -1619,7 +1594,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = QualifiedItemPathRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
+        let result = QualifiedItemRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
 
         assert_that!(result, is_empty());
     }
@@ -1648,7 +1623,6 @@ mod tests {
             file: PathBuf::from("test.rs"),
             line: 2,
             column: 13,
-            message: "call needs qualification",
             details: CallDetails {
                 actual_path: "run()".to_owned(),
                 replacement_path: "self::run()".to_owned(),
@@ -1658,7 +1632,7 @@ mod tests {
 
         assert_eq!(
             violation.to_string(),
-            "test.rs:2:13 call needs qualification - replace run() with self::run()"
+            "test.rs:2:13,uc,replace `run()` with `self::run()`"
         );
     }
 
@@ -1668,7 +1642,6 @@ mod tests {
             file: PathBuf::from("test.rs"),
             line: 2,
             column: 13,
-            message: "call needs qualification",
             details: CallDetails {
                 actual_path: "run()".to_owned(),
                 replacement_path: "external::run()".to_owned(),
@@ -1678,18 +1651,17 @@ mod tests {
 
         assert_eq!(
             violation.to_string(),
-            "test.rs:2:13 call needs qualification - replace run() with external::run(); add use crate::external;"
+            "test.rs:2:13,oc,replace `run()` with `external::run()`; add `use crate::external;`"
         );
     }
 
     #[test]
-    fn test_qualified_item_path_violation_formats_compact_output() {
-        let violation = QualifiedItemPathViolation {
+    fn test_qualified_item_violation_formats_compact_output() {
+        let violation = QualifiedItemViolation {
             file: PathBuf::from("test.rs"),
             line: 3,
             column: 13,
-            message: "import this item",
-            details: QualifiedItemPathDetails {
+            details: QualifiedItemDetails {
                 actual_path: "external::Thing".to_owned(),
                 expected_import: "use external::Thing;".to_owned(),
             },
@@ -1697,25 +1669,21 @@ mod tests {
 
         assert_eq!(
             violation.to_string(),
-            "test.rs:3:13 import this item - external::Thing -> use external::Thing;"
+            "test.rs:3:13,qualified_item,replace `external::Thing` with `Thing`; add `use external::Thing;`"
         );
     }
 
     #[test]
-    fn test_import_alias_violation_formats_compact_output() {
-        let violation = ImportAliasViolation {
+    fn test_aliased_import_violation_formats_compact_output() {
+        let violation = AliasedImportViolation {
             file: PathBuf::from("test.rs"),
             line: 4,
             column: 13,
-            message: "alias not allowed",
-            details: ImportAliasDetails {
-                alias: "Thing".to_owned(),
-            },
         };
 
         assert_eq!(
             violation.to_string(),
-            "test.rs:4:13 alias not allowed - alias: Thing [allowed: as _]"
+            "test.rs:4:13,aliased_import,use unaliased import if there are no clashes"
         );
     }
 }

@@ -6,8 +6,6 @@ use std::fmt::Result;
 use std::path::Path;
 use std::path::PathBuf;
 
-use serde::Serialize;
-
 use super::common::CallDetails;
 use super::common::FunctionCallFinding;
 use super::common::FunctionCallKind;
@@ -21,8 +19,8 @@ pub struct UnqualifiedCallRule;
 impl TypedRule for UnqualifiedCallRule {
     type Violation = UnqualifiedCallViolation;
 
-    fn name() -> &'static str {
-        "unqualified_call"
+    fn code() -> &'static str {
+        "uc"
     }
 
     fn check(&self, ctx: &FileContext<'_>) -> Vec<Self::Violation> {
@@ -34,12 +32,10 @@ impl TypedRule for UnqualifiedCallRule {
 }
 
 #[cfg_attr(test, derive(Debug, Eq, PartialEq))]
-#[derive(Serialize)]
 pub(super) struct UnqualifiedCallViolation {
     pub(super) file: PathBuf,
     pub(super) line: usize,
     pub(super) column: usize,
-    pub(super) message: &'static str,
     pub(super) details: CallDetails,
 }
 
@@ -50,7 +46,6 @@ impl UnqualifiedCallViolation {
             file: path.to_path_buf(),
             line: location.line,
             column: location.column.saturating_add(1),
-            message: "call needs qualification",
             details: CallDetails {
                 actual_path: finding.actual_path,
                 replacement_path: finding.suggestion.expected_path,
@@ -67,19 +62,19 @@ impl TypedRuleViolation for UnqualifiedCallViolation {
 impl Display for UnqualifiedCallViolation {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> Result {
         let details = format!(
-            "replace {} with {}{}",
+            "replace `{}` with `{}`{}",
             self.details.actual_path,
             self.details.replacement_path,
             self.details
                 .add_import
                 .as_ref()
-                .map_or_else(String::new, |import| format!("; add {import}")),
+                .map_or_else(String::new, |import| format!("; add `{import}`")),
         );
         formatter.write_str(&crate::cmds::rsl::rules::format_compact_violation(
             &self.file,
             self.line,
             self.column,
-            self.message,
+            UnqualifiedCallRule::code(),
             &details,
         ))
     }

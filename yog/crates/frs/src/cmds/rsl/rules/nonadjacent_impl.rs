@@ -1,4 +1,4 @@
-//! Impl-adjacency rule for `frs rsl`.
+//! Nonadjacent-impl rule for `frs rsl`.
 
 use std::fmt::Display;
 use std::fmt::Formatter;
@@ -7,20 +7,19 @@ use std::path::Path;
 use std::path::PathBuf;
 
 use proc_macro2::Span;
-use serde::Serialize;
 
 use crate::cmds::rsl::ast::ItemKind;
 use crate::cmds::rsl::engine::FileContext;
 use crate::cmds::rsl::rules::TypedRule;
 use crate::cmds::rsl::rules::TypedRuleViolation;
 
-pub struct ImplAdjacencyRule;
+pub struct NonadjacentImplRule;
 
-impl TypedRule for ImplAdjacencyRule {
-    type Violation = ImplAdjacencyViolation;
+impl TypedRule for NonadjacentImplRule {
+    type Violation = NonadjacentImplViolation;
 
-    fn name() -> &'static str {
-        "impl_adjacency"
+    fn code() -> &'static str {
+        "nonadjacent_impl"
     }
 
     fn check(&self, ctx: &FileContext<'_>) -> Vec<Self::Violation> {
@@ -51,7 +50,7 @@ impl TypedRule for ImplAdjacencyRule {
                     else {
                         continue;
                     };
-                    violations.push(ImplAdjacencyViolation::new(
+                    violations.push(NonadjacentImplViolation::new(
                         ctx.path,
                         classified.span,
                         crate::cmds::rsl::ast::impl_order_label(previous_item),
@@ -66,47 +65,49 @@ impl TypedRule for ImplAdjacencyRule {
 }
 
 #[cfg_attr(test, derive(Eq, PartialEq))]
-#[derive(Debug, Serialize)]
-pub(super) struct ImplAdjacencyViolation {
+#[derive(Debug)]
+pub(super) struct NonadjacentImplViolation {
     file: PathBuf,
     line: usize,
     column: usize,
-    message: &'static str,
-    details: ImplAdjacencyDetails,
+    details: NonadjacentImplDetails,
 }
 
-impl ImplAdjacencyViolation {
+impl NonadjacentImplViolation {
     fn new(path: &Path, span: Span, expected_after: String, item: ItemKind) -> Self {
         let location = span.start();
         Self {
             file: path.to_path_buf(),
             line: location.line,
             column: location.column.saturating_add(1),
-            message: "impl must follow its type",
-            details: ImplAdjacencyDetails { expected_after, item },
+            details: NonadjacentImplDetails { expected_after, item },
         }
     }
 }
 
-impl TypedRuleViolation for ImplAdjacencyViolation {
-    type Rule = ImplAdjacencyRule;
+impl TypedRuleViolation for NonadjacentImplViolation {
+    type Rule = NonadjacentImplRule;
 }
 
-impl Display for ImplAdjacencyViolation {
+impl Display for NonadjacentImplViolation {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> Result {
         formatter.write_str(&crate::cmds::rsl::rules::format_compact_violation(
             &self.file,
             self.line,
             self.column,
-            self.message,
-            &format!("{} -> after {}", self.details.item.label(), self.details.expected_after),
+            NonadjacentImplRule::code(),
+            &format!(
+                "move `{}` after `{}`",
+                self.details.item.label(),
+                self.details.expected_after
+            ),
         ))
     }
 }
 
 #[cfg_attr(test, derive(Eq, PartialEq))]
-#[derive(Debug, Serialize)]
-struct ImplAdjacencyDetails {
+#[derive(Debug)]
+struct NonadjacentImplDetails {
     expected_after: String,
     item: ItemKind,
 }
@@ -117,14 +118,14 @@ mod tests {
 
     use test_that::prelude::*;
 
-    use super::ImplAdjacencyDetails;
-    use super::ImplAdjacencyRule;
-    use super::ImplAdjacencyViolation;
+    use super::NonadjacentImplDetails;
+    use super::NonadjacentImplRule;
+    use super::NonadjacentImplViolation;
     use crate::cmds::rsl::ast::ItemKind;
     use crate::cmds::rsl::rules::TypedRule;
 
     #[test]
-    fn test_impl_adjacency_rule_check_when_impl_is_not_adjacent_to_type_reports_impl() {
+    fn test_nonadjacent_impl_rule_check_when_impl_is_not_adjacent_to_type_reports_impl() {
         let syntax = syn::parse_file(
             r"
             struct Data;
@@ -134,16 +135,15 @@ mod tests {
         )
         .unwrap();
 
-        let result = ImplAdjacencyRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
+        let result = NonadjacentImplRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
 
         assert_that!(
             result,
-            eq(vec![ImplAdjacencyViolation {
+            eq(vec![NonadjacentImplViolation {
                 file: PathBuf::from("test.rs"),
                 line: 4,
                 column: 13,
-                message: "impl must follow its type",
-                details: ImplAdjacencyDetails {
+                details: NonadjacentImplDetails {
                     expected_after: "struct Data".to_owned(),
                     item: ItemKind::Impl,
                 },
@@ -152,7 +152,7 @@ mod tests {
     }
 
     #[test]
-    fn test_impl_adjacency_rule_check_when_trait_impl_precedes_inherent_impl_reports_impls() {
+    fn test_nonadjacent_impl_rule_check_when_trait_impl_precedes_inherent_impl_reports_impls() {
         let syntax = syn::parse_file(
             r"
             struct Data;
@@ -162,27 +162,25 @@ mod tests {
         )
         .unwrap();
 
-        let result = ImplAdjacencyRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
+        let result = NonadjacentImplRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
 
         assert_that!(
             result,
             eq(vec![
-                ImplAdjacencyViolation {
+                NonadjacentImplViolation {
                     file: PathBuf::from("test.rs"),
                     line: 4,
                     column: 13,
-                    message: "impl must follow its type",
-                    details: ImplAdjacencyDetails {
+                    details: NonadjacentImplDetails {
                         expected_after: "struct Data".to_owned(),
                         item: ItemKind::Impl,
                     },
                 },
-                ImplAdjacencyViolation {
+                NonadjacentImplViolation {
                     file: PathBuf::from("test.rs"),
                     line: 3,
                     column: 13,
-                    message: "impl must follow its type",
-                    details: ImplAdjacencyDetails {
+                    details: NonadjacentImplDetails {
                         expected_after: "inherent impl Data".to_owned(),
                         item: ItemKind::Impl,
                     },
@@ -192,13 +190,12 @@ mod tests {
     }
 
     #[test]
-    fn test_impl_adjacency_violation_when_details_are_present_formats_compact_output() {
-        let violation = ImplAdjacencyViolation {
+    fn test_nonadjacent_impl_violation_when_details_are_present_formats_compact_output() {
+        let violation = NonadjacentImplViolation {
             file: PathBuf::from("test.rs"),
             line: 4,
             column: 13,
-            message: "impl must follow its type",
-            details: ImplAdjacencyDetails {
+            details: NonadjacentImplDetails {
                 expected_after: "struct Data".to_owned(),
                 item: ItemKind::Impl,
             },
@@ -206,12 +203,12 @@ mod tests {
 
         assert_eq!(
             violation.to_string(),
-            "test.rs:4:13 impl must follow its type - impl -> after struct Data"
+            "test.rs:4:13,nonadjacent_impl,move `impl` after `struct Data`"
         );
     }
 
     #[test]
-    fn test_impl_adjacency_rule_check_when_cfg_item_is_between_type_and_impl_reports_impl() {
+    fn test_nonadjacent_impl_rule_check_when_cfg_item_is_between_type_and_impl_reports_impl() {
         let syntax = syn::parse_file(
             r#"
             struct Data;
@@ -222,16 +219,15 @@ mod tests {
         )
         .unwrap();
 
-        let result = ImplAdjacencyRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
+        let result = NonadjacentImplRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
 
         assert_that!(
             result,
-            eq(vec![ImplAdjacencyViolation {
+            eq(vec![NonadjacentImplViolation {
                 file: PathBuf::from("test.rs"),
                 line: 5,
                 column: 13,
-                message: "impl must follow its type",
-                details: ImplAdjacencyDetails {
+                details: NonadjacentImplDetails {
                     expected_after: "struct Data".to_owned(),
                     item: ItemKind::Impl,
                 },

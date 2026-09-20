@@ -4,27 +4,25 @@ use std::fmt::Display;
 use std::path::Path;
 use std::sync::OnceLock;
 
-use serde::Serialize;
-
 use crate::cmds::rsl::engine::FileContext;
-use crate::cmds::rsl::rules::fn_order::FnOrderRule;
-use crate::cmds::rsl::rules::impl_adjacency::ImplAdjacencyRule;
-use crate::cmds::rsl::rules::import_alias::ImportAliasRule;
-use crate::cmds::rsl::rules::item_group::ItemGroupRule;
+use crate::cmds::rsl::rules::aliased_import::AliasedImportRule;
+use crate::cmds::rsl::rules::misordered_function::MisorderedFunctionRule;
+use crate::cmds::rsl::rules::misordered_item_group::MisorderedItemGroupRule;
+use crate::cmds::rsl::rules::misordered_visibility::MisorderedVisibilityRule;
+use crate::cmds::rsl::rules::nonadjacent_impl::NonadjacentImplRule;
 use crate::cmds::rsl::rules::overqualified_call::OverqualifiedCallRule;
-use crate::cmds::rsl::rules::qualified_item_path::QualifiedItemPathRule;
+use crate::cmds::rsl::rules::qualified_item::QualifiedItemRule;
 use crate::cmds::rsl::rules::unqualified_call::UnqualifiedCallRule;
-use crate::cmds::rsl::rules::visibility_order::VisibilityOrderRule;
 
+mod aliased_import;
 mod common;
-mod fn_order;
-mod impl_adjacency;
-mod import_alias;
-mod item_group;
+mod misordered_function;
+mod misordered_item_group;
+mod misordered_visibility;
+mod nonadjacent_impl;
 mod overqualified_call;
-mod qualified_item_path;
+mod qualified_item;
 mod unqualified_call;
-mod visibility_order;
 
 static RULES: OnceLock<[Box<dyn Rule>; 8]> = OnceLock::new();
 
@@ -49,24 +47,9 @@ where
 }
 
 /// Object-safe violation interface used after the dispatcher erases types.
-pub trait RuleViolation: Display + Send + Sync {
-    fn write_json(&self, output: &mut Vec<u8>) -> serde_json::Result<()>;
-}
+pub trait RuleViolation: Display + Send + Sync {}
 
-impl<T> RuleViolation for T
-where
-    T: crate::cmds::rsl::rules::TypedRuleViolation + Display,
-{
-    fn write_json(&self, output: &mut Vec<u8>) -> serde_json::Result<()> {
-        serde_json::to_writer(
-            output,
-            &SerializedViolation {
-                rule: <T::Rule as crate::cmds::rsl::rules::TypedRule>::name(),
-                violation: self,
-            },
-        )
-    }
-}
+impl<T> RuleViolation for T where T: crate::cmds::rsl::rules::TypedRuleViolation + Display {}
 
 /// Typed rule contract implemented by each concrete rule.
 ///
@@ -75,13 +58,13 @@ where
 trait TypedRule: Send + Sync + 'static {
     type Violation: crate::cmds::rsl::rules::TypedRuleViolation<Rule = Self> + Display + 'static;
 
-    fn name() -> &'static str;
+    fn code() -> &'static str;
 
     fn check(&self, ctx: &FileContext<'_>) -> Vec<Self::Violation>;
 }
 
 /// Typed link between a concrete violation and its owning rule.
-trait TypedRuleViolation: Serialize + Send + Sync + 'static {
+trait TypedRuleViolation: Send + Sync + 'static {
     type Rule: crate::cmds::rsl::rules::TypedRule<Violation = Self>;
 }
 
@@ -89,27 +72,10 @@ pub(super) fn format_compact_violation(
     file: &Path,
     line: usize,
     column: usize,
-    message: &str,
-    details: &str,
+    code: &str,
+    suggested_fix: &str,
 ) -> String {
-    if details.is_empty() {
-        format!("{}:{line}:{column} {message}", file.display())
-    } else {
-        format!("{}:{line}:{column} {message} - {details}", file.display())
-    }
-}
-
-/// Serialization-only adapter for the CLI output.
-///
-/// Concrete rules keep returning their own violation types. This adapter is
-/// needed only when the dispatcher combines those different types into one
-/// JSON list. The concrete violation selects its rule name through its
-/// associated `TypedRule` implementation.
-#[derive(Serialize)]
-struct SerializedViolation<'rule, V: ?Sized> {
-    rule: &'rule str,
-    #[serde(flatten)]
-    violation: &'rule V,
+    format!("{}:{line}:{column},{code},{suggested_fix}", file.display())
 }
 
 pub(super) fn check(ctx: &FileContext<'_>) -> Vec<Box<dyn RuleViolation>> {
@@ -125,14 +91,14 @@ fn rules() -> &'static [Box<dyn Rule>] {
     RULES
         .get_or_init(|| {
             [
-                Box::new(ItemGroupRule::new(None)) as Box<dyn Rule>,
-                Box::new(VisibilityOrderRule::new(None)),
-                Box::new(ImplAdjacencyRule),
-                Box::new(FnOrderRule),
+                Box::new(MisorderedItemGroupRule::new(None)) as Box<dyn Rule>,
+                Box::new(MisorderedVisibilityRule::new(None)),
+                Box::new(NonadjacentImplRule),
+                Box::new(MisorderedFunctionRule),
                 Box::new(UnqualifiedCallRule),
                 Box::new(OverqualifiedCallRule),
-                Box::new(QualifiedItemPathRule),
-                Box::new(ImportAliasRule),
+                Box::new(QualifiedItemRule),
+                Box::new(AliasedImportRule),
             ]
         })
         .as_slice()

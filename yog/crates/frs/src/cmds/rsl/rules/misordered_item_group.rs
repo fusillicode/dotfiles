@@ -1,4 +1,4 @@
-//! Item-group ordering rule for `frs rsl`.
+//! Misordered-item-group rule for `frs rsl`.
 
 use std::fmt::Display;
 use std::fmt::Formatter;
@@ -7,7 +7,6 @@ use std::path::Path;
 use std::path::PathBuf;
 
 use proc_macro2::Span;
-use serde::Serialize;
 
 use crate::cmds::rsl::ast::ItemGroup;
 use crate::cmds::rsl::ast::ItemKind;
@@ -15,11 +14,11 @@ use crate::cmds::rsl::engine::FileContext;
 use crate::cmds::rsl::rules::TypedRule;
 use crate::cmds::rsl::rules::TypedRuleViolation;
 
-pub struct ItemGroupRule {
+pub struct MisorderedItemGroupRule {
     group_order: [ItemGroup; 7],
 }
 
-impl ItemGroupRule {
+impl MisorderedItemGroupRule {
     pub(super) fn new(group_order: Option<[ItemGroup; 7]>) -> Self {
         Self {
             group_order: group_order.unwrap_or([
@@ -42,11 +41,11 @@ impl ItemGroupRule {
     }
 }
 
-impl TypedRule for ItemGroupRule {
-    type Violation = ItemGroupViolation;
+impl TypedRule for MisorderedItemGroupRule {
+    type Violation = MisorderedItemGroupViolation;
 
-    fn name() -> &'static str {
-        "item_group"
+    fn code() -> &'static str {
+        "misordered_item_group"
     }
 
     fn check(&self, ctx: &FileContext<'_>) -> Vec<Self::Violation> {
@@ -63,13 +62,11 @@ impl TypedRule for ItemGroupRule {
                 };
                 if metadata.is_test_module() {
                     if index != items.len().saturating_sub(1) {
-                        violations.push(ItemGroupViolation::new(
+                        violations.push(MisorderedItemGroupViolation::new(
                             ctx.path,
                             classified.span,
-                            ItemGroup::Modules,
                             ItemGroup::Items,
                             classified.kind,
-                            "test module must be last",
                         ));
                     }
                     continue;
@@ -79,13 +76,11 @@ impl TypedRule for ItemGroupRule {
                 if let Some(expected_group) = previous_group
                     && self.group_rank(actual_group) < self.group_rank(expected_group)
                 {
-                    violations.push(ItemGroupViolation::new(
+                    violations.push(MisorderedItemGroupViolation::new(
                         ctx.path,
                         classified.span,
-                        actual_group,
                         expected_group,
                         classified.kind,
-                        "item group out of order",
                     ));
                 }
                 previous_group = Some(actual_group);
@@ -97,64 +92,49 @@ impl TypedRule for ItemGroupRule {
 }
 
 #[cfg_attr(test, derive(Eq, PartialEq))]
-#[derive(Debug, Serialize)]
-pub(super) struct ItemGroupViolation {
+#[derive(Debug)]
+pub(super) struct MisorderedItemGroupViolation {
     file: PathBuf,
     line: usize,
     column: usize,
-    message: &'static str,
-    details: ViolationDetails,
+    details: MisorderedItemGroupDetails,
 }
 
-impl ItemGroupViolation {
-    fn new(
-        path: &Path,
-        span: Span,
-        actual_group: ItemGroup,
-        expected_group: ItemGroup,
-        item: ItemKind,
-        message: &'static str,
-    ) -> Self {
+impl MisorderedItemGroupViolation {
+    fn new(path: &Path, span: Span, expected_group: ItemGroup, item: ItemKind) -> Self {
         let location = span.start();
         Self {
             file: path.to_path_buf(),
             line: location.line,
             column: location.column.saturating_add(1),
-            message,
-            details: ViolationDetails {
-                actual_group,
-                expected_group,
-                item,
-            },
+            details: MisorderedItemGroupDetails { expected_group, item },
         }
     }
 }
 
-impl TypedRuleViolation for ItemGroupViolation {
-    type Rule = ItemGroupRule;
+impl TypedRuleViolation for MisorderedItemGroupViolation {
+    type Rule = MisorderedItemGroupRule;
 }
 
-impl Display for ItemGroupViolation {
+impl Display for MisorderedItemGroupViolation {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> Result {
         formatter.write_str(&crate::cmds::rsl::rules::format_compact_violation(
             &self.file,
             self.line,
             self.column,
-            self.message,
+            MisorderedItemGroupRule::code(),
             &format!(
-                "{} -> {} [{}]",
-                self.details.actual_group,
-                self.details.expected_group,
-                self.details.item.label()
+                "move `{}` after `{}`",
+                self.details.item.label(),
+                self.details.expected_group
             ),
         ))
     }
 }
 
 #[cfg_attr(test, derive(Eq, PartialEq))]
-#[derive(Debug, Serialize)]
-struct ViolationDetails {
-    actual_group: ItemGroup,
+#[derive(Debug)]
+struct MisorderedItemGroupDetails {
     expected_group: ItemGroup,
     item: ItemKind,
 }
@@ -165,9 +145,9 @@ mod tests {
 
     use test_that::prelude::*;
 
-    use super::ItemGroupRule;
-    use super::ItemGroupViolation;
-    use super::ViolationDetails;
+    use super::MisorderedItemGroupDetails;
+    use super::MisorderedItemGroupRule;
+    use super::MisorderedItemGroupViolation;
     use crate::cmds::rsl::ast::ItemGroup;
     use crate::cmds::rsl::rules::TypedRule;
 
@@ -220,7 +200,7 @@ mod tests {
     }
 
     #[test]
-    fn test_item_group_rule_check_when_group_rank_decreases_reports_offending_item() {
+    fn test_misordered_item_group_rule_check_when_group_rank_decreases_reports_offending_item() {
         let syntax = syn::parse_file(
             r"
             const VALUE: usize = 1;
@@ -230,17 +210,15 @@ mod tests {
         )
         .unwrap();
 
-        let result = ItemGroupRule::new(None).check(&crate::cmds::rsl::rules::test_ctx(&syntax));
+        let result = MisorderedItemGroupRule::new(None).check(&crate::cmds::rsl::rules::test_ctx(&syntax));
 
         assert_that!(
             result,
-            eq(vec![ItemGroupViolation {
+            eq(vec![MisorderedItemGroupViolation {
                 file: PathBuf::from("test.rs"),
                 line: 4,
                 column: 13,
-                message: "item group out of order",
-                details: ViolationDetails {
-                    actual_group: ItemGroup::Use,
+                details: MisorderedItemGroupDetails {
                     expected_group: ItemGroup::Items,
                     item: crate::cmds::rsl::ast::ItemKind::Use,
                 },
@@ -249,7 +227,7 @@ mod tests {
     }
 
     #[test]
-    fn test_item_group_rule_check_when_same_group_repeats_preserves_clean_order() {
+    fn test_misordered_item_group_rule_check_when_same_group_repeats_preserves_clean_order() {
         let syntax = syn::parse_file(
             r"
             const FIRST: usize = 1;
@@ -260,13 +238,13 @@ mod tests {
         )
         .unwrap();
 
-        let result = ItemGroupRule::new(None).check(&crate::cmds::rsl::rules::test_ctx(&syntax));
+        let result = MisorderedItemGroupRule::new(None).check(&crate::cmds::rsl::rules::test_ctx(&syntax));
 
         assert_that!(result, is_empty());
     }
 
     #[test]
-    fn test_item_group_rule_check_when_cfg_test_tests_module_is_last_returns_no_violations() {
+    fn test_misordered_item_group_rule_check_when_cfg_test_tests_module_is_last_returns_no_violations() {
         let syntax = syn::parse_file(
             r"
             fn run() {}
@@ -277,13 +255,13 @@ mod tests {
         )
         .unwrap();
 
-        let result = ItemGroupRule::new(None).check(&crate::cmds::rsl::rules::test_ctx(&syntax));
+        let result = MisorderedItemGroupRule::new(None).check(&crate::cmds::rsl::rules::test_ctx(&syntax));
 
         assert_that!(result, is_empty());
     }
 
     #[test]
-    fn test_item_group_rule_check_when_cfg_test_tests_module_is_not_last_reports_violation() {
+    fn test_misordered_item_group_rule_check_when_cfg_test_tests_module_is_not_last_reports_violation() {
         let syntax = syn::parse_file(
             r"
             #[cfg(test)]
@@ -294,17 +272,15 @@ mod tests {
         )
         .unwrap();
 
-        let result = ItemGroupRule::new(None).check(&crate::cmds::rsl::rules::test_ctx(&syntax));
+        let result = MisorderedItemGroupRule::new(None).check(&crate::cmds::rsl::rules::test_ctx(&syntax));
 
         assert_that!(
             result,
-            eq(vec![ItemGroupViolation {
+            eq(vec![MisorderedItemGroupViolation {
                 file: PathBuf::from("test.rs"),
                 line: 3,
                 column: 13,
-                message: "test module must be last",
-                details: ViolationDetails {
-                    actual_group: ItemGroup::Modules,
+                details: MisorderedItemGroupDetails {
                     expected_group: ItemGroup::Items,
                     item: crate::cmds::rsl::ast::ItemKind::Mod,
                 },
@@ -313,7 +289,7 @@ mod tests {
     }
 
     #[test]
-    fn test_item_group_rule_check_when_opaque_macro_is_between_items_ignores_macro_barrier() {
+    fn test_misordered_item_group_rule_check_when_opaque_macro_is_between_items_ignores_macro_barrier() {
         let syntax = syn::parse_file(
             r"
             const VALUE: usize = 1;
@@ -323,13 +299,13 @@ mod tests {
         )
         .unwrap();
 
-        let result = ItemGroupRule::new(None).check(&crate::cmds::rsl::rules::test_ctx(&syntax));
+        let result = MisorderedItemGroupRule::new(None).check(&crate::cmds::rsl::rules::test_ctx(&syntax));
 
         assert_that!(result, is_empty());
     }
 
     #[test]
-    fn test_item_group_rule_check_when_explicit_macro_definition_precedes_constant_reports_violation() {
+    fn test_misordered_item_group_rule_check_when_explicit_macro_definition_precedes_constant_reports_violation() {
         let syntax = syn::parse_file(
             r"
             macro_rules! declared {}
@@ -338,17 +314,15 @@ mod tests {
         )
         .unwrap();
 
-        let result = ItemGroupRule::new(None).check(&crate::cmds::rsl::rules::test_ctx(&syntax));
+        let result = MisorderedItemGroupRule::new(None).check(&crate::cmds::rsl::rules::test_ctx(&syntax));
 
         assert_that!(
             result,
-            eq(vec![ItemGroupViolation {
+            eq(vec![MisorderedItemGroupViolation {
                 file: PathBuf::from("test.rs"),
                 line: 3,
                 column: 13,
-                message: "item group out of order",
-                details: ViolationDetails {
-                    actual_group: ItemGroup::Constants,
+                details: MisorderedItemGroupDetails {
                     expected_group: ItemGroup::Items,
                     item: crate::cmds::rsl::ast::ItemKind::Const,
                 },
@@ -369,7 +343,7 @@ mod tests {
     }
 
     #[test]
-    fn test_item_group_rule_check_when_inline_module_contains_violation_reports_nested_item() {
+    fn test_misordered_item_group_rule_check_when_inline_module_contains_violation_reports_nested_item() {
         let syntax = syn::parse_file(
             r"
             mod child {
@@ -380,17 +354,15 @@ mod tests {
         )
         .unwrap();
 
-        let result = ItemGroupRule::new(None).check(&crate::cmds::rsl::rules::test_ctx(&syntax));
+        let result = MisorderedItemGroupRule::new(None).check(&crate::cmds::rsl::rules::test_ctx(&syntax));
 
         assert_that!(
             result,
-            eq(vec![ItemGroupViolation {
+            eq(vec![MisorderedItemGroupViolation {
                 file: PathBuf::from("test.rs"),
                 line: 4,
                 column: 17,
-                message: "item group out of order",
-                details: ViolationDetails {
-                    actual_group: ItemGroup::Constants,
+                details: MisorderedItemGroupDetails {
                     expected_group: ItemGroup::Items,
                     item: crate::cmds::rsl::ast::ItemKind::Const,
                 },
@@ -399,14 +371,12 @@ mod tests {
     }
 
     #[test]
-    fn test_item_group_violation_when_details_are_present_formats_compact_output() {
-        let violation = ItemGroupViolation {
+    fn test_misordered_item_group_violation_when_details_are_present_formats_compact_output() {
+        let violation = MisorderedItemGroupViolation {
             file: PathBuf::from("test.rs"),
             line: 4,
             column: 13,
-            message: "item group out of order",
-            details: ViolationDetails {
-                actual_group: ItemGroup::Constants,
+            details: MisorderedItemGroupDetails {
                 expected_group: ItemGroup::Items,
                 item: crate::cmds::rsl::ast::ItemKind::Const,
             },
@@ -414,7 +384,7 @@ mod tests {
 
         assert_eq!(
             violation.to_string(),
-            "test.rs:4:13 item group out of order - constants -> items [const]"
+            "test.rs:4:13,misordered_item_group,move `const` after `items`"
         );
     }
 

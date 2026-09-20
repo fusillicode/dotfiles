@@ -1,7 +1,6 @@
 //! The `frs rsl` command and its command-line interface.
 
 use std::ffi::OsString;
-use std::fmt::Write as _;
 use std::path::PathBuf;
 
 use rootcause::report;
@@ -23,7 +22,7 @@ mod rules;
 pub fn run(mut cli_args: Arguments) -> rootcause::Result<RslOutput> {
     if cli_args.contains("--help") {
         print!("{}", crate::cmds::Help::Rsl.text());
-        return Ok(RslOutput::Compact { violations: Vec::new() });
+        return Ok(RslOutput { violations: Vec::new() });
     }
 
     let opts = match RslOpts::try_from(cli_args.finish()) {
@@ -35,65 +34,29 @@ pub fn run(mut cli_args: Arguments) -> rootcause::Result<RslOutput> {
     };
     let violations = crate::cmds::rsl::engine::check_paths(&opts.paths)?;
 
-    Ok(match opts.format {
-        OutputFormat::Compact => RslOutput::Compact { violations },
-        OutputFormat::Json => RslOutput::Json { violations },
-    })
+    Ok(RslOutput { violations })
 }
 
 #[derive(Debug)]
 struct RslOpts {
     paths: Vec<PathBuf>,
-    format: OutputFormat,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum OutputFormat {
-    Compact,
-    Json,
-}
-
-pub enum RslOutput {
-    Compact { violations: Vec<Box<dyn RuleViolation>> },
-    Json { violations: Vec<Box<dyn RuleViolation>> },
+pub struct RslOutput {
+    violations: Vec<Box<dyn RuleViolation>>,
 }
 
 impl RslOutput {
     pub const fn is_empty(&self) -> bool {
-        match self {
-            Self::Compact { violations } | Self::Json { violations } => violations.is_empty(),
-        }
+        self.violations.is_empty()
     }
 
-    pub fn render(&self) -> serde_json::Result<String> {
-        match self {
-            Self::Compact { violations } => {
-                let mut rendered = String::new();
-                for (index, violation) in violations.iter().enumerate() {
-                    if index > 0 {
-                        rendered.push('\n');
-                    }
-                    write!(&mut rendered, "{violation}")
-                        .map_err(|_| serde_json::Error::io(std::io::Error::other("could not render compact output")))?;
-                }
-                Ok(rendered)
-            }
-            Self::Json { violations } => {
-                // Write directly into the final array to avoid `violation -> Value -> String`
-                // serialization and its intermediate JSON tree.
-                let mut serialized = Vec::new();
-                serialized.push(b'[');
-                for (index, violation) in violations.iter().enumerate() {
-                    if index > 0 {
-                        serialized.push(b',');
-                    }
-                    violation.write_json(&mut serialized)?;
-                }
-                serialized.push(b']');
-                String::from_utf8(serialized)
-                    .map_err(|error| serde_json::Error::io(std::io::Error::new(std::io::ErrorKind::InvalidData, error)))
-            }
-        }
+    pub fn render(&self) -> String {
+        self.violations
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join("\n")
     }
 }
 
@@ -115,12 +78,7 @@ impl TryFrom<Vec<OsString>> for RslOpts {
             }
         }
 
-        let mut cli_args = Arguments::from_vec(before_separator);
-        let format = if cli_args.contains("--json") {
-            OutputFormat::Json
-        } else {
-            OutputFormat::Compact
-        };
+        let cli_args = Arguments::from_vec(before_separator);
         let mut paths = cli_args.finish();
         if let Some(option) = paths.iter().find(|path| path.to_string_lossy().starts_with('-')) {
             return Err(report!("unknown rsl option").attach(format!("option={}", option.to_string_lossy())));
@@ -133,7 +91,6 @@ impl TryFrom<Vec<OsString>> for RslOpts {
 
         Ok(Self {
             paths: paths.into_iter().map(PathBuf::from).collect(),
-            format,
         })
     }
 }
@@ -144,7 +101,6 @@ mod tests {
     use std::fmt::Display;
     use std::path::PathBuf;
 
-    use serde_json::Value;
     use tempfile::TempDir;
     use test_that::prelude::*;
 
@@ -206,7 +162,7 @@ mod tests {
         assert_that!(
             output,
             eq(format!(
-                "{}:3:13 item group out of order - constants -> items [const]\n{}:3:13 item group out of order - constants -> items [const]\n",
+                "{}:3:13,misordered_item_group,move `const` after `items`\n{}:3:13,misordered_item_group,move `const` after `items`\n",
                 first.display(),
                 second.display(),
             ))
@@ -226,78 +182,18 @@ mod tests {
         ));
 
         let output = require(run_rsl(vec![source.clone().into_os_string()]));
-        let expected_file = source.to_string_lossy();
+        let expected_file = source.to_string_lossy().into_owned();
 
         assert_that!(
             output,
             eq(format!(
-                "{expected_file}:3:13 item group out of order - constants -> items [const]\n"
+                "{expected_file}:3:13,misordered_item_group,move `const` after `items`\n"
             ))
         );
     }
 
     #[test]
-    fn test_rsl_when_json_flag_is_supplied_returns_json_violations() {
-        let directory = require(tempfile::tempdir());
-        let source = require(write_source(
-            &directory,
-            "sample.rs",
-            r"
-            fn run() {}
-            use std::fmt;
-            ",
-        ));
-        let second_source = require(write_source(
-            &directory,
-            "second.rs",
-            r"
-            fn run() {}
-            use std::io;
-            ",
-        ));
-
-        let output = require(run_rsl(vec![
-            OsString::from("--json"),
-            source.clone().into_os_string(),
-            second_source.clone().into_os_string(),
-        ]));
-        let json: Value = require(serde_json::from_str(&output));
-        let expected_file = source.to_string_lossy().into_owned();
-        let expected_second_file = second_source.to_string_lossy().into_owned();
-
-        assert_that!(
-            json,
-            eq(serde_json::json!([
-                {
-                    "rule": "item_group",
-                    "file": expected_file,
-                    "line": 3,
-                    "column": 13,
-                    "message": "item group out of order",
-                    "details": {
-                        "actual_group": "use",
-                        "expected_group": "items",
-                        "item": "use"
-                    }
-                },
-                {
-                    "rule": "item_group",
-                    "file": expected_second_file,
-                    "line": 3,
-                    "column": 13,
-                    "message": "item group out of order",
-                    "details": {
-                        "actual_group": "use",
-                        "expected_group": "items",
-                        "item": "use"
-                    }
-                }
-            ]))
-        );
-    }
-
-    #[test]
-    fn test_rsl_when_function_qualification_is_invalid_reports_separate_rule_names() {
+    fn test_rsl_when_function_qualification_is_invalid_reports_rule_codes() {
         let directory = require(tempfile::tempdir());
         let source = require(write_source(
             &directory,
@@ -312,36 +208,24 @@ mod tests {
         ));
 
         let expected_file = source.to_string_lossy().into_owned();
-        let output = require(run_rsl(vec![OsString::from("--json"), source.into_os_string()]));
-        let json: Value = require(serde_json::from_str(&output));
+        let output = require(run_rsl(vec![source.into_os_string()]));
 
         assert_that!(
-            json,
-            eq(serde_json::json!([
-                {
-                    "rule": "unqualified_call",
-                    "file": expected_file,
-                    "line": 4,
-                    "column": 17,
-                    "message": "call needs qualification",
-                    "details": {
-                        "actual_path": "tempdir",
-                        "replacement_path": "tempfile::tempdir"
-                    }
-                },
-                {
-                    "rule": "overqualified_call",
-                    "file": expected_file,
-                    "line": 5,
-                    "column": 17,
-                    "message": "call needs qualification",
-                    "details": {
-                        "actual_path": "std::fs::read_to_string",
-                        "replacement_path": "fs::read_to_string",
-                        "add_import": "use std::fs;"
-                    }
-                }
-            ]))
+            output,
+            eq(format!(
+                "{expected_file}:4:17,uc,replace `tempdir` with `tempfile::tempdir`\n{expected_file}:5:17,oc,replace `std::fs::read_to_string` with `fs::read_to_string`; add `use std::fs;`\n"
+            ))
+        );
+    }
+
+    #[test]
+    fn test_rsl_when_json_option_is_supplied_returns_usage_error() {
+        let directory = require(tempfile::tempdir());
+        let source = require(write_source(&directory, "sample.rs", "fn main() {}"));
+
+        assert_that!(
+            run_rsl(vec![OsString::from("--json"), source.into_os_string()]),
+            err(anything())
         );
     }
 
@@ -394,7 +278,7 @@ mod tests {
             return Ok(String::new());
         }
 
-        Ok(format!("{}\n", output.render()?))
+        Ok(format!("{}\n", output.render()))
     }
 
     fn require<T, E: Display>(result: Result<T, E>) -> T {
