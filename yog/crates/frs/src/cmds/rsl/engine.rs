@@ -15,7 +15,7 @@ pub struct FileContext<'ast> {
 }
 
 pub(super) fn check_paths(paths: &[PathBuf]) -> rootcause::Result<Vec<Box<dyn RuleViolation>>> {
-    // Collect indexed results before propagating errors to preserve input order.
+    // Collect results before propagating errors to preserve input order.
     let file_results: Vec<_> = paths.par_iter().map(|path| self::check_path(path)).collect();
     let mut violations = Vec::new();
 
