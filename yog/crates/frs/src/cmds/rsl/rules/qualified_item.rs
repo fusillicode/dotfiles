@@ -1,4 +1,4 @@
-//! Qualified-item-path rule for `frs rsl`.
+//! Qualified-item rule for `frs rsl`.
 
 use std::fmt::Display;
 use std::fmt::Formatter;
@@ -7,7 +7,6 @@ use std::path::Path;
 use std::path::PathBuf;
 
 use proc_macro2::Span;
-use serde::Serialize;
 use syn::Expr;
 use syn::spanned::Spanned;
 use syn::visit::Visit;
@@ -23,24 +22,21 @@ use crate::cmds::rsl::rules::TypedRule;
 use crate::cmds::rsl::rules::TypedRuleViolation;
 
 #[cfg_attr(test, derive(Debug, Eq, PartialEq))]
-#[derive(Serialize)]
-pub(super) struct QualifiedItemPathViolation {
+pub(super) struct QualifiedItemViolation {
     pub(super) file: PathBuf,
     pub(super) line: usize,
     pub(super) column: usize,
-    pub(super) message: &'static str,
-    pub(super) details: QualifiedItemPathDetails,
+    pub(super) details: QualifiedItemDetails,
 }
 
-impl QualifiedItemPathViolation {
+impl QualifiedItemViolation {
     pub(super) fn new(path: &Path, span: Span, actual_path: String, expected_import: String) -> Self {
         let location = span.start();
         Self {
             file: path.to_path_buf(),
             line: location.line,
             column: location.column.saturating_add(1),
-            message: "import this item",
-            details: QualifiedItemPathDetails {
+            details: QualifiedItemDetails {
                 actual_path,
                 expected_import,
             },
@@ -49,19 +45,18 @@ impl QualifiedItemPathViolation {
 }
 
 #[cfg_attr(test, derive(Debug, Eq, PartialEq))]
-#[derive(Serialize)]
-pub(super) struct QualifiedItemPathDetails {
+pub(super) struct QualifiedItemDetails {
     pub(super) actual_path: String,
     pub(super) expected_import: String,
 }
 
-pub struct QualifiedItemPathRule;
+pub struct QualifiedItemRule;
 
-impl TypedRule for QualifiedItemPathRule {
-    type Violation = QualifiedItemPathViolation;
+impl TypedRule for QualifiedItemRule {
+    type Violation = QualifiedItemViolation;
 
-    fn name() -> &'static str {
-        "qualified_item_path"
+    fn code() -> &'static str {
+        "qualified_item"
     }
 
     fn check(&self, ctx: &FileContext<'_>) -> Vec<Self::Violation> {
@@ -69,7 +64,7 @@ impl TypedRule for QualifiedItemPathRule {
         let mut violations = Vec::new();
 
         for scope in &index.scopes {
-            let mut visitor = QualifiedItemPathVisitor {
+            let mut visitor = QualifiedItemVisitor {
                 index: &index,
                 current_module: &scope.path,
                 source_path: ctx.path,
@@ -85,15 +80,15 @@ impl TypedRule for QualifiedItemPathRule {
     }
 }
 
-struct QualifiedItemPathVisitor<'index, 'ast, 'output> {
+struct QualifiedItemVisitor<'index, 'ast, 'output> {
     index: &'index ModuleIndex<'ast>,
     current_module: &'index [String],
     source_path: &'index Path,
-    violations: &'output mut Vec<QualifiedItemPathViolation>,
+    violations: &'output mut Vec<QualifiedItemViolation>,
     skip_call_path: bool,
 }
 
-impl<'ast> Visit<'ast> for QualifiedItemPathVisitor<'_, '_, '_> {
+impl<'ast> Visit<'ast> for QualifiedItemVisitor<'_, '_, '_> {
     fn visit_expr_call(&mut self, expression: &'ast syn::ExprCall) {
         if let Expr::Path(path) = expression.func.as_ref()
             && let Some(parts) = associated_receiver_parts(&path.path)
@@ -126,7 +121,7 @@ impl<'ast> Visit<'ast> for QualifiedItemPathVisitor<'_, '_, '_> {
     fn visit_macro(&mut self, _mac: &'ast syn::Macro) {}
 }
 
-fn check_non_function_path(visitor: &mut QualifiedItemPathVisitor<'_, '_, '_>, parts: &[String], span: Span) {
+fn check_non_function_path(visitor: &mut QualifiedItemVisitor<'_, '_, '_>, parts: &[String], span: Span) {
     if parts.len() <= 1
         || !is_import_style_path(parts)
         || has_name_clash_parts(visitor.index, visitor.current_module, parts)
@@ -135,7 +130,7 @@ fn check_non_function_path(visitor: &mut QualifiedItemPathVisitor<'_, '_, '_>, p
     }
 
     let actual_path = parts.join("::");
-    visitor.violations.push(QualifiedItemPathViolation::new(
+    visitor.violations.push(QualifiedItemViolation::new(
         visitor.source_path,
         span,
         actual_path.clone(),
@@ -143,18 +138,27 @@ fn check_non_function_path(visitor: &mut QualifiedItemPathVisitor<'_, '_, '_>, p
     ));
 }
 
-impl Display for QualifiedItemPathViolation {
+impl Display for QualifiedItemViolation {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> Result {
+        let imported_name = self
+            .details
+            .actual_path
+            .rsplit("::")
+            .next()
+            .unwrap_or(self.details.actual_path.as_str());
         formatter.write_str(&crate::cmds::rsl::rules::format_compact_violation(
             &self.file,
             self.line,
             self.column,
-            self.message,
-            &format!("{} -> {}", self.details.actual_path, self.details.expected_import),
+            QualifiedItemRule::code(),
+            &format!(
+                "replace `{}` with `{}`; add `{}`",
+                self.details.actual_path, imported_name, self.details.expected_import
+            ),
         ))
     }
 }
 
-impl TypedRuleViolation for QualifiedItemPathViolation {
-    type Rule = QualifiedItemPathRule;
+impl TypedRuleViolation for QualifiedItemViolation {
+    type Rule = QualifiedItemRule;
 }

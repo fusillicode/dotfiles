@@ -97,10 +97,7 @@ mod tests {
     )]
     #[case::repo_help(&["repo", "--help"], Cmd::Help(Help::Repo))]
     #[case::repo_fix_help(&["repo", "fix", "--help"], Cmd::Help(Help::RepoFix))]
-    #[case::rsl(&["rsl", "--json", "sample.rs"], Cmd::Rsl(vec![
-        OsString::from("--json"),
-        OsString::from("sample.rs")
-    ]))]
+    #[case::rsl(&["rsl", "sample.rs"], Cmd::Rsl(vec![OsString::from("sample.rs")]))]
     #[case::rsl_help(&["rsl", "--help"], Cmd::Help(Help::Rsl))]
     fn test_parse_known_commands(#[case] args: &[&str], #[case] expected: Cmd) {
         assert_that!(parse(args), ok(eq(expected)));

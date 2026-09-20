@@ -1,4 +1,4 @@
-//! Function-order rule for `frs rsl`.
+//! Misordered-function rule for `frs rsl`.
 
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -9,7 +9,6 @@ use std::path::Path;
 use std::path::PathBuf;
 
 use proc_macro2::Span;
-use serde::Serialize;
 use syn::Expr;
 use syn::Item;
 use syn::visit::Visit;
@@ -21,27 +20,27 @@ use crate::cmds::rsl::engine::FileContext;
 use crate::cmds::rsl::rules::TypedRule;
 use crate::cmds::rsl::rules::TypedRuleViolation;
 
-pub struct FnOrderRule;
+pub struct MisorderedFunctionRule;
 
-impl TypedRule for FnOrderRule {
-    type Violation = FnOrderViolation;
+impl TypedRule for MisorderedFunctionRule {
+    type Violation = MisorderedFunctionViolation;
 
-    fn name() -> &'static str {
-        "fn_order"
+    fn code() -> &'static str {
+        "misordered_function"
     }
 
     fn check(&self, ctx: &FileContext<'_>) -> Vec<Self::Violation> {
         let mut violations = Vec::new();
 
         for items in &ctx.module_item_lists {
-            self::check_fn_order(&self::module_functions(items), ctx.path, &mut violations);
+            self::check_misordered_function(&self::module_functions(items), ctx.path, &mut violations);
 
             for module_item in items.iter().rev() {
                 let item = module_item.item();
                 if let Item::Impl(item_impl) = item
                     && item_impl.trait_.is_none()
                 {
-                    self::check_fn_order(&self::impl_functions(item_impl), ctx.path, &mut violations);
+                    self::check_misordered_function(&self::impl_functions(item_impl), ctx.path, &mut violations);
                 }
             }
         }
@@ -51,47 +50,49 @@ impl TypedRule for FnOrderRule {
 }
 
 #[cfg_attr(test, derive(Eq, PartialEq))]
-#[derive(Debug, Serialize)]
-pub(super) struct FnOrderViolation {
+#[derive(Debug)]
+pub(super) struct MisorderedFunctionViolation {
     file: PathBuf,
     line: usize,
     column: usize,
-    message: &'static str,
-    details: FnOrderDetails,
+    details: MisorderedFunctionDetails,
 }
 
-impl FnOrderViolation {
+impl MisorderedFunctionViolation {
     fn new(path: &Path, span: Span, expected_after: String, item: ItemKind) -> Self {
         let location = span.start();
         Self {
             file: path.to_path_buf(),
             line: location.line,
             column: location.column.saturating_add(1),
-            message: "helper must follow its caller",
-            details: FnOrderDetails { expected_after, item },
+            details: MisorderedFunctionDetails { expected_after, item },
         }
     }
 }
 
-impl TypedRuleViolation for FnOrderViolation {
-    type Rule = FnOrderRule;
+impl TypedRuleViolation for MisorderedFunctionViolation {
+    type Rule = MisorderedFunctionRule;
 }
 
-impl Display for FnOrderViolation {
+impl Display for MisorderedFunctionViolation {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> Result {
         formatter.write_str(&crate::cmds::rsl::rules::format_compact_violation(
             &self.file,
             self.line,
             self.column,
-            self.message,
-            &format!("{} -> after {}", self.details.item.label(), self.details.expected_after),
+            MisorderedFunctionRule::code(),
+            &format!(
+                "move `{}` after `{}`",
+                self.details.item.label(),
+                self.details.expected_after
+            ),
         ))
     }
 }
 
 #[cfg_attr(test, derive(Eq, PartialEq))]
-#[derive(Debug, Serialize)]
-struct FnOrderDetails {
+#[derive(Debug)]
+struct MisorderedFunctionDetails {
     expected_after: String,
     item: ItemKind,
 }
@@ -124,7 +125,11 @@ impl<'ast> Visit<'ast> for DirectCallCollector {
     fn visit_item_fn(&mut self, _function: &'ast syn::ItemFn) {}
 }
 
-fn check_fn_order(functions: &[FunctionInfo], path: &Path, violations: &mut Vec<FnOrderViolation>) {
+fn check_misordered_function(
+    functions: &[FunctionInfo],
+    path: &Path,
+    violations: &mut Vec<MisorderedFunctionViolation>,
+) {
     if functions.is_empty() {
         return;
     }
@@ -202,7 +207,7 @@ fn check_recursive_helpers(
     callers_by_target: &[Vec<usize>],
     helper_components: &[Vec<usize>],
     path: &Path,
-    violations: &mut Vec<FnOrderViolation>,
+    violations: &mut Vec<MisorderedFunctionViolation>,
 ) {
     for component in helper_components {
         if !self::component_is_recursive(component, functions, targets) {
@@ -218,7 +223,7 @@ fn check_recursive_anchor(
     functions: &[FunctionInfo],
     callers_by_target: &[Vec<usize>],
     path: &Path,
-    violations: &mut Vec<FnOrderViolation>,
+    violations: &mut Vec<MisorderedFunctionViolation>,
 ) {
     let members: HashSet<usize> = component.iter().copied().collect();
     let external_callers: Vec<usize> = component
@@ -250,7 +255,7 @@ fn check_recursive_adjacency(
     component: &[usize],
     functions: &[FunctionInfo],
     path: &Path,
-    violations: &mut Vec<FnOrderViolation>,
+    violations: &mut Vec<MisorderedFunctionViolation>,
 ) {
     let mut ordered = component.to_vec();
     ordered.sort_unstable_by_key(|&helper| {
@@ -279,7 +284,7 @@ fn check_non_recursive_helpers(
     helper_components: &[Vec<usize>],
     component_for_helper: &[Option<usize>],
     path: &Path,
-    violations: &mut Vec<FnOrderViolation>,
+    violations: &mut Vec<MisorderedFunctionViolation>,
 ) {
     for (helper, callers) in callers_by_target.iter().enumerate() {
         let Some(helper_function) = functions.get(helper) else {
@@ -312,9 +317,9 @@ fn push_caller_violation(
     item: &FunctionInfo,
     expected_after: &FunctionInfo,
     path: &Path,
-    violations: &mut Vec<FnOrderViolation>,
+    violations: &mut Vec<MisorderedFunctionViolation>,
 ) {
-    violations.push(FnOrderViolation::new(
+    violations.push(MisorderedFunctionViolation::new(
         path,
         item.span,
         format!("fn {}", expected_after.name),
@@ -526,14 +531,14 @@ mod tests {
 
     use test_that::prelude::*;
 
-    use super::FnOrderDetails;
-    use super::FnOrderRule;
-    use super::FnOrderViolation;
+    use super::MisorderedFunctionDetails;
+    use super::MisorderedFunctionRule;
+    use super::MisorderedFunctionViolation;
     use crate::cmds::rsl::ast::ItemKind;
     use crate::cmds::rsl::rules::TypedRule;
 
     #[test]
-    fn test_fn_order_check_when_private_helper_precedes_caller_reports_helper() {
+    fn test_misordered_function_check_when_private_helper_precedes_caller_reports_helper() {
         let syntax = syn::parse_file(
             r"
             fn helper() {}
@@ -544,16 +549,15 @@ mod tests {
         )
         .unwrap();
 
-        let result = FnOrderRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
+        let result = MisorderedFunctionRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
 
         assert_that!(
             result,
-            eq(vec![FnOrderViolation {
+            eq(vec![MisorderedFunctionViolation {
                 file: PathBuf::from("test.rs"),
                 line: 2,
                 column: 13,
-                message: "helper must follow its caller",
-                details: FnOrderDetails {
+                details: MisorderedFunctionDetails {
                     expected_after: "fn caller".to_owned(),
                     item: ItemKind::Fn,
                 },
@@ -562,7 +566,7 @@ mod tests {
     }
 
     #[test]
-    fn test_fn_order_check_when_mutually_recursive_helpers_are_split_reports_later_helper() {
+    fn test_misordered_function_check_when_mutually_recursive_helpers_are_split_reports_later_helper() {
         let syntax = syn::parse_file(
             r"
             fn first() {
@@ -576,16 +580,15 @@ mod tests {
         )
         .unwrap();
 
-        let result = FnOrderRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
+        let result = MisorderedFunctionRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
 
         assert_that!(
             result,
-            eq(vec![FnOrderViolation {
+            eq(vec![MisorderedFunctionViolation {
                 file: PathBuf::from("test.rs"),
                 line: 6,
                 column: 13,
-                message: "helper must follow its caller",
-                details: FnOrderDetails {
+                details: MisorderedFunctionDetails {
                     expected_after: "fn first".to_owned(),
                     item: ItemKind::Fn,
                 },
@@ -594,13 +597,12 @@ mod tests {
     }
 
     #[test]
-    fn test_fn_order_violation_when_details_are_present_formats_compact_output() {
-        let violation = FnOrderViolation {
+    fn test_misordered_function_violation_when_details_are_present_formats_compact_output() {
+        let violation = MisorderedFunctionViolation {
             file: PathBuf::from("test.rs"),
             line: 2,
             column: 13,
-            message: "helper must follow its caller",
-            details: FnOrderDetails {
+            details: MisorderedFunctionDetails {
                 expected_after: "fn caller".to_owned(),
                 item: ItemKind::Fn,
             },
@@ -608,12 +610,12 @@ mod tests {
 
         assert_eq!(
             violation.to_string(),
-            "test.rs:2:13 helper must follow its caller - fn -> after fn caller"
+            "test.rs:2:13,misordered_function,move `fn` after `fn caller`"
         );
     }
 
     #[test]
-    fn test_fn_order_check_when_external_module_is_declared_does_not_read_external_file() {
+    fn test_misordered_function_check_when_external_module_is_declared_does_not_read_external_file() {
         let syntax = syn::parse_file(
             r"
             mod external;
@@ -622,7 +624,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = FnOrderRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
+        let result = MisorderedFunctionRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
 
         assert_that!(result, is_empty());
     }
