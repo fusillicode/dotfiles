@@ -297,6 +297,55 @@ mod tests {
     }
 
     #[test]
+    fn test_rsl_when_function_qualification_is_invalid_reports_separate_rule_names() {
+        let directory = require(tempfile::tempdir());
+        let source = require(write_source(
+            &directory,
+            "sample.rs",
+            r#"
+            use tempfile::tempdir;
+            fn main() {
+                tempdir();
+                std::fs::read_to_string("foo");
+            }
+            "#,
+        ));
+
+        let expected_file = source.to_string_lossy().into_owned();
+        let output = require(run_rsl(vec![OsString::from("--json"), source.into_os_string()]));
+        let json: Value = require(serde_json::from_str(&output));
+
+        assert_that!(
+            json,
+            eq(serde_json::json!([
+                {
+                    "rule": "unqualified_call",
+                    "file": expected_file,
+                    "line": 4,
+                    "column": 17,
+                    "message": "call needs qualification",
+                    "details": {
+                        "actual_path": "tempdir",
+                        "replacement_path": "tempfile::tempdir"
+                    }
+                },
+                {
+                    "rule": "overqualified_call",
+                    "file": expected_file,
+                    "line": 5,
+                    "column": 17,
+                    "message": "call needs qualification",
+                    "details": {
+                        "actual_path": "std::fs::read_to_string",
+                        "replacement_path": "fs::read_to_string",
+                        "add_import": "use std::fs;"
+                    }
+                }
+            ]))
+        );
+    }
+
+    #[test]
     fn test_rsl_when_source_is_malformed_returns_parse_error() {
         let directory = require(tempfile::tempdir());
         let source = require(write_source(

@@ -9,17 +9,24 @@ use serde::Serialize;
 use crate::cmds::rsl::engine::FileContext;
 use crate::cmds::rsl::rules::fn_order::FnOrderRule;
 use crate::cmds::rsl::rules::impl_adjacency::ImplAdjacencyRule;
+use crate::cmds::rsl::rules::import_alias::ImportAliasRule;
 use crate::cmds::rsl::rules::item_group::ItemGroupRule;
-use crate::cmds::rsl::rules::qualification::QualificationRule;
+use crate::cmds::rsl::rules::overqualified_call::OverqualifiedCallRule;
+use crate::cmds::rsl::rules::qualified_item_path::QualifiedItemPathRule;
+use crate::cmds::rsl::rules::unqualified_call::UnqualifiedCallRule;
 use crate::cmds::rsl::rules::visibility_order::VisibilityOrderRule;
 
+mod common;
 mod fn_order;
 mod impl_adjacency;
+mod import_alias;
 mod item_group;
-mod qualification;
+mod overqualified_call;
+mod qualified_item_path;
+mod unqualified_call;
 mod visibility_order;
 
-static RULES: OnceLock<[Box<dyn Rule>; 5]> = OnceLock::new();
+static RULES: OnceLock<[Box<dyn Rule>; 8]> = OnceLock::new();
 
 /// Object-safe rule interface used by the dispatcher.
 ///
@@ -122,7 +129,10 @@ fn rules() -> &'static [Box<dyn Rule>] {
                 Box::new(VisibilityOrderRule::new(None)),
                 Box::new(ImplAdjacencyRule),
                 Box::new(FnOrderRule),
-                Box::new(QualificationRule),
+                Box::new(UnqualifiedCallRule),
+                Box::new(OverqualifiedCallRule),
+                Box::new(QualifiedItemPathRule),
+                Box::new(ImportAliasRule),
             ]
         })
         .as_slice()
