@@ -11,11 +11,11 @@ use syn::Expr;
 use syn::spanned::Spanned;
 use syn::visit::Visit;
 
-use super::common::ModuleIndex;
+use super::common::ModuleIdx;
 use super::common::associated_receiver_parts;
 use super::common::has_name_clash_parts;
 use super::common::is_import_style_path;
-use super::common::module_index;
+use super::common::module_idx;
 use super::common::path_parts;
 use crate::cmds::rsl::engine::FileContext;
 use crate::cmds::rsl::rules::TypedRule;
@@ -60,12 +60,12 @@ impl TypedRule for QualifiedItemRule {
     }
 
     fn check(&self, ctx: &FileContext<'_>) -> Vec<Self::Violation> {
-        let index = module_index(ctx.file);
+        let idx = module_idx(ctx.file);
         let mut violations = Vec::new();
 
-        for scope in &index.scopes {
+        for scope in &idx.scopes {
             let mut visitor = QualifiedItemVisitor {
-                index: &index,
+                idx: &idx,
                 current_module: &scope.path,
                 source_path: ctx.path,
                 violations: &mut violations,
@@ -80,10 +80,10 @@ impl TypedRule for QualifiedItemRule {
     }
 }
 
-struct QualifiedItemVisitor<'index, 'ast, 'output> {
-    index: &'index ModuleIndex<'ast>,
-    current_module: &'index [String],
-    source_path: &'index Path,
+struct QualifiedItemVisitor<'idx, 'ast, 'output> {
+    idx: &'idx ModuleIdx<'ast>,
+    current_module: &'idx [String],
+    source_path: &'idx Path,
     violations: &'output mut Vec<QualifiedItemViolation>,
     skip_call_path: bool,
 }
@@ -93,7 +93,7 @@ impl<'ast> Visit<'ast> for QualifiedItemVisitor<'_, '_, '_> {
         if let Expr::Path(path) = expression.func.as_ref()
             && let Some(parts) = associated_receiver_parts(&path.path)
         {
-            check_non_function_path(self, &parts, path.path.span());
+            check_non_fn_path(self, &parts, path.path.span());
         }
 
         let previous = self.skip_call_path;
@@ -106,7 +106,7 @@ impl<'ast> Visit<'ast> for QualifiedItemVisitor<'_, '_, '_> {
         if self.skip_call_path {
             self.skip_call_path = false;
         } else if let Some(parts) = path_parts(path) {
-            check_non_function_path(self, &parts, path.span());
+            check_non_fn_path(self, &parts, path.span());
         }
 
         syn::visit::visit_path(self, path);
@@ -121,10 +121,10 @@ impl<'ast> Visit<'ast> for QualifiedItemVisitor<'_, '_, '_> {
     fn visit_macro(&mut self, _mac: &'ast syn::Macro) {}
 }
 
-fn check_non_function_path(visitor: &mut QualifiedItemVisitor<'_, '_, '_>, parts: &[String], span: Span) {
+fn check_non_fn_path(visitor: &mut QualifiedItemVisitor<'_, '_, '_>, parts: &[String], span: Span) {
     if parts.len() <= 1
         || !is_import_style_path(parts)
-        || has_name_clash_parts(visitor.index, visitor.current_module, parts)
+        || has_name_clash_parts(visitor.idx, visitor.current_module, parts)
     {
         return;
     }

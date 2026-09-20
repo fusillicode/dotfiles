@@ -55,13 +55,13 @@ impl TypedRule for MisorderedItemGroupRule {
             // Keep unknown macro invocations transparent here to preserve the original group rule.
             let mut previous_group: Option<ItemGroup> = None;
 
-            for (index, module_item) in items.iter().enumerate() {
+            for (idx, module_item) in items.iter().enumerate() {
                 let metadata = module_item.metadata();
                 let Some(classified) = metadata.classified() else {
                     continue;
                 };
                 if metadata.is_test_module() {
-                    if index != items.len().saturating_sub(1) {
+                    if idx != items.len().saturating_sub(1) {
                         violations.push(MisorderedItemGroupViolation::new(
                             ctx.path,
                             classified.span,

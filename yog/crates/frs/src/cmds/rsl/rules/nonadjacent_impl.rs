@@ -28,11 +28,11 @@ impl TypedRule for NonadjacentImplRule {
         for items in &ctx.module_item_lists {
             // Raw AST positions make opaque macros and cfg-decorated items break physical adjacency.
             for node in &crate::cmds::rsl::ast::module_nodes(items) {
-                if node.indices.len() < 2 {
+                if node.idxs.len() < 2 {
                     continue;
                 }
 
-                for pair in node.indices.windows(2) {
+                for pair in node.idxs.windows(2) {
                     let [previous, current] = pair else {
                         continue;
                     };

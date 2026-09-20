@@ -10,7 +10,7 @@ use proc_macro2::Span;
 use syn::Item;
 use syn::UseTree;
 
-use super::common::module_index;
+use super::common::module_idx;
 use crate::cmds::rsl::engine::FileContext;
 use crate::cmds::rsl::rules::TypedRule;
 use crate::cmds::rsl::rules::TypedRuleViolation;
@@ -20,15 +20,17 @@ pub(super) struct AliasedImportViolation {
     pub(super) file: PathBuf,
     pub(super) line: usize,
     pub(super) column: usize,
+    pub(super) unaliased_import: String,
 }
 
 impl AliasedImportViolation {
-    pub(super) fn new(path: &Path, span: Span) -> Self {
+    pub(super) fn new(path: &Path, span: Span, unaliased_import: String) -> Self {
         let location = span.start();
         Self {
             file: path.to_path_buf(),
             line: location.line,
             column: location.column.saturating_add(1),
+            unaliased_import,
         }
     }
 }
@@ -43,10 +45,10 @@ impl TypedRule for AliasedImportRule {
     }
 
     fn check(&self, ctx: &FileContext<'_>) -> Vec<Self::Violation> {
-        let index = module_index(ctx.file);
+        let idx = module_idx(ctx.file);
         let mut violations = Vec::new();
 
-        for scope in &index.scopes {
+        for scope in &idx.scopes {
             for item in scope.items {
                 if let Item::Use(item_use) = item {
                     check_aliases(ctx.path, &item_use.tree, &mut violations);
@@ -59,14 +61,33 @@ impl TypedRule for AliasedImportRule {
 }
 
 fn check_aliases(path: &std::path::Path, tree: &UseTree, violations: &mut Vec<AliasedImportViolation>) {
-    let mut pending = vec![tree];
+    let mut pending = vec![(tree, Vec::new())];
 
-    while let Some(tree) = pending.pop() {
+    while let Some((tree, prefix)) = pending.pop() {
         match tree {
-            UseTree::Path(path) => pending.push(path.tree.as_ref()),
-            UseTree::Group(group) => pending.extend(group.items.iter()),
+            UseTree::Path(use_path) => {
+                let mut next_prefix = prefix;
+                next_prefix.push(use_path.ident.to_string());
+                pending.push((use_path.tree.as_ref(), next_prefix));
+            }
+            UseTree::Group(group) => {
+                for tree in group.items.iter().rev() {
+                    pending.push((tree, prefix.clone()));
+                }
+            }
             UseTree::Rename(rename) if rename.rename != "_" => {
-                violations.push(AliasedImportViolation::new(path, rename.rename.span()));
+                let unaliased_import = if rename.ident == "self" {
+                    prefix.join("::")
+                } else {
+                    let mut import_path = prefix;
+                    import_path.push(rename.ident.to_string());
+                    import_path.join("::")
+                };
+                violations.push(AliasedImportViolation::new(
+                    path,
+                    rename.rename.span(),
+                    unaliased_import,
+                ));
             }
             UseTree::Name(_) | UseTree::Glob(_) | UseTree::Rename(_) => {}
         }
@@ -84,7 +105,7 @@ impl Display for AliasedImportViolation {
             self.line,
             self.column,
             AliasedImportRule::code(),
-            "use unaliased import if there are no clashes",
+            &format!("use unaliased import `{}` if it doesn't clash", self.unaliased_import),
         ))
     }
 }
