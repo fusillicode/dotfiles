@@ -1,4 +1,4 @@
-//! Overqualified function-call rule for `frs rsl`.
+//! Overqualified fn-call rule for `frs rsl`.
 
 use std::fmt::Display;
 use std::fmt::Formatter;
@@ -7,9 +7,9 @@ use std::path::Path;
 use std::path::PathBuf;
 
 use super::common::CallDetails;
-use super::common::FunctionCallFinding;
-use super::common::FunctionCallKind;
-use super::common::find_function_calls;
+use super::common::FnCallFinding;
+use super::common::FnCallKind;
+use super::common::find_fn_calls;
 use crate::cmds::rsl::engine::FileContext;
 use crate::cmds::rsl::rules::TypedRule;
 use crate::cmds::rsl::rules::TypedRuleViolation;
@@ -24,7 +24,7 @@ impl TypedRule for OverqualifiedCallRule {
     }
 
     fn check(&self, ctx: &FileContext<'_>) -> Vec<Self::Violation> {
-        find_function_calls(ctx.file, FunctionCallKind::Overqualified)
+        find_fn_calls(ctx.file, FnCallKind::Overqualified)
             .into_iter()
             .map(|finding| OverqualifiedCallViolation::new(ctx.path, finding))
             .collect()
@@ -40,7 +40,7 @@ pub(super) struct OverqualifiedCallViolation {
 }
 
 impl OverqualifiedCallViolation {
-    fn new(path: &Path, finding: FunctionCallFinding) -> Self {
+    fn new(path: &Path, finding: FnCallFinding) -> Self {
         let location = finding.span.start();
         Self {
             file: path.to_path_buf(),

@@ -6,7 +6,7 @@ use std::sync::OnceLock;
 
 use crate::cmds::rsl::engine::FileContext;
 use crate::cmds::rsl::rules::aliased_import::AliasedImportRule;
-use crate::cmds::rsl::rules::misordered_function::MisorderedFunctionRule;
+use crate::cmds::rsl::rules::misordered_fn::MisorderedFnRule;
 use crate::cmds::rsl::rules::misordered_item_group::MisorderedItemGroupRule;
 use crate::cmds::rsl::rules::misordered_visibility::MisorderedVisibilityRule;
 use crate::cmds::rsl::rules::nonadjacent_impl::NonadjacentImplRule;
@@ -16,7 +16,7 @@ use crate::cmds::rsl::rules::unqualified_call::UnqualifiedCallRule;
 
 mod aliased_import;
 mod common;
-mod misordered_function;
+mod misordered_fn;
 mod misordered_item_group;
 mod misordered_visibility;
 mod nonadjacent_impl;
@@ -94,7 +94,7 @@ fn rules() -> &'static [Box<dyn Rule>] {
                 Box::new(MisorderedItemGroupRule::new(None)) as Box<dyn Rule>,
                 Box::new(MisorderedVisibilityRule::new(None)),
                 Box::new(NonadjacentImplRule),
-                Box::new(MisorderedFunctionRule),
+                Box::new(MisorderedFnRule),
                 Box::new(UnqualifiedCallRule),
                 Box::new(OverqualifiedCallRule),
                 Box::new(QualifiedItemRule),

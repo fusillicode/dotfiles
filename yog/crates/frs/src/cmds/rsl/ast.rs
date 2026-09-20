@@ -307,7 +307,7 @@ fn explicit_macro_span(tokens: &proc_macro2::TokenStream) -> Option<Span> {
 
 #[derive(Clone, Debug)]
 pub(super) struct OrderNode {
-    pub(super) source_index: usize,
+    pub(super) source_idx: usize,
     pub(super) span: Span,
     pub(super) group: Option<ItemGroup>,
     pub(super) visibility: Option<VisibilityClass>,
@@ -317,12 +317,12 @@ pub(super) struct OrderNode {
 #[derive(Clone, Debug)]
 pub(super) struct ModuleNode {
     pub(super) order: OrderNode,
-    pub(super) indices: Vec<usize>,
+    pub(super) idxs: Vec<usize>,
 }
 
 #[derive(Clone, Debug)]
 struct TypeCluster {
-    type_index: usize,
+    type_idx: usize,
     name: String,
     kind: ItemKind,
     visibility: VisibilityClass,
@@ -440,22 +440,22 @@ pub(super) fn module_item_lists(file: &syn::File) -> Vec<Vec<ModuleItem<'_>>> {
 }
 
 pub(super) fn module_nodes(items: &[ModuleItem<'_>]) -> Vec<ModuleNode> {
-    let mut type_indices = HashMap::new();
+    let mut type_idxs = HashMap::new();
     let mut clusters = HashMap::new();
 
-    for (index, module_item) in items.iter().enumerate() {
+    for (idx, module_item) in items.iter().enumerate() {
         let item = module_item.item();
         let Some((name, kind, visibility)) = self::type_definition(item) else {
             continue;
         };
-        if type_indices.insert(name.clone(), Some(index)).is_some() {
-            type_indices.insert(name, None);
+        if type_idxs.insert(name.clone(), Some(idx)).is_some() {
+            type_idxs.insert(name, None);
             continue;
         }
         clusters.insert(
-            index,
+            idx,
             TypeCluster {
-                type_index: index,
+                type_idx: idx,
                 name,
                 kind,
                 visibility,
@@ -465,7 +465,7 @@ pub(super) fn module_nodes(items: &[ModuleItem<'_>]) -> Vec<ModuleNode> {
         );
     }
 
-    for (index, module_item) in items.iter().enumerate() {
+    for (idx, module_item) in items.iter().enumerate() {
         let item = module_item.item();
         let Item::Impl(item_impl) = item else {
             continue;
@@ -473,70 +473,70 @@ pub(super) fn module_nodes(items: &[ModuleItem<'_>]) -> Vec<ModuleNode> {
         let Some(target_name) = self::impl_target_name(item_impl) else {
             continue;
         };
-        let Some(Some(type_index)) = type_indices.get(&target_name) else {
+        let Some(Some(type_idx)) = type_idxs.get(&target_name) else {
             continue;
         };
-        let Some(cluster) = clusters.get_mut(type_index) else {
+        let Some(cluster) = clusters.get_mut(type_idx) else {
             continue;
         };
         if item_impl.trait_.is_some() {
-            cluster.trait_impls.push(index);
+            cluster.trait_impls.push(idx);
         } else {
-            cluster.inherent_impls.push(index);
+            cluster.inherent_impls.push(idx);
         }
     }
 
     let mut item_to_cluster = HashMap::new();
-    for (&type_index, cluster) in &clusters {
-        item_to_cluster.insert(type_index, type_index);
-        for &index in cluster.inherent_impls.iter().chain(&cluster.trait_impls) {
-            item_to_cluster.insert(index, type_index);
+    for (&type_idx, cluster) in &clusters {
+        item_to_cluster.insert(type_idx, type_idx);
+        for &idx in cluster.inherent_impls.iter().chain(&cluster.trait_impls) {
+            item_to_cluster.insert(idx, type_idx);
         }
     }
 
     let mut emitted_clusters = HashSet::new();
     let mut nodes = Vec::new();
-    for (index, module_item) in items.iter().enumerate() {
+    for (idx, module_item) in items.iter().enumerate() {
         let item = module_item.item();
-        if let Some(&type_index) = item_to_cluster.get(&index) {
-            if !emitted_clusters.insert(type_index) {
+        if let Some(&type_idx) = item_to_cluster.get(&idx) {
+            if !emitted_clusters.insert(type_idx) {
                 continue;
             }
-            let Some(cluster) = clusters.get(&type_index) else {
+            let Some(cluster) = clusters.get(&type_idx) else {
                 continue;
             };
-            let Some(type_item) = items.get(cluster.type_index) else {
+            let Some(type_item) = items.get(cluster.type_idx) else {
                 continue;
             };
-            let mut indices = vec![cluster.type_index];
-            indices.extend(&cluster.inherent_impls);
-            indices.extend(&cluster.trait_impls);
-            let source_index = indices.iter().copied().min().unwrap_or(cluster.type_index);
+            let mut idxs = vec![cluster.type_idx];
+            idxs.extend(&cluster.inherent_impls);
+            idxs.extend(&cluster.trait_impls);
+            let source_idx = idxs.iter().copied().min().unwrap_or(cluster.type_idx);
             nodes.push(ModuleNode {
                 order: OrderNode {
-                    source_index,
+                    source_idx,
                     span: self::item_span(type_item.item()),
                     group: Some(cluster.kind.group()),
                     visibility: Some(cluster.visibility),
                     label: format!("{} {}", cluster.kind.label(), cluster.name),
                 },
-                indices,
+                idxs,
             });
         } else if let Some(classified) = module_item.metadata().classified() {
             nodes.push(ModuleNode {
                 order: OrderNode {
-                    source_index: index,
+                    source_idx: idx,
                     span: classified.span,
                     group: Some(classified.kind.group()),
                     visibility: module_item.metadata().visibility(),
                     label: self::item_label(item, classified.kind),
                 },
-                indices: vec![index],
+                idxs: vec![idx],
             });
         }
     }
 
-    nodes.sort_unstable_by_key(|node| node.order.source_index);
+    nodes.sort_unstable_by_key(|node| node.order.source_idx);
     nodes
 }
 
@@ -545,7 +545,7 @@ pub(super) fn impl_nodes(item_impl: &syn::ItemImpl) -> Vec<OrderNode> {
         .items
         .iter()
         .enumerate()
-        .filter_map(|(source_index, item)| {
+        .filter_map(|(source_idx, item)| {
             let (kind, visibility) = match item {
                 syn::ImplItem::Const(item) => (ItemKind::Const, Some(VisibilityClass::from(&item.vis))),
                 syn::ImplItem::Fn(item) => (ItemKind::Fn, Some(VisibilityClass::from(&item.vis))),
@@ -553,7 +553,7 @@ pub(super) fn impl_nodes(item_impl: &syn::ItemImpl) -> Vec<OrderNode> {
                 syn::ImplItem::Macro(_) | syn::ImplItem::Verbatim(_) | _ => return None,
             };
             Some(OrderNode {
-                source_index,
+                source_idx,
                 span: self::impl_item_span(item),
                 group: None,
                 visibility,
