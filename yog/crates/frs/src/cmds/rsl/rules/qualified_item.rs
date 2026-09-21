@@ -1,16 +1,13 @@
 //! Qualified-item rule for `frs rsl`.
 
-use std::fmt::Display;
-use std::fmt::Formatter;
-use std::fmt::Result;
 use std::path::Path;
-use std::path::PathBuf;
 
 use proc_macro2::Span;
 use syn::Expr;
 use syn::spanned::Spanned;
 use syn::visit::Visit;
 
+use super::common::Location;
 use super::common::ModuleIdx;
 use super::common::associated_receiver_parts;
 use super::common::has_name_clash_parts;
@@ -28,21 +25,17 @@ pub(super) const QUALIFIED_ALLOWED_PATHS: &[&str] = &[
     "std::io::Result",
 ];
 
-#[cfg_attr(test, derive(Debug, Eq, PartialEq))]
-pub(super) struct QualifiedItemViolation {
-    pub(super) file: PathBuf,
-    pub(super) line: usize,
-    pub(super) column: usize,
-    pub(super) details: QualifiedItemDetails,
+#[derive(Debug)]
+#[cfg_attr(test, derive(Eq, PartialEq))]
+pub struct QualifiedItemViolation {
+    pub location: Location,
+    pub details: QualifiedItemDetails,
 }
 
 impl QualifiedItemViolation {
     pub(super) fn new(path: &Path, span: Span, actual_path: String, expected_import: String) -> Self {
-        let location = span.start();
         Self {
-            file: path.to_path_buf(),
-            line: location.line,
-            column: location.column.saturating_add(1),
+            location: Location::from_span(path, span),
             details: QualifiedItemDetails {
                 actual_path,
                 expected_import,
@@ -51,10 +44,11 @@ impl QualifiedItemViolation {
     }
 }
 
-#[cfg_attr(test, derive(Debug, Eq, PartialEq))]
-pub(super) struct QualifiedItemDetails {
-    pub(super) actual_path: String,
-    pub(super) expected_import: String,
+#[derive(Debug)]
+#[cfg_attr(test, derive(Eq, PartialEq))]
+pub struct QualifiedItemDetails {
+    pub actual_path: String,
+    pub expected_import: String,
 }
 
 pub struct QualifiedItemRule {
@@ -158,27 +152,6 @@ fn check_non_fn_path(visitor: &mut QualifiedItemVisitor<'_, '_, '_>, parts: &[St
     ));
 }
 
-impl Display for QualifiedItemViolation {
-    fn fmt(&self, formatter: &mut Formatter<'_>) -> Result {
-        let imported_name = self
-            .details
-            .actual_path
-            .rsplit("::")
-            .next()
-            .unwrap_or(self.details.actual_path.as_str());
-        formatter.write_str(&crate::cmds::rsl::rules::format_compact_violation(
-            &self.file,
-            self.line,
-            self.column,
-            QualifiedItemRule::code(),
-            &format!(
-                "replace `{}` with `{}`; add `{}`",
-                self.details.actual_path, imported_name, self.details.expected_import
-            ),
-        ))
-    }
-}
-
 impl TypedRuleViolation for QualifiedItemViolation {
     type Rule = QualifiedItemRule;
 }
@@ -191,6 +164,7 @@ mod tests {
 
     use super::*;
     use crate::cmds::rsl::rules::TypedRule;
+    use crate::cmds::rsl::rules::common::Location;
 
     fn qualified_item_rule() -> QualifiedItemRule {
         QualifiedItemRule::new(&[])
@@ -215,9 +189,7 @@ mod tests {
         assert_that!(
             result,
             eq(vec![QualifiedItemViolation {
-                file: PathBuf::from("test.rs"),
-                line: 6,
-                column: 17,
+                location: Location::new(PathBuf::from("test.rs"), 6, 17),
                 details: QualifiedItemDetails {
                     actual_path: "crate::values::VALUE".to_owned(),
                     expected_import: "use crate::values::VALUE;".to_owned(),
@@ -256,9 +228,7 @@ mod tests {
         assert_that!(
             result,
             eq(vec![QualifiedItemViolation {
-                file: PathBuf::from("test.rs"),
-                line: 2,
-                column: 27,
+                location: Location::new(PathBuf::from("test.rs"), 2, 27),
                 details: QualifiedItemDetails {
                     actual_path: "std::fmt::Formatter".to_owned(),
                     expected_import: "use std::fmt::Formatter;".to_owned(),
@@ -337,18 +307,14 @@ mod tests {
             result,
             eq(vec![
                 QualifiedItemViolation {
-                    file: PathBuf::from("test.rs"),
-                    line: 12,
-                    column: 26,
+                    location: Location::new(PathBuf::from("test.rs"), 12, 26),
                     details: QualifiedItemDetails {
                         actual_path: "external::Thing".to_owned(),
                         expected_import: "use external::Thing;".to_owned(),
                     },
                 },
                 QualifiedItemViolation {
-                    file: PathBuf::from("test.rs"),
-                    line: 13,
-                    column: 17,
+                    location: Location::new(PathBuf::from("test.rs"), 13, 17),
                     details: QualifiedItemDetails {
                         actual_path: "external::Thing".to_owned(),
                         expected_import: "use external::Thing;".to_owned(),
@@ -372,9 +338,7 @@ mod tests {
         assert_that!(
             result,
             eq(vec![QualifiedItemViolation {
-                file: PathBuf::from("test.rs"),
-                line: 2,
-                column: 27,
+                location: Location::new(PathBuf::from("test.rs"), 2, 27),
                 details: QualifiedItemDetails {
                     actual_path: "syn::ExprCall".to_owned(),
                     expected_import: "use syn::ExprCall;".to_owned(),
@@ -420,23 +384,5 @@ mod tests {
         let result = qualified_item_rule().check(&crate::cmds::rsl::rules::test_ctx(&syntax));
 
         assert_that!(result, is_empty());
-    }
-
-    #[test]
-    fn test_qualified_item_violation_formats_compact_output() {
-        let violation = QualifiedItemViolation {
-            file: PathBuf::from("test.rs"),
-            line: 3,
-            column: 13,
-            details: QualifiedItemDetails {
-                actual_path: "external::Thing".to_owned(),
-                expected_import: "use external::Thing;".to_owned(),
-            },
-        };
-
-        assert_eq!(
-            violation.to_string(),
-            "test.rs:3:13,qualified_item,replace `external::Thing` with `Thing`; add `use external::Thing;`"
-        );
     }
 }

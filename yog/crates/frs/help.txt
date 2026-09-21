@@ -2,7 +2,7 @@ Rust maintenance commands
 
 Usage:
   frs repo fix [--clean] [--jobs N] DIRECTORY
-  frs rsl FILE...
+  frs rsl [--debug] FILE...
 
 Commands:
   repo fix  Configure Rust workspace build directories and remove quarantine metadata.

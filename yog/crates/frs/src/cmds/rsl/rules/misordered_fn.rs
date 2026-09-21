@@ -2,17 +2,14 @@
 
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::fmt::Display;
-use std::fmt::Formatter;
-use std::fmt::Result;
 use std::path::Path;
-use std::path::PathBuf;
 
 use proc_macro2::Span;
 use syn::Expr;
 use syn::Item;
 use syn::visit::Visit;
 
+use super::common::Location;
 use crate::cmds::rsl::ast::ItemKind;
 use crate::cmds::rsl::ast::ModuleItem;
 use crate::cmds::rsl::ast::VisibilityClass;
@@ -49,22 +46,17 @@ impl TypedRule for MisorderedFnRule {
     }
 }
 
-#[cfg_attr(test, derive(Eq, PartialEq))]
 #[derive(Debug)]
-pub(super) struct MisorderedFnViolation {
-    file: PathBuf,
-    line: usize,
-    column: usize,
-    details: MisorderedFnDetails,
+#[cfg_attr(test, derive(Eq, PartialEq))]
+pub struct MisorderedFnViolation {
+    pub location: Location,
+    pub details: MisorderedFnDetails,
 }
 
 impl MisorderedFnViolation {
     fn new(path: &Path, span: Span, expected_after: String, item: ItemKind) -> Self {
-        let location = span.start();
         Self {
-            file: path.to_path_buf(),
-            line: location.line,
-            column: location.column.saturating_add(1),
+            location: Location::from_span(path, span),
             details: MisorderedFnDetails { expected_after, item },
         }
     }
@@ -74,27 +66,11 @@ impl TypedRuleViolation for MisorderedFnViolation {
     type Rule = MisorderedFnRule;
 }
 
-impl Display for MisorderedFnViolation {
-    fn fmt(&self, formatter: &mut Formatter<'_>) -> Result {
-        formatter.write_str(&crate::cmds::rsl::rules::format_compact_violation(
-            &self.file,
-            self.line,
-            self.column,
-            MisorderedFnRule::code(),
-            &format!(
-                "move `{}` after `{}`",
-                self.details.item.label(),
-                self.details.expected_after
-            ),
-        ))
-    }
-}
-
-#[cfg_attr(test, derive(Eq, PartialEq))]
 #[derive(Debug)]
-struct MisorderedFnDetails {
-    expected_after: String,
-    item: ItemKind,
+#[cfg_attr(test, derive(Eq, PartialEq))]
+pub struct MisorderedFnDetails {
+    pub expected_after: String,
+    pub item: ItemKind,
 }
 
 #[derive(Clone, Debug)]
@@ -512,6 +488,7 @@ mod tests {
     use super::MisorderedFnViolation;
     use crate::cmds::rsl::ast::ItemKind;
     use crate::cmds::rsl::rules::TypedRule;
+    use crate::cmds::rsl::rules::common::Location;
 
     #[test]
     fn test_misordered_fn_check_when_private_helper_precedes_caller_reports_helper() {
@@ -530,9 +507,7 @@ mod tests {
         assert_that!(
             result,
             eq(vec![MisorderedFnViolation {
-                file: PathBuf::from("test.rs"),
-                line: 2,
-                column: 13,
+                location: Location::new(PathBuf::from("test.rs"), 2, 13),
                 details: MisorderedFnDetails {
                     expected_after: "fn caller".to_owned(),
                     item: ItemKind::Fn,
@@ -561,32 +536,12 @@ mod tests {
         assert_that!(
             result,
             eq(vec![MisorderedFnViolation {
-                file: PathBuf::from("test.rs"),
-                line: 6,
-                column: 13,
+                location: Location::new(PathBuf::from("test.rs"), 6, 13),
                 details: MisorderedFnDetails {
                     expected_after: "fn first".to_owned(),
                     item: ItemKind::Fn,
                 },
             }])
-        );
-    }
-
-    #[test]
-    fn test_misordered_fn_violation_when_details_are_present_formats_compact_output() {
-        let violation = MisorderedFnViolation {
-            file: PathBuf::from("test.rs"),
-            line: 2,
-            column: 13,
-            details: MisorderedFnDetails {
-                expected_after: "fn caller".to_owned(),
-                item: ItemKind::Fn,
-            },
-        };
-
-        assert_eq!(
-            violation.to_string(),
-            "test.rs:2:13,misordered_fn,move `fn` after `fn caller`"
         );
     }
 

@@ -1,14 +1,11 @@
 //! Overqualified fn-call rule for `frs rsl`.
 
-use std::fmt::Display;
-use std::fmt::Formatter;
-use std::fmt::Result;
 use std::path::Path;
-use std::path::PathBuf;
 
 use super::common::CallDetails;
 use super::common::FnCallFinding;
 use super::common::FnCallKind;
+use super::common::Location;
 use super::common::find_fn_calls;
 use crate::cmds::rsl::engine::FileContext;
 use crate::cmds::rsl::rules::TypedRule;
@@ -20,7 +17,7 @@ impl TypedRule for OverqualifiedCallRule {
     type Violation = OverqualifiedCallViolation;
 
     fn code() -> &'static str {
-        "oc"
+        "overqualified_call"
     }
 
     fn check(&self, ctx: &FileContext<'_>) -> Vec<Self::Violation> {
@@ -31,21 +28,17 @@ impl TypedRule for OverqualifiedCallRule {
     }
 }
 
-#[cfg_attr(test, derive(Debug, Eq, PartialEq))]
-pub(super) struct OverqualifiedCallViolation {
-    pub(super) file: PathBuf,
-    pub(super) line: usize,
-    pub(super) column: usize,
-    pub(super) details: CallDetails,
+#[derive(Debug)]
+#[cfg_attr(test, derive(Eq, PartialEq))]
+pub struct OverqualifiedCallViolation {
+    pub location: Location,
+    pub details: CallDetails,
 }
 
 impl OverqualifiedCallViolation {
     fn new(path: &Path, finding: FnCallFinding) -> Self {
-        let location = finding.span.start();
         Self {
-            file: path.to_path_buf(),
-            line: location.line,
-            column: location.column.saturating_add(1),
+            location: Location::from_span(path, finding.span),
             details: CallDetails {
                 actual_path: finding.actual_path,
                 replacement_path: finding.suggestion.expected_path,
@@ -59,27 +52,6 @@ impl TypedRuleViolation for OverqualifiedCallViolation {
     type Rule = OverqualifiedCallRule;
 }
 
-impl Display for OverqualifiedCallViolation {
-    fn fmt(&self, formatter: &mut Formatter<'_>) -> Result {
-        let details = format!(
-            "replace `{}` with `{}`{}",
-            self.details.actual_path,
-            self.details.replacement_path,
-            self.details
-                .add_import
-                .as_ref()
-                .map_or_else(String::new, |import| format!("; add `{import}`")),
-        );
-        formatter.write_str(&crate::cmds::rsl::rules::format_compact_violation(
-            &self.file,
-            self.line,
-            self.column,
-            OverqualifiedCallRule::code(),
-            &details,
-        ))
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
@@ -88,6 +60,7 @@ mod tests {
 
     use super::*;
     use crate::cmds::rsl::rules::TypedRule;
+    use crate::cmds::rsl::rules::common::Location;
 
     #[test]
     fn test_overqualified_call_check_when_foreign_module_call_has_one_module_prefix_returns_no_violations() {
@@ -159,9 +132,7 @@ mod tests {
         assert_that!(
             result,
             eq(vec![OverqualifiedCallViolation {
-                file: PathBuf::from("test.rs"),
-                line: 3,
-                column: 17,
+                location: Location::new(PathBuf::from("test.rs"), 3, 17),
                 details: CallDetails {
                     actual_path: "std::fs::read_to_string".to_owned(),
                     replacement_path: "fs::read_to_string".to_owned(),
@@ -230,24 +201,5 @@ mod tests {
         let result = OverqualifiedCallRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
 
         assert_that!(result, is_empty());
-    }
-
-    #[test]
-    fn test_overqualified_call_violation_formats_compact_output() {
-        let violation = OverqualifiedCallViolation {
-            file: PathBuf::from("test.rs"),
-            line: 2,
-            column: 13,
-            details: CallDetails {
-                actual_path: "run()".to_owned(),
-                replacement_path: "external::run()".to_owned(),
-                add_import: Some("use crate::external;".to_owned()),
-            },
-        };
-
-        assert_eq!(
-            violation.to_string(),
-            "test.rs:2:13,oc,replace `run()` with `external::run()`; add `use crate::external;`"
-        );
     }
 }
