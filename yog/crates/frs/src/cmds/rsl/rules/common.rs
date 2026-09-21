@@ -17,6 +17,3 @@ mod import_resolution;
 mod module_idx;
 mod path_resolution;
 mod scope_bindings;
-
-#[cfg(test)]
-mod tests;

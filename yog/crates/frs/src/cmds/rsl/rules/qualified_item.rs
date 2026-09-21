@@ -182,3 +182,261 @@ impl Display for QualifiedItemViolation {
 impl TypedRuleViolation for QualifiedItemViolation {
     type Rule = QualifiedItemRule;
 }
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use test_that::prelude::*;
+
+    use super::*;
+    use crate::cmds::rsl::rules::TypedRule;
+
+    fn qualified_item_rule() -> QualifiedItemRule {
+        QualifiedItemRule::new(&[])
+    }
+
+    #[test]
+    fn test_qualified_item_check_when_non_fn_path_is_fully_qualified_reports_import() {
+        let syntax = syn::parse_file(
+            r"
+            mod values {
+                pub const VALUE: usize = 1;
+            }
+            fn read() -> usize {
+                crate::values::VALUE
+            }
+            ",
+        )
+        .unwrap();
+
+        let result = qualified_item_rule().check(&crate::cmds::rsl::rules::test_ctx(&syntax));
+
+        assert_that!(
+            result,
+            eq(vec![QualifiedItemViolation {
+                file: PathBuf::from("test.rs"),
+                line: 6,
+                column: 17,
+                details: QualifiedItemDetails {
+                    actual_path: "crate::values::VALUE".to_owned(),
+                    expected_import: "use crate::values::VALUE;".to_owned(),
+                },
+            }])
+        );
+    }
+
+    #[test]
+    fn test_qualified_item_check_when_path_is_allowed_returns_no_violations() {
+        let syntax = syn::parse_file(
+            r"
+            fn inspect(_: std::fmt::Result) -> rootcause::Result<()> {
+                panic!()
+            }
+            ",
+        )
+        .unwrap();
+
+        let result = QualifiedItemRule::new(QUALIFIED_ALLOWED_PATHS).check(&crate::cmds::rsl::rules::test_ctx(&syntax));
+
+        assert_that!(result, is_empty());
+    }
+
+    #[test]
+    fn test_qualified_item_check_when_path_is_not_allowed_reports_import() {
+        let syntax = syn::parse_file(
+            r"
+            fn inspect(_: std::fmt::Formatter<'_>) {}
+            ",
+        )
+        .unwrap();
+
+        let result = QualifiedItemRule::new(QUALIFIED_ALLOWED_PATHS).check(&crate::cmds::rsl::rules::test_ctx(&syntax));
+
+        assert_that!(
+            result,
+            eq(vec![QualifiedItemViolation {
+                file: PathBuf::from("test.rs"),
+                line: 2,
+                column: 27,
+                details: QualifiedItemDetails {
+                    actual_path: "std::fmt::Formatter".to_owned(),
+                    expected_import: "use std::fmt::Formatter;".to_owned(),
+                },
+            }])
+        );
+    }
+
+    #[test]
+    fn test_qualified_item_check_when_non_fn_name_clashes_allows_qualified_path() {
+        let syntax = syn::parse_file(
+            r"
+            mod values {
+                pub const VALUE: usize = 1;
+            }
+            const VALUE: usize = 2;
+            fn read() -> usize {
+                crate::values::VALUE
+            }
+            ",
+        )
+        .unwrap();
+
+        let result = qualified_item_rule().check(&crate::cmds::rsl::rules::test_ctx(&syntax));
+
+        assert_that!(result, is_empty());
+    }
+
+    #[test]
+    fn test_qualified_item_check_when_struct_names_clash_allows_one_qualified_path() {
+        let syntax = syn::parse_file(
+            r"
+            mod first {
+                pub struct Thing;
+            }
+            mod second {
+                pub struct Thing;
+            }
+            use crate::first::Thing;
+            fn read() -> crate::second::Thing {
+                panic!()
+            }
+            ",
+        )
+        .unwrap();
+
+        let result = qualified_item_rule().check(&crate::cmds::rsl::rules::test_ctx(&syntax));
+
+        assert_that!(result, is_empty());
+    }
+
+    #[test]
+    fn test_qualified_item_check_when_external_paths_are_qualified_reports_paths() {
+        let syntax = syn::parse_file(
+            r"
+            mod external;
+            use external::Thing;
+            struct Data;
+            impl Data {
+                fn run() {}
+                fn call(&self) {
+                    self.run();
+                    Self::run();
+                }
+            }
+            fn read() -> external::Thing {
+                external::Thing::new()
+            }
+            ",
+        )
+        .unwrap();
+
+        let result = qualified_item_rule().check(&crate::cmds::rsl::rules::test_ctx(&syntax));
+
+        assert_that!(
+            result,
+            eq(vec![
+                QualifiedItemViolation {
+                    file: PathBuf::from("test.rs"),
+                    line: 12,
+                    column: 26,
+                    details: QualifiedItemDetails {
+                        actual_path: "external::Thing".to_owned(),
+                        expected_import: "use external::Thing;".to_owned(),
+                    },
+                },
+                QualifiedItemViolation {
+                    file: PathBuf::from("test.rs"),
+                    line: 13,
+                    column: 17,
+                    details: QualifiedItemDetails {
+                        actual_path: "external::Thing".to_owned(),
+                        expected_import: "use external::Thing;".to_owned(),
+                    },
+                },
+            ])
+        );
+    }
+
+    #[test]
+    fn test_qualified_item_check_when_unknown_external_type_is_qualified_reports_import() {
+        let syntax = syn::parse_file(
+            r"
+            fn inspect(_: syn::ExprCall) {}
+            ",
+        )
+        .unwrap();
+
+        let result = qualified_item_rule().check(&crate::cmds::rsl::rules::test_ctx(&syntax));
+
+        assert_that!(
+            result,
+            eq(vec![QualifiedItemViolation {
+                file: PathBuf::from("test.rs"),
+                line: 2,
+                column: 27,
+                details: QualifiedItemDetails {
+                    actual_path: "syn::ExprCall".to_owned(),
+                    expected_import: "use syn::ExprCall;".to_owned(),
+                },
+            }])
+        );
+    }
+
+    #[test]
+    fn test_qualified_item_check_when_enum_variant_is_qualified_ignores_path() {
+        let syntax = syn::parse_file(
+            r"
+            enum Kind {
+                First,
+                Second,
+            }
+            fn select(kind: Kind) -> Kind {
+                match kind {
+                    Kind::First => Kind::Second,
+                    Kind::Second => Kind::First,
+                }
+            }
+            ",
+        )
+        .unwrap();
+
+        let result = qualified_item_rule().check(&crate::cmds::rsl::rules::test_ctx(&syntax));
+
+        assert_that!(result, is_empty());
+    }
+
+    #[test]
+    fn test_qualified_item_check_when_associated_fn_is_referenced_ignores_path() {
+        let syntax = syn::parse_file(
+            r"
+            fn converter() -> fn(&String) -> &str {
+                String::as_str
+            }
+            ",
+        )
+        .unwrap();
+
+        let result = qualified_item_rule().check(&crate::cmds::rsl::rules::test_ctx(&syntax));
+
+        assert_that!(result, is_empty());
+    }
+
+    #[test]
+    fn test_qualified_item_violation_formats_compact_output() {
+        let violation = QualifiedItemViolation {
+            file: PathBuf::from("test.rs"),
+            line: 3,
+            column: 13,
+            details: QualifiedItemDetails {
+                actual_path: "external::Thing".to_owned(),
+                expected_import: "use external::Thing;".to_owned(),
+            },
+        };
+
+        assert_eq!(
+            violation.to_string(),
+            "test.rs:3:13,qualified_item,replace `external::Thing` with `Thing`; add `use external::Thing;`"
+        );
+    }
+}
