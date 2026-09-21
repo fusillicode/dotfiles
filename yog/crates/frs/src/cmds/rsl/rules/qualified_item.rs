@@ -21,6 +21,13 @@ use crate::cmds::rsl::engine::FileContext;
 use crate::cmds::rsl::rules::TypedRule;
 use crate::cmds::rsl::rules::TypedRuleViolation;
 
+pub(super) const QUALIFIED_ALLOWED_PATHS: &[&str] = &[
+    "anyhow::Result",
+    "rootcause::Result",
+    "std::fmt::Result",
+    "std::io::Result",
+];
+
 #[cfg_attr(test, derive(Debug, Eq, PartialEq))]
 pub(super) struct QualifiedItemViolation {
     pub(super) file: PathBuf,
@@ -50,7 +57,15 @@ pub(super) struct QualifiedItemDetails {
     pub(super) expected_import: String,
 }
 
-pub struct QualifiedItemRule;
+pub struct QualifiedItemRule {
+    allowed_paths: &'static [&'static str],
+}
+
+impl QualifiedItemRule {
+    pub(super) const fn new(allowed_paths: &'static [&'static str]) -> Self {
+        Self { allowed_paths }
+    }
+}
 
 impl TypedRule for QualifiedItemRule {
     type Violation = QualifiedItemViolation;
@@ -68,6 +83,7 @@ impl TypedRule for QualifiedItemRule {
                 idx: &idx,
                 current_module: &scope.path,
                 source_path: ctx.path,
+                allowed_paths: self.allowed_paths,
                 violations: &mut violations,
                 skip_call_path: false,
             };
@@ -84,6 +100,7 @@ struct QualifiedItemVisitor<'idx, 'ast, 'output> {
     idx: &'idx ModuleIdx<'ast>,
     current_module: &'idx [String],
     source_path: &'idx Path,
+    allowed_paths: &'static [&'static str],
     violations: &'output mut Vec<QualifiedItemViolation>,
     skip_call_path: bool,
 }
@@ -122,14 +139,17 @@ impl<'ast> Visit<'ast> for QualifiedItemVisitor<'_, '_, '_> {
 }
 
 fn check_non_fn_path(visitor: &mut QualifiedItemVisitor<'_, '_, '_>, parts: &[String], span: Span) {
-    if parts.len() <= 1
-        || !is_import_style_path(parts)
+    if parts.len() <= 1 || !is_import_style_path(parts) {
+        return;
+    }
+
+    let actual_path = parts.join("::");
+    if visitor.allowed_paths.iter().any(|allowed| *allowed == actual_path)
         || has_name_clash_parts(visitor.idx, visitor.current_module, parts)
     {
         return;
     }
 
-    let actual_path = parts.join("::");
     visitor.violations.push(QualifiedItemViolation::new(
         visitor.source_path,
         span,
