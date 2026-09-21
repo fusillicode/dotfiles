@@ -7,12 +7,17 @@ use super::super::aliased_import::AliasedImportViolation;
 use super::super::common::CallDetails;
 use super::super::overqualified_call::OverqualifiedCallRule;
 use super::super::overqualified_call::OverqualifiedCallViolation;
+use super::super::qualified_item::QUALIFIED_ALLOWED_PATHS;
 use super::super::qualified_item::QualifiedItemDetails;
 use super::super::qualified_item::QualifiedItemRule;
 use super::super::qualified_item::QualifiedItemViolation;
 use super::super::unqualified_call::UnqualifiedCallRule;
 use super::super::unqualified_call::UnqualifiedCallViolation;
 use crate::cmds::rsl::rules::TypedRule;
+
+fn qualified_item_rule() -> QualifiedItemRule {
+    QualifiedItemRule::new(&[])
+}
 
 #[test]
 fn test_unqualified_call_check_when_same_module_call_is_bare_returns_no_violations() {
@@ -542,7 +547,7 @@ fn test_qualified_item_check_when_non_fn_path_is_fully_qualified_reports_import(
     )
     .unwrap();
 
-    let result = QualifiedItemRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
+    let result = qualified_item_rule().check(&crate::cmds::rsl::rules::test_ctx(&syntax));
 
     assert_that!(
         result,
@@ -553,6 +558,47 @@ fn test_qualified_item_check_when_non_fn_path_is_fully_qualified_reports_import(
             details: QualifiedItemDetails {
                 actual_path: "crate::values::VALUE".to_owned(),
                 expected_import: "use crate::values::VALUE;".to_owned(),
+            },
+        }])
+    );
+}
+
+#[test]
+fn test_qualified_item_check_when_path_is_allowed_returns_no_violations() {
+    let syntax = syn::parse_file(
+        r"
+            fn inspect(_: std::fmt::Result) -> rootcause::Result<()> {
+                panic!()
+            }
+            ",
+    )
+    .unwrap();
+
+    let result = QualifiedItemRule::new(QUALIFIED_ALLOWED_PATHS).check(&crate::cmds::rsl::rules::test_ctx(&syntax));
+
+    assert_that!(result, is_empty());
+}
+
+#[test]
+fn test_qualified_item_check_when_path_is_not_allowed_reports_import() {
+    let syntax = syn::parse_file(
+        r"
+            fn inspect(_: std::fmt::Formatter<'_>) {}
+            ",
+    )
+    .unwrap();
+
+    let result = QualifiedItemRule::new(QUALIFIED_ALLOWED_PATHS).check(&crate::cmds::rsl::rules::test_ctx(&syntax));
+
+    assert_that!(
+        result,
+        eq(vec![QualifiedItemViolation {
+            file: PathBuf::from("test.rs"),
+            line: 2,
+            column: 27,
+            details: QualifiedItemDetails {
+                actual_path: "std::fmt::Formatter".to_owned(),
+                expected_import: "use std::fmt::Formatter;".to_owned(),
             },
         }])
     );
@@ -573,7 +619,7 @@ fn test_qualified_item_check_when_non_fn_name_clashes_allows_qualified_path() {
     )
     .unwrap();
 
-    let result = QualifiedItemRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
+    let result = qualified_item_rule().check(&crate::cmds::rsl::rules::test_ctx(&syntax));
 
     assert_that!(result, is_empty());
 }
@@ -596,7 +642,7 @@ fn test_qualified_item_check_when_struct_names_clash_allows_one_qualified_path()
     )
     .unwrap();
 
-    let result = QualifiedItemRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
+    let result = qualified_item_rule().check(&crate::cmds::rsl::rules::test_ctx(&syntax));
 
     assert_that!(result, is_empty());
 }
@@ -702,7 +748,7 @@ fn test_qualified_item_check_when_external_paths_are_qualified_reports_paths() {
     )
     .unwrap();
 
-    let result = QualifiedItemRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
+    let result = qualified_item_rule().check(&crate::cmds::rsl::rules::test_ctx(&syntax));
 
     assert_that!(
         result,
@@ -738,7 +784,7 @@ fn test_qualified_item_check_when_unknown_external_type_is_qualified_reports_imp
     )
     .unwrap();
 
-    let result = QualifiedItemRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
+    let result = qualified_item_rule().check(&crate::cmds::rsl::rules::test_ctx(&syntax));
 
     assert_that!(
         result,
@@ -772,7 +818,7 @@ fn test_qualified_item_check_when_enum_variant_is_qualified_ignores_path() {
     )
     .unwrap();
 
-    let result = QualifiedItemRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
+    let result = qualified_item_rule().check(&crate::cmds::rsl::rules::test_ctx(&syntax));
 
     assert_that!(result, is_empty());
 }
@@ -788,7 +834,7 @@ fn test_qualified_item_check_when_associated_fn_is_referenced_ignores_path() {
     )
     .unwrap();
 
-    let result = QualifiedItemRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
+    let result = qualified_item_rule().check(&crate::cmds::rsl::rules::test_ctx(&syntax));
 
     assert_that!(result, is_empty());
 }

@@ -219,6 +219,51 @@ mod tests {
     }
 
     #[test]
+    fn test_rsl_when_relative_call_uses_super_reports_relative_path() {
+        let directory = require(tempfile::tempdir());
+        let source = require(write_source(
+            &directory,
+            "sample.rs",
+            r"
+            mod parent {
+                mod child {
+                    fn run() {
+                        super::helper();
+                    }
+                }
+                fn helper() {}
+            }
+            ",
+        ));
+
+        let expected_file = source.to_string_lossy().into_owned();
+        let output = require(run_rsl(vec![source.into_os_string()]));
+
+        assert_that!(
+            output,
+            eq(format!(
+                "{expected_file}:5:25,relative_path,use a crate-absolute path\n"
+            ))
+        );
+    }
+
+    #[test]
+    fn test_rsl_when_qualified_result_paths_are_allowed_returns_no_output() {
+        let directory = require(tempfile::tempdir());
+        let source = require(write_source(
+            &directory,
+            "sample.rs",
+            r"
+            fn inspect(_: std::fmt::Result) -> rootcause::Result<()> {
+                panic!()
+            }
+            ",
+        ));
+
+        assert_that!(run_rsl(vec![source.into_os_string()]), ok(eq(String::new())));
+    }
+
+    #[test]
     fn test_rsl_when_json_option_is_supplied_returns_usage_error() {
         let directory = require(tempfile::tempdir());
         let source = require(write_source(&directory, "sample.rs", "fn main() {}"));

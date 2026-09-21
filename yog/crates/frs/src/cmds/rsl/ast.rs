@@ -254,6 +254,10 @@ pub(super) fn is_test_module(item: &Item) -> bool {
         return false;
     };
 
+    self::is_test_module_declaration(module)
+}
+
+pub(super) fn is_test_module_declaration(module: &syn::ItemMod) -> bool {
     module.ident == "tests"
         && module.attrs.iter().any(|attribute| {
             let syn::Meta::List(meta) = &attribute.meta else {
