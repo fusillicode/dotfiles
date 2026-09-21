@@ -1,10 +1,10 @@
 //! Built-in rules for `frs rsl`.
 
-use std::fmt::Display;
-use std::path::Path;
 use std::sync::OnceLock;
 
 use crate::cmds::rsl::engine::FileContext;
+use crate::cmds::rsl::output::FormattedRuleViolation;
+use crate::cmds::rsl::output::ViolationOutputFormat;
 use crate::cmds::rsl::rules::aliased_import::AliasedImportRule;
 use crate::cmds::rsl::rules::misordered_fn::MisorderedFnRule;
 use crate::cmds::rsl::rules::misordered_item_group::MisorderedItemGroupRule;
@@ -15,16 +15,16 @@ use crate::cmds::rsl::rules::qualified_item::QualifiedItemRule;
 use crate::cmds::rsl::rules::relative_path::RelativePathRule;
 use crate::cmds::rsl::rules::unqualified_call::UnqualifiedCallRule;
 
-mod aliased_import;
-mod common;
-mod misordered_fn;
-mod misordered_item_group;
-mod misordered_visibility;
-mod nonadjacent_impl;
-mod overqualified_call;
-mod qualified_item;
-mod relative_path;
-mod unqualified_call;
+pub(super) mod aliased_import;
+pub(super) mod common;
+pub(super) mod misordered_fn;
+pub(super) mod misordered_item_group;
+pub(super) mod misordered_visibility;
+pub(super) mod nonadjacent_impl;
+pub(super) mod overqualified_call;
+pub(super) mod qualified_item;
+pub(super) mod relative_path;
+pub(super) mod unqualified_call;
 
 static RULES: OnceLock<[Box<dyn Rule>; 9]> = OnceLock::new();
 
@@ -49,16 +49,25 @@ where
 }
 
 /// Object-safe violation interface used after the dispatcher erases types.
-pub trait RuleViolation: Display + Send + Sync {}
+pub(super) trait RuleViolation: Send + Sync {
+    fn render(&self, format: ViolationOutputFormat) -> String;
+}
 
-impl<T> RuleViolation for T where T: crate::cmds::rsl::rules::TypedRuleViolation + Display {}
+impl<T> RuleViolation for T
+where
+    T: crate::cmds::rsl::rules::TypedRuleViolation + FormattedRuleViolation,
+{
+    fn render(&self, format: ViolationOutputFormat) -> String {
+        FormattedRuleViolation::format(self, format)
+    }
+}
 
 /// Typed rule contract implemented by each concrete rule.
 ///
 /// Keeping the associated violation here prevents a rule from returning the
 /// violation type owned by another rule, while still allowing `dyn Rule`.
-trait TypedRule: Send + Sync + 'static {
-    type Violation: crate::cmds::rsl::rules::TypedRuleViolation<Rule = Self> + Display + 'static;
+pub(super) trait TypedRule: Send + Sync + 'static {
+    type Violation: crate::cmds::rsl::rules::TypedRuleViolation<Rule = Self> + FormattedRuleViolation + 'static;
 
     fn code() -> &'static str;
 
@@ -66,18 +75,8 @@ trait TypedRule: Send + Sync + 'static {
 }
 
 /// Typed link between a concrete violation and its owning rule.
-trait TypedRuleViolation: Send + Sync + 'static {
+pub(super) trait TypedRuleViolation: Send + Sync + 'static {
     type Rule: crate::cmds::rsl::rules::TypedRule<Violation = Self>;
-}
-
-pub(super) fn format_compact_violation(
-    file: &Path,
-    line: usize,
-    column: usize,
-    code: &str,
-    suggested_fix: &str,
-) -> String {
-    format!("{}:{line}:{column},{code},{suggested_fix}", file.display())
 }
 
 pub(super) fn check(ctx: &FileContext<'_>) -> Vec<Box<dyn RuleViolation>> {

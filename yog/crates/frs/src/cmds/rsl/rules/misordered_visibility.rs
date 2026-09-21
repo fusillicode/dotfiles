@@ -1,14 +1,11 @@
 //! Misordered-visibility rule for `frs rsl`.
 
-use std::fmt::Display;
-use std::fmt::Formatter;
-use std::fmt::Result;
 use std::path::Path;
-use std::path::PathBuf;
 
 use proc_macro2::Span;
 use syn::Item;
 
+use super::common::Location;
 use crate::cmds::rsl::ast::VisibilityClass;
 use crate::cmds::rsl::engine::FileContext;
 use crate::cmds::rsl::rules::TypedRule;
@@ -111,22 +108,17 @@ impl TypedRule for MisorderedVisibilityRule {
     }
 }
 
-#[cfg_attr(test, derive(Eq, PartialEq))]
 #[derive(Debug)]
-pub(super) struct MisorderedVisibilityViolation {
-    file: PathBuf,
-    line: usize,
-    column: usize,
-    details: MisorderedVisibilityDetails,
+#[cfg_attr(test, derive(Eq, PartialEq))]
+pub struct MisorderedVisibilityViolation {
+    pub location: Location,
+    pub details: MisorderedVisibilityDetails,
 }
 
 impl MisorderedVisibilityViolation {
     fn new(path: &Path, span: Span, expected_before: String, item_label: String) -> Self {
-        let location = span.start();
         Self {
-            file: path.to_path_buf(),
-            line: location.line,
-            column: location.column.saturating_add(1),
+            location: Location::from_span(path, span),
             details: MisorderedVisibilityDetails {
                 expected_before,
                 item_label,
@@ -139,26 +131,11 @@ impl TypedRuleViolation for MisorderedVisibilityViolation {
     type Rule = MisorderedVisibilityRule;
 }
 
-impl Display for MisorderedVisibilityViolation {
-    fn fmt(&self, formatter: &mut Formatter<'_>) -> Result {
-        formatter.write_str(&crate::cmds::rsl::rules::format_compact_violation(
-            &self.file,
-            self.line,
-            self.column,
-            MisorderedVisibilityRule::code(),
-            &format!(
-                "move `{}` before `{}`",
-                self.details.item_label, self.details.expected_before
-            ),
-        ))
-    }
-}
-
-#[cfg_attr(test, derive(Eq, PartialEq))]
 #[derive(Debug)]
-struct MisorderedVisibilityDetails {
-    expected_before: String,
-    item_label: String,
+#[cfg_attr(test, derive(Eq, PartialEq))]
+pub struct MisorderedVisibilityDetails {
+    pub expected_before: String,
+    pub item_label: String,
 }
 
 #[cfg(test)]
@@ -171,6 +148,7 @@ mod tests {
     use super::MisorderedVisibilityRule;
     use super::MisorderedVisibilityViolation;
     use crate::cmds::rsl::rules::TypedRule;
+    use crate::cmds::rsl::rules::common::Location;
 
     #[test]
     fn test_misordered_visibility_rule_check_when_visibility_decreases_reports_public_item() {
@@ -187,9 +165,7 @@ mod tests {
         assert_that!(
             result,
             eq(vec![MisorderedVisibilityViolation {
-                file: PathBuf::from("test.rs"),
-                line: 3,
-                column: 17,
+                location: Location::new(PathBuf::from("test.rs"), 3, 17),
                 details: MisorderedVisibilityDetails {
                     expected_before: "fn private".to_owned(),
                     item_label: "fn public".to_owned(),
@@ -214,9 +190,7 @@ mod tests {
         assert_that!(
             result,
             eq(vec![MisorderedVisibilityViolation {
-                file: PathBuf::from("test.rs"),
-                line: 3,
-                column: 17,
+                location: Location::new(PathBuf::from("test.rs"), 3, 17),
                 details: MisorderedVisibilityDetails {
                     expected_before: "fn private".to_owned(),
                     item_label: "struct Data".to_owned(),
@@ -243,32 +217,12 @@ mod tests {
         assert_that!(
             result,
             eq(vec![MisorderedVisibilityViolation {
-                file: PathBuf::from("test.rs"),
-                line: 5,
-                column: 21,
+                location: Location::new(PathBuf::from("test.rs"), 5, 21),
                 details: MisorderedVisibilityDetails {
                     expected_before: "fn helper".to_owned(),
                     item_label: "fn api".to_owned(),
                 },
             }])
-        );
-    }
-
-    #[test]
-    fn test_misordered_visibility_violation_when_details_are_present_formats_compact_output() {
-        let violation = MisorderedVisibilityViolation {
-            file: PathBuf::from("test.rs"),
-            line: 3,
-            column: 17,
-            details: MisorderedVisibilityDetails {
-                expected_before: "fn private".to_owned(),
-                item_label: "fn public".to_owned(),
-            },
-        };
-
-        assert_eq!(
-            violation.to_string(),
-            "test.rs:3:17,misordered_visibility,move `fn public` before `fn private`"
         );
     }
 }

@@ -1,9 +1,10 @@
 Run Rust source lint rules on explicitly supplied files.
 
 Usage:
-  frs rsl FILE...
+  frs rsl [--debug] FILE...
 
 Arguments:
+  --debug                  Include rule codes in violations.
   FILE                     Rust source file to check. Supply at least one file.
 
 Each file is checked as a root module. Inline module bodies are checked recursively.

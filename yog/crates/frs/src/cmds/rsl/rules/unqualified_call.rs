@@ -1,14 +1,11 @@
 //! Unqualified fn-call rule for `frs rsl`.
 
-use std::fmt::Display;
-use std::fmt::Formatter;
-use std::fmt::Result;
 use std::path::Path;
-use std::path::PathBuf;
 
 use super::common::CallDetails;
 use super::common::FnCallFinding;
 use super::common::FnCallKind;
+use super::common::Location;
 use super::common::find_fn_calls;
 use crate::cmds::rsl::engine::FileContext;
 use crate::cmds::rsl::rules::TypedRule;
@@ -20,7 +17,7 @@ impl TypedRule for UnqualifiedCallRule {
     type Violation = UnqualifiedCallViolation;
 
     fn code() -> &'static str {
-        "uc"
+        "unqualified_call"
     }
 
     fn check(&self, ctx: &FileContext<'_>) -> Vec<Self::Violation> {
@@ -31,21 +28,17 @@ impl TypedRule for UnqualifiedCallRule {
     }
 }
 
-#[cfg_attr(test, derive(Debug, Eq, PartialEq))]
-pub(super) struct UnqualifiedCallViolation {
-    pub(super) file: PathBuf,
-    pub(super) line: usize,
-    pub(super) column: usize,
-    pub(super) details: CallDetails,
+#[derive(Debug)]
+#[cfg_attr(test, derive(Eq, PartialEq))]
+pub struct UnqualifiedCallViolation {
+    pub location: Location,
+    pub details: CallDetails,
 }
 
 impl UnqualifiedCallViolation {
     fn new(path: &Path, finding: FnCallFinding) -> Self {
-        let location = finding.span.start();
         Self {
-            file: path.to_path_buf(),
-            line: location.line,
-            column: location.column.saturating_add(1),
+            location: Location::from_span(path, finding.span),
             details: CallDetails {
                 actual_path: finding.actual_path,
                 replacement_path: finding.suggestion.expected_path,
@@ -59,27 +52,6 @@ impl TypedRuleViolation for UnqualifiedCallViolation {
     type Rule = UnqualifiedCallRule;
 }
 
-impl Display for UnqualifiedCallViolation {
-    fn fmt(&self, formatter: &mut Formatter<'_>) -> Result {
-        let details = format!(
-            "replace `{}` with `{}`{}",
-            self.details.actual_path,
-            self.details.replacement_path,
-            self.details
-                .add_import
-                .as_ref()
-                .map_or_else(String::new, |import| format!("; add `{import}`")),
-        );
-        formatter.write_str(&crate::cmds::rsl::rules::format_compact_violation(
-            &self.file,
-            self.line,
-            self.column,
-            UnqualifiedCallRule::code(),
-            &details,
-        ))
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
@@ -88,6 +60,7 @@ mod tests {
 
     use super::*;
     use crate::cmds::rsl::rules::TypedRule;
+    use crate::cmds::rsl::rules::common::Location;
 
     #[test]
     fn test_unqualified_call_check_when_same_module_call_is_bare_returns_no_violations() {
@@ -175,9 +148,7 @@ mod tests {
         assert_that!(
             result,
             eq(vec![UnqualifiedCallViolation {
-                file: PathBuf::from("test.rs"),
-                line: 10,
-                column: 21,
+                location: Location::new(PathBuf::from("test.rs"), 10, 21),
                 details: CallDetails {
                     actual_path: "run".to_owned(),
                     replacement_path: "external::run".to_owned(),
@@ -212,9 +183,7 @@ mod tests {
         assert_that!(
             result,
             eq(vec![UnqualifiedCallViolation {
-                file: PathBuf::from("test.rs"),
-                line: 11,
-                column: 21,
+                location: Location::new(PathBuf::from("test.rs"), 11, 21),
                 details: CallDetails {
                     actual_path: "run".to_owned(),
                     replacement_path: "external::run".to_owned(),
@@ -353,9 +322,7 @@ mod tests {
         assert_that!(
             result,
             eq(vec![UnqualifiedCallViolation {
-                file: PathBuf::from("test.rs"),
-                line: 5,
-                column: 17,
+                location: Location::new(PathBuf::from("test.rs"), 5, 17),
                 details: CallDetails {
                     actual_path: "run".to_owned(),
                     replacement_path: "external::run".to_owned(),
@@ -382,9 +349,7 @@ mod tests {
         assert_that!(
             result,
             eq(vec![UnqualifiedCallViolation {
-                file: PathBuf::from("test.rs"),
-                line: 4,
-                column: 17,
+                location: Location::new(PathBuf::from("test.rs"), 4, 17),
                 details: CallDetails {
                     actual_path: "tempdir".to_owned(),
                     replacement_path: "tempfile::tempdir".to_owned(),
@@ -477,24 +442,5 @@ mod tests {
         let result = UnqualifiedCallRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
 
         assert_that!(result, is_empty());
-    }
-
-    #[test]
-    fn test_unqualified_call_violation_formats_compact_output() {
-        let violation = UnqualifiedCallViolation {
-            file: PathBuf::from("test.rs"),
-            line: 2,
-            column: 13,
-            details: CallDetails {
-                actual_path: "run()".to_owned(),
-                replacement_path: "self::run()".to_owned(),
-                add_import: None,
-            },
-        };
-
-        assert_eq!(
-            violation.to_string(),
-            "test.rs:2:13,uc,replace `run()` with `self::run()`"
-        );
     }
 }

@@ -1,13 +1,10 @@
 //! Misordered-item-group rule for `frs rsl`.
 
-use std::fmt::Display;
-use std::fmt::Formatter;
-use std::fmt::Result;
 use std::path::Path;
-use std::path::PathBuf;
 
 use proc_macro2::Span;
 
+use super::common::Location;
 use crate::cmds::rsl::ast::ItemGroup;
 use crate::cmds::rsl::ast::ItemKind;
 use crate::cmds::rsl::engine::FileContext;
@@ -91,22 +88,17 @@ impl TypedRule for MisorderedItemGroupRule {
     }
 }
 
-#[cfg_attr(test, derive(Eq, PartialEq))]
 #[derive(Debug)]
-pub(super) struct MisorderedItemGroupViolation {
-    file: PathBuf,
-    line: usize,
-    column: usize,
-    details: MisorderedItemGroupDetails,
+#[cfg_attr(test, derive(Eq, PartialEq))]
+pub struct MisorderedItemGroupViolation {
+    pub location: Location,
+    pub details: MisorderedItemGroupDetails,
 }
 
 impl MisorderedItemGroupViolation {
     fn new(path: &Path, span: Span, expected_group: ItemGroup, item: ItemKind) -> Self {
-        let location = span.start();
         Self {
-            file: path.to_path_buf(),
-            line: location.line,
-            column: location.column.saturating_add(1),
+            location: Location::from_span(path, span),
             details: MisorderedItemGroupDetails { expected_group, item },
         }
     }
@@ -116,27 +108,11 @@ impl TypedRuleViolation for MisorderedItemGroupViolation {
     type Rule = MisorderedItemGroupRule;
 }
 
-impl Display for MisorderedItemGroupViolation {
-    fn fmt(&self, formatter: &mut Formatter<'_>) -> Result {
-        formatter.write_str(&crate::cmds::rsl::rules::format_compact_violation(
-            &self.file,
-            self.line,
-            self.column,
-            MisorderedItemGroupRule::code(),
-            &format!(
-                "move `{}` after `{}`",
-                self.details.item.label(),
-                self.details.expected_group
-            ),
-        ))
-    }
-}
-
-#[cfg_attr(test, derive(Eq, PartialEq))]
 #[derive(Debug)]
-struct MisorderedItemGroupDetails {
-    expected_group: ItemGroup,
-    item: ItemKind,
+#[cfg_attr(test, derive(Eq, PartialEq))]
+pub struct MisorderedItemGroupDetails {
+    pub expected_group: ItemGroup,
+    pub item: ItemKind,
 }
 
 #[cfg(test)]
@@ -150,6 +126,7 @@ mod tests {
     use super::MisorderedItemGroupViolation;
     use crate::cmds::rsl::ast::ItemGroup;
     use crate::cmds::rsl::rules::TypedRule;
+    use crate::cmds::rsl::rules::common::Location;
 
     #[test]
     fn test_classify_item_when_each_group_is_present_returns_expected_groups() {
@@ -215,9 +192,7 @@ mod tests {
         assert_that!(
             result,
             eq(vec![MisorderedItemGroupViolation {
-                file: PathBuf::from("test.rs"),
-                line: 4,
-                column: 13,
+                location: Location::new(PathBuf::from("test.rs"), 4, 13),
                 details: MisorderedItemGroupDetails {
                     expected_group: ItemGroup::Items,
                     item: crate::cmds::rsl::ast::ItemKind::Use,
@@ -277,9 +252,7 @@ mod tests {
         assert_that!(
             result,
             eq(vec![MisorderedItemGroupViolation {
-                file: PathBuf::from("test.rs"),
-                line: 3,
-                column: 13,
+                location: Location::new(PathBuf::from("test.rs"), 3, 13),
                 details: MisorderedItemGroupDetails {
                     expected_group: ItemGroup::Items,
                     item: crate::cmds::rsl::ast::ItemKind::Mod,
@@ -319,9 +292,7 @@ mod tests {
         assert_that!(
             result,
             eq(vec![MisorderedItemGroupViolation {
-                file: PathBuf::from("test.rs"),
-                line: 3,
-                column: 13,
+                location: Location::new(PathBuf::from("test.rs"), 3, 13),
                 details: MisorderedItemGroupDetails {
                     expected_group: ItemGroup::Items,
                     item: crate::cmds::rsl::ast::ItemKind::Const,
@@ -359,32 +330,12 @@ mod tests {
         assert_that!(
             result,
             eq(vec![MisorderedItemGroupViolation {
-                file: PathBuf::from("test.rs"),
-                line: 4,
-                column: 17,
+                location: Location::new(PathBuf::from("test.rs"), 4, 17),
                 details: MisorderedItemGroupDetails {
                     expected_group: ItemGroup::Items,
                     item: crate::cmds::rsl::ast::ItemKind::Const,
                 },
             }])
-        );
-    }
-
-    #[test]
-    fn test_misordered_item_group_violation_when_details_are_present_formats_compact_output() {
-        let violation = MisorderedItemGroupViolation {
-            file: PathBuf::from("test.rs"),
-            line: 4,
-            column: 13,
-            details: MisorderedItemGroupDetails {
-                expected_group: ItemGroup::Items,
-                item: crate::cmds::rsl::ast::ItemKind::Const,
-            },
-        };
-
-        assert_eq!(
-            violation.to_string(),
-            "test.rs:4:13,misordered_item_group,move `const` after `items`"
         );
     }
 

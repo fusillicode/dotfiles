@@ -1,13 +1,10 @@
 //! Nonadjacent-impl rule for `frs rsl`.
 
-use std::fmt::Display;
-use std::fmt::Formatter;
-use std::fmt::Result;
 use std::path::Path;
-use std::path::PathBuf;
 
 use proc_macro2::Span;
 
+use super::common::Location;
 use crate::cmds::rsl::ast::ItemKind;
 use crate::cmds::rsl::engine::FileContext;
 use crate::cmds::rsl::rules::TypedRule;
@@ -64,22 +61,17 @@ impl TypedRule for NonadjacentImplRule {
     }
 }
 
-#[cfg_attr(test, derive(Eq, PartialEq))]
 #[derive(Debug)]
-pub(super) struct NonadjacentImplViolation {
-    file: PathBuf,
-    line: usize,
-    column: usize,
-    details: NonadjacentImplDetails,
+#[cfg_attr(test, derive(Eq, PartialEq))]
+pub struct NonadjacentImplViolation {
+    pub location: Location,
+    pub details: NonadjacentImplDetails,
 }
 
 impl NonadjacentImplViolation {
     fn new(path: &Path, span: Span, expected_after: String, item: ItemKind) -> Self {
-        let location = span.start();
         Self {
-            file: path.to_path_buf(),
-            line: location.line,
-            column: location.column.saturating_add(1),
+            location: Location::from_span(path, span),
             details: NonadjacentImplDetails { expected_after, item },
         }
     }
@@ -89,27 +81,11 @@ impl TypedRuleViolation for NonadjacentImplViolation {
     type Rule = NonadjacentImplRule;
 }
 
-impl Display for NonadjacentImplViolation {
-    fn fmt(&self, formatter: &mut Formatter<'_>) -> Result {
-        formatter.write_str(&crate::cmds::rsl::rules::format_compact_violation(
-            &self.file,
-            self.line,
-            self.column,
-            NonadjacentImplRule::code(),
-            &format!(
-                "move `{}` after `{}`",
-                self.details.item.label(),
-                self.details.expected_after
-            ),
-        ))
-    }
-}
-
-#[cfg_attr(test, derive(Eq, PartialEq))]
 #[derive(Debug)]
-struct NonadjacentImplDetails {
-    expected_after: String,
-    item: ItemKind,
+#[cfg_attr(test, derive(Eq, PartialEq))]
+pub struct NonadjacentImplDetails {
+    pub expected_after: String,
+    pub item: ItemKind,
 }
 
 #[cfg(test)]
@@ -123,6 +99,7 @@ mod tests {
     use super::NonadjacentImplViolation;
     use crate::cmds::rsl::ast::ItemKind;
     use crate::cmds::rsl::rules::TypedRule;
+    use crate::cmds::rsl::rules::common::Location;
 
     #[test]
     fn test_nonadjacent_impl_rule_check_when_impl_is_not_adjacent_to_type_reports_impl() {
@@ -140,9 +117,7 @@ mod tests {
         assert_that!(
             result,
             eq(vec![NonadjacentImplViolation {
-                file: PathBuf::from("test.rs"),
-                line: 4,
-                column: 13,
+                location: Location::new(PathBuf::from("test.rs"), 4, 13),
                 details: NonadjacentImplDetails {
                     expected_after: "struct Data".to_owned(),
                     item: ItemKind::Impl,
@@ -168,42 +143,20 @@ mod tests {
             result,
             eq(vec![
                 NonadjacentImplViolation {
-                    file: PathBuf::from("test.rs"),
-                    line: 4,
-                    column: 13,
+                    location: Location::new(PathBuf::from("test.rs"), 4, 13),
                     details: NonadjacentImplDetails {
                         expected_after: "struct Data".to_owned(),
                         item: ItemKind::Impl,
                     },
                 },
                 NonadjacentImplViolation {
-                    file: PathBuf::from("test.rs"),
-                    line: 3,
-                    column: 13,
+                    location: Location::new(PathBuf::from("test.rs"), 3, 13),
                     details: NonadjacentImplDetails {
                         expected_after: "inherent impl Data".to_owned(),
                         item: ItemKind::Impl,
                     },
                 },
             ])
-        );
-    }
-
-    #[test]
-    fn test_nonadjacent_impl_violation_when_details_are_present_formats_compact_output() {
-        let violation = NonadjacentImplViolation {
-            file: PathBuf::from("test.rs"),
-            line: 4,
-            column: 13,
-            details: NonadjacentImplDetails {
-                expected_after: "struct Data".to_owned(),
-                item: ItemKind::Impl,
-            },
-        };
-
-        assert_eq!(
-            violation.to_string(),
-            "test.rs:4:13,nonadjacent_impl,move `impl` after `struct Data`"
         );
     }
 
@@ -224,9 +177,7 @@ mod tests {
         assert_that!(
             result,
             eq(vec![NonadjacentImplViolation {
-                file: PathBuf::from("test.rs"),
-                line: 5,
-                column: 13,
+                location: Location::new(PathBuf::from("test.rs"), 5, 13),
                 details: NonadjacentImplDetails {
                     expected_after: "struct Data".to_owned(),
                     item: ItemKind::Impl,

@@ -17,7 +17,8 @@ use super::scope_bindings::closure_bindings;
 use super::scope_bindings::parameter_bindings;
 use super::scope_bindings::pattern_bindings;
 
-#[cfg_attr(test, derive(Debug, Eq, PartialEq))]
+#[derive(Debug)]
+#[cfg_attr(test, derive(Eq, PartialEq))]
 pub struct CallDetails {
     pub actual_path: String,
     pub replacement_path: String,

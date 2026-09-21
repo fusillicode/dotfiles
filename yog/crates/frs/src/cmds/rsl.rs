@@ -6,10 +6,12 @@ use std::path::PathBuf;
 use rootcause::report;
 use ytil_sys::pico_args::Arguments;
 
-use crate::cmds::rsl::rules::RuleViolation;
+pub use self::output::RslOutput;
+use self::output::ViolationOutputFormat;
 
 mod ast;
 mod engine;
+mod output;
 mod rules;
 
 /// Runs `frs rsl`.
@@ -22,7 +24,7 @@ mod rules;
 pub fn run(mut cli_args: Arguments) -> rootcause::Result<RslOutput> {
     if cli_args.contains("--help") {
         print!("{}", crate::cmds::Help::Rsl.text());
-        return Ok(RslOutput { violations: Vec::new() });
+        return Ok(RslOutput::new(Vec::new(), ViolationOutputFormat::Compact));
     }
 
     let opts = match RslOpts::try_from(cli_args.finish()) {
@@ -33,31 +35,19 @@ pub fn run(mut cli_args: Arguments) -> rootcause::Result<RslOutput> {
         }
     };
     let violations = crate::cmds::rsl::engine::check_paths(&opts.paths)?;
+    let format = if opts.debug {
+        ViolationOutputFormat::Debug
+    } else {
+        ViolationOutputFormat::Compact
+    };
 
-    Ok(RslOutput { violations })
+    Ok(RslOutput::new(violations, format))
 }
 
 #[derive(Debug)]
 struct RslOpts {
+    debug: bool,
     paths: Vec<PathBuf>,
-}
-
-pub struct RslOutput {
-    violations: Vec<Box<dyn RuleViolation>>,
-}
-
-impl RslOutput {
-    pub const fn is_empty(&self) -> bool {
-        self.violations.is_empty()
-    }
-
-    pub fn render(&self) -> String {
-        self.violations
-            .iter()
-            .map(ToString::to_string)
-            .collect::<Vec<_>>()
-            .join("\n")
-    }
 }
 
 impl TryFrom<Vec<OsString>> for RslOpts {
@@ -78,7 +68,8 @@ impl TryFrom<Vec<OsString>> for RslOpts {
             }
         }
 
-        let cli_args = Arguments::from_vec(before_separator);
+        let mut cli_args = Arguments::from_vec(before_separator);
+        let debug = cli_args.contains("--debug");
         let mut paths = cli_args.finish();
         if let Some(option) = paths.iter().find(|path| path.to_string_lossy().starts_with('-')) {
             return Err(report!("unknown rsl option").attach(format!("option={}", option.to_string_lossy())));
@@ -90,6 +81,7 @@ impl TryFrom<Vec<OsString>> for RslOpts {
         }
 
         Ok(Self {
+            debug,
             paths: paths.into_iter().map(PathBuf::from).collect(),
         })
     }
@@ -162,7 +154,7 @@ mod tests {
         assert_that!(
             output,
             eq(format!(
-                "{}:3:13,misordered_item_group,move `const` after `items`\n{}:3:13,misordered_item_group,move `const` after `items`\n",
+                "{}:3:13,move `const` after `items`\n{}:3:13,move `const` after `items`\n",
                 first.display(),
                 second.display(),
             ))
@@ -184,16 +176,11 @@ mod tests {
         let output = require(run_rsl(vec![source.clone().into_os_string()]));
         let expected_file = source.to_string_lossy().into_owned();
 
-        assert_that!(
-            output,
-            eq(format!(
-                "{expected_file}:3:13,misordered_item_group,move `const` after `items`\n"
-            ))
-        );
+        assert_that!(output, eq(format!("{expected_file}:3:13,move `const` after `items`\n")));
     }
 
     #[test]
-    fn test_rsl_when_function_qualification_is_invalid_reports_rule_codes() {
+    fn test_rsl_when_function_qualification_is_invalid_omits_rule_codes_by_default() {
         let directory = require(tempfile::tempdir());
         let source = require(write_source(
             &directory,
@@ -213,7 +200,33 @@ mod tests {
         assert_that!(
             output,
             eq(format!(
-                "{expected_file}:4:17,uc,replace `tempdir` with `tempfile::tempdir`\n{expected_file}:5:17,oc,replace `std::fs::read_to_string` with `fs::read_to_string`; add `use std::fs;`\n"
+                "{expected_file}:4:17,replace `tempdir` with `tempfile::tempdir`\n{expected_file}:5:17,replace `std::fs::read_to_string` with `fs::read_to_string`; add `use std::fs;`\n"
+            ))
+        );
+    }
+
+    #[test]
+    fn test_rsl_when_debug_flag_is_passed_includes_rule_codes() {
+        let directory = require(tempfile::tempdir());
+        let source = require(write_source(
+            &directory,
+            "sample.rs",
+            r#"
+            use tempfile::tempdir;
+            fn main() {
+                tempdir();
+                std::fs::read_to_string("foo");
+            }
+            "#,
+        ));
+
+        let expected_file = source.to_string_lossy().into_owned();
+        let output = require(run_rsl(vec![OsString::from("--debug"), source.into_os_string()]));
+
+        assert_that!(
+            output,
+            eq(format!(
+                "{expected_file}:4:17,unqualified_call,replace `tempdir` with `tempfile::tempdir`\n{expected_file}:5:17,overqualified_call,replace `std::fs::read_to_string` with `fs::read_to_string`; add `use std::fs;`\n"
             ))
         );
     }
@@ -239,12 +252,7 @@ mod tests {
         let expected_file = source.to_string_lossy().into_owned();
         let output = require(run_rsl(vec![source.into_os_string()]));
 
-        assert_that!(
-            output,
-            eq(format!(
-                "{expected_file}:5:25,relative_path,use a crate-absolute path\n"
-            ))
-        );
+        assert_that!(output, eq(format!("{expected_file}:5:25,use a crate-absolute path\n")));
     }
 
     #[test]
