@@ -1,10 +1,6 @@
 //! Relative-path rule for `frs rsl`.
 
-use std::fmt::Display;
-use std::fmt::Formatter;
-use std::fmt::Result;
 use std::path::Path;
-use std::path::PathBuf;
 
 use proc_macro2::Span;
 use syn::Expr;
@@ -12,6 +8,7 @@ use syn::UseTree;
 use syn::spanned::Spanned;
 use syn::visit::Visit;
 
+use super::common::Location;
 use crate::cmds::rsl::ast::is_test_module_declaration;
 use crate::cmds::rsl::engine::FileContext;
 use crate::cmds::rsl::rules::TypedRule;
@@ -42,38 +39,22 @@ impl TypedRule for RelativePathRule {
     }
 }
 
-#[cfg_attr(test, derive(Debug, Eq, PartialEq))]
-pub(super) struct RelativePathViolation {
-    file: PathBuf,
-    line: usize,
-    column: usize,
+#[derive(Debug)]
+#[cfg_attr(test, derive(Eq, PartialEq))]
+pub struct RelativePathViolation {
+    pub location: Location,
 }
 
 impl RelativePathViolation {
     fn new(path: &Path, span: Span) -> Self {
-        let location = span.start();
         Self {
-            file: path.to_path_buf(),
-            line: location.line,
-            column: location.column.saturating_add(1),
+            location: Location::from_span(path, span),
         }
     }
 }
 
 impl TypedRuleViolation for RelativePathViolation {
     type Rule = RelativePathRule;
-}
-
-impl Display for RelativePathViolation {
-    fn fmt(&self, formatter: &mut Formatter<'_>) -> Result {
-        formatter.write_str(&crate::cmds::rsl::rules::format_compact_violation(
-            &self.file,
-            self.line,
-            self.column,
-            RelativePathRule::code(),
-            "use a crate-absolute path",
-        ))
-    }
 }
 
 struct RelativePathVisitor<'output> {
@@ -154,6 +135,7 @@ mod tests {
 
     use super::*;
     use crate::cmds::rsl::rules::TypedRule;
+    use crate::cmds::rsl::rules::common::Location;
 
     #[test]
     fn test_relative_path_check_when_import_is_outside_tests_reports_violation() {
@@ -174,9 +156,7 @@ mod tests {
         assert_that!(
             result,
             eq(vec![RelativePathViolation {
-                file: PathBuf::from("test.rs"),
-                line: 5,
-                column: 25,
+                location: Location::new(PathBuf::from("test.rs"), 5, 25),
             }])
         );
     }
@@ -215,9 +195,7 @@ mod tests {
         assert_that!(
             result,
             eq(vec![RelativePathViolation {
-                file: PathBuf::from("test.rs"),
-                line: 4,
-                column: 21,
+                location: Location::new(PathBuf::from("test.rs"), 4, 21),
             }])
         );
     }
@@ -243,9 +221,7 @@ mod tests {
         assert_that!(
             result,
             eq(vec![RelativePathViolation {
-                file: PathBuf::from("test.rs"),
-                line: 6,
-                column: 25,
+                location: Location::new(PathBuf::from("test.rs"), 6, 25),
             }])
         );
     }
@@ -273,9 +249,7 @@ mod tests {
         assert_that!(
             result,
             eq(vec![RelativePathViolation {
-                file: PathBuf::from("test.rs"),
-                line: 8,
-                column: 25,
+                location: Location::new(PathBuf::from("test.rs"), 8, 25),
             }])
         );
     }
@@ -301,9 +275,7 @@ mod tests {
         assert_that!(
             result,
             eq(vec![RelativePathViolation {
-                file: PathBuf::from("test.rs"),
-                line: 6,
-                column: 29,
+                location: Location::new(PathBuf::from("test.rs"), 6, 29),
             }])
         );
     }

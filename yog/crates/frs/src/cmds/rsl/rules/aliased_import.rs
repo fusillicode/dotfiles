@@ -1,35 +1,28 @@
 //! Aliased-import rule for `frs rsl`.
 
-use std::fmt::Display;
-use std::fmt::Formatter;
-use std::fmt::Result;
 use std::path::Path;
-use std::path::PathBuf;
 
 use proc_macro2::Span;
 use syn::Item;
 use syn::UseTree;
 
+use super::common::Location;
 use super::common::module_idx;
 use crate::cmds::rsl::engine::FileContext;
 use crate::cmds::rsl::rules::TypedRule;
 use crate::cmds::rsl::rules::TypedRuleViolation;
 
-#[cfg_attr(test, derive(Debug, Eq, PartialEq))]
-pub(super) struct AliasedImportViolation {
-    pub(super) file: PathBuf,
-    pub(super) line: usize,
-    pub(super) column: usize,
-    pub(super) unaliased_import: String,
+#[derive(Debug)]
+#[cfg_attr(test, derive(Eq, PartialEq))]
+pub struct AliasedImportViolation {
+    pub location: Location,
+    pub unaliased_import: String,
 }
 
 impl AliasedImportViolation {
     pub(super) fn new(path: &Path, span: Span, unaliased_import: String) -> Self {
-        let location = span.start();
         Self {
-            file: path.to_path_buf(),
-            line: location.line,
-            column: location.column.saturating_add(1),
+            location: Location::from_span(path, span),
             unaliased_import,
         }
     }
@@ -98,18 +91,6 @@ impl TypedRuleViolation for AliasedImportViolation {
     type Rule = AliasedImportRule;
 }
 
-impl Display for AliasedImportViolation {
-    fn fmt(&self, formatter: &mut Formatter<'_>) -> Result {
-        formatter.write_str(&crate::cmds::rsl::rules::format_compact_violation(
-            &self.file,
-            self.line,
-            self.column,
-            AliasedImportRule::code(),
-            &format!("use unaliased import `{}` if it doesn't clash", self.unaliased_import),
-        ))
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
@@ -118,6 +99,7 @@ mod tests {
 
     use super::*;
     use crate::cmds::rsl::rules::TypedRule;
+    use crate::cmds::rsl::rules::common::Location;
 
     #[test]
     fn test_aliased_import_check_when_alias_is_private_reports_alias() {
@@ -133,9 +115,7 @@ mod tests {
         assert_that!(
             result,
             eq(vec![AliasedImportViolation {
-                file: PathBuf::from("test.rs"),
-                line: 2,
-                column: 38,
+                location: Location::new(PathBuf::from("test.rs"), 2, 38),
                 unaliased_import: "std::fmt::Display".to_owned(),
             }])
         );
@@ -169,9 +149,7 @@ mod tests {
         assert_that!(
             result,
             eq(vec![AliasedImportViolation {
-                file: PathBuf::from("test.rs"),
-                line: 2,
-                column: 40,
+                location: Location::new(PathBuf::from("test.rs"), 2, 40),
                 unaliased_import: "std::fmt::Debug".to_owned(),
             }])
         );
@@ -191,26 +169,9 @@ mod tests {
         assert_that!(
             result,
             eq(vec![AliasedImportViolation {
-                file: PathBuf::from("test.rs"),
-                line: 2,
-                column: 47,
+                location: Location::new(PathBuf::from("test.rs"), 2, 47),
                 unaliased_import: "std::fmt::Debug".to_owned(),
             }])
-        );
-    }
-
-    #[test]
-    fn test_aliased_import_violation_formats_compact_output() {
-        let violation = AliasedImportViolation {
-            file: PathBuf::from("test.rs"),
-            line: 4,
-            column: 13,
-            unaliased_import: "std::fmt::Thing".to_owned(),
-        };
-
-        assert_eq!(
-            violation.to_string(),
-            "test.rs:4:13,aliased_import,use unaliased import `std::fmt::Thing` if it doesn't clash"
         );
     }
 }
