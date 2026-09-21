@@ -10,7 +10,7 @@ Each file is checked as a root module. Inline module bodies are checked recursiv
 External module files are not read unless supplied separately.
 
 The built-in rules check item groups, visibility order, impl adjacency, function order,
-unqualified calls, overqualified calls, qualified item paths, and import aliases.
+unqualified calls, overqualified calls, qualified item paths, import aliases, and relative paths.
 
 Function calls use the shortest safe module path, qualified non-function paths use imports,
 and import aliases are limited to as _.

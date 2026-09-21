@@ -12,6 +12,7 @@ use crate::cmds::rsl::rules::misordered_visibility::MisorderedVisibilityRule;
 use crate::cmds::rsl::rules::nonadjacent_impl::NonadjacentImplRule;
 use crate::cmds::rsl::rules::overqualified_call::OverqualifiedCallRule;
 use crate::cmds::rsl::rules::qualified_item::QualifiedItemRule;
+use crate::cmds::rsl::rules::relative_path::RelativePathRule;
 use crate::cmds::rsl::rules::unqualified_call::UnqualifiedCallRule;
 
 mod aliased_import;
@@ -22,9 +23,10 @@ mod misordered_visibility;
 mod nonadjacent_impl;
 mod overqualified_call;
 mod qualified_item;
+mod relative_path;
 mod unqualified_call;
 
-static RULES: OnceLock<[Box<dyn Rule>; 8]> = OnceLock::new();
+static RULES: OnceLock<[Box<dyn Rule>; 9]> = OnceLock::new();
 
 /// Object-safe rule interface used by the dispatcher.
 ///
@@ -97,8 +99,11 @@ fn rules() -> &'static [Box<dyn Rule>] {
                 Box::new(MisorderedFnRule),
                 Box::new(UnqualifiedCallRule),
                 Box::new(OverqualifiedCallRule),
-                Box::new(QualifiedItemRule),
+                Box::new(QualifiedItemRule::new(
+                    crate::cmds::rsl::rules::qualified_item::QUALIFIED_ALLOWED_PATHS,
+                )),
                 Box::new(AliasedImportRule),
+                Box::new(RelativePathRule),
             ]
         })
         .as_slice()
