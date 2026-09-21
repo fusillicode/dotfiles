@@ -79,3 +79,175 @@ impl Display for OverqualifiedCallViolation {
         ))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use test_that::prelude::*;
+
+    use super::*;
+    use crate::cmds::rsl::rules::TypedRule;
+
+    #[test]
+    fn test_overqualified_call_check_when_foreign_module_call_has_one_module_prefix_returns_no_violations() {
+        let syntax = syn::parse_file(
+            r"
+            mod helper {
+                pub fn run() {}
+            }
+            fn main() {
+                helper::run();
+            }
+            ",
+        )
+        .unwrap();
+
+        let result = OverqualifiedCallRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
+
+        assert_that!(result, is_empty());
+    }
+
+    #[test]
+    fn test_overqualified_call_check_when_foreign_module_call_uses_crate_returns_no_violations() {
+        let syntax = syn::parse_file(
+            r"
+            mod helper {
+                pub fn run() {}
+            }
+            fn main() {
+                crate::helper::run();
+            }
+            ",
+        )
+        .unwrap();
+
+        let result = OverqualifiedCallRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
+
+        assert_that!(result, is_empty());
+    }
+
+    #[test]
+    fn test_overqualified_call_check_when_free_fn_call_has_one_module_prefix_returns_no_violations() {
+        let syntax = syn::parse_file(
+            r#"
+            fn read() {
+                fs::read_to_string("foo.md");
+            }
+            "#,
+        )
+        .unwrap();
+
+        let result = OverqualifiedCallRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
+
+        assert_that!(result, is_empty());
+    }
+
+    #[test]
+    fn test_overqualified_call_check_when_free_fn_call_has_multiple_module_prefixes_reports_call() {
+        let syntax = syn::parse_file(
+            r#"
+            fn read() {
+                std::fs::read_to_string("foo.md");
+            }
+            "#,
+        )
+        .unwrap();
+
+        let result = OverqualifiedCallRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
+
+        assert_that!(
+            result,
+            eq(vec![OverqualifiedCallViolation {
+                file: PathBuf::from("test.rs"),
+                line: 3,
+                column: 17,
+                details: CallDetails {
+                    actual_path: "std::fs::read_to_string".to_owned(),
+                    replacement_path: "fs::read_to_string".to_owned(),
+                    add_import: Some("use std::fs;".to_owned()),
+                },
+            }])
+        );
+    }
+
+    #[test]
+    fn test_overqualified_call_check_when_shortened_module_name_conflicts_with_import_returns_no_violations() {
+        let syntax = syn::parse_file(
+            r#"
+            mod other {
+                pub mod fs {}
+            }
+            use crate::other::fs;
+            fn read() {
+                std::fs::read_to_string("foo.md");
+            }
+            "#,
+        )
+        .unwrap();
+
+        let result = OverqualifiedCallRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
+
+        assert_that!(result, is_empty());
+    }
+
+    #[test]
+    fn test_overqualified_call_check_when_shortened_module_name_conflicts_with_local_module_returns_no_violations() {
+        let syntax = syn::parse_file(
+            r#"
+            mod fs {}
+            fn read() {
+                std::fs::read_to_string("foo.md");
+            }
+            "#,
+        )
+        .unwrap();
+
+        let result = OverqualifiedCallRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
+
+        assert_that!(result, is_empty());
+    }
+
+    #[test]
+    fn test_overqualified_call_check_when_imported_fn_module_name_conflicts_returns_no_violations() {
+        let syntax = syn::parse_file(
+            r"
+            mod source {
+                pub fn run() {}
+            }
+            mod other {
+                pub mod source {}
+            }
+            use crate::other::source;
+            use crate::source::run;
+            fn main() {
+                run();
+            }
+            ",
+        )
+        .unwrap();
+
+        let result = OverqualifiedCallRule.check(&crate::cmds::rsl::rules::test_ctx(&syntax));
+
+        assert_that!(result, is_empty());
+    }
+
+    #[test]
+    fn test_overqualified_call_violation_formats_compact_output() {
+        let violation = OverqualifiedCallViolation {
+            file: PathBuf::from("test.rs"),
+            line: 2,
+            column: 13,
+            details: CallDetails {
+                actual_path: "run()".to_owned(),
+                replacement_path: "external::run()".to_owned(),
+                add_import: Some("use crate::external;".to_owned()),
+            },
+        };
+
+        assert_eq!(
+            violation.to_string(),
+            "test.rs:2:13,oc,replace `run()` with `external::run()`; add `use crate::external;`"
+        );
+    }
+}
