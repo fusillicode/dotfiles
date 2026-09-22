@@ -4,7 +4,7 @@
   "blink.compat": { "branch": "main", "commit": "2ed6d9a28b07fa6f3bface818470605f8896408c" },
   "blink.lib": { "branch": "main", "commit": "fd9a48ebbe6ec30d5dfcc5b42c243941ccdca1aa" },
   "blink.pairs": { "branch": "main", "commit": "ef8fc29c8afa0fc1d0eb611a1a76fd87f0951f6e" },
-  "canola.nvim": { "branch": "main", "commit": "608cd79544c3adc853d0400f1f540e4f2aa4c024" },
+  "canola.nvim": { "branch": "main", "commit": "8173bc716f29797ce0ad94359565a20e17a0b88c" },
   "conform.nvim": { "branch": "master", "commit": "016802de402556da54c36bd7359b441266b01cdd" },
   "crates.nvim": { "branch": "main", "commit": "7039bc1d130e424232a7aa64ceddb170a154ff5b" },
   "fidget.nvim": { "branch": "main", "commit": "9e0201673e08e997e7cf52afca5565c70bd117f3" },
@@ -23,5 +23,5 @@
   "nvim-treesitter-context": { "branch": "master", "commit": "f3061339b8eaf9fda873600bc425b8d2d8502533" },
   "nvim-treesitter-textobjects": { "branch": "main", "commit": "5c7b0263797dfd1bd6202f2b219f3b53a80b2187" },
   "render-markdown.nvim": { "branch": "main", "commit": "640a3ec6d538bad17c328be373c7cad0293d9589" },
-  "schemastore.nvim": { "branch": "main", "commit": "b73cf982d16ff69e528d2ab269482f11c0825f64" }
+  "schemastore.nvim": { "branch": "main", "commit": "be687d17e4a9443e918c48c3c915b1f2ffd0f718" }
 }
