@@ -534,7 +534,7 @@ mod tests {
     fn test_write_scrollback_editor_focus_lost_if_live_when_editor_is_reporting_writes_lost() -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
         let mut config = server_test_helpers::server_config(tempdir.path(), "work")?;
-        let mut user_config = MuxrConfig::default();
+        let mut user_config = MuxrConfig::new()?;
         user_config.scrollback.editor = muxr_config::ScrollbackEditorConfig {
             program: "/bin/sh",
             args: &[
@@ -639,7 +639,7 @@ mod tests {
     fn test_replace_active_pane_with_scrollback_editor_preserves_split_shape() -> rootcause::Result<()> {
         let mut layout = state_test_helpers::layout("work")?;
         let original_pane_id = layout.split_active_pane(
-            muxr_config::MuxrConfig::default().layout,
+            muxr_config::MuxrConfig::new()?.layout,
             state_test_helpers::metadata("sh", 2),
             PaneSplitAxis::Vertical,
         )?;
@@ -681,7 +681,7 @@ mod tests {
         let size = TerminalSize::new(80, 24)?;
         let mut layout = state_test_helpers::layout("work")?;
         layout.split_active_pane(
-            muxr_config::MuxrConfig::default().layout,
+            muxr_config::MuxrConfig::new()?.layout,
             state_test_helpers::metadata("sh", 2),
             PaneSplitAxis::Vertical,
         )?;
@@ -746,7 +746,7 @@ mod tests {
     #[test]
     fn test_tracked_process_quiet_sweep_when_editor_is_active_preserves_hidden_original_pane() -> rootcause::Result<()>
     {
-        let user_config = MuxrConfig::default();
+        let user_config = MuxrConfig::new()?;
         let mut layout = state_test_helpers::layout("work")?;
         layout.split_active_pane(
             user_config.layout,

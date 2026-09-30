@@ -642,7 +642,7 @@ mod tests {
     use super::*;
 
     fn input(generation: u64) -> rootcause::Result<RenderInput> {
-        let config = MuxrConfig::default();
+        let config = MuxrConfig::new()?;
         Ok(RenderInput::new(
             generation,
             PaneRenderConfig {

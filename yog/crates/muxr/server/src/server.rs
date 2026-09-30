@@ -48,7 +48,7 @@ struct SessionHandshakeContext<'a> {
     delete_sessions: &'a Arc<DeleteSessions>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct ServerConfig {
     pub client_heartbeat_interval: Duration,
     pub client_heartbeat_timeout: Duration,
@@ -74,7 +74,7 @@ pub fn serve_session(session: &SessionName, external_layout: Option<PathBuf>) ->
         client_heartbeat_timeout: CLIENT_HEARTBEAT_TIMEOUT,
         client_write_timeout: CLIENT_WRITE_TIMEOUT,
         external_layout,
-        user_config: Arc::new(MuxrConfig::default()),
+        user_config: Arc::new(MuxrConfig::new()?),
         session: session.clone(),
         paths,
         max_accepted_connections: None,
@@ -412,7 +412,7 @@ pub mod test_helpers {
             client_heartbeat_timeout: TEST_CLIENT_HEARTBEAT_TIMEOUT,
             client_write_timeout: TEST_CLIENT_WRITE_TIMEOUT,
             external_layout: None,
-            user_config: std::sync::Arc::new(MuxrConfig::default()),
+            user_config: std::sync::Arc::new(MuxrConfig::new()?),
             session,
             paths,
             max_accepted_connections: None,
@@ -871,7 +871,7 @@ mod tests {
         self::runtime()?.block_on(async {
             let tempdir = tempfile::tempdir()?;
             let (session, paths) = self::session_paths(tempdir.path(), "work")?;
-            let mut user_config = MuxrConfig::default();
+            let mut user_config = MuxrConfig::new()?;
             user_config.scrollback.editor = muxr_config::ScrollbackEditorConfig {
                 program: "/bin/sh",
                 args: &["-c", "cat \"$1\"; sleep 30", "muxr-test-scrollback-editor"],
@@ -938,7 +938,7 @@ mod tests {
         self::runtime()?.block_on(async {
             let tempdir = tempfile::tempdir()?;
             let (session, paths) = self::session_paths(tempdir.path(), "work")?;
-            let mut user_config = MuxrConfig::default();
+            let mut user_config = MuxrConfig::new()?;
             user_config.scrollback.editor = muxr_config::ScrollbackEditorConfig {
                 program: "/bin/sh",
                 args: &["-c", "cat \"$1\"; sleep 30", "muxr-test-scrollback-editor"],
@@ -1005,7 +1005,7 @@ mod tests {
         self::runtime()?.block_on(async {
             let tempdir = tempfile::tempdir()?;
             let (session, paths) = self::session_paths(tempdir.path(), "work")?;
-            let mut user_config = MuxrConfig::default();
+            let mut user_config = MuxrConfig::new()?;
             user_config.scrollback.editor = muxr_config::ScrollbackEditorConfig {
                 program: "/bin/sh",
                 args: &[
@@ -1104,7 +1104,7 @@ mod tests {
         self::runtime()?.block_on(async {
             let tempdir = tempfile::tempdir()?;
             let (session, paths) = self::session_paths(tempdir.path(), "work")?;
-            let mut user_config = MuxrConfig::default();
+            let mut user_config = MuxrConfig::new()?;
             user_config.scrollback.editor = muxr_config::ScrollbackEditorConfig {
                 program: "/bin/sh",
                 args: &["-c", "cat \"$1\"; sleep 0.1; exit 7", "muxr-test-scrollback-editor"],
@@ -2239,7 +2239,7 @@ mod tests {
             client_heartbeat_timeout: TEST_CLIENT_HEARTBEAT_TIMEOUT,
             client_write_timeout: TEST_CLIENT_WRITE_TIMEOUT,
             external_layout: None,
-            user_config: Arc::new(MuxrConfig::default()),
+            user_config: Arc::new(MuxrConfig::new()?),
             session,
             paths: paths.clone(),
             max_accepted_connections: None,
@@ -2282,7 +2282,7 @@ mod tests {
             paths,
             max_accepted_connections,
             shell_cmd,
-            MuxrConfig::default(),
+            MuxrConfig::new().unwrap(),
         )
     }
 

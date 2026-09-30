@@ -19,7 +19,6 @@ muxr_core = { workspace = true }
 muxr_transport = { workspace = true }
 parking_lot = { version = "0.12" }
 portable-pty = { version = "0.9" }
-regex = { version = "1.13" }
 rio-vt = { version = "0.5", default-features = false }
 rootcause = { workspace = true }
 serde = { workspace = true }
@@ -33,6 +32,8 @@ tracing-subscriber = { version = "0.3" }
 url = { workspace = true }
 
 [dev-dependencies]
+nonempty-collections = { workspace = true }
+regex = { version = "1.13" }
 rstest = { workspace = true }
 tempfile = { workspace = true }
 test-that = { workspace = true }

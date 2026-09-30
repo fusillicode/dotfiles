@@ -678,7 +678,7 @@ mod tests {
     #[test]
     fn test_queue_sidebar_row_when_path_contains_zwj_emoji_keeps_label_flush_after_rail() -> rootcause::Result<()> {
         let mut output = CountingWriter::default();
-        let config = MuxrConfig::default().tab_bar;
+        let config = MuxrConfig::new()?.tab_bar;
 
         queue_sidebar_row(
             &mut output,
@@ -720,7 +720,7 @@ mod tests {
         )?;
         let mut output = CountingWriter::default();
 
-        queue(&mut output, MuxrConfig::default().tab_bar, &layout, 3)?;
+        queue(&mut output, MuxrConfig::new()?.tab_bar, &layout, 3)?;
 
         let rendered = output.rendered_string()?;
         assert_that!(rendered, contains_substring("project"));
@@ -749,7 +749,7 @@ mod tests {
         )?;
         let mut output = CountingWriter::default();
 
-        queue(&mut output, MuxrConfig::default().tab_bar, &layout, 2)?;
+        queue(&mut output, MuxrConfig::new()?.tab_bar, &layout, 2)?;
 
         let visible = self::strip_ansi(&output.rendered_string()?);
         assert_that!(visible, contains_substring("\u{258e}cx"));
@@ -776,7 +776,7 @@ mod tests {
         )?;
         let mut output = CountingWriter::default();
 
-        queue(&mut output, MuxrConfig::default().tab_bar, &layout, 2)?;
+        queue(&mut output, MuxrConfig::new()?.tab_bar, &layout, 2)?;
 
         let visible = self::strip_ansi(&output.rendered_string()?);
         assert_that!(visible, contains_substring("\u{258e}project"));
@@ -805,7 +805,7 @@ mod tests {
         )?;
         let mut output = CountingWriter::default();
 
-        queue(&mut output, MuxrConfig::default().tab_bar, &layout, 3)?;
+        queue(&mut output, MuxrConfig::new()?.tab_bar, &layout, 3)?;
 
         let visible = self::strip_ansi(&output.rendered_string()?);
         let rows = visible.split(SEPARATOR).collect::<Vec<_>>();

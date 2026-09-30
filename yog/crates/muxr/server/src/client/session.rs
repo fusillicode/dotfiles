@@ -790,6 +790,7 @@ mod tests {
 
     use muxr_config::MuxrConfig;
     use muxr_config::ProcessMatcher;
+    use muxr_config::ScreenObservationConfig;
     use muxr_config::ScrollbackEditorConfig;
     use muxr_config::TrackedProcess;
     use muxr_config::TrackedProcessId;
@@ -808,6 +809,7 @@ mod tests {
     use muxr_transport::ClientConnection;
     use muxr_transport::ClientEventReader;
     use muxr_transport::ServerListener;
+    use regex::Regex;
     use test_that::prelude::*;
 
     use super::*;
@@ -1481,10 +1483,6 @@ mod tests {
         .await
     }
 
-    #[expect(
-        clippy::too_many_lines,
-        reason = "the helper keeps the focused-input request, quiet timer, and final state assertions in one scenario"
-    )]
     async fn assert_focused_may_echo_request_precedes_quiet_deadline_extends_busy(
         request: ClientRequest,
     ) -> rootcause::Result<()> {
@@ -1492,12 +1490,7 @@ mod tests {
         let mut config = crate::server::test_helpers::server_config(tempdir.path(), "work")?;
         Arc::make_mut(&mut config.user_config)
             .tracked_processes
-            .push(TrackedProcess {
-                id: TrackedProcessId::Claude,
-                label: "cl",
-                matchers: vec![ProcessMatcher::ExactExecutable("cat")],
-                quiet_threshold: Duration::from_millis(30),
-            });
+            .push(self::tracked_cat_process("cl", Duration::from_millis(30)));
         crate::session::files::prepare_session_dirs(&config.paths)?;
         let terminal_size = TerminalSize::new(80, 24)?;
         let mut layout = self::layout(&config)?;
@@ -2374,8 +2367,7 @@ mod tests {
         )?;
         // The ordinary config does not track this fixture's cat process. Fresh process evidence must win over the
         // Codex footer left in its terminal and the previously cached Codex identity.
-        let changes =
-            processes.guard_quiet_deadlines(&MuxrConfig::default(), &fixture.layout, &fixture.runtimes, now)?;
+        let changes = processes.guard_quiet_deadlines(&MuxrConfig::new()?, &fixture.layout, &fixture.runtimes, now)?;
         test_that::assert_that!(changes.state_change(), eq(TrackedProcessStateChange::Changed));
         test_that::assert_that!(
             processes.snapshot(&fixture.layout),
@@ -2466,12 +2458,9 @@ mod tests {
         let mut config = crate::server::test_helpers::server_config(tempdir.path(), "work")?;
         config.shell_cmd = crate::server::test_helpers::shell_cmd("/bin/cat");
         let user_config = Arc::make_mut(&mut config.user_config);
-        user_config.tracked_processes.push(TrackedProcess {
-            id: TrackedProcessId::Claude,
-            label: "cl",
-            matchers: vec![ProcessMatcher::ExactExecutable("cat")],
-            quiet_threshold: Duration::from_secs(3),
-        });
+        user_config
+            .tracked_processes
+            .push(self::tracked_cat_process("cl", Duration::from_secs(3)));
         user_config.scrollback.editor = ScrollbackEditorConfig {
             program: "/bin/sh",
             args: &["-c", "cat \"$1\"; sleep 30", "muxr-test-scrollback-editor"],
@@ -2659,12 +2648,7 @@ mod tests {
         let mut config = crate::server::test_helpers::server_config(tempdir.path(), "work")?;
         Arc::make_mut(&mut config.user_config)
             .tracked_processes
-            .push(TrackedProcess {
-                id: TrackedProcessId::Claude,
-                label: "cl",
-                matchers: vec![ProcessMatcher::ExactExecutable("cat")],
-                quiet_threshold: Duration::from_secs(3),
-            });
+            .push(self::tracked_cat_process("cl", Duration::from_secs(3)));
         crate::session::files::prepare_session_dirs(&config.paths)?;
         let terminal_size = TerminalSize::new(80, 24)?;
         let mut layout = self::layout(&config)?;
@@ -2762,12 +2746,7 @@ mod tests {
         let mut config = crate::server::test_helpers::server_config(tempdir.path(), "work")?;
         Arc::make_mut(&mut config.user_config)
             .tracked_processes
-            .push(TrackedProcess {
-                id: TrackedProcessId::Claude,
-                label: "cl",
-                matchers: vec![ProcessMatcher::ExactExecutable("cat")],
-                quiet_threshold: Duration::from_secs(3),
-            });
+            .push(self::tracked_cat_process("cl", Duration::from_secs(3)));
         crate::session::files::prepare_session_dirs(&config.paths)?;
         let terminal_size = TerminalSize::new(80, 24)?;
         let mut layout = self::layout(&config)?;
@@ -2890,12 +2869,7 @@ mod tests {
         let mut config = crate::server::test_helpers::server_config(tempdir.path(), "work")?;
         Arc::make_mut(&mut config.user_config)
             .tracked_processes
-            .push(TrackedProcess {
-                id: TrackedProcessId::Claude,
-                label: "cl",
-                matchers: vec![ProcessMatcher::ExactExecutable("cat")],
-                quiet_threshold: Duration::from_secs(3),
-            });
+            .push(self::tracked_cat_process("cl", Duration::from_secs(3)));
         crate::session::files::prepare_session_dirs(&config.paths)?;
         let terminal_size = TerminalSize::new(80, 24)?;
         let mut layout = self::layout(&config)?;
@@ -3010,12 +2984,7 @@ mod tests {
         let mut config = crate::server::test_helpers::server_config(tempdir.path(), "work")?;
         Arc::make_mut(&mut config.user_config)
             .tracked_processes
-            .push(TrackedProcess {
-                id: TrackedProcessId::Claude,
-                label: "cl",
-                matchers: vec![ProcessMatcher::ExactExecutable("cat")],
-                quiet_threshold: Duration::from_secs(3),
-            });
+            .push(self::tracked_cat_process("cl", Duration::from_secs(3)));
         crate::session::files::prepare_session_dirs(&config.paths)?;
         let terminal_size = TerminalSize::new(80, 24)?;
         let mut layout = self::layout(&config)?;
@@ -3138,12 +3107,7 @@ mod tests {
         let mut config = crate::server::test_helpers::server_config(tempdir.path(), "work")?;
         Arc::make_mut(&mut config.user_config)
             .tracked_processes
-            .push(TrackedProcess {
-                id: TrackedProcessId::Claude,
-                label: "ct",
-                matchers: vec![ProcessMatcher::ExactExecutable("cat")],
-                quiet_threshold: Duration::from_secs(3),
-            });
+            .push(self::tracked_cat_process("ct", Duration::from_secs(3)));
         crate::session::files::prepare_session_dirs(&config.paths)?;
         let terminal_size = TerminalSize::new(80, 24)?;
         let mut layout = self::layout(&config)?;
@@ -3270,12 +3234,7 @@ mod tests {
         let mut config = crate::server::test_helpers::server_config(tempdir.path(), "work")?;
         Arc::make_mut(&mut config.user_config)
             .tracked_processes
-            .push(TrackedProcess {
-                id: TrackedProcessId::Claude,
-                label: "cl",
-                matchers: vec![ProcessMatcher::ExactExecutable("cat")],
-                quiet_threshold: Duration::from_millis(30),
-            });
+            .push(self::tracked_cat_process("cl", Duration::from_millis(30)));
         crate::session::files::prepare_session_dirs(&config.paths)?;
         let terminal_size = TerminalSize::new(80, 24)?;
         let mut layout = self::layout(&config)?;
@@ -3820,6 +3779,16 @@ mod tests {
         Ok(layout)
     }
 
+    fn tracked_cat_process(label: &'static str, quiet_threshold: Duration) -> TrackedProcess {
+        TrackedProcess {
+            id: TrackedProcessId::Claude,
+            label,
+            matchers: vec![ProcessMatcher::ExactExecutable("cat")],
+            quiet_threshold,
+            screen_observation: None,
+        }
+    }
+
     struct TrackedCatRuntimeFixture {
         _tempdir: tempfile::TempDir,
         config: ServerConfig,
@@ -3842,6 +3811,56 @@ mod tests {
         }
     }
 
+    #[rstest::rstest]
+    #[case(TrackedProcessId::Codex)]
+    #[case(TrackedProcessId::Cursor)]
+    fn test_tracked_process_screen_when_config_overrides_patterns_and_trimming_drives_busy_and_attention(
+        #[case] agent: TrackedProcessId,
+    ) -> rootcause::Result<()> {
+        let mut fixture = self::tracked_cat_runtime_fixture()?;
+        fixture.layout.active_tab_mut()?.focus_pane(PaneId::new(2)?)?;
+        let process = Arc::make_mut(&mut fixture.config.user_config)
+            .tracked_processes
+            .iter_mut()
+            .find(|process| process.matches("cat", None))
+            .ok_or_else(|| rootcause::report!("missing configured cat process"))?;
+        process.id = agent;
+        process.screen_observation = Some(ScreenObservationConfig {
+            busy: nonempty_collections::nev![Regex::new(r"\ATASK\s+ACTIVE\z")?],
+            needs_attention: nonempty_collections::nev![Regex::new(r"\ATASK\s+DONE\b")?],
+            trim_chars: &['#'],
+        });
+        let mut processes = PaneTrackedProcesses::default();
+        let then = Instant::now();
+        fixture.write_screen_text("# TASK ACTIVE #")?;
+        processes.observe_runtime_pane_cmds(
+            fixture.config.user_config.as_ref(),
+            &fixture.runtimes,
+            &[fixture.pane_id],
+            then,
+        )?;
+        test_that::assert_that!(
+            self::tracked_process_snapshot_state(&processes.snapshot(&fixture.layout), fixture.pane_id)?,
+            eq(TrackedProcessState::Busy)
+        );
+        fixture.write_screen_text("# TASK DONE turn 1 #")?;
+        processes.record_cached_visible_activity(&fixture.runtimes, &[fixture.pane_id], then)?;
+        let due = self::instant_after(then, Duration::from_secs(3))?;
+        processes.guard_quiet_deadlines(
+            fixture.config.user_config.as_ref(),
+            &fixture.layout,
+            &fixture.runtimes,
+            due,
+        )?;
+        test_that::assert_that!(
+            processes.mark_quiet_deadlines(&fixture.layout, due)?,
+            eq(TrackedProcessAttention::Unseen {
+                pane_ids: vec![fixture.pane_id]
+            })
+        );
+        Ok(())
+    }
+
     fn tracked_cat_runtime_fixture() -> rootcause::Result<TrackedCatRuntimeFixture> {
         let tempdir = tempfile::tempdir()?;
         let mut config = crate::server::test_helpers::server_config(tempdir.path(), "work")?;
@@ -3852,6 +3871,9 @@ mod tests {
                 label: "cx",
                 matchers: vec![ProcessMatcher::ExactExecutable("cat")],
                 quiet_threshold: Duration::from_secs(3),
+                screen_observation: MuxrConfig::new()?
+                    .tracked_process_for_cmd("codex", None)
+                    .and_then(|process| process.screen_observation.clone()),
             });
         crate::session::files::prepare_session_dirs(&config.paths)?;
         let terminal_size = TerminalSize::new(80, 24)?;

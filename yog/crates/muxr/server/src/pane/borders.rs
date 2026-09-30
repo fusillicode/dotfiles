@@ -838,8 +838,8 @@ mod tests {
         let mut rows = self::empty_render_rows(&size);
         self::paste_borders(
             &mut rows,
-            MuxrConfig::default().pane_borders,
-            MuxrConfig::default().pane_attention,
+            MuxrConfig::new()?.pane_borders,
+            MuxrConfig::new()?.pane_attention,
             &borders,
             Some(&active_pane),
             &[],
@@ -877,8 +877,8 @@ mod tests {
 
         self::paste_borders(
             &mut rows,
-            MuxrConfig::default().pane_borders,
-            MuxrConfig::default().pane_attention,
+            MuxrConfig::new()?.pane_borders,
+            MuxrConfig::new()?.pane_attention,
             &borders,
             None,
             &[],
@@ -930,8 +930,8 @@ mod tests {
         let border_cells = self::compose_border_cells(std::slice::from_ref(&border), Some(&active_pane), &[], mode)?;
         self::paste_borders(
             &mut rows,
-            MuxrConfig::default().pane_borders,
-            MuxrConfig::default().pane_attention,
+            MuxrConfig::new()?.pane_borders,
+            MuxrConfig::new()?.pane_attention,
             &[border],
             Some(&active_pane),
             &[],
@@ -970,8 +970,8 @@ mod tests {
         )?;
         self::paste_borders(
             &mut rows,
-            MuxrConfig::default().pane_borders,
-            MuxrConfig::default().pane_attention,
+            MuxrConfig::new()?.pane_borders,
+            MuxrConfig::new()?.pane_attention,
             &[border],
             Some(&active_pane),
             std::slice::from_ref(&attention_pane),
@@ -1019,8 +1019,8 @@ mod tests {
         )?;
         self::paste_borders(
             &mut rows,
-            MuxrConfig::default().pane_borders,
-            MuxrConfig::default().pane_attention,
+            MuxrConfig::new()?.pane_borders,
+            MuxrConfig::new()?.pane_attention,
             &[border],
             Some(&active_pane),
             std::slice::from_ref(&attention_pane),
@@ -1063,8 +1063,8 @@ mod tests {
         )?;
         self::paste_borders(
             &mut rows,
-            MuxrConfig::default().pane_borders,
-            MuxrConfig::default().pane_attention,
+            MuxrConfig::new()?.pane_borders,
+            MuxrConfig::new()?.pane_attention,
             &[border],
             Some(&active_pane),
             std::slice::from_ref(&active_pane),
@@ -1106,8 +1106,8 @@ mod tests {
         let border_cells = self::compose_border_cells(&borders, Some(&active_pane), &[], mode)?;
         self::paste_borders(
             &mut rows,
-            MuxrConfig::default().pane_borders,
-            MuxrConfig::default().pane_attention,
+            MuxrConfig::new()?.pane_borders,
+            MuxrConfig::new()?.pane_attention,
             &borders,
             Some(&active_pane),
             &[],
@@ -1147,8 +1147,8 @@ mod tests {
         let border_cells = self::compose_border_cells(std::slice::from_ref(&border), Some(&active_pane), &[], mode)?;
         self::paste_borders(
             &mut rows,
-            MuxrConfig::default().pane_borders,
-            MuxrConfig::default().pane_attention,
+            MuxrConfig::new()?.pane_borders,
+            MuxrConfig::new()?.pane_attention,
             &[border],
             Some(&active_pane),
             &[],

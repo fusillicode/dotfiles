@@ -880,7 +880,10 @@ mod tests {
             pane_exit_notify: Arc::new(tokio::sync::Notify::new()),
             output_waiter: (Mutex::new(0), Condvar::new()),
             screen_dirty: AtomicBool::new(false),
-            terminal: Mutex::new(TerminalState::with_scrollback(size, MuxrConfig::default().scrollback)),
+            terminal: Mutex::new(TerminalState::with_scrollback(
+                size,
+                MuxrConfig::new().unwrap().scrollback,
+            )),
             title_changes: Mutex::new(Vec::new()),
         }
     }
@@ -1023,7 +1026,7 @@ mod tests {
             &ShellCmd::with_args("/bin/sh", ["-c", "sleep 0.1; exit 7"])?,
             "/tmp",
             &terminal_size()?,
-            MuxrConfig::default().scrollback,
+            MuxrConfig::new()?.scrollback,
             Arc::new(tokio::sync::Notify::new()),
         )?;
         let handle = session.handle();

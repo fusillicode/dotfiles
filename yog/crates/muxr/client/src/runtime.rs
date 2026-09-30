@@ -141,7 +141,7 @@ pub fn start(session: &SessionName, server_executable: &Path, external_layout: O
     tokio::runtime::Runtime::new()
         .context("failed to build muxr tokio runtime")?
         .block_on(async {
-            let muxr_config = MuxrConfig::default();
+            let muxr_config = MuxrConfig::new()?;
             let terminal_size = crate::terminal::current_terminal_size()?;
             let pane_size = crate::terminal::pane_size_for_terminal(muxr_config.tab_bar.width, &terminal_size)?;
             let attached_session =
@@ -534,7 +534,7 @@ fn send_decoded_input(
     request_sender: &tokio::sync::mpsc::Sender<ClientRequest>,
     decoded: Vec<DecodedInput>,
 ) -> ClientInputSend {
-    let keybindings = MuxrConfig::default().keybindings;
+    let keybindings = MuxrConfig::new().unwrap().keybindings;
     self::send_decoded_input_with_ordering(
         &keybindings,
         cmd_sender,

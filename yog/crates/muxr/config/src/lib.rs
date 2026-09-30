@@ -4,8 +4,6 @@
 //! transport stay in their feature crates. Colors are intentionally semantic config values; feature tests should assert
 //! roles such as focused, resize, attention, or selected instead of concrete color values.
 
-use std::time::Duration;
-
 use muxr_core::RenderColor;
 
 pub use self::keybindings::KeybindingAction;
@@ -15,9 +13,14 @@ pub use self::keybindings::LocalKeybindingAction;
 pub use self::session_layout::ExternalLayoutPane;
 pub use self::session_layout::ExternalLayoutTab;
 pub use self::session_layout::ExternalSessionLayout;
+pub use self::tracked_process::ProcessMatcher;
+pub use self::tracked_process::ScreenObservationConfig;
+pub use self::tracked_process::TrackedProcess;
+pub use self::tracked_process::TrackedProcessId;
 
 mod keybindings;
 mod session_layout;
+mod tracked_process;
 
 pub const SPLIT_RATIO_MIN_PER_MILLE: u16 = 50;
 pub const SPLIT_RATIO_MAX_PER_MILLE: u16 = 950;
@@ -25,7 +28,7 @@ const SPLIT_RESIZE_STEP_MIN: u16 = 1;
 const SPLIT_RESIZE_STEP_MAX: u16 = 950;
 
 /// Full hardcoded muxr config.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct MuxrConfig {
     /// These tables are compiled into both muxr binaries. Edit the default in `keybindings.rs` and rebuild muxr to
     /// change a key.
@@ -40,13 +43,13 @@ pub struct MuxrConfig {
     pub tracked_processes: Vec<TrackedProcess>,
 }
 
-impl Default for MuxrConfig {
-    #[expect(
-        clippy::too_many_lines,
-        reason = "the hardcoded config stays in one visible literal so local tuning does not require jumping between helpers"
-    )]
-    fn default() -> Self {
-        Self {
+impl MuxrConfig {
+    /// Build the static configuration and compile its screen regexes.
+    ///
+    /// # Errors
+    /// Returns an error if a configured screen regex is invalid.
+    pub fn new() -> rootcause::Result<Self> {
+        Ok(Self {
             keybindings: KeybindingsConfig::default(),
             layout: LayoutConfig {
                 horizontal_split_ratio: SplitRatio(500),
@@ -118,58 +121,10 @@ impl Default for MuxrConfig {
                 },
                 width: 21,
             },
-            tracked_processes: vec![
-                TrackedProcess {
-                    id: TrackedProcessId::Claude,
-                    label: "cl",
-                    matchers: vec![
-                        ProcessMatcher::ExactExecutable("claude"),
-                        ProcessMatcher::ExactExecutable("claude-code"),
-                        ProcessMatcher::PathContains("/claude/versions/"),
-                    ],
-                    quiet_threshold: Duration::from_secs(3),
-                },
-                TrackedProcess {
-                    id: TrackedProcessId::Codex,
-                    label: "cx",
-                    matchers: vec![
-                        ProcessMatcher::ExactExecutable("codex"),
-                        ProcessMatcher::ExactExecutable("codex-aarch64-apple-darwin"),
-                        ProcessMatcher::ExactExecutable("codex-x86_64-apple-darwin"),
-                    ],
-                    quiet_threshold: Duration::from_secs(3),
-                },
-                TrackedProcess {
-                    id: TrackedProcessId::Cursor,
-                    label: "cu",
-                    matchers: vec![
-                        ProcessMatcher::ExactExecutable("cursor"),
-                        ProcessMatcher::ExactExecutable("cursor-agent"),
-                        ProcessMatcher::ExecutableWithPathContains {
-                            executable: "node",
-                            path_contains: "/cursor-agent/versions/",
-                        },
-                    ],
-                    quiet_threshold: Duration::from_secs(3),
-                },
-                TrackedProcess {
-                    id: TrackedProcessId::Gemini,
-                    label: "gm",
-                    matchers: vec![ProcessMatcher::ExactExecutable("gemini")],
-                    quiet_threshold: Duration::from_secs(3),
-                },
-                TrackedProcess {
-                    id: TrackedProcessId::Opencode,
-                    label: "oc",
-                    matchers: vec![ProcessMatcher::ExactExecutable("opencode")],
-                    quiet_threshold: Duration::from_secs(3),
-                },
-            ],
-        }
+            tracked_processes: tracked_process::defaults()?,
+        })
     }
-}
 
-impl MuxrConfig {
     /// Return the first configured process matching a foreground executable and optional path.
     pub fn tracked_process_for_cmd(&self, executable: &str, path: Option<&str>) -> Option<&TrackedProcess> {
         self.tracked_processes
@@ -332,57 +287,6 @@ pub struct TextAttrs {
     pub bold: bool,
 }
 
-/// One foreground process class that can drive tab-bar dots and quiet-attention state.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct TrackedProcess {
-    pub id: TrackedProcessId,
-    pub label: &'static str,
-    pub matchers: Vec<ProcessMatcher>,
-    pub quiet_threshold: Duration,
-}
-
-impl TrackedProcess {
-    /// Return true when any matcher identifies this tracked process.
-    pub fn matches(&self, executable: &str, path: Option<&str>) -> bool {
-        self.matchers.iter().any(|matcher| matcher.matches(executable, path))
-    }
-}
-
-/// Stable ids for initially configured tracked processes.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum TrackedProcessId {
-    Claude,
-    Codex,
-    Cursor,
-    Gemini,
-    Opencode,
-}
-
-/// A foreground process matcher.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ProcessMatcher {
-    ExactExecutable(&'static str),
-    PathContains(&'static str),
-    ExecutableWithPathContains {
-        executable: &'static str,
-        path_contains: &'static str,
-    },
-}
-
-impl ProcessMatcher {
-    /// Return true when this matcher identifies a foreground process.
-    pub fn matches(self, executable: &str, path: Option<&str>) -> bool {
-        match self {
-            Self::ExactExecutable(expected) => executable == expected,
-            Self::PathContains(needle) => path.is_some_and(|path| path.contains(needle)),
-            Self::ExecutableWithPathContains {
-                executable: expected,
-                path_contains,
-            } => executable == expected && path.is_some_and(|path| path.contains(path_contains)),
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use test_that::prelude::*;
@@ -414,8 +318,8 @@ mod tests {
     }
 
     #[test]
-    fn test_muxr_config_default_contains_valid_layout_values() -> rootcause::Result<()> {
-        let config = MuxrConfig::default();
+    fn test_muxr_config_when_constructed_contains_valid_layout_values() -> rootcause::Result<()> {
+        let config = MuxrConfig::new()?;
 
         SplitRatio::new(config.layout.horizontal_split_ratio.per_mille())?;
         SplitRatio::new(config.layout.vertical_split_ratio.per_mille())?;
@@ -423,60 +327,9 @@ mod tests {
         Ok(())
     }
 
-    #[rstest::rstest]
-    #[case::claude("claude", None, TrackedProcessId::Claude, "cl")]
-    #[case::claude_code("claude-code", None, TrackedProcessId::Claude, "cl")]
-    #[case::claude_versioned_runtime(
-        "node",
-        Some("/Users/me/claude/versions/1.2.3/node"),
-        TrackedProcessId::Claude,
-        "cl"
-    )]
-    #[case::codex("codex", None, TrackedProcessId::Codex, "cx")]
-    #[case::codex_aarch64("codex-aarch64-apple-darwin", None, TrackedProcessId::Codex, "cx")]
-    #[case::cursor("cursor", None, TrackedProcessId::Cursor, "cu")]
-    #[case::cursor_agent("cursor-agent", None, TrackedProcessId::Cursor, "cu")]
-    #[case::cursor_versioned_runtime(
-        "node",
-        Some("/Users/me/cursor-agent/versions/1.2.3/node"),
-        TrackedProcessId::Cursor,
-        "cu"
-    )]
-    #[case::gemini("gemini", None, TrackedProcessId::Gemini, "gm")]
-    #[case::opencode("opencode", None, TrackedProcessId::Opencode, "oc")]
-    fn test_tracked_processes_when_command_matches_returns_process(
-        #[case] executable: &str,
-        #[case] path: Option<&str>,
-        #[case] expected_id: TrackedProcessId,
-        #[case] expected_label: &str,
-    ) -> rootcause::Result<()> {
-        let config = MuxrConfig::default();
-        let process = config
-            .tracked_process_for_cmd(executable, path)
-            .ok_or_else(|| rootcause::report!("expected tracked process"))?;
-
-        assert_that!(process.id, eq(expected_id));
-        assert_that!(process.label, eq(expected_label));
-        Ok(())
-    }
-
-    #[rstest::rstest]
-    #[case::rg_codex("rg-codex", None)]
-    #[case::notcodex("notcodex", None)]
-    #[case::plain_node("node", None)]
-    #[case::node_without_cursor_runtime("node", Some("/usr/local/bin/node"))]
-    fn test_tracked_processes_when_command_does_not_match_returns_none(
-        #[case] executable: &str,
-        #[case] path: Option<&str>,
-    ) {
-        let config = MuxrConfig::default();
-
-        assert_that!(config.tracked_process_for_cmd(executable, path), eq(None));
-    }
-
     #[test]
-    fn test_config_default_exposes_semantic_roles() {
-        let config = MuxrConfig::default();
+    fn test_config_when_constructed_exposes_semantic_roles() {
+        let config = MuxrConfig::new().unwrap();
 
         assert_that!(config.pane_borders.focused, eq(config.pane_borders.default));
         assert_that!(config.pane_attention.border, eq(config.pane_borders.default));

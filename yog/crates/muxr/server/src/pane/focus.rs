@@ -389,7 +389,7 @@ mod tests {
     ) -> rootcause::Result<()> {
         let mut layout = state_test_helpers::layout("work")?;
         layout.split_active_pane(
-            MuxrConfig::default().layout,
+            MuxrConfig::new()?.layout,
             state_test_helpers::metadata("sh", 2),
             PaneSplitAxis::Vertical,
         )?;
@@ -452,7 +452,7 @@ mod tests {
     ) -> rootcause::Result<()> {
         let mut layout = state_test_helpers::layout("work")?;
         layout.split_active_pane(
-            MuxrConfig::default().layout,
+            MuxrConfig::new()?.layout,
             state_test_helpers::metadata("sh", 2),
             PaneSplitAxis::Vertical,
         )?;
@@ -477,7 +477,7 @@ mod tests {
     ) -> rootcause::Result<()> {
         let mut layout = state_test_helpers::layout("work")?;
         layout.split_active_pane(
-            MuxrConfig::default().layout,
+            MuxrConfig::new()?.layout,
             state_test_helpers::metadata("sh", 2),
             PaneSplitAxis::Vertical,
         )?;
@@ -495,12 +495,12 @@ mod tests {
     {
         let mut layout = state_test_helpers::layout("work")?;
         layout.split_active_pane(
-            MuxrConfig::default().layout,
+            MuxrConfig::new()?.layout,
             state_test_helpers::metadata("sh", 2),
             PaneSplitAxis::Vertical,
         )?;
         layout.split_active_pane(
-            MuxrConfig::default().layout,
+            MuxrConfig::new()?.layout,
             state_test_helpers::metadata("sh", 3),
             PaneSplitAxis::Horizontal,
         )?;

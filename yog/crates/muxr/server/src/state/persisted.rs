@@ -99,12 +99,12 @@ mod tests {
         let mut layout = SessionLayout::initial(&session, state_test_helpers::metadata("sh", 1))?;
 
         layout.split_active_pane(
-            MuxrConfig::default().layout,
+            MuxrConfig::new()?.layout,
             state_test_helpers::metadata("sh", 2),
             PaneSplitAxis::Vertical,
         )?;
         layout.split_active_pane(
-            MuxrConfig::default().layout,
+            MuxrConfig::new()?.layout,
             state_test_helpers::metadata("sh", 3),
             PaneSplitAxis::Horizontal,
         )?;
@@ -134,13 +134,13 @@ mod tests {
         let mut layout = SessionLayout::initial(&session, state_test_helpers::metadata("sh", 1))?;
 
         layout.split_active_pane(
-            MuxrConfig::default().layout,
+            MuxrConfig::new()?.layout,
             state_test_helpers::metadata("sh", 2),
             PaneSplitAxis::Vertical,
         )?;
         state_test_helpers::force_balanced_test_split_ratio(&mut layout)?;
         assert_that!(
-            layout.resize_active_pane(MuxrConfig::default().layout, PaneResizeDirection::Left)?,
+            layout.resize_active_pane(MuxrConfig::new()?.layout, PaneResizeDirection::Left)?,
             eq(crate::pane::resize::PaneResizeChange::Changed)
         );
         self::write_metadata(&paths, &layout)?;

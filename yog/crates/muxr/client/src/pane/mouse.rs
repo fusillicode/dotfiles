@@ -204,7 +204,7 @@ mod tests {
     #[test]
     fn test_handle_mouse_input_action_when_plain_mouse_click_arrives_focuses_pane() -> rootcause::Result<()> {
         self::runtime()?.block_on(async {
-            let config = MuxrConfig::default();
+            let config = MuxrConfig::new()?;
             let (input_sender, mut input_receiver) = tokio::sync::mpsc::channel(1);
             let mut renderer = ClientRenderer::with_synchronized_output(
                 self::layout_snapshot()?,
@@ -241,7 +241,7 @@ mod tests {
     fn test_handle_mouse_input_action_when_alt_click_hits_file_path_sends_one_open_file_request()
     -> rootcause::Result<()> {
         self::runtime()?.block_on(async {
-            let config = MuxrConfig::default();
+            let config = MuxrConfig::new()?;
             let (input_sender, mut input_receiver) = tokio::sync::mpsc::channel(2);
             let mut renderer = ClientRenderer::with_synchronized_output(
                 self::layout_snapshot()?,
@@ -315,7 +315,7 @@ mod tests {
     #[test]
     fn test_handle_mouse_input_action_when_tab_sidebar_is_clicked_focuses_tab() -> rootcause::Result<()> {
         self::runtime()?.block_on(async {
-            let config = MuxrConfig::default();
+            let config = MuxrConfig::new()?;
             let (input_sender, mut input_receiver) = tokio::sync::mpsc::channel(1);
             let mut renderer = ClientRenderer::with_synchronized_output(
                 self::two_tab_layout()?,
@@ -349,7 +349,7 @@ mod tests {
     fn test_handle_mouse_input_action_when_selection_release_is_on_tab_sidebar_finalizes_selection()
     -> rootcause::Result<()> {
         self::runtime()?.block_on(async {
-            let config = MuxrConfig::default();
+            let config = MuxrConfig::new()?;
             let (input_sender, mut input_receiver) = tokio::sync::mpsc::channel(1);
             let mut renderer = ClientRenderer::with_synchronized_output(
                 self::layout_snapshot()?,
@@ -405,7 +405,7 @@ mod tests {
     fn test_handle_mouse_input_action_when_selection_drag_moves_into_tab_sidebar_clamps_to_left_edge()
     -> rootcause::Result<()> {
         self::runtime()?.block_on(async {
-            let config = MuxrConfig::default();
+            let config = MuxrConfig::new()?;
             let (input_sender, mut input_receiver) = tokio::sync::mpsc::channel(2);
             let mut renderer = ClientRenderer::with_synchronized_output(
                 self::layout_snapshot()?,
@@ -464,7 +464,7 @@ mod tests {
     #[test]
     fn test_handle_mouse_input_action_when_pane_tracks_mouse_forwards_mouse_to_server() -> rootcause::Result<()> {
         self::runtime()?.block_on(async {
-            let config = MuxrConfig::default();
+            let config = MuxrConfig::new()?;
             let (input_sender, mut input_receiver) = tokio::sync::mpsc::channel(1);
             let mut renderer = ClientRenderer::with_synchronized_output(
                 self::layout_snapshot()?,
@@ -504,7 +504,7 @@ mod tests {
     #[test]
     fn test_handle_mouse_input_action_when_pane_receives_wheel_forwards_mouse_to_server() -> rootcause::Result<()> {
         self::runtime()?.block_on(async {
-            let config = MuxrConfig::default();
+            let config = MuxrConfig::new()?;
             let (input_sender, mut input_receiver) = tokio::sync::mpsc::channel(1);
             let mut renderer = ClientRenderer::with_synchronized_output(
                 self::layout_snapshot()?,
@@ -540,7 +540,7 @@ mod tests {
     fn test_handle_mouse_input_action_when_pane_wheel_request_queue_is_full_waits_for_queue_space()
     -> rootcause::Result<()> {
         self::runtime()?.block_on(async {
-            let config = MuxrConfig::default();
+            let config = MuxrConfig::new()?;
             let (input_sender, mut input_receiver) = tokio::sync::mpsc::channel(1);
             assert_that!(input_sender.try_send(ClientRequest::Pong), ok(eq(())));
             let mut renderer = ClientRenderer::with_synchronized_output(
@@ -580,7 +580,7 @@ mod tests {
     fn test_handle_mouse_input_action_when_tracking_drag_crosses_pane_routes_to_pressed_pane() -> rootcause::Result<()>
     {
         self::runtime()?.block_on(async {
-            let config = MuxrConfig::default();
+            let config = MuxrConfig::new()?;
             let (input_sender, mut input_receiver) = tokio::sync::mpsc::channel(4);
             let mut renderer = ClientRenderer::with_synchronized_output(
                 self::layout_snapshot()?,

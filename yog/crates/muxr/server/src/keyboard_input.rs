@@ -574,7 +574,7 @@ mod tests {
         };
 
         assert_that!(
-            self::resolve_key(&MuxrConfig::default().keybindings, input_mode, &key),
+            self::resolve_key(&MuxrConfig::new().unwrap().keybindings, input_mode, &key),
             eq(KeyResolution::Cmd {
                 cmd,
                 next_mode: ServerInputMode::Normal,
@@ -600,7 +600,7 @@ mod tests {
         let key = self::key(ClientKeyCode::Char(character), ClientKeyModifiers::SHIFT_ALT, &[]);
 
         assert_that!(
-            self::resolve_key(&MuxrConfig::default().keybindings, input_mode, &key),
+            self::resolve_key(&MuxrConfig::new().unwrap().keybindings, input_mode, &key),
             eq(KeyResolution::Cmd {
                 cmd: ClientCmd::Tab(TabCmd::FocusAt(tab_index)),
                 next_mode: ServerInputMode::Normal,
@@ -618,7 +618,7 @@ mod tests {
         );
 
         assert_that!(
-            self::resolve_key(&MuxrConfig::default().keybindings, input_mode, &key),
+            self::resolve_key(&MuxrConfig::new().unwrap().keybindings, input_mode, &key),
             eq(KeyResolution::Raw)
         );
     }
@@ -633,7 +633,7 @@ mod tests {
         };
 
         assert_that!(
-            self::resolve_key(&MuxrConfig::default().keybindings, input_mode, &key),
+            self::resolve_key(&MuxrConfig::new().unwrap().keybindings, input_mode, &key),
             eq(KeyResolution::Raw)
         );
     }
@@ -659,7 +659,7 @@ mod tests {
         };
 
         assert_that!(
-            self::resolve_key(&MuxrConfig::default().keybindings, input_mode, &key),
+            self::resolve_key(&MuxrConfig::new().unwrap().keybindings, input_mode, &key),
             eq(KeyResolution::Cmd {
                 cmd,
                 next_mode: ServerInputMode::Resize,
@@ -681,14 +681,14 @@ mod tests {
         };
 
         assert_that!(
-            self::resolve_key(&MuxrConfig::default().keybindings, ServerInputMode::Normal, &enter),
+            self::resolve_key(&MuxrConfig::new().unwrap().keybindings, ServerInputMode::Normal, &enter),
             eq(KeyResolution::Cmd {
                 cmd: ClientCmd::EnterResizeMode,
                 next_mode: ServerInputMode::Resize,
             })
         );
         assert_that!(
-            self::resolve_key(&MuxrConfig::default().keybindings, ServerInputMode::Resize, &exit),
+            self::resolve_key(&MuxrConfig::new().unwrap().keybindings, ServerInputMode::Resize, &exit),
             eq(KeyResolution::Cmd {
                 cmd: ClientCmd::ExitMode,
                 next_mode: ServerInputMode::Normal,
@@ -706,7 +706,7 @@ mod tests {
         );
 
         assert_that!(
-            self::resolve_key(&MuxrConfig::default().keybindings, input_mode, &key),
+            self::resolve_key(&MuxrConfig::new().unwrap().keybindings, input_mode, &key),
             eq(KeyResolution::Raw)
         );
     }
