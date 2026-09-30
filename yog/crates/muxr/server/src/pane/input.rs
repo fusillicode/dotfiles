@@ -62,6 +62,9 @@ pub fn handle_client_key(key: &ClientKey, state: &mut ClientSessionState<'_>) ->
     }
 
     let interaction = TrackedProcessUserInteraction::from_key_input(key, &bytes);
+    state
+        .pane_tracked_processes
+        .capture_completion_before_input(pane_id, interaction, &handle);
     let viewport_move = handle.write_input(&bytes)?;
     let tracked_process_change =
         state
@@ -105,6 +108,9 @@ fn write_active_pane_user_input(
     write: impl FnOnce(&PtyHandle) -> rootcause::Result<PtyViewportMove>,
 ) -> rootcause::Result<PaneInputOutcome> {
     let (pane_id, handle) = self::active_pane_handle_with_id(state)?;
+    state
+        .pane_tracked_processes
+        .capture_completion_before_input(pane_id, interaction, &handle);
     let viewport_move = write(&handle)?;
     let tracked_process_change =
         state

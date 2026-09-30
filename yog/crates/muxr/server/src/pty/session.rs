@@ -42,6 +42,7 @@ use crate::terminal::TerminalScrollMove;
 use crate::terminal::TerminalSnapshot;
 use crate::terminal::TerminalSnapshotScope;
 use crate::terminal::TerminalState;
+use crate::terminal::TerminalTextTail;
 
 const READ_BUFFER_SIZE: usize = 8192;
 
@@ -455,6 +456,10 @@ impl PtyHandle {
         Ok(writer
             .write_all(&dump)
             .context("failed to write muxr scrollback dump")?)
+    }
+
+    pub(crate) fn live_tail_text(&self, row_limit: usize) -> TerminalTextTail {
+        self.state.terminal.lock().live_tail_text(row_limit)
     }
 }
 

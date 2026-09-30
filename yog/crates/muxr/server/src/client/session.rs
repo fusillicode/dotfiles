@@ -788,6 +788,7 @@ mod tests {
     use std::time::Duration;
     use std::time::Instant;
 
+    use muxr_config::MuxrConfig;
     use muxr_config::ProcessMatcher;
     use muxr_config::ScrollbackEditorConfig;
     use muxr_config::TrackedProcess;
@@ -810,11 +811,15 @@ mod tests {
     use test_that::prelude::*;
 
     use super::*;
+    use crate::event_writer::ServerEventSink;
     use crate::pane::cmd::PaneCmd;
     use crate::pane::cmd::PaneCmdObservation;
     use crate::pane::cmd::PaneCmdSnapshot;
     use crate::pane::split::PaneSplitAxis;
+    use crate::pane::tracked_process::PaneTrackedProcessSnapshot;
+    use crate::pane::tracked_process::TrackedProcessAttention;
     use crate::pane::tracked_process::TrackedProcessChanges;
+    use crate::pane::tracked_process::TrackedProcessStateChange;
     use crate::pane::tracked_process::TrackedProcessUserInteraction;
     use crate::pty::ShellCmd;
     use crate::session::start_seed::SessionStartSeed;
@@ -920,7 +925,7 @@ mod tests {
         pane_tracked_processes.observe_pane_cmd(
             config.user_config.as_ref(),
             pane_id,
-            &self::fg_tracked_process("codex"),
+            &self::fg_tracked_process("claude"),
             then,
         );
         pane_tracked_processes.record_user_interaction(
@@ -1026,7 +1031,7 @@ mod tests {
             pane_tracked_processes.observe_pane_cmd(
                 config.user_config.as_ref(),
                 pane_id,
-                &self::fg_tracked_process("codex"),
+                &self::fg_tracked_process("claude"),
                 then,
             );
         }
@@ -1142,7 +1147,7 @@ mod tests {
         pane_tracked_processes.observe_pane_cmd(
             config.user_config.as_ref(),
             pane_id,
-            &self::fg_tracked_process("codex"),
+            &self::fg_tracked_process("claude"),
             then,
         );
         pane_tracked_processes.record_user_interaction(
@@ -1233,19 +1238,19 @@ mod tests {
         pane_tracked_processes.observe_pane_cmd(
             config.user_config.as_ref(),
             fallback_pane_id,
-            &self::fg_tracked_process("codex"),
+            &self::fg_tracked_process("claude"),
             then,
         );
         assert_that!(
             pane_tracked_processes.mark_quiet_deadlines(&layout, self::instant_after(then, Duration::from_secs(3))?,)?,
-            eq(crate::pane::tracked_process::TrackedProcessAttention::Unseen {
+            eq(TrackedProcessAttention::Unseen {
                 pane_ids: vec![fallback_pane_id]
             })
         );
         pane_tracked_processes.observe_pane_cmd(
             config.user_config.as_ref(),
             active_pane_id,
-            &self::fg_tracked_process("codex"),
+            &self::fg_tracked_process("claude"),
             then,
         );
         let mut timers = ClientTimers::new(&config)?;
@@ -1371,12 +1376,12 @@ mod tests {
         pane_tracked_processes.observe_pane_cmd(
             config.user_config.as_ref(),
             pane_id,
-            &self::fg_tracked_process("codex"),
+            &self::fg_tracked_process("claude"),
             then,
         );
         assert_that!(
             pane_tracked_processes.mark_quiet_deadlines(&layout, self::instant_after(then, Duration::from_secs(3))?,)?,
-            eq(crate::pane::tracked_process::TrackedProcessAttention::Seen)
+            eq(TrackedProcessAttention::Seen)
         );
 
         let mut timers = ClientTimers::new(&config)?;
@@ -1488,8 +1493,8 @@ mod tests {
         Arc::make_mut(&mut config.user_config)
             .tracked_processes
             .push(TrackedProcess {
-                id: TrackedProcessId::Codex,
-                label: "cx",
+                id: TrackedProcessId::Claude,
+                label: "cl",
                 matchers: vec![ProcessMatcher::ExactExecutable("cat")],
                 quiet_threshold: Duration::from_millis(30),
             });
@@ -1509,6 +1514,9 @@ mod tests {
         )?;
         crate::screen_render::resize_panes_to_layout(&layout, &runtimes, &terminal_size)?;
         self::wait_for_runtime_fg_cmd(&runtimes, pane_id, "cat")?;
+        let completed = format!("{}Worked for 22m 38s • 11:37\n", "\n".repeat(24));
+        runtimes.handle(pane_id)?.write_input(completed.as_bytes())?;
+        self::wait_for_runtime_snapshot_contains(&runtimes, pane_id, "Worked for 22m 38s • 11:37")?;
         let then = Instant::now()
             .checked_sub(Duration::from_millis(60))
             .ok_or_else(|| rootcause::report!("test instant underflowed"))?;
@@ -1644,6 +1652,7 @@ mod tests {
     #[tokio::test(start_paused = true)]
     async fn test_handle_output_activity_sample_when_runtime_process_is_tracked_marks_busy() -> rootcause::Result<()> {
         let mut fixture = self::tracked_cat_runtime_fixture()?;
+        fixture.write_screen_text("Working (1s • esc to interrupt)")?;
         let mut timers = ClientTimers::new(&fixture.config)?;
         timers.schedule_output_activity_samples(&[fixture.pane_id])?;
         let pane_tracked_processes = PaneTrackedProcesses::default();
@@ -1696,6 +1705,683 @@ mod tests {
         );
 
         self::abort_client_drain(client_drain).await;
+        Ok(())
+    }
+
+    #[rstest::rstest]
+    #[case(false)]
+    #[case(true)]
+    #[tokio::test]
+    async fn test_prompt_submit_when_old_completion_remains_waits_for_fresh_completion(
+        #[case] structured_key: bool,
+    ) -> rootcause::Result<()> {
+        let mut fixture = self::tracked_cat_runtime_fixture()?;
+        fixture.write_screen_text("  Worked for 16m 15s • 14:18")?;
+        let mut pane_tracked_processes = PaneTrackedProcesses::default();
+        let then = Instant::now();
+        pane_tracked_processes.observe_runtime_pane_cmds(
+            &fixture.config.user_config,
+            &fixture.runtimes,
+            &[fixture.pane_id],
+            then,
+        )?;
+        let due = self::instant_after(then, Duration::from_secs(3))?;
+        pane_tracked_processes.guard_quiet_deadlines(
+            &fixture.config.user_config,
+            &fixture.layout,
+            &fixture.runtimes,
+            due,
+        )?;
+        pane_tracked_processes.mark_quiet_deadlines(&fixture.layout, due)?;
+        let (layout_snapshot, mut render_worker) = crate::screen_render::initial_client_render(
+            &fixture.config,
+            &mut fixture.layout,
+            &fixture.runtimes,
+            &pane_tracked_processes,
+            &fixture.terminal_size,
+        )?;
+        let delete_sessions = DeleteSessions::default();
+        let (pty_event_sender, _pty_event_receiver) = self::pty_event_channel();
+        let mut sink_guards = Vec::new();
+        let mut state = ClientSessionState {
+            pane_tracked_processes,
+            config: &fixture.config,
+            delete_sessions: &delete_sessions,
+            input_mode: ServerInputMode::Normal,
+            last_layout_snapshot: layout_snapshot,
+            layout: &mut fixture.layout,
+            pane_fullscreen: PaneFullscreen::default(),
+            pty_event_sender: &pty_event_sender,
+            render_worker: &mut render_worker,
+            runtimes: &mut fixture.runtimes,
+            scrollback_editor: None,
+            sink_guards: &mut sink_guards,
+            terminal_size: fixture.terminal_size,
+        };
+        if structured_key {
+            crate::pane::input::handle_client_key(
+                &ClientKey {
+                    code: ClientKeyCode::Enter,
+                    modifiers: ClientKeyModifiers::NONE,
+                    raw_bytes: b"\r".to_vec(),
+                },
+                &mut state,
+            )?;
+        } else {
+            crate::pane::input::handle_client_input(b"\r", &mut state)?;
+        }
+        self::assert_submission_waits_for_fresh_completion(&mut state, fixture.pane_id)
+    }
+
+    #[rstest::rstest]
+    #[case(false, TrackedProcessState::Seen)]
+    #[case(true, TrackedProcessState::Seen)]
+    #[case(false, TrackedProcessState::Busy)]
+    #[case(true, TrackedProcessState::Busy)]
+    #[tokio::test]
+    async fn test_codex_when_enter_does_not_start_work_preserves_completion(
+        #[case] structured_key: bool,
+        #[case] initial_state: TrackedProcessState,
+    ) -> rootcause::Result<()> {
+        let mut fixture = self::tracked_cat_runtime_fixture()?;
+        let completed = "  Worked for 16m 15s • 14:18";
+        fixture.write_screen_text(if initial_state == TrackedProcessState::Busy {
+            "Working (1s • esc to interrupt)"
+        } else {
+            completed
+        })?;
+        let then = Instant::now();
+        let mut pane_tracked_processes = PaneTrackedProcesses::default();
+        pane_tracked_processes.observe_runtime_pane_cmds(
+            &fixture.config.user_config,
+            &fixture.runtimes,
+            &[fixture.pane_id],
+            then,
+        )?;
+        let due = self::instant_after(then, Duration::from_secs(3))?;
+        if initial_state == TrackedProcessState::Seen {
+            pane_tracked_processes.guard_quiet_deadlines(
+                &fixture.config.user_config,
+                &fixture.layout,
+                &fixture.runtimes,
+                due,
+            )?;
+            pane_tracked_processes.mark_quiet_deadlines(&fixture.layout, due)?;
+        } else {
+            fixture.write_screen_text(completed)?;
+        }
+        let (layout_snapshot, mut render_worker) = crate::screen_render::initial_client_render(
+            &fixture.config,
+            &mut fixture.layout,
+            &fixture.runtimes,
+            &pane_tracked_processes,
+            &fixture.terminal_size,
+        )?;
+        let delete_sessions = DeleteSessions::default();
+        let (pty_event_sender, _pty_event_receiver) = self::pty_event_channel();
+        let mut sink_guards = Vec::new();
+        let mut state = ClientSessionState {
+            pane_tracked_processes,
+            config: &fixture.config,
+            delete_sessions: &delete_sessions,
+            input_mode: ServerInputMode::Normal,
+            last_layout_snapshot: layout_snapshot,
+            layout: &mut fixture.layout,
+            pane_fullscreen: PaneFullscreen::default(),
+            pty_event_sender: &pty_event_sender,
+            render_worker: &mut render_worker,
+            runtimes: &mut fixture.runtimes,
+            scrollback_editor: None,
+            sink_guards: &mut sink_guards,
+            terminal_size: fixture.terminal_size,
+        };
+        if structured_key {
+            crate::pane::input::handle_client_key(
+                &ClientKey {
+                    code: ClientKeyCode::Enter,
+                    modifiers: ClientKeyModifiers::NONE,
+                    raw_bytes: b"\r".to_vec(),
+                },
+                &mut state,
+            )?;
+        } else {
+            crate::pane::input::handle_client_input(b"\r", &mut state)?;
+        }
+        self::assert_ignored_enter_preserves_completion(&mut state, fixture.pane_id, initial_state, due)
+    }
+
+    fn assert_ignored_enter_preserves_completion(
+        state: &mut ClientSessionState<'_>,
+        pane_id: PaneId,
+        initial_state: TrackedProcessState,
+        due: Instant,
+    ) -> rootcause::Result<()> {
+        test_that::assert_that!(
+            self::tracked_process_snapshot_state(&state.pane_tracked_processes.snapshot(state.layout), pane_id)?,
+            eq(initial_state)
+        );
+        state
+            .pane_tracked_processes
+            .record_cached_visible_activity(state.runtimes, &[pane_id], due)?;
+        let later = self::instant_after(due, Duration::from_secs(30))?;
+        state.pane_tracked_processes.guard_quiet_deadlines(
+            &state.config.user_config,
+            state.layout,
+            state.runtimes,
+            later,
+        )?;
+        let expected = if initial_state == TrackedProcessState::Busy {
+            TrackedProcessAttention::Seen
+        } else {
+            TrackedProcessAttention::Unchanged
+        };
+        test_that::assert_that!(
+            state.pane_tracked_processes.mark_quiet_deadlines(state.layout, later)?,
+            eq(expected)
+        );
+        test_that::assert_that!(
+            self::tracked_process_snapshot_state(&state.pane_tracked_processes.snapshot(state.layout), pane_id)?,
+            eq(TrackedProcessState::Seen)
+        );
+        test_that::assert_that!(
+            state.pane_tracked_processes.next_quiet_deadline(state.layout)?,
+            eq(None)
+        );
+        Ok(())
+    }
+
+    fn assert_submission_waits_for_fresh_completion(
+        state: &mut ClientSessionState<'_>,
+        pane_id: PaneId,
+    ) -> rootcause::Result<()> {
+        let retry = Instant::now();
+        test_that::assert_that!(
+            state.pane_tracked_processes.next_quiet_deadline(state.layout)?,
+            eq(None)
+        );
+        // Repainting the pre-submission footer must not start green or arm attention.
+        state
+            .pane_tracked_processes
+            .record_cached_visible_activity(state.runtimes, &[pane_id], retry)?;
+        test_that::assert_that!(
+            state.pane_tracked_processes.next_quiet_deadline(state.layout)?,
+            eq(None)
+        );
+        test_that::assert_that!(
+            self::tracked_process_snapshot_state(&state.pane_tracked_processes.snapshot(state.layout), pane_id)?,
+            eq(TrackedProcessState::Seen)
+        );
+        // A new completion is sufficient even when Working was never sampled.
+        let output = format!("{}Worked for 2s • 14:19\n", "\n".repeat(24));
+        state.runtimes.handle(pane_id)?.write_input(output.as_bytes())?;
+        self::wait_for_runtime_snapshot_contains(state.runtimes, pane_id, "Worked for 2s • 14:19")?;
+        state
+            .pane_tracked_processes
+            .record_cached_visible_activity(state.runtimes, &[pane_id], retry)?;
+        let completed = self::instant_after(retry, Duration::from_secs(3))?;
+        state.pane_tracked_processes.guard_quiet_deadlines(
+            &state.config.user_config,
+            state.layout,
+            state.runtimes,
+            completed,
+        )?;
+        test_that::assert_that!(
+            state
+                .pane_tracked_processes
+                .mark_quiet_deadlines(state.layout, completed)?,
+            eq(TrackedProcessAttention::Seen)
+        );
+        Ok(())
+    }
+
+    #[rstest::rstest]
+    #[case(TrackedProcessState::Seen)]
+    #[case(TrackedProcessState::Unseen)]
+    #[tokio::test]
+    async fn test_handle_pane_output_message_when_completion_is_repainted_allows_quiet(
+        #[case] expected_state: TrackedProcessState,
+    ) -> rootcause::Result<()> {
+        let mut fixture = self::tracked_cat_runtime_fixture()?;
+        if expected_state == TrackedProcessState::Unseen {
+            fixture.layout.active_tab_mut()?.focus_pane(PaneId::new(2)?)?;
+        }
+        let completed = "  Worked for 16m 15s • 14:18";
+        fixture.write_screen_text(completed)?;
+        let before = fixture.runtimes.handle(fixture.pane_id)?.live_tail_text(12);
+        let then = Instant::now()
+            .checked_sub(Duration::from_secs(4))
+            .ok_or_else(|| rootcause::report!("test instant underflowed"))?;
+        let mut pane_tracked_processes = PaneTrackedProcesses::default();
+        pane_tracked_processes.observe_runtime_pane_cmds(
+            &fixture.config.user_config,
+            &fixture.runtimes,
+            &[fixture.pane_id],
+            then,
+        )?;
+        pane_tracked_processes.record_user_interaction(
+            &fixture.layout,
+            fixture.pane_id,
+            TrackedProcessUserInteraction::StartsTrackedProcessWork,
+            then,
+        )?;
+        let mut timers = ClientTimers::new(&fixture.config)?;
+        timers.sync_tracked_process_quiet_deadline_for_layout(&pane_tracked_processes, &fixture.layout)?;
+        let (layout_snapshot, mut render_worker) = crate::screen_render::initial_client_render(
+            &fixture.config,
+            &mut fixture.layout,
+            &fixture.runtimes,
+            &pane_tracked_processes,
+            &fixture.terminal_size,
+        )?;
+        let _initial_damage = fixture.runtimes.take_screen_dirty_panes();
+        // Wait for distinct intermediate output so the existing footer cannot satisfy the repaint wait early.
+        fixture.write_screen_text("repaint in progress")?;
+        fixture.write_screen_text(completed)?;
+        test_that::assert_that!(fixture.runtimes.handle(fixture.pane_id)?.live_tail_text(12), eq(before));
+        let (mut event_writer, client_drain) =
+            self::connect_client_event_drain(&fixture.config, &mut render_worker).await?;
+        let delete_sessions = DeleteSessions::default();
+        let (pty_event_sender, _pty_event_receiver) = self::pty_event_channel();
+        let mut sink_guards = Vec::new();
+        let mut state = ClientSessionState {
+            pane_tracked_processes,
+            config: &fixture.config,
+            delete_sessions: &delete_sessions,
+            input_mode: ServerInputMode::Normal,
+            last_layout_snapshot: layout_snapshot,
+            layout: &mut fixture.layout,
+            pane_fullscreen: PaneFullscreen::default(),
+            pty_event_sender: &pty_event_sender,
+            render_worker: &mut render_worker,
+            runtimes: &mut fixture.runtimes,
+            scrollback_editor: None,
+            sink_guards: &mut sink_guards,
+            terminal_size: fixture.terminal_size,
+        };
+        self::assert_repainted_completion_settles(
+            &mut state,
+            &mut event_writer,
+            &mut timers,
+            fixture.pane_id,
+            expected_state,
+        )
+        .await?;
+        self::abort_client_drain(client_drain).await;
+        Ok(())
+    }
+
+    async fn assert_repainted_completion_settles(
+        state: &mut ClientSessionState<'_>,
+        event_writer: &mut impl ServerEventSink,
+        timers: &mut ClientTimers,
+        pane_id: PaneId,
+        expected_state: TrackedProcessState,
+    ) -> rootcause::Result<()> {
+        let mut render_dmg = ClientRenderDmg::Clean;
+        assert_that!(
+            crate::pty_output::handle_pane_output_message(
+                Some(SessionPaneOutputMessage::PaneOutputReady),
+                event_writer,
+                state,
+                timers,
+                &mut render_dmg,
+            )
+            .await?,
+            eq(ClientSessionFlow::Continue)
+        );
+        assert_that!(timers.tracked_process_quiet_deadline(), eq(QuietDeadline::Elapsed));
+        let mut heartbeat_started_at = None;
+        assert_that!(
+            self::handle_session_runtime_timer_message(
+                SessionRuntimeTimerMessage::TrackedProcessQuietDeadlineReached,
+                event_writer,
+                state,
+                timers,
+                &mut heartbeat_started_at,
+                &mut render_dmg,
+            )
+            .await?,
+            eq(ClientSessionFlow::Continue)
+        );
+        assert_that!(
+            self::tracked_process_snapshot_state(&state.pane_tracked_processes.snapshot(state.layout), pane_id)?,
+            eq(expected_state)
+        );
+        let redraw = format!("{}idle redraw\n", "\n".repeat(24));
+        state.runtimes.handle(pane_id)?.write_input(redraw.as_bytes())?;
+        self::wait_for_runtime_snapshot_contains(state.runtimes, pane_id, "idle redraw")?;
+        state
+            .pane_tracked_processes
+            .record_cached_visible_activity(state.runtimes, &[pane_id], Instant::now())?;
+        assert_that!(
+            self::tracked_process_snapshot_state(&state.pane_tracked_processes.snapshot(state.layout), pane_id)?,
+            eq(expected_state)
+        );
+        Ok(())
+    }
+
+    #[rstest::rstest]
+    #[case("Working (1s • esc to interrupt)", TrackedProcessState::Busy, true)]
+    #[case("Worked for 1s • 14:18", TrackedProcessState::Seen, true)]
+    #[case("ready for input", TrackedProcessState::Seen, false)]
+    fn test_codex_when_first_discovered_on_focus_seeds_visible_status(
+        #[case] text: &str,
+        #[case] expected: TrackedProcessState,
+        #[case] has_deadline: bool,
+    ) -> rootcause::Result<()> {
+        let fixture = self::tracked_cat_runtime_fixture()?;
+        fixture.write_screen_text(text)?;
+        let now = Instant::now();
+        let mut processes = PaneTrackedProcesses::default();
+        processes.acknowledge_active_pane_attention(
+            &fixture.config.user_config,
+            &fixture.layout,
+            &fixture.runtimes,
+            now,
+        )?;
+        test_that::assert_that!(
+            self::tracked_process_snapshot_state(&processes.snapshot(&fixture.layout), fixture.pane_id)?,
+            eq(expected)
+        );
+        let expected_deadline = if has_deadline {
+            Some(self::instant_after(now, Duration::from_secs(3))?)
+        } else {
+            None
+        };
+        test_that::assert_that!(processes.next_quiet_deadline(&fixture.layout)?, eq(expected_deadline));
+        Ok(())
+    }
+
+    #[rstest::rstest]
+    #[case("  Worked for 16m 15s • 14:18", Duration::from_secs(3))]
+    #[case("Working (6m 35s • ctrl+x to interrupt)", Duration::from_secs(4))]
+    #[case("approval required", Duration::from_secs(4))]
+    #[case(
+        "Worked for 16m 15s • 14:18\nWorking (1s • esc to interrupt)",
+        Duration::from_secs(4)
+    )]
+    fn test_record_cached_visible_activity_when_screen_status_varies_extends_only_unconfirmed_completion(
+        #[case] text: &str,
+        #[case] expected_delay: Duration,
+    ) -> rootcause::Result<()> {
+        let fixture = self::tracked_cat_runtime_fixture()?;
+        fixture.write_screen_text("Working (0s • esc to interrupt)")?;
+        let then = Instant::now();
+        let mut processes = PaneTrackedProcesses::default();
+        processes.observe_runtime_pane_cmds(
+            &fixture.config.user_config,
+            &fixture.runtimes,
+            &[fixture.pane_id],
+            then,
+        )?;
+
+        fixture.write_screen_text(text)?;
+        processes.record_cached_visible_activity(
+            &fixture.runtimes,
+            &[fixture.pane_id],
+            self::instant_after(then, Duration::from_secs(1))?,
+        )?;
+
+        test_that::assert_that!(
+            processes.next_quiet_deadline(&fixture.layout)?,
+            eq(Some(self::instant_after(then, expected_delay)?))
+        );
+        Ok(())
+    }
+
+    #[rstest::rstest]
+    #[case(TrackedProcessState::Seen, "Worked for 22m 38s • 11:37")]
+    #[case(TrackedProcessState::Unseen, "Worked for 22m 38s • 11:37")]
+    #[case(
+        TrackedProcessState::Unseen,
+        "Working (6m 35s • ctrl+x to interrupt)\nWorked for 22m 38s • 11:37"
+    )]
+    fn test_tracked_process_screen_when_completion_is_latest_allows_due_attention(
+        #[case] expected_state: TrackedProcessState,
+        #[case] finished_text: &str,
+    ) -> rootcause::Result<()> {
+        let mut fixture = self::tracked_cat_runtime_fixture()?;
+        if expected_state == TrackedProcessState::Unseen {
+            fixture.layout.active_tab_mut()?.focus_pane(PaneId::new(2)?)?;
+        }
+        fixture.write_screen_text("Working (6m 35s • ctrl+x to interrupt)")?;
+        let then = Instant::now();
+        let quiet_at = self::instant_after(then, Duration::from_secs(30))?;
+        let mut processes = PaneTrackedProcesses::default();
+        processes.observe_runtime_pane_cmds(
+            &fixture.config.user_config,
+            &fixture.runtimes,
+            &[fixture.pane_id],
+            then,
+        )?;
+        processes.guard_quiet_deadlines(
+            &fixture.config.user_config,
+            &fixture.layout,
+            &fixture.runtimes,
+            quiet_at,
+        )?;
+        test_that::assert_that!(
+            processes.mark_quiet_deadlines(&fixture.layout, quiet_at)?,
+            eq(TrackedProcessAttention::Unchanged)
+        );
+        test_that::assert_that!(
+            self::tracked_process_snapshot_state(&processes.snapshot(&fixture.layout), fixture.pane_id)?,
+            eq(TrackedProcessState::Busy)
+        );
+        test_that::assert_that!(
+            processes.next_quiet_deadline(&fixture.layout)?,
+            eq(Some(self::instant_after(quiet_at, Duration::from_secs(3))?))
+        );
+
+        fixture.write_screen_text(finished_text)?;
+        let completed_at = self::instant_after(quiet_at, Duration::from_secs(1))?;
+        processes.observe_runtime_pane_cmds(
+            &fixture.config.user_config,
+            &fixture.runtimes,
+            &[fixture.pane_id],
+            completed_at,
+        )?;
+        processes.guard_quiet_deadlines(
+            &fixture.config.user_config,
+            &fixture.layout,
+            &fixture.runtimes,
+            completed_at,
+        )?;
+        test_that::assert_that!(
+            processes.mark_quiet_deadlines(&fixture.layout, completed_at)?,
+            eq(TrackedProcessAttention::Unchanged)
+        );
+        let deadline = self::instant_after(quiet_at, Duration::from_secs(3))?;
+        test_that::assert_that!(processes.next_quiet_deadline(&fixture.layout)?, eq(Some(deadline)));
+        processes.guard_quiet_deadlines(
+            &fixture.config.user_config,
+            &fixture.layout,
+            &fixture.runtimes,
+            deadline,
+        )?;
+        let expected_attention = if expected_state == TrackedProcessState::Unseen {
+            TrackedProcessAttention::Unseen {
+                pane_ids: vec![fixture.pane_id],
+            }
+        } else {
+            TrackedProcessAttention::Seen
+        };
+        test_that::assert_that!(
+            processes.mark_quiet_deadlines(&fixture.layout, deadline)?,
+            eq(expected_attention)
+        );
+        test_that::assert_that!(
+            self::tracked_process_snapshot_state(&processes.snapshot(&fixture.layout), fixture.pane_id)?,
+            eq(expected_state)
+        );
+        test_that::assert_that!(processes.next_quiet_deadline(&fixture.layout)?, eq(None));
+        Ok(())
+    }
+
+    #[rstest::rstest]
+    #[case("approval required")]
+    #[case("Worked for 22m 38s • 11:37\nWorking (6m 35s • ctrl+x to interrupt)")]
+    fn test_tracked_process_screen_when_attention_is_not_confirmed_keeps_busy_and_retries(
+        #[case] text: &str,
+    ) -> rootcause::Result<()> {
+        let mut fixture = self::tracked_cat_runtime_fixture()?;
+        fixture.layout.active_tab_mut()?.focus_pane(PaneId::new(2)?)?;
+        fixture.write_screen_text("Working (0s • esc to interrupt)")?;
+        let then = Instant::now();
+        let now = self::instant_after(then, Duration::from_secs(30))?;
+        let mut processes = PaneTrackedProcesses::default();
+        processes.observe_runtime_pane_cmds(
+            &fixture.config.user_config,
+            &fixture.runtimes,
+            &[fixture.pane_id],
+            then,
+        )?;
+        fixture.write_screen_text(text)?;
+        processes.guard_quiet_deadlines(&fixture.config.user_config, &fixture.layout, &fixture.runtimes, now)?;
+        test_that::assert_that!(
+            processes.mark_quiet_deadlines(&fixture.layout, now)?,
+            eq(TrackedProcessAttention::Unchanged)
+        );
+        test_that::assert_that!(
+            self::tracked_process_snapshot_state(&processes.snapshot(&fixture.layout), fixture.pane_id)?,
+            eq(TrackedProcessState::Busy)
+        );
+        test_that::assert_that!(
+            processes.next_quiet_deadline(&fixture.layout)?,
+            eq(Some(self::instant_after(now, Duration::from_secs(3))?))
+        );
+        Ok(())
+    }
+
+    #[rstest::rstest]
+    #[case(false)]
+    #[case(true)]
+    fn test_tracked_process_screen_when_quiet_deadline_is_not_due_preserves_deadline(
+        #[case] recent_input: bool,
+    ) -> rootcause::Result<()> {
+        let fixture = self::tracked_cat_runtime_fixture()?;
+        let handle = fixture.runtimes.handle(fixture.pane_id)?;
+        let busy = format!("{}Working (6m 35s • ctrl+x to interrupt)\n", "\n".repeat(24));
+        handle.write_input(busy.as_bytes())?;
+        self::wait_for_runtime_snapshot_contains(&fixture.runtimes, fixture.pane_id, "to interrupt)")?;
+        let then = Instant::now();
+        let mut processes = PaneTrackedProcesses::default();
+        processes.observe_runtime_pane_cmds(
+            &fixture.config.user_config,
+            &fixture.runtimes,
+            &[fixture.pane_id],
+            then,
+        )?;
+        let check_at = if recent_input {
+            processes.record_user_interaction(
+                &fixture.layout,
+                fixture.pane_id,
+                TrackedProcessUserInteraction::MayEcho,
+                self::instant_after(then, Duration::from_secs(2))?,
+            )?;
+            self::instant_after(then, Duration::from_secs(3))?
+        } else {
+            self::instant_after(then, Duration::from_secs(1))?
+        };
+        let deadline = processes.next_quiet_deadline(&fixture.layout)?;
+        test_that::assert_that!(
+            processes.guard_quiet_deadlines(
+                &fixture.config.user_config,
+                &fixture.layout,
+                &fixture.runtimes,
+                check_at
+            )?,
+            eq(TrackedProcessChanges::default())
+        );
+        test_that::assert_that!(processes.next_quiet_deadline(&fixture.layout)?, eq(deadline));
+        test_that::assert_that!(
+            processes.mark_quiet_deadlines(&fixture.layout, check_at)?,
+            eq(TrackedProcessAttention::Unchanged)
+        );
+        Ok(())
+    }
+
+    #[rstest::rstest]
+    #[case(false, TrackedProcessState::Busy, "Working (6m 35s • ctrl+x to interrupt)")]
+    #[case(true, TrackedProcessState::Busy, "Working (6m 35s • ctrl+x to interrupt)")]
+    #[case(false, TrackedProcessState::Unseen, "Worked for 22m 38s • 11:37")]
+    #[case(true, TrackedProcessState::Seen, "Worked for 22m 38s • 11:37")]
+    fn test_tracked_process_screen_when_pane_is_settled_rearms_only_for_working(
+        #[case] acknowledged: bool,
+        #[case] expected_state: TrackedProcessState,
+        #[case] text: &str,
+    ) -> rootcause::Result<()> {
+        let mut fixture = self::tracked_cat_runtime_fixture()?;
+        fixture.layout.active_tab_mut()?.focus_pane(PaneId::new(2)?)?;
+        fixture.write_screen_text("Worked for 22m 38s • 11:37")?;
+        let then = Instant::now();
+        let mut processes = PaneTrackedProcesses::default();
+        processes.observe_runtime_pane_cmds(
+            &fixture.config.user_config,
+            &fixture.runtimes,
+            &[fixture.pane_id],
+            then,
+        )?;
+        processes.mark_quiet_deadlines(&fixture.layout, self::instant_after(then, Duration::from_secs(3))?)?;
+        if acknowledged {
+            processes.acknowledge_attention(fixture.pane_id);
+        }
+
+        fixture.write_screen_text("redraw")?;
+        let handle = fixture.runtimes.handle(fixture.pane_id)?;
+        let output = format!("{}{text}\n", "\n".repeat(24));
+        handle.write_input(output.as_bytes())?;
+        self::wait_for_runtime_snapshot_contains(&fixture.runtimes, fixture.pane_id, text)?;
+        let now = self::instant_after(then, Duration::from_secs(30))?;
+        processes.observe_runtime_pane_cmds(&fixture.config.user_config, &fixture.runtimes, &[fixture.pane_id], now)?;
+        processes.record_cached_visible_activity(&fixture.runtimes, &[fixture.pane_id], now)?;
+        test_that::assert_that!(
+            processes.guard_quiet_deadlines(&fixture.config.user_config, &fixture.layout, &fixture.runtimes, now)?,
+            eq(TrackedProcessChanges::default())
+        );
+        test_that::assert_that!(
+            processes.mark_quiet_deadlines(&fixture.layout, now)?,
+            eq(TrackedProcessAttention::Unchanged)
+        );
+        test_that::assert_that!(
+            self::tracked_process_snapshot_state(&processes.snapshot(&fixture.layout), fixture.pane_id)?,
+            eq(expected_state)
+        );
+        let expected_deadline = if expected_state == TrackedProcessState::Busy {
+            Some(self::instant_after(now, Duration::from_secs(3))?)
+        } else {
+            None
+        };
+        test_that::assert_that!(processes.next_quiet_deadline(&fixture.layout)?, eq(expected_deadline));
+        Ok(())
+    }
+
+    #[test]
+    fn test_tracked_process_screen_when_foreground_is_untracked_discards_stale_busy_footer() -> rootcause::Result<()> {
+        let fixture = self::tracked_cat_runtime_fixture()?;
+        let handle = fixture.runtimes.handle(fixture.pane_id)?;
+        let busy = format!("{}Working (6m 35s • ctrl+x to interrupt)\n", "\n".repeat(24));
+        handle.write_input(busy.as_bytes())?;
+        self::wait_for_runtime_snapshot_contains(&fixture.runtimes, fixture.pane_id, "to interrupt)")?;
+        let then = Instant::now();
+        let now = self::instant_after(then, Duration::from_secs(3))?;
+        let mut processes = PaneTrackedProcesses::default();
+        processes.observe_runtime_pane_cmds(
+            &fixture.config.user_config,
+            &fixture.runtimes,
+            &[fixture.pane_id],
+            then,
+        )?;
+        // The ordinary config does not track this fixture's cat process. Fresh process evidence must win over the
+        // Codex footer left in its terminal and the previously cached Codex identity.
+        let changes =
+            processes.guard_quiet_deadlines(&MuxrConfig::default(), &fixture.layout, &fixture.runtimes, now)?;
+        test_that::assert_that!(changes.state_change(), eq(TrackedProcessStateChange::Changed));
+        test_that::assert_that!(
+            processes.snapshot(&fixture.layout),
+            eq(PaneTrackedProcessSnapshot::default())
+        );
+        test_that::assert_that!(processes.next_quiet_deadline(&fixture.layout)?, eq(None));
         Ok(())
     }
 
@@ -1781,8 +2467,8 @@ mod tests {
         config.shell_cmd = crate::server::test_helpers::shell_cmd("/bin/cat");
         let user_config = Arc::make_mut(&mut config.user_config);
         user_config.tracked_processes.push(TrackedProcess {
-            id: TrackedProcessId::Codex,
-            label: "cx",
+            id: TrackedProcessId::Claude,
+            label: "cl",
             matchers: vec![ProcessMatcher::ExactExecutable("cat")],
             quiet_threshold: Duration::from_secs(3),
         });
@@ -1893,34 +2579,25 @@ mod tests {
     #[tokio::test]
     async fn test_run_client_session_when_request_arrives_near_quiet_deadline_handles_request_and_quiet()
     -> rootcause::Result<()> {
-        let tempdir = tempfile::tempdir()?;
-        let config = crate::server::test_helpers::server_config(tempdir.path(), "work")?;
-        crate::session::files::prepare_session_dirs(&config.paths)?;
-        let terminal_size = TerminalSize::new(80, 24)?;
-        let mut layout = self::layout(&config)?;
-        let pane_id = PaneId::new(1)?;
-        layout.active_tab_mut()?.focus_pane(pane_id)?;
+        let TrackedCatRuntimeFixture {
+            _tempdir,
+            config,
+            terminal_size,
+            mut layout,
+            pane_id,
+            mut runtimes,
+        } = self::tracked_cat_runtime_fixture()?;
+        let working = format!("{}Working (1s • esc to interrupt)\n", "\n".repeat(24));
+        runtimes.handle(pane_id)?.write_input(working.as_bytes())?;
+        self::wait_for_runtime_snapshot_contains(&runtimes, pane_id, "Working (1s • esc to interrupt)")?;
         let then = Instant::now()
             .checked_sub(Duration::from_millis(2_950))
             .ok_or_else(|| rootcause::report!("test instant underflowed"))?;
         let mut pane_tracked_processes = PaneTrackedProcesses::default();
-        pane_tracked_processes.observe_pane_cmd(
-            config.user_config.as_ref(),
-            pane_id,
-            &self::fg_tracked_process("codex"),
-            then,
-        );
-
-        let mut runtimes = PaneRuntimes::spawn_for_start_seed(
-            &config,
-            &SessionStartSeed {
-                layout: layout.clone(),
-                startup_cmds: Vec::new(),
-            },
-            &terminal_size,
-            Arc::new(tokio::sync::Notify::new()),
-        )?;
-        crate::screen_render::resize_panes_to_layout(&layout, &runtimes, &terminal_size)?;
+        pane_tracked_processes.observe_runtime_pane_cmds(config.user_config.as_ref(), &runtimes, &[pane_id], then)?;
+        let completed = format!("{}Worked for 22m 38s • 11:37\n", "\n".repeat(24));
+        runtimes.handle(pane_id)?.write_input(completed.as_bytes())?;
+        self::wait_for_runtime_snapshot_contains(&runtimes, pane_id, "Worked for 22m 38s • 11:37")?;
         let (layout_snapshot, mut render_worker) = crate::screen_render::initial_client_render(
             &config,
             &mut layout,
@@ -1983,8 +2660,8 @@ mod tests {
         Arc::make_mut(&mut config.user_config)
             .tracked_processes
             .push(TrackedProcess {
-                id: TrackedProcessId::Codex,
-                label: "cx",
+                id: TrackedProcessId::Claude,
+                label: "cl",
                 matchers: vec![ProcessMatcher::ExactExecutable("cat")],
                 quiet_threshold: Duration::from_secs(3),
             });
@@ -2086,8 +2763,8 @@ mod tests {
         Arc::make_mut(&mut config.user_config)
             .tracked_processes
             .push(TrackedProcess {
-                id: TrackedProcessId::Codex,
-                label: "cx",
+                id: TrackedProcessId::Claude,
+                label: "cl",
                 matchers: vec![ProcessMatcher::ExactExecutable("cat")],
                 quiet_threshold: Duration::from_secs(3),
             });
@@ -2214,8 +2891,8 @@ mod tests {
         Arc::make_mut(&mut config.user_config)
             .tracked_processes
             .push(TrackedProcess {
-                id: TrackedProcessId::Codex,
-                label: "cx",
+                id: TrackedProcessId::Claude,
+                label: "cl",
                 matchers: vec![ProcessMatcher::ExactExecutable("cat")],
                 quiet_threshold: Duration::from_secs(3),
             });
@@ -2334,8 +3011,8 @@ mod tests {
         Arc::make_mut(&mut config.user_config)
             .tracked_processes
             .push(TrackedProcess {
-                id: TrackedProcessId::Codex,
-                label: "cx",
+                id: TrackedProcessId::Claude,
+                label: "cl",
                 matchers: vec![ProcessMatcher::ExactExecutable("cat")],
                 quiet_threshold: Duration::from_secs(3),
             });
@@ -2479,7 +3156,7 @@ mod tests {
         pane_tracked_processes.observe_pane_cmd(
             config.user_config.as_ref(),
             pane_id,
-            &self::fg_tracked_process("codex"),
+            &self::fg_tracked_process("cursor-agent"),
             then,
         );
         let mut timers = ClientTimers::new(&config)?;
@@ -2556,7 +3233,7 @@ mod tests {
                 state.layout,
                 self::instant_after(Instant::now(), Duration::from_secs(4))?
             )?,
-            eq(crate::pane::tracked_process::TrackedProcessAttention::Seen)
+            eq(TrackedProcessAttention::Seen)
         );
         self::abort_client_drain(client_drain).await;
         Ok(())
@@ -2564,14 +3241,14 @@ mod tests {
 
     async fn assert_output_sample_defers_runtime_process_discovery(
         timers: &mut ClientTimers,
-        event_writer: &mut impl crate::event_writer::ServerEventSink,
+        event_writer: &mut impl ServerEventSink,
         state: &mut ClientSessionState<'_>,
         render_dmg: &mut ClientRenderDmg,
         pane_id: PaneId,
     ) -> rootcause::Result<()> {
         assert_that!(
             self::tracked_process_snapshot_label(&state.pane_tracked_processes.snapshot(state.layout), pane_id)?,
-            eq("cx")
+            eq("cu")
         );
         tokio::time::advance(Duration::from_millis(500)).await;
         assert_that!(
@@ -2594,8 +3271,8 @@ mod tests {
         Arc::make_mut(&mut config.user_config)
             .tracked_processes
             .push(TrackedProcess {
-                id: TrackedProcessId::Codex,
-                label: "cx",
+                id: TrackedProcessId::Claude,
+                label: "cl",
                 matchers: vec![ProcessMatcher::ExactExecutable("cat")],
                 quiet_threshold: Duration::from_millis(30),
             });
@@ -2702,7 +3379,7 @@ mod tests {
         pane_tracked_processes.observe_pane_cmd(
             config.user_config.as_ref(),
             tracked_pane_id,
-            &self::fg_tracked_process("codex"),
+            &self::fg_tracked_process("cursor-agent"),
             then,
         );
         pane_tracked_processes.record_user_interaction(
@@ -3152,6 +3829,19 @@ mod tests {
         runtimes: PaneRuntimes,
     }
 
+    impl TrackedCatRuntimeFixture {
+        fn write_screen_text(&self, text: &str) -> rootcause::Result<()> {
+            // Move old output beyond the observed tail before writing the requested status rows.
+            let output = format!("{}{text}\n", "\n".repeat(24));
+            self.runtimes.handle(self.pane_id)?.write_input(output.as_bytes())?;
+            let last_line = text
+                .lines()
+                .next_back()
+                .ok_or_else(|| rootcause::report!("expected status text"))?;
+            self::wait_for_runtime_snapshot_contains(&self.runtimes, self.pane_id, last_line)
+        }
+    }
+
     fn tracked_cat_runtime_fixture() -> rootcause::Result<TrackedCatRuntimeFixture> {
         let tempdir = tempfile::tempdir()?;
         let mut config = crate::server::test_helpers::server_config(tempdir.path(), "work")?;
@@ -3343,7 +4033,7 @@ mod tests {
     }
 
     fn tracked_process_snapshot_state(
-        snapshot: &crate::pane::tracked_process::PaneTrackedProcessSnapshot,
+        snapshot: &PaneTrackedProcessSnapshot,
         pane_id: PaneId,
     ) -> rootcause::Result<TrackedProcessState> {
         snapshot
@@ -3356,7 +4046,7 @@ mod tests {
     }
 
     fn tracked_process_snapshot_label(
-        snapshot: &crate::pane::tracked_process::PaneTrackedProcessSnapshot,
+        snapshot: &PaneTrackedProcessSnapshot,
         pane_id: PaneId,
     ) -> rootcause::Result<&str> {
         snapshot

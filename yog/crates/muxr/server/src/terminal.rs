@@ -1,3 +1,5 @@
+use std::ops::Range;
+
 use muxr_config::ScrollbackConfig;
 use muxr_config::ScrollbackDumpStyle;
 use muxr_core::ClientMouseEvent;
@@ -104,6 +106,23 @@ impl TerminalSnapshot {
             *target = row;
         }
         Ok(changed_rows)
+    }
+}
+
+/// Text candidates starting at each physical row, including any soft-wrapped successors.
+#[derive(Default)]
+#[cfg_attr(test, derive(Debug, Eq, PartialEq))]
+pub struct TerminalTextTail {
+    text: String,
+    lines: Vec<Range<usize>>,
+}
+
+impl TerminalTextTail {
+    pub(crate) fn candidate_lines(&self) -> impl DoubleEndedIterator<Item = &str> {
+        self.lines
+            .iter()
+            .filter_map(|range| self.text.get(range.clone()))
+            .map(str::trim_end)
     }
 }
 
@@ -566,6 +585,11 @@ impl TerminalState {
         dump
     }
 
+    /// Read the bottom live rows without moving the viewport or consuming render damage.
+    pub(crate) fn live_tail_text(&self, row_limit: usize) -> TerminalTextTail {
+        render::live_tail_text(self.rio.terminal(), row_limit)
+    }
+
     const fn scroll_move(before: usize, after: usize) -> TerminalScrollMove {
         if before == after {
             TerminalScrollMove::Unchanged
@@ -609,6 +633,87 @@ mod tests {
 
     fn assert_replies_eq(replies: &TerminalReplies, expected: &[Vec<u8>]) {
         assert_that!(replies.as_ref(), eq(expected));
+    }
+
+    #[test]
+    fn test_terminal_state_live_tail_when_scrolled_reads_live_rows_without_changing_viewport() -> rootcause::Result<()>
+    {
+        let mut terminal = self::terminal_state(&TerminalSize::new(80, 3)?);
+        let _output = terminal.process("old\r\none\r\ntwo\r\nWorking (6m 35s • ctrl+x to interrupt)".as_bytes());
+        test_that::assert_that!(terminal.scroll(PaneScrollDirection::Up), eq(TerminalScrollMove::Moved));
+        let before = terminal.render_snapshot(TerminalSnapshotScope::Full)?;
+        test_that::assert_that!(
+            terminal.live_tail_text(2).candidate_lines().collect::<Vec<_>>(),
+            eq(vec!["two", "Working (6m 35s • ctrl+x to interrupt)"])
+        );
+        test_that::assert_that!(terminal.render_snapshot(TerminalSnapshotScope::Full)?, eq(before));
+        Ok(())
+    }
+
+    #[test]
+    fn test_terminal_state_live_tail_when_wrapped_joins_status_and_preserves_damage() -> rootcause::Result<()> {
+        let mut terminal = self::terminal_state(&TerminalSize::new(20, 2)?);
+        let _baseline = terminal.render_snapshot(TerminalSnapshotScope::Full)?;
+        let _output = terminal.process("\x1b[32mWorking (6m 35s • ctrl+x to interrupt)\x1b[0m".as_bytes());
+        test_that::assert_that!(
+            terminal.live_tail_text(12).candidate_lines().collect::<Vec<_>>(),
+            eq(vec!["Working (6m 35s • ctrl+x to interrupt)", "rl+x to interrupt)"])
+        );
+        test_that::assert_that!(
+            terminal
+                .render_snapshot(TerminalSnapshotScope::ChangedRows)?
+                .rows()
+                .len(),
+            eq(2)
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_terminal_state_live_tail_when_window_is_bounded_excludes_older_rows() -> rootcause::Result<()> {
+        let mut terminal = self::terminal_state(&TerminalSize::new(80, 13)?);
+        let _output = terminal.process("Working (1s • esc to interrupt)\r\n".as_bytes());
+        test_that::assert_that!(
+            terminal.live_tail_text(12).candidate_lines().collect::<Vec<_>>(),
+            eq(vec![""; 12])
+        );
+        test_that::assert_that!(
+            terminal.live_tail_text(0).candidate_lines().collect::<Vec<_>>(),
+            eq(Vec::<&str>::new())
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_terminal_state_live_tail_when_alternate_screen_is_active_reads_active_grid() -> rootcause::Result<()> {
+        let mut terminal = self::terminal_state(&TerminalSize::new(80, 1)?);
+        let _output =
+            terminal.process("Worked for 1s • 11:37\x1b[?1049h\x1b[HWorking (1s • esc to interrupt)".as_bytes());
+        test_that::assert_that!(
+            terminal.live_tail_text(12).candidate_lines().collect::<Vec<_>>(),
+            eq(vec!["Working (1s • esc to interrupt)"])
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_terminal_state_when_completion_is_repainted_reports_damage_without_screen_changes() -> rootcause::Result<()>
+    {
+        let mut terminal = self::terminal_state(&TerminalSize::new(80, 3)?);
+        let repaint = "\x1b[2;1H  Worked for 16m 15s • 14:18";
+        let _initial_output = terminal.process(repaint.as_bytes());
+        let before = terminal.render_snapshot(TerminalSnapshotScope::Full)?;
+
+        let output = terminal.process(repaint.as_bytes());
+
+        test_that::assert_that!(
+            output,
+            eq(TerminalProcessOutcome::ScreenDirty {
+                replies: TerminalReplies::default()
+            })
+        );
+        test_that::assert_that!(terminal.render_snapshot(TerminalSnapshotScope::Full)?, eq(before));
+        Ok(())
     }
 
     #[test]
