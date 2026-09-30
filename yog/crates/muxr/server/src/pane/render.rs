@@ -798,7 +798,7 @@ mod tests {
             RenderCell::narrow("a", RenderStyle::default()),
             RenderCell::narrow("b", RenderStyle::default()),
         ]];
-        let config = MuxrConfig::default();
+        let config = MuxrConfig::new()?;
         let pane_render = PaneRenderConfig {
             border_styles: config.pane_borders,
             mode: BorderRenderMode::Focus,
@@ -938,7 +938,7 @@ mod tests {
     #[test]
     fn test_paste_snapshot_when_visible_url_is_present_adds_hyperlink_metadata() -> rootcause::Result<()> {
         let size = TerminalSize::new(24, 1)?;
-        let mut terminal = crate::terminal::TerminalState::with_scrollback(&size, MuxrConfig::default().scrollback);
+        let mut terminal = crate::terminal::TerminalState::with_scrollback(&size, MuxrConfig::new()?.scrollback);
         let _ = terminal.process(b"https://example.com");
         let snapshot = terminal.render_snapshot(TerminalSnapshotScope::Full)?;
         let region = PaneRegion {
@@ -1018,7 +1018,7 @@ mod tests {
 
     fn paste_terminal_row(bytes: &[u8]) -> rootcause::Result<Vec<RenderCell>> {
         let size = TerminalSize::new(24, 1)?;
-        let mut terminal = crate::terminal::TerminalState::with_scrollback(&size, MuxrConfig::default().scrollback);
+        let mut terminal = crate::terminal::TerminalState::with_scrollback(&size, MuxrConfig::new()?.scrollback);
         let _ = terminal.process(bytes);
         let snapshot = terminal.render_snapshot(TerminalSnapshotScope::Full)?;
         let region = PaneRegion {

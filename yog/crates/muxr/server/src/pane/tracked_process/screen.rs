@@ -1,11 +1,8 @@
+use muxr_config::ScreenObservationConfig;
+use muxr_config::TrackedProcess;
 use muxr_config::TrackedProcessId;
 
-mod codex;
-
 pub(super) const SCREEN_TAIL_ROWS: usize = 12;
-
-type ScreenPattern = fn(&str) -> bool;
-type AttentionPattern = fn(&str) -> Option<&str>;
 
 #[derive(Clone, Copy)]
 #[cfg_attr(test, derive(Debug, Eq, PartialEq))]
@@ -21,46 +18,33 @@ pub(super) enum BusyStart {
     Screen,
 }
 
-pub(super) struct ScreenPatterns {
-    pub(super) busy_start: BusyStart,
-    busy: &'static [ScreenPattern],
-    attention: &'static [AttentionPattern],
-}
-
-impl ScreenPatterns {
-    pub(super) fn observe<'a>(&self, lines: impl DoubleEndedIterator<Item = &'a str>) -> ScreenObservation<'a> {
-        // Status rows from earlier turns can remain visible. The lowest recognized row takes precedence.
-        for line in lines.rev() {
-            if self.busy.iter().any(|pattern| pattern(line)) {
-                return ScreenObservation::Busy;
-            }
-            if let Some(completion) = self.attention.iter().find_map(|pattern| pattern(line)) {
-                return ScreenObservation::NeedsAttention(completion);
-            }
+pub(super) fn observe<'a>(
+    patterns: &ScreenObservationConfig,
+    lines: impl DoubleEndedIterator<Item = &'a str>,
+) -> ScreenObservation<'a> {
+    // Status rows from earlier turns can remain visible. The lowest recognized row takes precedence.
+    for line in lines.rev() {
+        let status = patterns.normalize_line(line);
+        if patterns.matches_busy(status) {
+            return ScreenObservation::Busy;
         }
-        // An absent busy row alone is not confirmation that the agent finished.
-        ScreenObservation::Unknown
-    }
-}
-
-/// Register both checks together; attention patterns return the status text used to reject pre-submission footers.
-pub(super) const fn patterns(process: TrackedProcessId) -> Option<ScreenPatterns> {
-    match process {
-        TrackedProcessId::Codex => Some(ScreenPatterns {
-            busy_start: BusyStart::Screen,
-            busy: &[codex::busy],
-            attention: &[codex::needs_attention],
-        }),
-        TrackedProcessId::Claude | TrackedProcessId::Cursor | TrackedProcessId::Gemini | TrackedProcessId::Opencode => {
-            None
+        if patterns.matches_needs_attention(status) {
+            // Keep the full normalized status, even when a configured regex matches only part of it.
+            return ScreenObservation::NeedsAttention(status);
         }
     }
+    // An absent busy row alone is not confirmation that the agent finished.
+    ScreenObservation::Unknown
 }
 
-pub(super) const fn busy_start(process: TrackedProcessId) -> BusyStart {
-    match patterns(process) {
-        Some(patterns) => patterns.busy_start,
-        None => BusyStart::Activity,
+pub(super) const fn busy_start(process: &TrackedProcess) -> BusyStart {
+    match (&process.screen_observation, process.id) {
+        (Some(_), TrackedProcessId::Codex) => BusyStart::Screen,
+        (None, _)
+        | (
+            Some(_),
+            TrackedProcessId::Claude | TrackedProcessId::Cursor | TrackedProcessId::Gemini | TrackedProcessId::Opencode,
+        ) => BusyStart::Activity,
     }
 }
 
@@ -68,10 +52,44 @@ pub(super) const fn busy_start(process: TrackedProcessId) -> BusyStart {
 mod tests {
     use muxr_config::MuxrConfig;
     use muxr_core::TerminalSize;
+    use regex::Regex;
     use test_that::prelude::*;
 
     use super::*;
     use crate::terminal::TerminalState;
+
+    fn patterns(agent: TrackedProcessId) -> Option<ScreenObservationConfig> {
+        MuxrConfig::new()
+            .unwrap()
+            .tracked_processes
+            .into_iter()
+            .find(|process| process.id == agent)
+            .and_then(|process| process.screen_observation)
+    }
+
+    #[rstest::rstest]
+    #[case("RUNNING", ScreenObservation::Busy)]
+    #[case("THINKING", ScreenObservation::Busy)]
+    #[case("DONE turn 12", ScreenObservation::NeedsAttention("DONE turn 12"))]
+    #[case("FINISHED turn 13", ScreenObservation::NeedsAttention("FINISHED turn 13"))]
+    #[case("RUNNING\nDONE turn 14", ScreenObservation::NeedsAttention("DONE turn 14"))]
+    #[case("DONE turn 14\nTHINKING", ScreenObservation::Busy)]
+    #[case(" # RUNNING # ", ScreenObservation::Busy)]
+    #[case(" # DONE turn 15 # ", ScreenObservation::NeedsAttention("DONE turn 15"))]
+    #[case("• RUNNING", ScreenObservation::Unknown)]
+    #[case("Working (1s • esc to interrupt)", ScreenObservation::Unknown)]
+    fn test_observe_when_patterns_are_configured_uses_all_alternatives_and_preserves_completion(
+        #[case] text: &str,
+        #[case] expected: ScreenObservation<'_>,
+    ) -> rootcause::Result<()> {
+        let patterns = ScreenObservationConfig {
+            busy: nonempty_collections::nev![Regex::new(r"\ARUN(?:NING)?\z")?, Regex::new(r"\ATHINK(?:ING)?\z")?],
+            needs_attention: nonempty_collections::nev![Regex::new(r"\ADONE\b")?, Regex::new(r"\AFINISHED\b")?],
+            trim_chars: &['#'],
+        };
+        test_that::assert_that!(observe(&patterns, text.lines()), eq(expected));
+        Ok(())
+    }
 
     #[rstest::rstest]
     #[case(TrackedProcessId::Claude)]
@@ -106,7 +124,7 @@ mod tests {
         #[case] expected: ScreenObservation<'_>,
     ) {
         let patterns = patterns(TrackedProcessId::Codex).unwrap();
-        assert_eq!(patterns.observe(text.lines()), expected);
+        assert_eq!(observe(&patterns, text.lines()), expected);
     }
 
     #[rstest::rstest]
@@ -131,14 +149,14 @@ mod tests {
         #[case] expected: ScreenObservation<'_>,
     ) -> rootcause::Result<()> {
         let mut terminal =
-            TerminalState::with_scrollback(&TerminalSize::new(columns, 3)?, MuxrConfig::default().scrollback);
+            TerminalState::with_scrollback(&TerminalSize::new(columns, 3)?, MuxrConfig::new()?.scrollback);
         if stale_wrap {
             let _output = terminal.process(format!("{}\x1b[2;1H", "x".repeat(81)).as_bytes());
         }
         let _output = terminal.process(format!("  {status}").as_bytes());
         let patterns = patterns(TrackedProcessId::Codex).ok_or_else(|| rootcause::report!("missing Codex patterns"))?;
         test_that::assert_that!(
-            patterns.observe(terminal.live_tail_text(SCREEN_TAIL_ROWS).candidate_lines()),
+            observe(&patterns, terminal.live_tail_text(SCREEN_TAIL_ROWS).candidate_lines()),
             eq(expected)
         );
         Ok(())

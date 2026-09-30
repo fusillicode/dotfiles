@@ -2490,6 +2490,8 @@ name = "muxr-config"
 version = "0.1.0"
 dependencies = [
  "muxr-core",
+ "nonempty-collections",
+ "regex",
  "rootcause",
  "rstest",
  "serde",
@@ -2521,6 +2523,7 @@ dependencies = [
  "muxr-config",
  "muxr-core",
  "muxr-transport",
+ "nonempty-collections",
  "parking_lot",
  "portable-pty",
  "regex",
@@ -2623,6 +2626,12 @@ dependencies = [
  "ytil_cmd",
  "ytil_sys",
 ]
+
+[[package]]
+name = "nonempty-collections"
+version = "1.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "988fb92b275335f315a9bddf7a8881a02c79c6084e9a626f656f12c50776a045"
 
 [[package]]
 name = "nu-ansi-term"

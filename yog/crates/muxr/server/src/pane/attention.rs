@@ -165,7 +165,7 @@ mod tests {
         let session: SessionName = "work".parse()?;
         let mut layout = SessionLayout::initial(&session, self::metadata("sh", 1))?;
         layout.split_active_pane(
-            MuxrConfig::default().layout,
+            MuxrConfig::new()?.layout,
             self::metadata("sh", 2),
             PaneSplitAxis::Vertical,
         )?;

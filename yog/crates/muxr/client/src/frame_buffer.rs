@@ -911,7 +911,7 @@ mod tests {
         let mut output = Vec::new();
 
         let highlight = SelectionHighlight {
-            background: MuxrConfig::default().selection.bg,
+            background: MuxrConfig::new()?.selection.bg,
             range: &selection,
         };
         encode_terminal_render(
@@ -932,7 +932,7 @@ mod tests {
     #[test]
     fn test_selection_visual_when_cell_is_selected_marks_only_selected_cells() -> rootcause::Result<()> {
         let (selection, unselected_style) = self::selection_range_and_style()?;
-        let selection_bg = MuxrConfig::default().selection.bg;
+        let selection_bg = MuxrConfig::new()?.selection.bg;
 
         assert_that!(
             SelectionVisual::for_cell(Some(&selection), 0, 0),

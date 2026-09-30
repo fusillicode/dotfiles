@@ -441,7 +441,7 @@ mod tests {
         assert_that!(
             tracked_processes
                 .observe_pane_cmd(
-                    &MuxrConfig::default(),
+                    &MuxrConfig::new()?,
                     pane_1,
                     &PaneCmdObservation::FgCmd(crate::pane::cmd::FgCmd::from_test_cmd(PaneCmd {
                         executable: "claude".to_owned(),

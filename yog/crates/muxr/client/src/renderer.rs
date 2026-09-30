@@ -121,7 +121,7 @@ impl ClientRenderer {
         pane_regions: PaneRegionsSnapshot,
         synchronized_output: SynchronizedOutput,
     ) -> Self {
-        let config = MuxrConfig::default();
+        let config = MuxrConfig::new().unwrap();
         Self::with_config_and_synchronized_output(&config, layout, pane_regions, synchronized_output)
     }
 

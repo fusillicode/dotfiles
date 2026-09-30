@@ -196,14 +196,14 @@ mod tests {
         let mut layout = state_test_helpers::layout("work")?;
 
         layout.split_active_pane(
-            MuxrConfig::default().layout,
+            MuxrConfig::new()?.layout,
             state_test_helpers::metadata("sh", 2),
             split_axis,
         )?;
         state_test_helpers::force_balanced_test_split_ratio(&mut layout)?;
 
         assert_that!(
-            layout.resize_active_pane(MuxrConfig::default().layout, direction)?,
+            layout.resize_active_pane(MuxrConfig::new()?.layout, direction)?,
             eq(PaneResizeChange::Changed)
         );
         let expected_regions = expected_regions
@@ -222,19 +222,19 @@ mod tests {
         let mut layout = state_test_helpers::layout("work")?;
 
         layout.split_active_pane(
-            MuxrConfig::default().layout,
+            MuxrConfig::new()?.layout,
             state_test_helpers::metadata("sh", 2),
             PaneSplitAxis::Vertical,
         )?;
         layout.split_active_pane(
-            MuxrConfig::default().layout,
+            MuxrConfig::new()?.layout,
             state_test_helpers::metadata("sh", 3),
             PaneSplitAxis::Horizontal,
         )?;
         state_test_helpers::force_balanced_test_split_ratio(&mut layout)?;
 
         assert_that!(
-            layout.resize_active_pane(MuxrConfig::default().layout, PaneResizeDirection::Up)?,
+            layout.resize_active_pane(MuxrConfig::new()?.layout, PaneResizeDirection::Up)?,
             eq(PaneResizeChange::Changed)
         );
         assert_that!(
@@ -247,7 +247,7 @@ mod tests {
         );
 
         assert_that!(
-            layout.resize_active_pane(MuxrConfig::default().layout, PaneResizeDirection::Left)?,
+            layout.resize_active_pane(MuxrConfig::new()?.layout, PaneResizeDirection::Left)?,
             eq(PaneResizeChange::Changed)
         );
         assert_that!(

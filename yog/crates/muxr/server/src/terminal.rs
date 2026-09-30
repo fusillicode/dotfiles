@@ -1219,7 +1219,7 @@ mod tests {
 
     #[test]
     fn test_terminal_state_scroll_when_large_normal_output_finishes_shows_capped_history() -> rootcause::Result<()> {
-        let mut scrollback = MuxrConfig::default().scrollback;
+        let mut scrollback = MuxrConfig::new()?.scrollback;
         scrollback.rows = 6;
         let mut terminal = TerminalState::with_scrollback(&TerminalSize::new(8, 4)?, scrollback);
         let mut output = String::new();
@@ -1508,7 +1508,7 @@ mod tests {
 
     #[test]
     fn test_terminal_state_when_partial_rows_exceed_configured_limit_keeps_recent_rows() -> rootcause::Result<()> {
-        let mut scrollback = MuxrConfig::default().scrollback;
+        let mut scrollback = MuxrConfig::new()?.scrollback;
         scrollback.rows = 2;
         let mut terminal = TerminalState::with_scrollback(&TerminalSize::new(8, 4)?, scrollback);
 
@@ -2190,7 +2190,7 @@ mod tests {
     fn test_terminal_state_render_snapshot_when_scrolled_history_is_evicted_returns_all_rows() -> rootcause::Result<()>
     {
         let size = TerminalSize::new(8, 3)?;
-        let mut scrollback = MuxrConfig::default().scrollback;
+        let mut scrollback = MuxrConfig::new()?.scrollback;
         scrollback.rows = 2;
         let mut terminal = TerminalState::with_scrollback(&size, scrollback);
         let _initial = terminal.process(b"\x1b[1;1HA\x1b[2;1HB\x1b[3;1Hfixed\x1b[1;2r\x1b[1S");
@@ -2233,7 +2233,7 @@ mod tests {
     }
 
     fn terminal_state(size: &TerminalSize) -> TerminalState {
-        TerminalState::with_scrollback(size, MuxrConfig::default().scrollback)
+        TerminalState::with_scrollback(size, MuxrConfig::new().unwrap().scrollback)
     }
 
     fn test_scrollback_dump(terminal: &mut TerminalState, style: ScrollbackDumpStyle) -> Vec<u8> {

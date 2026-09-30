@@ -255,7 +255,7 @@ mod tests {
 
     #[test]
     fn test_pane_size_for_terminal_when_tab_bar_has_room_reserves_sidebar_columns() -> rootcause::Result<()> {
-        let tab_bar_width = MuxrConfig::default().tab_bar.width;
+        let tab_bar_width = MuxrConfig::new()?.tab_bar.width;
 
         assert_that!(
             pane_size_for_terminal(tab_bar_width, &TerminalSize::new(80, 24)?)?,

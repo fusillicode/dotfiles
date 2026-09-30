@@ -98,7 +98,7 @@ mod tests {
     fn test_pane_fullscreen_toggle_active_pane_when_inactive_enters_fullscreen_layout() -> rootcause::Result<()> {
         let mut layout = crate::state::test_helpers::layout("default")?;
         let pane_id = layout.split_active_pane(
-            MuxrConfig::default().layout,
+            MuxrConfig::new()?.layout,
             crate::state::test_helpers::metadata("sh", 2),
             crate::pane::split::PaneSplitAxis::Vertical,
         )?;
@@ -139,7 +139,7 @@ mod tests {
     fn test_pane_fullscreen_visible_pane_id_when_focus_changed_returns_none() -> rootcause::Result<()> {
         let mut layout = crate::state::test_helpers::layout("default")?;
         layout.split_active_pane(
-            MuxrConfig::default().layout,
+            MuxrConfig::new()?.layout,
             crate::state::test_helpers::metadata("sh", 2),
             crate::pane::split::PaneSplitAxis::Vertical,
         )?;
@@ -161,7 +161,7 @@ mod tests {
         let mut layout = crate::state::test_helpers::layout("default")?;
         let tab_a = layout.active_tab;
         let pane_a = layout.split_active_pane(
-            MuxrConfig::default().layout,
+            MuxrConfig::new()?.layout,
             crate::state::test_helpers::metadata("sh", 2),
             crate::pane::split::PaneSplitAxis::Vertical,
         )?;
@@ -169,7 +169,7 @@ mod tests {
         fullscreen.toggle_active_pane(&layout)?;
         let _pane_b = layout.create_tab(crate::state::test_helpers::metadata("sh", 3))?;
         layout.split_active_pane(
-            MuxrConfig::default().layout,
+            MuxrConfig::new()?.layout,
             crate::state::test_helpers::metadata("sh", 4),
             crate::pane::split::PaneSplitAxis::Vertical,
         )?;
@@ -190,7 +190,7 @@ mod tests {
     fn test_pane_fullscreen_pane_layout_when_inactive_uses_real_layout() -> rootcause::Result<()> {
         let mut layout = crate::state::test_helpers::layout("default")?;
         layout.split_active_pane(
-            MuxrConfig::default().layout,
+            MuxrConfig::new()?.layout,
             crate::state::test_helpers::metadata("sh", 2),
             crate::pane::split::PaneSplitAxis::Vertical,
         )?;
@@ -208,7 +208,7 @@ mod tests {
         let mut layout = crate::state::test_helpers::layout("default")?;
         let tab_a = layout.active_tab;
         let pane_a = layout.split_active_pane(
-            MuxrConfig::default().layout,
+            MuxrConfig::new()?.layout,
             crate::state::test_helpers::metadata("sh", 2),
             crate::pane::split::PaneSplitAxis::Vertical,
         )?;
@@ -233,7 +233,7 @@ mod tests {
         let mut layout = crate::state::test_helpers::layout("default")?;
         let hidden_pane = PaneId::new(1)?;
         let visible_pane = layout.split_active_pane(
-            MuxrConfig::default().layout,
+            MuxrConfig::new()?.layout,
             crate::state::test_helpers::metadata("sh", 2),
             crate::pane::split::PaneSplitAxis::Vertical,
         )?;

@@ -191,7 +191,7 @@ struct PaneTrackedProcessLifecycle {
 
 // Observations borrow the read-only config entry so hot visible-activity samples do not clone matcher Vecs. The
 // lifecycle clones only when it actually stores a newly tracked process.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug)]
 enum TrackedProcessCmdObservation<'a> {
     Tracked(&'a TrackedProcess),
     TrustedUntracked,
@@ -237,7 +237,7 @@ impl From<PaneTrackedProcessStatus> for TrackedProcessState {
 
 impl PaneTrackedProcessLifecycle {
     const fn new(tracked_process: TrackedProcess, now: Instant) -> Self {
-        let (status, pending_work_start) = match screen::busy_start(tracked_process.id) {
+        let (status, pending_work_start) = match screen::busy_start(&tracked_process) {
             BusyStart::Activity => (PaneTrackedProcessStatus::Busy, PendingTrackedWorkStart::None),
             BusyStart::Screen => (PaneTrackedProcessStatus::Seen, PendingTrackedWorkStart::Pending),
         };
@@ -287,7 +287,7 @@ impl PaneTrackedProcessLifecycle {
             }
             TrackedProcessUserInteraction::StartsTrackedProcessWork => {
                 self.recent_user_interaction = None;
-                if screen::busy_start(self.tracked_process.id) == BusyStart::Screen {
+                if screen::busy_start(&self.tracked_process) == BusyStart::Screen {
                     // Enter may be an empty prompt or another editor action. Only a Working row starts green.
                     if !self.has_quiet_deadline() {
                         self.pending_work_start = PendingTrackedWorkStart::Pending;
@@ -350,7 +350,7 @@ impl PaneTrackedProcessLifecycle {
     }
 
     fn record_visible_activity(&mut self, now: Instant) -> TrackedProcessChanges {
-        if screen::busy_start(self.tracked_process.id) == BusyStart::Screen
+        if screen::busy_start(&self.tracked_process) == BusyStart::Screen
             && self.status != PaneTrackedProcessStatus::Busy
         {
             return TrackedProcessChanges::default();
@@ -572,10 +572,10 @@ impl PaneTrackedProcesses {
             let Some(lifecycle) = self.by_pane.get_mut(pane_id) else {
                 continue;
             };
-            let activity = match screen::patterns(lifecycle.tracked_process.id) {
+            let activity = match lifecycle.tracked_process.screen_observation.as_ref() {
                 Some(patterns) => {
                     let text = runtimes.handle(*pane_id)?.live_tail_text(screen::SCREEN_TAIL_ROWS);
-                    lifecycle.record_screen_activity(patterns.observe(text.candidate_lines()), now)
+                    lifecycle.record_screen_activity(screen::observe(patterns, text.candidate_lines()), now)
                 }
                 None => lifecycle.record_visible_activity(now),
             };
@@ -782,16 +782,16 @@ impl PaneTrackedProcesses {
         let Some(lifecycle) = self.by_pane.get_mut(&pane_id) else {
             return;
         };
-        let Some(patterns) = screen::patterns(lifecycle.tracked_process.id) else {
+        let Some(patterns) = lifecycle.tracked_process.screen_observation.as_ref() else {
             return;
         };
-        if patterns.busy_start == BusyStart::Screen && lifecycle.has_quiet_deadline() {
+        if screen::busy_start(&lifecycle.tracked_process) == BusyStart::Screen && lifecycle.has_quiet_deadline() {
             // An editor action during work or completion must not invalidate the completion we are waiting for.
             return;
         }
         // Capture before writing input: the PTY reader can observe the next turn immediately after submission.
         let text = handle.live_tail_text(screen::SCREEN_TAIL_ROWS);
-        match patterns.observe(text.candidate_lines()) {
+        match screen::observe(patterns, text.candidate_lines()) {
             ScreenObservation::NeedsAttention(completion) => {
                 lifecycle.completion_before_work = Some(completion.to_owned());
             }
@@ -893,9 +893,9 @@ impl PaneTrackedProcesses {
             let Some(lifecycle) = self.by_pane.get(&pane_id) else {
                 continue;
             };
-            let Some(patterns) = screen::patterns(lifecycle.tracked_process.id) else {
+            if lifecycle.tracked_process.screen_observation.is_none() {
                 continue;
-            };
+            }
             if lifecycle.quiet_deadline(focus)?.is_none_or(|deadline| deadline > now) {
                 continue;
             }
@@ -913,7 +913,13 @@ impl PaneTrackedProcesses {
 
             let allows_quiet = if matches!(observation, TrackedProcessCmdObservation::Tracked(_)) {
                 let text = read_screen(pane_id)?;
-                let screen = patterns.observe(text.candidate_lines());
+                let screen = lifecycle
+                    .tracked_process
+                    .screen_observation
+                    .as_ref()
+                    .map_or(ScreenObservation::Unknown, |patterns| {
+                        screen::observe(patterns, text.candidate_lines())
+                    });
                 if matches!(screen, ScreenObservation::Busy) {
                     changes.merge(lifecycle.record_screen_activity(screen, now));
                 }
@@ -987,6 +993,7 @@ fn runtime_pane_cmd_observation(runtimes: &PaneRuntimes, pane_id: PaneId) -> roo
 
 #[cfg(test)]
 mod tests {
+    use muxr_config::TrackedProcessId;
     use muxr_core::SessionName;
     use muxr_core::TerminalSize;
     use test_that::prelude::*;
@@ -998,8 +1005,27 @@ mod tests {
     use crate::state::SessionMetadata;
     use crate::terminal::TerminalState;
 
+    #[test]
+    fn test_lifecycle_when_screen_observation_is_disabled_uses_activity_tracking() -> rootcause::Result<()> {
+        let mut config = MuxrConfig::new()?;
+        let codex = config
+            .tracked_processes
+            .iter_mut()
+            .find(|process| process.id == TrackedProcessId::Codex)
+            .ok_or_else(|| rootcause::report!("missing Codex config"))?;
+        codex.screen_observation = None;
+        let mut processes = PaneTrackedProcesses::default();
+        let pane_id = self::pane_id()?;
+        processes.observe_pane_cmd(&config, pane_id, &self::fg_tracked_process("codex"), Instant::now());
+        assert_that!(
+            pane_tracked_process_status(&processes, pane_id),
+            eq(TrackedProcessState::Busy)
+        );
+        Ok(())
+    }
+
     fn tracked_process(executable: &str) -> rootcause::Result<TrackedProcess> {
-        MuxrConfig::default()
+        MuxrConfig::new()?
             .tracked_process_for_cmd(executable, None)
             .cloned()
             .ok_or_else(|| rootcause::report!("expected configured tracked process"))
@@ -1125,24 +1151,27 @@ mod tests {
     fn test_screen_allows_quiet_when_previous_completion_returns_requires_working_or_new_completion()
     -> rootcause::Result<()> {
         let mut lifecycle = PaneTrackedProcessLifecycle::new(self::tracked_process("codex")?, Instant::now());
-        let patterns = screen::patterns(lifecycle.tracked_process.id)
+        let process = self::tracked_process("codex")?;
+        let patterns = process
+            .screen_observation
+            .as_ref()
             .ok_or_else(|| rootcause::report!("missing Codex patterns"))?;
         let completed = "Worked for 1s • 14:18";
         lifecycle.completion_before_work = Some(completed.to_owned());
         test_that::assert_that!(
-            lifecycle.screen_allows_quiet(patterns.observe("partial redraw".lines())),
+            lifecycle.screen_allows_quiet(screen::observe(patterns, "partial redraw".lines())),
             eq(false)
         );
         test_that::assert_that!(
-            lifecycle.screen_allows_quiet(patterns.observe("── Worked for 1s • 14:18 ───".lines())),
+            lifecycle.screen_allows_quiet(screen::observe(patterns, "── Worked for 1s • 14:18 ───".lines())),
             eq(false)
         );
         test_that::assert_that!(
-            lifecycle.screen_allows_quiet(patterns.observe("Working (0s • esc to interrupt)".lines())),
+            lifecycle.screen_allows_quiet(screen::observe(patterns, "Working (0s • esc to interrupt)".lines())),
             eq(false)
         );
         test_that::assert_that!(
-            lifecycle.screen_allows_quiet(patterns.observe(completed.lines())),
+            lifecycle.screen_allows_quiet(screen::observe(patterns, completed.lines())),
             eq(true)
         );
         Ok(())
@@ -1379,7 +1408,7 @@ mod tests {
         assert_that!(
             pane_tracked_processes
                 .observe_pane_cmd(
-                    &MuxrConfig::default(),
+                    &MuxrConfig::new()?,
                     pane_id,
                     &self::fg_tracked_process("claude"),
                     Instant::now(),
@@ -1409,7 +1438,7 @@ mod tests {
         assert_that!(
             pane_tracked_processes
                 .observe_pane_cmd(
-                    &MuxrConfig::default(),
+                    &MuxrConfig::new()?,
                     pane_id,
                     &PaneCmdObservation::FgCmd(FgCmd::from_test_group(
                         Some(self::cmd(17869, "agg")),
@@ -1439,7 +1468,7 @@ mod tests {
         let pane_id = self::pane_id()?;
         let then = Instant::now();
         pane_tracked_processes.observe_pane_cmd(
-            &MuxrConfig::default(),
+            &MuxrConfig::new()?,
             pane_id,
             &self::fg_tracked_process("claude"),
             then,
@@ -1449,7 +1478,7 @@ mod tests {
         assert_that!(
             pane_tracked_processes
                 .observe_pane_cmd(
-                    &MuxrConfig::default(),
+                    &MuxrConfig::new()?,
                     pane_id,
                     &observation,
                     self::instant_after(then, Duration::from_secs(1))?,
@@ -1477,7 +1506,7 @@ mod tests {
         let pane_id = self::pane_id()?;
         let then = Instant::now();
         pane_tracked_processes.observe_pane_cmd(
-            &MuxrConfig::default(),
+            &MuxrConfig::new()?,
             pane_id,
             &self::fg_tracked_process("claude"),
             then,
@@ -1485,7 +1514,7 @@ mod tests {
 
         assert_that!(
             pane_tracked_processes.observe_visible_activity(
-                &MuxrConfig::default(),
+                &MuxrConfig::new()?,
                 pane_id,
                 &observation,
                 self::instant_after(then, Duration::from_secs(1))?,
@@ -1509,7 +1538,7 @@ mod tests {
         let pane_id = self::pane_id()?;
         let then = Instant::now();
         pane_tracked_processes.observe_pane_cmd(
-            &MuxrConfig::default(),
+            &MuxrConfig::new()?,
             pane_id,
             &self::fg_tracked_process("claude"),
             then,
@@ -1519,7 +1548,7 @@ mod tests {
         assert_that!(
             pane_tracked_processes
                 .observe_pane_cmd(
-                    &MuxrConfig::default(),
+                    &MuxrConfig::new()?,
                     pane_id,
                     &self::unknown(),
                     self::instant_after(then, Duration::from_secs(1))?,
@@ -1542,7 +1571,7 @@ mod tests {
         let mut pane_tracked_processes = PaneTrackedProcesses::default();
         let pane_id = self::pane_id()?;
         pane_tracked_processes.observe_pane_cmd(
-            &MuxrConfig::default(),
+            &MuxrConfig::new()?,
             pane_id,
             &self::fg_tracked_process("claude"),
             Instant::now(),
@@ -1551,7 +1580,7 @@ mod tests {
 
         assert_that!(
             pane_tracked_processes.observe_visible_activity(
-                &MuxrConfig::default(),
+                &MuxrConfig::new()?,
                 pane_id,
                 &self::fg_tracked_process("claude"),
                 Instant::now(),
@@ -1571,7 +1600,7 @@ mod tests {
         let mut pane_tracked_processes = PaneTrackedProcesses::default();
         let pane_id = self::pane_id()?;
         pane_tracked_processes.observe_pane_cmd(
-            &MuxrConfig::default(),
+            &MuxrConfig::new()?,
             pane_id,
             &self::fg_tracked_process("cursor-agent"),
             Instant::now(),
@@ -1580,7 +1609,7 @@ mod tests {
 
         assert_that!(
             pane_tracked_processes.observe_visible_activity(
-                &MuxrConfig::default(),
+                &MuxrConfig::new()?,
                 pane_id,
                 &self::fg_tracked_process("cursor-agent"),
                 Instant::now(),
@@ -1602,7 +1631,7 @@ mod tests {
         let pane_id = self::pane_id()?;
         let then = Instant::now();
         pane_tracked_processes.observe_pane_cmd(
-            &MuxrConfig::default(),
+            &MuxrConfig::new()?,
             pane_id,
             &self::fg_tracked_process("claude"),
             then,
@@ -1617,7 +1646,7 @@ mod tests {
 
         assert_that!(
             pane_tracked_processes.observe_visible_activity(
-                &MuxrConfig::default(),
+                &MuxrConfig::new()?,
                 pane_id,
                 &self::fg_tracked_process("claude"),
                 self::instant_after(then, Duration::from_millis(100))?,
@@ -1639,7 +1668,7 @@ mod tests {
         let pane_id = self::pane_id()?;
         let then = Instant::now();
         pane_tracked_processes.observe_pane_cmd(
-            &MuxrConfig::default(),
+            &MuxrConfig::new()?,
             pane_id,
             &self::fg_tracked_process("claude"),
             then,
@@ -1654,7 +1683,7 @@ mod tests {
 
         assert_that!(
             pane_tracked_processes.observe_pane_cmd(
-                &MuxrConfig::default(),
+                &MuxrConfig::new()?,
                 pane_id,
                 &self::fg_tracked_process("claude"),
                 self::instant_after(then, Duration::from_millis(502))?,
@@ -1673,7 +1702,7 @@ mod tests {
         layout.active_tab_mut()?.focus_pane(pane_id)?;
         let then = Instant::now();
         pane_tracked_processes.observe_pane_cmd(
-            &MuxrConfig::default(),
+            &MuxrConfig::new()?,
             pane_id,
             &self::fg_tracked_process("claude"),
             then,
@@ -1694,7 +1723,7 @@ mod tests {
 
         assert_that!(
             pane_tracked_processes.observe_visible_activity(
-                &MuxrConfig::default(),
+                &MuxrConfig::new()?,
                 pane_id,
                 &self::fg_tracked_process("claude"),
                 self::instant_after(then, Duration::from_millis(150))?,
@@ -1717,7 +1746,7 @@ mod tests {
         layout.active_tab_mut()?.focus_pane(pane_id)?;
         let then = Instant::now();
         pane_tracked_processes.observe_pane_cmd(
-            &MuxrConfig::default(),
+            &MuxrConfig::new()?,
             pane_id,
             &self::fg_tracked_process("claude"),
             then,
@@ -1732,7 +1761,7 @@ mod tests {
 
         assert_that!(
             pane_tracked_processes.observe_visible_activity(
-                &MuxrConfig::default(),
+                &MuxrConfig::new()?,
                 pane_id,
                 &self::fg_tracked_process("claude"),
                 self::instant_after(then, Duration::from_millis(150))?,
@@ -1754,7 +1783,7 @@ mod tests {
         layout.active_tab_mut()?.focus_pane(pane_id)?;
         let then = Instant::now();
         pane_tracked_processes.observe_pane_cmd(
-            &MuxrConfig::default(),
+            &MuxrConfig::new()?,
             pane_id,
             &self::fg_tracked_process("claude"),
             then,
@@ -1769,7 +1798,7 @@ mod tests {
         assert_that!(
             pane_tracked_processes
                 .observe_pane_cmd(
-                    &MuxrConfig::default(),
+                    &MuxrConfig::new()?,
                     pane_id,
                     &self::fg_tracked_process("cursor-agent"),
                     self::instant_after(then, Duration::from_millis(150))?,
@@ -1787,7 +1816,7 @@ mod tests {
         )?;
         assert_that!(
             pane_tracked_processes.observe_visible_activity(
-                &MuxrConfig::default(),
+                &MuxrConfig::new()?,
                 pane_id,
                 &self::fg_tracked_process("cursor-agent"),
                 self::instant_after(then, Duration::from_millis(200))?,
@@ -1813,7 +1842,7 @@ mod tests {
         let pane_id = PaneId::new(1)?;
         let then = Instant::now();
         pane_tracked_processes.observe_pane_cmd(
-            &MuxrConfig::default(),
+            &MuxrConfig::new()?,
             pane_id,
             &self::fg_tracked_process("claude"),
             then,
@@ -1849,7 +1878,7 @@ mod tests {
         let mut pane_tracked_processes = PaneTrackedProcesses::default();
         let then = Instant::now();
         pane_tracked_processes.observe_pane_cmd(
-            &MuxrConfig::default(),
+            &MuxrConfig::new()?,
             pane_id,
             &self::fg_tracked_process("claude"),
             then,
@@ -1876,7 +1905,7 @@ mod tests {
         let mut pane_tracked_processes = PaneTrackedProcesses::default();
         let then = Instant::now();
         pane_tracked_processes.observe_pane_cmd(
-            &MuxrConfig::default(),
+            &MuxrConfig::new()?,
             pane_id,
             &self::fg_tracked_process("claude"),
             then,
@@ -1905,7 +1934,7 @@ mod tests {
         let mut pane_tracked_processes = PaneTrackedProcesses::default();
         let then = Instant::now();
         pane_tracked_processes.observe_pane_cmd(
-            &MuxrConfig::default(),
+            &MuxrConfig::new()?,
             pane_id,
             &self::fg_tracked_process("claude"),
             then,
@@ -1929,7 +1958,7 @@ mod tests {
         layout.active_tab_mut()?.focus_pane(reused_pane_id)?;
         let mut pane_tracked_processes = PaneTrackedProcesses::default();
         pane_tracked_processes.observe_pane_cmd(
-            &MuxrConfig::default(),
+            &MuxrConfig::new()?,
             reused_pane_id,
             &self::fg_tracked_process("claude"),
             Instant::now(),
@@ -1949,7 +1978,7 @@ mod tests {
             },
         )?;
         let new_pane_id = layout.split_active_pane(
-            MuxrConfig::default().layout,
+            MuxrConfig::new()?.layout,
             self::metadata("sh", 3),
             PaneSplitAxis::Vertical,
         )?;
@@ -1970,7 +1999,7 @@ mod tests {
         let stale_pane_id = PaneId::new(2)?;
         let mut pane_tracked_processes = PaneTrackedProcesses::default();
         pane_tracked_processes.observe_pane_cmd(
-            &MuxrConfig::default(),
+            &MuxrConfig::new()?,
             stale_pane_id,
             &self::fg_tracked_process("claude"),
             Instant::now(),
@@ -1990,13 +2019,13 @@ mod tests {
         let mut pane_tracked_processes = PaneTrackedProcesses::default();
         let then = Instant::now();
         pane_tracked_processes.observe_pane_cmd(
-            &MuxrConfig::default(),
+            &MuxrConfig::new()?,
             stale_pane_id,
             &self::fg_tracked_process("claude"),
             then,
         );
         pane_tracked_processes.observe_pane_cmd(
-            &MuxrConfig::default(),
+            &MuxrConfig::new()?,
             live_pane_id,
             &self::fg_tracked_process("claude"),
             self::instant_after(then, Duration::from_secs(1))?,
@@ -2015,7 +2044,7 @@ mod tests {
         let mut pane_tracked_processes = PaneTrackedProcesses::default();
         let pane_id = self::pane_id()?;
         pane_tracked_processes.observe_pane_cmd(
-            &MuxrConfig::default(),
+            &MuxrConfig::new()?,
             pane_id,
             &self::fg_tracked_process("claude"),
             Instant::now(),
@@ -2100,7 +2129,7 @@ mod tests {
     }
 
     fn screen_tail(text: &str) -> rootcause::Result<TerminalTextTail> {
-        let mut terminal = TerminalState::with_scrollback(&TerminalSize::new(80, 1)?, MuxrConfig::default().scrollback);
+        let mut terminal = TerminalState::with_scrollback(&TerminalSize::new(80, 1)?, MuxrConfig::new()?.scrollback);
         let _output = terminal.process(text.as_bytes());
         Ok(terminal.live_tail_text(screen::SCREEN_TAIL_ROWS))
     }
@@ -2124,7 +2153,7 @@ mod tests {
         let session: SessionName = "work".parse()?;
         let mut layout = SessionLayout::initial(&session, self::metadata("sh", 1))?;
         layout.split_active_pane(
-            MuxrConfig::default().layout,
+            MuxrConfig::new()?.layout,
             self::metadata("sh", 2),
             PaneSplitAxis::Vertical,
         )?;
