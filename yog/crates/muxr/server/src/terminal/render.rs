@@ -34,6 +34,7 @@ use smallvec::SmallVec;
 use super::CursorShapeSource;
 use super::TerminalSnapshot;
 use super::TerminalSnapshotScope;
+use super::TerminalTextTail;
 
 const RENDER_CELL_TEXT_INLINE_BYTES: usize = 24;
 
@@ -95,6 +96,37 @@ pub(super) fn visible_line<U: EventListener>(terminal: &Crosswords<U>, row: usiz
     let row = i32::try_from(row).unwrap_or(i32::MAX);
     let offset = i32::try_from(terminal.display_offset()).unwrap_or(i32::MAX);
     Line(row.saturating_sub(offset))
+}
+
+pub(super) fn live_tail_text<U: EventListener>(terminal: &Crosswords<U>, row_limit: usize) -> TerminalTextTail {
+    let mut tail = TerminalTextTail::default();
+    let mut hyperlink_cache = HashMap::new();
+    let first_row = terminal.screen_lines().saturating_sub(row_limit);
+    let mut logical_line_start = 0;
+
+    for row in first_row..terminal.screen_lines() {
+        // Direct live-grid coordinates deliberately ignore display_offset().
+        let line = Line(i32::try_from(row).unwrap_or(i32::MAX));
+        let cells = render_row(&terminal.grid, line, terminal.columns(), &mut hyperlink_cache);
+        let start = tail.text.len();
+        for cell in cells {
+            tail.text.push_str(cell.text());
+        }
+        let end = tail.text.len();
+        tail.lines.push(start..end);
+        if row_wrap(&terminal.grid[line]) != RowWrap::EndsWithSoftWrap
+            || row.saturating_add(1) == terminal.screen_lines()
+        {
+            // Cursor painting can leave an earlier WRAPLINE flag intact. Keep each physical start as well as
+            // the joined logical line, borrowing all candidates from one text buffer.
+            for range in tail.lines.iter_mut().skip(logical_line_start) {
+                range.end = end;
+            }
+            logical_line_start = tail.lines.len();
+        }
+    }
+
+    tail
 }
 
 pub(super) fn scrollback_grid_dump<U: EventListener>(

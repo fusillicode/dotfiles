@@ -579,7 +579,7 @@ mod tests {
         pane_tracked_processes.observe_pane_cmd(
             config.user_config.as_ref(),
             pane_id,
-            &self::fg_tracked_process("codex"),
+            &self::fg_tracked_process("claude"),
             then,
         );
         pane_tracked_processes.record_user_interaction(

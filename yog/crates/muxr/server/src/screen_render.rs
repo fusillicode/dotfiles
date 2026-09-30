@@ -21,6 +21,7 @@ use crate::pane::runtime::PaneRuntimes;
 use crate::pane::tracked_process::PaneTrackedProcessSnapshot;
 use crate::pane::tracked_process::PaneTrackedProcesses;
 use crate::pane::tracked_process::TrackedProcessAttention;
+use crate::pane::tracked_process::TrackedProcessStateChange;
 use crate::render_state::ClientRenderDmg;
 use crate::render_state::ClientSessionFlow;
 use crate::render_worker::RenderInput;
@@ -342,7 +343,7 @@ pub async fn handle_cmd_handoff_sample(
     )?;
     timers.remove_output_activity_sample_panes(&pane_ids)?;
     timers.sync_tracked_process_quiet_deadline_for_layout(&state.pane_tracked_processes, state.layout)?;
-    if changes.state_change() == crate::pane::tracked_process::TrackedProcessStateChange::Changed {
+    if changes.state_change() == TrackedProcessStateChange::Changed {
         let pane_surface_dirty =
             self::pane_ids_visible_render_dmg(state.layout, &state.pane_fullscreen, &state.terminal_size, &pane_ids)?;
         return self::flush_tracked_process_runtime_layout(timers, event_writer, state, render_dmg, pane_surface_dirty)
@@ -372,7 +373,7 @@ pub async fn handle_output_activity_sample(
         Instant::now(),
     )?;
     timers.sync_tracked_process_quiet_deadline_for_layout(&state.pane_tracked_processes, state.layout)?;
-    if changes.state_change() == crate::pane::tracked_process::TrackedProcessStateChange::Changed {
+    if changes.state_change() == TrackedProcessStateChange::Changed {
         let pane_surface_dirty =
             self::pane_ids_visible_render_dmg(state.layout, &state.pane_fullscreen, &state.terminal_size, &pane_ids)?;
         return self::flush_tracked_process_runtime_layout(timers, event_writer, state, render_dmg, pane_surface_dirty)
@@ -404,12 +405,22 @@ pub async fn flush_pane_attention(
     render_dmg: &mut ClientRenderDmg,
 ) -> rootcause::Result<ClientSessionFlow> {
     let now = Instant::now();
+    let process_changes = state.pane_tracked_processes.guard_quiet_deadlines(
+        &state.config.user_config,
+        state.layout,
+        state.runtimes,
+        now,
+    )?;
     let pane_surface_dirty = match state.pane_tracked_processes.mark_quiet_deadlines(state.layout, now)? {
-        TrackedProcessAttention::Seen => ClientRenderDmg::Clean,
+        TrackedProcessAttention::Unchanged
+            if process_changes.state_change() == TrackedProcessStateChange::Unchanged =>
+        {
+            return Ok(ClientSessionFlow::Continue);
+        }
+        TrackedProcessAttention::Seen | TrackedProcessAttention::Unchanged => ClientRenderDmg::Clean,
         TrackedProcessAttention::Unseen { pane_ids } => {
             self::pane_ids_visible_render_dmg(state.layout, &state.pane_fullscreen, &state.terminal_size, &pane_ids)?
         }
-        TrackedProcessAttention::Unchanged => return Ok(ClientSessionFlow::Continue),
     };
     render_dmg.include_dmg(pane_surface_dirty);
     timers.sync_render_deadline(render_dmg)?;
@@ -567,7 +578,7 @@ mod tests {
                     Instant::now(),
                 )
                 .state_change()
-                == crate::pane::tracked_process::TrackedProcessStateChange::Changed,
+                == TrackedProcessStateChange::Changed,
             eq(true)
         );
 

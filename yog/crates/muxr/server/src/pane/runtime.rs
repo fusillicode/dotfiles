@@ -444,7 +444,7 @@ mod tests {
                     &MuxrConfig::default(),
                     pane_1,
                     &PaneCmdObservation::FgCmd(crate::pane::cmd::FgCmd::from_test_cmd(PaneCmd {
-                        executable: "codex".to_owned(),
+                        executable: "claude".to_owned(),
                         path: None,
                         pid: 42,
                     })),
@@ -458,7 +458,7 @@ mod tests {
         let metadata = PaneRuntimeMetadata::from_sources(
             vec![(pane_2, Some("~/work".to_owned()))],
             vec![
-                (pane_1, Some("codex".to_owned())),
+                (pane_1, Some("claude".to_owned())),
                 (pane_2, Some("demo process start".to_owned())),
                 (pane_3, Some("echo seeded".to_owned())),
             ],
@@ -466,7 +466,7 @@ mod tests {
         );
         let snapshot_fields = metadata.pane_snapshot_fields();
 
-        assert_that!(snapshot_fields.cmd_label(pane_1), eq(Some("cx")));
+        assert_that!(snapshot_fields.cmd_label(pane_1), eq(Some("cl")));
         assert_that!(snapshot_fields.cmd_label(pane_2), eq(None));
         assert_that!(snapshot_fields.cmd_label(pane_3), eq(Some("echo seeded")));
         assert_that!(snapshot_fields.terminal_title(pane_2), eq(Some("~/work")));

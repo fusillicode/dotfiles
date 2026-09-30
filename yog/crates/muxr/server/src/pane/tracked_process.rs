@@ -8,12 +8,18 @@ use muxr_config::TrackedProcess;
 use muxr_core::PaneId;
 use muxr_core::TrackedProcessState;
 
+use self::screen::BusyStart;
+use self::screen::ScreenObservation;
 use crate::pane::cmd::FgCmd;
 use crate::pane::cmd::PaneCmdObservation;
 use crate::pane::cmd::PaneCmdSnapshot;
 use crate::pane::cmd::ProcessGroupLookupError;
 use crate::pane::runtime::PaneRuntimes;
+use crate::pty::PtyHandle;
 use crate::state::SessionLayout;
+use crate::terminal::TerminalTextTail;
+
+mod screen;
 
 const USER_INPUT_VISIBLE_ACTIVITY_SUPPRESSION: Duration = Duration::from_millis(500);
 
@@ -174,6 +180,7 @@ impl TrackedProcessChange {
 
 #[derive(Debug)]
 struct PaneTrackedProcessLifecycle {
+    completion_before_work: Option<String>,
     last_focused_user_interaction: Option<Instant>,
     last_tracked_activity: Instant,
     pending_work_start: PendingTrackedWorkStart,
@@ -194,6 +201,8 @@ enum TrackedProcessCmdObservation<'a> {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum PaneTrackedProcessStatus {
     Busy,
+    // A completion was observed without a Working row. Wait for the quiet threshold without showing green.
+    Settling,
     Seen,
     Unseen,
 }
@@ -220,7 +229,7 @@ impl From<PaneTrackedProcessStatus> for TrackedProcessState {
     fn from(status: PaneTrackedProcessStatus) -> Self {
         match status {
             PaneTrackedProcessStatus::Busy => Self::Busy,
-            PaneTrackedProcessStatus::Seen => Self::Seen,
+            PaneTrackedProcessStatus::Seen | PaneTrackedProcessStatus::Settling => Self::Seen,
             PaneTrackedProcessStatus::Unseen => Self::Unseen,
         }
     }
@@ -228,12 +237,17 @@ impl From<PaneTrackedProcessStatus> for TrackedProcessState {
 
 impl PaneTrackedProcessLifecycle {
     const fn new(tracked_process: TrackedProcess, now: Instant) -> Self {
+        let (status, pending_work_start) = match screen::busy_start(tracked_process.id) {
+            BusyStart::Activity => (PaneTrackedProcessStatus::Busy, PendingTrackedWorkStart::None),
+            BusyStart::Screen => (PaneTrackedProcessStatus::Seen, PendingTrackedWorkStart::Pending),
+        };
         Self {
+            completion_before_work: None,
             last_focused_user_interaction: None,
             last_tracked_activity: now,
-            pending_work_start: PendingTrackedWorkStart::None,
+            pending_work_start,
             recent_user_interaction: None,
-            status: PaneTrackedProcessStatus::Busy,
+            status,
             tracked_process,
         }
     }
@@ -255,9 +269,9 @@ impl PaneTrackedProcessLifecycle {
         now: Instant,
         focus_state: TrackedProcessPaneFocus,
     ) -> TrackedProcessChanges {
-        // Focused local echo does not change sidebar state, but it can still extend the quiet deadline for Busy.
+        // Focused local echo does not change sidebar state, but it can still extend the quiet deadline.
         let focused_deadline_extended = focus_state == TrackedProcessPaneFocus::Focused
-            && self.status == PaneTrackedProcessStatus::Busy
+            && self.has_quiet_deadline()
             && now > self.quiet_activity_at(focus_state);
         if focus_state == TrackedProcessPaneFocus::Focused {
             self.last_focused_user_interaction = Some(now);
@@ -272,17 +286,75 @@ impl PaneTrackedProcessLifecycle {
                 }
             }
             TrackedProcessUserInteraction::StartsTrackedProcessWork => {
-                // Prompt submit starts tracked work even before output. Use it as the quiet-deadline anchor so a
-                // silent agent turn still shows Busy, then clears after the configured quiet threshold.
+                self.recent_user_interaction = None;
+                if screen::busy_start(self.tracked_process.id) == BusyStart::Screen {
+                    // Enter may be an empty prompt or another editor action. Only a Working row starts green.
+                    if !self.has_quiet_deadline() {
+                        self.pending_work_start = PendingTrackedWorkStart::Pending;
+                    }
+                    return if focused_deadline_extended {
+                        TrackedProcessChanges::deadline_only()
+                    } else {
+                        TrackedProcessChanges::default()
+                    };
+                }
+                // Prompt submit starts tracked work even before output and anchors its quiet deadline.
                 self.pending_work_start = PendingTrackedWorkStart::Pending;
                 self.last_tracked_activity = now;
-                self.recent_user_interaction = None;
                 TrackedProcessChanges::for_activity(self.mark_visible_activity())
             }
         }
     }
 
+    fn record_screen_activity(&mut self, observation: ScreenObservation<'_>, now: Instant) -> TrackedProcessChanges {
+        match observation {
+            ScreenObservation::Busy => {
+                // Positive work evidence takes precedence over local-echo suppression and needs no Enter event.
+                self.completion_before_work = None;
+                self.pending_work_start = PendingTrackedWorkStart::None;
+                self.recent_user_interaction = None;
+                self.last_tracked_activity = now;
+                TrackedProcessChanges::for_activity(self.mark_visible_activity())
+            }
+            ScreenObservation::NeedsAttention(_) if self.screen_allows_quiet(observation) => {
+                let pending = self.pending_work_start;
+                self.pending_work_start = PendingTrackedWorkStart::None;
+                if !self.has_quiet_deadline() && pending == PendingTrackedWorkStart::Pending {
+                    self.status = PaneTrackedProcessStatus::Settling;
+                    self.last_tracked_activity = now;
+                    return TrackedProcessChanges::state_and_deadline();
+                }
+                // Completed TUIs can repaint unchanged cells. Do not postpone their quiet deadline.
+                TrackedProcessChanges::default()
+            }
+            ScreenObservation::NeedsAttention(_) | ScreenObservation::Unknown => self.record_visible_activity(now),
+        }
+    }
+
+    fn screen_allows_quiet(&mut self, observation: ScreenObservation<'_>) -> bool {
+        match observation {
+            ScreenObservation::Busy => {
+                self.completion_before_work = None;
+                false
+            }
+            ScreenObservation::NeedsAttention(completion) => {
+                if self.completion_before_work.as_deref() == Some(completion) {
+                    return false;
+                }
+                self.completion_before_work = None;
+                true
+            }
+            // Partial redraws must not make the previous turn's completion fresh again.
+            ScreenObservation::Unknown => false,
+        }
+    }
+
     fn record_visible_activity(&mut self, now: Instant) -> TrackedProcessChanges {
+        if screen::busy_start(self.tracked_process.id) == BusyStart::Screen
+            && self.status != PaneTrackedProcessStatus::Busy
+        {
+            return TrackedProcessChanges::default();
+        }
         self.discard_stale_user_interaction(now);
         if self.recent_user_interaction.is_some() {
             // User typing and mouse gestures can redraw through the PTY. Those bytes still render, but they are not
@@ -324,7 +396,7 @@ impl PaneTrackedProcessLifecycle {
     const fn mark_visible_activity(&mut self) -> TrackedProcessStateChange {
         match self.status {
             PaneTrackedProcessStatus::Busy => TrackedProcessStateChange::Unchanged,
-            PaneTrackedProcessStatus::Seen | PaneTrackedProcessStatus::Unseen => {
+            PaneTrackedProcessStatus::Seen | PaneTrackedProcessStatus::Unseen | PaneTrackedProcessStatus::Settling => {
                 self.status = PaneTrackedProcessStatus::Busy;
                 TrackedProcessStateChange::Changed
             }
@@ -332,7 +404,7 @@ impl PaneTrackedProcessLifecycle {
     }
 
     fn mark_quiet(&mut self, quiet_for: Duration, focus_state: TrackedProcessPaneFocus) -> TrackedProcessStateChange {
-        if self.status != PaneTrackedProcessStatus::Busy {
+        if !self.has_quiet_deadline() {
             return TrackedProcessStateChange::Unchanged;
         }
         if quiet_for < self.tracked_process.quiet_threshold {
@@ -349,14 +421,16 @@ impl PaneTrackedProcessLifecycle {
     const fn attention_need(&self) -> TrackedProcessAttentionNeed {
         match self.status {
             PaneTrackedProcessStatus::Unseen => TrackedProcessAttentionNeed::NeedsAttention,
-            PaneTrackedProcessStatus::Busy | PaneTrackedProcessStatus::Seen => TrackedProcessAttentionNeed::None,
+            PaneTrackedProcessStatus::Busy | PaneTrackedProcessStatus::Seen | PaneTrackedProcessStatus::Settling => {
+                TrackedProcessAttentionNeed::None
+            }
         }
     }
 
     const fn state(&self) -> TrackedProcessState {
         match self.status {
             PaneTrackedProcessStatus::Busy => TrackedProcessState::Busy,
-            PaneTrackedProcessStatus::Seen => TrackedProcessState::Seen,
+            PaneTrackedProcessStatus::Seen | PaneTrackedProcessStatus::Settling => TrackedProcessState::Seen,
             PaneTrackedProcessStatus::Unseen => TrackedProcessState::Unseen,
         }
     }
@@ -379,13 +453,20 @@ impl PaneTrackedProcessLifecycle {
     }
 
     fn quiet_deadline(&self, focus_state: TrackedProcessPaneFocus) -> rootcause::Result<Option<Instant>> {
-        if self.status != PaneTrackedProcessStatus::Busy {
+        if !self.has_quiet_deadline() {
             return Ok(None);
         }
         self.quiet_activity_at(focus_state)
             .checked_add(self.tracked_process.quiet_threshold)
             .map(Some)
             .ok_or_else(|| rootcause::report!("muxr tracked-process quiet deadline overflowed"))
+    }
+
+    const fn has_quiet_deadline(&self) -> bool {
+        matches!(
+            self.status,
+            PaneTrackedProcessStatus::Busy | PaneTrackedProcessStatus::Settling
+        )
     }
 }
 
@@ -416,8 +497,7 @@ impl PaneTrackedProcesses {
     ) -> rootcause::Result<TrackedProcessChanges> {
         let mut changes = TrackedProcessChanges::default();
         for pane_id in pane_ids {
-            let observation = self::runtime_pane_cmd_observation(runtimes, *pane_id)?;
-            changes.merge(self.observe_pane_cmd(config, *pane_id, &observation, now));
+            changes.merge(self.observe_runtime_pane_cmd(config, runtimes, *pane_id, now)?);
         }
         Ok(changes)
     }
@@ -430,8 +510,7 @@ impl PaneTrackedProcesses {
         now: Instant,
     ) -> rootcause::Result<TrackedProcessChanges> {
         let active_pane = layout.active_pane_id()?;
-        let observation = self::runtime_pane_cmd_observation(runtimes, active_pane)?;
-        let mut changes = self.observe_pane_cmd(config, active_pane, &observation, now);
+        let mut changes = self.observe_runtime_pane_cmd(config, runtimes, active_pane, now)?;
         changes.merge(self.acknowledge_attention(active_pane));
         Ok(changes)
     }
@@ -467,7 +546,11 @@ impl PaneTrackedProcesses {
         let tracked = matches!(cmd_observation, TrackedProcessCmdObservation::Tracked(_));
         let state_change = self.apply_cmd_observation(pane_id, cmd_observation, now);
         let activity_changes = if tracked {
-            self.record_cached_visible_activity(&[pane_id], now)
+            self.by_pane
+                .get_mut(&pane_id)
+                .map_or_else(TrackedProcessChanges::default, |lifecycle| {
+                    lifecycle.record_visible_activity(now)
+                })
         } else {
             TrackedProcessChanges::default()
         };
@@ -480,16 +563,25 @@ impl PaneTrackedProcesses {
 
     pub(crate) fn record_cached_visible_activity(
         &mut self,
+        runtimes: &PaneRuntimes,
         pane_ids: &[PaneId],
         now: Instant,
-    ) -> TrackedProcessChanges {
+    ) -> rootcause::Result<TrackedProcessChanges> {
         let mut changes = TrackedProcessChanges::default();
         for pane_id in pane_ids {
-            if let Some(lifecycle) = self.by_pane.get_mut(pane_id) {
-                changes.merge(lifecycle.record_visible_activity(now));
-            }
+            let Some(lifecycle) = self.by_pane.get_mut(pane_id) else {
+                continue;
+            };
+            let activity = match screen::patterns(lifecycle.tracked_process.id) {
+                Some(patterns) => {
+                    let text = runtimes.handle(*pane_id)?.live_tail_text(screen::SCREEN_TAIL_ROWS);
+                    lifecycle.record_screen_activity(patterns.observe(text.candidate_lines()), now)
+                }
+                None => lifecycle.record_visible_activity(now),
+            };
+            changes.merge(activity);
         }
-        changes
+        Ok(changes)
     }
 
     pub fn mark_quiet_deadlines(
@@ -641,8 +733,7 @@ impl PaneTrackedProcesses {
         now: Instant,
     ) -> TrackedProcessStateChange {
         let Some(lifecycle) = self.by_pane.get_mut(&pane_id) else {
-            // A newly observed tracked process starts Busy even if its first dirty frame was missed by the sampled
-            // scan. Pre-process input suppression belongs to the shell and must not hide the new process output.
+            // Pre-process input suppression belongs to the shell and must not hide the new process output.
             self.by_pane
                 .insert(pane_id, PaneTrackedProcessLifecycle::new(tracked_process.clone(), now));
             return TrackedProcessStateChange::Changed;
@@ -677,6 +768,36 @@ impl PaneTrackedProcesses {
     ) -> rootcause::Result<Option<TrackedProcessClientChange>> {
         let changes = self.record_user_interaction(layout, pane_id, interaction, now)?;
         Ok(TrackedProcessClientChange::from_changes(pane_id, changes))
+    }
+
+    pub(in crate::pane) fn capture_completion_before_input(
+        &mut self,
+        pane_id: PaneId,
+        interaction: TrackedProcessUserInteraction,
+        handle: &PtyHandle,
+    ) {
+        if interaction != TrackedProcessUserInteraction::StartsTrackedProcessWork {
+            return;
+        }
+        let Some(lifecycle) = self.by_pane.get_mut(&pane_id) else {
+            return;
+        };
+        let Some(patterns) = screen::patterns(lifecycle.tracked_process.id) else {
+            return;
+        };
+        if patterns.busy_start == BusyStart::Screen && lifecycle.has_quiet_deadline() {
+            // An editor action during work or completion must not invalidate the completion we are waiting for.
+            return;
+        }
+        // Capture before writing input: the PTY reader can observe the next turn immediately after submission.
+        let text = handle.live_tail_text(screen::SCREEN_TAIL_ROWS);
+        match patterns.observe(text.candidate_lines()) {
+            ScreenObservation::NeedsAttention(completion) => {
+                lifecycle.completion_before_work = Some(completion.to_owned());
+            }
+            ScreenObservation::Busy => lifecycle.completion_before_work = None,
+            ScreenObservation::Unknown => {}
+        }
     }
 
     // Active-pane input resolves the focused pane handle in the same turn before calling this.
@@ -714,6 +835,100 @@ impl PaneTrackedProcesses {
         } else {
             TrackedProcessChanges::default()
         }
+    }
+
+    /// Check the live screen immediately before quiet transitions. For confirmed agents with screen checks, require
+    /// attention before green-dot removal or red-dot activation; otherwise the existing timer retries later.
+    pub(crate) fn guard_quiet_deadlines(
+        &mut self,
+        config: &MuxrConfig,
+        layout: &SessionLayout,
+        runtimes: &PaneRuntimes,
+        now: Instant,
+    ) -> rootcause::Result<TrackedProcessChanges> {
+        self.guard_observed_quiet_deadlines(
+            layout,
+            now,
+            |pane_id| {
+                let observation = self::runtime_pane_cmd_observation(runtimes, pane_id)?;
+                Ok(self::tracked_process_observation_from_pane_cmd(config, &observation))
+            },
+            |pane_id| Ok(runtimes.handle(pane_id)?.live_tail_text(screen::SCREEN_TAIL_ROWS)),
+        )
+    }
+
+    fn observe_runtime_pane_cmd(
+        &mut self,
+        config: &MuxrConfig,
+        runtimes: &PaneRuntimes,
+        pane_id: PaneId,
+        now: Instant,
+    ) -> rootcause::Result<TrackedProcessChanges> {
+        let observation = self::runtime_pane_cmd_observation(runtimes, pane_id)?;
+        let mut changes = self.observe_pane_cmd(config, pane_id, &observation, now);
+        if changes.state_change() == TrackedProcessStateChange::Changed {
+            // Discovery can follow the last dirty frame, including on attach or focus. Seed from the current screen.
+            changes.merge(self.record_cached_visible_activity(runtimes, &[pane_id], now)?);
+        }
+        Ok(changes)
+    }
+
+    fn guard_observed_quiet_deadlines<'a>(
+        &mut self,
+        layout: &SessionLayout,
+        now: Instant,
+        mut observe_cmd: impl FnMut(PaneId) -> rootcause::Result<TrackedProcessCmdObservation<'a>>,
+        mut read_screen: impl FnMut(PaneId) -> rootcause::Result<TerminalTextTail>,
+    ) -> rootcause::Result<TrackedProcessChanges> {
+        let focused_pane = layout.active_pane_id()?;
+        let mut changes = TrackedProcessChanges::default();
+
+        for pane_id in layout.pane_ids() {
+            let focus = if pane_id == focused_pane {
+                TrackedProcessPaneFocus::Focused
+            } else {
+                TrackedProcessPaneFocus::Unfocused
+            };
+
+            let Some(lifecycle) = self.by_pane.get(&pane_id) else {
+                continue;
+            };
+            let Some(patterns) = screen::patterns(lifecycle.tracked_process.id) else {
+                continue;
+            };
+            if lifecycle.quiet_deadline(focus)?.is_none_or(|deadline| deadline > now) {
+                continue;
+            }
+
+            // An exited agent can leave its last status row behind. Refresh its identity before trusting that row.
+            let observation = observe_cmd(pane_id)?;
+
+            if self.apply_cmd_observation(pane_id, observation, now) == TrackedProcessStateChange::Changed {
+                changes.merge(TrackedProcessChanges::state_and_deadline());
+                continue;
+            }
+            let Some(lifecycle) = self.by_pane.get_mut(&pane_id) else {
+                continue;
+            };
+
+            let allows_quiet = if matches!(observation, TrackedProcessCmdObservation::Tracked(_)) {
+                let text = read_screen(pane_id)?;
+                let screen = patterns.observe(text.candidate_lines());
+                if matches!(screen, ScreenObservation::Busy) {
+                    changes.merge(lifecycle.record_screen_activity(screen, now));
+                }
+                lifecycle.screen_allows_quiet(screen)
+            } else {
+                // Unknown identity retains the lifecycle and defers its quiet transition.
+                false
+            };
+            if !allows_quiet {
+                lifecycle.last_tracked_activity = now;
+                changes.merge(TrackedProcessChanges::deadline_only());
+            }
+        }
+
+        Ok(changes)
     }
 
     fn attention_need(&self, pane_id: PaneId) -> TrackedProcessAttentionNeed {
@@ -773,6 +988,7 @@ fn runtime_pane_cmd_observation(runtimes: &PaneRuntimes, pane_id: PaneId) -> roo
 #[cfg(test)]
 mod tests {
     use muxr_core::SessionName;
+    use muxr_core::TerminalSize;
     use test_that::prelude::*;
 
     use super::*;
@@ -780,6 +996,7 @@ mod tests {
     use crate::pane::cmd::PaneCmdUnknownReason;
     use crate::pane::split::PaneSplitAxis;
     use crate::state::SessionMetadata;
+    use crate::terminal::TerminalState;
 
     fn tracked_process(executable: &str) -> rootcause::Result<TrackedProcess> {
         MuxrConfig::default()
@@ -808,11 +1025,126 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_pane_tracked_process_lifecycle_when_created_starts_busy() -> rootcause::Result<()> {
-        let pane_tracked_process = PaneTrackedProcessLifecycle::new(self::tracked_process("codex")?, Instant::now());
+    #[rstest::rstest]
+    #[case("codex", TrackedProcessState::Seen)]
+    #[case("claude", TrackedProcessState::Busy)]
+    #[case("cursor-agent", TrackedProcessState::Busy)]
+    #[case("gemini", TrackedProcessState::Busy)]
+    #[case("opencode", TrackedProcessState::Busy)]
+    fn test_lifecycle_when_discovered_or_entered_uses_agent_busy_start_policy(
+        #[case] executable: &str,
+        #[case] expected: TrackedProcessState,
+    ) -> rootcause::Result<()> {
+        let now = Instant::now();
+        let mut lifecycle = PaneTrackedProcessLifecycle::new(self::tracked_process(executable)?, now);
+        assert_that!(lifecycle.state(), eq(expected));
+        lifecycle.status = PaneTrackedProcessStatus::Seen;
+        lifecycle.record_user_interaction(
+            TrackedProcessUserInteraction::StartsTrackedProcessWork,
+            now,
+            TrackedProcessPaneFocus::Focused,
+        );
+        lifecycle.record_visible_activity(now);
+        assert_that!(lifecycle.state(), eq(expected));
+        assert_that!(
+            lifecycle.quiet_deadline(TrackedProcessPaneFocus::Focused)?.is_some(),
+            eq(expected == TrackedProcessState::Busy)
+        );
+        Ok(())
+    }
 
-        assert_that!(pane_tracked_process.state(), eq(TrackedProcessState::Busy));
+    #[rstest::rstest]
+    #[case(PaneTrackedProcessStatus::Seen)]
+    #[case(PaneTrackedProcessStatus::Unseen)]
+    #[case(PaneTrackedProcessStatus::Settling)]
+    fn test_codex_when_working_arrives_without_enter_starts_busy_despite_local_echo(
+        #[case] status: PaneTrackedProcessStatus,
+    ) -> rootcause::Result<()> {
+        let now = Instant::now();
+        let mut lifecycle = PaneTrackedProcessLifecycle::new(self::tracked_process("codex")?, now);
+        lifecycle.status = status;
+        lifecycle.pending_work_start = PendingTrackedWorkStart::None;
+        lifecycle.record_user_interaction(
+            TrackedProcessUserInteraction::MayEcho,
+            now,
+            TrackedProcessPaneFocus::Focused,
+        );
+        assert_that!(
+            lifecycle.record_screen_activity(ScreenObservation::Busy, now),
+            eq(TrackedProcessChanges::state_and_deadline())
+        );
+        assert_that!(lifecycle.state(), eq(TrackedProcessState::Busy));
+        let later = self::instant_after(now, Duration::from_secs(1))?;
+        lifecycle.record_screen_activity(ScreenObservation::Unknown, later);
+        assert_that!(
+            lifecycle.quiet_deadline(TrackedProcessPaneFocus::Unfocused)?,
+            eq(Some(self::instant_after(later, Duration::from_secs(3))?))
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_codex_when_new_completion_follows_ignored_enter_raises_attention_without_green() -> rootcause::Result<()> {
+        let now = Instant::now();
+        let mut lifecycle = PaneTrackedProcessLifecycle::new(self::tracked_process("codex")?, now);
+        lifecycle.completion_before_work = Some("Worked for 1s • 14:18".to_owned());
+        for observation in [
+            ScreenObservation::Unknown,
+            ScreenObservation::NeedsAttention("Worked for 1s • 14:18"),
+        ] {
+            assert_that!(
+                lifecycle.record_screen_activity(observation, now),
+                eq(TrackedProcessChanges::default())
+            );
+        }
+        assert_that!(lifecycle.state(), eq(TrackedProcessState::Seen));
+        assert_that!(lifecycle.quiet_deadline(TrackedProcessPaneFocus::Unfocused)?, eq(None));
+        let completed = ScreenObservation::NeedsAttention("Worked for 2s • 14:19");
+        lifecycle.record_screen_activity(completed, now);
+        assert_that!(lifecycle.state(), eq(TrackedProcessState::Seen));
+        let due = self::instant_after(now, Duration::from_secs(3))?;
+        assert_that!(
+            lifecycle.record_screen_activity(completed, due),
+            eq(TrackedProcessChanges::default())
+        );
+        assert_that!(
+            lifecycle.quiet_deadline(TrackedProcessPaneFocus::Unfocused)?,
+            eq(Some(due))
+        );
+        lifecycle.mark_quiet_if_due(due, TrackedProcessPaneFocus::Unfocused);
+        assert_that!(lifecycle.state(), eq(TrackedProcessState::Unseen));
+        assert_that!(
+            lifecycle.record_screen_activity(completed, due),
+            eq(TrackedProcessChanges::default())
+        );
+        assert_that!(lifecycle.quiet_deadline(TrackedProcessPaneFocus::Unfocused)?, eq(None));
+        Ok(())
+    }
+
+    #[test]
+    fn test_screen_allows_quiet_when_previous_completion_returns_requires_working_or_new_completion()
+    -> rootcause::Result<()> {
+        let mut lifecycle = PaneTrackedProcessLifecycle::new(self::tracked_process("codex")?, Instant::now());
+        let patterns = screen::patterns(lifecycle.tracked_process.id)
+            .ok_or_else(|| rootcause::report!("missing Codex patterns"))?;
+        let completed = "Worked for 1s • 14:18";
+        lifecycle.completion_before_work = Some(completed.to_owned());
+        test_that::assert_that!(
+            lifecycle.screen_allows_quiet(patterns.observe("partial redraw".lines())),
+            eq(false)
+        );
+        test_that::assert_that!(
+            lifecycle.screen_allows_quiet(patterns.observe("── Worked for 1s • 14:18 ───".lines())),
+            eq(false)
+        );
+        test_that::assert_that!(
+            lifecycle.screen_allows_quiet(patterns.observe("Working (0s • esc to interrupt)".lines())),
+            eq(false)
+        );
+        test_that::assert_that!(
+            lifecycle.screen_allows_quiet(patterns.observe(completed.lines())),
+            eq(true)
+        );
         Ok(())
     }
 
@@ -824,7 +1156,7 @@ mod tests {
         #[case] expected_state: TrackedProcessState,
     ) -> rootcause::Result<()> {
         let then = Instant::now();
-        let mut pane_tracked_process = PaneTrackedProcessLifecycle::new(self::tracked_process("codex")?, then);
+        let mut pane_tracked_process = PaneTrackedProcessLifecycle::new(self::tracked_process("claude")?, then);
         pane_tracked_process.status = starting_status;
         pane_tracked_process.record_user_interaction(
             TrackedProcessUserInteraction::MayEcho,
@@ -849,7 +1181,7 @@ mod tests {
     ) -> rootcause::Result<()> {
         let then = Instant::now();
         let prompt_submitted_at = self::instant_after(then, Duration::from_millis(100))?;
-        let mut pane_tracked_process = PaneTrackedProcessLifecycle::new(self::tracked_process("codex")?, then);
+        let mut pane_tracked_process = PaneTrackedProcessLifecycle::new(self::tracked_process("claude")?, then);
         pane_tracked_process.status = starting_status;
         pane_tracked_process.record_user_interaction(
             TrackedProcessUserInteraction::MayEcho,
@@ -878,7 +1210,7 @@ mod tests {
     fn test_pane_tracked_process_lifecycle_when_busy_output_moves_only_quiet_deadline() -> rootcause::Result<()> {
         let then = Instant::now();
         let visible_activity_at = self::instant_after(then, Duration::from_millis(501))?;
-        let mut pane_tracked_process = PaneTrackedProcessLifecycle::new(self::tracked_process("codex")?, then);
+        let mut pane_tracked_process = PaneTrackedProcessLifecycle::new(self::tracked_process("claude")?, then);
 
         assert_that!(
             pane_tracked_process.record_visible_activity(visible_activity_at),
@@ -896,7 +1228,7 @@ mod tests {
     fn test_pane_tracked_process_lifecycle_when_user_echo_suppression_expires_records_busy_activity()
     -> rootcause::Result<()> {
         let then = Instant::now();
-        let mut pane_tracked_process = PaneTrackedProcessLifecycle::new(self::tracked_process("codex")?, then);
+        let mut pane_tracked_process = PaneTrackedProcessLifecycle::new(self::tracked_process("claude")?, then);
         pane_tracked_process.record_user_interaction(
             TrackedProcessUserInteraction::MayEcho,
             then,
@@ -920,7 +1252,7 @@ mod tests {
     fn test_pane_tracked_process_lifecycle_when_prompt_submit_precedes_visible_activity_marks_busy()
     -> rootcause::Result<()> {
         let then = Instant::now();
-        let mut pane_tracked_process = PaneTrackedProcessLifecycle::new(self::tracked_process("codex")?, then);
+        let mut pane_tracked_process = PaneTrackedProcessLifecycle::new(self::tracked_process("claude")?, then);
         pane_tracked_process.status = PaneTrackedProcessStatus::Seen;
         pane_tracked_process.record_user_interaction(
             TrackedProcessUserInteraction::MayEcho,
@@ -953,7 +1285,7 @@ mod tests {
         #[case] expected_state: TrackedProcessState,
     ) -> rootcause::Result<()> {
         let then = Instant::now();
-        let mut pane_tracked_process = PaneTrackedProcessLifecycle::new(self::tracked_process("codex")?, then);
+        let mut pane_tracked_process = PaneTrackedProcessLifecycle::new(self::tracked_process("claude")?, then);
 
         assert_that!(
             pane_tracked_process.mark_quiet_if_due(self::instant_after(then, Duration::from_secs(3))?, focus_state),
@@ -967,7 +1299,7 @@ mod tests {
     #[test]
     fn test_pane_tracked_process_lifecycle_when_focused_user_input_is_recent_stays_busy() -> rootcause::Result<()> {
         let then = Instant::now();
-        let mut pane_tracked_process = PaneTrackedProcessLifecycle::new(self::tracked_process("codex")?, then);
+        let mut pane_tracked_process = PaneTrackedProcessLifecycle::new(self::tracked_process("claude")?, then);
         assert_that!(
             pane_tracked_process.record_user_interaction(
                 TrackedProcessUserInteraction::MayEcho,
@@ -1001,7 +1333,7 @@ mod tests {
     fn test_pane_tracked_process_lifecycle_when_unfocused_user_input_is_recent_still_marks_unseen()
     -> rootcause::Result<()> {
         let then = Instant::now();
-        let mut pane_tracked_process = PaneTrackedProcessLifecycle::new(self::tracked_process("codex")?, then);
+        let mut pane_tracked_process = PaneTrackedProcessLifecycle::new(self::tracked_process("claude")?, then);
         assert_that!(
             pane_tracked_process.record_user_interaction(
                 TrackedProcessUserInteraction::MayEcho,
@@ -1026,7 +1358,7 @@ mod tests {
     #[test]
     fn test_pane_tracked_process_lifecycle_when_attention_is_acknowledged_marks_seen() -> rootcause::Result<()> {
         let mut pane_tracked_process =
-            PaneTrackedProcessLifecycle::new(self::tracked_process("codex")?, Instant::now());
+            PaneTrackedProcessLifecycle::new(self::tracked_process("claude")?, Instant::now());
         pane_tracked_process.status = PaneTrackedProcessStatus::Unseen;
 
         assert_that!(
@@ -1049,7 +1381,7 @@ mod tests {
                 .observe_pane_cmd(
                     &MuxrConfig::default(),
                     pane_id,
-                    &self::fg_tracked_process("codex"),
+                    &self::fg_tracked_process("claude"),
                     Instant::now(),
                 )
                 .state_change()
@@ -1063,7 +1395,7 @@ mod tests {
         );
         let snapshot = pane_tracked_processes.snapshot(&layout);
         let pane = self::tracked_process_snapshot_pane(&snapshot, pane_id)?;
-        assert_that!(pane.label(), eq("cx"));
+        assert_that!(pane.label(), eq("cl"));
         assert_that!(pane.state(), eq(TrackedProcessState::Busy));
         Ok(())
     }
@@ -1081,7 +1413,7 @@ mod tests {
                     pane_id,
                     &PaneCmdObservation::FgCmd(FgCmd::from_test_group(
                         Some(self::cmd(17869, "agg")),
-                        Ok(vec![self::cmd(17989, "codex")]),
+                        Ok(vec![self::cmd(17989, "claude")]),
                     )),
                     Instant::now(),
                 )
@@ -1092,7 +1424,7 @@ mod tests {
 
         let snapshot = pane_tracked_processes.snapshot(&layout);
         let pane = self::tracked_process_snapshot_pane(&snapshot, pane_id)?;
-        assert_that!(pane.label(), eq("cx"));
+        assert_that!(pane.label(), eq("cl"));
         assert_that!(pane.state(), eq(TrackedProcessState::Busy));
         Ok(())
     }
@@ -1109,7 +1441,7 @@ mod tests {
         pane_tracked_processes.observe_pane_cmd(
             &MuxrConfig::default(),
             pane_id,
-            &self::fg_tracked_process("codex"),
+            &self::fg_tracked_process("claude"),
             then,
         );
         self::set_pane_tracked_process_status(&mut pane_tracked_processes, pane_id, PaneTrackedProcessStatus::Unseen);
@@ -1147,7 +1479,7 @@ mod tests {
         pane_tracked_processes.observe_pane_cmd(
             &MuxrConfig::default(),
             pane_id,
-            &self::fg_tracked_process("codex"),
+            &self::fg_tracked_process("claude"),
             then,
         );
 
@@ -1179,7 +1511,7 @@ mod tests {
         pane_tracked_processes.observe_pane_cmd(
             &MuxrConfig::default(),
             pane_id,
-            &self::fg_tracked_process("codex"),
+            &self::fg_tracked_process("claude"),
             then,
         );
         self::set_pane_tracked_process_status(&mut pane_tracked_processes, pane_id, PaneTrackedProcessStatus::Unseen);
@@ -1212,7 +1544,7 @@ mod tests {
         pane_tracked_processes.observe_pane_cmd(
             &MuxrConfig::default(),
             pane_id,
-            &self::fg_tracked_process("codex"),
+            &self::fg_tracked_process("claude"),
             Instant::now(),
         );
         self::set_pane_tracked_process_status(&mut pane_tracked_processes, pane_id, PaneTrackedProcessStatus::Unseen);
@@ -1221,7 +1553,7 @@ mod tests {
             pane_tracked_processes.observe_visible_activity(
                 &MuxrConfig::default(),
                 pane_id,
-                &self::fg_tracked_process("codex"),
+                &self::fg_tracked_process("claude"),
                 Instant::now(),
             ),
             eq(TrackedProcessChanges::default())
@@ -1272,7 +1604,7 @@ mod tests {
         pane_tracked_processes.observe_pane_cmd(
             &MuxrConfig::default(),
             pane_id,
-            &self::fg_tracked_process("codex"),
+            &self::fg_tracked_process("claude"),
             then,
         );
         self::set_pane_tracked_process_status(&mut pane_tracked_processes, pane_id, PaneTrackedProcessStatus::Seen);
@@ -1287,7 +1619,7 @@ mod tests {
             pane_tracked_processes.observe_visible_activity(
                 &MuxrConfig::default(),
                 pane_id,
-                &self::fg_tracked_process("codex"),
+                &self::fg_tracked_process("claude"),
                 self::instant_after(then, Duration::from_millis(100))?,
             ),
             eq(TrackedProcessChanges::default())
@@ -1309,7 +1641,7 @@ mod tests {
         pane_tracked_processes.observe_pane_cmd(
             &MuxrConfig::default(),
             pane_id,
-            &self::fg_tracked_process("codex"),
+            &self::fg_tracked_process("claude"),
             then,
         );
         pane_tracked_processes.record_user_interaction(
@@ -1324,7 +1656,7 @@ mod tests {
             pane_tracked_processes.observe_pane_cmd(
                 &MuxrConfig::default(),
                 pane_id,
-                &self::fg_tracked_process("codex"),
+                &self::fg_tracked_process("claude"),
                 self::instant_after(then, Duration::from_millis(502))?,
             ),
             eq(TrackedProcessChanges::default())
@@ -1343,7 +1675,7 @@ mod tests {
         pane_tracked_processes.observe_pane_cmd(
             &MuxrConfig::default(),
             pane_id,
-            &self::fg_tracked_process("codex"),
+            &self::fg_tracked_process("claude"),
             then,
         );
         self::set_pane_tracked_process_status(&mut pane_tracked_processes, pane_id, PaneTrackedProcessStatus::Seen);
@@ -1364,7 +1696,7 @@ mod tests {
             pane_tracked_processes.observe_visible_activity(
                 &MuxrConfig::default(),
                 pane_id,
-                &self::fg_tracked_process("codex"),
+                &self::fg_tracked_process("claude"),
                 self::instant_after(then, Duration::from_millis(150))?,
             ),
             eq(TrackedProcessChanges::deadline_only())
@@ -1378,7 +1710,7 @@ mod tests {
     }
 
     #[test]
-    fn test_record_cached_visible_activity_when_prompt_submit_precedes_output_marks_busy() -> rootcause::Result<()> {
+    fn test_observe_visible_activity_when_prompt_submit_precedes_output_keeps_busy() -> rootcause::Result<()> {
         let mut layout = self::layout()?;
         let mut pane_tracked_processes = PaneTrackedProcesses::default();
         let pane_id = self::pane_id()?;
@@ -1387,7 +1719,7 @@ mod tests {
         pane_tracked_processes.observe_pane_cmd(
             &MuxrConfig::default(),
             pane_id,
-            &self::fg_tracked_process("codex"),
+            &self::fg_tracked_process("claude"),
             then,
         );
         self::set_pane_tracked_process_status(&mut pane_tracked_processes, pane_id, PaneTrackedProcessStatus::Seen);
@@ -1399,8 +1731,12 @@ mod tests {
         )?;
 
         assert_that!(
-            pane_tracked_processes
-                .record_cached_visible_activity(&[pane_id], self::instant_after(then, Duration::from_millis(150))?,),
+            pane_tracked_processes.observe_visible_activity(
+                &MuxrConfig::default(),
+                pane_id,
+                &self::fg_tracked_process("claude"),
+                self::instant_after(then, Duration::from_millis(150))?,
+            ),
             eq(TrackedProcessChanges::deadline_only())
         );
         assert_that!(
@@ -1420,7 +1756,7 @@ mod tests {
         pane_tracked_processes.observe_pane_cmd(
             &MuxrConfig::default(),
             pane_id,
-            &self::fg_tracked_process("codex"),
+            &self::fg_tracked_process("claude"),
             then,
         );
         pane_tracked_processes.record_user_interaction(
@@ -1479,7 +1815,7 @@ mod tests {
         pane_tracked_processes.observe_pane_cmd(
             &MuxrConfig::default(),
             pane_id,
-            &self::fg_tracked_process("codex"),
+            &self::fg_tracked_process("claude"),
             then,
         );
 
@@ -1515,7 +1851,7 @@ mod tests {
         pane_tracked_processes.observe_pane_cmd(
             &MuxrConfig::default(),
             pane_id,
-            &self::fg_tracked_process("codex"),
+            &self::fg_tracked_process("claude"),
             then,
         );
         pane_tracked_processes.record_user_interaction(
@@ -1542,7 +1878,7 @@ mod tests {
         pane_tracked_processes.observe_pane_cmd(
             &MuxrConfig::default(),
             pane_id,
-            &self::fg_tracked_process("codex"),
+            &self::fg_tracked_process("claude"),
             then,
         );
         pane_tracked_processes.record_user_interaction(
@@ -1571,7 +1907,7 @@ mod tests {
         pane_tracked_processes.observe_pane_cmd(
             &MuxrConfig::default(),
             pane_id,
-            &self::fg_tracked_process("codex"),
+            &self::fg_tracked_process("claude"),
             then,
         );
 
@@ -1595,7 +1931,7 @@ mod tests {
         pane_tracked_processes.observe_pane_cmd(
             &MuxrConfig::default(),
             reused_pane_id,
-            &self::fg_tracked_process("codex"),
+            &self::fg_tracked_process("claude"),
             Instant::now(),
         );
 
@@ -1636,7 +1972,7 @@ mod tests {
         pane_tracked_processes.observe_pane_cmd(
             &MuxrConfig::default(),
             stale_pane_id,
-            &self::fg_tracked_process("codex"),
+            &self::fg_tracked_process("claude"),
             Instant::now(),
         );
 
@@ -1656,13 +1992,13 @@ mod tests {
         pane_tracked_processes.observe_pane_cmd(
             &MuxrConfig::default(),
             stale_pane_id,
-            &self::fg_tracked_process("codex"),
+            &self::fg_tracked_process("claude"),
             then,
         );
         pane_tracked_processes.observe_pane_cmd(
             &MuxrConfig::default(),
             live_pane_id,
-            &self::fg_tracked_process("codex"),
+            &self::fg_tracked_process("claude"),
             self::instant_after(then, Duration::from_secs(1))?,
         );
         layout.remove_exited_pane(stale_pane_id, 0, self::successful_exit_status())?;
@@ -1681,7 +2017,7 @@ mod tests {
         pane_tracked_processes.observe_pane_cmd(
             &MuxrConfig::default(),
             pane_id,
-            &self::fg_tracked_process("codex"),
+            &self::fg_tracked_process("claude"),
             Instant::now(),
         );
         self::set_pane_tracked_process_status(&mut pane_tracked_processes, pane_id, PaneTrackedProcessStatus::Unseen);
@@ -1696,6 +2032,77 @@ mod tests {
             eq(TrackedProcessState::Seen)
         );
         Ok(())
+    }
+
+    #[rstest::rstest]
+    #[case(false)]
+    #[case(true)]
+    fn test_guard_quiet_deadlines_when_identity_is_unknown_keeps_busy_until_confirmed(
+        #[case] focused: bool,
+    ) -> rootcause::Result<()> {
+        let mut layout = self::layout()?;
+        let pane_id = self::pane_id()?;
+        if focused {
+            layout.active_tab_mut()?.focus_pane(pane_id)?;
+        }
+        let then = Instant::now();
+        let due = self::instant_after(then, Duration::from_secs(3))?;
+        let mut processes = PaneTrackedProcesses::default();
+        let process = self::tracked_process("codex")?;
+        processes.apply_cmd_observation(pane_id, TrackedProcessCmdObservation::Tracked(&process), then);
+        processes
+            .by_pane
+            .get_mut(&pane_id)
+            .ok_or_else(|| rootcause::report!("missing lifecycle"))?
+            .record_screen_activity(ScreenObservation::Busy, then);
+        test_that::assert_that!(
+            processes.guard_observed_quiet_deadlines(
+                &layout,
+                due,
+                |_| Ok(TrackedProcessCmdObservation::Unknown),
+                |_| Err(rootcause::report!("unconfirmed identity must not read stale screen")),
+            )?,
+            eq(TrackedProcessChanges::deadline_only())
+        );
+        test_that::assert_that!(
+            processes.mark_quiet_deadlines(&layout, due)?,
+            eq(TrackedProcessAttention::Unchanged)
+        );
+        let retry = self::instant_after(due, Duration::from_secs(3))?;
+        test_that::assert_that!(processes.next_quiet_deadline(&layout)?, eq(Some(retry)));
+        processes.guard_observed_quiet_deadlines(
+            &layout,
+            retry,
+            |_| Ok(TrackedProcessCmdObservation::Tracked(&process)),
+            |_| self::screen_tail("Working (1s • esc to interrupt)"),
+        )?;
+        test_that::assert_that!(
+            processes.mark_quiet_deadlines(&layout, retry)?,
+            eq(TrackedProcessAttention::Unchanged)
+        );
+        let completed = self::instant_after(retry, Duration::from_secs(3))?;
+        processes.guard_observed_quiet_deadlines(
+            &layout,
+            completed,
+            |_| Ok(TrackedProcessCmdObservation::Tracked(&process)),
+            |_| self::screen_tail("Worked for 2s • 14:19"),
+        )?;
+        let expected = if focused {
+            TrackedProcessAttention::Seen
+        } else {
+            TrackedProcessAttention::Unseen {
+                pane_ids: vec![pane_id],
+            }
+        };
+        test_that::assert_that!(processes.mark_quiet_deadlines(&layout, completed)?, eq(expected));
+        test_that::assert_that!(processes.next_quiet_deadline(&layout)?, eq(None));
+        Ok(())
+    }
+
+    fn screen_tail(text: &str) -> rootcause::Result<TerminalTextTail> {
+        let mut terminal = TerminalState::with_scrollback(&TerminalSize::new(80, 1)?, MuxrConfig::default().scrollback);
+        let _output = terminal.process(text.as_bytes());
+        Ok(terminal.live_tail_text(screen::SCREEN_TAIL_ROWS))
     }
 
     fn pane_id() -> rootcause::Result<PaneId> {

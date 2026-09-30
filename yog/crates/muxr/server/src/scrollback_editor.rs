@@ -758,11 +758,11 @@ mod tests {
         let visible_pane_id = PaneId::new(1)?;
         let mut tracked_processes = PaneTrackedProcesses::default();
         let then = Instant::now();
-        tracked_processes.observe_pane_cmd(&user_config, visible_pane_id, &self::fg_tracked_process("codex"), then);
+        tracked_processes.observe_pane_cmd(&user_config, visible_pane_id, &self::fg_tracked_process("claude"), then);
         tracked_processes.observe_pane_cmd(
             &user_config,
             hidden_original_pane_id,
-            &self::fg_tracked_process("codex"),
+            &self::fg_tracked_process("claude"),
             then,
         );
         layout.replace_active_pane_with_scrollback_editor(state_test_helpers::metadata(SCROLLBACK_EDITOR_TITLE, 3))?;
