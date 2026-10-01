@@ -2,30 +2,33 @@ use std::collections::BTreeSet;
 use std::fmt;
 use std::num::NonZeroU32;
 
+use nutype::nutype;
 use rootcause::report;
 use serde::Deserialize;
 use serde::Serialize;
 
 use super::ClientMousePosition;
 use super::TrackedProcessState;
+use super::terminal::TerminalDimension;
 
-#[derive(
-    rkyv::Archive,
-    Clone,
-    Copy,
-    Debug,
-    Deserialize,
-    rkyv::Deserialize,
-    Eq,
-    Hash,
-    Ord,
-    PartialEq,
-    PartialOrd,
-    Serialize,
-    rkyv::Serialize,
+#[nutype(
+    const_fn,
+    validate(greater = 0),
+    derive(
+        Clone,
+        Copy,
+        Debug,
+        Eq,
+        Hash,
+        Ord,
+        PartialEq,
+        PartialOrd,
+        Serialize,
+        Deserialize,
+        TryFrom
+    )
 )]
-#[serde(transparent)]
-pub struct TabId(NonZeroU32);
+pub struct TabId(u32);
 
 impl TabId {
     /// Build a tab id for layout snapshots and persisted session state.
@@ -33,16 +36,13 @@ impl TabId {
     /// # Errors
     /// - The id is zero.
     pub fn new(id: u32) -> rootcause::Result<Self> {
-        let Some(id) = NonZeroU32::new(id) else {
-            return Err(report!("invalid muxr tab id").attach("id=0"));
-        };
-        Ok(Self(id))
+        Self::try_new(id).map_err(|_| report!("invalid muxr tab id").attach("id=0"))
     }
 
     /// Return the numeric tab id.
     #[must_use]
     pub const fn get(self) -> u32 {
-        self.0.get()
+        self.into_inner()
     }
 }
 
@@ -52,23 +52,60 @@ impl fmt::Display for TabId {
     }
 }
 
-#[derive(
-    rkyv::Archive,
-    Clone,
-    Copy,
-    Debug,
-    Deserialize,
-    rkyv::Deserialize,
-    Eq,
-    Hash,
-    Ord,
-    PartialEq,
-    PartialOrd,
-    Serialize,
-    rkyv::Serialize,
+impl From<TabId> for NonZeroU32 {
+    fn from(value: TabId) -> Self {
+        // Nutype validates every construction path; zero cannot reach this infallible conversion.
+        Self::new(value.get()).unwrap_or(Self::MIN)
+    }
+}
+
+impl rkyv::Archive for TabId {
+    type Archived = rkyv::Archived<NonZeroU32>;
+    type Resolver = rkyv::Resolver<NonZeroU32>;
+
+    fn resolve(&self, resolver: Self::Resolver, out: rkyv::Place<Self::Archived>) {
+        rkyv::Archive::resolve(&NonZeroU32::from(*self), resolver, out);
+    }
+}
+
+impl<S> rkyv::Serialize<S> for TabId
+where
+    S: rkyv::rancor::Fallible + ?Sized,
+    NonZeroU32: rkyv::Serialize<S>,
+{
+    fn serialize(&self, serializer: &mut S) -> Result<Self::Resolver, S::Error> {
+        rkyv::Serialize::serialize(&NonZeroU32::from(*self), serializer)
+    }
+}
+
+impl<D> rkyv::Deserialize<TabId, D> for rkyv::primitive::ArchivedNonZeroU32
+where
+    D: rkyv::rancor::Fallible + ?Sized,
+    D::Error: rkyv::rancor::Source,
+{
+    fn deserialize(&self, _deserializer: &mut D) -> Result<TabId, D::Error> {
+        TabId::try_new(self.to_native().get()).map_err(super::rkyv_deserialize_error::<D::Error>)
+    }
+}
+
+#[nutype(
+    const_fn,
+    validate(greater = 0),
+    derive(
+        Clone,
+        Copy,
+        Debug,
+        Eq,
+        Hash,
+        Ord,
+        PartialEq,
+        PartialOrd,
+        Serialize,
+        Deserialize,
+        TryFrom
+    )
 )]
-#[serde(transparent)]
-pub struct PaneId(NonZeroU32);
+pub struct PaneId(u32);
 
 impl PaneId {
     /// Build a pane id for layout snapshots and persisted session state.
@@ -76,22 +113,55 @@ impl PaneId {
     /// # Errors
     /// - The id is zero.
     pub fn new(id: u32) -> rootcause::Result<Self> {
-        let Some(id) = NonZeroU32::new(id) else {
-            return Err(report!("invalid muxr pane id").attach("id=0"));
-        };
-        Ok(Self(id))
+        Self::try_new(id).map_err(|_| report!("invalid muxr pane id").attach("id=0"))
     }
 
     /// Return the numeric pane id.
     #[must_use]
     pub const fn get(self) -> u32 {
-        self.0.get()
+        self.into_inner()
     }
 }
 
 impl fmt::Display for PaneId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "pane-{}", self.get())
+    }
+}
+
+impl From<PaneId> for NonZeroU32 {
+    fn from(value: PaneId) -> Self {
+        // Nutype validates every construction path; zero cannot reach this infallible conversion.
+        Self::new(value.get()).unwrap_or(Self::MIN)
+    }
+}
+
+impl rkyv::Archive for PaneId {
+    type Archived = rkyv::Archived<NonZeroU32>;
+    type Resolver = rkyv::Resolver<NonZeroU32>;
+
+    fn resolve(&self, resolver: Self::Resolver, out: rkyv::Place<Self::Archived>) {
+        rkyv::Archive::resolve(&NonZeroU32::from(*self), resolver, out);
+    }
+}
+
+impl<S> rkyv::Serialize<S> for PaneId
+where
+    S: rkyv::rancor::Fallible + ?Sized,
+    NonZeroU32: rkyv::Serialize<S>,
+{
+    fn serialize(&self, serializer: &mut S) -> Result<Self::Resolver, S::Error> {
+        rkyv::Serialize::serialize(&NonZeroU32::from(*self), serializer)
+    }
+}
+
+impl<D> rkyv::Deserialize<PaneId, D> for rkyv::primitive::ArchivedNonZeroU32
+where
+    D: rkyv::rancor::Fallible + ?Sized,
+    D::Error: rkyv::rancor::Source,
+{
+    fn deserialize(&self, _deserializer: &mut D) -> Result<PaneId, D::Error> {
+        PaneId::try_new(self.to_native().get()).map_err(super::rkyv_deserialize_error::<D::Error>)
     }
 }
 
@@ -329,9 +399,9 @@ pub struct PaneRegionSnapshot {
     id: PaneId,
     col: u16,
     row: u16,
-    cols: u16,
+    cols: TerminalDimension,
     mouse_mode: PaneMouseMode,
-    rows: u16,
+    rows: TerminalDimension,
     visible_top_row: u64,
     wrapped_rows: Vec<RowWrap>,
 }
@@ -351,6 +421,10 @@ impl PaneRegionSnapshot {
         mouse_mode: PaneMouseMode,
         visible_top_row: u64,
     ) -> rootcause::Result<Self> {
+        let cols = TerminalDimension::try_new(cols)
+            .map_err(|_| report!("invalid muxr pane region").attach("reason=cols must be nonzero"))?;
+        let rows = TerminalDimension::try_new(rows)
+            .map_err(|_| report!("invalid muxr pane region").attach("reason=rows must be nonzero"))?;
         let region = Self {
             id,
             col,
@@ -359,7 +433,7 @@ impl PaneRegionSnapshot {
             mouse_mode,
             rows,
             visible_top_row,
-            wrapped_rows: vec![RowWrap::EndsBeforeSoftWrap; usize::from(rows)],
+            wrapped_rows: vec![RowWrap::EndsBeforeSoftWrap; usize::from(rows.into_inner())],
         };
         region.validate()?;
         Ok(region)
@@ -382,7 +456,7 @@ impl PaneRegionSnapshot {
 
     #[must_use]
     pub const fn cols(&self) -> u16 {
-        self.cols
+        self.cols.into_inner()
     }
 
     #[must_use]
@@ -403,7 +477,7 @@ impl PaneRegionSnapshot {
 
     #[must_use]
     pub const fn rows(&self) -> u16 {
-        self.rows
+        self.rows.into_inner()
     }
 
     /// Return the stable content row rendered at the top of this pane's visible viewport.
@@ -429,10 +503,10 @@ impl PaneRegionSnapshot {
 
     #[must_use]
     pub const fn containment(&self, row: u16, col: u16) -> PaneRegionContainment {
-        let Some(end_row) = self.row.checked_add(self.rows) else {
+        let Some(end_row) = self.row.checked_add(self.rows()) else {
             return PaneRegionContainment::Outside;
         };
-        let Some(end_col) = self.col.checked_add(self.cols) else {
+        let Some(end_col) = self.col.checked_add(self.cols()) else {
             return PaneRegionContainment::Outside;
         };
 
@@ -444,22 +518,16 @@ impl PaneRegionSnapshot {
     }
 
     fn validate(&self) -> rootcause::Result<()> {
-        if self.cols == 0 {
-            return Err(report!("invalid muxr pane region").attach("reason=cols must be nonzero"));
-        }
-        if self.rows == 0 {
-            return Err(report!("invalid muxr pane region").attach("reason=rows must be nonzero"));
-        }
-        if self.col.checked_add(self.cols).is_none() {
+        if self.col.checked_add(self.cols()).is_none() {
             return Err(report!("invalid muxr pane region").attach("reason=column range overflowed"));
         }
-        if self.row.checked_add(self.rows).is_none() {
+        if self.row.checked_add(self.rows()).is_none() {
             return Err(report!("invalid muxr pane region").attach("reason=row range overflowed"));
         }
-        if self.wrapped_rows.len() != usize::from(self.rows) {
+        if self.wrapped_rows.len() != usize::from(self.rows()) {
             return Err(report!("invalid muxr pane region")
                 .attach("reason=wrapped row count must match region height")
-                .attach(format!("expected={}", self.rows))
+                .attach(format!("expected={}", self.rows()))
                 .attach(format!("actual={}", self.wrapped_rows.len())));
         }
         Ok(())
@@ -475,8 +543,8 @@ where
         let id = rkyv::Deserialize::<PaneId, D>::deserialize(&self.id, deserializer)?;
         let col = rkyv::Deserialize::<u16, D>::deserialize(&self.col, deserializer)?;
         let row = rkyv::Deserialize::<u16, D>::deserialize(&self.row, deserializer)?;
-        let cols = rkyv::Deserialize::<u16, D>::deserialize(&self.cols, deserializer)?;
-        let rows = rkyv::Deserialize::<u16, D>::deserialize(&self.rows, deserializer)?;
+        let cols = rkyv::Deserialize::<TerminalDimension, D>::deserialize(&self.cols, deserializer)?.into_inner();
+        let rows = rkyv::Deserialize::<TerminalDimension, D>::deserialize(&self.rows, deserializer)?.into_inner();
         let mouse_mode = rkyv::Deserialize::<PaneMouseMode, D>::deserialize(&self.mouse_mode, deserializer)?;
         let visible_top_row = rkyv::Deserialize::<u64, D>::deserialize(&self.visible_top_row, deserializer)?;
         let wrapped_rows = rkyv::Deserialize::<Vec<RowWrap>, D>::deserialize(&self.wrapped_rows, deserializer)?;
@@ -582,6 +650,22 @@ mod tests {
     use test_that::prelude::*;
 
     use super::*;
+
+    #[test]
+    fn test_layout_ids_archive_when_zero_returns_error() -> rootcause::Result<()> {
+        let bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&0_u32)?;
+        assert_that!(
+            rkyv::access::<rkyv::Archived<TabId>, rkyv::rancor::Error>(&bytes),
+            err(anything())
+        );
+        assert_that!(
+            rkyv::access::<rkyv::Archived<PaneId>, rkyv::rancor::Error>(&bytes),
+            err(anything())
+        );
+        assert_that!(rkyv::from_bytes::<TabId, rkyv::rancor::Error>(&bytes), err(anything()));
+        assert_that!(rkyv::from_bytes::<PaneId, rkyv::rancor::Error>(&bytes), err(anything()));
+        Ok(())
+    }
 
     #[test]
     fn test_layout_snapshot_single_pane_when_built_returns_stable_layout() -> rootcause::Result<()> {

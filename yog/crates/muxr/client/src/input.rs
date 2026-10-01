@@ -122,13 +122,16 @@ pub struct InputDecoder {
     keybindings: KeybindingsConfig,
 }
 
-impl Default for InputDecoder {
-    fn default() -> Self {
-        Self::with_keybindings(KeybindingsConfig::default())
-    }
-}
-
 impl InputDecoder {
+    /// Build an input decoder with the configured keybinding tables.
+    ///
+    /// # Errors
+    /// Returns an error if a configured keybinding character is invalid.
+    #[cfg(test)]
+    pub fn new() -> rootcause::Result<Self> {
+        Ok(Self::with_keybindings(KeybindingsConfig::new()?))
+    }
+
     pub(crate) const fn with_keybindings(keybindings: KeybindingsConfig) -> Self {
         Self {
             pending: PendingInput::None,
@@ -569,7 +572,7 @@ mod tests {
 
     #[test]
     fn test_input_decoder_decode_when_printable_bytes_are_plain_returns_keys() {
-        let mut decoder = InputDecoder::default();
+        let mut decoder = InputDecoder::new().unwrap();
 
         assert_that!(
             decoder.decode(b"abc"),
@@ -583,7 +586,7 @@ mod tests {
 
     #[test]
     fn test_input_decoder_decode_when_bare_enter_arrives_preserves_input_bytes() {
-        let mut decoder = InputDecoder::default();
+        let mut decoder = InputDecoder::new().unwrap();
 
         assert_that!(decoder.decode(b"\r"), eq(vec![DecodedInput::Input(b"\r".to_vec())]));
     }
@@ -612,7 +615,7 @@ mod tests {
         #[case] code: ClientKeyCode,
         #[case] modifiers: ClientKeyModifiers,
     ) {
-        let mut decoder = InputDecoder::default();
+        let mut decoder = InputDecoder::new().unwrap();
 
         assert_that!(
             self::decode_and_finalize(&mut decoder, bytes),
@@ -629,7 +632,7 @@ mod tests {
         #[case] bytes: &[u8],
         #[case] character: char,
     ) {
-        let mut decoder = InputDecoder::default();
+        let mut decoder = InputDecoder::new().unwrap();
 
         assert_that!(
             self::decode_and_finalize(&mut decoder, bytes),
@@ -643,7 +646,7 @@ mod tests {
 
     #[test]
     fn test_input_decoder_decode_when_shortcut_is_between_input_splits_actions() {
-        let mut decoder = InputDecoder::default();
+        let mut decoder = InputDecoder::new().unwrap();
 
         assert_that!(
             decoder.decode(b"a\x1bEb"),
@@ -657,7 +660,7 @@ mod tests {
 
     #[test]
     fn test_input_decoder_decode_when_unknown_legacy_alt_key_arrives_preserves_input_bytes() {
-        let mut decoder = InputDecoder::default();
+        let mut decoder = InputDecoder::new().unwrap();
         let bytes = b"\x1bY";
 
         assert_that!(decoder.decode(bytes), eq(vec![DecodedInput::Input(bytes.to_vec())]));
@@ -668,7 +671,7 @@ mod tests {
     #[case::st_terminated(b"\x1b]0;title\x1b\\")]
     #[case::contains_muxr_prefix(b"\x1b]0;\x1bC\x1b\\")]
     fn test_input_decoder_decode_when_osc_arrives_preserves_control_string_bytes(#[case] bytes: &[u8]) {
-        let mut decoder = InputDecoder::default();
+        let mut decoder = InputDecoder::new().unwrap();
 
         assert_that!(decoder.decode(bytes), eq(vec![DecodedInput::Input(bytes.to_vec())]));
     }
@@ -678,7 +681,7 @@ mod tests {
     #[case::sos(b"\x1bX1;2\x1b\\")]
     #[case::pm(b"\x1b^1;2\x1b\\")]
     fn test_input_decoder_decode_when_legacy_shortcut_prefix_is_control_string_preserves_bytes(#[case] bytes: &[u8]) {
-        let mut decoder = InputDecoder::default();
+        let mut decoder = InputDecoder::new().unwrap();
 
         assert_that!(decoder.decode(bytes), eq(vec![DecodedInput::Input(bytes.to_vec())]));
         assert_that!(decoder.idle_timeout(), eq(InputIdleTimeout::NotNeeded));
@@ -686,7 +689,7 @@ mod tests {
 
     #[test]
     fn test_input_decoder_finalize_when_ambiguous_legacy_shortcut_arrives_returns_key() {
-        let mut decoder = InputDecoder::default();
+        let mut decoder = InputDecoder::new().unwrap();
         let bytes = b"\x1bP";
 
         assert_that!(decoder.decode(bytes), eq(Vec::<DecodedInput>::new()));
@@ -703,7 +706,7 @@ mod tests {
 
     #[test]
     fn test_input_decoder_finalize_when_ambiguous_legacy_shortcut_has_suffix_replays_suffix() {
-        let mut decoder = InputDecoder::default();
+        let mut decoder = InputDecoder::new().unwrap();
 
         assert_that!(decoder.decode(b"\x1bPa"), eq(Vec::<DecodedInput>::new()));
         assert_that!(
@@ -717,7 +720,7 @@ mod tests {
 
     #[test]
     fn test_input_decoder_finalize_when_ambiguous_suffix_ends_in_escape_drains_pending_key() {
-        let mut decoder = InputDecoder::default();
+        let mut decoder = InputDecoder::new().unwrap();
 
         assert_that!(decoder.decode(b"\x1bP\x1b"), eq(Vec::<DecodedInput>::new()));
         assert_that!(
@@ -731,7 +734,7 @@ mod tests {
 
     #[test]
     fn test_input_decoder_decode_when_control_string_exceeds_buffer_limit_flushes_raw_chunks() {
-        let mut decoder = InputDecoder::default();
+        let mut decoder = InputDecoder::new().unwrap();
         let mut bytes = vec![ESC, b']'];
         bytes.extend(std::iter::repeat_n(b'a', MAX_PENDING_CONTROL_STRING_BYTES));
 
@@ -762,7 +765,7 @@ mod tests {
 
     #[test]
     fn test_input_decoder_decode_when_flushed_osc_reaches_bel_terminator_returns_following_key() {
-        let mut decoder = InputDecoder::default();
+        let mut decoder = InputDecoder::new().unwrap();
         let mut bytes = vec![ESC, b']'];
         bytes.extend(std::iter::repeat_n(b'a', MAX_PENDING_CONTROL_STRING_BYTES));
         bytes.extend(*b"\x07z");
@@ -782,7 +785,7 @@ mod tests {
 
     #[test]
     fn test_input_decoder_decode_when_unknown_csi_arrives_preserves_bytes() {
-        let mut decoder = InputDecoder::default();
+        let mut decoder = InputDecoder::new().unwrap();
         let bytes = b"\x1b[1~";
 
         assert_that!(decoder.decode(bytes), eq(vec![DecodedInput::Input(bytes.to_vec())]));
@@ -790,7 +793,7 @@ mod tests {
 
     #[test]
     fn test_input_decoder_decode_when_shortcut_is_split_preserves_pending_prefix() {
-        let mut decoder = InputDecoder::default();
+        let mut decoder = InputDecoder::new().unwrap();
 
         assert_that!(decoder.decode(b"\x1b"), eq(Vec::<DecodedInput>::new()));
         assert_that!(decoder.idle_timeout(), eq(InputIdleTimeout::Needed));
@@ -807,7 +810,7 @@ mod tests {
 
     #[test]
     fn test_input_decoder_finalize_when_bare_escape_arrives_returns_key() {
-        let mut decoder = InputDecoder::default();
+        let mut decoder = InputDecoder::new().unwrap();
 
         assert_that!(decoder.decode(b"\x1b"), eq(Vec::<DecodedInput>::new()));
         assert_that!(decoder.idle_timeout(), eq(InputIdleTimeout::Needed));
@@ -824,7 +827,7 @@ mod tests {
 
     #[test]
     fn test_input_decoder_finalize_when_pending_unknown_sequence_arrives_preserves_bytes() {
-        let mut decoder = InputDecoder::default();
+        let mut decoder = InputDecoder::new().unwrap();
         let bytes = b"\x1b[1";
 
         assert_that!(decoder.decode(bytes), eq(Vec::<DecodedInput>::new()));
@@ -846,7 +849,7 @@ mod tests {
         #[case] bytes: &[u8],
         #[case] code: ClientKeyCode,
     ) {
-        let mut decoder = InputDecoder::default();
+        let mut decoder = InputDecoder::new().unwrap();
 
         assert_that!(
             decoder.decode(bytes),
@@ -856,7 +859,7 @@ mod tests {
 
     #[test]
     fn test_input_decoder_decode_when_arrow_is_split_preserves_pending_prefix() {
-        let mut decoder = InputDecoder::default();
+        let mut decoder = InputDecoder::new().unwrap();
 
         assert_that!(decoder.decode(b"\x1b["), eq(Vec::<DecodedInput>::new()));
         assert_that!(decoder.idle_timeout(), eq(InputIdleTimeout::Needed));
@@ -887,7 +890,7 @@ mod tests {
         #[case] code: ClientKeyCode,
         #[case] modifiers: ClientKeyModifiers,
     ) {
-        let mut decoder = InputDecoder::default();
+        let mut decoder = InputDecoder::new().unwrap();
 
         assert_that!(
             decoder.decode(bytes),
@@ -909,7 +912,7 @@ mod tests {
         #[case] bytes: &[u8],
         #[case] character: char,
     ) {
-        let mut decoder = InputDecoder::default();
+        let mut decoder = InputDecoder::new().unwrap();
 
         assert_that!(
             self::decode_and_finalize(&mut decoder, bytes),
@@ -923,7 +926,7 @@ mod tests {
 
     #[test]
     fn test_input_decoder_decode_when_kitty_key_is_split_preserves_pending_prefix() {
-        let mut decoder = InputDecoder::default();
+        let mut decoder = InputDecoder::new().unwrap();
 
         assert_that!(decoder.decode(b"\x1b[13"), eq(Vec::<DecodedInput>::new()));
         assert_that!(decoder.idle_timeout(), eq(InputIdleTimeout::Needed));
@@ -940,7 +943,7 @@ mod tests {
 
     #[test]
     fn test_input_decoder_decode_when_bracketed_paste_arrives_returns_single_paste() {
-        let mut decoder = InputDecoder::default();
+        let mut decoder = InputDecoder::new().unwrap();
 
         assert_that!(
             decoder.decode(b"\x1b[200~echo hi\n\x1b[201~"),
@@ -950,7 +953,7 @@ mod tests {
 
     #[test]
     fn test_input_decoder_decode_when_bracketed_paste_is_split_preserves_pending_paste() {
-        let mut decoder = InputDecoder::default();
+        let mut decoder = InputDecoder::new().unwrap();
 
         assert_that!(decoder.decode(b"\x1b[200~echo"), eq(Vec::<DecodedInput>::new()));
         assert_that!(decoder.idle_timeout(), eq(InputIdleTimeout::NotNeeded));
@@ -965,7 +968,7 @@ mod tests {
     #[case::bare_escape(b"\x1b")]
     #[case::incomplete_csi(b"\x1b[")]
     fn test_input_decoder_needs_idle_timeout_when_escape_prefix_is_pending(#[case] bytes: &[u8]) {
-        let mut decoder = InputDecoder::default();
+        let mut decoder = InputDecoder::new().unwrap();
 
         assert_that!(decoder.decode(bytes), eq(Vec::<DecodedInput>::new()));
 
@@ -974,7 +977,7 @@ mod tests {
 
     #[test]
     fn test_input_decoder_when_osc_payload_is_split_after_idle_preserves_payload() {
-        let mut decoder = InputDecoder::default();
+        let mut decoder = InputDecoder::new().unwrap();
 
         assert_that!(decoder.decode(b"\x1b]0;"), eq(Vec::<DecodedInput>::new()));
         assert_that!(decoder.idle_timeout(), eq(InputIdleTimeout::NotNeeded));
@@ -992,7 +995,7 @@ mod tests {
         #[case] bytes: &[u8],
         #[case] button: u16,
     ) {
-        let mut decoder = InputDecoder::default();
+        let mut decoder = InputDecoder::new().unwrap();
 
         assert_that!(
             decoder.decode(bytes),
@@ -1006,7 +1009,7 @@ mod tests {
 
     #[test]
     fn test_input_decoder_decode_when_mouse_click_arrives_returns_mouse_event() {
-        let mut decoder = InputDecoder::default();
+        let mut decoder = InputDecoder::new().unwrap();
 
         assert_that!(
             decoder.decode(b"\x1b[<0;10;5M"),
@@ -1020,7 +1023,7 @@ mod tests {
 
     #[test]
     fn test_input_decoder_decode_when_sgr_alt_mouse_click_arrives_returns_alt_mouse_event() {
-        let mut decoder = InputDecoder::default();
+        let mut decoder = InputDecoder::new().unwrap();
 
         assert_that!(
             decoder.decode(b"\x1b[<8;10;5M"),
@@ -1034,7 +1037,7 @@ mod tests {
 
     #[test]
     fn test_input_decoder_decode_when_sgr_alt_mouse_release_arrives_returns_alt_mouse_event() {
-        let mut decoder = InputDecoder::default();
+        let mut decoder = InputDecoder::new().unwrap();
 
         assert_that!(
             decoder.decode(b"\x1b[<8;10;5m"),
@@ -1048,7 +1051,7 @@ mod tests {
 
     #[test]
     fn test_input_decoder_decode_when_mouse_drag_arrives_returns_mouse_event() {
-        let mut decoder = InputDecoder::default();
+        let mut decoder = InputDecoder::new().unwrap();
 
         assert_that!(
             decoder.decode(b"\x1b[<32;10;5M"),
@@ -1062,7 +1065,7 @@ mod tests {
 
     #[test]
     fn test_input_decoder_decode_when_mouse_release_arrives_returns_mouse_event() {
-        let mut decoder = InputDecoder::default();
+        let mut decoder = InputDecoder::new().unwrap();
 
         assert_that!(
             decoder.decode(b"\x1b[<0;10;5m"),

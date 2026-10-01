@@ -1,5 +1,7 @@
 //! Initial pane split proportions and resize increments.
 
+use nutype::nutype;
+
 pub const SPLIT_RATIO_MIN_PER_MILLE: u16 = 50;
 pub const SPLIT_RATIO_MAX_PER_MILLE: u16 = 950;
 const SPLIT_RESIZE_STEP_MIN: u16 = 1;
@@ -13,18 +15,26 @@ pub struct LayoutConfig {
     pub vertical_split_ratio: SplitRatio,
 }
 
-impl Default for LayoutConfig {
-    fn default() -> Self {
-        Self {
-            horizontal_split_ratio: SplitRatio(500),
-            resize_step: SplitResizeStep(50),
-            vertical_split_ratio: SplitRatio(400),
-        }
+impl LayoutConfig {
+    /// Build the static pane layout configuration.
+    ///
+    /// # Errors
+    /// Returns an error if a configured split ratio or resize step is outside its supported bounds.
+    pub fn new() -> rootcause::Result<Self> {
+        Ok(Self {
+            horizontal_split_ratio: SplitRatio::new(500)?,
+            resize_step: SplitResizeStep::new(50)?,
+            vertical_split_ratio: SplitRatio::new(400)?,
+        })
     }
 }
 
 /// A pane split ratio expressed in parts per thousand.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[nutype(
+    const_fn,
+    validate(greater_or_equal = SPLIT_RATIO_MIN_PER_MILLE, less_or_equal = SPLIT_RATIO_MAX_PER_MILLE),
+    derive(Clone, Copy, Debug, Eq, PartialEq, TryFrom),
+)]
 pub struct SplitRatio(u16);
 
 impl SplitRatio {
@@ -33,23 +43,26 @@ impl SplitRatio {
     /// # Errors
     /// Returns an error when `value` is outside the range supported by muxr pane layout.
     pub fn new(value: u16) -> rootcause::Result<Self> {
-        if !(SPLIT_RATIO_MIN_PER_MILLE..=SPLIT_RATIO_MAX_PER_MILLE).contains(&value) {
-            return Err(rootcause::report!("muxr split ratio is outside supported bounds")
+        Self::try_new(value).map_err(|_| {
+            rootcause::report!("muxr split ratio is outside supported bounds")
                 .attach(format!("min={SPLIT_RATIO_MIN_PER_MILLE}"))
                 .attach(format!("max={SPLIT_RATIO_MAX_PER_MILLE}"))
-                .attach(format!("actual={value}")));
-        }
-        Ok(Self(value))
+                .attach(format!("actual={value}"))
+        })
     }
 
     /// Return the split ratio in parts per thousand.
     pub const fn per_mille(self) -> u16 {
-        self.0
+        self.into_inner()
     }
 }
 
 /// A pane split resize delta expressed in parts per thousand.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[nutype(
+    const_fn,
+    validate(greater_or_equal = SPLIT_RESIZE_STEP_MIN, less_or_equal = SPLIT_RESIZE_STEP_MAX),
+    derive(Clone, Copy, Debug, Eq, PartialEq, TryFrom),
+)]
 pub struct SplitResizeStep(u16);
 
 impl SplitResizeStep {
@@ -58,18 +71,17 @@ impl SplitResizeStep {
     /// # Errors
     /// Returns an error when `value` is zero or larger than the supported split-ratio range.
     pub fn new(value: u16) -> rootcause::Result<Self> {
-        if !(SPLIT_RESIZE_STEP_MIN..=SPLIT_RESIZE_STEP_MAX).contains(&value) {
-            return Err(rootcause::report!("muxr split resize step is outside supported bounds")
+        Self::try_new(value).map_err(|_| {
+            rootcause::report!("muxr split resize step is outside supported bounds")
                 .attach(format!("min={SPLIT_RESIZE_STEP_MIN}"))
                 .attach(format!("max={SPLIT_RESIZE_STEP_MAX}"))
-                .attach(format!("actual={value}")));
-        }
-        Ok(Self(value))
+                .attach(format!("actual={value}"))
+        })
     }
 
     /// Return the resize step in parts per thousand.
     pub const fn per_mille(self) -> u16 {
-        self.0
+        self.into_inner()
     }
 }
 

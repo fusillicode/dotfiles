@@ -26,7 +26,7 @@ impl fmt::Display for SessionAction {
 pub fn run() -> rootcause::Result<()> {
     let sessions = muxr_client::list_sessions()?;
     if sessions.is_empty() {
-        super::start::run(&SessionName::default(), None)?;
+        super::start::run(&SessionName::default_name()?, None)?;
         return Ok(());
     }
 

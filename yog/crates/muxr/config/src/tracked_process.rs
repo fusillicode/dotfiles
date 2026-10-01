@@ -2,10 +2,86 @@
 
 use std::time::Duration;
 
-use nonempty_collections::NEVec;
-use nonempty_collections::nev;
+use nutype::nutype;
 use regex::Regex;
 use rootcause::prelude::ResultExt;
+
+/// Configured foreground processes and their screen recognition rules.
+#[derive(Clone, Debug)]
+pub struct TrackedProcessConfig {
+    pub processes: Vec<TrackedProcess>,
+}
+
+impl TrackedProcessConfig {
+    /// Build the configured agents and compile their screen patterns.
+    ///
+    /// # Errors
+    /// Returns an error if a configured screen regex is invalid or an observation pattern list is empty.
+    pub fn new() -> rootcause::Result<Self> {
+        Ok(Self {
+            processes: vec![
+                TrackedProcess {
+                    id: TrackedProcessId::Claude,
+                    label: "cl",
+                    matchers: vec![
+                        ProcessMatcher::ExactExecutable("claude"),
+                        ProcessMatcher::ExactExecutable("claude-code"),
+                        ProcessMatcher::PathContains("/claude/versions/"),
+                    ],
+                    quiet_threshold: Duration::from_secs(3),
+                    screen_observation: None,
+                },
+                TrackedProcess {
+                    id: TrackedProcessId::Codex,
+                    label: "cx",
+                    matchers: vec![
+                        ProcessMatcher::ExactExecutable("codex"),
+                        ProcessMatcher::ExactExecutable("codex-aarch64-apple-darwin"),
+                        ProcessMatcher::ExactExecutable("codex-x86_64-apple-darwin"),
+                    ],
+                    quiet_threshold: Duration::from_secs(3),
+                    screen_observation: Some(ScreenObservationConfig {
+                        busy: ObservationPatterns::try_new(vec![
+                            Regex::new(r"\AWorking \(\s*(?:[0-9]+h(?:\s+[0-9]+m)?(?:\s+[0-9]+s)?|[0-9]+m(?:\s+[0-9]+s)?|[0-9]+s)\s*•\s*\S+ to interrupt\s*\)\z").context("invalid Codex busy regex (index=0)")?,
+                        ])?,
+                        needs_attention: ObservationPatterns::try_new(vec![
+                            Regex::new(r"\AWorked for \s*(?:[0-9]+h(?:\s+[0-9]+m)?(?:\s+[0-9]+s)?|[0-9]+m(?:\s+[0-9]+s)?|[0-9]+s)\s*•\s*(?:[01][0-9]|2[0-3]):[0-5][0-9]\z").context("invalid Codex needs_attention regex (index=0)")?,
+                        ])?,
+                        trim_chars: &['─', '━', '•', '·', '⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'],
+                    }),
+                },
+                TrackedProcess {
+                    id: TrackedProcessId::Cursor,
+                    label: "cu",
+                    matchers: vec![
+                        ProcessMatcher::ExactExecutable("cursor"),
+                        ProcessMatcher::ExactExecutable("cursor-agent"),
+                        ProcessMatcher::ExecutableWithPathContains {
+                            executable: "node",
+                            path_contains: "/cursor-agent/versions/",
+                        },
+                    ],
+                    quiet_threshold: Duration::from_secs(3),
+                    screen_observation: None,
+                },
+                TrackedProcess {
+                    id: TrackedProcessId::Gemini,
+                    label: "gm",
+                    matchers: vec![ProcessMatcher::ExactExecutable("gemini")],
+                    quiet_threshold: Duration::from_secs(3),
+                    screen_observation: None,
+                },
+                TrackedProcess {
+                    id: TrackedProcessId::Opencode,
+                    label: "oc",
+                    matchers: vec![ProcessMatcher::ExactExecutable("opencode")],
+                    quiet_threshold: Duration::from_secs(3),
+                    screen_observation: None,
+                },
+            ],
+        })
+    }
+}
 
 /// One foreground process class that can drive tab-bar dots and quiet-attention state.
 #[derive(Clone, Debug)]
@@ -31,8 +107,8 @@ impl TrackedProcess {
 /// Edit the static values in `tracked_process.rs` and rebuild to tune them.
 #[derive(Clone, Debug)]
 pub struct ScreenObservationConfig {
-    pub busy: NEVec<Regex>,
-    pub needs_attention: NEVec<Regex>,
+    pub busy: ObservationPatterns,
+    pub needs_attention: ObservationPatterns,
     /// Additional edge decorations to trim; whitespace is always trimmed.
     pub trim_chars: &'static [char],
 }
@@ -51,6 +127,29 @@ impl ScreenObservationConfig {
     /// Match a normalized status against the configured attention patterns.
     pub fn matches_needs_attention(&self, status: &str) -> bool {
         self.needs_attention.iter().any(|pattern| pattern.is_match(status))
+    }
+}
+
+/// Nonempty compiled regex alternatives for one screen observation state.
+#[nutype(
+    validate(with = ObservationPatterns::validate, error = rootcause::Report),
+    derive(Clone, Debug, AsRef),
+)]
+pub struct ObservationPatterns(Vec<Regex>);
+
+impl ObservationPatterns {
+    /// Iterate over the compiled alternatives without allowing the collection to become empty.
+    pub fn iter(&self) -> impl Iterator<Item = &Regex> {
+        self.as_ref().iter()
+    }
+
+    fn validate(patterns: &[Regex]) -> rootcause::Result<()> {
+        if patterns.is_empty() {
+            return Err(
+                rootcause::report!("invalid muxr observation patterns").attach("reason=patterns must not be empty")
+            );
+        }
+        Ok(())
     }
 }
 
@@ -89,73 +188,6 @@ impl ProcessMatcher {
     }
 }
 
-/// Build the configured agents and compile their screen patterns.
-///
-/// # Errors
-/// Returns an error if a configured screen regex is invalid.
-pub fn defaults() -> rootcause::Result<Vec<TrackedProcess>> {
-    Ok(vec![
-        TrackedProcess {
-            id: TrackedProcessId::Claude,
-            label: "cl",
-            matchers: vec![
-                ProcessMatcher::ExactExecutable("claude"),
-                ProcessMatcher::ExactExecutable("claude-code"),
-                ProcessMatcher::PathContains("/claude/versions/"),
-            ],
-            quiet_threshold: Duration::from_secs(3),
-            screen_observation: None,
-        },
-        TrackedProcess {
-            id: TrackedProcessId::Codex,
-            label: "cx",
-            matchers: vec![
-                ProcessMatcher::ExactExecutable("codex"),
-                ProcessMatcher::ExactExecutable("codex-aarch64-apple-darwin"),
-                ProcessMatcher::ExactExecutable("codex-x86_64-apple-darwin"),
-            ],
-            quiet_threshold: Duration::from_secs(3),
-            screen_observation: Some(ScreenObservationConfig {
-                busy: nev![
-                    Regex::new(r"\AWorking \(\s*(?:[0-9]+h(?:\s+[0-9]+m)?(?:\s+[0-9]+s)?|[0-9]+m(?:\s+[0-9]+s)?|[0-9]+s)\s*•\s*\S+ to interrupt\s*\)\z").context("invalid Codex busy regex (index=0)")?,
-                ],
-                needs_attention: nev![
-                    Regex::new(r"\AWorked for \s*(?:[0-9]+h(?:\s+[0-9]+m)?(?:\s+[0-9]+s)?|[0-9]+m(?:\s+[0-9]+s)?|[0-9]+s)\s*•\s*(?:[01][0-9]|2[0-3]):[0-5][0-9]\z").context("invalid Codex needs_attention regex (index=0)")?,
-                ],
-                trim_chars: &['─', '━', '•', '·', '⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'],
-            }),
-        },
-        TrackedProcess {
-            id: TrackedProcessId::Cursor,
-            label: "cu",
-            matchers: vec![
-                ProcessMatcher::ExactExecutable("cursor"),
-                ProcessMatcher::ExactExecutable("cursor-agent"),
-                ProcessMatcher::ExecutableWithPathContains {
-                    executable: "node",
-                    path_contains: "/cursor-agent/versions/",
-                },
-            ],
-            quiet_threshold: Duration::from_secs(3),
-            screen_observation: None,
-        },
-        TrackedProcess {
-            id: TrackedProcessId::Gemini,
-            label: "gm",
-            matchers: vec![ProcessMatcher::ExactExecutable("gemini")],
-            quiet_threshold: Duration::from_secs(3),
-            screen_observation: None,
-        },
-        TrackedProcess {
-            id: TrackedProcessId::Opencode,
-            label: "oc",
-            matchers: vec![ProcessMatcher::ExactExecutable("opencode")],
-            quiet_threshold: Duration::from_secs(3),
-            screen_observation: None,
-        },
-    ])
-}
-
 #[cfg(test)]
 mod tests {
     use regex::RegexBuilder;
@@ -163,6 +195,11 @@ mod tests {
 
     use super::*;
     use crate::MuxrConfig;
+
+    #[test]
+    fn test_observation_patterns_when_empty_returns_error() {
+        assert_that!(ObservationPatterns::try_new(Vec::new()), err(anything()));
+    }
 
     #[rstest::rstest]
     #[case(&[], " \t status \u{2003}", "status")]
@@ -178,8 +215,8 @@ mod tests {
         #[case] expected: &str,
     ) -> rootcause::Result<()> {
         let screen = ScreenObservationConfig {
-            busy: nonempty_collections::nev![Regex::new(r"\Astatus\s+active\z")?],
-            needs_attention: nonempty_collections::nev![Regex::new(r"\Adone[0-9]+\z")?],
+            busy: ObservationPatterns::try_new(vec![Regex::new(r"\Astatus\s+active\z")?])?,
+            needs_attention: ObservationPatterns::try_new(vec![Regex::new(r"\Adone[0-9]+\z")?])?,
             trim_chars,
         };
         test_that::assert_that!(screen.normalize_line(line), eq(expected));
@@ -189,8 +226,10 @@ mod tests {
     #[test]
     fn test_screen_observation_when_regex_has_builder_options_preserves_compiled_behavior() -> rootcause::Result<()> {
         let screen = ScreenObservationConfig {
-            busy: nonempty_collections::nev![RegexBuilder::new(r"\Awork(?:ing)?\z").case_insensitive(true).build()?],
-            needs_attention: nonempty_collections::nev![Regex::new(r"\Adone[0-9]+\z")?],
+            busy: ObservationPatterns::try_new(vec![
+                RegexBuilder::new(r"\Awork(?:ing)?\z").case_insensitive(true).build()?,
+            ])?,
+            needs_attention: ObservationPatterns::try_new(vec![Regex::new(r"\Adone[0-9]+\z")?])?,
             trim_chars: &[],
         };
         test_that::assert_that!(screen.matches_busy("WORKING"), eq(true));
@@ -215,6 +254,7 @@ mod tests {
         MuxrConfig::new()
             .unwrap()
             .tracked_processes
+            .processes
             .into_iter()
             .find(|process| process.id == TrackedProcessId::Codex)
             .unwrap()

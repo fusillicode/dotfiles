@@ -88,7 +88,7 @@ mod tests {
     #[test]
     fn test_prepare_session_dirs_when_state_root_is_public_secures_state_root() -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
-        let session = SessionName::default();
+        let session = SessionName::default_name()?;
         let paths = SessionPaths::from_sessions_root_path(&tempdir.path().join("sessions"), &session)?;
         let state_root = self::state_root(&paths)?;
         fs::create_dir_all(state_root).context("failed to create test state root")?;
@@ -107,7 +107,7 @@ mod tests {
     #[test]
     fn test_remove_server_file_when_path_is_missing_is_silent() -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
-        let session = SessionName::default();
+        let session = SessionName::default_name()?;
 
         let log = crate::session::tracing::collect_test_log(&session, || {
             self::remove_server_file("remove_socket", &tempdir.path().join("missing.sock"));

@@ -758,7 +758,7 @@ mod tests {
         let abandoned_lifecycles = queue.lifecycle_events();
         assert_that!(abandoned_lifecycles.len(), eq(1));
 
-        let session = SessionName::default();
+        let session = SessionName::default_name()?;
         let log = crate::session::tracing::collect_test_log(&session, || {
             let span = tracing::info_span!("muxr_session", session = %session);
             let _guard = span.enter();

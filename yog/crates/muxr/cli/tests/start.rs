@@ -57,7 +57,7 @@ fn test_muxr_when_no_args_and_no_sessions_starts_default_session() -> rootcause:
         .prefix("muxr-cli.")
         .tempdir_in("/tmp")
         .context("failed to create muxr cli test home")?;
-    let session = SessionName::default();
+    let session = SessionName::default_name()?;
     let paths = session_paths(home.path(), &session);
 
     let output = run_muxr(home.path(), [])?;

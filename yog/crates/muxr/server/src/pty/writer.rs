@@ -854,7 +854,7 @@ mod tests {
 
     #[test]
     fn test_run_writer_loop_when_terminal_reply_write_fails_warns() -> rootcause::Result<()> {
-        let session = SessionName::default();
+        let session = SessionName::default_name()?;
         let (queue, receiver) = self::queued_pty_writer();
         queue.write_terminal_replies(&[b"\x1b[1;1R".to_vec()])?;
         queue.shutdown()?;

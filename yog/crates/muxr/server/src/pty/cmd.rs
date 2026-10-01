@@ -1,12 +1,14 @@
 use std::env;
+use std::path::Path;
 use std::path::PathBuf;
 
+use nutype::nutype;
 use portable_pty::CommandBuilder;
 use rootcause::report;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ShellCmd {
-    program: PathBuf,
+    program: ShellProgram,
     args: Vec<String>,
 }
 
@@ -16,10 +18,7 @@ impl ShellCmd {
     /// # Errors
     /// - The program path is empty.
     pub fn new(program: impl Into<PathBuf>) -> rootcause::Result<Self> {
-        let program = program.into();
-        if program.as_os_str().is_empty() {
-            return Err(report!("invalid muxr shell cmd").attach("reason=program path must not be empty"));
-        }
+        let program = ShellProgram::try_new(program.into())?;
 
         Ok(Self {
             program,
@@ -55,9 +54,13 @@ impl ShellCmd {
     #[must_use]
     pub fn label(&self) -> String {
         self.program
+            .as_ref()
             .file_name()
             .and_then(|name| name.to_str())
-            .map_or_else(|| self.program.to_string_lossy().into_owned(), ToOwned::to_owned)
+            .map_or_else(
+                || self.program.as_ref().to_string_lossy().into_owned(),
+                ToOwned::to_owned,
+            )
     }
 
     #[must_use]
@@ -72,7 +75,7 @@ impl ShellCmd {
 
     #[must_use]
     pub fn shell_input_line(&self) -> String {
-        let mut line = self::shell_quote(&self.program.to_string_lossy());
+        let mut line = self::shell_quote(&self.program.as_ref().to_string_lossy());
         for arg in &self.args {
             line.push(' ');
             line.push_str(&self::shell_quote(arg));
@@ -82,12 +85,27 @@ impl ShellCmd {
     }
 
     pub fn cmd_builder(&self, cwd: &str) -> rootcause::Result<CommandBuilder> {
-        let mut cmd = CommandBuilder::new(self.program.as_os_str());
+        let mut cmd = CommandBuilder::new(self.program.as_ref().as_os_str());
         cmd.cwd(self::resolved_cwd(cwd)?);
         for arg in &self.args {
             cmd.arg(arg);
         }
         Ok(cmd)
+    }
+}
+
+#[nutype(
+    validate(with = ShellProgram::validate, error = rootcause::Report),
+    derive(Clone, Debug, Eq, PartialEq, AsRef),
+)]
+struct ShellProgram(PathBuf);
+
+impl ShellProgram {
+    fn validate(program: &Path) -> rootcause::Result<()> {
+        if program.as_os_str().is_empty() {
+            return Err(report!("invalid muxr shell cmd").attach("reason=program path must not be empty"));
+        }
+        Ok(())
     }
 }
 

@@ -635,7 +635,7 @@ mod tests {
 
     #[test]
     fn test_pane_ids_include_visible_when_pane_is_in_inactive_tab_returns_false() -> rootcause::Result<()> {
-        let session = SessionName::default();
+        let session = SessionName::default_name()?;
         let mut layout = SessionLayout::initial(&session, self::metadata("sh", 1))?;
         let inactive_pane = PaneId::new(1)?;
         let active_pane = layout.create_tab(self::metadata("sh", 2))?;

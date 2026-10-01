@@ -61,11 +61,11 @@ impl Cmd {
     fn parse_start(args: &[String]) -> rootcause::Result<Self> {
         match args {
             [] => Ok(Self::Start {
-                session: SessionName::default(),
+                session: SessionName::default_name()?,
                 external_layout: None,
             }),
             [layout_flag, layout] if layout_flag == EXTERNAL_LAYOUT_ARG => Ok(Self::Start {
-                session: SessionName::default(),
+                session: SessionName::default_name()?,
                 external_layout: Some(PathBuf::from(layout)),
             }),
             [layout_flag] if layout_flag == EXTERNAL_LAYOUT_ARG => {
