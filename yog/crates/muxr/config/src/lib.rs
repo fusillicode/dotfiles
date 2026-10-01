@@ -28,9 +28,11 @@ pub use self::session_layout::ExternalSessionLayout;
 pub use self::tab_bar::RailStyle;
 pub use self::tab_bar::TabBarConfig;
 pub use self::tab_bar::TrackedProcessStyle;
+pub use self::tracked_process::ObservationPatterns;
 pub use self::tracked_process::ProcessMatcher;
 pub use self::tracked_process::ScreenObservationConfig;
 pub use self::tracked_process::TrackedProcess;
+pub use self::tracked_process::TrackedProcessConfig;
 pub use self::tracked_process::TrackedProcessId;
 
 mod keybindings;
@@ -55,31 +57,33 @@ pub struct MuxrConfig {
     pub scrollback: ScrollbackConfig,
     pub selection: SelectionStyle,
     pub tab_bar: TabBarConfig,
-    pub tracked_processes: Vec<TrackedProcess>,
+    pub tracked_processes: TrackedProcessConfig,
 }
 
 impl MuxrConfig {
     /// Build the static configuration and compile its screen regexes.
     ///
     /// # Errors
-    /// Returns an error if a configured screen regex is invalid.
+    /// Returns an error if a regex, split value, or keybinding character is invalid, or an observation pattern list is
+    /// empty.
     pub fn new() -> rootcause::Result<Self> {
         Ok(Self {
-            keybindings: KeybindingsConfig::default(),
-            layout: LayoutConfig::default(),
+            keybindings: KeybindingsConfig::new()?,
+            layout: LayoutConfig::new()?,
             pane_attention: PaneAttentionConfig::default(),
             pane_borders: PaneBorderStyles::default(),
             pane_dim: PaneDimConfig::default(),
             scrollback: ScrollbackConfig::default(),
             selection: SelectionStyle::default(),
             tab_bar: TabBarConfig::default(),
-            tracked_processes: tracked_process::defaults()?,
+            tracked_processes: TrackedProcessConfig::new()?,
         })
     }
 
     /// Return the first configured process matching a foreground executable and optional path.
     pub fn tracked_process_for_cmd(&self, executable: &str, path: Option<&str>) -> Option<&TrackedProcess> {
         self.tracked_processes
+            .processes
             .iter()
             .find(|process| process.matches(executable, path))
     }

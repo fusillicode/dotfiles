@@ -111,7 +111,7 @@ mod tests {
 
     #[test]
     fn test_record_detach_ack_send_failure_when_reason_exists_warns() -> rootcause::Result<()> {
-        let session = SessionName::default();
+        let session = SessionName::default_name()?;
 
         let log = crate::session::tracing::collect_test_log(&session, || {
             let span = tracing::info_span!("muxr_session", session = %session);
@@ -128,7 +128,7 @@ mod tests {
 
     #[test]
     fn test_record_detach_ack_send_failure_when_reason_is_none_is_silent() -> rootcause::Result<()> {
-        let session = SessionName::default();
+        let session = SessionName::default_name()?;
         let log = crate::session::tracing::collect_test_log(&session, || {
             let span = tracing::info_span!("muxr_session", session = %session);
             let _guard = span.enter();

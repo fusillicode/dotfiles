@@ -51,6 +51,7 @@ pub(super) const fn busy_start(process: &TrackedProcess) -> BusyStart {
 #[cfg(test)]
 mod tests {
     use muxr_config::MuxrConfig;
+    use muxr_config::ObservationPatterns;
     use muxr_core::TerminalSize;
     use regex::Regex;
     use test_that::prelude::*;
@@ -62,6 +63,7 @@ mod tests {
         MuxrConfig::new()
             .unwrap()
             .tracked_processes
+            .processes
             .into_iter()
             .find(|process| process.id == agent)
             .and_then(|process| process.screen_observation)
@@ -83,8 +85,14 @@ mod tests {
         #[case] expected: ScreenObservation<'_>,
     ) -> rootcause::Result<()> {
         let patterns = ScreenObservationConfig {
-            busy: nonempty_collections::nev![Regex::new(r"\ARUN(?:NING)?\z")?, Regex::new(r"\ATHINK(?:ING)?\z")?],
-            needs_attention: nonempty_collections::nev![Regex::new(r"\ADONE\b")?, Regex::new(r"\AFINISHED\b")?],
+            busy: ObservationPatterns::try_new(vec![
+                Regex::new(r"\ARUN(?:NING)?\z")?,
+                Regex::new(r"\ATHINK(?:ING)?\z")?,
+            ])?,
+            needs_attention: ObservationPatterns::try_new(vec![
+                Regex::new(r"\ADONE\b")?,
+                Regex::new(r"\AFINISHED\b")?,
+            ])?,
             trim_chars: &['#'],
         };
         test_that::assert_that!(observe(&patterns, text.lines()), eq(expected));

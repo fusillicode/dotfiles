@@ -1,3 +1,5 @@
+use muxr_config::ObservationPatterns;
+
 use super::*;
 
 #[tokio::test(start_paused = true)]
@@ -626,13 +628,14 @@ fn test_tracked_process_screen_when_config_overrides_patterns_and_trimming_drive
     fixture.layout.active_tab_mut()?.focus_pane(PaneId::new(2)?)?;
     let process = Arc::make_mut(&mut fixture.config.user_config)
         .tracked_processes
+        .processes
         .iter_mut()
         .find(|process| process.matches("cat", None))
         .ok_or_else(|| rootcause::report!("missing configured cat process"))?;
     process.id = agent;
     process.screen_observation = Some(ScreenObservationConfig {
-        busy: nonempty_collections::nev![Regex::new(r"\ATASK\s+ACTIVE\z")?],
-        needs_attention: nonempty_collections::nev![Regex::new(r"\ATASK\s+DONE\b")?],
+        busy: ObservationPatterns::try_new(vec![Regex::new(r"\ATASK\s+ACTIVE\z")?])?,
+        needs_attention: ObservationPatterns::try_new(vec![Regex::new(r"\ATASK\s+DONE\b")?])?,
         trim_chars: &['#'],
     });
     let mut processes = PaneTrackedProcesses::default();

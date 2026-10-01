@@ -66,7 +66,7 @@ muxr_config = { package = "muxr-config", path = "./crates/muxr/config" }
 muxr_core = { package = "muxr-core", path = "./crates/muxr/core" }
 muxr_transport = { package = "muxr-transport", path = "./crates/muxr/transport" }
 nomicon = { path = "./crates/nomicon" }
-nonempty-collections = { version = "1.4" }
+nutype = { version = "0.8", features = ["serde"] }
 nvim-oxi = { path = "../third_party/nvim-oxi", features = ["neovim-nightly", "mlua"] }
 owo-colors = { version = "4" }
 rootcause = { version = "0.13" }

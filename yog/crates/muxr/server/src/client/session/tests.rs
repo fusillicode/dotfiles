@@ -707,6 +707,7 @@ async fn assert_focused_may_echo_request_precedes_quiet_deadline_extends_busy(
     let mut config = crate::server::test_helpers::server_config(tempdir.path(), "work")?;
     Arc::make_mut(&mut config.user_config)
         .tracked_processes
+        .processes
         .push(self::tracked_cat_process("cl", Duration::from_millis(30)));
     crate::session::files::prepare_session_dirs(&config.paths)?;
     let terminal_size = TerminalSize::new(80, 24)?;
@@ -1019,6 +1020,7 @@ async fn test_handle_client_message_when_scrollback_open_and_restore_resync_quie
     let user_config = Arc::make_mut(&mut config.user_config);
     user_config
         .tracked_processes
+        .processes
         .push(self::tracked_cat_process("cl", Duration::from_secs(3)));
     user_config.scrollback.editor = ScrollbackEditorConfig {
         program: "/bin/sh",
@@ -1206,6 +1208,7 @@ async fn test_run_client_session_when_pty_output_arrives_before_quiet_deadline_k
     let mut config = crate::server::test_helpers::server_config(tempdir.path(), "work")?;
     Arc::make_mut(&mut config.user_config)
         .tracked_processes
+        .processes
         .push(self::tracked_cat_process("cl", Duration::from_secs(3)));
     crate::session::files::prepare_session_dirs(&config.paths)?;
     let terminal_size = TerminalSize::new(80, 24)?;
@@ -1304,6 +1307,7 @@ async fn test_run_client_session_when_request_defers_quiet_drains_queued_output_
     let mut config = crate::server::test_helpers::server_config(tempdir.path(), "work")?;
     Arc::make_mut(&mut config.user_config)
         .tracked_processes
+        .processes
         .push(self::tracked_cat_process("cl", Duration::from_secs(3)));
     crate::session::files::prepare_session_dirs(&config.paths)?;
     let terminal_size = TerminalSize::new(80, 24)?;
@@ -1426,6 +1430,7 @@ async fn test_run_client_session_when_batch_limit_precedes_queued_output_at_quie
     let mut config = crate::server::test_helpers::server_config(tempdir.path(), "work")?;
     Arc::make_mut(&mut config.user_config)
         .tracked_processes
+        .processes
         .push(self::tracked_cat_process("cl", Duration::from_secs(3)));
     crate::session::files::prepare_session_dirs(&config.paths)?;
     let terminal_size = TerminalSize::new(80, 24)?;
@@ -1538,6 +1543,7 @@ async fn test_drain_queued_output_before_quiet_when_batch_limit_precedes_output_
     let mut config = crate::server::test_helpers::server_config(tempdir.path(), "work")?;
     Arc::make_mut(&mut config.user_config)
         .tracked_processes
+        .processes
         .push(self::tracked_cat_process("cl", Duration::from_secs(3)));
     crate::session::files::prepare_session_dirs(&config.paths)?;
     let terminal_size = TerminalSize::new(80, 24)?;
@@ -1659,6 +1665,7 @@ async fn test_handle_pane_output_message_when_output_arrives_after_quiet_deadlin
     let mut config = crate::server::test_helpers::server_config(tempdir.path(), "work")?;
     Arc::make_mut(&mut config.user_config)
         .tracked_processes
+        .processes
         .push(self::tracked_cat_process("ct", Duration::from_secs(3)));
     crate::session::files::prepare_session_dirs(&config.paths)?;
     let terminal_size = TerminalSize::new(80, 24)?;
@@ -1786,6 +1793,7 @@ async fn assert_mouse_request_precedes_quiet_deadline_extends_busy(
     let mut config = crate::server::test_helpers::server_config(tempdir.path(), "work")?;
     Arc::make_mut(&mut config.user_config)
         .tracked_processes
+        .processes
         .push(self::tracked_cat_process("cl", Duration::from_millis(30)));
     crate::session::files::prepare_session_dirs(&config.paths)?;
     let terminal_size = TerminalSize::new(80, 24)?;
@@ -2367,6 +2375,7 @@ fn tracked_cat_runtime_fixture() -> rootcause::Result<TrackedCatRuntimeFixture> 
     let mut config = crate::server::test_helpers::server_config(tempdir.path(), "work")?;
     Arc::make_mut(&mut config.user_config)
         .tracked_processes
+        .processes
         .push(TrackedProcess {
             id: TrackedProcessId::Codex,
             label: "cx",

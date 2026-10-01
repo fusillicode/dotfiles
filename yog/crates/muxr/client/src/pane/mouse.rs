@@ -281,7 +281,7 @@ mod tests {
                 err(matches_pattern!(tokio::sync::mpsc::error::TryRecvError::Empty))
             );
 
-            let mut decoder = crate::input::InputDecoder::default();
+            let mut decoder = crate::input::InputDecoder::new()?;
             let decoded_release = decoder.decode(b"\x1b[<8;10;5m");
             let [crate::input::DecodedInput::Mouse(release)] = decoded_release.as_slice() else {
                 return Err(report!("expected decoded Alt-left release"));

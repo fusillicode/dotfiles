@@ -19,11 +19,11 @@ use interprocess::local_socket::traits::tokio::Listener as _;
 use interprocess::local_socket::traits::tokio::Stream as _;
 use muxr_core::ClientRequest;
 use muxr_core::ServerEvent;
+use muxr_core::SocketPath;
 use muxr_core::decode_client_request;
 use muxr_core::decode_server_event;
 use muxr_core::encode_client_request;
 use muxr_core::encode_server_event;
-use muxr_core::validate_socket_path;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
 use tokio::io::AsyncRead;
@@ -50,7 +50,7 @@ impl ClientConnection {
     /// - The local socket name cannot be built.
     /// - The socket connection fails.
     pub async fn connect(path: &Path) -> rootcause::Result<Self> {
-        validate_socket_path(path)?;
+        let path = SocketPath::try_new(path)?.into_inner();
         let name = path
             .to_fs_name::<GenericFilePath>()
             .context("failed to build muxr socket name")?;
@@ -200,7 +200,7 @@ impl ServerListener {
     /// - The local socket name cannot be built.
     /// - The socket cannot be bound.
     pub fn bind(path: &Path) -> rootcause::Result<Self> {
-        validate_socket_path(path)?;
+        let path = SocketPath::try_new(path)?.into_inner();
         let name = path
             .to_fs_name::<GenericFilePath>()
             .context("failed to build muxr socket name")?;

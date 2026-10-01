@@ -27,7 +27,7 @@ pub struct RenderBaseline {
     #[serde(skip)]
     hyperlink_presence: RenderHyperlinkPresence,
     rows: Vec<RenderRowSpan>,
-    seq: u64,
+    seq: RenderSequence,
     size: TerminalSize,
 }
 
@@ -44,6 +44,8 @@ impl RenderBaseline {
         cursor: RenderCursor,
         rows: Vec<RenderRowSpan>,
     ) -> rootcause::Result<Self> {
+        let seq = RenderSequence::try_new(seq)
+            .map_err(|_| report!("invalid muxr render baseline").attach("reason=seq must be nonzero"))?;
         let baseline = Self {
             cursor,
             hyperlink_presence: Self::rows_hyperlink_presence(&rows),
@@ -57,7 +59,7 @@ impl RenderBaseline {
 
     #[must_use]
     pub fn into_parts(self) -> (u64, TerminalSize, RenderCursor, Vec<RenderRowSpan>) {
-        (self.seq, self.size, self.cursor, self.rows)
+        (self.seq.into_inner(), self.size, self.cursor, self.rows)
     }
 
     #[must_use]
@@ -77,7 +79,7 @@ impl RenderBaseline {
 
     #[must_use]
     pub const fn seq(&self) -> u64 {
-        self.seq
+        self.seq.into_inner()
     }
 
     #[must_use]
@@ -86,9 +88,6 @@ impl RenderBaseline {
     }
 
     fn validate(&self) -> rootcause::Result<()> {
-        if self.seq == 0 {
-            return Err(report!("invalid muxr render baseline").attach("reason=seq must be nonzero"));
-        }
         self.cursor.validate(self.size.rows(), self.size.cols())?;
         Self::validate_full_rows(&self.size, &self.rows)
     }
@@ -143,13 +142,13 @@ where
 
 #[derive(rkyv::Archive, Clone, Debug, Eq, PartialEq, Serialize, rkyv::Serialize)]
 pub struct RenderDiff {
-    base_seq: u64,
+    base_seq: RenderSequence,
     cursor: RenderCursor,
     // Keep link-free updates on the direct codec without adding a hot-path cell scan.
     #[serde(skip)]
     hyperlink_presence: RenderHyperlinkPresence,
     rows: Vec<RenderRowSpan>,
-    seq: u64,
+    seq: RenderSequence,
     size: TerminalSize,
 }
 
@@ -167,6 +166,15 @@ impl RenderDiff {
         cursor: RenderCursor,
         rows: Vec<RenderRowSpan>,
     ) -> rootcause::Result<Self> {
+        let raw_base_seq = base_seq;
+        let base_seq = RenderSequence::try_new(base_seq)
+            .map_err(|_| report!("invalid muxr render diff").attach("reason=base_seq must be nonzero"))?;
+        let seq = RenderSequence::try_new(seq).map_err(|_| {
+            report!("invalid muxr render diff")
+                .attach("reason=seq must advance base_seq")
+                .attach(format!("base_seq={raw_base_seq}"))
+                .attach(format!("seq={seq}"))
+        })?;
         let diff = Self {
             base_seq,
             cursor,
@@ -181,12 +189,18 @@ impl RenderDiff {
 
     #[must_use]
     pub fn into_parts(self) -> (u64, u64, TerminalSize, RenderCursor, Vec<RenderRowSpan>) {
-        (self.base_seq, self.seq, self.size, self.cursor, self.rows)
+        (
+            self.base_seq.into_inner(),
+            self.seq.into_inner(),
+            self.size,
+            self.cursor,
+            self.rows,
+        )
     }
 
     #[must_use]
     pub const fn base_seq(&self) -> u64 {
-        self.base_seq
+        self.base_seq.into_inner()
     }
 
     #[must_use]
@@ -206,7 +220,7 @@ impl RenderDiff {
 
     #[must_use]
     pub const fn seq(&self) -> u64 {
-        self.seq
+        self.seq.into_inner()
     }
 
     #[must_use]
@@ -215,14 +229,11 @@ impl RenderDiff {
     }
 
     fn validate(&self) -> rootcause::Result<()> {
-        if self.base_seq == 0 {
-            return Err(report!("invalid muxr render diff").attach("reason=base_seq must be nonzero"));
-        }
         if self.seq <= self.base_seq {
             return Err(report!("invalid muxr render diff")
                 .attach("reason=seq must advance base_seq")
-                .attach(format!("base_seq={}", self.base_seq))
-                .attach(format!("seq={}", self.seq)));
+                .attach(format!("base_seq={}", self.base_seq()))
+                .attach(format!("seq={}", self.seq())));
         }
         self.cursor.validate(self.size.rows(), self.size.cols())?;
         for row in &self.rows {
@@ -454,8 +465,80 @@ fn invalid_wide_cell_sequence(reason: &'static str, index: usize) -> rootcause::
         .attach(format!("cell_index={index}"))
 }
 
-#[derive(rkyv::Archive, Debug, rkyv::Deserialize, Eq, Hash, PartialEq, rkyv::Serialize)]
+#[nutype::nutype(
+    const_fn,
+    validate(greater = 0),
+    derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize)
+)]
+struct RenderSequence(u64);
+
+impl rkyv::Archive for RenderSequence {
+    type Archived = rkyv::primitive::ArchivedU64;
+    type Resolver = ();
+
+    fn resolve(&self, resolver: Self::Resolver, out: rkyv::Place<Self::Archived>) {
+        rkyv::Archive::resolve(&self.into_inner(), resolver, out);
+    }
+}
+
+impl<S> rkyv::Serialize<S> for RenderSequence
+where
+    S: rkyv::rancor::Fallible + ?Sized,
+    u64: rkyv::Serialize<S>,
+{
+    fn serialize(&self, serializer: &mut S) -> Result<Self::Resolver, S::Error> {
+        rkyv::Serialize::serialize(&self.into_inner(), serializer)
+    }
+}
+
+#[nutype::nutype(
+    validate(with = SharedRenderUri::validate, error = rootcause::Report),
+    derive(Debug, Eq, Hash, PartialEq, AsRef),
+)]
 struct SharedRenderUri(String);
+
+impl SharedRenderUri {
+    fn validate(uri: &str) -> rootcause::Result<()> {
+        if uri.is_empty() {
+            return Err(report!("invalid muxr render hyperlink").attach("reason=uri must be nonempty"));
+        }
+        if uri.chars().any(char::is_control) {
+            return Err(report!("invalid muxr render hyperlink").attach("reason=uri must not contain control chars"));
+        }
+        Ok(())
+    }
+}
+
+impl rkyv::Archive for SharedRenderUri {
+    type Archived = rkyv::string::ArchivedString;
+    type Resolver = rkyv::string::StringResolver;
+
+    fn resolve(&self, resolver: Self::Resolver, out: rkyv::Place<Self::Archived>) {
+        rkyv::string::ArchivedString::resolve_from_str(self.as_ref(), resolver, out);
+    }
+}
+
+impl<S> rkyv::Serialize<S> for SharedRenderUri
+where
+    S: rkyv::rancor::Fallible + ?Sized,
+    S::Error: rkyv::rancor::Source,
+    str: rkyv::SerializeUnsized<S>,
+{
+    fn serialize(&self, serializer: &mut S) -> Result<Self::Resolver, S::Error> {
+        rkyv::string::ArchivedString::serialize_from_str(self.as_ref(), serializer)
+    }
+}
+
+impl<D> rkyv::Deserialize<SharedRenderUri, D> for rkyv::string::ArchivedString
+where
+    D: rkyv::rancor::Fallible + ?Sized,
+    D::Error: rkyv::rancor::Source,
+{
+    fn deserialize(&self, deserializer: &mut D) -> Result<SharedRenderUri, D::Error> {
+        let raw = rkyv::Deserialize::<String, D>::deserialize(self, deserializer)?;
+        SharedRenderUri::try_new(raw).map_err(super::rkyv_deserialize_error::<D::Error>)
+    }
+}
 
 #[derive(rkyv::Archive, Clone, Debug, Eq, PartialEq, rkyv::Serialize)]
 pub struct RenderHyperlink {
@@ -471,27 +554,13 @@ impl RenderHyperlink {
     /// - The URI is empty.
     /// - The URI contains terminal control characters.
     pub fn new(uri: impl Into<String>) -> rootcause::Result<Self> {
-        let uri = uri.into();
-        Self::validate_uri(&uri)?;
-        Ok(Self {
-            uri: Arc::new(SharedRenderUri(uri)),
-        })
-    }
-
-    fn validate_uri(uri: &str) -> rootcause::Result<()> {
-        if uri.is_empty() {
-            return Err(report!("invalid muxr render hyperlink").attach("reason=uri must be nonempty"));
-        }
-        if uri.chars().any(char::is_control) {
-            return Err(report!("invalid muxr render hyperlink").attach("reason=uri must not contain control chars"));
-        }
-
-        Ok(())
+        let uri = SharedRenderUri::try_new(uri)?;
+        Ok(Self { uri: Arc::new(uri) })
     }
 
     #[must_use]
     pub fn uri(&self) -> &str {
-        &self.uri.0
+        self.uri.as_ref().as_ref()
     }
 
     #[cfg(test)]
@@ -526,7 +595,7 @@ where
 {
     fn deserialize(&self, deserializer: &mut D) -> Result<RenderHyperlink, D::Error> {
         let uri = rkyv::Deserialize::<SharedRenderUri, D>::deserialize(&self.uri, deserializer)?;
-        RenderHyperlink::new(uri.0).map_err(super::rkyv_deserialize_error::<D::Error>)
+        Ok(RenderHyperlink { uri: Arc::new(uri) })
     }
 }
 
@@ -754,26 +823,6 @@ pub enum RenderColor {
 pub mod test_helpers {
     use super::*;
 
-    pub fn raw_render_hyperlink(uri: impl Into<String>) -> RenderHyperlink {
-        RenderHyperlink {
-            uri: Arc::new(SharedRenderUri(uri.into())),
-        }
-    }
-
-    pub fn raw_render_cell(
-        hyperlink: Option<RenderHyperlink>,
-        style: RenderStyle,
-        text: impl AsRef<str>,
-        width: RenderCellWidth,
-    ) -> RenderCell {
-        RenderCell {
-            hyperlink,
-            style,
-            text: CompactString::new(text.as_ref()),
-            width,
-        }
-    }
-
     pub fn raw_render_diff(
         base_seq: u64,
         seq: u64,
@@ -782,11 +831,11 @@ pub mod test_helpers {
         rows: Vec<RenderRowSpan>,
     ) -> RenderDiff {
         RenderDiff {
-            base_seq,
+            base_seq: RenderSequence::try_new(base_seq).unwrap(),
             cursor,
             hyperlink_presence: RenderBaseline::rows_hyperlink_presence(&rows),
             rows,
-            seq,
+            seq: RenderSequence::try_new(seq).unwrap(),
             size,
         }
     }
@@ -802,6 +851,19 @@ mod tests {
     use test_that::prelude::*;
 
     use super::*;
+
+    #[derive(rkyv::Archive, rkyv::Serialize)]
+    struct RawRenderHyperlink {
+        uri: String,
+    }
+
+    #[derive(rkyv::Archive, rkyv::Serialize)]
+    struct RawRenderCell {
+        hyperlink: Option<RawRenderHyperlink>,
+        style: RenderStyle,
+        text: CompactString,
+        width: RenderCellWidth,
+    }
 
     #[rstest]
     #[case::empty("")]
@@ -870,12 +932,12 @@ mod tests {
 
     #[test]
     fn test_render_cell_rkyv_deserialize_when_hyperlink_uri_is_invalid_returns_error() -> rootcause::Result<()> {
-        let cell = test_helpers::raw_render_cell(
-            Some(test_helpers::raw_render_hyperlink(String::new())),
-            RenderStyle::default(),
-            "x",
-            RenderCellWidth::Narrow,
-        );
+        let cell = RawRenderCell {
+            hyperlink: Some(RawRenderHyperlink { uri: String::new() }),
+            style: RenderStyle::default(),
+            text: CompactString::new("x"),
+            width: RenderCellWidth::Narrow,
+        };
         let bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&cell)?;
         let archived = rkyv::access::<rkyv::Archived<RenderCell>, rkyv::rancor::Error>(&bytes)?;
 

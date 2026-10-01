@@ -30,6 +30,7 @@ fn test_lifecycle_when_screen_observation_is_disabled_uses_activity_tracking() -
     let mut config = MuxrConfig::new()?;
     let codex = config
         .tracked_processes
+        .processes
         .iter_mut()
         .find(|process| process.id == TrackedProcessId::Codex)
         .ok_or_else(|| rootcause::report!("missing Codex config"))?;

@@ -48,6 +48,7 @@ pub use session::SERVER_LOG_TIMESTAMP_FORMAT;
 pub use session::ServerLogTimestamp;
 pub use session::SessionName;
 pub use session::SessionPaths;
+pub use session::SocketPath;
 pub use session::validate_socket_path;
 
 mod protocol;

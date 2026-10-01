@@ -1,17 +1,17 @@
 use std::env;
-use std::fmt;
 use std::io;
 use std::path::Path;
 use std::path::PathBuf;
 use std::str::FromStr;
 
+use nutype::nutype;
 use rootcause::report;
 use serde::Deserialize;
-use serde::Deserializer;
 use serde::Serialize;
 
 pub const DEFAULT_SESSION_NAME: &str = "default";
 pub const EXTERNAL_LAYOUT_ARG: &str = "--layout";
+
 /// Timestamp format used in muxr server log filenames.
 ///
 /// The server owns timestamp generation; clients should not pass this through the private runner argv.
@@ -28,18 +28,15 @@ const SERVER_LOG_TIMESTAMP_LEN: usize = 14;
 /// Validated timestamp component for a muxr server log filename.
 ///
 /// This is intentionally a filename-only type, not a protocol/versioning field.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[nutype(
+    validate(predicate = ServerLogTimestamp::is_valid),
+    derive(Clone, Debug, Eq, PartialEq, AsRef, Display),
+)]
 pub struct ServerLogTimestamp(String);
 
-impl AsRef<str> for ServerLogTimestamp {
-    fn as_ref(&self) -> &str {
-        &self.0
-    }
-}
-
-impl fmt::Display for ServerLogTimestamp {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.as_ref())
+impl ServerLogTimestamp {
+    fn is_valid(raw: &str) -> bool {
+        raw.len() == SERVER_LOG_TIMESTAMP_LEN && raw.as_bytes().iter().all(u8::is_ascii_digit)
     }
 }
 
@@ -47,47 +44,65 @@ impl FromStr for ServerLogTimestamp {
     type Err = rootcause::Report;
 
     fn from_str(raw: &str) -> Result<Self, Self::Err> {
-        if raw.len() != SERVER_LOG_TIMESTAMP_LEN {
-            return Err(report!("invalid muxr server log timestamp {raw:?}").attach("reason=expected YYYYMMDDHHMMSS"));
-        }
-        let bytes = raw.as_bytes();
-        if !bytes.iter().all(u8::is_ascii_digit) {
-            return Err(report!("invalid muxr server log timestamp {raw:?}").attach("reason=expected YYYYMMDDHHMMSS"));
-        }
-        Ok(Self(raw.to_owned()))
+        Self::try_new(raw).map_err(|_| {
+            report!("invalid muxr server log timestamp")
+                .attach(format!("timestamp={raw:?}"))
+                .attach("reason=expected YYYYMMDDHHMMSS")
+        })
     }
 }
 
-#[derive(rkyv::Archive, Clone, Debug, Eq, Hash, PartialEq, Serialize, rkyv::Serialize)]
-#[serde(transparent)]
+#[nutype(
+    validate(with = SessionName::validate, error = rootcause::Report),
+    derive(Clone, Debug, Eq, Hash, PartialEq, AsRef, Display, Serialize, Deserialize),
+)]
 pub struct SessionName(String);
 
-impl<'de> Deserialize<'de> for SessionName {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        String::deserialize(deserializer)?
-            .parse()
-            .map_err(serde::de::Error::custom)
+impl SessionName {
+    /// Build the configured default session name through the same validation as user input.
+    ///
+    /// # Errors
+    /// Returns an error if the configured default violates the session-name grammar.
+    pub fn default_name() -> rootcause::Result<Self> {
+        DEFAULT_SESSION_NAME.parse()
     }
-}
 
-impl AsRef<str> for SessionName {
-    fn as_ref(&self) -> &str {
-        &self.0
-    }
-}
+    fn validate(raw: &str) -> rootcause::Result<()> {
+        if raw.is_empty() {
+            return Err(report!("invalid muxr session name")
+                .attach(format!("name={raw:?}"))
+                .attach("reason=empty names are not allowed"));
+        }
 
-impl Default for SessionName {
-    fn default() -> Self {
-        Self(DEFAULT_SESSION_NAME.to_owned())
-    }
-}
+        if matches!(raw, "." | "..") {
+            return Err(report!("invalid muxr session name")
+                .attach(format!("name={raw:?}"))
+                .attach("reason=reserved names are not allowed"));
+        }
 
-impl fmt::Display for SessionName {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.as_ref())
+        if raw.starts_with('-') {
+            // Names are CLI operands too; leading '-' is reserved for flags before the value reaches filesystem paths.
+            return Err(report!("invalid muxr session name")
+                .attach(format!("name={raw:?}"))
+                .attach("reason=names must not start with -"));
+        }
+
+        if raw.len() > 64 {
+            return Err(report!("invalid muxr session name")
+                .attach(format!("name={raw:?}"))
+                .attach("reason=names longer than 64 bytes are not allowed"));
+        }
+
+        if !raw
+            .chars()
+            .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-' | '.'))
+        {
+            return Err(report!("invalid muxr session name")
+                .attach(format!("name={raw:?}"))
+                .attach("reason=only ASCII alphanumeric, _, -, and . are allowed"));
+        }
+
+        Ok(())
     }
 }
 
@@ -95,18 +110,37 @@ impl FromStr for SessionName {
     type Err = rootcause::Report;
 
     fn from_str(raw: &str) -> Result<Self, Self::Err> {
-        self::validate_muxr_name(raw, "session")?;
-        Ok(Self(raw.to_owned()))
+        Self::try_new(raw)
     }
 }
 
-impl<D> rkyv::Deserialize<SessionName, D> for ArchivedSessionName
+impl rkyv::Archive for SessionName {
+    type Archived = rkyv::string::ArchivedString;
+    type Resolver = rkyv::string::StringResolver;
+
+    fn resolve(&self, resolver: Self::Resolver, out: rkyv::Place<Self::Archived>) {
+        rkyv::string::ArchivedString::resolve_from_str(self.as_ref(), resolver, out);
+    }
+}
+
+impl<S> rkyv::Serialize<S> for SessionName
+where
+    S: rkyv::rancor::Fallible + ?Sized,
+    S::Error: rkyv::rancor::Source,
+    str: rkyv::SerializeUnsized<S>,
+{
+    fn serialize(&self, serializer: &mut S) -> Result<Self::Resolver, S::Error> {
+        rkyv::string::ArchivedString::serialize_from_str(self.as_ref(), serializer)
+    }
+}
+
+impl<D> rkyv::Deserialize<SessionName, D> for rkyv::string::ArchivedString
 where
     D: rkyv::rancor::Fallible + ?Sized,
     D::Error: rkyv::rancor::Source,
 {
     fn deserialize(&self, deserializer: &mut D) -> Result<SessionName, D::Error> {
-        let raw = rkyv::Deserialize::<String, D>::deserialize(&self.0, deserializer)?;
+        let raw = rkyv::Deserialize::<String, D>::deserialize(self, deserializer)?;
         raw.parse().map_err(|error: rootcause::Report| {
             <D::Error as rkyv::rancor::Source>::new(io::Error::new(io::ErrorKind::InvalidData, error.to_string()))
         })
@@ -227,21 +261,33 @@ impl SessionPaths {
     }
 }
 
+/// Borrowed Unix socket path checked against muxr's portable encoded-byte limit.
+#[nutype(
+    validate(with = SocketPath::validate, error = rootcause::Report),
+    derive(Clone, Copy, Debug),
+)]
+pub struct SocketPath<'a>(&'a Path);
+
+impl SocketPath<'_> {
+    fn validate(path: &Path) -> rootcause::Result<()> {
+        // Filesystem socket paths include a trailing NUL; 103 bytes is the safe macOS payload.
+        let bytes = path.as_os_str().as_encoded_bytes().len();
+        if bytes > SOCKET_PATH_MAX_BYTES {
+            return Err(report!("muxr socket path is too long")
+                .attach(format!("limit={SOCKET_PATH_MAX_BYTES}"))
+                .attach(format!("actual={bytes}"))
+                .attach(format!("path={}", path.display())));
+        }
+        Ok(())
+    }
+}
+
 /// Validate that a muxr Unix socket path fits the portable filesystem-socket limit.
 ///
 /// # Errors
 /// - The path is longer than the conservative macOS `sockaddr_un.sun_path` capacity.
 pub fn validate_socket_path(path: &Path) -> rootcause::Result<()> {
-    // Filesystem Unix socket paths include a trailing NUL in sockaddr_un; 103 bytes is the safe macOS payload.
-    let bytes = path.as_os_str().as_encoded_bytes().len();
-    if bytes > SOCKET_PATH_MAX_BYTES {
-        return Err(report!("muxr socket path is too long")
-            .attach(format!("limit={SOCKET_PATH_MAX_BYTES}"))
-            .attach(format!("actual={bytes}"))
-            .attach(format!("path={}", path.display())));
-    }
-
-    Ok(())
+    SocketPath::try_new(path).map(|_| ())
 }
 
 fn socket_file_name(session: &SessionName) -> String {
@@ -259,37 +305,6 @@ fn socket_hash(session: &SessionName) -> u64 {
 
 fn server_log_file_name(session: &SessionName, timestamp: &ServerLogTimestamp, pid: u32) -> String {
     format!("{session}-{timestamp}-{pid}.log")
-}
-
-fn validate_muxr_name(raw: &str, kind: &str) -> rootcause::Result<()> {
-    if raw.is_empty() {
-        return Err(report!("invalid muxr {kind} name {raw:?}").attach("reason=empty names are not allowed"));
-    }
-
-    if matches!(raw, "." | "..") {
-        return Err(report!("invalid muxr {kind} name {raw:?}").attach("reason=reserved names are not allowed"));
-    }
-
-    if raw.starts_with('-') {
-        // Names are CLI operands too; leading '-' is reserved for flags before the value reaches filesystem paths.
-        return Err(report!("invalid muxr {kind} name {raw:?}").attach("reason=names must not start with -"));
-    }
-
-    if raw.len() > 64 {
-        return Err(
-            report!("invalid muxr {kind} name {raw:?}").attach("reason=names longer than 64 bytes are not allowed")
-        );
-    }
-
-    if !raw
-        .chars()
-        .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-' | '.'))
-    {
-        return Err(report!("invalid muxr {kind} name {raw:?}")
-            .attach("reason=only ASCII alphanumeric, _, -, and . are allowed"));
-    }
-
-    Ok(())
 }
 
 #[cfg(test)]
@@ -326,15 +341,17 @@ mod tests {
     #[case::shell_metacharacters("$(x)")]
     #[case::punctuation("name!")]
     fn test_session_name_from_str_when_name_is_invalid_returns_error(#[case] raw: &str) {
+        let error = raw.parse::<SessionName>().unwrap_err();
         assert_that!(
-            raw.parse::<SessionName>(),
-            err(displays_as(contains_substring(format!("{raw:?}"))))
+            error.format_current_context().to_string(),
+            eq("invalid muxr session name")
         );
+        assert_that!(format!("{error:#}"), contains_substring(format!("name={raw:?}")));
     }
 
     #[test]
     fn test_session_name_rkyv_deserialize_when_name_is_invalid_returns_error() -> rootcause::Result<()> {
-        let bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&SessionName("../x".to_owned()))?;
+        let bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&"../x".to_owned())?;
         let archived = rkyv::access::<rkyv::Archived<SessionName>, rkyv::rancor::Error>(&bytes)?;
 
         assert_that!(
@@ -346,7 +363,7 @@ mod tests {
 
     #[test]
     fn test_session_name_default_returns_default_session() {
-        assert_that!(SessionName::default().as_ref(), eq(DEFAULT_SESSION_NAME));
+        assert_that!(SessionName::default_name().unwrap().as_ref(), eq(DEFAULT_SESSION_NAME));
     }
 
     #[rstest]
@@ -366,7 +383,12 @@ mod tests {
     #[case::slash("20260611/143012")]
     #[case::letters("20260611abcdef")]
     fn test_server_log_timestamp_from_str_when_timestamp_is_invalid_returns_error(#[case] raw: &str) {
-        assert_that!(raw.parse::<ServerLogTimestamp>(), err(anything()));
+        let error = raw.parse::<ServerLogTimestamp>().unwrap_err();
+        assert_that!(
+            error.format_current_context().to_string(),
+            eq("invalid muxr server log timestamp")
+        );
+        assert_that!(format!("{error:#}"), contains_substring(format!("timestamp={raw:?}")));
     }
 
     #[test]

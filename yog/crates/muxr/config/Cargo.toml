@@ -12,7 +12,7 @@ categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
 muxr_core = { workspace = true }
-nonempty-collections = { workspace = true }
+nutype = { workspace = true }
 regex = { version = "1.13" }
 rootcause = { workspace = true }
 serde = { workspace = true }

@@ -1,12 +1,14 @@
+use std::borrow::Borrow;
+
 use muxr_config::LayoutConfig;
 use muxr_config::SPLIT_RATIO_MAX_PER_MILLE;
 use muxr_config::SPLIT_RATIO_MIN_PER_MILLE;
 use muxr_core::PaneId;
 use muxr_core::TerminalSize;
+use nutype::nutype;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
 use serde::Deserialize;
-use serde::Deserializer;
 use serde::Serialize;
 
 use crate::client::session::ClientSessionState;
@@ -29,41 +31,28 @@ pub enum PaneSplitAxis {
     Vertical,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
-#[serde(transparent)]
+#[nutype(
+    validate(with = PaneSplitRatio::validate, error = rootcause::Report),
+    derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize),
+)]
 pub struct PaneSplitRatio(u16);
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum PaneSplitResize {
-    DecreaseFirst,
-    IncreaseFirst,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct PaneSplitClientOutcome {
-    pub new_pane_id: PaneId,
-    pub previous_pane: PaneId,
-}
-
 impl PaneSplitRatio {
-    fn default_for_axis(layout_config: LayoutConfig, axis: PaneSplitAxis) -> rootcause::Result<Self> {
-        let ratio = match axis {
-            PaneSplitAxis::Horizontal => layout_config.horizontal_split_ratio,
-            PaneSplitAxis::Vertical => layout_config.vertical_split_ratio,
-        };
-        Self::new(ratio.per_mille())
-    }
-
     pub fn new(value: u16) -> rootcause::Result<Self> {
-        muxr_config::SplitRatio::new(value)?;
-        Ok(Self(value))
+        Self::try_new(value)
     }
 
     pub fn resized(self, layout_config: LayoutConfig, resize: PaneSplitResize) -> rootcause::Result<Self> {
         let resize_step = layout_config.resize_step.per_mille();
         let value = match resize {
-            PaneSplitResize::DecreaseFirst => self.0.saturating_sub(resize_step).max(SPLIT_RATIO_MIN_PER_MILLE),
-            PaneSplitResize::IncreaseFirst => self.0.saturating_add(resize_step).min(SPLIT_RATIO_MAX_PER_MILLE),
+            PaneSplitResize::DecreaseFirst => self
+                .into_inner()
+                .saturating_sub(resize_step)
+                .max(SPLIT_RATIO_MIN_PER_MILLE),
+            PaneSplitResize::IncreaseFirst => self
+                .into_inner()
+                .saturating_add(resize_step)
+                .min(SPLIT_RATIO_MAX_PER_MILLE),
         };
         Self::new(value)
     }
@@ -77,7 +66,7 @@ impl PaneSplitRatio {
             .ok_or_else(|| report!("muxr pane split max length underflowed"))?;
 
         let scaled = u32::from(total)
-            .checked_mul(u32::from(self.0))
+            .checked_mul(u32::from(self.into_inner()))
             .ok_or_else(|| report!("muxr pane split ratio multiplication overflowed"))?;
         let rounded = scaled
             .checked_add(u32::from(SPLIT_RATIO_HALF_SCALE))
@@ -93,16 +82,30 @@ impl PaneSplitRatio {
 
         Ok((first, second))
     }
+
+    fn default_for_axis(layout_config: LayoutConfig, axis: PaneSplitAxis) -> rootcause::Result<Self> {
+        let ratio = match axis {
+            PaneSplitAxis::Horizontal => layout_config.horizontal_split_ratio,
+            PaneSplitAxis::Vertical => layout_config.vertical_split_ratio,
+        };
+        Self::new(ratio.per_mille())
+    }
+
+    fn validate(value: impl Borrow<u16>) -> rootcause::Result<()> {
+        muxr_config::SplitRatio::new(*value.borrow()).map(|_| ())
+    }
 }
 
-impl<'de> Deserialize<'de> for PaneSplitRatio {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let value = u16::deserialize(deserializer)?;
-        Self::new(value).map_err(|error| serde::de::Error::custom(format!("{error:#}")))
-    }
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PaneSplitResize {
+    DecreaseFirst,
+    IncreaseFirst,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct PaneSplitClientOutcome {
+    pub new_pane_id: PaneId,
+    pub previous_pane: PaneId,
 }
 
 impl SessionLayout {

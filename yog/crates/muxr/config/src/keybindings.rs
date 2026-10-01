@@ -3,255 +3,256 @@ use std::collections::BTreeMap;
 use muxr_core::ClientKey;
 use muxr_core::ClientKeyCode;
 use muxr_core::ClientKeyModifiers;
+use nutype::nutype;
 
-const DEFAULT_LOCAL_KEYBINDINGS: [(KeyChord, LocalAction); 2] = [
+const DEFAULT_LOCAL_KEYBINDINGS: [(KeyChordSpec, LocalAction); 2] = [
     (
-        KeyChord {
-            code: char_code('C'),
+        KeyChordSpec {
+            code: KeyCodeSpec::from_character('C'),
             modifiers: KeyModifiers::SHIFT_ALT,
         },
         LocalAction::CopySelection,
     ),
     (
-        KeyChord {
-            code: char_code('X'),
+        KeyChordSpec {
+            code: KeyCodeSpec::from_character('X'),
             modifiers: KeyModifiers::SHIFT_ALT,
         },
         LocalAction::CopySelectionInline,
     ),
 ];
 
-const DEFAULT_NORMAL_KEYBINDINGS: [(KeyChord, NormalAction); 24] = [
+const DEFAULT_NORMAL_KEYBINDINGS: [(KeyChordSpec, NormalAction); 24] = [
     (
-        KeyChord {
-            code: char_code('N'),
+        KeyChordSpec {
+            code: KeyCodeSpec::from_character('N'),
             modifiers: KeyModifiers::SHIFT_ALT,
         },
         NormalAction::FocusNextTab,
     ),
     (
-        KeyChord {
-            code: char_code('P'),
+        KeyChordSpec {
+            code: KeyCodeSpec::from_character('P'),
             modifiers: KeyModifiers::SHIFT_ALT,
         },
         NormalAction::FocusPreviousTab,
     ),
     (
-        KeyChord {
-            code: char_code('n'),
+        KeyChordSpec {
+            code: KeyCodeSpec::from_character('n'),
             modifiers: KeyModifiers::CTRL_ALT,
         },
         NormalAction::MoveTabRight,
     ),
     (
-        KeyChord {
-            code: char_code('p'),
+        KeyChordSpec {
+            code: KeyCodeSpec::from_character('p'),
             modifiers: KeyModifiers::CTRL_ALT,
         },
         NormalAction::MoveTabLeft,
     ),
     (
-        KeyChord {
-            code: char_code('1'),
+        KeyChordSpec {
+            code: KeyCodeSpec::from_character('1'),
             modifiers: KeyModifiers::SHIFT_ALT,
         },
         NormalAction::FocusTab1,
     ),
     (
-        KeyChord {
-            code: char_code('2'),
+        KeyChordSpec {
+            code: KeyCodeSpec::from_character('2'),
             modifiers: KeyModifiers::SHIFT_ALT,
         },
         NormalAction::FocusTab2,
     ),
     (
-        KeyChord {
-            code: char_code('3'),
+        KeyChordSpec {
+            code: KeyCodeSpec::from_character('3'),
             modifiers: KeyModifiers::SHIFT_ALT,
         },
         NormalAction::FocusTab3,
     ),
     (
-        KeyChord {
-            code: char_code('4'),
+        KeyChordSpec {
+            code: KeyCodeSpec::from_character('4'),
             modifiers: KeyModifiers::SHIFT_ALT,
         },
         NormalAction::FocusTab4,
     ),
     (
-        KeyChord {
-            code: char_code('5'),
+        KeyChordSpec {
+            code: KeyCodeSpec::from_character('5'),
             modifiers: KeyModifiers::SHIFT_ALT,
         },
         NormalAction::FocusTab5,
     ),
     (
-        KeyChord {
-            code: char_code('6'),
+        KeyChordSpec {
+            code: KeyCodeSpec::from_character('6'),
             modifiers: KeyModifiers::SHIFT_ALT,
         },
         NormalAction::FocusTab6,
     ),
     (
-        KeyChord {
-            code: char_code('7'),
+        KeyChordSpec {
+            code: KeyCodeSpec::from_character('7'),
             modifiers: KeyModifiers::SHIFT_ALT,
         },
         NormalAction::FocusTab7,
     ),
     (
-        KeyChord {
-            code: char_code('8'),
+        KeyChordSpec {
+            code: KeyCodeSpec::from_character('8'),
             modifiers: KeyModifiers::SHIFT_ALT,
         },
         NormalAction::FocusTab8,
     ),
     (
-        KeyChord {
-            code: char_code('9'),
+        KeyChordSpec {
+            code: KeyCodeSpec::from_character('9'),
             modifiers: KeyModifiers::SHIFT_ALT,
         },
         NormalAction::FocusTab9,
     ),
     (
-        KeyChord {
-            code: char_code('E'),
+        KeyChordSpec {
+            code: KeyCodeSpec::from_character('E'),
             modifiers: KeyModifiers::SHIFT_ALT,
         },
         NormalAction::CreateTab,
     ),
     (
-        KeyChord {
-            code: char_code('H'),
+        KeyChordSpec {
+            code: KeyCodeSpec::from_character('H'),
             modifiers: KeyModifiers::SHIFT_ALT,
         },
         NormalAction::FocusPaneLeft,
     ),
     (
-        KeyChord {
-            code: char_code('J'),
+        KeyChordSpec {
+            code: KeyCodeSpec::from_character('J'),
             modifiers: KeyModifiers::SHIFT_ALT,
         },
         NormalAction::FocusPaneDown,
     ),
     (
-        KeyChord {
-            code: char_code('K'),
+        KeyChordSpec {
+            code: KeyCodeSpec::from_character('K'),
             modifiers: KeyModifiers::SHIFT_ALT,
         },
         NormalAction::FocusPaneUp,
     ),
     (
-        KeyChord {
-            code: char_code('L'),
+        KeyChordSpec {
+            code: KeyCodeSpec::from_character('L'),
             modifiers: KeyModifiers::SHIFT_ALT,
         },
         NormalAction::FocusPaneRight,
     ),
     (
-        KeyChord {
-            code: char_code('D'),
+        KeyChordSpec {
+            code: KeyCodeSpec::from_character('D'),
             modifiers: KeyModifiers::SHIFT_ALT,
         },
         NormalAction::SplitPaneBottom,
     ),
     (
-        KeyChord {
-            code: char_code('V'),
+        KeyChordSpec {
+            code: KeyCodeSpec::from_character('V'),
             modifiers: KeyModifiers::SHIFT_ALT,
         },
         NormalAction::SplitPaneRight,
     ),
     (
-        KeyChord {
-            code: char_code('W'),
+        KeyChordSpec {
+            code: KeyCodeSpec::from_character('W'),
             modifiers: KeyModifiers::SHIFT_ALT,
         },
         NormalAction::ClosePane,
     ),
     (
-        KeyChord {
-            code: char_code('F'),
+        KeyChordSpec {
+            code: KeyCodeSpec::from_character('F'),
             modifiers: KeyModifiers::SHIFT_ALT,
         },
         NormalAction::TogglePaneFullscreen,
     ),
     (
-        KeyChord {
-            code: char_code('R'),
+        KeyChordSpec {
+            code: KeyCodeSpec::from_character('R'),
             modifiers: KeyModifiers::SHIFT_ALT,
         },
         NormalAction::EnterResizeMode,
     ),
     (
-        KeyChord {
-            code: char_code('S'),
+        KeyChordSpec {
+            code: KeyCodeSpec::from_character('S'),
             modifiers: KeyModifiers::SHIFT_ALT,
         },
         NormalAction::OpenScrollbackEditor,
     ),
 ];
 
-const DEFAULT_RESIZE_KEYBINDINGS: [(KeyChord, ResizeAction); 9] = [
+const DEFAULT_RESIZE_KEYBINDINGS: [(KeyChordSpec, ResizeAction); 9] = [
     (
-        KeyChord {
-            code: SupportedKeyCode::Esc,
+        KeyChordSpec {
+            code: KeyCodeSpec::Esc,
             modifiers: KeyModifiers::NONE,
         },
         ResizeAction::ExitResizeMode,
     ),
     (
-        KeyChord {
-            code: char_code('h'),
+        KeyChordSpec {
+            code: KeyCodeSpec::from_character('h'),
             modifiers: KeyModifiers::NONE,
         },
         ResizeAction::ResizePaneLeft,
     ),
     (
-        KeyChord {
-            code: SupportedKeyCode::Left,
+        KeyChordSpec {
+            code: KeyCodeSpec::Left,
             modifiers: KeyModifiers::NONE,
         },
         ResizeAction::ResizePaneLeft,
     ),
     (
-        KeyChord {
-            code: char_code('j'),
+        KeyChordSpec {
+            code: KeyCodeSpec::from_character('j'),
             modifiers: KeyModifiers::NONE,
         },
         ResizeAction::ResizePaneDown,
     ),
     (
-        KeyChord {
-            code: SupportedKeyCode::Down,
+        KeyChordSpec {
+            code: KeyCodeSpec::Down,
             modifiers: KeyModifiers::NONE,
         },
         ResizeAction::ResizePaneDown,
     ),
     (
-        KeyChord {
-            code: char_code('k'),
+        KeyChordSpec {
+            code: KeyCodeSpec::from_character('k'),
             modifiers: KeyModifiers::NONE,
         },
         ResizeAction::ResizePaneUp,
     ),
     (
-        KeyChord {
-            code: SupportedKeyCode::Up,
+        KeyChordSpec {
+            code: KeyCodeSpec::Up,
             modifiers: KeyModifiers::NONE,
         },
         ResizeAction::ResizePaneUp,
     ),
     (
-        KeyChord {
-            code: char_code('l'),
+        KeyChordSpec {
+            code: KeyCodeSpec::from_character('l'),
             modifiers: KeyModifiers::NONE,
         },
         ResizeAction::ResizePaneRight,
     ),
     (
-        KeyChord {
-            code: SupportedKeyCode::Right,
+        KeyChordSpec {
+            code: KeyCodeSpec::Right,
             modifiers: KeyModifiers::NONE,
         },
         ResizeAction::ResizePaneRight,
@@ -306,60 +307,27 @@ pub enum LocalKeybindingAction {
     CopySelectionInline,
 }
 
-#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+#[nutype(
+    const_fn,
+    validate(greater_or_equal = 32, less_or_equal = 126),
+    derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)
+)]
 struct AsciiChar(u8);
 
 impl AsciiChar {
-    const fn from_client_character(character: char) -> Option<Self> {
-        if character.is_ascii() && !character.is_ascii_control() {
-            Some(Self(character as u8))
-        } else {
-            None
+    fn from_client_character(character: char) -> Option<Self> {
+        if !character.is_ascii() {
+            return None;
         }
-    }
-
-    const fn from_binding_character(character: char) -> Self {
-        assert!(character.is_ascii() && !character.is_ascii_control());
-        Self(character as u8)
+        Self::try_new(character as u8).ok()
     }
 
     const fn byte(self) -> u8 {
-        self.0
+        self.into_inner()
     }
 
-    const fn canonical(self, modifiers: KeyModifiers) -> Self {
-        let byte = match modifiers {
-            KeyModifiers::None => self.0,
-            KeyModifiers::Alt | KeyModifiers::Ctrl | KeyModifiers::CtrlAlt => self.0.to_ascii_lowercase(),
-            KeyModifiers::Shift | KeyModifiers::ShiftAlt | KeyModifiers::CtrlShift | KeyModifiers::CtrlAltShift => {
-                match self.0 {
-                    b'!' => b'1',
-                    b'@' => b'2',
-                    b'#' => b'3',
-                    b'$' => b'4',
-                    b'%' => b'5',
-                    b'^' => b'6',
-                    b'&' => b'7',
-                    b'*' => b'8',
-                    b'(' => b'9',
-                    b')' => b'0',
-                    b'_' => b'-',
-                    b'+' => b'=',
-                    b'{' => b'[',
-                    b'}' => b']',
-                    b'|' => b'\\',
-                    b':' => b';',
-                    b'"' => b'\'',
-                    b'<' => b',',
-                    b'>' => b'.',
-                    b'?' => b'/',
-                    b'~' => b'`',
-                    byte => byte,
-                }
-                .to_ascii_uppercase()
-            }
-        };
-        Self(byte)
+    fn canonical(self, modifiers: KeyModifiers) -> Option<Self> {
+        Self::try_new(modifiers.canonical_byte(self.byte())).ok()
     }
 }
 
@@ -374,14 +342,14 @@ enum SupportedKeyCode {
 }
 
 impl SupportedKeyCode {
-    const fn canonical(self, modifiers: KeyModifiers) -> Self {
+    fn canonical(self, modifiers: KeyModifiers) -> Option<Self> {
         match self {
-            Self::Char(character) => Self::Char(character.canonical(modifiers)),
-            Self::Down => Self::Down,
-            Self::Esc => Self::Esc,
-            Self::Left => Self::Left,
-            Self::Right => Self::Right,
-            Self::Up => Self::Up,
+            Self::Char(character) => Some(Self::Char(character.canonical(modifiers)?)),
+            Self::Down => Some(Self::Down),
+            Self::Esc => Some(Self::Esc),
+            Self::Left => Some(Self::Left),
+            Self::Right => Some(Self::Right),
+            Self::Up => Some(Self::Up),
         }
     }
 }
@@ -415,10 +383,77 @@ impl KeyModifiers {
             (true, true, true) => Self::CtrlAltShift,
         }
     }
+
+    const fn canonical_byte(self, byte: u8) -> u8 {
+        match self {
+            Self::None => byte,
+            Self::Alt | Self::Ctrl | Self::CtrlAlt => byte.to_ascii_lowercase(),
+            Self::Shift | Self::ShiftAlt | Self::CtrlShift | Self::CtrlAltShift => match byte {
+                b'!' => b'1',
+                b'@' => b'2',
+                b'#' => b'3',
+                b'$' => b'4',
+                b'%' => b'5',
+                b'^' => b'6',
+                b'&' => b'7',
+                b'*' => b'8',
+                b'(' => b'9',
+                b')' => b'0',
+                b'_' => b'-',
+                b'+' => b'=',
+                b'{' => b'[',
+                b'}' => b']',
+                b'|' => b'\\',
+                b':' => b';',
+                b'"' => b'\'',
+                b'<' => b',',
+                b'>' => b'.',
+                b'?' => b'/',
+                b'~' => b'`',
+                byte => byte,
+            }
+            .to_ascii_uppercase(),
+        }
+    }
 }
 
-const fn char_code(character: char) -> SupportedKeyCode {
-    SupportedKeyCode::Char(AsciiChar::from_binding_character(character))
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+enum KeyCodeSpec {
+    Char(u8),
+    Down,
+    Esc,
+    Left,
+    Right,
+    Up,
+}
+
+impl KeyCodeSpec {
+    const fn from_character(character: char) -> Self {
+        assert!(character.is_ascii() && !character.is_ascii_control());
+        Self::Char(character as u8)
+    }
+
+    const fn canonical(self, modifiers: KeyModifiers) -> Self {
+        match self {
+            Self::Char(byte) => Self::Char(modifiers.canonical_byte(byte)),
+            Self::Down => Self::Down,
+            Self::Esc => Self::Esc,
+            Self::Left => Self::Left,
+            Self::Right => Self::Right,
+            Self::Up => Self::Up,
+        }
+    }
+
+    fn compile(self) -> rootcause::Result<SupportedKeyCode> {
+        match self {
+            Self::Char(byte) => Ok(SupportedKeyCode::Char(AsciiChar::try_new(byte)?)),
+            Self::Down => Ok(SupportedKeyCode::Down),
+            Self::Esc => Ok(SupportedKeyCode::Esc),
+            Self::Left => Ok(SupportedKeyCode::Left),
+            Self::Right => Ok(SupportedKeyCode::Right),
+            Self::Up => Ok(SupportedKeyCode::Up),
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -449,12 +484,10 @@ struct KeyChord {
 }
 
 impl KeyChord {
-    const fn from_client_key(key: &ClientKey) -> Option<Self> {
+    fn from_client_key(key: &ClientKey) -> Option<Self> {
         let code = match key.code {
             ClientKeyCode::Char(character) => {
-                let Some(character) = AsciiChar::from_client_character(character) else {
-                    return None;
-                };
+                let character = AsciiChar::from_client_character(character)?;
                 SupportedKeyCode::Char(character)
             }
             ClientKeyCode::Down => SupportedKeyCode::Down,
@@ -468,8 +501,23 @@ impl KeyChord {
         };
         let modifiers = KeyModifiers::from_client_modifiers(key.modifiers);
         Some(Self {
-            code: code.canonical(modifiers),
+            code: code.canonical(modifiers)?,
             modifiers,
+        })
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+struct KeyChordSpec {
+    code: KeyCodeSpec,
+    modifiers: KeyModifiers,
+}
+
+impl KeyChordSpec {
+    fn compile(self) -> rootcause::Result<KeyChord> {
+        Ok(KeyChord {
+            code: self.code.compile()?,
+            modifiers: self.modifiers,
         })
     }
 
@@ -482,12 +530,12 @@ impl KeyChord {
 
     const fn comparison(self, other: Self) -> KeyChordComparison {
         let same_code = match (self.code, other.code) {
-            (SupportedKeyCode::Char(left), SupportedKeyCode::Char(right)) => left.byte() == right.byte(),
-            (SupportedKeyCode::Down, SupportedKeyCode::Down)
-            | (SupportedKeyCode::Esc, SupportedKeyCode::Esc)
-            | (SupportedKeyCode::Left, SupportedKeyCode::Left)
-            | (SupportedKeyCode::Right, SupportedKeyCode::Right)
-            | (SupportedKeyCode::Up, SupportedKeyCode::Up) => true,
+            (KeyCodeSpec::Char(left), KeyCodeSpec::Char(right)) => left == right,
+            (KeyCodeSpec::Down, KeyCodeSpec::Down)
+            | (KeyCodeSpec::Esc, KeyCodeSpec::Esc)
+            | (KeyCodeSpec::Left, KeyCodeSpec::Left)
+            | (KeyCodeSpec::Right, KeyCodeSpec::Right)
+            | (KeyCodeSpec::Up, KeyCodeSpec::Up) => true,
             _ => false,
         };
         let same_modifiers = matches!(
@@ -519,37 +567,27 @@ impl KeyChord {
 
         match (self.code, self.modifiers) {
             (
-                SupportedKeyCode::Char(_)
-                | SupportedKeyCode::Down
-                | SupportedKeyCode::Esc
-                | SupportedKeyCode::Left
-                | SupportedKeyCode::Right
-                | SupportedKeyCode::Up,
+                KeyCodeSpec::Char(_)
+                | KeyCodeSpec::Down
+                | KeyCodeSpec::Esc
+                | KeyCodeSpec::Left
+                | KeyCodeSpec::Right
+                | KeyCodeSpec::Up,
                 KeyModifiers::None,
-            ) => KeyChordValidation::Supported,
-            (SupportedKeyCode::Char(character), KeyModifiers::Alt) => {
-                match legacy_character_support(character.byte()) {
-                    LegacyCharacterSupport::Alt | LegacyCharacterSupport::AltAndShiftAlt => {
-                        KeyChordValidation::Supported
-                    }
-                    LegacyCharacterSupport::ShiftAlt | LegacyCharacterSupport::Unsupported => {
-                        KeyChordValidation::Unsupported
-                    }
+            )
+            | (KeyCodeSpec::Char(b'n' | b'p'), KeyModifiers::CtrlAlt) => KeyChordValidation::Supported,
+            (KeyCodeSpec::Char(character), KeyModifiers::Alt) => match legacy_character_support(character) {
+                LegacyCharacterSupport::Alt | LegacyCharacterSupport::AltAndShiftAlt => KeyChordValidation::Supported,
+                LegacyCharacterSupport::ShiftAlt | LegacyCharacterSupport::Unsupported => {
+                    KeyChordValidation::Unsupported
                 }
-            }
-            (SupportedKeyCode::Char(character), KeyModifiers::ShiftAlt) => {
-                match legacy_character_support(character.byte()) {
-                    LegacyCharacterSupport::ShiftAlt | LegacyCharacterSupport::AltAndShiftAlt => {
-                        KeyChordValidation::Supported
-                    }
-                    LegacyCharacterSupport::Alt | LegacyCharacterSupport::Unsupported => {
-                        KeyChordValidation::Unsupported
-                    }
+            },
+            (KeyCodeSpec::Char(character), KeyModifiers::ShiftAlt) => match legacy_character_support(character) {
+                LegacyCharacterSupport::ShiftAlt | LegacyCharacterSupport::AltAndShiftAlt => {
+                    KeyChordValidation::Supported
                 }
-            }
-            (SupportedKeyCode::Char(character), KeyModifiers::CtrlAlt) if matches!(character.byte(), b'n' | b'p') => {
-                KeyChordValidation::Supported
-            }
+                LegacyCharacterSupport::Alt | LegacyCharacterSupport::Unsupported => KeyChordValidation::Unsupported,
+            },
             _ => KeyChordValidation::Unsupported,
         }
     }
@@ -574,7 +612,7 @@ const _: () = assert_unique_keybindings(&DEFAULT_RESIZE_KEYBINDINGS);
 const _: () = assert_disjoint_keybindings(&DEFAULT_LOCAL_KEYBINDINGS, &DEFAULT_NORMAL_KEYBINDINGS);
 const _: () = assert_disjoint_keybindings(&DEFAULT_LOCAL_KEYBINDINGS, &DEFAULT_RESIZE_KEYBINDINGS);
 
-const fn assert_unique_keybindings<Action>(bindings: &[(KeyChord, Action)]) {
+const fn assert_unique_keybindings<Action>(bindings: &[(KeyChordSpec, Action)]) {
     let mut remaining = bindings;
     while let Some((first, rest)) = remaining.split_first() {
         let validation = first.0.validation();
@@ -599,8 +637,8 @@ const fn assert_unique_keybindings<Action>(bindings: &[(KeyChord, Action)]) {
 }
 
 const fn assert_disjoint_keybindings<LeftAction, RightAction>(
-    left: &[(KeyChord, LeftAction)],
-    right: &[(KeyChord, RightAction)],
+    left: &[(KeyChordSpec, LeftAction)],
+    right: &[(KeyChordSpec, RightAction)],
 ) {
     let mut left = left;
     while let Some((first, rest)) = left.split_first() {
@@ -716,11 +754,13 @@ struct Keymap<Action> {
     bindings: BTreeMap<KeyChord, Action>,
 }
 
-impl<Action, const LENGTH: usize> From<[(KeyChord, Action); LENGTH]> for Keymap<Action> {
-    fn from(bindings: [(KeyChord, Action); LENGTH]) -> Self {
-        Self {
-            bindings: bindings.into_iter().collect(),
-        }
+impl<Action> Keymap<Action> {
+    fn new<const LENGTH: usize>(bindings: [(KeyChordSpec, Action); LENGTH]) -> rootcause::Result<Self> {
+        let bindings = bindings
+            .into_iter()
+            .map(|(chord, action)| Ok((chord.compile()?, action)))
+            .collect::<rootcause::Result<BTreeMap<_, _>>>()?;
+        Ok(Self { bindings })
     }
 }
 
@@ -746,17 +786,19 @@ pub struct KeybindingsConfig {
     resize: Keymap<ResizeAction>,
 }
 
-impl Default for KeybindingsConfig {
-    fn default() -> Self {
-        Self {
-            local: Keymap::from(DEFAULT_LOCAL_KEYBINDINGS),
-            normal: Keymap::from(DEFAULT_NORMAL_KEYBINDINGS),
-            resize: Keymap::from(DEFAULT_RESIZE_KEYBINDINGS),
-        }
-    }
-}
-
 impl KeybindingsConfig {
+    /// Compile the static keybinding inventory into validated runtime keys.
+    ///
+    /// # Errors
+    /// Returns an error if a configured character is not printable ASCII.
+    pub fn new() -> rootcause::Result<Self> {
+        Ok(Self {
+            local: Keymap::new(DEFAULT_LOCAL_KEYBINDINGS)?,
+            normal: Keymap::new(DEFAULT_NORMAL_KEYBINDINGS)?,
+            resize: Keymap::new(DEFAULT_RESIZE_KEYBINDINGS)?,
+        })
+    }
+
     /// Resolve a normalized client key in the client-local keymap.
     pub fn resolve_local(&self, key: &ClientKey) -> Option<LocalKeybindingAction> {
         let chord = KeyChord::from_client_key(key)?;
@@ -782,9 +824,17 @@ mod tests {
 
     use super::*;
 
+    #[rstest::rstest]
+    #[case::control(31)]
+    #[case::del(127)]
+    #[case::non_ascii(128)]
+    fn test_key_code_spec_compile_when_character_is_invalid_returns_error(#[case] byte: u8) {
+        assert_that!(KeyCodeSpec::Char(byte).compile(), err(anything()));
+    }
+
     #[test]
-    fn test_keybindings_default_when_contains_unique_inventory_returns_config() {
-        let keybindings = KeybindingsConfig::default();
+    fn test_keybindings_new_when_contains_unique_inventory_returns_config() {
+        let keybindings = KeybindingsConfig::new().unwrap();
 
         assert_that!(keybindings.local.bindings.len(), eq(2));
         assert_that!(keybindings.normal.bindings.len(), eq(24));
@@ -812,7 +862,7 @@ mod tests {
         #[case] modifiers: ClientKeyModifiers,
         #[case] action: LocalKeybindingAction,
     ) {
-        let keybindings = KeybindingsConfig::default();
+        let keybindings = KeybindingsConfig::new().unwrap();
         let key = ClientKey {
             code,
             modifiers,
@@ -847,7 +897,7 @@ mod tests {
         #[case] modifiers: ClientKeyModifiers,
         #[case] action: KeybindingAction,
     ) {
-        let keybindings = KeybindingsConfig::default();
+        let keybindings = KeybindingsConfig::new().unwrap();
         let key = ClientKey {
             code,
             modifiers,
@@ -859,7 +909,7 @@ mod tests {
 
     #[test]
     fn test_keybindings_resolve_when_unsupported_code_arrives_returns_none() {
-        let keybindings = KeybindingsConfig::default();
+        let keybindings = KeybindingsConfig::new().unwrap();
         let key = ClientKey {
             code: ClientKeyCode::Enter,
             modifiers: ClientKeyModifiers::NONE,
@@ -871,7 +921,7 @@ mod tests {
 
     #[test]
     fn test_keybindings_resolve_when_shifted_punctuation_arrives_returns_tab_action() {
-        let keybindings = KeybindingsConfig::default();
+        let keybindings = KeybindingsConfig::new().unwrap();
         let key = ClientKey {
             code: ClientKeyCode::Char('!'),
             modifiers: ClientKeyModifiers::SHIFT_ALT,
@@ -886,12 +936,12 @@ mod tests {
 
     #[test]
     fn test_key_chord_when_shifted_letter_case_varies_matches_canonical_chord() {
-        let lower = KeyChord {
-            code: char_code('c'),
+        let lower = KeyChordSpec {
+            code: KeyCodeSpec::from_character('c'),
             modifiers: KeyModifiers::SHIFT_ALT,
         };
-        let upper = KeyChord {
-            code: char_code('C'),
+        let upper = KeyChordSpec {
+            code: KeyCodeSpec::from_character('C'),
             modifiers: KeyModifiers::SHIFT_ALT,
         };
 
@@ -901,12 +951,12 @@ mod tests {
     }
 
     #[rstest::rstest]
-    #[case::alt_left_bracket(KeyChord { code: char_code('['), modifiers: KeyModifiers::Alt })]
-    #[case::alt_right_bracket(KeyChord { code: char_code(']'), modifiers: KeyModifiers::Alt })]
-    #[case::alt_shifted_punctuation(KeyChord { code: char_code('!'), modifiers: KeyModifiers::Alt })]
-    #[case::ctrl_alt_other_character(KeyChord { code: char_code('a'), modifiers: KeyModifiers::CtrlAlt })]
-    #[case::shifted_arrow(KeyChord { code: SupportedKeyCode::Left, modifiers: KeyModifiers::Shift })]
-    fn test_key_chord_when_legacy_decoder_cannot_emit_chord_reports_unsupported(#[case] chord: KeyChord) {
+    #[case::alt_left_bracket(KeyChordSpec { code: KeyCodeSpec::from_character('['), modifiers: KeyModifiers::Alt })]
+    #[case::alt_right_bracket(KeyChordSpec { code: KeyCodeSpec::from_character(']'), modifiers: KeyModifiers::Alt })]
+    #[case::alt_shifted_punctuation(KeyChordSpec { code: KeyCodeSpec::from_character('!'), modifiers: KeyModifiers::Alt })]
+    #[case::ctrl_alt_other_character(KeyChordSpec { code: KeyCodeSpec::from_character('a'), modifiers: KeyModifiers::CtrlAlt })]
+    #[case::shifted_arrow(KeyChordSpec { code: KeyCodeSpec::Left, modifiers: KeyModifiers::Shift })]
+    fn test_key_chord_when_legacy_decoder_cannot_emit_chord_reports_unsupported(#[case] chord: KeyChordSpec) {
         assert_that!(chord.validation(), eq(KeyChordValidation::Unsupported));
     }
 }

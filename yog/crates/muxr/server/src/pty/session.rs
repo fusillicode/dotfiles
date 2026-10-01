@@ -1060,7 +1060,7 @@ mod tests {
             output_wakeup_pending: Arc::new(AtomicBool::new(false)),
             sender,
         });
-        let session = SessionName::default();
+        let session = SessionName::default_name()?;
 
         let log = crate::session::tracing::collect_test_log(&session, || {
             state.mark_exited(PtyExitStatus {
@@ -1097,7 +1097,7 @@ mod tests {
             sender,
         });
         drop(receiver);
-        let session = SessionName::default();
+        let session = SessionName::default_name()?;
 
         let log = crate::session::tracing::collect_test_log(&session, || {
             state.mark_exited(PtyExitStatus {
