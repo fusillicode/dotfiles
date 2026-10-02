@@ -98,7 +98,10 @@ mod tests {
             .expect("target session should be written");
         std::fs::write(root.join("other.jsonl"), "not json\n").expect("nonmatching session should be written");
 
-        let sessions_result = load_sessions_from_root_by_key(&root, &[SessionKey::new(Agent::Claude, "target")]);
+        let sessions_result = load_sessions_from_root_by_key(
+            &root,
+            &[SessionKey::new(Agent::Claude, "target").expect("test value should be valid")],
+        );
         assert_that!(sessions_result.as_ref().map(|_| ()), ok(eq(())));
         let sessions = sessions_result.expect("target Claude session should load");
 

@@ -66,12 +66,13 @@ fn format_hx_status_line(hx_status_line: &HxStatusLine) -> rootcause::Result<Str
 mod tests {
     use std::path::PathBuf;
 
-    use rstest::rstest;
     use test_that::prelude::*;
+    use ytil_hx::HxCoordinate;
+    use ytil_hx::HxCursorPosition;
 
     use super::*;
 
-    #[rstest]
+    #[rstest::rstest]
     #[case("src/main.rs", 42, 7, "src/main.rs:42")]
     #[case("crates/ytil/cmd/src/lib.rs", 1, 1, "crates/ytil/cmd/src/lib.rs:1")]
     #[case("file.txt", 100, 50, "file.txt:100")]
@@ -83,7 +84,10 @@ mod tests {
     ) {
         let status = HxStatusLine {
             file_path: PathBuf::from(path),
-            position: ytil_hx::HxCursorPosition { line, column },
+            position: HxCursorPosition {
+                line: HxCoordinate::try_new(line).expect("test line should be positive"),
+                column: HxCoordinate::try_new(column).expect("test column should be positive"),
+            },
         };
         assert_that!(format_hx_status_line(&status), ok(eq(expected)));
     }

@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 
 use jiff::Timestamp;
+use nutype::nutype;
 use rootcause::option_ext::OptionExt;
 use rootcause::report;
 
@@ -14,12 +15,17 @@ const SEARCH_TEXT_MAX_BYTES: usize = 32 * 1024;
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct SessionKey {
     agent: Agent,
-    id: String,
+    id: SessionId,
 }
 
 impl SessionKey {
-    pub fn new(agent: Agent, id: impl Into<String>) -> Self {
-        Self { agent, id: id.into() }
+    /// Build a session key after validating its identifier.
+    ///
+    /// # Errors
+    /// Returns an error when the session identifier is empty.
+    pub fn new(agent: Agent, id: impl Into<String>) -> rootcause::Result<Self> {
+        let id = SessionId::try_new(id.into()).map_err(|_| report!("invalid session id"))?;
+        Ok(Self { agent, id })
     }
 
     pub const fn agent(&self) -> Agent {
@@ -27,7 +33,7 @@ impl SessionKey {
     }
 
     pub fn id(&self) -> &str {
-        &self.id
+        self.id.as_ref()
     }
 }
 
@@ -46,10 +52,7 @@ impl FromStr for SessionKey {
         };
         let agent =
             Agent::from_name(agent).map_err(|err| report!("invalid session key agent").attach(err.to_string()))?;
-        if id.is_empty() {
-            return Err(report!("invalid session key").attach(format!("value={value}")));
-        }
-        Ok(Self::new(agent, id))
+        Self::new(agent, id).map_err(|_| report!("invalid session key").attach(format!("value={value}")))
     }
 }
 
@@ -212,6 +215,13 @@ impl SearchTextBuilder {
     }
 }
 
+/// An agent session identifier with at least one character.
+#[nutype(
+    validate(not_empty),
+    derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, AsRef, Display)
+)]
+struct SessionId(String);
+
 fn push_normalized_snippet(search_text: &mut String, last_snippet: &mut Option<String>, snippet: &str) -> bool {
     let separator_len = usize::from(!search_text.is_empty());
     if search_text.len().saturating_add(separator_len) >= SEARCH_TEXT_MAX_BYTES {
@@ -264,12 +274,45 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_session_key_when_constructor_receives_empty_id_returns_error() {
+        let error = SessionKey::new(Agent::Codex, "").expect_err("empty session ID must be rejected");
+
+        assert_eq!(error.format_current_context().to_string(), "invalid session id");
+    }
+
+    #[test]
+    fn test_session_key_when_parser_receives_empty_id_returns_error_with_input() {
+        let error = "codex:"
+            .parse::<SessionKey>()
+            .expect_err("empty session ID must be rejected");
+
+        assert_eq!(error.format_current_context().to_string(), "invalid session key");
+        assert!(
+            error
+                .attachments()
+                .iter()
+                .any(|attachment| attachment.to_string() == "value=codex:")
+        );
+    }
+
+    #[test]
+    fn test_session_key_when_id_contains_colons_or_spaces_preserves_id() {
+        let key = SessionKey::new(Agent::Codex, " id:part ").expect("nonempty session ID must be accepted");
+
+        assert_that!("codex: id:part ".parse::<SessionKey>(), ok(eq(key.clone())));
+        assert_eq!(key.id(), " id:part ");
+    }
+
+    #[test]
     fn test_session_key_string_round_trip_uses_agent_session_format() {
         let key_result = "codex:session-id".parse::<SessionKey>();
         assert_that!(key_result, ok(anything()));
         let key = key_result.expect("session key should parse");
 
-        assert_that!(key, eq(SessionKey::new(Agent::Codex, "session-id")));
+        assert_that!(
+            key,
+            eq(SessionKey::new(Agent::Codex, "session-id").expect("test value should be valid"))
+        );
         assert_that!(key.to_string(), eq("codex:session-id"));
     }
 

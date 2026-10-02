@@ -13,6 +13,7 @@ include = ["src/**/*", "help.txt", "help/**/*"]
 
 [dependencies]
 git2 = { workspace = true }
+nutype = { workspace = true }
 owo-colors = { workspace = true }
 proc-macro2 = { version = "1", features = ["span-locations"] }
 rayon = { version = "1.12" }

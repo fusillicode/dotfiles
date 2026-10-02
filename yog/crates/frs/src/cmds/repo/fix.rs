@@ -9,6 +9,7 @@ use std::process::Command;
 use std::thread;
 
 use git2::Repository as GitRepo;
+use nutype::nutype;
 use owo_colors::OwoColorize;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
@@ -38,11 +39,16 @@ pub fn run(mut cli_args: Arguments) -> rootcause::Result<()> {
     self::fix(&options)
 }
 
+/// Positive concurrency limit for repository cleanup workers.
+#[nutype(validate(greater = 0), derive(Clone, Copy, Debug, Eq, PartialEq))]
+struct WorkerCount(usize);
+
 #[derive(Debug)]
+#[cfg_attr(test, derive(Eq, PartialEq))]
 struct RepoFixOpts {
     directory: PathBuf,
     clean: bool,
-    jobs: usize,
+    jobs: WorkerCount,
 }
 
 impl TryFrom<Vec<OsString>> for RepoFixOpts {
@@ -67,15 +73,12 @@ impl TryFrom<Vec<OsString>> for RepoFixOpts {
         while cli_args.contains("--clean") {
             clean = true;
         }
-        let mut jobs = DEFAULT_JOBS;
+        let mut jobs = WorkerCount::try_new(DEFAULT_JOBS)?;
         while let Some(value) = cli_args
             .opt_value_from_str::<_, usize>("--jobs")
             .map_err(|error| report!("--jobs requires a positive integer").attach(error.to_string()))?
         {
-            if value == 0 {
-                return Err(report!("--jobs must be a positive integer"));
-            }
-            jobs = value;
+            jobs = WorkerCount::try_new(value).map_err(|_| report!("--jobs must be a positive integer"))?;
         }
 
         let mut positionals = cli_args.finish();
@@ -411,13 +414,13 @@ fn cargo_metadata(manifest: &Path) -> rootcause::Result<CargoMetadata> {
         .attach_with(|| format!("invalid cargo metadata for {}", manifest.display()))?)
 }
 
-fn clean_workspaces(workspaces: &[Workspace], jobs: usize) -> Vec<Result<Workspace, Failure>> {
+fn clean_workspaces(workspaces: &[Workspace], jobs: WorkerCount) -> Vec<Result<Workspace, Failure>> {
     let mut pending = Vec::new();
     let mut cleanups = Vec::new();
 
     for workspace in workspaces {
         pending.push((workspace.clone(), self::spawn_cargo_clean(workspace)));
-        if pending.len() >= jobs {
+        if pending.len() >= jobs.into_inner() {
             cleanups.push(self::collect_cargo_cleanup(pending.remove(0)));
         }
     }
@@ -566,4 +569,60 @@ fn summarize_repos(processed: usize, failures: &[Failure]) -> rootcause::Result<
         return Ok(());
     }
     Err(report!("Rust repo maintenance failed"))
+}
+
+#[cfg(test)]
+mod tests {
+    use test_that::prelude::*;
+
+    use super::*;
+
+    #[rstest::rstest]
+    #[case(1)]
+    #[case(DEFAULT_JOBS)]
+    #[case(usize::MAX)]
+    fn test_repo_fix_opts_when_jobs_is_positive_returns_validated_options(#[case] jobs: usize) {
+        let raw = vec![
+            OsString::from("--jobs"),
+            OsString::from(jobs.to_string()),
+            OsString::from("repo"),
+        ];
+        let expected = RepoFixOpts {
+            directory: PathBuf::from("repo"),
+            clean: false,
+            jobs: WorkerCount::try_new(jobs).expect("positive worker count must be accepted"),
+        };
+
+        assert_that!(RepoFixOpts::try_from(raw), ok(eq(expected)));
+    }
+
+    #[test]
+    fn test_repo_fix_opts_when_jobs_is_omitted_returns_default_worker_count() {
+        let expected = RepoFixOpts {
+            directory: PathBuf::from("repo"),
+            clean: true,
+            jobs: WorkerCount::try_new(DEFAULT_JOBS).expect("default worker count must be positive"),
+        };
+
+        assert_that!(
+            RepoFixOpts::try_from(vec!["--clean".into(), "repo".into()]),
+            ok(eq(expected))
+        );
+    }
+
+    #[test]
+    fn test_repo_fix_opts_when_jobs_is_zero_returns_existing_error() {
+        let raw = vec!["--jobs".into(), "0".into(), "repo".into()];
+        let error = RepoFixOpts::try_from(raw).expect_err("zero jobs must be rejected");
+
+        assert_eq!(
+            error.format_current_context().to_string(),
+            "--jobs must be a positive integer"
+        );
+    }
+
+    #[test]
+    fn test_worker_count_when_value_is_zero_returns_error() {
+        let _error = WorkerCount::try_new(0).expect_err("zero workers must be rejected");
+    }
 }

@@ -114,7 +114,10 @@ mod tests {
         std::fs::write(root.join("rollout-2026-01-01-other.jsonl"), "not json\n")
             .expect("nonmatching session should be written");
 
-        let sessions_result = load_sessions_from_root_by_key(&root, &[SessionKey::new(Agent::Codex, "target")]);
+        let sessions_result = load_sessions_from_root_by_key(
+            &root,
+            &[SessionKey::new(Agent::Codex, "target").expect("test value should be valid")],
+        );
         assert_that!(sessions_result.as_ref().map(|_| ()), ok(eq(())));
         let sessions = sessions_result.expect("target Codex session should load");
 

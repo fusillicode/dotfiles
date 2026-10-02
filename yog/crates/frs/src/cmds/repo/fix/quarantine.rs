@@ -7,6 +7,8 @@ use std::thread;
 
 use rootcause::report;
 
+use super::WorkerCount;
+
 /// The result of cleaning one repo's quarantine metadata.
 pub struct RepoCleanup {
     /// Repo that was inspected.
@@ -16,11 +18,11 @@ pub struct RepoCleanup {
 }
 
 /// Removes quarantine metadata from every repo while skipping nested repos and symbolic links.
-pub fn clean(repos: &[PathBuf], jobs: usize) -> Vec<RepoCleanup> {
+pub fn clean(repos: &[PathBuf], jobs: WorkerCount) -> Vec<RepoCleanup> {
     repos.iter().map(|repo| self::clean_repo(repo, repos, jobs)).collect()
 }
 
-fn clean_repo(repo: &Path, repos: &[PathBuf], jobs: usize) -> RepoCleanup {
+fn clean_repo(repo: &Path, repos: &[PathBuf], jobs: WorkerCount) -> RepoCleanup {
     let mut failures = Vec::new();
     let mut workers = std::collections::VecDeque::new();
     workers.push_back(thread::spawn({
@@ -83,7 +85,7 @@ fn clean_repo(repo: &Path, repos: &[PathBuf], jobs: usize) -> RepoCleanup {
         } else {
             None
         };
-        if workers.len() >= jobs
+        if workers.len() >= jobs.into_inner()
             && let Some(worker) = workers.pop_front()
             && let Some(failure) = self::collect_cleanup(worker)
         {

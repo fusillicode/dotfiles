@@ -11,10 +11,12 @@ keywords = ["editor", "wezterm", "neovim", "helix", "integration"]
 categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
+nutype = { workspace = true }
 rootcause = { workspace = true }
 ytil_wezterm = { workspace = true }
 
 [dev-dependencies]
+rstest = { workspace = true }
 test-that = { workspace = true }
 
 [lints]

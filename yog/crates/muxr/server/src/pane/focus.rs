@@ -403,42 +403,62 @@ mod tests {
         Ok(())
     }
 
-    #[test]
-    fn test_pane_focus_events_for_live_panes_when_runtime_sets_vary_returns_focus_transition() -> rootcause::Result<()>
-    {
-        let previous_pane = PaneId::new(1)?;
-        let next_pane = PaneId::new(2)?;
+    #[rstest::rstest]
+    #[case::both_live(
+        1,
+        2,
+        &[1, 2],
+        &[
+            (1, TerminalFocusEvent::Lost),
+            (2, TerminalFocusEvent::Gained),
+        ],
+    )]
+    #[case::unchanged(
+        1,
+        1,
+        &[1],
+        &[],
+    )]
+    #[case::only_next_live(
+        1,
+        2,
+        &[2],
+        &[(2, TerminalFocusEvent::Gained)],
+    )]
+    #[case::only_previous_live(
+        1,
+        2,
+        &[1],
+        &[(1, TerminalFocusEvent::Lost)],
+    )]
+    #[case::neither_live(
+        1,
+        2,
+        &[],
+        &[],
+    )]
+    fn test_pane_focus_events_for_live_panes_when_runtime_sets_vary_returns_focus_transition(
+        #[case] previous_id: u32,
+        #[case] next_id: u32,
+        #[case] live_ids: &[u32],
+        #[case] expected_events: &[(u32, TerminalFocusEvent)],
+    ) -> rootcause::Result<()> {
+        let previous_pane = PaneId::new(previous_id)?;
+        let next_pane = PaneId::new(next_id)?;
+        let live_panes = live_ids
+            .iter()
+            .copied()
+            .map(PaneId::new)
+            .collect::<rootcause::Result<Vec<_>>>()?;
+        let expected = expected_events
+            .iter()
+            .map(|&(id, event)| Ok((PaneId::new(id)?, event)))
+            .collect::<rootcause::Result<Vec<_>>>()?;
 
-        for (previous_pane, next_pane, live_panes, expected) in [
-            (
-                previous_pane,
-                next_pane,
-                vec![previous_pane, next_pane],
-                vec![
-                    (previous_pane, TerminalFocusEvent::Lost),
-                    (next_pane, TerminalFocusEvent::Gained),
-                ],
-            ),
-            (previous_pane, previous_pane, vec![previous_pane], Vec::new()),
-            (
-                previous_pane,
-                next_pane,
-                vec![next_pane],
-                vec![(next_pane, TerminalFocusEvent::Gained)],
-            ),
-            (
-                previous_pane,
-                next_pane,
-                vec![previous_pane],
-                vec![(previous_pane, TerminalFocusEvent::Lost)],
-            ),
-            (previous_pane, next_pane, Vec::new(), Vec::new()),
-        ] {
-            assert_that!(
-                self::pane_focus_events_for_live_panes(previous_pane, next_pane, &live_panes),
-                eq(expected)
-            );
-        }
+        assert_that!(
+            self::pane_focus_events_for_live_panes(previous_pane, next_pane, &live_panes),
+            eq(expected)
+        );
         Ok(())
     }
 

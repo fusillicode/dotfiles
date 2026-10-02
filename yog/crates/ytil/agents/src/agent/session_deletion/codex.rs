@@ -217,7 +217,7 @@ mod tests {
         let child = write_deletion_session(&root, "child", Some("parent"), "child.jsonl");
         let grandchild = write_deletion_session(&root, "grandchild", Some("child"), "grandchild.jsonl");
         let unrelated = write_deletion_session(&root, "other", None, "other.jsonl");
-        let key = SessionKey::new(Agent::Codex, "parent");
+        let key = SessionKey::new(Agent::Codex, "parent").expect("test value should be valid");
 
         let plan = build_deletion_plan(&root, &key, None).expect("plan should resolve");
 
@@ -240,7 +240,7 @@ mod tests {
         std::fs::create_dir_all(&root).expect("session root should be created");
         let parent = write_deletion_session(&root, "parent", None, "parent.jsonl");
         let unrelated = write_deletion_session_with_subagent(&root, "child", Some("parent"), "child.jsonl", false);
-        let key = SessionKey::new(Agent::Codex, "parent");
+        let key = SessionKey::new(Agent::Codex, "parent").expect("test value should be valid");
 
         let plan = build_deletion_plan(&root, &key, None).expect("plan should resolve");
 
@@ -256,7 +256,7 @@ mod tests {
         std::fs::create_dir_all(&root).expect("session root should be created");
         let selected_path = write_deletion_session(&root, "other", None, "selected.jsonl");
         write_deletion_session(&root, "target", None, "target.jsonl");
-        let key = SessionKey::new(Agent::Codex, "target");
+        let key = SessionKey::new(Agent::Codex, "target").expect("test value should be valid");
 
         let result = build_deletion_plan(&root, &key, Some(&selected_path));
 
@@ -300,7 +300,7 @@ mod tests {
         std::fs::create_dir_all(&root).expect("session root should be created");
         write_deletion_session(&root, "parent", None, "one.jsonl");
         write_deletion_session(&root, "parent", None, "two.jsonl");
-        let key = SessionKey::new(Agent::Codex, "parent");
+        let key = SessionKey::new(Agent::Codex, "parent").expect("test value should be valid");
 
         let result = build_deletion_plan(&root, &key, None);
 
@@ -317,7 +317,7 @@ mod tests {
         std::fs::create_dir_all(&root).expect("session root should be created");
         write_deletion_session(&root, "one", Some("two"), "one.jsonl");
         write_deletion_session(&root, "two", Some("one"), "two.jsonl");
-        let key = SessionKey::new(Agent::Codex, "one");
+        let key = SessionKey::new(Agent::Codex, "one").expect("test value should be valid");
 
         let result = build_deletion_plan(&root, &key, None);
 
@@ -335,7 +335,7 @@ mod tests {
         let invalid = root.join("invalid.jsonl");
         std::fs::write(&invalid, "{\"type\":\"other\"}\n").expect("fixture should be written");
         let parent = write_deletion_session(&root, "parent", None, "parent.jsonl");
-        let key = SessionKey::new(Agent::Codex, "parent");
+        let key = SessionKey::new(Agent::Codex, "parent").expect("test value should be valid");
 
         let plan = build_deletion_plan(&root, &key, None).expect("plan should resolve");
 
@@ -354,7 +354,7 @@ mod tests {
         let invalid = root.join("invalid.jsonl");
         std::fs::write(&invalid, "not json\n").expect("fixture should be written");
         let parent = write_deletion_session(&root, "parent", None, "parent.jsonl");
-        let key = SessionKey::new(Agent::Codex, "parent");
+        let key = SessionKey::new(Agent::Codex, "parent").expect("test value should be valid");
 
         let plan = build_deletion_plan(&root, &key, None).expect("plan should resolve");
 
@@ -379,7 +379,7 @@ mod tests {
             ),
         )
         .expect("fixture should be updated");
-        let key = SessionKey::new(Agent::Codex, "parent");
+        let key = SessionKey::new(Agent::Codex, "parent").expect("test value should be valid");
 
         let plan = build_deletion_plan(&root, &key, None).expect("plan should resolve");
 
