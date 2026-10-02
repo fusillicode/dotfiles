@@ -13,6 +13,7 @@ categories = ["command-line-utilities", "development-tools"]
 [dependencies]
 itertools = { version = "0.15" }
 jiff = { workspace = true }
+nutype = { workspace = true }
 owo-colors = { workspace = true }
 pico-args = { version = "0.5" }
 rootcause = { workspace = true }

@@ -885,20 +885,20 @@ mod tests {
         Ok(())
     }
 
-    #[test]
-    fn test_write_focus_event_when_focus_reporting_is_enabled_writes_event() -> rootcause::Result<()> {
-        for (event, expected) in [
-            (TerminalFocusEvent::Gained, b"\x1b[I".as_slice()),
-            (TerminalFocusEvent::Lost, b"\x1b[O".as_slice()),
-        ] {
-            let (queue, receiver) = self::queued_pty_writer();
-            let written = Arc::new(Mutex::new(Vec::new()));
+    #[rstest::rstest]
+    #[case::gained(TerminalFocusEvent::Gained, b"\x1b[I")]
+    #[case::lost(TerminalFocusEvent::Lost, b"\x1b[O")]
+    fn test_write_focus_event_when_focus_reporting_is_enabled_writes_event(
+        #[case] event: TerminalFocusEvent,
+        #[case] expected: &[u8],
+    ) -> rootcause::Result<()> {
+        let (queue, receiver) = self::queued_pty_writer();
+        let written = Arc::new(Mutex::new(Vec::new()));
 
-            queue.write_focus_event(TerminalFocusReporting::Enabled, event)?;
-            self::drain_queued_writes(&queue, &receiver, self::capturing_pty_writer(Arc::clone(&written)))?;
+        queue.write_focus_event(TerminalFocusReporting::Enabled, event)?;
+        self::drain_queued_writes(&queue, &receiver, self::capturing_pty_writer(Arc::clone(&written)))?;
 
-            assert_that!(self::captured_pty_bytes(written.as_ref()), eq(expected.to_vec()));
-        }
+        assert_that!(self::captured_pty_bytes(written.as_ref()), eq(expected.to_vec()));
         Ok(())
     }
 

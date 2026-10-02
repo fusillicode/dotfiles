@@ -298,18 +298,19 @@ mod tests {
         })
     }
 
-    #[test]
-    fn test_alt_left_click_phase_when_extra_modifiers_are_present_ignores_event() {
-        for button in [12, 24, 28] {
-            assert_that!(
-                alt_left_click_phase(ClientMouseEvent {
-                    button,
-                    phase: ClientMouseEventPhase::Press,
-                    position: ClientMousePosition { row: 0, col: 0 },
-                }),
-                none()
-            );
-        }
+    #[rstest::rstest]
+    #[case::shift_alt(12)]
+    #[case::alt_control(24)]
+    #[case::shift_alt_control(28)]
+    fn test_alt_left_click_phase_when_extra_modifiers_are_present_ignores_event(#[case] button: u16) {
+        assert_that!(
+            alt_left_click_phase(ClientMouseEvent {
+                button,
+                phase: ClientMouseEventPhase::Press,
+                position: ClientMousePosition { row: 0, col: 0 },
+            }),
+            none()
+        );
     }
 
     #[test]

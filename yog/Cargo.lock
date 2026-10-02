@@ -1357,6 +1357,7 @@ name = "frs"
 version = "0.1.0"
 dependencies = [
  "git2",
+ "nutype",
  "owo-colors",
  "proc-macro2",
  "rayon",
@@ -5604,6 +5605,7 @@ name = "ytil_agents"
 version = "0.1.0"
 dependencies = [
  "jiff",
+ "nutype",
  "rootcause",
  "rstest",
  "serde",
@@ -5627,7 +5629,9 @@ dependencies = [
 name = "ytil_editor"
 version = "0.1.0"
 dependencies = [
+ "nutype",
  "rootcause",
+ "rstest",
  "test-that",
  "ytil_wezterm",
 ]
@@ -5676,7 +5680,9 @@ name = "ytil_hx"
 version = "0.1.0"
 dependencies = [
  "fake",
+ "nutype",
  "rootcause",
+ "rstest",
 ]
 
 [[package]]
@@ -5708,6 +5714,7 @@ dependencies = [
  "home",
  "itertools 0.15.0",
  "jiff",
+ "nutype",
  "owo-colors",
  "pico-args",
  "rootcause",

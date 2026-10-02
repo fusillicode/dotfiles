@@ -6,6 +6,7 @@
 use core::str::FromStr;
 use std::path::Path;
 
+use nutype::nutype;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
 use ytil_wezterm::WeztermPane;
@@ -53,13 +54,21 @@ impl FromStr for Editor {
     }
 }
 
+/// A nonnegative editor coordinate; zero retains the editor's default positioning behavior.
+#[nutype(
+    default = 0,
+    validate(greater_or_equal = 0),
+    derive(Clone, Copy, Debug, Default, Eq, PartialEq, Display, FromStr)
+)]
+pub struct FileCoordinate(i64);
+
 /// Represents a file to be opened in an editor with optional line and column positioning.
 #[derive(Debug, Eq, PartialEq)]
 pub struct FileToOpen {
-    /// The column number to position the cursor (0-based, defaults to 0).
-    pub column: i64,
-    /// The line number to position the cursor (0-based, defaults to 0).
-    pub line_nbr: i64,
+    /// The column number to position the cursor (nonnegative, defaults to 0).
+    pub column: FileCoordinate,
+    /// The line number to position the cursor (nonnegative, defaults to 0).
+    pub line_nbr: FileCoordinate,
     /// The filesystem path to the file.
     pub path: String,
 }
@@ -105,14 +114,14 @@ impl FromStr for FileToOpen {
             .attach_with(|| format!("str={s}"))?;
         let line_nbr = parts
             .next()
-            .map(str::parse::<i64>)
+            .map(str::parse::<FileCoordinate>)
             .transpose()
             .context("invalid line number")
             .attach_with(|| format!("str={s:?}"))?
             .unwrap_or_default();
         let column = parts
             .next()
-            .map(str::parse::<i64>)
+            .map(str::parse::<FileCoordinate>)
             .transpose()
             .context("invalid column number")
             .attach_with(|| format!("str={s:?}"))?
@@ -143,12 +152,41 @@ mod tests {
 
     use super::*;
 
+    #[rstest::rstest]
+    #[case::negative_line("Cargo.toml:-1:0")]
+    #[case::negative_column("Cargo.toml:0:-1")]
+    #[case::both_negative("Cargo.toml:-1:-1")]
+    fn test_file_to_open_when_coordinate_is_negative_returns_error(#[case] input: &str) {
+        assert_that!(input.parse::<FileToOpen>(), err(anything()));
+    }
+
+    #[rstest::rstest]
+    #[case::minus_one(-1)]
+    #[case::minimum(i64::MIN)]
+    fn test_file_coordinate_when_value_is_negative_returns_error(#[case] value: i64) {
+        let _error = FileCoordinate::try_new(value).expect_err("negative coordinates must be rejected");
+    }
+
+    #[rstest::rstest]
+    #[case::minimum(0)]
+    #[case::maximum(i64::MAX)]
+    fn test_file_coordinate_when_value_is_at_bounds_returns_value(#[case] value: i64) {
+        let coordinate = FileCoordinate::try_new(value).expect("nonnegative coordinates must be accepted");
+
+        assert_eq!(coordinate.into_inner(), value);
+    }
+
+    #[test]
+    fn test_file_coordinate_when_defaulted_returns_zero() {
+        assert_eq!(FileCoordinate::default().into_inner(), 0);
+    }
+
     #[test]
     fn test_open_file_cmd_returns_the_expected_cmd_string() {
         let file = FileToOpen {
             path: "src/main.rs".into(),
-            line_nbr: 12,
-            column: 5,
+            line_nbr: FileCoordinate::try_new(12).expect("test coordinate should be valid"),
+            column: FileCoordinate::try_new(5).expect("test coordinate should be valid"),
         };
         assert_eq!(Editor::Hx.open_file_cmd(&file), "':o src/main.rs:12'");
         assert_eq!(
@@ -205,23 +243,23 @@ mod tests {
 
         let expected = FileToOpen {
             path: dummy_path.clone(),
-            line_nbr: 0,
-            column: 0,
+            line_nbr: FileCoordinate::default(),
+            column: FileCoordinate::default(),
         };
         assert_that!(FileToOpen::from_str(&dummy_path), ok(eq(expected)));
 
         let expected = FileToOpen {
             path: dummy_path.clone(),
-            line_nbr: 3,
-            column: 0,
+            line_nbr: FileCoordinate::try_new(3).expect("test coordinate should be valid"),
+            column: FileCoordinate::default(),
         };
         assert_that!(FileToOpen::from_str(&format!("{dummy_path}:3")), ok(eq(expected)));
 
         let input = format!("{dummy_path}:3:7");
         let expected = FileToOpen {
             path: dummy_path,
-            line_nbr: 3,
-            column: 7,
+            line_nbr: FileCoordinate::try_new(3).expect("test coordinate should be valid"),
+            column: FileCoordinate::try_new(7).expect("test coordinate should be valid"),
         };
         assert_that!(FileToOpen::from_str(&input), ok(eq(expected)));
     }
@@ -251,8 +289,8 @@ mod tests {
         let panes = vec![pane_with(7, 1, &dir)];
         let expected = FileToOpen {
             path: dir.join("Cargo.toml").to_string_lossy().into_owned(),
-            line_nbr: 0,
-            column: 0,
+            line_nbr: FileCoordinate::default(),
+            column: FileCoordinate::default(),
         };
         assert_that!(
             FileToOpen::try_from(("Cargo.toml", 7, panes.as_slice())),

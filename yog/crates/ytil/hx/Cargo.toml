@@ -15,10 +15,12 @@ fake = ["dep:fake"]
 
 [dependencies]
 fake = { workspace = true, optional = true }
+nutype = { workspace = true }
 rootcause = { workspace = true }
 
 [dev-dependencies]
 fake = { workspace = true }
+rstest = { workspace = true }
 
 [lints]
 workspace = true

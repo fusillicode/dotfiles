@@ -807,30 +807,75 @@ mod tests {
     }
 
     #[rstest::rstest]
-    #[case::vertical_then_horizontal_focus_lower_right(
+    #[case::vertical_then_horizontal_lower_right_junction(
         NestedBorderFixture::VerticalThenHorizontal,
         3,
-        vec![(12, 40, "├"), (13, 40, "│"), (12, 41, "─")],
+        (12, 40, "├"),
     )]
-    #[case::vertical_then_horizontal_focus_upper_right(
+    #[case::vertical_then_horizontal_lower_right_parent(
+        NestedBorderFixture::VerticalThenHorizontal,
+        3,
+        (13, 40, "│"),
+    )]
+    #[case::vertical_then_horizontal_lower_right_child(
+        NestedBorderFixture::VerticalThenHorizontal,
+        3,
+        (12, 41, "─"),
+    )]
+    #[case::vertical_then_horizontal_upper_right_top(
         NestedBorderFixture::VerticalThenHorizontal,
         2,
-        vec![(0, 40, "│"), (11, 40, "│"), (12, 40, "├"), (12, 41, "─")],
+        (0, 40, "│"),
     )]
-    #[case::horizontal_then_vertical_focus_lower_right(
+    #[case::vertical_then_horizontal_upper_right_parent(
+        NestedBorderFixture::VerticalThenHorizontal,
+        2,
+        (11, 40, "│"),
+    )]
+    #[case::vertical_then_horizontal_upper_right_junction(
+        NestedBorderFixture::VerticalThenHorizontal,
+        2,
+        (12, 40, "├"),
+    )]
+    #[case::vertical_then_horizontal_upper_right_child(
+        NestedBorderFixture::VerticalThenHorizontal,
+        2,
+        (12, 41, "─"),
+    )]
+    #[case::horizontal_then_vertical_lower_right_junction(
         NestedBorderFixture::HorizontalThenVertical,
         3,
-        vec![(12, 40, "┬"), (12, 41, "─"), (13, 40, "│")],
+        (12, 40, "┬"),
     )]
-    #[case::horizontal_then_vertical_focus_lower_left(
+    #[case::horizontal_then_vertical_lower_right_parent(
+        NestedBorderFixture::HorizontalThenVertical,
+        3,
+        (12, 41, "─"),
+    )]
+    #[case::horizontal_then_vertical_lower_right_child(
+        NestedBorderFixture::HorizontalThenVertical,
+        3,
+        (13, 40, "│"),
+    )]
+    #[case::horizontal_then_vertical_lower_left_parent(
         NestedBorderFixture::HorizontalThenVertical,
         2,
-        vec![(12, 39, "─"), (12, 40, "┬"), (13, 40, "│")],
+        (12, 39, "─"),
+    )]
+    #[case::horizontal_then_vertical_lower_left_junction(
+        NestedBorderFixture::HorizontalThenVertical,
+        2,
+        (12, 40, "┬"),
+    )]
+    #[case::horizontal_then_vertical_lower_left_child(
+        NestedBorderFixture::HorizontalThenVertical,
+        2,
+        (13, 40, "│"),
     )]
     fn test_paste_borders_when_active_pane_touches_parent_and_child_borders_highlights_outline(
         #[case] fixture: NestedBorderFixture,
         #[case] active_pane: u32,
-        #[case] expected_focused_cells: Vec<(u16, u16, &'static str)>,
+        #[case] expected_focused_cell: (u16, u16, &str),
     ) -> rootcause::Result<()> {
         let active_pane = PaneId::new(active_pane)?;
         let size = TerminalSize::new(80, 24)?;
@@ -847,17 +892,16 @@ mod tests {
         )?;
         let border_cells = self::compose_border_cells(&borders, Some(&active_pane), &[], BorderRenderMode::Focus)?;
 
-        for (row, col, glyph) in expected_focused_cells {
-            let cell = rows
-                .get(usize::from(row))
-                .and_then(|row| row.get(usize::from(col)))
-                .ok_or_else(|| report!("expected focused border cell").attach(format!("row={row} col={col}")))?;
-            assert_that!(cell.text(), eq(glyph));
-            assert_that!(
-                self::border_cell_at(&border_cells, row, col)?.visual,
-                eq(BorderVisual::Focused)
-            );
-        }
+        let (row, col, glyph) = expected_focused_cell;
+        let cell = rows
+            .get(usize::from(row))
+            .and_then(|row| row.get(usize::from(col)))
+            .ok_or_else(|| report!("expected focused border cell").attach(format!("row={row} col={col}")))?;
+        assert_that!(cell.text(), eq(glyph));
+        assert_that!(
+            self::border_cell_at(&border_cells, row, col)?.visual,
+            eq(BorderVisual::Focused)
+        );
         Ok(())
     }
 

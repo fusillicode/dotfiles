@@ -5,6 +5,7 @@ use std::process::Output;
 use std::str::FromStr;
 
 use jiff::civil::Date;
+use nutype::nutype;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
 use strum::EnumString;
@@ -154,19 +155,14 @@ impl FromStr for RustcCommitDate {
 }
 
 /// A validated Rustup toolchain name.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[nutype(
+    validate(with = RustToolchainName::validate, error = rootcause::Report),
+    derive(Clone, Debug, Eq, PartialEq, Display),
+)]
 pub struct RustToolchainName(String);
 
-impl Display for RustToolchainName {
-    fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
-        formatter.write_str(&self.0)
-    }
-}
-
-impl TryFrom<&str> for RustToolchainName {
-    type Error = rootcause::Report;
-
-    fn try_from(value: &str) -> Result<Self, Self::Error> {
+impl RustToolchainName {
+    fn validate(value: &str) -> rootcause::Result<()> {
         if value.is_empty() {
             return Err(report!("Rust toolchain name is empty").attach(format!("input={value:?}")));
         }
@@ -179,7 +175,15 @@ impl TryFrom<&str> for RustToolchainName {
                 .attach(format!("character={character:?}")));
         }
 
-        Ok(Self(value.to_owned()))
+        Ok(())
+    }
+}
+
+impl TryFrom<&str> for RustToolchainName {
+    type Error = rootcause::Report;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        Self::try_new(value)
     }
 }
 
@@ -416,8 +420,14 @@ mod tests {
     use super::*;
 
     #[rstest::rstest]
-    #[case("1.95.0", RustToolchainName("1.95.0".to_owned()))]
-    #[case("1.99.0-beta.1", RustToolchainName("1.99.0-beta.1".to_owned()))]
+    #[case(
+        "1.95.0",
+        RustToolchainName::try_new("1.95.0").expect("test value should be valid"),
+    )]
+    #[case(
+        "1.99.0-beta.1",
+        RustToolchainName::try_new("1.99.0-beta.1").expect("test value should be valid"),
+    )]
     fn test_rust_toolchain_name_when_name_is_parsed_returns_typed_value(
         #[case] value: &str,
         #[case] expected: RustToolchainName,
@@ -429,7 +439,9 @@ mod tests {
     #[case("1.95.0")]
     #[case("1.99.0-beta.1")]
     fn test_rust_toolchain_name_when_formatted_returns_original_name(#[case] value: &str) {
-        let actual = RustToolchainName(value.to_owned()).to_string();
+        let actual = RustToolchainName::try_new(value)
+            .expect("test value should be valid")
+            .to_string();
 
         assert_that!(actual, eq(value));
     }
@@ -442,6 +454,8 @@ mod tests {
         let actual = value.parse::<RustToolchainName>();
 
         assert_that!(actual, err(anything()));
+        assert_that!(RustToolchainName::try_new(value), err(anything()));
+        assert_that!(RustToolchainName::try_from(value), err(anything()));
     }
 
     #[test]
@@ -474,12 +488,14 @@ mod tests {
             InstalledRustToolchain::Channel(InstalledChannelToolchain {
                 channel: RustToolchainChannel::Nightly,
                 date: Some(RustToolchainDate(jiff::civil::Date::new(2026, 7, 12).unwrap())),
-                name: RustToolchainName("nightly-2026-07-12-aarch64-apple-darwin".to_owned()),
+                name: RustToolchainName::try_new("nightly-2026-07-12-aarch64-apple-darwin")
+                    .expect("test value should be valid"),
             }),
             InstalledRustToolchain::Channel(InstalledChannelToolchain {
                 channel: RustToolchainChannel::Nightly,
                 date: Some(RustToolchainDate(jiff::civil::Date::new(2026, 8, 30).unwrap())),
-                name: RustToolchainName("nightly-2026-08-30-aarch64-apple-darwin".to_owned()),
+                name: RustToolchainName::try_new("nightly-2026-08-30-aarch64-apple-darwin")
+                    .expect("test value should be valid"),
             }),
         ];
 
@@ -492,7 +508,7 @@ mod tests {
         InstalledRustToolchain::Channel(InstalledChannelToolchain {
             channel: RustToolchainChannel::Stable,
             date: None,
-            name: RustToolchainName("stable-aarch64-apple-darwin".to_owned()),
+            name: RustToolchainName::try_new("stable-aarch64-apple-darwin").expect("test value should be valid"),
         })
     )]
     #[case(
@@ -500,7 +516,7 @@ mod tests {
         InstalledRustToolchain::Channel(InstalledChannelToolchain {
             channel: RustToolchainChannel::Stable,
             date: None,
-            name: RustToolchainName("stable".to_owned()),
+            name: RustToolchainName::try_new("stable").expect("test value should be valid"),
         })
     )]
     #[case(
@@ -508,12 +524,16 @@ mod tests {
         InstalledRustToolchain::Channel(InstalledChannelToolchain {
             channel: RustToolchainChannel::Nightly,
             date: Some(RustToolchainDate(jiff::civil::Date::new(2026, 8, 30).unwrap())),
-            name: RustToolchainName("nightly-2026-08-30-aarch64-apple-darwin".to_owned()),
+            name: RustToolchainName::try_new("nightly-2026-08-30-aarch64-apple-darwin")
+                .expect("test value should be valid"),
         })
     )]
     #[case(
         "1.99.0-beta.1-aarch64-apple-darwin",
-        InstalledRustToolchain::Exact(RustToolchainName("1.99.0-beta.1-aarch64-apple-darwin".to_owned()))
+        InstalledRustToolchain::Exact(
+            RustToolchainName::try_new("1.99.0-beta.1-aarch64-apple-darwin")
+                .expect("test value should be valid"),
+        ),
     )]
     fn test_parse_installed_rust_toolchains_when_input_contains_channel_and_exact_names_classifies_toolchains(
         #[case] name: &str,
@@ -537,7 +557,12 @@ mod tests {
         );
         let actual = select_latest_installed_rust_toolchain(&toolchain, &installed, None);
 
-        assert_that!(actual, some(eq(RustToolchainName(expected.to_owned()))));
+        assert_that!(
+            actual,
+            some(eq(
+                RustToolchainName::try_new(expected).expect("test value should be valid")
+            ))
+        );
     }
 
     #[test]
@@ -549,9 +574,10 @@ mod tests {
 
         assert_that!(
             actual,
-            some(eq(RustToolchainName(
-                "nightly-2026-08-31-aarch64-apple-darwin".to_owned(),
-            )))
+            some(eq(RustToolchainName::try_new(
+                "nightly-2026-08-31-aarch64-apple-darwin",
+            )
+            .expect("test value should be valid")))
         );
     }
 
@@ -581,7 +607,12 @@ mod tests {
             rustc_commit_date,
         );
 
-        assert_that!(actual, some(eq(RustToolchainName(expected.to_owned()))));
+        assert_that!(
+            actual,
+            some(eq(
+                RustToolchainName::try_new(expected).expect("test value should be valid")
+            ))
+        );
     }
 
     #[test]
@@ -591,7 +622,9 @@ mod tests {
 
         assert_that!(
             actual,
-            some(eq(RustToolchainName("nightly-aarch64-apple-darwin".to_owned())))
+            some(eq(
+                RustToolchainName::try_new("nightly-aarch64-apple-darwin").expect("test value should be valid")
+            ))
         );
     }
 
@@ -625,7 +658,12 @@ mod tests {
         );
         let actual = select_latest_installed_rust_toolchain(&toolchain, &installed, None);
 
-        assert_that!(actual, some(eq(RustToolchainName(expected.to_owned()))));
+        assert_that!(
+            actual,
+            some(eq(
+                RustToolchainName::try_new(expected).expect("test value should be valid")
+            ))
+        );
     }
 
     #[test]

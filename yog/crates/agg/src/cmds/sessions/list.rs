@@ -465,7 +465,9 @@ mod tests {
                 String::from("--session"),
                 String::from("codex:target"),
             ]),
-            ok(eq([SessionKey::new(Agent::Codex, "target")]))
+            ok(eq([
+                SessionKey::new(Agent::Codex, "target").expect("test value should be valid")
+            ]))
         );
     }
 

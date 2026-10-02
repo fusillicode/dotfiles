@@ -96,7 +96,7 @@ mod tests {
         let other_meta = dir.path().join("other").join("meta.json");
         write_meta_json(&target_meta, &workspace, true, "Target");
         write_meta_json(&other_meta, &workspace, true, "Other");
-        let keys = vec![SessionKey::new(Agent::Cursor, "target")];
+        let keys = vec![SessionKey::new(Agent::Cursor, "target").expect("test value should be valid")];
         let requested_ids = crate::agent::session_loader::requested_ids(&keys, Agent::Cursor);
 
         let sessions = load_sessions_from_paths(&[target_meta, other_meta], Some(&requested_ids));

@@ -12,12 +12,12 @@ pub(super) fn delete_selected_sessions(selected: &[RenderableSession], home_dir:
     let targets = selected
         .iter()
         .map(|session| {
-            DeletionTarget::new(
-                SessionKey::new(session.session.agent, &session.session.id),
+            Ok(DeletionTarget::new(
+                SessionKey::new(session.session.agent, &session.session.id)?,
                 session.session.path.clone(),
-            )
+            ))
         })
-        .collect::<Vec<_>>();
+        .collect::<rootcause::Result<Vec<_>>>()?;
     let report = ytil_agents::agent::session_deletion::delete_session_targets(home_dir, &targets);
     let mut failures = Vec::new();
 
@@ -69,6 +69,7 @@ mod tests {
     use std::path::PathBuf;
 
     use jiff::Timestamp;
+    use tempfile::tempdir;
     use test_that::prelude::*;
     use ytil_agents::agent::Agent;
     use ytil_agents::agent::session::Session;
@@ -78,9 +79,27 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_delete_selected_sessions_when_id_is_empty_returns_error_before_deletion() {
+        let directory = tempdir().expect("test directory should be created");
+        let mut session = render_test_session();
+        session.session.id.clear();
+        session.session.path = directory.path().join("session.jsonl");
+        std::fs::write(&session.session.path, "session content").expect("test session should be written");
+        let session_path = session.session.path.clone();
+
+        let error = delete_selected_sessions(&[session], directory.path()).expect_err("empty ID must be rejected");
+
+        assert_eq!(error.format_current_context().to_string(), "invalid session id");
+        assert_eq!(
+            std::fs::read_to_string(session_path).expect("session must remain readable"),
+            "session content"
+        );
+    }
+
+    #[test]
     fn test_render_deleted_session_when_no_related_sessions_prints_id_without_count() {
         let session = render_test_session();
-        let key = SessionKey::new(Agent::Claude, "session-id");
+        let key = SessionKey::new(Agent::Claude, "session-id").expect("test value should be valid");
 
         let output = rendered_output(&session, &key, 0);
 
@@ -93,7 +112,7 @@ mod tests {
     #[test]
     fn test_render_deleted_session_when_related_sessions_exist_prints_id_and_count() {
         let session = render_test_session();
-        let key = SessionKey::new(Agent::Claude, "session-id");
+        let key = SessionKey::new(Agent::Claude, "session-id").expect("test value should be valid");
 
         let output = rendered_output(&session, &key, 2);
 

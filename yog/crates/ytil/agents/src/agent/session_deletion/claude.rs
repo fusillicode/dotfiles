@@ -92,7 +92,7 @@ mod tests {
         let matching_filename_path = root.join("target.jsonl");
         std::fs::write(&selected_path, claude_content("target")).expect("selected session should be written");
         std::fs::write(&matching_filename_path, claude_content("other")).expect("other session should be written");
-        let key = SessionKey::new(Agent::Claude, "target");
+        let key = SessionKey::new(Agent::Claude, "target").expect("test value should be valid");
 
         let plan = build_deletion_plan(&root, &key, Some(&selected_path)).expect("plan should resolve");
 
@@ -109,7 +109,7 @@ mod tests {
         std::fs::create_dir_all(&root).expect("session root should be created");
         let selected_path = root.join("selected.jsonl");
         std::fs::write(&selected_path, claude_content("other")).expect("selected session should be written");
-        let key = SessionKey::new(Agent::Claude, "target");
+        let key = SessionKey::new(Agent::Claude, "target").expect("test value should be valid");
 
         let result = build_deletion_plan(&root, &key, Some(&selected_path));
 

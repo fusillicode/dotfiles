@@ -3,6 +3,15 @@
 use core::str::FromStr;
 use std::path::PathBuf;
 
+#[cfg(any(test, feature = "fake"))]
+use fake::Dummy;
+#[cfg(any(test, feature = "fake"))]
+use fake::Fake;
+#[cfg(any(test, feature = "fake"))]
+use fake::Faker;
+#[cfg(any(test, feature = "fake"))]
+use fake::RngExt;
+use nutype::nutype;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
 
@@ -57,14 +66,29 @@ impl FromStr for HxStatusLine {
     }
 }
 
+/// A 1-based Helix line or column coordinate.
+#[nutype(validate(greater = 0), derive(Clone, Copy, Debug, Eq, PartialEq, Display, FromStr))]
+pub struct HxCoordinate(usize);
+
+#[cfg(any(test, feature = "fake"))]
+impl Dummy<Faker> for HxCoordinate {
+    fn dummy_with_rng<R: RngExt + ?Sized>(config: &Faker, rng: &mut R) -> Self {
+        loop {
+            if let Ok(coordinate) = Self::try_new(config.fake_with_rng::<usize, _>(rng)) {
+                return coordinate;
+            }
+        }
+    }
+}
+
 /// Represents a cursor position in a text file with line and column coordinates.
 #[derive(Debug, Eq, PartialEq)]
 #[cfg_attr(any(test, feature = "fake"), derive(fake::Dummy))]
 pub struct HxCursorPosition {
     /// The column number (1-based).
-    pub column: usize,
+    pub column: HxCoordinate,
     /// The line number (1-based).
-    pub line: usize,
+    pub line: HxCoordinate,
 }
 
 /// Parses a [`HxCursorPosition`] from a string in the format "line:column".
@@ -92,7 +116,60 @@ impl FromStr for HxCursorPosition {
 
 #[cfg(test)]
 mod tests {
+    use fake::rand::SeedableRng;
+    use fake::rand::rngs::StdRng;
+
     use super::*;
+
+    #[rstest::rstest]
+    #[case::zero_line("0:1", "invalid line number")]
+    #[case::zero_column("1:0", "invalid column number")]
+    #[case::both_zero("0:0", "invalid line number")]
+    fn test_hx_cursor_position_when_coordinate_is_zero_returns_error(#[case] input: &str, #[case] expected: &str) {
+        let error = input
+            .parse::<HxCursorPosition>()
+            .expect_err("zero coordinates must be rejected");
+
+        assert_eq!(error.format_current_context().to_string(), expected);
+    }
+
+    #[test]
+    fn test_hx_coordinate_when_value_is_zero_returns_error() {
+        let _error = HxCoordinate::try_new(0).expect_err("zero coordinates must be rejected");
+    }
+
+    #[rstest::rstest]
+    #[case::minimum(1, 1)]
+    #[case::maximum_column(1, usize::MAX)]
+    #[case::maximum_line(usize::MAX, 1)]
+    #[case::maximum_both(usize::MAX, usize::MAX)]
+    fn test_hx_cursor_position_when_coordinates_are_at_bounds_returns_position(
+        #[case] line: usize,
+        #[case] column: usize,
+    ) {
+        let expected = HxCursorPosition {
+            line: HxCoordinate::try_new(line).expect("positive line must be accepted"),
+            column: HxCoordinate::try_new(column).expect("positive column must be accepted"),
+        };
+        let actual = format!("{line}:{column}")
+            .parse::<HxCursorPosition>()
+            .expect("positive coordinates must parse");
+
+        assert_eq!(actual, expected);
+    }
+
+    #[rstest::rstest]
+    #[case::zero_seed(0)]
+    #[case::one_seed(1)]
+    #[case::ordinary_seed(42)]
+    #[case::maximum_seed(u64::MAX)]
+    fn test_hx_cursor_position_when_generated_by_faker_returns_positive_coordinates(#[case] seed: u64) {
+        let mut rng = StdRng::seed_from_u64(seed);
+        let position = Faker.fake_with_rng::<HxCursorPosition, _>(&mut rng);
+
+        assert!(position.line.into_inner() > 0);
+        assert!(position.column.into_inner() > 0);
+    }
 
     #[test]
     fn test_hx_cursor_from_str_when_file_exists_in_normal_mode_returns_cursor() {
@@ -101,7 +178,10 @@ mod tests {
         );
         let expected = HxStatusLine {
             file_path: "src/utils.rs".into(),
-            position: HxCursorPosition { line: 42, column: 33 },
+            position: HxCursorPosition {
+                line: HxCoordinate::try_new(42).expect("test coordinate should be valid"),
+                column: HxCoordinate::try_new(33).expect("test coordinate should be valid"),
+            },
         };
 
         assert_eq!(result.unwrap(), expected);
@@ -114,7 +194,10 @@ mod tests {
         );
         let expected = HxStatusLine {
             file_path: "src/utils.rs".into(),
-            position: HxCursorPosition { line: 33, column: 42 },
+            position: HxCursorPosition {
+                line: HxCoordinate::try_new(33).expect("test coordinate should be valid"),
+                column: HxCoordinate::try_new(42).expect("test coordinate should be valid"),
+            },
         };
 
         assert_eq!(result.unwrap(), expected);

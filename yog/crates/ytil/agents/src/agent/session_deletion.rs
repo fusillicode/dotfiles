@@ -230,10 +230,10 @@ mod tests {
         );
         write_file(&cursor_path, r#"{"cwd":"/tmp"}"#);
         let keys = vec![
-            SessionKey::new(Agent::Claude, "claude"),
-            SessionKey::new(Agent::Codex, "codex"),
-            SessionKey::new(Agent::Cursor, "cursor"),
-            SessionKey::new(Agent::Claude, "missing"),
+            SessionKey::new(Agent::Claude, "claude").expect("test value should be valid"),
+            SessionKey::new(Agent::Codex, "codex").expect("test value should be valid"),
+            SessionKey::new(Agent::Cursor, "cursor").expect("test value should be valid"),
+            SessionKey::new(Agent::Claude, "missing").expect("test value should be valid"),
         ];
 
         let report = delete_sessions(home_dir, &keys);
@@ -257,7 +257,7 @@ mod tests {
         let home_dir = dir.path();
         let meta_path = home_dir.join(".cursor/chats/hash/session-id/meta.json");
         write_file(&meta_path, r#"{"cwd":"/tmp"}"#);
-        let keys = vec![SessionKey::new(Agent::Cursor, "session-id")];
+        let keys = vec![SessionKey::new(Agent::Cursor, "session-id").expect("test value should be valid")];
 
         let report = delete_sessions(home_dir, &keys);
 
@@ -281,7 +281,10 @@ mod tests {
         let other_dir = home_dir.join(".cursor/chats/hash-b").join(session_id);
         write_file(&selected_dir.join("meta.json"), r#"{"cwd":"/tmp/selected"}"#);
         write_file(&other_dir.join("meta.json"), r#"{"cwd":"/tmp/other"}"#);
-        let target = DeletionTarget::new(SessionKey::new(Agent::Cursor, session_id), selected_dir.clone());
+        let target = DeletionTarget::new(
+            SessionKey::new(Agent::Cursor, session_id).expect("test value should be valid"),
+            selected_dir.clone(),
+        );
 
         let report = delete_session_targets(home_dir, &[target]);
 
