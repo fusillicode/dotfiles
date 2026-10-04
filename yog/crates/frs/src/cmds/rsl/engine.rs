@@ -7,6 +7,7 @@ use rayon::prelude::*;
 use rootcause::report;
 
 use crate::cmds::rsl::rules::RuleViolation;
+use crate::cmds::rsl::rules::SelectedRules;
 
 pub struct FileContext<'ast> {
     pub path: &'ast Path,
@@ -14,9 +15,9 @@ pub struct FileContext<'ast> {
     pub(super) module_item_lists: Vec<Vec<crate::cmds::rsl::ast::ModuleItem<'ast>>>,
 }
 
-pub(super) fn check_paths(paths: &[PathBuf]) -> rootcause::Result<Vec<Box<dyn RuleViolation>>> {
+pub(super) fn check_paths(paths: &[PathBuf], rules: &SelectedRules) -> rootcause::Result<Vec<Box<dyn RuleViolation>>> {
     // Collect results before propagating errors to preserve input order.
-    let file_results: Vec<_> = paths.par_iter().map(|path| self::check_path(path)).collect();
+    let file_results: Vec<_> = paths.par_iter().map(|path| self::check_path(path, rules)).collect();
     let mut violations = Vec::new();
 
     for file_result in file_results {
@@ -26,7 +27,7 @@ pub(super) fn check_paths(paths: &[PathBuf]) -> rootcause::Result<Vec<Box<dyn Ru
     Ok(violations)
 }
 
-fn check_path(path: &Path) -> rootcause::Result<Vec<Box<dyn RuleViolation>>> {
+fn check_path(path: &Path, rules: &SelectedRules) -> rootcause::Result<Vec<Box<dyn RuleViolation>>> {
     let source = std::fs::read_to_string(path).map_err(|error| {
         report!("could not read Rust source")
             .attach(format!("path={}", path.display()))
@@ -39,9 +40,15 @@ fn check_path(path: &Path) -> rootcause::Result<Vec<Box<dyn RuleViolation>>> {
     })?;
     let module_item_lists = crate::cmds::rsl::ast::module_item_lists(&syntax);
 
-    Ok(crate::cmds::rsl::rules::check(&FileContext {
+    let ctx = FileContext {
         path,
         file: &syntax,
         module_item_lists,
-    }))
+    };
+    let mut violations = Vec::new();
+    for rule in rules {
+        violations.extend(rule.check(&ctx));
+    }
+
+    Ok(violations)
 }

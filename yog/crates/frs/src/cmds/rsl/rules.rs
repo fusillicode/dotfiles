@@ -1,6 +1,10 @@
 //! Built-in rules for `frs rsl`.
 
+use std::iter::Copied;
+use std::slice::Iter;
 use std::sync::OnceLock;
+
+use rootcause::report;
 
 use crate::cmds::rsl::engine::FileContext;
 use crate::cmds::rsl::output::FormattedRuleViolation;
@@ -32,7 +36,9 @@ static RULES: OnceLock<[Box<dyn Rule>; 9]> = OnceLock::new();
 ///
 /// Concrete rules implement [`TypedRule`]. Its blanket implementation erases
 /// the concrete violation type only at this registry boundary.
-trait Rule: Send + Sync {
+pub(super) trait Rule: Send + Sync {
+    fn code(&self) -> &'static str;
+
     fn check(&self, ctx: &FileContext<'_>) -> Vec<Box<dyn RuleViolation>>;
 }
 
@@ -40,6 +46,10 @@ impl<T> Rule for T
 where
     T: crate::cmds::rsl::rules::TypedRule,
 {
+    fn code(&self) -> &'static str {
+        T::code()
+    }
+
     fn check(&self, ctx: &FileContext<'_>) -> Vec<Box<dyn RuleViolation>> {
         <T as crate::cmds::rsl::rules::TypedRule>::check(self, ctx)
             .into_iter()
@@ -79,13 +89,44 @@ pub(super) trait TypedRuleViolation: Send + Sync + 'static {
     type Rule: crate::cmds::rsl::rules::TypedRule<Violation = Self>;
 }
 
-pub(super) fn check(ctx: &FileContext<'_>) -> Vec<Box<dyn RuleViolation>> {
-    let mut violations = Vec::new();
-    for rule in self::rules() {
-        violations.extend(rule.check(ctx));
-    }
+/// Validated built-in rules to execute, in registry order without duplicates.
+pub(super) struct SelectedRules(Vec<&'static dyn Rule>);
 
-    violations
+impl<'a> IntoIterator for &'a SelectedRules {
+    type IntoIter = Copied<Iter<'a, Self::Item>>;
+    type Item = &'static dyn Rule;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.iter().copied()
+    }
+}
+
+impl TryFrom<Vec<String>> for SelectedRules {
+    type Error = rootcause::Report;
+
+    fn try_from(rule_ids: Vec<String>) -> Result<Self, Self::Error> {
+        let registry: Vec<_> = self::rules()
+            .iter()
+            .map(|rule| (rule.code().replace('_', "-"), rule.as_ref()))
+            .collect();
+
+        for rule_id in &rule_ids {
+            if !registry.iter().any(|(id, _)| id == rule_id) {
+                let available: Vec<_> = registry.iter().map(|(id, _)| id.as_str()).collect();
+                return Err(report!("unknown rsl rule")
+                    .attach(format!("rule={rule_id}"))
+                    .attach(format!("available_rules={}", available.join(", "))));
+            }
+        }
+
+        let rules = registry
+            .iter()
+            .filter(|(id, _)| rule_ids.is_empty() || rule_ids.contains(id))
+            .map(|(_, rule)| *rule)
+            .collect();
+
+        Ok(Self(rules))
+    }
 }
 
 fn rules() -> &'static [Box<dyn Rule>] {
