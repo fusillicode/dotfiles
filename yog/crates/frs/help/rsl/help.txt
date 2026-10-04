@@ -1,11 +1,22 @@
 Run Rust source lint rules on explicitly supplied files.
 
 Usage:
-  frs rsl [--debug] FILE...
+  frs rsl [--debug] [--rules ID[,ID...]]... [--] FILE...
 
 Arguments:
   --debug                  Include rule codes in violations.
+  --rules ID[,ID...]       Run only these rules. Supply comma-separated kebab-case IDs.
+                           May be repeated to select more rules.
+  --                       Treat remaining arguments as file paths.
   FILE                     Rust source file to check. Supply at least one file.
+
+With no --rules options, all built-in rules run. Unknown or empty IDs are rejected.
+Rule IDs:
+  misordered-item-group, misordered-visibility, nonadjacent-impl, misordered-fn,
+  unqualified-call, overqualified-call, qualified-item, aliased-import, relative-path
+
+Example:
+  frs rsl --rules misordered-fn,relative-path src/main.rs
 
 Each file is checked as a root module. Inline module bodies are checked recursively.
 External module files are not read unless supplied separately.
