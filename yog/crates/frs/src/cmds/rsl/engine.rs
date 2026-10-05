@@ -11,8 +11,8 @@ use crate::cmds::rsl::rules::SelectedRules;
 
 pub struct FileContext<'ast> {
     pub path: &'ast Path,
+    pub(super) source: &'ast str,
     pub file: &'ast syn::File,
-    pub(super) module_item_lists: Vec<Vec<crate::cmds::rsl::ast::ModuleItem<'ast>>>,
 }
 
 pub(super) fn check_paths(paths: &[PathBuf], rules: &SelectedRules) -> rootcause::Result<Vec<Box<dyn RuleViolation>>> {
@@ -38,12 +38,11 @@ fn check_path(path: &Path, rules: &SelectedRules) -> rootcause::Result<Vec<Box<d
             .attach(format!("path={}", path.display()))
             .attach(format!("error={error}"))
     })?;
-    let module_item_lists = crate::cmds::rsl::ast::module_item_lists(&syntax);
 
     let ctx = FileContext {
         path,
+        source: &source,
         file: &syntax,
-        module_item_lists,
     };
     let mut violations = Vec::new();
     for rule in rules {

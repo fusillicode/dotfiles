@@ -5,28 +5,15 @@ Usage:
 
 Arguments:
   --debug                  Include rule codes in violations.
-  --rules ID[,ID...]       Run only these rules. Supply comma-separated kebab-case IDs.
+  --rules ID[,ID...]       Run only these rules. Supply comma-separated rule IDs.
                            May be repeated to select more rules.
   --                       Treat remaining arguments as file paths.
   FILE                     Rust source file to check. Supply at least one file.
 
 With no --rules options, all built-in rules run. Unknown or empty IDs are rejected.
 Rule IDs:
-  misordered-item-group, misordered-visibility, nonadjacent-impl, misordered-fn,
+  ordering-rule,
   unqualified-call, overqualified-call, qualified-item, aliased-import, relative-path
 
 Example:
-  frs rsl --rules misordered-fn,relative-path src/main.rs
-
-Each file is checked as a root module. Inline module bodies are checked recursively.
-External module files are not read unless supplied separately.
-
-The built-in rules check item groups, visibility order, impl adjacency, function order,
-unqualified calls, overqualified calls, qualified item paths, import aliases, and relative paths.
-
-Function calls use the shortest safe module path, qualified non-function paths use imports,
-and import aliases are limited to as _.
-
-The required item groups are:
-  extern_crate -> use -> foreign_mod/mod -> global_asm -> const/static
-  -> ty_alias -> macro/enum/struct/union/trait/trait_alias/impl/fn
+  frs rsl --rules ordering-rule,relative-path src/main.rs
