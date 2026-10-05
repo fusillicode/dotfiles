@@ -1,7 +1,7 @@
 use std::path::Path;
 use std::path::PathBuf;
 
-use ranges::Position;
+use item_source_ranges::SourcePosition;
 
 use super::*;
 use crate::cmds::rsl::output::FormattedRuleViolation;
@@ -13,20 +13,23 @@ use crate::cmds::rsl::output::ViolationOutputFormat;
 #[case(vec![0, 0], Vec::new(), Err("incomplete item permutation"))]
 #[case(
     vec![0, 1],
-    vec![OrderingRuleReason { before: 0, after: 1, preference: Preference::Caller }],
+    vec![OrderingConstraint { before_item_index: 0, after_item_index: 1, kind: OrderingConstraintKind::CallerBeforeHelper }],
     Ok(())
 )]
 #[case(
     vec![1, 0],
-    vec![OrderingRuleReason { before: 0, after: 1, preference: Preference::Caller }],
+    vec![OrderingConstraint { before_item_index: 0, after_item_index: 1, kind: OrderingConstraintKind::CallerBeforeHelper }],
     Err("invalid item identity or ordering constraint")
 )]
-fn test_ordering_rule_when_sequence_is_validated_preserves_conflict_messages(
-    #[case] required: Vec<usize>,
-    #[case] reasons: Vec<OrderingRuleReason>,
+fn test_ordering_rule_when_required_item_order_is_validated_reports_invalid_item_order(
+    #[case] required_item_order: Vec<usize>,
+    #[case] constraints: Vec<OrderingConstraint>,
     #[case] expected: Result<(), &'static str>,
 ) {
-    assert_eq!(validate_sequence(&[0, 1], &required, &reasons), expected);
+    assert_eq!(
+        validate_required_item_order(&[0, 1], &required_item_order, &constraints),
+        expected
+    );
 }
 
 #[rstest::rstest]
@@ -106,15 +109,17 @@ fn test_ordering_rule_when_test_module_is_present_keeps_it_last_within_module_gr
 ) {
     let violations = check(source);
     let item_count = syn::parse_file(source).unwrap().items.len();
-    let actual = violations.first().map_or_else(|| (0..item_count).collect(), required);
+    let actual = violations
+        .first()
+        .map_or_else(|| (0..item_count).collect(), required_item_order);
     assert_eq!(actual, expected);
-    let reordered = apply(source, &violations);
+    let reordered = apply_ordering_violations(source, &violations);
     assert_eq!(check(&reordered), Vec::new());
     assert_eq!(check(source), violations);
 }
 
 #[test]
-fn test_ordering_rule_when_nested_test_module_follows_function_moves_it_into_module_group() {
+fn test_ordering_rule_when_nested_test_module_follows_fn_moves_it_into_module_group() {
     let source = r"
         mod parent {
             use std::fmt;
@@ -126,8 +131,8 @@ fn test_ordering_rule_when_nested_test_module_follows_function_moves_it_into_mod
     ";
     let violations = check(source);
     assert_eq!(violations.len(), 1);
-    assert_eq!(required(&violations[0]), vec![0, 1, 3, 2]);
-    assert_eq!(check(&apply(source, &violations)), Vec::new());
+    assert_eq!(required_item_order(&violations[0]), vec![0, 1, 3, 2]);
+    assert_eq!(check(&apply_ordering_violations(source, &violations)), Vec::new());
 }
 
 #[rstest::rstest]
@@ -158,7 +163,7 @@ fn test_ordering_rule_when_imports_follow_formatter_order_preserves_visibility_m
 }
 
 #[test]
-fn test_ordering_rule_when_import_follows_function_moves_import_without_changing_import_order() {
+fn test_ordering_rule_when_import_follows_fn_moves_import_without_changing_import_order() {
     let source = r"
         use std::path::Path;
         fn helper() {}
@@ -168,8 +173,8 @@ fn test_ordering_rule_when_import_follows_function_moves_import_without_changing
         }
     ";
     let violations = check(source);
-    assert_eq!(required(&violations[0]), vec![0, 2, 3, 1]);
-    let reordered = apply(source, &violations);
+    assert_eq!(required_item_order(&violations[0]), vec![0, 2, 3, 1]);
+    let reordered = apply_ordering_violations(source, &violations);
     assert_eq!(check(&reordered), Vec::new());
     let expected = r"
         use std::path::Path;
@@ -226,19 +231,21 @@ fn test_ordering_rule_when_agreed_exceptions_apply_returns_required_sequence(
     let syntax = syn::parse_file(source).unwrap();
     let actual = violations.first().map_or_else(
         || (0..syntax.items.len()).collect(),
-        |violation| match &violation.details {
-            Arrangement::Ordered { required, .. } => required.clone(),
-            Arrangement::Conflict { message, .. } => panic!("{message}"),
+        |violation| match &violation.outcome {
+            OrderingOutcome::Computed {
+                required_item_order, ..
+            } => required_item_order.clone(),
+            OrderingOutcome::Failed { message, .. } => panic!("{message}"),
         },
     );
     assert_eq!(actual, expected);
-    let reordered = apply(source, &violations);
+    let reordered = apply_ordering_violations(source, &violations);
     assert_eq!(check(&reordered), Vec::new(), "{reordered}");
     assert_eq!(check(source), violations);
 }
 
 #[test]
-fn test_ordering_rule_when_private_helper_precedes_caller_retains_complete_details_and_renders_only_order() {
+fn test_ordering_rule_when_private_helper_precedes_caller_retains_complete_metadata_and_renders_only_order() {
     let source = single_line(
         r"
             fn helper() {}
@@ -253,40 +260,40 @@ fn test_ordering_rule_when_private_helper_precedes_caller_retains_complete_detai
         scope: "module crate".to_owned(),
         depth: 0,
         items: vec![
-            ItemDetails {
+            ItemOrderingMetadata {
                 range: SourceRange {
-                    start: Position { line: 1, column: 1 },
-                    end: Position { line: 1, column: 15 },
-                    bytes: 0..14,
+                    start: SourcePosition { line: 1, column: 1 },
+                    end: SourcePosition { line: 1, column: 15 },
+                    byte_range: 0..14,
                     whole_lines: false,
                 },
                 label: "fn helper".to_owned(),
                 kind: Some(ItemKind::Fn),
                 group: ItemGroup::Items,
                 visibility: Some(VisibilityClass::Private),
-                block: 0,
+                block_first_item_index: 0,
             },
-            ItemDetails {
+            ItemOrderingMetadata {
                 range: SourceRange {
-                    start: Position { line: 1, column: 16 },
-                    end: Position { line: 1, column: 41 },
-                    bytes: 15..40,
+                    start: SourcePosition { line: 1, column: 16 },
+                    end: SourcePosition { line: 1, column: 41 },
+                    byte_range: 15..40,
                     whole_lines: false,
                 },
                 label: "fn caller".to_owned(),
                 kind: Some(ItemKind::Fn),
                 group: ItemGroup::Items,
                 visibility: Some(VisibilityClass::Private),
-                block: 1,
+                block_first_item_index: 1,
             },
         ],
-        details: Arrangement::Ordered {
-            original: vec![0, 1],
-            required: vec![1, 0],
-            reasons: vec![OrderingRuleReason {
-                before: 1,
-                after: 0,
-                preference: Preference::Caller,
+        outcome: OrderingOutcome::Computed {
+            source_item_order: vec![0, 1],
+            required_item_order: vec![1, 0],
+            constraints: vec![OrderingConstraint {
+                before_item_index: 1,
+                after_item_index: 0,
+                kind: OrderingConstraintKind::CallerBeforeHelper,
             }],
         },
     }];
@@ -316,53 +323,53 @@ fn test_ordering_rule_when_type_and_impl_are_separated_retains_complete_block_id
             scope: "module crate".to_owned(),
             depth: 0,
             items: vec![
-                ItemDetails {
+                ItemOrderingMetadata {
                     range: SourceRange {
-                        start: Position { line: 2, column: 1 },
-                        end: Position { line: 2, column: 21 },
-                        bytes: 1..21,
+                        start: SourcePosition { line: 2, column: 1 },
+                        end: SourcePosition { line: 2, column: 21 },
+                        byte_range: 1..21,
                         whole_lines: true
                     },
                     label: "struct Data".to_owned(),
                     kind: Some(ItemKind::Struct),
                     group: ItemGroup::Items,
                     visibility: Some(VisibilityClass::Private),
-                    block: 0,
+                    block_first_item_index: 0,
                 },
-                ItemDetails {
+                ItemOrderingMetadata {
                     range: SourceRange {
-                        start: Position { line: 3, column: 1 },
-                        end: Position { line: 3, column: 26 },
-                        bytes: 22..47,
+                        start: SourcePosition { line: 3, column: 1 },
+                        end: SourcePosition { line: 3, column: 26 },
+                        byte_range: 22..47,
                         whole_lines: true
                     },
                     label: "fn unrelated".to_owned(),
                     kind: Some(ItemKind::Fn),
                     group: ItemGroup::Items,
                     visibility: Some(VisibilityClass::Private),
-                    block: 1,
+                    block_first_item_index: 1,
                 },
-                ItemDetails {
+                ItemOrderingMetadata {
                     range: SourceRange {
-                        start: Position { line: 4, column: 1 },
-                        end: Position { line: 4, column: 21 },
-                        bytes: 48..68,
+                        start: SourcePosition { line: 4, column: 1 },
+                        end: SourcePosition { line: 4, column: 21 },
+                        byte_range: 48..68,
                         whole_lines: true
                     },
                     label: "impl Data".to_owned(),
                     kind: Some(ItemKind::Impl),
                     group: ItemGroup::Items,
                     visibility: None,
-                    block: 0,
+                    block_first_item_index: 0,
                 },
             ],
-            details: Arrangement::Ordered {
-                original: vec![0, 1, 2],
-                required: vec![0, 2, 1],
-                reasons: vec![OrderingRuleReason {
-                    before: 0,
-                    after: 2,
-                    preference: Preference::TypeBlock
+            outcome: OrderingOutcome::Computed {
+                source_item_order: vec![0, 1, 2],
+                required_item_order: vec![0, 2, 1],
+                constraints: vec![OrderingConstraint {
+                    before_item_index: 0,
+                    after_item_index: 2,
+                    kind: OrderingConstraintKind::TypeImplAdjacency
                 }],
             },
         }]
@@ -427,8 +434,8 @@ fn test_ordering_rule_when_type_and_impl_are_separated_retains_complete_block_id
 )]
 fn test_ordering_rule_when_syntactic_reference_calls_helper_moves_it_after_caller(#[case] source: &str) {
     let violations = check(source);
-    assert_eq!(required(&violations[0]), vec![1, 0]);
-    assert_eq!(check(&apply(source, &violations)), Vec::new());
+    assert_eq!(required_item_order(&violations[0]), vec![1, 0]);
+    assert_eq!(check(&apply_ordering_violations(source, &violations)), Vec::new());
 }
 
 #[rstest::rstest]
@@ -608,11 +615,13 @@ fn test_ordering_rule_when_no_unsatisfied_relationship_exists_preserves_source_o
         pub const VALUE: () = ();
     "
 )]
-fn test_ordering_rule_when_preferences_interact_emits_deterministic_convergent_sequences(#[case] source: &str) {
+fn test_ordering_rule_when_constraints_interact_produces_repeatable_order_and_passes_after_application(
+    #[case] source: &str,
+) {
     let violations = check(source);
     assert_ne!(violations, Vec::new());
     assert_eq!(check(source), violations);
-    let actual = apply(source, &violations);
+    let actual = apply_ordering_violations(source, &violations);
     assert_eq!(check(&actual), Vec::new(), "{actual}");
     // Parsing after application also proves item boundaries remain syntactically intact.
     syn::parse_file(&actual).unwrap();
@@ -640,7 +649,7 @@ fn test_ordering_rule_when_scopes_are_nested_emits_deepest_first_and_preserves_s
         actual,
         vec![(2, "impl Data"), (1, "module crate::child"), (0, "module crate")]
     );
-    assert_eq!(check(&apply(source, &violations)), Vec::new());
+    assert_eq!(check(&apply_ordering_violations(source, &violations)), Vec::new());
 }
 
 #[test]
@@ -658,7 +667,7 @@ fn test_ordering_rule_when_items_have_comments_keeps_attached_content_and_scope_
         pub fn public() {}
     ";
     let violations = check(source);
-    let actual = apply(source, &violations);
+    let actual = apply_ordering_violations(source, &violations);
     let expected = r"
         //! scope docs
 
@@ -677,7 +686,7 @@ fn test_ordering_rule_when_items_have_comments_keeps_attached_content_and_scope_
         violations[0]
             .items
             .iter()
-            .map(|item| item.range.compact())
+            .map(|item| item.range.format_compact())
             .collect::<Vec<_>>(),
         vec!["6-8", "9-11"]
     );
@@ -771,7 +780,7 @@ fn test_ordering_rule_when_inner_macro_shadows_outer_respects_lexical_scope(
 ) {
     let violations = check(source);
     assert_eq!(!violations.is_empty(), requires_outer);
-    assert_eq!(check(&apply(source, &violations)), Vec::new());
+    assert_eq!(check(&apply_ordering_violations(source, &violations)), Vec::new());
 }
 
 #[rstest::rstest]
@@ -841,7 +850,7 @@ fn test_ordering_rule_when_ranges_include_trivia_preserves_complete_items(
     #[case] source: &str,
     #[case] expected: &str,
 ) {
-    let actual = apply(source, &check(source));
+    let actual = apply_ordering_violations(source, &check(source));
     assert_eq!(actual, expected);
     assert_eq!(check(&actual), Vec::new());
 }
@@ -898,7 +907,7 @@ fn test_ordering_rule_when_items_share_line_preserves_precise_boundaries_and_uni
     // Keep fixtures readable above; precise-boundary coverage requires same-line source at runtime.
     let source = single_line(source);
     let expected = single_line(expected);
-    let actual = apply(&source, &check(&source));
+    let actual = apply_ordering_violations(&source, &check(&source));
     assert_eq!(actual, expected);
     assert_eq!(check(&actual), Vec::new());
 }
@@ -1045,7 +1054,7 @@ fn test_ordering_rule_when_compilable_fixture_is_reordered_matches_verified_sour
     #[case] source: &str,
     #[case] expected: &str,
 ) {
-    let actual = apply(source, &check(source));
+    let actual = apply_ordering_violations(source, &check(source));
     assert_eq!(actual, expected, "{name}");
     assert_eq!(check(&actual), Vec::new(), "{name}");
 }
@@ -1076,7 +1085,7 @@ fn test_ordering_rule_when_scope_labels_repeat_identifies_each_scope_by_original
             "test.rs:8:9,ordering_rule,impl Data: order=[10-10,9-9]",
         ]
     );
-    assert_eq!(check(&apply(source, &violations)), Vec::new());
+    assert_eq!(check(&apply_ordering_violations(source, &violations)), Vec::new());
 }
 
 #[rstest::rstest]
@@ -1088,7 +1097,7 @@ fn test_ordering_rule_when_scope_labels_repeat_identifies_each_scope_by_original
 #[case("test.rs", vec![0, 1])]
 #[case("src/tests.rs", vec![1, 0])]
 #[case("test_parser.txt", vec![0, 1])]
-fn test_ordering_rule_when_filename_selects_test_scope_orders_function_sections(
+fn test_ordering_rule_when_filename_selects_test_scope_orders_fn_sections(
     #[case] path: &str,
     #[case] expected: Vec<usize>,
 ) {
@@ -1099,10 +1108,13 @@ fn test_ordering_rule_when_filename_selects_test_scope_orders_function_sections(
             helper();
         }
     ";
-    let violations = check_path(source, path);
-    assert_eq!(root_sequence(source, &violations), expected);
-    assert_eq!(check_path(&apply(source, &violations), path), Vec::new());
-    assert_eq!(check_path(source, path), violations);
+    let violations = check_source_at_path(source, path);
+    assert_eq!(root_item_order(source, &violations), expected);
+    assert_eq!(
+        check_source_at_path(&apply_ordering_violations(source, &violations), path),
+        Vec::new()
+    );
+    assert_eq!(check_source_at_path(source, path), violations);
 }
 
 #[rstest::rstest]
@@ -1167,8 +1179,8 @@ fn test_ordering_rule_when_attribute_path_marks_tests_ignores_attribute_argument
     #[case] expected: Vec<usize>,
 ) {
     let violations = check(source);
-    assert_eq!(root_sequence(source, &violations), expected);
-    assert_eq!(check(&apply(source, &violations)), Vec::new());
+    assert_eq!(root_item_order(source, &violations), expected);
+    assert_eq!(check(&apply_ordering_violations(source, &violations)), Vec::new());
 }
 
 #[rstest::rstest]
@@ -1188,9 +1200,12 @@ fn test_ordering_rule_when_recursion_crosses_sections_keeps_sections_separate(
         }
         fn unrelated() {}
     ";
-    let violations = check_path(source, path);
-    assert_eq!(root_sequence(source, &violations), expected);
-    assert_eq!(check_path(&apply(source, &violations), path), Vec::new());
+    let violations = check_source_at_path(source, path);
+    assert_eq!(root_item_order(source, &violations), expected);
+    assert_eq!(
+        check_source_at_path(&apply_ordering_violations(source, &violations), path),
+        Vec::new()
+    );
 }
 
 #[test]
@@ -1213,9 +1228,9 @@ fn test_ordering_rule_when_test_module_contains_nested_scopes_inherits_helper_se
     ";
     let violations = check(source);
     assert_eq!(violations.len(), 2);
-    assert_eq!(required(&violations[0]), vec![1, 0]);
-    assert_eq!(required(&violations[1]), vec![0, 1, 3, 2]);
-    assert_eq!(check(&apply(source, &violations)), Vec::new());
+    assert_eq!(required_item_order(&violations[0]), vec![1, 0]);
+    assert_eq!(required_item_order(&violations[1]), vec![0, 1, 3, 2]);
+    assert_eq!(check(&apply_ordering_violations(source, &violations)), Vec::new());
 }
 
 #[test]
@@ -1236,9 +1251,12 @@ fn test_ordering_rule_when_helpers_share_test_section_retains_caller_and_recursi
             first();
         }
     ";
-    let violations = check_path(source, "tests.rs");
-    assert_eq!(root_sequence(source, &violations), vec![4, 3, 0, 2, 1]);
-    assert_eq!(check_path(&apply(source, &violations), "tests.rs"), Vec::new());
+    let violations = check_source_at_path(source, "tests.rs");
+    assert_eq!(root_item_order(source, &violations), vec![4, 3, 0, 2, 1]);
+    assert_eq!(
+        check_source_at_path(&apply_ordering_violations(source, &violations), "tests.rs"),
+        Vec::new()
+    );
 }
 
 #[rstest::rstest]
@@ -1256,14 +1274,17 @@ fn test_ordering_rule_when_impl_scope_contains_tests_applies_file_section_order(
             fn helper() {}
         }
     ";
-    let violations = check_path(source, path);
-    let sequence = violations.first().map_or_else(|| vec![0, 1], required);
-    assert_eq!(sequence, expected);
-    assert_eq!(check_path(&apply(source, &violations), path), Vec::new());
+    let violations = check_source_at_path(source, path);
+    let item_order = violations.first().map_or_else(|| vec![0, 1], required_item_order);
+    assert_eq!(item_order, expected);
+    assert_eq!(
+        check_source_at_path(&apply_ordering_violations(source, &violations), path),
+        Vec::new()
+    );
 }
 
 #[test]
-fn test_ordering_rule_when_test_functions_recurse_retains_their_adjacent_block() {
+fn test_ordering_rule_when_test_fns_recurse_retains_their_adjacent_block() {
     let source = r"
         #[test]
         fn first() {
@@ -1275,16 +1296,19 @@ fn test_ordering_rule_when_test_functions_recurse_retains_their_adjacent_block()
             first();
         }
     ";
-    let violations = check_path(source, "tests.rs");
-    assert_eq!(root_sequence(source, &violations), vec![0, 2, 1]);
-    assert_eq!(check_path(&apply(source, &violations), "tests.rs"), Vec::new());
+    let violations = check_source_at_path(source, "tests.rs");
+    assert_eq!(root_item_order(source, &violations), vec![0, 2, 1]);
+    assert_eq!(
+        check_source_at_path(&apply_ordering_violations(source, &violations), "tests.rs"),
+        Vec::new()
+    );
 }
 
 fn check(source: &str) -> Vec<OrderingRuleViolation> {
-    check_path(source, "test.rs")
+    check_source_at_path(source, "test.rs")
 }
 
-fn check_path(source: &str, path: &str) -> Vec<OrderingRuleViolation> {
+fn check_source_at_path(source: &str, path: &str) -> Vec<OrderingRuleViolation> {
     let syntax = syn::parse_file(source).unwrap();
     OrderingRule.check(&FileContext {
         path: Path::new(path),
@@ -1293,11 +1317,14 @@ fn check_path(source: &str, path: &str) -> Vec<OrderingRuleViolation> {
     })
 }
 
-fn root_sequence(source: &str, violations: &[OrderingRuleViolation]) -> Vec<usize> {
+fn root_item_order(source: &str, violations: &[OrderingRuleViolation]) -> Vec<usize> {
     violations
         .iter()
         .find(|violation| violation.scope == "module crate")
-        .map_or_else(|| (0..syn::parse_file(source).unwrap().items.len()).collect(), required)
+        .map_or_else(
+            || (0..syn::parse_file(source).unwrap().items.len()).collect(),
+            required_item_order,
+        )
 }
 
 fn single_line(source: &str) -> String {
@@ -1309,34 +1336,44 @@ fn single_line(source: &str) -> String {
         .join(" ")
 }
 
-fn apply(source: &str, violations: &[OrderingRuleViolation]) -> String {
+fn apply_ordering_violations(source: &str, violations: &[OrderingRuleViolation]) -> String {
     let mut edits: Vec<(std::ops::Range<usize>, String)> = Vec::new();
     for violation in violations {
-        let original: Vec<_> = violation.items.iter().map(|item| item.range.bytes.clone()).collect();
+        let source_item_ranges: Vec<_> = violation
+            .items
+            .iter()
+            .map(|item| item.range.byte_range.clone())
+            .collect();
         let mut replacement = String::new();
-        for (slot, index) in required(violation).into_iter().enumerate() {
-            let item = &original[index];
-            replacement.push_str(&render_slice(source, item.clone(), &edits));
-            if let Some(next) = original.get(slot.saturating_add(1)) {
-                replacement.push_str(source.get(original[slot].end..next.start).unwrap());
+        for (slot, index) in required_item_order(violation).into_iter().enumerate() {
+            let item = &source_item_ranges[index];
+            replacement.push_str(&render_range_with_edits(source, item.clone(), &edits));
+            if let Some(next) = source_item_ranges.get(slot.saturating_add(1)) {
+                replacement.push_str(source.get(source_item_ranges[slot].end..next.start).unwrap());
             }
         }
-        let range = original.first().unwrap().start..original.last().unwrap().end;
+        let range = source_item_ranges.first().unwrap().start..source_item_ranges.last().unwrap().end;
         edits.retain(|(nested, _)| !(nested.start >= range.start && nested.end <= range.end));
         edits.push((range, replacement));
         edits.sort_by_key(|(range, _)| range.start);
     }
-    render_slice(source, 0..source.len(), &edits)
+    render_range_with_edits(source, 0..source.len(), &edits)
 }
 
-fn required(violation: &OrderingRuleViolation) -> Vec<usize> {
-    match &violation.details {
-        Arrangement::Ordered { required, .. } => required.clone(),
-        Arrangement::Conflict { message, .. } => panic!("{message}"),
+fn required_item_order(violation: &OrderingRuleViolation) -> Vec<usize> {
+    match &violation.outcome {
+        OrderingOutcome::Computed {
+            required_item_order, ..
+        } => required_item_order.clone(),
+        OrderingOutcome::Failed { message, .. } => panic!("{message}"),
     }
 }
 
-fn render_slice(source: &str, range: std::ops::Range<usize>, edits: &[(std::ops::Range<usize>, String)]) -> String {
+fn render_range_with_edits(
+    source: &str,
+    range: std::ops::Range<usize>,
+    edits: &[(std::ops::Range<usize>, String)],
+) -> String {
     let mut result = String::new();
     let mut position = range.start;
     for (edit, text) in edits {

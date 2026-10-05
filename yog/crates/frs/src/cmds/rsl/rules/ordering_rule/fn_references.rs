@@ -17,30 +17,30 @@ use syn::visit;
 use syn::visit::Visit;
 
 #[derive(Clone, Copy)]
-pub(super) enum CallScope {
-    Module,
-    Associated,
+pub(super) enum FnPathScope {
+    ModuleFns,
+    ImplFns,
 }
 
-pub(super) fn direct_calls(block: &Block, attributes: &[Attribute], scope: CallScope) -> Vec<String> {
-    let mut collector = DirectCallCollector {
+pub(super) fn collect_fn_name_candidates(block: &Block, attributes: &[Attribute], scope: FnPathScope) -> Vec<String> {
+    let mut collector = FnNameCandidateCollector {
         scope,
-        collected: Vec::new(),
+        candidate_names: Vec::new(),
     };
     for attribute in attributes {
         collector.visit_attribute(attribute);
     }
     collector.visit_block(block);
-    collector.collected
+    collector.candidate_names
 }
 
-struct DirectCallCollector {
-    scope: CallScope,
-    collected: Vec<String>,
+struct FnNameCandidateCollector {
+    scope: FnPathScope,
+    candidate_names: Vec<String>,
 }
 
-impl DirectCallCollector {
-    fn visit_arguments(&mut self, tokens: TokenStream) {
+impl FnNameCandidateCollector {
+    fn scan_attribute_arguments(&mut self, tokens: TokenStream) {
         let Ok(arguments) = Punctuated::<Expr, syn::Token![,]>::parse_terminated.parse2(tokens) else {
             return;
         };
@@ -49,7 +49,7 @@ impl DirectCallCollector {
         }
     }
 
-    fn visit_tokens(&mut self, tokens: TokenStream) {
+    fn scan_macro_tokens(&mut self, tokens: TokenStream) {
         let tokens: Vec<_> = tokens.into_iter().collect();
         let mut remaining = tokens.as_slice();
         loop {
@@ -58,20 +58,23 @@ impl DirectCallCollector {
                     remaining = rest;
                 }
                 [TokenTree::Group(group), rest @ ..] => {
-                    self.visit_tokens(group.stream());
+                    self.scan_macro_tokens(group.stream());
                     remaining = rest;
                 }
                 [TokenTree::Punct(first), TokenTree::Punct(second), rest @ ..]
                     if first.as_char() == ':' && second.as_char() == ':' =>
                 {
                     // Absolute paths are outside this local-name heuristic.
-                    remaining = self::macro_path(rest).1;
+                    remaining = self::take_identifier_path(rest).1;
                 }
                 [TokenTree::Ident(_), ..] => {
-                    let (segments, rest) = self::macro_path(remaining);
-                    let macro_name = matches!(rest.first(), Some(TokenTree::Punct(punct)) if punct.as_char() == '!');
-                    if !macro_name && let Some(name) = self::local_call_name(segments.into_iter(), self.scope) {
-                        self.collected.push(name);
+                    let (segments, rest) = self::take_identifier_path(remaining);
+                    let is_macro_invocation =
+                        matches!(rest.first(), Some(TokenTree::Punct(punct)) if punct.as_char() == '!');
+                    if !is_macro_invocation
+                        && let Some(name) = self::match_local_fn_path(segments.into_iter(), self.scope)
+                    {
+                        self.candidate_names.push(name);
                     }
                     remaining = rest;
                 }
@@ -82,12 +85,12 @@ impl DirectCallCollector {
     }
 }
 
-impl<'ast> Visit<'ast> for DirectCallCollector {
+impl<'ast> Visit<'ast> for FnNameCandidateCollector {
     fn visit_expr_call(&mut self, expression: &'ast ExprCall) {
         if let Expr::Path(path) = expression.func.as_ref()
-            && let Some(name) = self::direct_call_name(path, self.scope)
+            && let Some(name) = self::local_called_fn_name(path, self.scope)
         {
-            self.collected.push(name);
+            self.candidate_names.push(name);
         }
         visit::visit_expr_call(self, expression);
     }
@@ -97,21 +100,21 @@ impl<'ast> Visit<'ast> for DirectCallCollector {
     fn visit_attribute(&mut self, attribute: &'ast Attribute) {
         let mut segments = attribute.path().segments.iter();
         let first = segments.next();
-        let case = first.is_some_and(|segment| segment.ident == "case")
+        let is_case_attribute = first.is_some_and(|segment| segment.ident == "case")
             || (first.is_some_and(|segment| segment.ident == "rstest")
                 && segments.next().is_some_and(|segment| segment.ident == "case"));
-        if case && let Meta::List(list) = &attribute.meta {
-            self.visit_arguments(list.tokens.clone());
+        if is_case_attribute && let Meta::List(list) = &attribute.meta {
+            self.scan_attribute_arguments(list.tokens.clone());
         }
     }
 
     fn visit_macro(&mut self, mac: &'ast Macro) {
         // Macro tokens are syntactic references, including quoted or discarded arguments.
-        self.visit_tokens(mac.tokens.clone());
+        self.scan_macro_tokens(mac.tokens.clone());
     }
 }
 
-fn macro_path(tokens: &[TokenTree]) -> (Vec<&Ident>, &[TokenTree]) {
+fn take_identifier_path(tokens: &[TokenTree]) -> (Vec<&Ident>, &[TokenTree]) {
     let [TokenTree::Ident(first), rest @ ..] = tokens else {
         return (Vec::new(), tokens);
     };
@@ -133,23 +136,25 @@ fn macro_path(tokens: &[TokenTree]) -> (Vec<&Ident>, &[TokenTree]) {
     (segments, remaining)
 }
 
-fn direct_call_name(path: &ExprPath, scope: CallScope) -> Option<String> {
+fn local_called_fn_name(path: &ExprPath, scope: FnPathScope) -> Option<String> {
     // Caller order is intentionally syntax-only: resolve only local fn paths.
     if path.qself.is_some() || path.path.leading_colon.is_some() {
         return None;
     }
-    self::local_call_name(path.path.segments.iter().map(|segment| &segment.ident), scope)
+    self::match_local_fn_path(path.path.segments.iter().map(|segment| &segment.ident), scope)
 }
 
-fn local_call_name<'a>(mut segments: impl Iterator<Item = &'a Ident>, scope: CallScope) -> Option<String> {
+fn match_local_fn_path<'a>(mut segments: impl Iterator<Item = &'a Ident>, scope: FnPathScope) -> Option<String> {
     let first = segments.next()?;
     let second = segments.next();
     match (scope, second) {
-        (CallScope::Module, None) => Some(first.to_string()),
-        (CallScope::Module, Some(second)) if first == "self" && segments.next().is_none() => Some(second.to_string()),
-        (CallScope::Associated, Some(second)) if first == "Self" && segments.next().is_none() => {
+        (FnPathScope::ModuleFns, None) => Some(first.to_string()),
+        (FnPathScope::ModuleFns, Some(second)) if first == "self" && segments.next().is_none() => {
             Some(second.to_string())
         }
-        (CallScope::Module | CallScope::Associated, _) => None,
+        (FnPathScope::ImplFns, Some(second)) if first == "Self" && segments.next().is_none() => {
+            Some(second.to_string())
+        }
+        (FnPathScope::ModuleFns | FnPathScope::ImplFns, _) => None,
     }
 }
