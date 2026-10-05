@@ -50,10 +50,10 @@ pub(super) const fn busy_start(process: &TrackedProcess) -> BusyStart {
 
 #[cfg(test)]
 mod tests {
+    use lazy_regex::Regex;
     use muxr_config::MuxrConfig;
     use muxr_config::ObservationPatterns;
     use muxr_core::TerminalSize;
-    use regex::Regex;
     use test_that::prelude::*;
 
     use super::*;
@@ -86,12 +86,12 @@ mod tests {
     ) -> rootcause::Result<()> {
         let patterns = ScreenObservationConfig {
             busy: ObservationPatterns::try_new(vec![
-                Regex::new(r"\ARUN(?:NING)?\z")?,
-                Regex::new(r"\ATHINK(?:ING)?\z")?,
+                Regex::clone(lazy_regex::regex!(r"\ARUN(?:NING)?\z")),
+                Regex::clone(lazy_regex::regex!(r"\ATHINK(?:ING)?\z")),
             ])?,
             needs_attention: ObservationPatterns::try_new(vec![
-                Regex::new(r"\ADONE\b")?,
-                Regex::new(r"\AFINISHED\b")?,
+                Regex::clone(lazy_regex::regex!(r"\ADONE\b")),
+                Regex::clone(lazy_regex::regex!(r"\AFINISHED\b")),
             ])?,
             trim_chars: &['#'],
         };

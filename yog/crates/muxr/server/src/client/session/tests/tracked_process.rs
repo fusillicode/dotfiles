@@ -1,3 +1,4 @@
+use lazy_regex::Regex;
 use muxr_config::ObservationPatterns;
 
 use super::*;
@@ -634,8 +635,8 @@ fn test_tracked_process_screen_when_config_overrides_patterns_and_trimming_drive
         .ok_or_else(|| rootcause::report!("missing configured cat process"))?;
     process.id = agent;
     process.screen_observation = Some(ScreenObservationConfig {
-        busy: ObservationPatterns::try_new(vec![Regex::new(r"\ATASK\s+ACTIVE\z")?])?,
-        needs_attention: ObservationPatterns::try_new(vec![Regex::new(r"\ATASK\s+DONE\b")?])?,
+        busy: ObservationPatterns::try_new(vec![Regex::clone(lazy_regex::regex!(r"\ATASK\s+ACTIVE\z"))])?,
+        needs_attention: ObservationPatterns::try_new(vec![Regex::clone(lazy_regex::regex!(r"\ATASK\s+DONE\b"))])?,
         trim_chars: &['#'],
     });
     let mut processes = PaneTrackedProcesses::default();

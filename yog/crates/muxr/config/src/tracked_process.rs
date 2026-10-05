@@ -2,9 +2,8 @@
 
 use std::time::Duration;
 
+use lazy_regex::Regex;
 use nutype::nutype;
-use regex::Regex;
-use rootcause::prelude::ResultExt;
 
 /// Configured foreground processes and their screen recognition rules.
 #[derive(Clone, Debug)]
@@ -13,10 +12,10 @@ pub struct TrackedProcessConfig {
 }
 
 impl TrackedProcessConfig {
-    /// Build the configured agents and compile their screen patterns.
+    /// Build the configured agents with compile-time-validated screen patterns.
     ///
     /// # Errors
-    /// Returns an error if a configured screen regex is invalid or an observation pattern list is empty.
+    /// Returns an error if an observation pattern list is empty.
     pub fn new() -> rootcause::Result<Self> {
         Ok(Self {
             processes: vec![
@@ -41,12 +40,12 @@ impl TrackedProcessConfig {
                     ],
                     quiet_threshold: Duration::from_secs(3),
                     screen_observation: Some(ScreenObservationConfig {
-                        busy: ObservationPatterns::try_new(vec![
-                            Regex::new(r"\AWorking \(\s*(?:[0-9]+h(?:\s+[0-9]+m)?(?:\s+[0-9]+s)?|[0-9]+m(?:\s+[0-9]+s)?|[0-9]+s)\s*•\s*\S+ to interrupt\s*\)\z").context("invalid Codex busy regex (index=0)")?,
-                        ])?,
-                        needs_attention: ObservationPatterns::try_new(vec![
-                            Regex::new(r"\AWorked for \s*(?:[0-9]+h(?:\s+[0-9]+m)?(?:\s+[0-9]+s)?|[0-9]+m(?:\s+[0-9]+s)?|[0-9]+s)\s*•\s*(?:[01][0-9]|2[0-3]):[0-5][0-9]\z").context("invalid Codex needs_attention regex (index=0)")?,
-                        ])?,
+                        busy: ObservationPatterns::try_new(vec![Regex::clone(lazy_regex::regex!(
+                            r"\AWorking \(\s*(?:[0-9]+h(?:\s+[0-9]+m)?(?:\s+[0-9]+s)?|[0-9]+m(?:\s+[0-9]+s)?|[0-9]+s)\s*•\s*\S+ to interrupt\s*\)\z"
+                        ))])?,
+                        needs_attention: ObservationPatterns::try_new(vec![Regex::clone(lazy_regex::regex!(
+                            r"\AWorked for \s*(?:[0-9]+h(?:\s+[0-9]+m)?(?:\s+[0-9]+s)?|[0-9]+m(?:\s+[0-9]+s)?|[0-9]+s)\s*•\s*(?:[01][0-9]|2[0-3]):[0-5][0-9]\z"
+                        ))])?,
                         trim_chars: &['─', '━', '•', '·', '⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'],
                     }),
                 },
@@ -190,7 +189,6 @@ impl ProcessMatcher {
 
 #[cfg(test)]
 mod tests {
-    use regex::RegexBuilder;
     use test_that::prelude::*;
 
     use super::*;
@@ -215,8 +213,8 @@ mod tests {
         #[case] expected: &str,
     ) -> rootcause::Result<()> {
         let screen = ScreenObservationConfig {
-            busy: ObservationPatterns::try_new(vec![Regex::new(r"\Astatus\s+active\z")?])?,
-            needs_attention: ObservationPatterns::try_new(vec![Regex::new(r"\Adone[0-9]+\z")?])?,
+            busy: ObservationPatterns::try_new(vec![Regex::clone(lazy_regex::regex!(r"\Astatus\s+active\z"))])?,
+            needs_attention: ObservationPatterns::try_new(vec![Regex::clone(lazy_regex::regex!(r"\Adone[0-9]+\z"))])?,
             trim_chars,
         };
         test_that::assert_that!(screen.normalize_line(line), eq(expected));
@@ -224,12 +222,11 @@ mod tests {
     }
 
     #[test]
-    fn test_screen_observation_when_regex_has_builder_options_preserves_compiled_behavior() -> rootcause::Result<()> {
+    fn test_screen_observation_when_regex_has_case_insensitive_flag_preserves_compiled_behavior()
+    -> rootcause::Result<()> {
         let screen = ScreenObservationConfig {
-            busy: ObservationPatterns::try_new(vec![
-                RegexBuilder::new(r"\Awork(?:ing)?\z").case_insensitive(true).build()?,
-            ])?,
-            needs_attention: ObservationPatterns::try_new(vec![Regex::new(r"\Adone[0-9]+\z")?])?,
+            busy: ObservationPatterns::try_new(vec![Regex::clone(lazy_regex::regex!(r"\Awork(?:ing)?\z"i))])?,
+            needs_attention: ObservationPatterns::try_new(vec![Regex::clone(lazy_regex::regex!(r"\Adone[0-9]+\z"))])?,
             trim_chars: &[],
         };
         test_that::assert_that!(screen.matches_busy("WORKING"), eq(true));

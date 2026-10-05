@@ -25,7 +25,6 @@ use muxr_core::TrackedProcessState;
 use muxr_transport::ClientConnection;
 use muxr_transport::ClientEventReader;
 use muxr_transport::ServerListener;
-use regex::Regex;
 use test_that::prelude::*;
 
 use super::*;

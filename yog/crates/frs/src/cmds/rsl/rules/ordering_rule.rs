@@ -31,11 +31,11 @@
 
 use std::path::Path;
 
+use lazy_regex::Regex;
 use proc_macro2::Ident;
 use proc_macro2::LineColumn;
 use proc_macro2::Span;
 use ranges::SourceRange;
-use regex::Regex;
 use syn::Attribute;
 use syn::ImplItem;
 use syn::Item;
@@ -69,24 +69,10 @@ impl TypedRule for OrderingRule {
     }
 
     fn check(&self, ctx: &FileContext<'_>) -> Vec<Self::Violation> {
-        let attribute_pattern = match Regex::new(r"(?:^|_)test(?:_|$)|^rstest$") {
-            Ok(pattern) => pattern,
-            Err(error) => {
-                return vec![OrderingRuleViolation {
-                    location: Location::from_span(ctx.path, Span::call_site()),
-                    scope: "module crate".to_owned(),
-                    depth: 0,
-                    items: Vec::new(),
-                    details: Arrangement::Conflict {
-                        message: format!("invalid test attribute pattern: {error}"),
-                        reasons: Vec::new(),
-                    },
-                }];
-            }
-        };
+        let attribute_pattern = lazy_regex::regex!(r"(?:^|_)test(?:_|$)|^rstest$");
         let tests = TestContext {
             kind: ScopeKind::from_path(ctx.path),
-            attribute_pattern: &attribute_pattern,
+            attribute_pattern,
         };
         let mut violations = Vec::new();
         check_scope(

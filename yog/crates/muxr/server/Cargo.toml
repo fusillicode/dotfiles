@@ -33,7 +33,7 @@ tracing-subscriber = { version = "0.3" }
 url = { workspace = true }
 
 [dev-dependencies]
-regex = { version = "1.13" }
+lazy-regex = { workspace = true }
 rstest = { workspace = true }
 tempfile = { workspace = true }
 test-that = { workspace = true }
