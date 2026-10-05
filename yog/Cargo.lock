@@ -1361,6 +1361,7 @@ dependencies = [
  "owo-colors",
  "proc-macro2",
  "rayon",
+ "regex",
  "rootcause",
  "rstest",
  "serde",

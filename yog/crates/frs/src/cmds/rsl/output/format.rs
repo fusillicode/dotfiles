@@ -2,10 +2,7 @@ use super::ViolationOutputFormat;
 use crate::cmds::rsl::rules::common::Location;
 
 mod aliased_import;
-mod misordered_fn;
-mod misordered_item_group;
-mod misordered_visibility;
-mod nonadjacent_impl;
+mod ordering_rule;
 mod overqualified_call;
 mod qualified_item;
 mod relative_path;

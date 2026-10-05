@@ -1,13 +1,7 @@
 //! Shared syntax classification helpers for the rsl rules.
 
-use std::collections::HashMap;
-use std::collections::HashSet;
-use std::collections::VecDeque;
-
-use proc_macro2::Span;
 use proc_macro2::TokenTree;
 use syn::Item;
-use syn::spanned::Spanned;
 
 #[derive(Clone, Copy, Debug, strum::Display, Eq, PartialEq)]
 #[strum(serialize_all = "snake_case")]
@@ -98,25 +92,11 @@ impl From<&syn::Visibility> for VisibilityClass {
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct ClassifiedItem {
-    pub kind: ItemKind,
-    pub span: Span,
-}
-
-pub fn type_definition(item: &Item) -> Option<(String, ItemKind, VisibilityClass)> {
+pub fn type_definition_name(item: &Item) -> Option<String> {
     match item {
-        Item::Enum(item) => Some((item.ident.to_string(), ItemKind::Enum, VisibilityClass::from(&item.vis))),
-        Item::Struct(item) => Some((
-            item.ident.to_string(),
-            ItemKind::Struct,
-            VisibilityClass::from(&item.vis),
-        )),
-        Item::Union(item) => Some((
-            item.ident.to_string(),
-            ItemKind::Union,
-            VisibilityClass::from(&item.vis),
-        )),
+        Item::Enum(item) => Some(item.ident.to_string()),
+        Item::Struct(item) => Some(item.ident.to_string()),
+        Item::Union(item) => Some(item.ident.to_string()),
         Item::Const(_)
         | Item::ExternCrate(_)
         | Item::Fn(_)
@@ -166,6 +146,21 @@ pub fn item_visibility(item: &Item) -> Option<VisibilityClass> {
 }
 
 pub fn item_label(item: &Item, kind: ItemKind) -> String {
+    if let Item::Impl(item) = item {
+        let target = self::impl_target_name(item).unwrap_or_else(|| "type".to_owned());
+        return item.trait_.as_ref().map_or_else(
+            || format!("impl {target}"),
+            |(path, _)| {
+                let name = path
+                    .segments
+                    .iter()
+                    .map(|segment| segment.ident.to_string())
+                    .collect::<Vec<_>>()
+                    .join("::");
+                format!("impl {name} for {target}")
+            },
+        );
+    }
     let name = match item {
         Item::Const(item) => Some(item.ident.to_string()),
         Item::Enum(item) => Some(item.ident.to_string()),
@@ -178,50 +173,13 @@ pub fn item_label(item: &Item, kind: ItemKind) -> String {
         Item::TraitAlias(item) => Some(item.ident.to_string()),
         Item::Type(item) => Some(item.ident.to_string()),
         Item::Union(item) => Some(item.ident.to_string()),
-        Item::Use(_) | Item::ForeignMod(_) | Item::Macro(_) | Item::Impl(_) | Item::Verbatim(_) | _ => None,
+        Item::Macro(item) => item.ident.as_ref().map(ToString::to_string),
+        Item::Use(_) | Item::ForeignMod(_) | Item::Impl(_) | Item::Verbatim(_) | _ => None,
     };
     name.map_or_else(|| kind.label().to_owned(), |name| format!("{} {name}", kind.label()))
 }
 
-pub fn impl_order_label(item: &Item) -> String {
-    if let Item::Impl(item_impl) = item {
-        let target = self::impl_target_name(item_impl).unwrap_or_else(|| "type".to_owned());
-        if item_impl.trait_.is_some() {
-            format!("trait impl {target}")
-        } else {
-            format!("inherent impl {target}")
-        }
-    } else {
-        self::classify_item(item).map_or_else(
-            || "item".to_owned(),
-            |classified| self::item_label(item, classified.kind),
-        )
-    }
-}
-
-pub fn item_span(item: &Item) -> Span {
-    match item {
-        Item::Const(item) => item.const_token.span(),
-        Item::Enum(item) => item.enum_token.span(),
-        Item::ExternCrate(item) => item.extern_token.span(),
-        Item::Fn(item) => item.sig.fn_token.span(),
-        Item::ForeignMod(item) => item.abi.extern_token.span(),
-        Item::Impl(item) => item.impl_token.span(),
-        Item::Macro(item) => item.mac.path.span(),
-        Item::Mod(item) => item.mod_token.span(),
-        Item::Static(item) => item.static_token.span(),
-        Item::Struct(item) => item.struct_token.span(),
-        Item::Trait(item) => item.trait_token.span(),
-        Item::TraitAlias(item) => item.trait_token.span(),
-        Item::Type(item) => item.type_token.span(),
-        Item::Union(item) => item.union_token.span(),
-        Item::Use(item) => item.use_token.span(),
-        Item::Verbatim(tokens) => self::explicit_macro_span(tokens).unwrap_or_else(|| tokens.span()),
-        _ => item.span(),
-    }
-}
-
-pub fn classify_item(item: &Item) -> Option<ClassifiedItem> {
+pub fn classify_item(item: &Item) -> Option<ItemKind> {
     let kind = match item {
         Item::ExternCrate(_) => ItemKind::ExternCrate,
         Item::Use(_) => ItemKind::Use,
@@ -239,14 +197,11 @@ pub fn classify_item(item: &Item) -> Option<ClassifiedItem> {
         Item::TraitAlias(_) => ItemKind::TraitAlias,
         Item::Impl(_) => ItemKind::Impl,
         Item::Fn(_) => ItemKind::Fn,
-        Item::Verbatim(tokens) if self::explicit_macro_span(tokens).is_some() => ItemKind::Macro,
+        Item::Verbatim(tokens) if self::is_explicit_macro(tokens) => ItemKind::Macro,
         Item::Macro(_) | Item::Verbatim(_) | _ => return None,
     };
 
-    Some(ClassifiedItem {
-        kind,
-        span: self::item_span(item),
-    })
+    Some(kind)
 }
 
 pub(super) fn is_test_module(item: &Item) -> bool {
@@ -276,14 +231,17 @@ fn is_global_asm(item: &syn::ItemMacro) -> bool {
         .is_some_and(|segment| segment.ident == "global_asm")
 }
 
-fn explicit_macro_span(tokens: &proc_macro2::TokenStream) -> Option<Span> {
+fn is_explicit_macro(tokens: &proc_macro2::TokenStream) -> bool {
     let mut tokens = tokens.clone().into_iter().peekable();
     loop {
-        match tokens.next()? {
+        let Some(token) = tokens.next() else {
+            return false;
+        };
+        match token {
             TokenTree::Punct(punct) if punct.as_char() == '#' => {
                 if !matches!(tokens.next(), Some(TokenTree::Group(group)) if group.delimiter() == proc_macro2::Delimiter::Bracket)
                 {
-                    return None;
+                    return false;
                 }
             }
             TokenTree::Ident(ident) if ident == "pub" => {
@@ -295,350 +253,15 @@ fn explicit_macro_span(tokens: &proc_macro2::TokenStream) -> Option<Span> {
             TokenTree::Ident(ident) if matches!(ident.to_string().as_str(), "crate" | "self" | "super") => {}
             TokenTree::Ident(ident) if ident == "macro" => {
                 let Some(TokenTree::Ident(_)) = tokens.next() else {
-                    return None;
+                    return false;
                 };
                 if matches!(tokens.peek(), Some(TokenTree::Group(group)) if group.delimiter() == proc_macro2::Delimiter::Parenthesis)
                 {
                     tokens.next();
                 }
-                return matches!(tokens.next(), Some(TokenTree::Group(group)) if group.delimiter() == proc_macro2::Delimiter::Brace)
-                    .then_some(ident.span());
+                return matches!(tokens.next(), Some(TokenTree::Group(group)) if group.delimiter() == proc_macro2::Delimiter::Brace);
             }
-            TokenTree::Group(_) | TokenTree::Ident(_) | TokenTree::Punct(_) | TokenTree::Literal(_) => return None,
+            TokenTree::Group(_) | TokenTree::Ident(_) | TokenTree::Punct(_) | TokenTree::Literal(_) => return false,
         }
-    }
-}
-
-#[derive(Clone, Debug)]
-pub(super) struct OrderNode {
-    pub(super) source_idx: usize,
-    pub(super) span: Span,
-    pub(super) group: Option<ItemGroup>,
-    pub(super) visibility: Option<VisibilityClass>,
-    pub(super) label: String,
-}
-
-#[derive(Clone, Debug)]
-pub(super) struct ModuleNode {
-    pub(super) order: OrderNode,
-    pub(super) idxs: Vec<usize>,
-}
-
-#[derive(Clone, Debug)]
-struct TypeCluster {
-    type_idx: usize,
-    name: String,
-    kind: ItemKind,
-    visibility: VisibilityClass,
-    inherent_impls: Vec<usize>,
-    trait_impls: Vec<usize>,
-}
-
-#[derive(Clone, Copy, Debug)]
-pub(super) enum ItemVisibility {
-    Known(VisibilityClass),
-    NotApplicable,
-}
-
-#[derive(Debug)]
-pub(super) enum ItemMetadata {
-    Unclassified,
-    Classified {
-        item: ClassifiedItem,
-        visibility: ItemVisibility,
-    },
-    TestModule {
-        item: ClassifiedItem,
-        visibility: VisibilityClass,
-    },
-}
-
-impl ItemMetadata {
-    fn from_item(item: &Item) -> Self {
-        let Some(classified) = self::classify_item(item) else {
-            return Self::Unclassified;
-        };
-        if self::is_test_module(item)
-            && let Item::Mod(module) = item
-        {
-            return Self::TestModule {
-                item: classified,
-                visibility: VisibilityClass::from(&module.vis),
-            };
-        }
-
-        let visibility = self::item_visibility(item).map_or(ItemVisibility::NotApplicable, ItemVisibility::Known);
-        Self::Classified {
-            item: classified,
-            visibility,
-        }
-    }
-
-    pub(super) const fn classified(&self) -> Option<&ClassifiedItem> {
-        match self {
-            Self::Unclassified => None,
-            Self::Classified { item, .. } | Self::TestModule { item, .. } => Some(item),
-        }
-    }
-
-    pub(super) const fn is_test_module(&self) -> bool {
-        matches!(self, Self::TestModule { .. })
-    }
-
-    pub(super) const fn visibility(&self) -> Option<VisibilityClass> {
-        match self {
-            Self::Unclassified => None,
-            Self::Classified { visibility, .. } => visibility.value(),
-            Self::TestModule { visibility, .. } => Some(*visibility),
-        }
-    }
-}
-
-impl ItemVisibility {
-    const fn value(self) -> Option<VisibilityClass> {
-        match self {
-            Self::Known(visibility) => Some(visibility),
-            Self::NotApplicable => None,
-        }
-    }
-}
-
-pub(super) struct ModuleItem<'ast> {
-    item: &'ast Item,
-    metadata: ItemMetadata,
-}
-
-impl<'ast> ModuleItem<'ast> {
-    pub(super) const fn item(&self) -> &'ast Item {
-        self.item
-    }
-
-    pub(super) const fn metadata(&self) -> &ItemMetadata {
-        &self.metadata
-    }
-}
-
-pub(super) fn module_item_lists(file: &syn::File) -> Vec<Vec<ModuleItem<'_>>> {
-    let mut pending = VecDeque::from([file.items.as_slice()]);
-    let mut scopes = Vec::new();
-
-    while let Some(items) = pending.pop_front() {
-        let module_items = items
-            .iter()
-            .map(|item| ModuleItem {
-                item,
-                metadata: ItemMetadata::from_item(item),
-            })
-            .collect();
-        scopes.push(module_items);
-        for item in items {
-            if let Item::Mod(module) = item
-                && let Some((_, nested_items)) = &module.content
-            {
-                pending.push_back(nested_items);
-            }
-        }
-    }
-
-    scopes
-}
-
-pub(super) fn module_nodes(items: &[ModuleItem<'_>]) -> Vec<ModuleNode> {
-    let mut type_idxs = HashMap::new();
-    let mut clusters = HashMap::new();
-
-    for (idx, module_item) in items.iter().enumerate() {
-        let item = module_item.item();
-        let Some((name, kind, visibility)) = self::type_definition(item) else {
-            continue;
-        };
-        if type_idxs.insert(name.clone(), Some(idx)).is_some() {
-            type_idxs.insert(name, None);
-            continue;
-        }
-        clusters.insert(
-            idx,
-            TypeCluster {
-                type_idx: idx,
-                name,
-                kind,
-                visibility,
-                inherent_impls: Vec::new(),
-                trait_impls: Vec::new(),
-            },
-        );
-    }
-
-    for (idx, module_item) in items.iter().enumerate() {
-        let item = module_item.item();
-        let Item::Impl(item_impl) = item else {
-            continue;
-        };
-        let Some(target_name) = self::impl_target_name(item_impl) else {
-            continue;
-        };
-        let Some(Some(type_idx)) = type_idxs.get(&target_name) else {
-            continue;
-        };
-        let Some(cluster) = clusters.get_mut(type_idx) else {
-            continue;
-        };
-        if item_impl.trait_.is_some() {
-            cluster.trait_impls.push(idx);
-        } else {
-            cluster.inherent_impls.push(idx);
-        }
-    }
-
-    let mut item_to_cluster = HashMap::new();
-    for (&type_idx, cluster) in &clusters {
-        item_to_cluster.insert(type_idx, type_idx);
-        for &idx in cluster.inherent_impls.iter().chain(&cluster.trait_impls) {
-            item_to_cluster.insert(idx, type_idx);
-        }
-    }
-
-    let mut emitted_clusters = HashSet::new();
-    let mut nodes = Vec::new();
-    for (idx, module_item) in items.iter().enumerate() {
-        let item = module_item.item();
-        if let Some(&type_idx) = item_to_cluster.get(&idx) {
-            if !emitted_clusters.insert(type_idx) {
-                continue;
-            }
-            let Some(cluster) = clusters.get(&type_idx) else {
-                continue;
-            };
-            let Some(type_item) = items.get(cluster.type_idx) else {
-                continue;
-            };
-            let mut idxs = vec![cluster.type_idx];
-            idxs.extend(&cluster.inherent_impls);
-            idxs.extend(&cluster.trait_impls);
-            let source_idx = idxs.iter().copied().min().unwrap_or(cluster.type_idx);
-            nodes.push(ModuleNode {
-                order: OrderNode {
-                    source_idx,
-                    span: self::item_span(type_item.item()),
-                    group: Some(cluster.kind.group()),
-                    visibility: Some(cluster.visibility),
-                    label: format!("{} {}", cluster.kind.label(), cluster.name),
-                },
-                idxs,
-            });
-        } else if let Some(classified) = module_item.metadata().classified() {
-            nodes.push(ModuleNode {
-                order: OrderNode {
-                    source_idx: idx,
-                    span: classified.span,
-                    group: Some(classified.kind.group()),
-                    visibility: module_item.metadata().visibility(),
-                    label: self::item_label(item, classified.kind),
-                },
-                idxs: vec![idx],
-            });
-        }
-    }
-
-    nodes.sort_unstable_by_key(|node| node.order.source_idx);
-    nodes
-}
-
-pub(super) fn impl_nodes(item_impl: &syn::ItemImpl) -> Vec<OrderNode> {
-    item_impl
-        .items
-        .iter()
-        .enumerate()
-        .filter_map(|(source_idx, item)| {
-            let (kind, visibility) = match item {
-                syn::ImplItem::Const(item) => (ItemKind::Const, Some(VisibilityClass::from(&item.vis))),
-                syn::ImplItem::Fn(item) => (ItemKind::Fn, Some(VisibilityClass::from(&item.vis))),
-                syn::ImplItem::Type(item) => (ItemKind::TypeAlias, Some(VisibilityClass::from(&item.vis))),
-                syn::ImplItem::Macro(_) | syn::ImplItem::Verbatim(_) | _ => return None,
-            };
-            Some(OrderNode {
-                source_idx,
-                span: self::impl_item_span(item),
-                group: None,
-                visibility,
-                label: self::impl_item_label(item, kind),
-            })
-        })
-        .collect()
-}
-
-fn impl_item_label(item: &syn::ImplItem, kind: ItemKind) -> String {
-    let name = match item {
-        syn::ImplItem::Const(item) => Some(item.ident.to_string()),
-        syn::ImplItem::Fn(item) => Some(item.sig.ident.to_string()),
-        syn::ImplItem::Type(item) => Some(item.ident.to_string()),
-        syn::ImplItem::Macro(_) | syn::ImplItem::Verbatim(_) | _ => None,
-    };
-    name.map_or_else(|| kind.label().to_owned(), |name| format!("{} {name}", kind.label()))
-}
-
-fn impl_item_span(item: &syn::ImplItem) -> Span {
-    match item {
-        syn::ImplItem::Const(item) => item.const_token.span,
-        syn::ImplItem::Fn(item) => item.sig.fn_token.span,
-        syn::ImplItem::Type(item) => item.type_token.span,
-        syn::ImplItem::Macro(item) => item.mac.path.span(),
-        syn::ImplItem::Verbatim(tokens) => tokens.span(),
-        _ => item.span(),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_module_item_lists_when_metadata_is_requested_returns_cached_item_details() {
-        let file = syn::parse_file(
-            r"
-            fn run() {}
-            #[cfg(test)]
-            mod tests {}
-            ",
-        )
-        .expect("source should parse");
-
-        let item_lists = module_item_lists(&file);
-        let root = item_lists.first().expect("root item list should exist");
-        let first_metadata = root.first().expect("root item should exist").metadata();
-
-        assert_eq!(root.len(), 2);
-        assert_eq!(first_metadata.classified().map(|item| item.kind), Some(ItemKind::Fn));
-        assert!(!first_metadata.is_test_module());
-        assert_eq!(first_metadata.visibility(), Some(VisibilityClass::Private));
-        let second_item = root.get(1).expect("second root item should exist");
-        assert_eq!(
-            second_item.metadata().classified().map(|item| item.kind),
-            Some(ItemKind::Mod)
-        );
-        assert!(second_item.metadata().is_test_module());
-    }
-
-    #[test]
-    fn test_item_metadata_when_item_has_no_module_visibility_marks_it_not_applicable() {
-        let file = syn::parse_file(
-            r"
-            struct Data;
-            impl Data {}
-            ",
-        )
-        .expect("source should parse");
-
-        let item_lists = module_item_lists(&file);
-        let root = item_lists.first().expect("root item list should exist");
-        let metadata = root.get(1).expect("impl item should exist").metadata();
-
-        assert!(matches!(
-            metadata,
-            ItemMetadata::Classified {
-                visibility: ItemVisibility::NotApplicable,
-                ..
-            }
-        ));
     }
 }
