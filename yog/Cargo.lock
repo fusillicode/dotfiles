@@ -1357,11 +1357,11 @@ name = "frs"
 version = "0.1.0"
 dependencies = [
  "git2",
+ "lazy-regex",
  "nutype",
  "owo-colors",
  "proc-macro2",
  "rayon",
- "regex",
  "rootcause",
  "rstest",
  "serde",
@@ -2084,6 +2084,29 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bf36173d4167ed999940f804952e6b08197cae5ad5d572eb4db150ce8ad5d58f"
 
 [[package]]
+name = "lazy-regex"
+version = "3.6.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f0a2cce8a22920a29fdcc8c9170aa5d29edd9fbcf8bea856e24c2cb1c2419f67"
+dependencies = [
+ "lazy-regex-proc_macros",
+ "once_cell",
+ "regex",
+]
+
+[[package]]
+name = "lazy-regex-proc_macros"
+version = "3.6.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6f1e4b1f1d8c71edb4ff2b2150ec4606445fd2ddf67ddc097655daf59286baa6"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "regex",
+ "syn 3.0.6",
+]
+
+[[package]]
 name = "lazy_static"
 version = "1.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2521,9 +2544,9 @@ dependencies = [
 name = "muxr-config"
 version = "0.1.0"
 dependencies = [
+ "lazy-regex",
  "muxr-core",
  "nutype",
- "regex",
  "rootcause",
  "rstest",
  "serde",
@@ -2552,6 +2575,7 @@ version = "0.1.0"
 dependencies = [
  "jiff",
  "kanal",
+ "lazy-regex",
  "libproc",
  "muxr-config",
  "muxr-core",
@@ -2559,7 +2583,6 @@ dependencies = [
  "nutype",
  "parking_lot",
  "portable-pty",
- "regex",
  "rio-vt",
  "rootcause",
  "rstest",

@@ -61,11 +61,10 @@ pub struct MuxrConfig {
 }
 
 impl MuxrConfig {
-    /// Build the static configuration and compile its screen regexes.
+    /// Build the static configuration with compile-time-validated screen patterns.
     ///
     /// # Errors
-    /// Returns an error if a regex, split value, or keybinding character is invalid, or an observation pattern list is
-    /// empty.
+    /// Returns an error if a split value or keybinding character is invalid, or an observation pattern list is empty.
     pub fn new() -> rootcause::Result<Self> {
         Ok(Self {
             keybindings: KeybindingsConfig::new()?,

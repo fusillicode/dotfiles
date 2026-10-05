@@ -11,9 +11,9 @@ keywords = ["muxr", "terminal", "multiplexer", "config"]
 categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
+lazy-regex = { workspace = true }
 muxr_core = { workspace = true }
 nutype = { workspace = true }
-regex = { version = "1.13" }
 rootcause = { workspace = true }
 serde = { workspace = true }
 
