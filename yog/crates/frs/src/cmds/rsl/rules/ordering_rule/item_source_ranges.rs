@@ -6,14 +6,14 @@ use proc_macro2::Span;
 #[derive(Clone, Debug)]
 #[cfg_attr(test, derive(Eq, PartialEq))]
 pub struct SourceRange {
-    pub start: Position,
-    pub end: Position,
-    pub bytes: std::ops::Range<usize>,
+    pub start: SourcePosition,
+    pub end: SourcePosition,
+    pub byte_range: std::ops::Range<usize>,
     pub whole_lines: bool,
 }
 
 impl SourceRange {
-    pub fn compact(&self) -> String {
+    pub fn format_compact(&self) -> String {
         if self.whole_lines {
             format!("{}-{}", self.start.line, self.end.line)
         } else {
@@ -27,25 +27,33 @@ impl SourceRange {
 
 #[derive(Clone, Copy, Debug)]
 #[cfg_attr(test, derive(Eq, PartialEq))]
-pub struct Position {
+pub struct SourcePosition {
     pub line: usize,
     pub column: usize,
 }
 
-pub(super) fn item_ranges(source: &str, spans: &[Span], scope_start: LineColumn) -> Vec<SourceRange> {
-    let raw: Vec<_> = spans
+pub(super) fn item_ranges_with_attached_comments(
+    source: &str,
+    spans: &[Span],
+    scope_start: LineColumn,
+) -> Vec<SourceRange> {
+    let ast_byte_ranges: Vec<_> = spans
         .iter()
         .map(|span| byte_offset(source, span.start())..byte_offset(source, span.end()))
         .collect();
 
     let mut previous_end = None;
-    raw.iter()
+    ast_byte_ranges
+        .iter()
         .enumerate()
         .map(|(index, range)| {
-            let lower = previous_end;
-            let upper = raw.get(index.saturating_add(1)).map_or(source.len(), |next| next.start);
-            let start = leading_comments(source, lower, range.start, byte_offset(source, scope_start));
-            let end = trailing_comment(source, range.end, upper);
+            let previous_item_end = previous_end;
+            let next_item_start = ast_byte_ranges
+                .get(index.saturating_add(1))
+                .map_or(source.len(), |next| next.start);
+
+            let start = attached_start_offset(source, previous_item_end, range.start, byte_offset(source, scope_start));
+            let end = attached_end_offset(source, range.end, next_item_start);
 
             let line_start = source
                 .get(..start)
@@ -58,13 +66,13 @@ pub(super) fn item_ranges(source: &str, spans: &[Span], scope_start: LineColumn)
             let whole_lines = source.get(line_start..start).is_some_and(|text| text.trim().is_empty())
                 && source.get(end..line_end).is_some_and(|text| text.trim().is_empty());
 
-            let bytes = if whole_lines { line_start..line_end } else { start..end };
-            previous_end = Some(bytes.end);
+            let byte_range = if whole_lines { line_start..line_end } else { start..end };
+            previous_end = Some(byte_range.end);
 
             SourceRange {
-                start: position_at(source, bytes.start),
-                end: position_at(source, bytes.end),
-                bytes,
+                start: position_at(source, byte_range.start),
+                end: position_at(source, byte_range.end),
+                byte_range,
                 whole_lines,
             }
         })
@@ -90,27 +98,32 @@ fn byte_offset(source: &str, position: LineColumn) -> usize {
     line_start.saturating_add(column)
 }
 
-fn position_at(source: &str, offset: usize) -> Position {
+fn position_at(source: &str, offset: usize) -> SourcePosition {
     let prefix = source.get(..offset).unwrap_or_default();
     let line = prefix.bytes().filter(|&byte| byte == b'\n').count().saturating_add(1);
     let column = prefix.rsplit('\n').next().unwrap_or_default().chars().count();
 
-    Position {
+    SourcePosition {
         line,
         column: column.saturating_add(1),
     }
 }
 
-fn leading_comments(source: &str, lower: Option<usize>, start: usize, scope_start: usize) -> usize {
-    let boundary = lower.unwrap_or(scope_start);
-    let Some(gap) = source.get(boundary..start) else {
-        return start;
+fn attached_start_offset(
+    source: &str,
+    previous_item_end: Option<usize>,
+    ast_start_offset: usize,
+    scope_start_offset: usize,
+) -> usize {
+    let boundary = previous_item_end.unwrap_or(scope_start_offset);
+    let Some(gap) = source.get(boundary..ast_start_offset) else {
+        return ast_start_offset;
     };
 
     // A same-line trailing comment belongs to the preceding item. Inner docs remain scope-owned.
-    let skipped = if lower.is_some() {
+    let skipped = if previous_item_end.is_some() {
         let Some(newline) = gap.find('\n') else {
-            return start;
+            return ast_start_offset;
         };
         newline.saturating_add(1)
     } else {
@@ -155,11 +168,11 @@ fn leading_comments(source: &str, lower: Option<usize>, start: usize, scope_star
         newlines = 0;
     }
 
-    attached.unwrap_or(start)
+    attached.unwrap_or(ast_start_offset)
 }
 
-fn trailing_comment(source: &str, end: usize, upper: usize) -> usize {
-    let gap = source.get(end..upper).unwrap_or_default();
+fn attached_end_offset(source: &str, ast_end_offset: usize, next_item_start: usize) -> usize {
+    let gap = source.get(ast_end_offset..next_item_start).unwrap_or_default();
     let mut cursor = 0_usize;
     loop {
         let rest = gap.get(cursor..).unwrap_or_default();
@@ -171,7 +184,7 @@ fn trailing_comment(source: &str, end: usize, upper: usize) -> usize {
         };
         cursor = cursor.saturating_add(spaces).saturating_add(length);
     }
-    end.saturating_add(cursor)
+    ast_end_offset.saturating_add(cursor)
 }
 
 fn comment_length(text: &str) -> Option<usize> {
