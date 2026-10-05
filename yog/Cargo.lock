@@ -4163,9 +4163,9 @@ checksum = "33f4fe9184a62d842c9ef383018f3306d8ba224fd9d836f56d7288308847c256"
 
 [[package]]
 name = "skim"
-version = "5.7.3"
+version = "5.7.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6eac24b53a830509391ddc908ff5435948ff3a227ec91cc37613fbf4bdee66d7"
+checksum = "78c3b7c7b71e971d790463b580ed9128ace108b293c8c281bbc4bfc921e516a2"
 dependencies = [
  "ansi-to-tui",
  "assert_enum_variants",
@@ -4834,9 +4834,9 @@ dependencies = [
 
 [[package]]
 name = "twox-hash"
-version = "2.1.4"
+version = "2.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5283634e518fe9e82c7b20520bb4bc209009fd16c82077c802f8111ecbb0117a"
+checksum = "86a801b3cea342a06d468c8710662aa29e5e05e4f5c0d62f00bbb7f2ad7941c2"
 
 [[package]]
 name = "typed-path"
