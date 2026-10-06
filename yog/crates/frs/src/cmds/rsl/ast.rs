@@ -204,14 +204,6 @@ pub fn classify_item(item: &Item) -> Option<ItemKind> {
     Some(kind)
 }
 
-pub(super) fn is_test_module(item: &Item) -> bool {
-    let Item::Mod(module) = item else {
-        return false;
-    };
-
-    self::is_test_module_declaration(module)
-}
-
 pub(super) fn is_test_module_declaration(module: &syn::ItemMod) -> bool {
     module.ident == "tests"
         && module.attrs.iter().any(|attribute| {

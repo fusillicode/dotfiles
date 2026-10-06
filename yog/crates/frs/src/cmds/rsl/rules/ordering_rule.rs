@@ -1,12 +1,14 @@
 //! Deterministic item ordering, with one complete arrangement per affected scope.
 //!
 //! ```text
-//! extern_crate -> use -> foreign_mod/mod -> #[cfg(test)] mod tests
+//! extern_crate -> use -> foreign_mod/mod -> #[cfg(test)] mod tests;
 //! -> global_asm -> const/static -> ty_alias -> macros/types/traits/impls/functions
+//! -> inline #[cfg(test)] mod tests { ... }
 //! ```
 //!
 //! Keep contiguous blocks: `type -> inherent impls -> trait impls`, and mutually recursive private helpers.
-//! Within each group or inherent impl: `pub -> pub(crate) -> restricted -> private`; imports follow the formatter.
+//! Within each group or inherent impl: `pub -> pub(crate) -> restricted -> private`.
+//! Imports, external module declarations, and associated items other than methods follow the formatter.
 //! Test-only files (`tests.rs`, `test_*.rs`, `*_test.rs`, `*_tests.rs`) and inline `#[cfg(test)]`
 //! modules inherit `tests -> helpers`; production scopes keep test functions last.
 //! Test attribute path segments match `(?:^|_)test(?:_|$)|^rstest$`; arguments do not classify functions.
@@ -14,8 +16,10 @@
 //! Private helpers follow their earliest eligible caller; shared helpers prefer public callers.
 //! Duplicate-name impls attach to the last preceding declaration, without cfg evaluation.
 //!
-//! Exception: keep macros in their normal group and defer consuming inline modules after them.
-//! Preserve lexical shadowing: inner definitions shadow outer names from their declaration onward.
+//! Preserve source order between macro sources and possible consumers, without resolving macro names.
+//! Sources include macro definitions/invocations, imports, and opaque items. Consumers include attributed items,
+//! external modules, and items containing macros or opaque syntax. Plain items can cross macro sources.
+//! Ordering preferences yield to macro preservation. Incompatible adjacency emits a conflict without moves.
 //!
 //! Diagnostics list all immediate items in required order; conflicts emit no move instructions.
 //! Rich item metadata, original/required sequences, and ordering constraints remain in the Rust payload.
@@ -304,6 +308,13 @@ impl TestOrdering {
     }
 
     fn classify_item_section(self, ast: ItemAst<'_>) -> TestOrderSection {
+        if let ItemAst::ModuleItem(Item::Mod(module)) = ast
+            && module.content.is_some()
+            && ast::is_test_module_declaration(module)
+        {
+            return TestOrderSection::TrailingTestModules;
+        }
+
         let test_attribute_pattern = lazy_regex::regex!(r"(?:^|_)test(?:_|$)|^rstest$");
 
         let is_test_fn = ast.fn_attributes().is_some_and(|attributes| {
@@ -345,6 +356,7 @@ impl From<&Path> for TestOrdering {
 enum TestOrderSection {
     LeadingItems,
     TrailingFns,
+    TrailingTestModules,
 }
 
 #[derive(Clone, Copy)]
@@ -356,6 +368,16 @@ enum ItemAst<'ast> {
 impl<'ast> ItemAst<'ast> {
     const fn is_fn(self) -> bool {
         matches!(self, Self::ModuleItem(Item::Fn(_)) | Self::ImplItem(ImplItem::Fn(_)))
+    }
+
+    const fn allows_visibility_order_with(self, other: Self) -> bool {
+        match (self, other) {
+            (Self::ModuleItem(Item::Use(_) | Item::Mod(ItemMod { content: None, .. })), _)
+            | (_, Self::ModuleItem(Item::Use(_) | Item::Mod(ItemMod { content: None, .. }))) => false,
+            (Self::ModuleItem(_), Self::ModuleItem(_))
+            | (Self::ImplItem(ImplItem::Fn(_)), Self::ImplItem(ImplItem::Fn(_))) => true,
+            (Self::ModuleItem(_) | Self::ImplItem(_), Self::ModuleItem(_) | Self::ImplItem(_)) => false,
+        }
     }
 
     fn span(self) -> Span {

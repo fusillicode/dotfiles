@@ -2,6 +2,8 @@ use std::path::Path;
 use std::path::PathBuf;
 
 use item_source_ranges::SourcePosition;
+use syn::Expr;
+use syn::Stmt;
 
 use super::*;
 use crate::cmds::rsl::output::FormattedRuleViolation;
@@ -72,7 +74,7 @@ fn test_ordering_rule_when_verbatim_tokens_are_classified_recognizes_only_macro_
         use std::fmt;
         mod child {}
         #[cfg(test)]
-        mod tests {}
+        mod tests;
         const VALUE: () = ();
         struct Data;
         impl Data {}
@@ -87,7 +89,7 @@ fn test_ordering_rule_when_verbatim_tokens_are_classified_recognizes_only_macro_
         impl Data {}
         fn run() {}
         #[cfg(test)]
-        mod tests {}
+        mod tests;
         mod child {}
         const VALUE: () = ();
     ",
@@ -97,13 +99,40 @@ fn test_ordering_rule_when_verbatim_tokens_are_classified_recognizes_only_macro_
     r"
         use std::fmt;
         #[cfg(test)]
-        pub mod tests {}
+        pub mod tests;
         mod private {}
         pub struct Data;
     ",
     vec![0, 2, 1, 3]
 )]
-fn test_ordering_rule_when_test_module_is_present_keeps_it_last_within_module_group(
+#[case(
+    r"
+        use std::fmt;
+        #[cfg(test)]
+        pub mod tests {}
+        mod child {}
+        const VALUE: () = ();
+        struct Data;
+        impl Data {}
+        #[test]
+        fn example() {}
+        fn run() {}
+    ",
+    vec![0, 2, 3, 4, 5, 7, 6, 1]
+)]
+#[case(
+    r"
+        #[cfg(test)]
+        mod tests {
+            #[test]
+            fn example() {}
+        }
+        fn run() {}
+        mod child {}
+    ",
+    vec![2, 1, 0]
+)]
+fn test_ordering_rule_when_test_module_is_present_orders_it_by_declaration_form(
     #[case] source: &str,
     #[case] expected: Vec<usize>,
 ) {
@@ -119,20 +148,44 @@ fn test_ordering_rule_when_test_module_is_present_keeps_it_last_within_module_gr
 }
 
 #[test]
-fn test_ordering_rule_when_nested_test_module_follows_fn_moves_it_into_module_group() {
+fn test_ordering_rule_when_nested_inline_test_module_precedes_fn_moves_it_to_scope_end() {
     let source = r"
         mod parent {
             use std::fmt;
             mod child {}
-            fn run() {}
             #[cfg(test)]
             mod tests {}
+            fn run() {}
         }
     ";
     let violations = check(source);
     assert_eq!(violations.len(), 1);
     assert_eq!(required_item_order(&violations[0]), vec![0, 1, 3, 2]);
     assert_eq!(check(&apply_ordering_violations(source, &violations)), Vec::new());
+}
+
+#[rstest::rstest]
+#[case("lib.rs", vec![1, 2, 0])]
+#[case("tests.rs", vec![2, 1, 0])]
+fn test_ordering_rule_when_inline_test_module_shares_fn_sections_keeps_it_after_both(
+    #[case] path: &str,
+    #[case] expected: Vec<usize>,
+) {
+    let source = r"
+        #[cfg(test)]
+        mod tests {}
+        fn helper() {}
+        #[test]
+        fn example() {
+            helper();
+        }
+    ";
+    let violations = check_source_at_path(source, path);
+    assert_eq!(root_item_order(source, &violations), expected);
+    assert_eq!(
+        check_source_at_path(&apply_ordering_violations(source, &violations), path),
+        Vec::new()
+    );
 }
 
 #[rstest::rstest]
@@ -159,6 +212,350 @@ fn test_ordering_rule_when_nested_test_module_follows_fn_moves_it_into_module_gr
     "
 )]
 fn test_ordering_rule_when_imports_follow_formatter_order_preserves_visibility_mix(#[case] source: &str) {
+    assert_eq!(check(source), Vec::new());
+}
+
+#[rstest::rstest]
+#[case(
+    r"
+        mod alpha;
+        pub mod beta;
+        pub(crate) mod gamma;
+    "
+)]
+#[case(
+    r"
+        struct Data;
+        impl Data {
+            type Alpha = ();
+            pub type Beta = ();
+            const ALPHA: () = ();
+            pub const BETA: () = ();
+            pub fn run() {}
+        }
+    "
+)]
+#[case(
+    r"
+        struct Data;
+        impl Data {
+            pub fn run() {}
+            const ALPHA: () = ();
+        }
+    "
+)]
+fn test_ordering_rule_when_formatter_controls_item_order_ignores_conflicting_visibility(#[case] source: &str) {
+    assert_eq!(check(source), Vec::new());
+}
+
+#[rstest::rstest]
+#[case(
+    r"
+        mod alpha {}
+        pub mod beta {}
+    "
+)]
+#[case(
+    r"
+        struct Data;
+        impl Data {
+            fn helper() {}
+            pub fn run() {}
+        }
+    "
+)]
+fn test_ordering_rule_when_formatter_preserves_visibility_order_keeps_public_items_first(#[case] source: &str) {
+    let violations = check(source);
+    assert_eq!(violations.len(), 1);
+    assert_eq!(required_item_order(&violations[0]), vec![1, 0]);
+    assert_eq!(check(&apply_ordering_violations(source, &violations)), Vec::new());
+}
+
+#[rstest::rstest]
+#[case(
+    r"
+        #[macro_use]
+        mod macros;
+        pub mod consumer;
+    ",
+    vec![0, 1]
+)]
+#[case(
+    r"
+        fn before() {}
+        #[macro_use]
+        extern crate external;
+        use external::Data;
+        pub fn after() {}
+    ",
+    vec![1, 2, 3, 0]
+)]
+#[case(
+    r"
+        mod before;
+        #[macro_use]
+        mod first;
+        pub mod between;
+        #[macro_use]
+        mod second;
+        pub mod after;
+    ",
+    vec![0, 1, 2, 3, 4]
+)]
+#[case(
+    r"
+        fn private_before() {}
+        pub fn public_before() {}
+        #[macro_use]
+        mod macros;
+        fn private_after() {}
+        pub fn public_after() {}
+    ",
+    vec![2, 1, 4, 0, 3]
+)]
+#[case(
+    r"
+        fn helper() {}
+        #[macro_use]
+        mod macros;
+        pub fn caller() {
+            helper();
+        }
+    ",
+    vec![1, 2, 0]
+)]
+#[case(
+    r"
+        fn first() {
+            second();
+        }
+        #[macro_use]
+        mod macros;
+        fn second() {
+            first();
+        }
+    ",
+    vec![1, 0, 2]
+)]
+#[case(
+    r"
+        #[cfg_attr(unix, macro_use)]
+        mod macros;
+        pub mod consumer;
+    ",
+    vec![0, 1]
+)]
+#[case(
+    r"
+        #[cfg_attr(unix, cfg_attr(feature, macro_use))]
+        extern crate external;
+        pub mod consumer;
+    ",
+    vec![0, 1]
+)]
+#[case(
+    r"
+        mod before;
+        #[macro_use(named)]
+        extern crate external;
+        pub mod after;
+    ",
+    vec![0, 1, 2]
+)]
+#[case(
+    r#"
+        fn helper() {}
+        #[cfg_attr(macro_use, path = "child.rs")]
+        mod child;
+        pub fn caller() {
+            helper();
+        }
+    "#,
+    vec![1, 2, 0]
+)]
+fn test_ordering_rule_when_macro_import_has_possible_consumers_preserves_only_their_source_order(
+    #[case] source: &str,
+    #[case] expected: Vec<usize>,
+) {
+    let violations = check(source);
+    assert_eq!(root_item_order(source, &violations), expected);
+    assert_eq!(check(&apply_ordering_violations(source, &violations)), Vec::new());
+}
+
+#[test]
+fn test_ordering_rule_when_type_impl_block_can_cross_macro_import_keeps_it_adjacent() {
+    let source = r"
+        struct Data;
+        #[macro_use]
+        mod macros;
+        impl Data {}
+    ";
+    let violations = check(source);
+    assert_eq!(root_item_order(source, &violations), vec![1, 0, 2]);
+    assert_eq!(check(&apply_ordering_violations(source, &violations)), Vec::new());
+}
+
+#[rstest::rstest]
+#[case(
+    r"
+        struct Data;
+        macro_rules! value {
+            () => { 7 };
+        }
+        impl Data {
+            fn value() -> u8 {
+                value!()
+            }
+        }
+    ",
+    vec![1, 0, 2]
+)]
+#[case(
+    r"
+        struct Data;
+        macro_rules! helper {
+            () => {};
+        }
+        impl Data {}
+    ",
+    vec![0, 2, 1]
+)]
+#[case(
+    r"
+        struct Data;
+        #[macro_use]
+        mod macros;
+        impl Data {
+            fn value() -> u8 {
+                value!()
+            }
+        }
+    ",
+    vec![1, 0, 2]
+)]
+#[case(
+    r"
+        struct Data;
+        declare_macros!();
+        impl Data {
+            fn value() -> u8 {
+                value!()
+            }
+        }
+    ",
+    vec![1, 0, 2]
+)]
+fn test_ordering_rule_when_plain_type_can_cross_macro_keeps_impl_adjacent_and_binding_order(
+    #[case] source: &str,
+    #[case] expected: Vec<usize>,
+) {
+    let violations = check(source);
+    assert_eq!(root_item_order(source, &violations), expected);
+    assert_eq!(check(&apply_ordering_violations(source, &violations)), Vec::new());
+}
+
+#[test]
+fn test_ordering_rule_when_type_and_impl_consume_on_opposite_sides_declines_scope() {
+    let source = r"
+        #[custom]
+        struct Data;
+        macro_rules! value {
+            () => { 7 };
+        }
+        impl Data {
+            fn value() -> u8 {
+                value!()
+            }
+        }
+    ";
+    let violations = check(source);
+    assert_eq!(violations.len(), 1);
+    assert!(matches!(violations[0].outcome, OrderingOutcome::Failed { .. }));
+    assert!(!violations[0].format(ViolationOutputFormat::Compact).contains("order=["));
+}
+
+#[test]
+fn test_ordering_rule_when_impl_contains_opaque_expression_preserves_possible_macro_binding() {
+    let source = r"
+        struct Data;
+        macro_rules! value {
+            () => { 7 };
+        }
+        impl Data {
+            fn value() -> u8 {
+                value!()
+            }
+        }
+    ";
+    let mut syntax = syn::parse_file(source).unwrap();
+    let Item::Impl(implementation) = &mut syntax.items[2] else {
+        panic!("expected impl");
+    };
+    let ImplItem::Fn(method) = &mut implementation.items[0] else {
+        panic!("expected method");
+    };
+    // Model source that a newer compiler accepts but this parser leaves opaque.
+    method.block.stmts[0] = Stmt::Expr(Expr::Verbatim("value!()".parse().unwrap()), None);
+    let context = FileContext {
+        path: Path::new("lib.rs"),
+        source,
+        file: &syntax,
+    };
+    let violations = OrderingRule.check(&context);
+    assert_eq!(root_item_order(source, &violations), vec![1, 0, 2]);
+}
+
+#[rstest::rstest]
+#[case(
+    r"
+        #[macro_use]
+        mod macros;
+        pub mod child {
+            m!();
+        }
+        macro_rules! m {
+            () => {};
+        }
+        mod later {
+            m!();
+        }
+    "
+)]
+#[case(
+    r"
+        #[macro_use]
+        mod macros;
+        mod outer {
+            mod child {
+                m!();
+            }
+            macro_rules! m {
+                () => {};
+            }
+            mod later {
+                m!();
+            }
+        }
+    "
+)]
+#[case(
+    r"
+        mod outer {
+            #[macro_use]
+            mod macros;
+            mod child {
+                m!();
+            }
+            macro_rules! m {
+                () => {};
+            }
+            mod later {
+                m!();
+            }
+        }
+    "
+)]
+fn test_ordering_rule_when_local_macro_follows_imported_macro_consumer_preserves_shadowing(#[case] source: &str) {
     assert_eq!(check(source), Vec::new());
 }
 
@@ -210,7 +607,7 @@ fn test_ordering_rule_when_import_follows_fn_moves_import_without_changing_impor
         }
         const VALUE: () = ();
     ",
-    vec![2, 1, 0]
+    vec![0, 2, 1]
 )]
 #[case(
     r#"
@@ -704,8 +1101,7 @@ fn test_ordering_rule_when_items_have_comments_keeps_attached_content_and_scope_
         macro_rules! m {
             () => {};
         }
-    ",
-    false
+    "
 )]
 #[case(
     r"
@@ -721,8 +1117,7 @@ fn test_ordering_rule_when_items_have_comments_keeps_attached_content_and_scope_
         pub mod second {
             m!();
         }
-    ",
-    false
+    "
 )]
 #[case(
     r"
@@ -737,8 +1132,7 @@ fn test_ordering_rule_when_items_have_comments_keeps_attached_content_and_scope_
         macro_rules! m {
             () => {};
         }
-    ",
-    false
+    "
 )]
 #[case(
     r"
@@ -752,8 +1146,7 @@ fn test_ordering_rule_when_items_have_comments_keeps_attached_content_and_scope_
         macro_rules! m {
             () => {};
         }
-    ",
-    true
+    "
 )]
 #[case(
     r"
@@ -771,16 +1164,10 @@ fn test_ordering_rule_when_items_have_comments_keeps_attached_content_and_scope_
         macro_rules! m {
             () => {};
         }
-    ",
-    true
+    "
 )]
-fn test_ordering_rule_when_inner_macro_shadows_outer_respects_lexical_scope(
-    #[case] source: &str,
-    #[case] requires_outer: bool,
-) {
-    let violations = check(source);
-    assert_eq!(!violations.is_empty(), requires_outer);
-    assert_eq!(check(&apply_ordering_violations(source, &violations)), Vec::new());
+fn test_ordering_rule_when_macro_scopes_have_shadowing_preserves_existing_source_order(#[case] source: &str) {
+    assert_eq!(check(source), Vec::new());
 }
 
 #[rstest::rstest]
@@ -914,15 +1301,15 @@ fn test_ordering_rule_when_items_share_line_preserves_precise_boundaries_and_uni
 
 #[rstest::rstest]
 #[case(
-    "macro_deferred",
+    "macro_source_order",
     r"
-        pub mod child {
-            m!();
-        }
         macro_rules! m {
             () => {
                 const _: () = super::VALUE;
             };
+        }
+        pub mod child {
+            m!();
         }
         const VALUE: () = ();
     ",
