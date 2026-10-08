@@ -396,7 +396,7 @@ impl PaneTrackedProcesses {
             let activity = match lifecycle.screen_observation() {
                 Some(patterns) => {
                     let text = runtimes.handle(*pane_id)?.live_tail_text(screen::SCREEN_TAIL_ROWS);
-                    lifecycle.record_screen_activity(screen::observe(patterns, text.candidate_lines()), now)
+                    lifecycle.record_screen_activity(screen::observe(patterns, text.candidate_line_spans()), now)
                 }
                 None => lifecycle.record_visible_activity(now),
             };
@@ -406,7 +406,7 @@ impl PaneTrackedProcesses {
     }
 
     /// Check the live screen immediately before quiet transitions. For confirmed agents with screen checks, require
-    /// attention before green-dot removal or red-dot activation; otherwise the existing timer retries later.
+    /// completion before red-dot activation, or cancellation for immediate clearing; otherwise the timer retries later.
     pub(crate) fn guard_quiet_deadlines(
         &mut self,
         config: &MuxrConfig,
@@ -442,7 +442,7 @@ impl PaneTrackedProcesses {
         };
         // Capture before writing input: the PTY reader can observe the next turn immediately after submission.
         let text = handle.live_tail_text(screen::SCREEN_TAIL_ROWS);
-        let observation = screen::observe(patterns, text.candidate_lines());
+        let observation = screen::observe(patterns, text.candidate_line_spans());
         lifecycle.capture_completion_before_work(observation);
     }
 
@@ -600,7 +600,7 @@ impl PaneTrackedProcesses {
                 let screen = lifecycle
                     .screen_observation()
                     .map_or(ScreenObservation::Unknown, |patterns| {
-                        screen::observe(patterns, text.candidate_lines())
+                        screen::observe(patterns, text.candidate_line_spans())
                     });
                 lifecycle.guard_quiet_deadline(screen, now)
             } else {

@@ -5,6 +5,37 @@ use super::super::tests::tracked_process;
 use super::*;
 
 #[rstest::rstest]
+#[case(PaneTrackedProcessStatus::Busy)]
+#[case(PaneTrackedProcessStatus::Settling)]
+#[case(PaneTrackedProcessStatus::Unseen)]
+#[case(PaneTrackedProcessStatus::Seen)]
+fn test_codex_when_cancelled_clears_work_and_does_not_rearm_on_repaint(
+    #[case] status: PaneTrackedProcessStatus,
+) -> rootcause::Result<()> {
+    let now = Instant::now();
+    let mut lifecycle = PaneTrackedProcessLifecycle::new(self::tracked_process("codex")?, now);
+    lifecycle.status = status;
+    lifecycle.pending_work_start = PendingTrackedWorkStart::Pending;
+    lifecycle.completion_before_work = Some("old completion".to_owned());
+    lifecycle.record_screen_activity(ScreenObservation::Cancelled, now);
+    test_that::assert_that!(lifecycle.state(), eq(TrackedProcessState::Seen));
+    test_that::assert_that!(lifecycle.quiet_deadline(TrackedProcessPaneFocus::Unfocused)?, eq(None));
+    test_that::assert_that!(lifecycle.pending_work_start, eq(PendingTrackedWorkStart::None));
+    test_that::assert_that!(lifecycle.completion_before_work, eq(None));
+    test_that::assert_that!(
+        lifecycle.record_screen_activity(ScreenObservation::Unknown, now),
+        eq(TrackedProcessChanges::default())
+    );
+    test_that::assert_that!(
+        lifecycle.guard_quiet_deadline(ScreenObservation::Cancelled, now),
+        eq(TrackedProcessChanges::default())
+    );
+    lifecycle.record_screen_activity(ScreenObservation::Busy, now);
+    test_that::assert_that!(lifecycle.state(), eq(TrackedProcessState::Busy));
+    Ok(())
+}
+
+#[rstest::rstest]
 #[case("codex", TrackedProcessState::Seen)]
 #[case("claude", TrackedProcessState::Busy)]
 #[case("cursor-agent", TrackedProcessState::Busy)]
@@ -112,19 +143,25 @@ fn test_screen_allows_quiet_when_previous_completion_returns_requires_working_or
     let completed = "Worked for 1s • 14:18";
     lifecycle.completion_before_work = Some(completed.to_owned());
     test_that::assert_that!(
-        lifecycle.screen_allows_quiet(screen::observe(patterns, "partial redraw".lines())),
+        lifecycle.screen_allows_quiet(screen::observe(patterns, screen::text_line_spans("partial redraw"))),
         eq(false)
     );
     test_that::assert_that!(
-        lifecycle.screen_allows_quiet(screen::observe(patterns, "── Worked for 1s • 14:18 ───".lines())),
+        lifecycle.screen_allows_quiet(screen::observe(
+            patterns,
+            screen::text_line_spans("── Worked for 1s • 14:18 ───")
+        )),
         eq(false)
     );
     test_that::assert_that!(
-        lifecycle.screen_allows_quiet(screen::observe(patterns, "Working (0s • esc to interrupt)".lines())),
+        lifecycle.screen_allows_quiet(screen::observe(
+            patterns,
+            screen::text_line_spans("Working (0s • esc to interrupt)")
+        )),
         eq(false)
     );
     test_that::assert_that!(
-        lifecycle.screen_allows_quiet(screen::observe(patterns, completed.lines())),
+        lifecycle.screen_allows_quiet(screen::observe(patterns, screen::text_line_spans(completed))),
         eq(true)
     );
     Ok(())

@@ -2,6 +2,64 @@ use lazy_regex::Regex;
 use muxr_config::ObservationPatterns;
 
 use super::*;
+use crate::pane::tracked_process::TrackedProcessDeadlineChange;
+
+#[rstest::rstest]
+#[case(false, false, false)]
+#[case(false, true, false)]
+#[case(true, false, false)]
+#[case(true, true, false)]
+#[case(false, false, true)]
+#[case(true, true, true)]
+#[tokio::test]
+async fn test_codex_when_cancelled_clears_indicator_without_attention(
+    #[case] focused: bool,
+    #[case] timer_sample: bool,
+    #[case] hard_wrapped: bool,
+) -> rootcause::Result<()> {
+    let mut fixture = self::tracked_cat_runtime_fixture()?;
+    if !focused {
+        fixture.layout.active_tab_mut()?.focus_pane(PaneId::new(2)?)?;
+    }
+    fixture.write_screen_text("Working (1s • esc to interrupt)")?;
+    let now = Instant::now();
+    let mut processes = PaneTrackedProcesses::default();
+    processes.observe_runtime_pane_cmds(&fixture.config.user_config, &fixture.runtimes, &[fixture.pane_id], now)?;
+    test_that::assert_that!(
+        self::tracked_process_snapshot_state(&processes.snapshot(&fixture.layout), fixture.pane_id)?,
+        eq(TrackedProcessState::Busy)
+    );
+    fixture.write_screen_text(if hard_wrapped {
+        "■ Conversation interrupted - use\n/feedback if something went wrong"
+    } else {
+        "■ Conversation interrupted - use /feedback if something went wrong"
+    })?;
+    let due = self::instant_after(now, Duration::from_secs(3))?;
+    let changes = if timer_sample {
+        processes.guard_quiet_deadlines(&fixture.config.user_config, &fixture.layout, &fixture.runtimes, due)?
+    } else {
+        processes.record_cached_visible_activity(&fixture.runtimes, &[fixture.pane_id], now)?
+    };
+    // Nonempty effects have private constructors; compare their complete public state/deadline projection.
+    test_that::assert_that!(
+        (changes.state_change(), changes.deadline_change()),
+        eq((
+            TrackedProcessStateChange::Changed,
+            TrackedProcessDeadlineChange::Changed
+        ))
+    );
+    test_that::assert_that!(
+        self::tracked_process_snapshot_state(&processes.snapshot(&fixture.layout), fixture.pane_id)?,
+        eq(TrackedProcessState::Seen)
+    );
+    test_that::assert_that!(processes.next_quiet_deadline(&fixture.layout)?, eq(None));
+    test_that::assert_that!(
+        processes.mark_quiet_deadlines(&fixture.layout, due)?,
+        eq(TrackedProcessAttention::Unchanged)
+    );
+    test_that::assert_that!(processes.attention_pane_ids(&fixture.layout), eq(Vec::new()));
+    Ok(())
+}
 
 #[tokio::test(start_paused = true)]
 async fn test_handle_cmd_handoff_sample_when_output_sample_is_pending_removes_stale_sample() -> rootcause::Result<()> {
@@ -637,6 +695,9 @@ fn test_tracked_process_screen_when_config_overrides_patterns_and_trimming_drive
     process.screen_observation = Some(ScreenObservationConfig {
         busy: ObservationPatterns::try_new(vec![Regex::clone(lazy_regex::regex!(r"\ATASK\s+ACTIVE\z"))])?,
         needs_attention: ObservationPatterns::try_new(vec![Regex::clone(lazy_regex::regex!(r"\ATASK\s+DONE\b"))])?,
+        cancelled: Some(ObservationPatterns::try_new(vec![Regex::clone(lazy_regex::regex!(
+            r"\ATASK\s+CANCELLED\z"
+        ))])?),
         trim_chars: &['#'],
     });
     let mut processes = PaneTrackedProcesses::default();
@@ -667,5 +728,15 @@ fn test_tracked_process_screen_when_config_overrides_patterns_and_trimming_drive
             pane_ids: vec![fixture.pane_id]
         })
     );
+    fixture.write_screen_text("# TASK ACTIVE #")?;
+    processes.record_cached_visible_activity(&fixture.runtimes, &[fixture.pane_id], due)?;
+    fixture.write_screen_text("# TASK CANCELLED #")?;
+    processes.record_cached_visible_activity(&fixture.runtimes, &[fixture.pane_id], due)?;
+    test_that::assert_that!(
+        self::tracked_process_snapshot_state(&processes.snapshot(&fixture.layout), fixture.pane_id)?,
+        eq(TrackedProcessState::Seen)
+    );
+    test_that::assert_that!(processes.next_quiet_deadline(&fixture.layout)?, eq(None));
+    test_that::assert_that!(processes.attention_pane_ids(&fixture.layout), eq(Vec::new()));
     Ok(())
 }

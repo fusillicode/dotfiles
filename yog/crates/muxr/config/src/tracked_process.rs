@@ -46,6 +46,9 @@ impl TrackedProcessConfig {
                         needs_attention: ObservationPatterns::try_new(vec![Regex::clone(lazy_regex::regex!(
                             r"\AWorked for \s*(?:[0-9]+h(?:\s+[0-9]+m)?(?:\s+[0-9]+s)?|[0-9]+m(?:\s+[0-9]+s)?|[0-9]+s)\s*•\s*(?:[01][0-9]|2[0-3]):[0-5][0-9]\z"
                         ))])?,
+                        cancelled: Some(ObservationPatterns::try_new(vec![Regex::clone(lazy_regex::regex!(
+                            r"\A■\s+Conversation interrupted - use /feedback if something went wrong\z"
+                        ))])?),
                         trim_chars: &['─', '━', '•', '·', '⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'],
                     }),
                 },
@@ -108,6 +111,8 @@ impl TrackedProcess {
 pub struct ScreenObservationConfig {
     pub busy: ObservationPatterns,
     pub needs_attention: ObservationPatterns,
+    /// Cancellation patterns clear the indicator immediately. `None` disables cancellation recognition.
+    pub cancelled: Option<ObservationPatterns>,
     /// Additional edge decorations to trim; whitespace is always trimmed.
     pub trim_chars: &'static [char],
 }
@@ -121,6 +126,13 @@ impl ScreenObservationConfig {
     /// Match a normalized status against the configured busy patterns.
     pub fn matches_busy(&self, status: &str) -> bool {
         self.busy.iter().any(|pattern| pattern.is_match(status))
+    }
+
+    /// Match a normalized status against the configured cancellation patterns.
+    pub fn matches_cancelled(&self, status: &str) -> bool {
+        self.cancelled
+            .as_ref()
+            .is_some_and(|patterns| patterns.iter().any(|pattern| pattern.is_match(status)))
     }
 
     /// Match a normalized status against the configured attention patterns.
@@ -215,6 +227,7 @@ mod tests {
         let screen = ScreenObservationConfig {
             busy: ObservationPatterns::try_new(vec![Regex::clone(lazy_regex::regex!(r"\Astatus\s+active\z"))])?,
             needs_attention: ObservationPatterns::try_new(vec![Regex::clone(lazy_regex::regex!(r"\Adone[0-9]+\z"))])?,
+            cancelled: None,
             trim_chars,
         };
         test_that::assert_that!(screen.normalize_line(line), eq(expected));
@@ -227,12 +240,25 @@ mod tests {
         let screen = ScreenObservationConfig {
             busy: ObservationPatterns::try_new(vec![Regex::clone(lazy_regex::regex!(r"\Awork(?:ing)?\z"i))])?,
             needs_attention: ObservationPatterns::try_new(vec![Regex::clone(lazy_regex::regex!(r"\Adone[0-9]+\z"))])?,
+            cancelled: None,
             trim_chars: &[],
         };
         test_that::assert_that!(screen.matches_busy("WORKING"), eq(true));
         test_that::assert_that!(screen.matches_needs_attention("DONE1"), eq(false));
         test_that::assert_that!(screen.matches_needs_attention("done1"), eq(true));
         Ok(())
+    }
+
+    #[rstest::rstest]
+    #[case("■ Conversation interrupted - use /feedback if something went wrong", true)]
+    #[case("  ■ Conversation interrupted - use /feedback if something went wrong  ", true)]
+    #[case("■\tConversation interrupted - use /feedback if something went wrong", true)]
+    #[case("› ■ Conversation interrupted - use /feedback if something went wrong", false)]
+    #[case("example: ■ Conversation interrupted - use /feedback if something went wrong", false)]
+    #[case("■ Conversation interrupted - use /feedback if something went wrong extra", false)]
+    fn test_codex_cancelled_when_text_varies_matches_only_cancellation(#[case] text: &str, #[case] expected: bool) {
+        let screen = codex_screen_observation();
+        assert_eq!(screen.matches_cancelled(screen.normalize_line(text)), expected);
     }
 
     #[rstest::rstest]

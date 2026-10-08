@@ -1,6 +1,40 @@
 use super::*;
 
 #[test]
+fn test_terminal_state_candidate_line_spans_when_wraps_mix_skips_overlapping_suffixes() -> rootcause::Result<()> {
+    let mut terminal = self::terminal_state(&TerminalSize::new(10, 4)?);
+    let _output = terminal.process(b"abcdefghijk\r\nlast");
+    let tail = terminal.live_tail_text(12);
+    let spans: Vec<Vec<_>> = tail
+        .candidate_line_spans()
+        .map(|span| span.map(str::trim_end).collect())
+        .collect();
+    test_that::assert_that!(
+        spans,
+        eq(vec![
+            vec!["abcdefghijk", "last", ""],
+            vec!["k", "last", ""],
+            vec!["last", ""],
+            vec![""]
+        ])
+    );
+    Ok(())
+}
+
+#[test]
+fn test_terminal_state_candidate_line_spans_when_rows_are_short_retains_right_edge_padding() -> rootcause::Result<()> {
+    let mut terminal = self::terminal_state(&TerminalSize::new(4, 3)?);
+    let _output = terminal.process(b"full\r\nend");
+    let tail = terminal.live_tail_text(12);
+    let spans: Vec<Vec<_>> = tail.candidate_line_spans().map(Iterator::collect).collect();
+    test_that::assert_that!(
+        spans,
+        eq(vec![vec!["full", "end ", "    "], vec!["end ", "    "], vec!["    "]])
+    );
+    Ok(())
+}
+
+#[test]
 fn test_terminal_state_live_tail_when_scrolled_reads_live_rows_without_changing_viewport() -> rootcause::Result<()> {
     let mut terminal = self::terminal_state(&TerminalSize::new(80, 3)?);
     let _output = terminal.process("old\r\none\r\ntwo\r\nWorking (6m 35s • ctrl+x to interrupt)".as_bytes());

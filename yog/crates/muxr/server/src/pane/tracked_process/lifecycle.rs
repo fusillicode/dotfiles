@@ -109,6 +109,7 @@ impl PaneTrackedProcessLifecycle {
         now: Instant,
     ) -> TrackedProcessChanges {
         match observation {
+            ScreenObservation::Cancelled => self.cancel_work(),
             ScreenObservation::Busy => {
                 // Positive work evidence takes precedence over local-echo suppression and needs no Enter event.
                 self.completion_before_work = None;
@@ -228,7 +229,7 @@ impl PaneTrackedProcessLifecycle {
             ScreenObservation::NeedsAttention(completion) => {
                 self.completion_before_work = Some(completion.to_owned());
             }
-            ScreenObservation::Busy => self.completion_before_work = None,
+            ScreenObservation::Busy | ScreenObservation::Cancelled => self.completion_before_work = None,
             ScreenObservation::Unknown => {}
         }
     }
@@ -238,6 +239,9 @@ impl PaneTrackedProcessLifecycle {
         observation: ScreenObservation<'_>,
         now: Instant,
     ) -> TrackedProcessChanges {
+        if matches!(observation, ScreenObservation::Cancelled) {
+            return self.cancel_work();
+        }
         let mut changes = TrackedProcessChanges::default();
         if matches!(observation, ScreenObservation::Busy) {
             changes.merge(self.record_screen_activity(observation, now));
@@ -247,6 +251,20 @@ impl PaneTrackedProcessLifecycle {
             changes.merge(TrackedProcessChanges::deadline_only());
         }
         changes
+    }
+
+    fn cancel_work(&mut self) -> TrackedProcessChanges {
+        let changed = self.status != PaneTrackedProcessStatus::Seen;
+        self.status = PaneTrackedProcessStatus::Seen;
+        self.pending_work_start = PendingTrackedWorkStart::None;
+        self.completion_before_work = None;
+        self.recent_user_interaction = None;
+        self.last_focused_user_interaction = None;
+        if changed {
+            TrackedProcessChanges::state_and_deadline()
+        } else {
+            TrackedProcessChanges::default()
+        }
     }
 
     fn screen_allows_quiet(&mut self, observation: ScreenObservation<'_>) -> bool {
@@ -263,7 +281,7 @@ impl PaneTrackedProcessLifecycle {
                 true
             }
             // Partial redraws must not make the previous turn's completion fresh again.
-            ScreenObservation::Unknown => false,
+            ScreenObservation::Cancelled | ScreenObservation::Unknown => false,
         }
     }
 
