@@ -121,11 +121,27 @@ pub struct TerminalTextTail {
 }
 
 impl TerminalTextTail {
+    #[cfg(test)]
     pub(crate) fn candidate_lines(&self) -> impl DoubleEndedIterator<Item = &str> {
         self.lines
             .iter()
             .filter_map(|range| self.text.get(range.clone()))
             .map(str::trim_end)
+    }
+
+    /// Each physical-row candidate followed by non-overlapping logical lines below it, retaining right-edge padding.
+    pub(crate) fn candidate_line_spans(&self) -> impl DoubleEndedIterator<Item = impl Iterator<Item = &str>> {
+        self.lines.iter().enumerate().map(move |(index, range)| {
+            let mut previous_end = range.start;
+            self.lines.iter().skip(index).filter_map(move |line| {
+                // Soft-wrapped candidates overlap. Their suffix rows must not be appended a second time.
+                if line.start < previous_end {
+                    return None;
+                }
+                previous_end = line.end;
+                self.text.get(line.clone())
+            })
+        })
     }
 }
 

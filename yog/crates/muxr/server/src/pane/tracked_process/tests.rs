@@ -726,6 +726,54 @@ fn test_guard_quiet_deadlines_when_identity_is_unknown_keeps_busy_until_confirme
     Ok(())
 }
 
+#[rstest::rstest]
+#[case(false)]
+#[case(true)]
+fn test_guard_quiet_deadlines_when_cancellation_splits_words_clears_work(
+    #[case] focused: bool,
+) -> rootcause::Result<()> {
+    let mut layout = self::layout()?;
+    let pane_id = self::pane_id()?;
+    if focused {
+        layout.active_tab_mut()?.focus_pane(pane_id)?;
+    }
+    let now = Instant::now();
+    let due = self::instant_after(now, Duration::from_secs(3))?;
+    let process = self::tracked_process("codex")?;
+    let mut processes = PaneTrackedProcesses::default();
+    processes.apply_cmd_observation(pane_id, TrackedProcessCmdObservation::Tracked(&process), now);
+    processes
+        .by_pane
+        .get_mut(&pane_id)
+        .ok_or_else(|| rootcause::report!("missing lifecycle"))?
+        .record_screen_activity(ScreenObservation::Busy, now);
+    let mut terminal = TerminalState::with_scrollback(&TerminalSize::new(10, 12)?, MuxrConfig::new()?.scrollback);
+    let _output = terminal.process(
+        "■\r\nConversati\r\non\r\ninterrupte\r\nd - use\r\n/feedback\r\nif\r\nsomething\r\nwent wrong".as_bytes(),
+    );
+    test_that::assert_that!(
+        processes.guard_observed_quiet_deadlines(
+            &layout,
+            due,
+            |_| Ok(TrackedProcessCmdObservation::Tracked(&process)),
+            |_| Ok(terminal.live_tail_text(screen::SCREEN_TAIL_ROWS)),
+        )?,
+        eq(TrackedProcessChanges::state_and_deadline())
+    );
+    let snapshot = processes.snapshot(&layout);
+    test_that::assert_that!(
+        self::tracked_process_snapshot_pane(&snapshot, pane_id)?.state(),
+        eq(TrackedProcessState::Seen)
+    );
+    test_that::assert_that!(processes.next_quiet_deadline(&layout)?, eq(None));
+    test_that::assert_that!(
+        processes.mark_quiet_deadlines(&layout, due)?,
+        eq(TrackedProcessAttention::Unchanged)
+    );
+    test_that::assert_that!(processes.attention_pane_ids(&layout), eq(Vec::new()));
+    Ok(())
+}
+
 fn screen_tail(text: &str) -> rootcause::Result<TerminalTextTail> {
     let mut terminal = TerminalState::with_scrollback(&TerminalSize::new(80, 1)?, MuxrConfig::new()?.scrollback);
     let _output = terminal.process(text.as_bytes());
