@@ -64,13 +64,15 @@ return {
       },
       files      = {
         -- Jump to line! https://github.com/ibhagwan/fzf-lua/discussions/2032#discussioncomment-13046310
-        line_query = function(q)
+        line_query   = function(q)
           return nvrim.plugins.fzf_lua.parse_line_query(q, plugin.get_last_query())
         end,
-        winopts    = { title = '', },
-        fzf_opts   = { ['--ansi'] = true, },
-        fd_opts    = table.concat(nvrim.plugins.fzf_lua.get_fd_flags(), ' '),
-        git_icons  = true,
+        winopts      = { title = '', },
+        fzf_opts     = { ['--ansi'] = true, },
+        fd_opts      = table.concat(nvrim.plugins.fzf_lua.get_fd_flags(), ' '),
+        git_icons    = true,
+        -- To avoid 200 milliseconds RPC timeout when Neovim is busy
+        multiprocess = false,
       },
       buffers    = {
         winopts               = { title = '', },
@@ -89,6 +91,8 @@ return {
       git        = {
         status = vim.tbl_extend('error',
           {
+            -- To avoid 200 milliseconds RPC timeout when Neovim is busy
+            multiprocess = false,
             actions = {
               ['ctrl-h'] = { fn = plugin.actions.git_stage, reload = true, },
               ['ctrl-l'] = { fn = plugin.actions.git_unstage, reload = true, },
