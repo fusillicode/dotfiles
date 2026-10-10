@@ -92,15 +92,17 @@ export EDITOR='nvim'
 # PATH (deduplicated, skip non-existent)
 typeset -U path
 path=(
-  /opt/homebrew/opt/openssl/bin(N)
+  /opt/homebrew/opt/openssl@3/bin(N)
   $path
 )
 
 # Build flags (rdkafka & M1)
-export OPENSSL_ROOT_DIR="/opt/homebrew/opt/openssl"
-export LDFLAGS="-L/opt/homebrew/opt/openssl/lib -L/opt/homebrew/opt/llvm/lib"
-export CPPFLAGS="-I/opt/homebrew/opt/openssl/include -I/opt/homebrew/opt/llvm/include"
-export PKG_CONFIG_PATH="/opt/homebrew/opt/openssl/lib/pkgconfig"
+# Use the versioned formula: Homebrew's openssl alias can change major versions.
+export OPENSSL_DIR="/opt/homebrew/opt/openssl@3"
+export OPENSSL_ROOT_DIR="$OPENSSL_DIR"
+export LDFLAGS="-L$OPENSSL_DIR/lib -L/opt/homebrew/opt/llvm/lib"
+export CPPFLAGS="-I$OPENSSL_DIR/include -I/opt/homebrew/opt/llvm/include"
+export PKG_CONFIG_PATH="$OPENSSL_DIR/lib/pkgconfig"
 
 # Mise (cached)
 _mise_cache="$_zsh_cache/mise.zsh"
