@@ -138,6 +138,10 @@ local function get_custom_lsps_configs()
           lens = { debug = { enable = false, }, implementations = { enable = false, }, run = { enable = false, }, },
           procMacro = { enable = true, },
           showUnlinkedFileNotification = false,
+          references = {
+            excludeImports = true,
+            excludeTests = true
+          }
         },
       },
     },
