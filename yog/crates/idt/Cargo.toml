@@ -18,12 +18,12 @@ serde_json = { workspace = true }
 sha2 = { version = "0.11" }
 tar = { version = "0.4" }
 tempfile = { workspace = true }
-toml = "1.0"
+toml = "1.1"
 ureq = { workspace = true }
 xz2 = { version = "0.1" }
 ytil_cmd = { workspace = true }
 ytil_sys = { workspace = true }
-zip = { version = "8.5", default-features = false, features = ["deflate"] }
+zip = { version = "9.0", default-features = false, features = ["deflate"] }
 
 [dev-dependencies]
 rstest = { workspace = true }
