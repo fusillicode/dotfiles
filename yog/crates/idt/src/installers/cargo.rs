@@ -18,180 +18,66 @@ pub struct Cargo<'a> {
     source_bin_dir: &'a Path,
     bin_dir: &'a Path,
     bin_name: &'static str,
-    source: Source,
+    install_args: &'static [&'static str],
+    requested_toolchain: Option<RequestedRustToolchain>,
     health_check: HealthCheck,
 }
 
-enum Source {
-    Registry {
-        crate_name: &'static str,
-        features: Option<&'static str>,
-        all_features: bool,
-        locked: bool,
-    },
-    Git {
-        repository: &'static str,
-        branch: Option<&'static str>,
-        locked: bool,
-        requested_toolchain: Option<RequestedRustToolchain>,
-        package_name: Option<&'static str>,
-    },
-}
-
-#[derive(Clone, Copy)]
-enum HealthCheck {
-    /// Run the installed binary directly with its health-check arguments.
-    Binary(&'static [&'static str]),
-    /// Run a Cargo subcommand because the installed binary expects Cargo's dispatch prefix.
-    CargoSubcommand(&'static str),
-}
-
 impl<'a> Cargo<'a> {
-    pub const fn registry(
+    /// Pass arguments directly to `cargo install`, after the shared `--force` flag.
+    pub const fn new(
         source_bin_dir: &'a Path,
         bin_dir: &'a Path,
         bin_name: &'static str,
-        crate_name: &'static str,
+        install_args: &'static [&'static str],
     ) -> Self {
         Self {
             source_bin_dir,
             bin_dir,
             bin_name,
-            source: Source::Registry {
-                crate_name,
-                features: None,
-                all_features: false,
-                locked: false,
-            },
+            install_args,
+            requested_toolchain: None,
             health_check: HealthCheck::Binary(&["--version"]),
         }
     }
 
-    pub const fn registry_with_features(
-        source_bin_dir: &'a Path,
-        bin_dir: &'a Path,
-        bin_name: &'static str,
-        crate_name: &'static str,
-        features: &'static str,
-    ) -> Self {
-        Self {
-            source_bin_dir,
-            bin_dir,
-            bin_name,
-            source: Source::Registry {
-                crate_name,
-                features: Some(features),
-                all_features: false,
-                locked: false,
-            },
-            health_check: HealthCheck::Binary(&["--version"]),
+    pub fn with_toolchain(mut self, toolchain: RequestedRustToolchain) -> Self {
+        self.requested_toolchain = Some(toolchain);
+        self
+    }
+
+    pub const fn with_cargo_subcommand(mut self, subcommand: &'static str) -> Self {
+        self.health_check = HealthCheck::CargoSubcommand(subcommand);
+        self
+    }
+
+    pub const fn with_health_check_args(mut self, args: &'static [&'static str]) -> Self {
+        self.health_check = HealthCheck::Binary(args);
+        self
+    }
+
+    fn install_command(&self) -> rootcause::Result<Command> {
+        let mut command = ytil_cmd::silent_cmd("cargo");
+        if let Some(requested_toolchain) = &self.requested_toolchain {
+            let toolchain = ytil_sys::rustup::find_latest_installed_rust_toolchain(requested_toolchain)?;
+            command.arg(format!("+{toolchain}"));
         }
+        command.args(["install", "--force"]).args(self.install_args);
+        Ok(command)
     }
 
-    pub const fn locked_registry(
-        source_bin_dir: &'a Path,
-        bin_dir: &'a Path,
-        bin_name: &'static str,
-        crate_name: &'static str,
-    ) -> Self {
-        Self {
-            source_bin_dir,
-            bin_dir,
-            bin_name,
-            source: Source::Registry {
-                crate_name,
-                features: None,
-                all_features: false,
-                locked: true,
-            },
-            health_check: HealthCheck::Binary(&["--version"]),
-        }
-    }
-
-    pub const fn git(
-        source_bin_dir: &'a Path,
-        bin_dir: &'a Path,
-        bin_name: &'static str,
-        repository: &'static str,
-    ) -> Self {
-        Self {
-            source_bin_dir,
-            bin_dir,
-            bin_name,
-            source: Source::Git {
-                repository,
-                branch: None,
-                locked: false,
-                requested_toolchain: None,
-                package_name: None,
-            },
-            health_check: HealthCheck::Binary(&["--version"]),
-        }
-    }
-
-    pub const fn registry_with_all_features(
-        source_bin_dir: &'a Path,
-        bin_dir: &'a Path,
-        bin_name: &'static str,
-        crate_name: &'static str,
-    ) -> Self {
-        Self {
-            source_bin_dir,
-            bin_dir,
-            bin_name,
-            source: Source::Registry {
-                crate_name,
-                features: None,
-                all_features: true,
-                locked: false,
-            },
-            health_check: HealthCheck::Binary(&["--version"]),
-        }
-    }
-
-    pub const fn registry_with_cargo_subcommand(
-        source_bin_dir: &'a Path,
-        bin_dir: &'a Path,
-        bin_name: &'static str,
-        crate_name: &'static str,
-        cargo_subcommand: &'static str,
-    ) -> Self {
-        let mut installer = Self::registry(source_bin_dir, bin_dir, bin_name, crate_name);
-        installer.health_check = HealthCheck::CargoSubcommand(cargo_subcommand);
-        installer
-    }
-
-    pub const fn registry_with_health_check_args(
-        source_bin_dir: &'a Path,
-        bin_dir: &'a Path,
-        bin_name: &'static str,
-        crate_name: &'static str,
-        health_check_args: &'static [&'static str],
-    ) -> Self {
-        let mut installer = Self::registry(source_bin_dir, bin_dir, bin_name, crate_name);
-        installer.health_check = HealthCheck::Binary(health_check_args);
-        installer
-    }
-
-    pub const fn nightly_git(
-        source_bin_dir: &'a Path,
-        bin_dir: &'a Path,
-        bin_name: &'static str,
-        repository: &'static str,
-        branch: &'static str,
-    ) -> Self {
-        Self {
-            source_bin_dir,
-            bin_dir,
-            bin_name,
-            source: Source::Git {
-                repository,
-                branch: Some(branch),
-                locked: true,
-                requested_toolchain: Some(RequestedRustToolchain::Nightly(None)),
-                package_name: Some(bin_name),
-            },
-            health_check: HealthCheck::Binary(&["--version"]),
+    fn health_check_command(&self) -> Command {
+        match self.health_check {
+            HealthCheck::Binary(args) => {
+                let mut command = Command::new(self.bin_dir.join(self.bin_name()));
+                command.args(args);
+                command
+            }
+            HealthCheck::CargoSubcommand(subcommand) => {
+                let mut command = Command::new("cargo");
+                command.args([subcommand, "--version"]);
+                command
+            }
         }
     }
 }
@@ -206,62 +92,7 @@ impl Installer for Cargo<'_> {
     }
 
     fn install(&self) -> rootcause::Result<()> {
-        let toolchain = match &self.source {
-            Source::Git {
-                requested_toolchain: Some(requested_toolchain),
-                ..
-            } => Some(ytil_sys::rustup::find_latest_installed_rust_toolchain(
-                requested_toolchain,
-            )?),
-            Source::Registry { .. }
-            | Source::Git {
-                requested_toolchain: None,
-                ..
-            } => None,
-        };
-        let mut command = ytil_cmd::silent_cmd("cargo");
-        if let Some(toolchain) = toolchain {
-            command.arg(format!("+{toolchain}"));
-        }
-        command.args(["install", "--force"]);
-
-        match &self.source {
-            Source::Registry {
-                crate_name,
-                features,
-                all_features,
-                locked,
-            } => {
-                command.arg(*crate_name);
-                if let Some(features) = features {
-                    command.args(["--features", *features]);
-                }
-                if *all_features {
-                    command.arg("--all-features");
-                }
-                if *locked {
-                    command.arg("--locked");
-                }
-            }
-            Source::Git {
-                repository,
-                branch,
-                locked,
-                package_name,
-                ..
-            } => {
-                command.args(["--git", *repository]);
-                if let Some(branch) = branch {
-                    command.args(["--branch", *branch]);
-                }
-                if *locked {
-                    command.arg("--locked");
-                }
-                if let Some(package_name) = package_name {
-                    command.arg(*package_name);
-                }
-            }
-        }
+        let mut command = self.install_command()?;
 
         command
             .status()
@@ -288,26 +119,17 @@ impl Installer for Cargo<'_> {
     }
 }
 
-impl Cargo<'_> {
-    fn health_check_command(&self) -> Command {
-        match self.health_check {
-            HealthCheck::Binary(args) => {
-                let mut command = Command::new(self.bin_dir.join(self.bin_name()));
-                command.args(args);
-                command
-            }
-            HealthCheck::CargoSubcommand(subcommand) => {
-                let mut command = Command::new("cargo");
-                command.args([subcommand, "--version"]);
-                command
-            }
-        }
-    }
-}
-
 /// Resolve Cargo's binary directory once before installers begin running.
 pub fn bin_dir() -> rootcause::Result<PathBuf> {
     Ok(cargo_install_root()?.join("bin"))
+}
+
+#[derive(Clone, Copy)]
+enum HealthCheck {
+    /// Run the installed binary directly with its health-check arguments.
+    Binary(&'static [&'static str]),
+    /// Run a Cargo subcommand because the installed binary expects Cargo's dispatch prefix.
+    CargoSubcommand(&'static str),
 }
 
 /// Resolve Cargo's install-root precedence without scanning installed packages or invoking Cargo.
@@ -376,17 +198,51 @@ mod tests {
 
     use super::*;
 
+    #[rstest::rstest]
+    #[case::registry(&["ripgrep"], &["install", "--force", "ripgrep"])]
+    #[case::features(&["cargo-audit", "--features", "fix"], &["install", "--force", "cargo-audit", "--features", "fix"])]
+    #[case::all_features(&["taplo-cli", "--all-features"], &["install", "--force", "taplo-cli", "--all-features"])]
+    #[case::locked(&["cargo-nextest", "--locked"], &["install", "--force", "cargo-nextest", "--locked"])]
+    #[case::git(
+        &["--git", "https://github.com/rtk-ai/rtk", "--branch", "master", "rtk"],
+        &["install", "--force", "--git", "https://github.com/rtk-ai/rtk", "--branch", "master", "rtk"],
+    )]
+    #[case::version_and_defaults(
+        &["tool", "--version", "1.2.3", "--no-default-features", "--features", "cli"],
+        &["install", "--force", "tool", "--version", "1.2.3", "--no-default-features", "--features", "cli"],
+    )]
+    #[case::path_with_spaces(
+        &["--path", "/tools/my crate"],
+        &["install", "--force", "--path", "/tools/my crate"],
+    )]
+    fn test_install_command_when_arguments_vary_preserves_cargo_options(
+        #[case] args: &'static [&'static str],
+        #[case] expected: &[&str],
+    ) {
+        let installer = Cargo::new(Path::new("/source/bin"), Path::new("/target/bin"), "tool", args);
+
+        let command = installer.install_command().unwrap();
+
+        assert_eq!(command.get_program(), OsStr::new("cargo"));
+        assert_eq!(command.get_args().collect::<Vec<_>>(), expected);
+    }
+
+    #[test]
+    fn test_cargo_health_check_command_when_defaults_are_selected_uses_linked_binary_version() {
+        let installer = Cargo::new(Path::new("/source/bin"), Path::new("/target/bin"), "rtk", &["rtk"]);
+
+        let command = installer.health_check_command();
+
+        assert_eq!(command.get_program(), OsStr::new("/target/bin/rtk"));
+        assert_eq!(command.get_args().collect::<Vec<_>>(), vec![OsStr::new("--version")]);
+    }
+
     #[test]
     fn test_cargo_health_check_command_when_cargo_subcommand_is_selected_uses_cargo_dispatch() {
         let source_bin_dir = Path::new("/source/bin");
         let bin_dir = Path::new("/target/bin");
-        let installer = Cargo::registry_with_cargo_subcommand(
-            source_bin_dir,
-            bin_dir,
-            "cargo-llvm-cov",
-            "cargo-llvm-cov",
-            "llvm-cov",
-        );
+        let installer = Cargo::new(source_bin_dir, bin_dir, "cargo-llvm-cov", &["cargo-llvm-cov"])
+            .with_cargo_subcommand("llvm-cov");
 
         let command = installer.health_check_command();
 
@@ -401,7 +257,7 @@ mod tests {
     fn test_cargo_health_check_command_when_custom_args_are_selected_uses_direct_binary() {
         let source_bin_dir = Path::new("/source/bin");
         let bin_dir = Path::new("/target/bin");
-        let installer = Cargo::registry_with_health_check_args(source_bin_dir, bin_dir, "pv", "pv", &["--help"]);
+        let installer = Cargo::new(source_bin_dir, bin_dir, "pv", &["pv"]).with_health_check_args(&["--help"]);
 
         let command = installer.health_check_command();
 

@@ -18,6 +18,7 @@ use rootcause::prelude::ResultExt;
 use rootcause::report;
 use ytil_sys::SysInfo;
 use ytil_sys::cli::Args;
+use ytil_sys::rustup::RequestedRustToolchain;
 
 use crate::installers::Installer;
 use crate::installers::alacritty::Alacritty;
@@ -163,105 +164,75 @@ fn parallel_installers<'a>(
 /// Construct the declared Cargo and Git tool inventory.
 fn managed_cargo_installers<'a>(cargo_bin_dir: &'a Path, bin_dir: &'a Path) -> Vec<Box<dyn Installer + 'a>> {
     vec![
-        Box::new(Cargo::registry_with_cargo_subcommand(
-            cargo_bin_dir,
-            bin_dir,
-            "cargo-auditable",
-            "cargo-auditable",
-            "auditable",
-        )),
-        Box::new(Cargo::registry_with_features(
+        Box::new(
+            Cargo::new(cargo_bin_dir, bin_dir, "cargo-auditable", &["cargo-auditable"])
+                .with_cargo_subcommand("auditable"),
+        ),
+        Box::new(Cargo::new(
             cargo_bin_dir,
             bin_dir,
             "cargo-audit",
-            "cargo-audit",
-            "fix",
+            &["cargo-audit", "--features", "fix"],
         )),
-        Box::new(Cargo::registry_with_cargo_subcommand(
-            cargo_bin_dir,
-            bin_dir,
-            "cargo-diet",
-            "cargo-diet",
-            "diet",
-        )),
-        Box::new(Cargo::registry(
-            cargo_bin_dir,
-            bin_dir,
-            "cargo-machete",
-            "cargo-machete",
-        )),
-        Box::new(Cargo::registry_with_cargo_subcommand(
-            cargo_bin_dir,
-            bin_dir,
-            "cargo-make",
-            "cargo-make",
-            "make",
-        )),
-        Box::new(Cargo::registry(cargo_bin_dir, bin_dir, "cargo-sort", "cargo-sort")),
-        Box::new(Cargo::registry_with_cargo_subcommand(
-            cargo_bin_dir,
-            bin_dir,
-            "cargo-sort-derives",
-            "cargo-sort-derives",
-            "sort-derives",
-        )),
-        Box::new(Cargo::registry(cargo_bin_dir, bin_dir, "ccase", "ccase")),
-        Box::new(Cargo::registry(cargo_bin_dir, bin_dir, "fd", "fd-find")),
-        Box::new(Cargo::registry(cargo_bin_dir, bin_dir, "jnv", "jnv")),
-        Box::new(Cargo::registry(cargo_bin_dir, bin_dir, "mise", "mise")),
-        Box::new(Cargo::registry_with_health_check_args(
-            cargo_bin_dir,
-            bin_dir,
-            "pv",
-            "pv",
-            &["--help"],
-        )),
-        Box::new(Cargo::registry(cargo_bin_dir, bin_dir, "qj", "qj")),
-        Box::new(Cargo::registry(cargo_bin_dir, bin_dir, "rg", "ripgrep")),
-        Box::new(Cargo::registry(cargo_bin_dir, bin_dir, "sd", "sd")),
-        Box::new(Cargo::registry(cargo_bin_dir, bin_dir, "sqlx", "sqlx-cli")),
-        Box::new(Cargo::registry(
-            cargo_bin_dir,
-            bin_dir,
-            "tree-sitter",
-            "tree-sitter-cli",
-        )),
-        Box::new(Cargo::registry(cargo_bin_dir, bin_dir, "typos", "typos-cli")),
+        Box::new(Cargo::new(cargo_bin_dir, bin_dir, "cargo-diet", &["cargo-diet"]).with_cargo_subcommand("diet")),
+        Box::new(Cargo::new(cargo_bin_dir, bin_dir, "cargo-machete", &["cargo-machete"])),
+        Box::new(Cargo::new(cargo_bin_dir, bin_dir, "cargo-make", &["cargo-make"]).with_cargo_subcommand("make")),
+        Box::new(Cargo::new(cargo_bin_dir, bin_dir, "cargo-sort", &["cargo-sort"])),
+        Box::new(
+            Cargo::new(cargo_bin_dir, bin_dir, "cargo-sort-derives", &["cargo-sort-derives"])
+                .with_cargo_subcommand("sort-derives"),
+        ),
+        Box::new(Cargo::new(cargo_bin_dir, bin_dir, "ccase", &["ccase"])),
+        Box::new(Cargo::new(cargo_bin_dir, bin_dir, "fd", &["fd-find"])),
+        Box::new(Cargo::new(cargo_bin_dir, bin_dir, "jnv", &["jnv"])),
+        Box::new(Cargo::new(cargo_bin_dir, bin_dir, "mise", &["mise"])),
+        Box::new(Cargo::new(cargo_bin_dir, bin_dir, "pv", &["pv"]).with_health_check_args(&["--help"])),
+        Box::new(Cargo::new(cargo_bin_dir, bin_dir, "qj", &["qj"])),
+        Box::new(Cargo::new(cargo_bin_dir, bin_dir, "rg", &["ripgrep"])),
+        Box::new(Cargo::new(cargo_bin_dir, bin_dir, "sd", &["sd"])),
+        Box::new(Cargo::new(cargo_bin_dir, bin_dir, "sqlx", &["sqlx-cli"])),
+        Box::new(Cargo::new(cargo_bin_dir, bin_dir, "tree-sitter", &["tree-sitter-cli"])),
+        Box::new(Cargo::new(cargo_bin_dir, bin_dir, "typos", &["typos-cli"])),
         // Let's just use typos for now
-        // Box::new(Cargo::registry(cargo_bin_dir, bin_dir, "harper-ls", "harper-ls")),
-        Box::new(Cargo::registry_with_all_features(
+        // Box::new(Cargo::new(cargo_bin_dir, bin_dir, "harper-ls", &["harper-ls"])),
+        Box::new(Cargo::new(
             cargo_bin_dir,
             bin_dir,
             "taplo",
-            "taplo-cli",
+            &["taplo-cli", "--all-features"],
         )),
-        Box::new(Cargo::nightly_git(
-            cargo_bin_dir,
-            bin_dir,
-            "rust-analyzer",
-            "https://github.com/rust-lang/rust-analyzer.git",
-            "master",
-        )),
-        Box::new(Cargo::locked_registry(
+        Box::new(
+            Cargo::new(
+                cargo_bin_dir,
+                bin_dir,
+                "rust-analyzer",
+                &[
+                    "--git",
+                    "https://github.com/rust-lang/rust-analyzer.git",
+                    "--branch",
+                    "master",
+                    "--locked",
+                    "rust-analyzer",
+                ],
+            )
+            .with_toolchain(RequestedRustToolchain::Nightly(None)),
+        ),
+        Box::new(Cargo::new(
             cargo_bin_dir,
             bin_dir,
             "cargo-nextest",
-            "cargo-nextest",
+            &["cargo-nextest", "--locked"],
         )),
-        Box::new(Cargo::registry_with_cargo_subcommand(
-            cargo_bin_dir,
-            bin_dir,
-            "cargo-llvm-cov",
-            "cargo-llvm-cov",
-            "llvm-cov",
-        )),
-        Box::new(Cargo::git(
+        Box::new(
+            Cargo::new(cargo_bin_dir, bin_dir, "cargo-llvm-cov", &["cargo-llvm-cov"]).with_cargo_subcommand("llvm-cov"),
+        ),
+        Box::new(Cargo::new(
             cargo_bin_dir,
             bin_dir,
             "rtk",
-            "https://github.com/rtk-ai/rtk",
+            &["--git", "https://github.com/rtk-ai/rtk", "--branch", "master", "rtk"],
         )),
-        Box::new(Cargo::registry(cargo_bin_dir, bin_dir, "kache", "kache")),
+        Box::new(Cargo::new(cargo_bin_dir, bin_dir, "kache", &["kache"])),
     ]
 }
 
