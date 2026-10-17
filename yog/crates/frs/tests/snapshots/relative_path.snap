@@ -1,0 +1,49 @@
+---
+source: crates/frs/tests/rsl.rs
+expression: "&rewritten"
+---
+//! Source rewrites and conservative skips for relative-path.
+
+pub mod test_glob {
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+        mod nested {
+            use super::*;
+        }
+    }
+}
+
+pub mod relative_import_and_type {
+    mod a {
+        mod b {
+            use super::Thing;
+            fn run(_: super::Thing) {
+                super::run();
+            }
+        }
+    }
+}
+
+pub mod multiple_parent_levels {
+    mod a {
+        mod b {
+            use {super::super::Thing, super::Other};
+        }
+    }
+}
+
+pub mod nested_relative_groups {
+    mod a {
+        mod b {
+            use {
+                super::Thing,
+                {super::super::Other, super::Third},
+            };
+        }
+    }
+}
+
+pub mod unresolved_parent {
+    use super::Thing;
+}

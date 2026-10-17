@@ -1,5 +1,6 @@
 //! Atomic blocks and precedence relationships, with stable source-order ties.
 
+use std::borrow::Cow;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -18,38 +19,24 @@ use syn::visit;
 use syn::visit::Visit;
 
 use super::ItemAst;
+use super::ItemOrder;
 use super::OrderingConstraint;
 use super::OrderingConstraintKind;
 use super::OrderingItem;
-use super::OrderingOutcome;
+use super::TestOrderSection;
 use super::ast;
 use super::fn_references;
 use super::fn_references::FnPathScope;
 use crate::cmds::rsl::ast::ItemGroup;
 use crate::cmds::rsl::ast::VisibilityClass;
 
-pub(super) fn compute_required_item_order(items: &mut [OrderingItem<'_>]) -> OrderingOutcome {
+pub(super) fn compute_required_item_order(items: &[OrderingItem<'_>]) -> Result<ItemOrder, String> {
     let mut blocks = AtomicItemBlocks::new(items);
-    if let Err(message) = merge_type_impl_blocks(items, &mut blocks) {
-        return OrderingOutcome::Failed {
-            message,
-            constraints: blocks.constraints,
-        };
-    }
+    merge_type_impl_blocks(items, &mut blocks)?;
 
     let fn_indices_by_name = unique_fn_indices_by_name(items);
     let helper_call_graph = build_private_helper_call_graph(items, &fn_indices_by_name);
     merge_recursive_fn_blocks(items, &helper_call_graph, &mut blocks);
-    for members in &blocks.members {
-        if let Some(&block_first_item_index) = members.first() {
-            for &member_item_index in members {
-                if let Some(item) = items.get_mut(member_item_index) {
-                    item.metadata.block_first_item_index = block_first_item_index;
-                }
-            }
-        }
-    }
-
     let mut precedence_graph = BlockPrecedenceGraph::new(&blocks);
     add_macro_source_order_constraints(items, &blocks, &mut precedence_graph);
     add_section_group_visibility_constraints(items, &blocks, &mut precedence_graph);
@@ -71,30 +58,17 @@ pub(super) fn compute_required_item_order(items: &mut [OrderingItem<'_>]) -> Ord
                 })
                 .map(|item| format!("{}@{}", item.metadata.label, item.metadata.range.format_compact()))
                 .collect();
-            return OrderingOutcome::Failed {
-                message: format!("cycle [{}]", cycle_labels.join(" -> ")),
-                constraints: blocks
-                    .constraints
-                    .into_iter()
-                    .chain(precedence_graph.constraints)
-                    .collect(),
-            };
+            return Err(format!("cycle [{}]", cycle_labels.join(" -> ")));
         }
     };
 
-    let constraints = std::mem::take(&mut blocks.constraints)
+    let constraints: Vec<_> = std::mem::take(&mut blocks.constraints)
         .into_iter()
         .chain(precedence_graph.constraints)
         .collect();
 
     let required_item_order = blocks.expand_block_order_to_item_order(&required_block_order);
-    let source_item_order: Vec<_> = (0..items.len()).collect();
-
-    OrderingOutcome::Computed {
-        source_item_order,
-        required_item_order,
-        constraints,
-    }
+    ItemOrder::new(items, required_item_order, &constraints)
 }
 
 struct AtomicItemBlocks {
@@ -124,6 +98,7 @@ impl AtomicItemBlocks {
                 });
             }
         }
+
         self.members
             .retain(|block| !block.iter().any(|item| members.contains(item)));
         self.members.push(members);
@@ -161,15 +136,18 @@ impl From<ItemAst<'_>> for MacroOrderingRole {
                 .any(|attribute| is_macro_import_attribute(&attribute.meta)),
             ItemAst::ModuleItem(_) | ItemAst::ImplItem(_) => false,
         };
+
         if is_source {
             return Self::Source;
         }
 
         let mut consumer = PossibleMacroConsumer::default();
+
         match ast {
             ItemAst::ModuleItem(item) => consumer.visit_item(item),
             ItemAst::ImplItem(item) => consumer.visit_impl_item(item),
         }
+
         if consumer.found {
             Self::PossibleConsumer
         } else {
@@ -211,6 +189,7 @@ fn add_macro_source_order_constraints(
     precedence_graph: &mut BlockPrecedenceGraph,
 ) {
     let roles: Vec<_> = items.iter().map(|item| MacroOrderingRole::from(item.ast)).collect();
+
     for (before_item_index, before_role) in roles.iter().enumerate() {
         for (after_item_index, after_role) in roles.iter().enumerate().skip(before_item_index.saturating_add(1)) {
             let preserves_binding = matches!(
@@ -220,9 +199,11 @@ fn add_macro_source_order_constraints(
                     MacroOrderingRole::Source | MacroOrderingRole::PossibleConsumer
                 ) | (MacroOrderingRole::PossibleConsumer, MacroOrderingRole::Source)
             );
+
             if !preserves_binding {
                 continue;
             }
+
             if let (Some(before_block), Some(after_block)) = (
                 blocks.block_index_containing_item(before_item_index),
                 blocks.block_index_containing_item(after_item_index),
@@ -239,17 +220,25 @@ fn add_macro_source_order_constraints(
 }
 
 fn is_macro_import_attribute(meta: &Meta) -> bool {
-    if meta.path().is_ident("macro_use") {
-        return true;
+    let mut pending = vec![Cow::Borrowed(meta)];
+
+    while let Some(meta) = pending.pop() {
+        if meta.path().is_ident("macro_use") {
+            return true;
+        }
+
+        let Meta::List(list) = meta.as_ref() else {
+            continue;
+        };
+
+        if list.path.is_ident("cfg_attr")
+            && let Ok(arguments) = list.parse_args_with(Punctuated::<Meta, Token![,]>::parse_terminated)
+        {
+            pending.extend(arguments.into_iter().skip(1).map(Cow::Owned));
+        }
     }
-    let Meta::List(list) = meta else {
-        return false;
-    };
-    if !list.path.is_ident("cfg_attr") {
-        return false;
-    }
-    list.parse_args_with(Punctuated::<Meta, Token![,]>::parse_terminated)
-        .is_ok_and(|arguments| arguments.iter().skip(1).any(is_macro_import_attribute))
+
+    false
 }
 
 struct BlockPrecedenceEdge {
@@ -300,6 +289,7 @@ impl BlockPrecedenceGraph {
                 successor_block_index: after_block_index,
                 kind,
             });
+
             if let (Some(before_item_index), Some(after_item_index)) = (
                 blocks.members.get(before_block_index).and_then(|m| m.last()),
                 blocks.members.get(after_block_index).and_then(|m| m.first()),
@@ -316,14 +306,17 @@ impl BlockPrecedenceGraph {
     fn has_macro_preserving_path(&self, start: usize, target: usize) -> bool {
         let mut pending = VecDeque::from([(start, false)]);
         let mut visited = HashSet::from([(start, false)]);
+
         while let Some((block_index, preserves_macro_order)) = pending.pop_front() {
             for edge in self.outgoing_edges.get(block_index).into_iter().flatten() {
                 let preserves_macro_order =
                     preserves_macro_order || matches!(edge.kind, OrderingConstraintKind::MacroBindingPreservation);
                 let successor = (edge.successor_block_index, preserves_macro_order);
+
                 if successor == (target, true) {
                     return true;
                 }
+
                 if visited.insert(successor) {
                     pending.push_back(successor);
                 }
@@ -334,6 +327,7 @@ impl BlockPrecedenceGraph {
 
     fn stable_topological_order(&self, blocks: &AtomicItemBlocks) -> Result<Vec<usize>, Vec<usize>> {
         let mut incoming_edge_counts = vec![0_usize; self.outgoing_edges.len()];
+
         for edge in self.outgoing_edges.iter().flatten() {
             if let Some(count) = incoming_edge_counts.get_mut(edge.successor_block_index) {
                 *count = count.saturating_add(1);
@@ -356,11 +350,14 @@ impl BlockPrecedenceGraph {
             .collect();
 
         let mut block_order = Vec::new();
+
         while let Some((_, next_block_index)) = ready_blocks.pop_first() {
             block_order.push(next_block_index);
+
             for edge in self.outgoing_edges.get(next_block_index).into_iter().flatten() {
                 if let Some(count) = incoming_edge_counts.get_mut(edge.successor_block_index) {
                     *count = count.saturating_sub(1);
+
                     if *count == 0 {
                         ready_blocks.insert((
                             earliest_source_item_index(edge.successor_block_index),
@@ -387,6 +384,7 @@ impl BlockPrecedenceGraph {
         for &start_block_index in unresolved_blocks {
             let mut pending_paths = VecDeque::from([vec![start_block_index]]);
             let mut visited = HashSet::from([start_block_index]);
+
             while let Some(path) = pending_paths.pop_front() {
                 let Some(&last_block_index) = path.last() else {
                     continue;
@@ -394,9 +392,11 @@ impl BlockPrecedenceGraph {
 
                 for edge in self.outgoing_edges.get(last_block_index).into_iter().flatten() {
                     let next_block_index = edge.successor_block_index;
+
                     if !unresolved_blocks.contains(&next_block_index) {
                         continue;
                     }
+
                     let mut extended_path = path.clone();
                     extended_path.push(next_block_index);
 
@@ -417,6 +417,7 @@ impl BlockPrecedenceGraph {
 
 fn merge_type_impl_blocks(items: &[OrderingItem<'_>], blocks: &mut AtomicItemBlocks) -> Result<(), String> {
     let mut declaration_indices_by_name: HashMap<String, Vec<usize>> = HashMap::new();
+
     for (source_item_index, item) in items.iter().enumerate() {
         if let ItemAst::ModuleItem(item) = item.ast
             && let Some(name) = ast::type_definition_name(item)
@@ -429,13 +430,16 @@ fn merge_type_impl_blocks(items: &[OrderingItem<'_>], blocks: &mut AtomicItemBlo
     }
 
     let mut impl_indices_by_declaration: HashMap<usize, (Vec<usize>, Vec<usize>)> = HashMap::new();
+
     for (source_item_index, item) in items.iter().enumerate() {
         let ItemAst::ModuleItem(Item::Impl(item)) = item.ast else {
             continue;
         };
+
         let Some(name) = ast::impl_target_name(item) else {
             continue;
         };
+
         let Some(candidate_declarations) = declaration_indices_by_name.get(&name) else {
             continue;
         };
@@ -484,6 +488,7 @@ fn merge_type_impl_blocks(items: &[OrderingItem<'_>], blocks: &mut AtomicItemBlo
 fn unique_fn_indices_by_name(items: &[OrderingItem<'_>]) -> HashMap<String, usize> {
     let mut fn_indices_by_name = HashMap::new();
     let mut ambiguous_fn_names = HashSet::new();
+
     for (source_item_index, item) in items.iter().enumerate() {
         if let Some(name) = item.ast.fn_name().map(ToString::to_string)
             && fn_indices_by_name.insert(name.clone(), source_item_index).is_some()
@@ -491,6 +496,7 @@ fn unique_fn_indices_by_name(items: &[OrderingItem<'_>]) -> HashMap<String, usiz
             ambiguous_fn_names.insert(name);
         }
     }
+
     for name in ambiguous_fn_names {
         fn_indices_by_name.remove(&name);
     }
@@ -531,6 +537,7 @@ fn collect_item_fn_name_candidates(item: &OrderingItem<'_>) -> Vec<String> {
         }
         ItemAst::ModuleItem(_) | ItemAst::ImplItem(_) => {}
     }
+
     let ItemAst::ModuleItem(Item::Impl(item)) = item.ast else {
         return Vec::new();
     };
@@ -541,6 +548,7 @@ fn collect_item_fn_name_candidates(item: &OrderingItem<'_>) -> Vec<String> {
             let ImplItem::Fn(method) = item else {
                 return None;
             };
+
             Some(fn_references::collect_fn_name_candidates(
                 &method.block,
                 &method.attrs,
@@ -569,6 +577,7 @@ fn merge_recursive_fn_blocks(
         .collect();
 
     let mut reverse_call_graph = vec![Vec::new(); private_fn_graph.len()];
+
     for (caller_item_index, callee_item_indices) in private_fn_graph.iter().enumerate() {
         for &callee_item_index in callee_item_indices {
             if let Some(callers) = reverse_call_graph.get_mut(callee_item_index) {
@@ -579,6 +588,7 @@ fn merge_recursive_fn_blocks(
 
     let mut visited = vec![false; private_fn_graph.len()];
     let mut finish_order = Vec::new();
+
     for item_index in 0..private_fn_graph.len() {
         record_graph_finish_order(item_index, &private_fn_graph, &mut visited, &mut finish_order);
     }
@@ -612,6 +622,7 @@ fn record_graph_finish_order(
     finish_order: &mut Vec<usize>,
 ) {
     let mut stack = vec![(start_item_index, false)];
+
     while let Some((item_index, successors_visited)) = stack.pop() {
         if successors_visited {
             finish_order.push(item_index);
@@ -644,15 +655,18 @@ fn collect_reachable_component(
     component_items: &mut Vec<usize>,
 ) {
     let mut stack = vec![start_item_index];
+
     while let Some(item_index) = stack.pop() {
         if visited.get(item_index).copied().unwrap_or(false) {
             continue;
         }
+
         let Some(visited_node) = visited.get_mut(item_index) else {
             continue;
         };
         *visited_node = true;
         component_items.push(item_index);
+
         if let Some(successor_items) = graph.get(item_index) {
             stack.extend(successor_items.iter().rev().copied());
         }
@@ -674,6 +688,7 @@ fn add_section_group_visibility_constraints(
                 .map(item_group_sort_key),
         )
     });
+
     for (before_block_index, members) in ranked_blocks {
         let Some(item) = members.first().and_then(|&index| items.get(index)) else {
             continue;
@@ -686,12 +701,14 @@ fn add_section_group_visibility_constraints(
 
             if item.section != other.section {
                 if item.section < other.section {
-                    precedence_graph.add_precedence(
-                        before_block_index,
-                        after_block_index,
-                        OrderingConstraintKind::GroupOrTestSectionOrder,
-                        blocks,
-                    );
+                    // Unlike soft preferences, test-module placement must report macro conflicts.
+                    let kind = if other.section == TestOrderSection::TrailingTestModules {
+                        OrderingConstraintKind::TrailingTestModuleOrder
+                    } else {
+                        OrderingConstraintKind::GroupOrTestSectionOrder
+                    };
+
+                    precedence_graph.add_precedence(before_block_index, after_block_index, kind, blocks);
                 }
                 continue;
             }
@@ -708,7 +725,8 @@ fn add_section_group_visibility_constraints(
                     blocks,
                 );
             } else if item.ast.allows_visibility_order_with(other.ast)
-                && (!module_item_scope || (before_rank == after_rank && item.metadata.group == other.metadata.group))
+                && (!module_item_scope
+                    || (before_rank == after_rank && item.metadata.group() == other.metadata.group()))
                 && let (Some(before_visibility), Some(after_visibility)) =
                     (item.metadata.visibility, other.metadata.visibility)
                 && before_visibility < after_visibility
@@ -727,7 +745,7 @@ fn add_section_group_visibility_constraints(
 fn item_group_sort_key(item: &OrderingItem<'_>) -> (usize, bool) {
     let test_module = matches!(item.ast, ItemAst::ModuleItem(Item::Mod(module))
         if module.content.is_none() && ast::is_test_module_declaration(module));
-    (item_group_priority(item.metadata.group), test_module)
+    (item_group_priority(item.metadata.group()), test_module)
 }
 
 const fn item_group_priority(group: ItemGroup) -> usize {
@@ -752,6 +770,7 @@ fn add_caller_before_helper_constraints(
         let Some(item) = members.first().and_then(|&index| items.get(index)) else {
             continue;
         };
+
         if !item.ast.is_fn() || item.metadata.visibility != Some(VisibilityClass::Private) {
             continue;
         }

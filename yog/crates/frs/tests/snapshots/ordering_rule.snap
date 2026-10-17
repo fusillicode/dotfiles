@@ -1,0 +1,641 @@
+---
+source: crates/frs/tests/rsl.rs
+expression: "&rewritten"
+---
+//! Ordering preferences across production, test-only, macro, and source-boundary scopes.
+
+pub mod production {
+    //! Item sections, visibility, impl adjacency, callers, and attached comments.
+
+    extern crate core;
+
+    use std::fmt;
+
+    pub use std::io;
+    mod private_external;
+
+    pub mod public_external;
+    unsafe extern "C" {
+        fn foreign_function();
+    }
+
+    pub mod declarations {
+        mod child;
+
+        #[cfg(test)]
+        mod tests;
+    }
+
+    pub mod nested {
+        //! Each inline module and inherent impl has its own ordering.
+
+        pub mod public_inline {}
+        mod private_inline {}
+        pub const PUBLIC: u8 = 3;
+        pub(crate) const CRATE: u8 = 2;
+
+        pub(super) static RESTRICTED: u8 = 1;
+        const PRIVATE: u8 = 0;
+        pub type Public = u8;
+        pub(crate) type Crate = u8;
+
+        pub(super) type Restricted = u8;
+
+        type Private = u8;
+
+        /// The record and both inherent impls must stay together.
+        pub struct Record {
+            value: u8,
+        }
+
+        impl Record {
+            pub fn reset(&mut self) {
+                self.normalize();
+            }
+
+            pub(crate) fn crate_visible(&self) -> u8 {
+                self.value
+            }
+
+            pub(super) fn restricted(&self) -> u8 {
+                self.value
+            }
+
+            fn normalize(&mut self) {
+                self.value = 0;
+            }
+        }
+
+        impl Record {
+            const EMPTY: u8 = 0;
+
+            pub fn is_valid(&self) -> bool {
+                self.validate()
+            }
+
+            fn validate(&self) -> bool {
+                self.value == 0
+            }
+        }
+
+        impl Display for Record {
+            fn display(&self) -> u8 {
+                self.value
+            }
+        }
+
+        pub fn first() {
+            shared();
+        }
+
+        pub fn second() {
+            shared();
+        }
+
+        pub trait Display {
+            fn display(&self) -> u8;
+        }
+
+        pub(crate) fn crate_visible() {}
+
+        pub(super) fn restricted() {}
+
+        fn shared() {}
+
+        fn private_caller() {
+            shared();
+        }
+
+        struct PrivateRecord;
+
+        #[cfg(test)]
+        mod tests {
+            #[test]
+            fn record_starts_empty() {
+                let _ = sample();
+            }
+
+            fn sample() -> u8 {
+                0
+            }
+        }
+    }
+
+    global_asm!("");
+
+    pub static PUBLIC_LIMIT: u8 = 2;
+
+    const PRIVATE_LIMIT: u8 = 1;
+
+    pub type PublicAlias = u8;
+
+    type PrivateAlias = u8;
+
+    /// Public entry documentation travels with its function.
+    pub fn entry() -> u8 {
+        helper()
+    }
+
+    pub enum Mode {
+        Ready,
+    }
+
+    pub union Storage {
+        byte: u8,
+        word: u32,
+    }
+
+    fn unrelated() {}
+
+    // Private helper documentation travels with its function.
+    fn helper() -> u8 {
+        1
+    } // Keep this trailing comment with helper.
+
+    #[test]
+    fn production_test_stays_after_helpers() {
+        let _ = helper();
+    }
+
+    #[cfg(test)]
+    mod tests {
+        #[test]
+        fn entry_returns_sample() {
+            let _ = sample();
+        }
+
+        fn sample() -> u8 {
+            1
+        }
+    }
+}
+
+pub mod exceptions {
+    //! Ordering exceptions preserve macro binding and independent safe inner fixes.
+
+    pub mod imported_macros {
+        #[macro_use]
+        mod macros;
+
+        pub fn public_before() {}
+
+        pub fn public_after() {}
+
+        fn private_before() {}
+
+        fn private_after() {}
+    }
+
+    pub mod conditional_macro_imports {
+        mod before;
+
+        #[cfg_attr(feature = "first", macro_use)]
+        mod first;
+
+        pub mod between;
+
+        #[macro_use]
+        mod second;
+
+        pub mod after;
+    }
+
+    pub mod local_references {
+        fn macro_name() {}
+
+        fn text_only() {}
+
+        fn qualified_only() {}
+
+        fn nested_only() {}
+
+        #[case(attribute())]
+        fn caller() {
+            self::direct();
+            assert!(assertion());
+            custom!(nested => [self::nested_tokens()]);
+            stringify!(stringified());
+            custom!(identifier);
+
+            macro_name!();
+            custom!("text_only()");
+            custom!($qualified_only, foreign::qualified_only(), ::qualified_only(), self::nested::qualified_only());
+
+            fn nested() {
+                nested_only();
+            }
+        }
+
+        fn direct() {}
+
+        fn attribute() {}
+
+        fn assertion() -> bool {
+            true
+        }
+
+        fn nested_tokens() {}
+
+        fn stringified() {}
+
+        fn identifier() {}
+    }
+
+    pub mod helper_chain {
+        pub fn entry() {
+            middle();
+        }
+
+        fn middle() {
+            leaf();
+        }
+
+        fn leaf() {}
+
+        fn unrelated() {}
+    }
+
+    pub mod recursive_block {
+        pub fn parity(n: u32) -> bool {
+            even(n)
+        }
+
+        pub struct Data {
+            pub value: u32,
+        }
+
+        impl Data {
+            pub fn new(value: u32) -> Self {
+                Self { value }
+            }
+        }
+
+        fn odd(n: u32) -> bool {
+            n != 0 && even(n - 1)
+        }
+
+        fn even(n: u32) -> bool {
+            n == 0 || odd(n - 1)
+        }
+    }
+
+    pub mod macro_shadowing {
+        pub mod child {
+            macro_rules! m {
+                () => {
+                    pub const INNER: () = ();
+                };
+            }
+
+            m!();
+        }
+
+        macro_rules! m {
+            () => {
+                pub const OUTER: () = ();
+            };
+        }
+
+        pub mod sibling {
+            m!();
+        }
+    }
+
+    pub mod imported_then_local_macro {
+        #[macro_use]
+        mod macros;
+
+        mod before {
+            m!();
+        }
+
+        macro_rules! m {
+            () => {};
+        }
+
+        mod after {
+            m!();
+        }
+    }
+
+    pub mod type_crosses_macro_source {
+        macro_rules! value {
+            () => {
+                7
+            };
+        }
+
+        struct Data;
+
+        impl Data {
+            fn value() -> u8 {
+                value!()
+            }
+        }
+    }
+
+    pub mod type_crosses_opaque_source {
+        declare_macros!();
+
+        struct Data;
+
+        impl Data {
+            fn value() -> u8 {
+                value!()
+            }
+        }
+    }
+
+    pub mod unused_macro_between_type_and_impl {
+        struct Data;
+
+        impl Data {}
+
+        macro_rules! unused {
+            () => {};
+        }
+    }
+
+    pub mod conflicting_outer_scope {
+        #[custom]
+        struct Data;
+
+        macro_rules! m {
+            () => {};
+        }
+
+        impl Data {
+            pub fn public() {}
+
+            fn private() {
+                m!();
+            }
+        }
+    }
+
+    pub mod production_sections {
+        fn helper() {
+            example();
+        }
+
+        fn unrelated() {}
+
+        #[test]
+        fn example() {
+            helper();
+        }
+    }
+
+    pub mod macro_sections {
+        const VALUE: u8 = 1;
+
+        macro_rules! m {
+            () => {
+                pub const V: u8 = super::VALUE;
+            };
+        }
+
+        pub mod child {
+            m!();
+        }
+    }
+
+    #[cfg(test)]
+    pub mod verification {
+        mod nested {
+            struct Data;
+
+            impl Data {
+                #[test]
+                fn example() {}
+
+                pub fn helper() {}
+            }
+
+            #[test]
+            fn example() {}
+
+            fn helper() {}
+        }
+    }
+}
+
+pub mod test_module_placement {
+    pub mod external_declarations {
+        #[cfg(test)]
+        mod test;
+
+        #[cfg(test)]
+        mod checks;
+
+        #[cfg(test)]
+        mod tests;
+
+        const VALUE: u8 = 1;
+    }
+
+    pub mod macro_conflict {
+        macro_rules! value {
+            () => {
+                1
+            };
+        }
+
+        #[cfg(test)]
+        mod test {
+            #[test]
+            fn example() {
+                assert_eq!(helper(), 1);
+            }
+
+            fn helper() -> u8 {
+                value!()
+            }
+        }
+
+        macro_rules! value {
+            () => {
+                2
+            };
+        }
+    }
+
+    mod ordinary {}
+
+    const VALUE: u8 = 1;
+
+    fn production() {}
+
+    #[cfg(test)]
+    pub mod test {
+        #[test]
+        fn example() {}
+
+        fn helper() {}
+    }
+
+    #[cfg(test)]
+    mod checks {}
+}
+
+pub mod boundaries {
+    //! Preserve comments, Unicode, same-line boundaries, and conditional declarations.
+
+    pub mod comments {
+        //! Scope documentation stays in this module.
+
+        // Blank-separated scope header stays in its original slot.
+
+        /* Public documentation */
+        /// Public API documentation stays with beta.
+        pub fn β() {}
+        // private tail
+
+        // Private documentation stays with alpha.
+        #[cfg(unix)]
+        fn α() {} /* first */
+    }
+
+    pub mod same_line {
+        pub fn β() {}
+        fn α() {}
+    }
+
+    pub mod inner_docs {
+        #![allow(dead_code)]
+        pub fn public() {}
+
+        /* Private note stays with its function. */
+        fn private() {}
+    }
+
+    pub mod nested_comments {
+        pub fn public() {}
+
+        fn private() {} /* trailing
+        //
+        /* nested */
+         */
+    }
+
+    pub mod conditional_types {
+        #[cfg(feature = "first")]
+        pub struct Data;
+
+        #[cfg(not(feature = "first"))]
+        pub struct Data;
+
+        impl Data {
+            pub fn new() -> Self {
+                Self
+            }
+        }
+
+        pub fn entry() -> Data {
+            Data::new()
+        }
+    }
+
+    pub mod repeated_impl_labels {
+        pub struct Data;
+
+        #[cfg(unix)]
+        impl Data {
+            pub fn public() {}
+
+            fn private() {}
+        }
+
+        #[cfg(windows)]
+        impl Data {
+            pub fn public() {}
+
+            fn private() {}
+        }
+    }
+}
+
+#[cfg(test)]
+pub mod tests {
+    //! Test-only scopes put tests before helpers, including inside nested modules and impls.
+
+    pub mod nested {
+        pub struct Fixture;
+
+        impl Fixture {
+            #[test]
+            fn example() {
+                Self::helper();
+            }
+
+            fn helper() {}
+        }
+
+        #[custom::integration_test]
+        fn nested_test() {
+            helper();
+        }
+
+        fn helper() {}
+    }
+
+    pub mod recursive_tests {
+        #[test]
+        fn first() {
+            second();
+        }
+
+        #[test]
+        fn second() {
+            first();
+        }
+
+        fn helper() {}
+    }
+
+    pub mod sections {
+        #[test]
+        fn example() {
+            helper();
+        }
+
+        fn helper() {
+            example();
+        }
+
+        fn unrelated() {}
+    }
+
+    #[test]
+    fn first_uses_builder() {
+        let _ = build();
+    }
+
+    #[rstest::rstest]
+    #[case(1)]
+    fn parameterized_uses_sample(#[case] expected: u8) {
+        let _ = (sample(), expected);
+    }
+
+    fn build() -> u8 {
+        sample()
+    }
+
+    fn sample() -> u8 {
+        1
+    }
+
+    // Attribute arguments do not turn this helper into a test.
+    #[tracing::instrument(name = "test")]
+    fn traced_helper() {}
+
+    #[cfg(test)]
+    mod tests {
+        #[test]
+        fn example() {
+            helper();
+        }
+
+        fn helper() {}
+    }
+}

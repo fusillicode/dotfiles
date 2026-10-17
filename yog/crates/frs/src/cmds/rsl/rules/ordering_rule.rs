@@ -3,7 +3,7 @@
 //! ```text
 //! extern_crate -> use -> foreign_mod/mod -> #[cfg(test)] mod tests;
 //! -> global_asm -> const/static -> ty_alias -> macros/types/traits/impls/functions
-//! -> inline #[cfg(test)] mod tests { ... }
+//! -> inline #[cfg(test)] modules (any name)
 //! ```
 //!
 //! Keep contiguous blocks: `type -> inherent impls -> trait impls`, and mutually recursive private helpers.
@@ -19,14 +19,10 @@
 //! Preserve source order between macro sources and possible consumers, without resolving macro names.
 //! Sources include macro definitions/invocations, imports, and opaque items. Consumers include attributed items,
 //! external modules, and items containing macros or opaque syntax. Plain items can cross macro sources.
-//! Ordering preferences yield to macro preservation. Incompatible adjacency emits a conflict without moves.
+//! Ordering preferences yield to macro preservation, except inline test modules must be last.
+//! Incompatible test-module placement or adjacency emits a conflict without moves.
 //!
-//! Diagnostics list all immediate items in required order; conflicts emit no move instructions.
-//! Rich item metadata, original/required sequences, and ordering constraints remain in the Rust payload.
-//!
-//! ```text
-//! src/lib.rs:1:1,ordering_rule,module crate: order=[14-15,1-2,4-12]
-//! ```
+//! Conflicting scopes are skipped; independent nested scopes can still be fixed.
 //!
 //! Apply inner scopes first, retaining original-snapshot identities as earlier edits shift positions.
 //! Ranges include attributes and attached comments: `9-11` is inclusive; `9:3-11:2` uses one-based columns
@@ -35,7 +31,6 @@
 
 use std::path::Path;
 
-use item_source_ranges::SourceRange;
 use proc_macro2::Ident;
 use proc_macro2::LineColumn;
 use proc_macro2::Span;
@@ -46,86 +41,77 @@ use syn::ItemMod;
 use syn::Meta;
 use syn::spanned::Spanned;
 
+use super::Rule;
 use crate::cmds::rsl::ast;
 use crate::cmds::rsl::ast::ItemGroup;
 use crate::cmds::rsl::ast::ItemKind;
 use crate::cmds::rsl::ast::VisibilityClass;
 use crate::cmds::rsl::engine::FileContext;
-use crate::cmds::rsl::rules::TypedRule;
-use crate::cmds::rsl::rules::TypedRuleViolation;
-use crate::cmds::rsl::rules::common::Location;
+use crate::cmds::rsl::source::SourceEditor;
+use crate::cmds::rsl::source::item_ranges;
+use crate::cmds::rsl::source::item_ranges::SourceRange;
 
 mod fn_references;
 mod item_ordering;
-mod item_source_ranges;
 
-#[cfg(test)]
-mod tests;
+pub(super) struct OrderingRule;
 
-pub struct OrderingRule;
-
-impl TypedRule for OrderingRule {
-    type Violation = OrderingRuleViolation;
-
-    fn code() -> &'static str {
-        "ordering_rule"
+impl Rule for OrderingRule {
+    fn id(&self) -> &'static str {
+        "ordering-rule"
     }
 
-    fn check(&self, ctx: &FileContext<'_>) -> Vec<Self::Violation> {
+    fn fix(&self, ctx: &FileContext<'_>, editor: &mut SourceEditor<'_>) -> rootcause::Result<()> {
         let test_ordering = TestOrdering::from(ctx.path);
-        let mut violations = Vec::new();
-        check_scope(
-            ctx,
-            ctx.file.items.iter().map(ItemAst::ModuleItem),
-            OrderingScope {
-                label: "module crate".to_owned(),
-                diagnostic_span: Span::call_site(),
-                body_start: LineColumn { line: 1, column: 0 },
+        let mut pending = vec![
+            ScopeWork::Fix {
+                items: ctx.file.items.iter().map(ItemAst::ModuleItem).collect(),
+                scope: OrderingScope {
+                    label: "module crate".to_owned(),
+                    body_start: LineColumn { line: 1, column: 0 },
+                    test_ordering,
+                },
+            },
+            ScopeWork::Discover {
+                items: &ctx.file.items,
+                name: "crate".to_owned(),
                 test_ordering,
             },
-            0,
-            &mut violations,
-        );
-        check_nested_scopes(ctx, &ctx.file.items, "crate", 0, test_ordering, &mut violations);
-        violations.sort_by_key(|violation| {
-            (
-                std::cmp::Reverse(violation.depth),
-                violation.location.line,
-                violation.location.column,
-            )
-        });
-        violations
+        ];
+
+        while let Some(work) = pending.pop() {
+            match work {
+                ScopeWork::Discover {
+                    items,
+                    name,
+                    test_ordering,
+                } => {
+                    schedule_nested_scopes(items, &name, test_ordering, &mut pending);
+                }
+                ScopeWork::Fix { items, scope } => {
+                    fix_scope(ctx, items.into_iter(), &scope, editor)?;
+                }
+            }
+        }
+
+        Ok(())
     }
 }
 
 #[derive(Debug)]
-#[cfg_attr(test, derive(Eq, PartialEq))]
-pub struct OrderingRuleViolation {
-    pub location: Location,
-    pub scope: String,
-    pub depth: usize,
-    pub items: Vec<ItemOrderingMetadata>,
-    pub outcome: OrderingOutcome,
-}
-
-impl TypedRuleViolation for OrderingRuleViolation {
-    type Rule = OrderingRule;
-}
-
-#[derive(Debug)]
-#[cfg_attr(test, derive(Eq, PartialEq))]
 pub struct ItemOrderingMetadata {
     pub range: SourceRange,
     pub label: String,
     pub kind: Option<ItemKind>,
-    pub group: ItemGroup,
     pub visibility: Option<VisibilityClass>,
-    /// Index of the first member in this item's atomic block, in the original snapshot.
-    pub block_first_item_index: usize,
 }
 
 impl ItemOrderingMetadata {
-    fn new(ast: ItemAst<'_>, source_item_index: usize, range: SourceRange) -> Self {
+    fn group(&self) -> ItemGroup {
+        self.kind.map_or(ItemGroup::Items, ItemKind::group)
+    }
+
+    fn new(ast: ItemAst<'_>, range: SourceRange) -> Self {
         let (kind, label, visibility) = match ast {
             ItemAst::ModuleItem(item) => {
                 let kind = ast::classify_item(item);
@@ -154,70 +140,31 @@ impl ItemOrderingMetadata {
             range,
             label,
             kind,
-            group: kind.map_or(ItemGroup::Items, ItemKind::group),
             visibility,
-            block_first_item_index: source_item_index,
         }
     }
 }
 
-#[derive(Debug)]
-#[cfg_attr(test, derive(Eq, PartialEq))]
-pub enum OrderingOutcome {
-    Computed {
-        source_item_order: Vec<usize>,
-        required_item_order: Vec<usize>,
-        constraints: Vec<OrderingConstraint>,
-    },
-    Failed {
-        message: String,
-        constraints: Vec<OrderingConstraint>,
-    },
-}
+/// A complete permutation that satisfies every computed ordering constraint.
+struct ItemOrder(Vec<usize>);
 
-impl OrderingOutcome {
-    fn validate(self, items: &[OrderingItem<'_>]) -> Self {
-        let constraints = match &self {
-            Self::Computed { constraints, .. } | Self::Failed { constraints, .. } => constraints,
-        };
-        let invalid_identity = constraints.iter().any(|constraint| {
-            constraint.before_item_index >= items.len() || constraint.after_item_index >= items.len()
-        });
-        let invalid_metadata = items.iter().any(|item| {
-            item.metadata.label.is_empty()
-                || item
-                    .metadata
-                    .kind
-                    .is_some_and(|kind| kind.group() != item.metadata.group)
-                || item.metadata.range.byte_range.is_empty()
-        });
-        let error = if invalid_identity || invalid_metadata {
-            Some("invalid item identity or ordering constraint")
-        } else {
-            match &self {
-                Self::Computed {
-                    source_item_order,
-                    required_item_order,
-                    ..
-                } => validate_required_item_order(source_item_order, required_item_order, constraints).err(),
-                Self::Failed { .. } => None,
-            }
-        };
-        if let Some(message) = error {
-            let constraints = match self {
-                Self::Computed { constraints, .. } | Self::Failed { constraints, .. } => constraints,
-            };
-            return Self::Failed {
-                message: message.to_owned(),
-                constraints,
-            };
-        }
-        self
+impl ItemOrder {
+    fn new(
+        items: &[OrderingItem<'_>],
+        indices: Vec<usize>,
+        constraints: &[OrderingConstraint],
+    ) -> Result<Self, String> {
+        validate_required_item_order(items.len(), &indices, constraints).map_err(str::to_owned)?;
+
+        Ok(Self(indices))
+    }
+
+    fn is_identity(&self) -> bool {
+        self.0.iter().copied().eq(0..self.0.len())
     }
 }
 
 #[derive(Debug)]
-#[cfg_attr(test, derive(Eq, PartialEq))]
 pub struct OrderingConstraint {
     pub before_item_index: usize,
     pub after_item_index: usize,
@@ -225,9 +172,9 @@ pub struct OrderingConstraint {
 }
 
 #[derive(Clone, Copy, Debug)]
-#[cfg_attr(test, derive(Eq, PartialEq))]
 pub enum OrderingConstraintKind {
     GroupOrTestSectionOrder,
+    TrailingTestModuleOrder,
     VisibilityOrder,
     TypeImplAdjacency,
     RecursiveFnAdjacency,
@@ -236,15 +183,17 @@ pub enum OrderingConstraintKind {
 }
 
 fn validate_required_item_order(
-    source_item_order: &[usize],
+    item_count: usize,
     required_item_order: &[usize],
     constraints: &[OrderingConstraint],
 ) -> Result<(), &'static str> {
     let mut permutation = required_item_order.to_vec();
     permutation.sort_unstable();
-    if permutation != source_item_order {
+
+    if !permutation.into_iter().eq(0..item_count) {
         return Err("incomplete item permutation");
     }
+
     let valid_constraints = constraints.iter().all(|constraint| {
         let before_position = required_item_order
             .iter()
@@ -255,16 +204,19 @@ fn validate_required_item_order(
         let (Some(before_position), Some(after_position)) = (before_position, after_position) else {
             return false;
         };
+
         match constraint.kind {
             OrderingConstraintKind::TypeImplAdjacency | OrderingConstraintKind::RecursiveFnAdjacency => {
                 before_position.saturating_add(1) == after_position
             }
             OrderingConstraintKind::GroupOrTestSectionOrder
+            | OrderingConstraintKind::TrailingTestModuleOrder
             | OrderingConstraintKind::VisibilityOrder
             | OrderingConstraintKind::CallerBeforeHelper
             | OrderingConstraintKind::MacroBindingPreservation => before_position < after_position,
         }
     });
+
     if valid_constraints {
         Ok(())
     } else {
@@ -280,9 +232,20 @@ struct OrderingItem<'ast> {
 
 struct OrderingScope {
     label: String,
-    diagnostic_span: Span,
     body_start: LineColumn,
     test_ordering: TestOrdering,
+}
+
+enum ScopeWork<'ast> {
+    Discover {
+        items: &'ast [Item],
+        name: String,
+        test_ordering: TestOrdering,
+    },
+    Fix {
+        items: Vec<ItemAst<'ast>>,
+        scope: OrderingScope,
+    },
 }
 
 #[derive(Clone, Copy)]
@@ -293,14 +256,7 @@ enum TestOrdering {
 
 impl TestOrdering {
     fn for_nested_module(self, module: &ItemMod) -> Self {
-        let is_test_only_module = module.attrs.iter().any(|attribute| {
-            let Meta::List(meta) = &attribute.meta else {
-                return false;
-            };
-            meta.path.is_ident("cfg")
-                && syn::parse2::<syn::Path>(meta.tokens.clone()).is_ok_and(|path| path.is_ident("test"))
-        });
-        if is_test_only_module {
+        if is_test_only_module(module) {
             Self::InTestOnlyModule
         } else {
             self
@@ -310,7 +266,7 @@ impl TestOrdering {
     fn classify_item_section(self, ast: ItemAst<'_>) -> TestOrderSection {
         if let ItemAst::ModuleItem(Item::Mod(module)) = ast
             && module.content.is_some()
-            && ast::is_test_module_declaration(module)
+            && is_test_only_module(module)
         {
             return TestOrderSection::TrailingTestModules;
         }
@@ -341,9 +297,11 @@ impl From<&Path> for TestOrdering {
         if path.extension().is_none_or(|extension| extension != "rs") {
             return Self::InProdModule;
         }
+
         let test_file = path.file_stem().and_then(|name| name.to_str()).is_some_and(|name| {
             name == "tests" || name.starts_with("test_") || name.ends_with("_test") || name.ends_with("_tests")
         });
+
         if test_file {
             Self::InTestOnlyModule
         } else {
@@ -357,6 +315,17 @@ enum TestOrderSection {
     LeadingItems,
     TrailingFns,
     TrailingTestModules,
+}
+
+fn is_test_only_module(module: &ItemMod) -> bool {
+    module.attrs.iter().any(|attribute| {
+        let Meta::List(meta) = &attribute.meta else {
+            return false;
+        };
+
+        meta.path.is_ident("cfg")
+            && syn::parse2::<syn::Path>(meta.tokens.clone()).is_ok_and(|path| path.is_ident("test"))
+    })
 }
 
 #[derive(Clone, Copy)]
@@ -404,51 +373,49 @@ impl<'ast> ItemAst<'ast> {
     }
 }
 
-fn check_nested_scopes(
-    ctx: &FileContext<'_>,
-    items: &[Item],
-    name: &str,
-    depth: usize,
+fn schedule_nested_scopes<'ast>(
+    items: &'ast [Item],
+    parent: &str,
     test_ordering: TestOrdering,
-    violations: &mut Vec<OrderingRuleViolation>,
+    pending: &mut Vec<ScopeWork<'ast>>,
 ) {
-    for item in items {
+    // Stack order retains source-order siblings and fixes each parent after its children.
+    for item in items.iter().rev() {
         match item {
             Item::Mod(module) => {
-                if let Some((brace, nested)) = &module.content {
-                    let test_ordering = test_ordering.for_nested_module(module);
-                    let name = format!("{name}::{}", module.ident);
-                    let depth = depth.saturating_add(1);
-                    check_scope(
-                        ctx,
-                        nested.iter().map(ItemAst::ModuleItem),
-                        OrderingScope {
-                            label: format!("module {name}"),
-                            diagnostic_span: module.mod_token.span,
-                            body_start: brace.span.open().end(),
-                            test_ordering,
-                        },
-                        depth,
-                        violations,
-                    );
-                    check_nested_scopes(ctx, nested, &name, depth, test_ordering, violations);
-                }
-            }
-            Item::Impl(item) if item.trait_.is_none() => check_scope(
-                ctx,
-                item.items.iter().map(ItemAst::ImplItem),
-                OrderingScope {
-                    label: format!(
-                        "impl {}",
-                        ast::impl_target_name(item).unwrap_or_else(|| "type".to_owned())
-                    ),
-                    diagnostic_span: item.impl_token.span,
-                    body_start: item.brace_token.span.open().end(),
+                let Some((brace, items)) = &module.content else {
+                    continue;
+                };
+
+                let test_ordering = test_ordering.for_nested_module(module);
+                let name = format!("{parent}::{}", module.ident);
+                pending.push(ScopeWork::Fix {
+                    items: items.iter().map(ItemAst::ModuleItem).collect(),
+                    scope: OrderingScope {
+                        label: format!("module {name}"),
+                        body_start: brace.span.open().end(),
+                        test_ordering,
+                    },
+                });
+                pending.push(ScopeWork::Discover {
+                    items,
+                    name,
                     test_ordering,
-                },
-                depth.saturating_add(1),
-                violations,
-            ),
+                });
+            }
+            Item::Impl(item) if item.trait_.is_none() => {
+                pending.push(ScopeWork::Fix {
+                    items: item.items.iter().map(ItemAst::ImplItem).collect(),
+                    scope: OrderingScope {
+                        label: format!(
+                            "impl {}",
+                            ast::impl_target_name(item).unwrap_or_else(|| "type".to_owned())
+                        ),
+                        body_start: item.brace_token.span.open().end(),
+                        test_ordering,
+                    },
+                });
+            }
             Item::Const(_)
             | Item::Enum(_)
             | Item::ExternCrate(_)
@@ -469,45 +436,98 @@ fn check_nested_scopes(
     }
 }
 
-fn check_scope<'ast>(
+fn fix_scope<'ast>(
     ctx: &FileContext<'_>,
     ast_items: impl Iterator<Item = ItemAst<'ast>>,
-    scope: OrderingScope,
-    depth: usize,
-    violations: &mut Vec<OrderingRuleViolation>,
-) {
+    scope: &OrderingScope,
+    editor: &mut SourceEditor<'_>,
+) -> rootcause::Result<()> {
     let ast_items: Vec<_> = ast_items.collect();
+
     if ast_items.len() < 2 {
-        return;
+        return Ok(());
     }
 
     let spans: Vec<_> = ast_items.iter().map(|item| item.span()).collect();
-    let item_source_ranges =
-        item_source_ranges::item_ranges_with_attached_comments(ctx.source, &spans, scope.body_start);
-
-    let mut items: Vec<_> = ast_items
+    let ranges = item_ranges::item_ranges_with_attached_comments(ctx.source, &spans, scope.body_start);
+    let items: Vec<_> = ast_items
         .into_iter()
-        .zip(item_source_ranges)
-        .enumerate()
-        .map(|(source_item_index, (ast, range))| OrderingItem {
-            metadata: ItemOrderingMetadata::new(ast, source_item_index, range),
+        .zip(ranges)
+        .map(|(ast, range)| OrderingItem {
+            metadata: ItemOrderingMetadata::new(ast, range),
             ast,
             section: scope.test_ordering.classify_item_section(ast),
         })
         .collect();
 
-    let ordering_outcome = item_ordering::compute_required_item_order(&mut items).validate(&items);
-
-    if matches!(&ordering_outcome, OrderingOutcome::Computed { source_item_order, required_item_order, .. } if source_item_order == required_item_order)
-    {
-        return;
+    match item_ordering::compute_required_item_order(&items) {
+        Ok(order) if !order.is_identity() => reorder_scope(&items, &order.0, editor)?,
+        Ok(_) => {}
+        Err(message) => editor.skip(format!("{}: {message}", scope.label)),
     }
 
-    violations.push(OrderingRuleViolation {
-        location: Location::from_span(ctx.path, scope.diagnostic_span),
-        scope: scope.label,
-        depth,
-        items: items.into_iter().map(|item| item.metadata).collect(),
-        outcome: ordering_outcome,
-    });
+    Ok(())
+}
+
+fn reorder_scope(items: &[OrderingItem<'_>], order: &[usize], editor: &mut SourceEditor<'_>) -> rootcause::Result<()> {
+    let mut replacement = String::new();
+
+    for (slot, &index) in order.iter().enumerate() {
+        let item = items
+            .get(index)
+            .ok_or_else(|| rootcause::report!("invalid ordering permutation"))?;
+        replacement.push_str(&editor.render_range(item.metadata.range.byte_range.clone())?);
+
+        if let (Some(current), Some(next)) = (items.get(slot), items.get(slot.saturating_add(1))) {
+            let gap = current.metadata.range.byte_range.end..next.metadata.range.byte_range.start;
+            replacement.push_str(&editor.render_range(gap)?);
+        }
+    }
+
+    if let (Some(first), Some(last)) = (items.first(), items.last()) {
+        editor.replace(
+            first.metadata.range.byte_range.start..last.metadata.range.byte_range.end,
+            replacement,
+        )?;
+    }
+
+    Ok(())
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[rstest::rstest]
+    #[case(vec![0, 1], Vec::new(), Ok(()))]
+    #[case(vec![0], Vec::new(), Err("incomplete item permutation"))]
+    #[case(vec![0, 0], Vec::new(), Err("incomplete item permutation"))]
+    #[case(
+        vec![0, 1],
+        vec![OrderingConstraint {
+            before_item_index: 0,
+            after_item_index: 1,
+            kind: OrderingConstraintKind::CallerBeforeHelper,
+        }],
+        Ok(()),
+    )]
+    #[case(
+        vec![1, 0],
+        vec![OrderingConstraint {
+            before_item_index: 0,
+            after_item_index: 1,
+            kind: OrderingConstraintKind::CallerBeforeHelper,
+        }],
+        Err("invalid item identity or ordering constraint"),
+    )]
+    fn test_ordering_rule_when_required_item_order_is_validated_reports_invalid_item_order(
+        #[case] required_item_order: Vec<usize>,
+        #[case] constraints: Vec<OrderingConstraint>,
+        #[case] expected: Result<(), &'static str>,
+    ) {
+        assert_eq!(
+            validate_required_item_order(2, &required_item_order, &constraints),
+            expected
+        );
+    }
 }

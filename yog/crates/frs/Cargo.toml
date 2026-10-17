@@ -6,7 +6,7 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 readme.workspace = true
-description = "Maintain Rust repositories and lint Rust source code."
+description = "Maintain Rust repositories and rewrite Rust source preferences."
 keywords = ["rust", "cargo", "maintenance", "cli"]
 categories = ["command-line-utilities", "development-tools"]
 include = ["src/**/*", "help.txt", "help/**/*"]
@@ -17,7 +17,6 @@ lazy-regex = { workspace = true }
 nutype = { workspace = true }
 owo-colors = { workspace = true }
 proc-macro2 = { version = "1", features = ["span-locations"] }
-rayon = { version = "1.12" }
 rootcause = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -26,6 +25,7 @@ syn = { version = "3", features = ["full", "visit"] }
 ytil_sys = { workspace = true }
 
 [dev-dependencies]
+insta = { version = "1.48", default-features = false }
 rstest = { workspace = true }
 tempfile = { workspace = true }
 test-that = { workspace = true }

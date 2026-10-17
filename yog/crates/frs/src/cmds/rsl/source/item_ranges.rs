@@ -4,7 +4,6 @@ use proc_macro2::LineColumn;
 use proc_macro2::Span;
 
 #[derive(Clone, Debug)]
-#[cfg_attr(test, derive(Eq, PartialEq))]
 pub struct SourceRange {
     pub start: SourcePosition,
     pub end: SourcePosition,
@@ -26,13 +25,12 @@ impl SourceRange {
 }
 
 #[derive(Clone, Copy, Debug)]
-#[cfg_attr(test, derive(Eq, PartialEq))]
 pub struct SourcePosition {
     pub line: usize,
     pub column: usize,
 }
 
-pub(super) fn item_ranges_with_attached_comments(
+pub(in crate::cmds::rsl) fn item_ranges_with_attached_comments(
     source: &str,
     spans: &[Span],
     scope_start: LineColumn,
@@ -63,6 +61,12 @@ pub(super) fn item_ranges_with_attached_comments(
                 .get(end..)
                 .and_then(|suffix| suffix.find('\n'))
                 .map_or(source.len(), |offset| end.saturating_add(offset));
+            // Keep the entire CRLF in the gap, including when an EOF item moves into the middle.
+            let line_end = if source.get(..line_end).is_some_and(|prefix| prefix.ends_with('\r')) {
+                line_end.saturating_sub(1)
+            } else {
+                line_end
+            };
             let whole_lines = source.get(line_start..start).is_some_and(|text| text.trim().is_empty())
                 && source.get(end..line_end).is_some_and(|text| text.trim().is_empty());
 
@@ -79,7 +83,7 @@ pub(super) fn item_ranges_with_attached_comments(
         .collect()
 }
 
-fn byte_offset(source: &str, position: LineColumn) -> usize {
+pub(super) fn byte_offset(source: &str, position: LineColumn) -> usize {
     let line_start = source
         .split_inclusive('\n')
         .take(position.line.saturating_sub(1))
@@ -133,6 +137,7 @@ fn attached_start_offset(
     let mut cursor = skipped;
     let mut attached = None;
     let mut newlines = 0_usize;
+
     while let Some(rest) = gap.get(cursor..)
         && !rest.is_empty()
     {
@@ -144,6 +149,7 @@ fn attached_start_offset(
             if character == '\n' {
                 newlines = newlines.saturating_add(1);
             }
+
             if newlines > 1 {
                 attached = None;
             }
@@ -152,6 +158,7 @@ fn attached_start_offset(
         }
 
         let length = comment_length(rest);
+
         if let Some(length) = length {
             if rest.starts_with("//!") || rest.starts_with("/*!") {
                 attached = None;
@@ -174,6 +181,7 @@ fn attached_start_offset(
 fn attached_end_offset(source: &str, ast_end_offset: usize, next_item_start: usize) -> usize {
     let gap = source.get(ast_end_offset..next_item_start).unwrap_or_default();
     let mut cursor = 0_usize;
+
     loop {
         let rest = gap.get(cursor..).unwrap_or_default();
         let comment = rest
@@ -189,7 +197,8 @@ fn attached_end_offset(source: &str, ast_end_offset: usize, next_item_start: usi
 
 fn comment_length(text: &str) -> Option<usize> {
     if text.starts_with("//") {
-        Some(text.find('\n').unwrap_or(text.len()))
+        let line = text.split('\n').next().unwrap_or_default();
+        Some(line.strip_suffix('\r').unwrap_or(line).len())
     } else if text.starts_with("/*") {
         block_comment_end(text)
     } else {
@@ -200,6 +209,7 @@ fn comment_length(text: &str) -> Option<usize> {
 fn block_comment_end(comment: &str) -> Option<usize> {
     let mut depth = 0_usize;
     let mut characters = comment.char_indices().peekable();
+
     while let Some((offset, character)) = characters.next() {
         match (character, characters.peek()) {
             ('/', Some((_, '*'))) => {
@@ -209,6 +219,7 @@ fn block_comment_end(comment: &str) -> Option<usize> {
             ('*', Some((_, '/'))) => {
                 depth = depth.saturating_sub(1);
                 characters.next();
+
                 if depth == 0 {
                     return Some(offset.saturating_add(2));
                 }

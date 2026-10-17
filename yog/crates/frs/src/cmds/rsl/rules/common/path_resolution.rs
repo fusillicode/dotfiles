@@ -7,21 +7,15 @@ pub fn path_parts(path: &syn::Path) -> Option<Vec<String>> {
 
     let last_segment = path.segments.len().saturating_sub(1);
     let mut parts = Vec::new();
+
     for (idx, segment) in path.segments.iter().enumerate() {
         if idx != last_segment && !matches!(&segment.arguments, PathArguments::None) {
             return None;
         }
         parts.push(segment.ident.to_string());
     }
-    Some(parts)
-}
 
-pub fn associated_receiver_parts(path: &syn::Path) -> Option<Vec<String>> {
-    let parts = self::path_parts(path)?;
-    is_associated_fn_path(&parts)
-        .then(|| parts.get(..parts.len().saturating_sub(1)))
-        .flatten()
-        .map(ToOwned::to_owned)
+    Some(parts)
 }
 
 pub fn is_associated_fn_path(parts: &[String]) -> bool {
@@ -49,19 +43,22 @@ fn is_type_name(name: &str) -> bool {
 }
 
 pub fn normalize_path(current_module: &[String], parts: &[String]) -> Vec<String> {
-    let mut absolute_parts = current_module.to_vec();
+    let mut normalized = current_module.to_vec();
     let mut first_item = 0;
 
     match parts.first().map(String::as_str) {
         Some("crate") => {
-            absolute_parts.clear();
+            // The supplied file's position in the crate is unknown.
+            normalized = vec!["crate".to_owned()];
             first_item = 1;
         }
         Some("self") => first_item = 1,
         Some("super") => {
             while parts.get(first_item).is_some_and(|part| part == "super") {
-                if absolute_parts.pop().is_none() {
-                    return Vec::new();
+                if normalized.last().is_none_or(|part| part == "super") {
+                    normalized.push("super".to_owned());
+                } else {
+                    normalized.pop();
                 }
                 first_item = first_item.saturating_add(1);
             }
@@ -70,9 +67,9 @@ pub fn normalize_path(current_module: &[String], parts: &[String]) -> Vec<String
     }
 
     if let Some(suffix) = parts.get(first_item..) {
-        absolute_parts.extend(suffix.iter().cloned());
+        normalized.extend(suffix.iter().cloned());
     }
-    absolute_parts
+    normalized
 }
 
 pub fn path_label(path: &syn::Path) -> String {
