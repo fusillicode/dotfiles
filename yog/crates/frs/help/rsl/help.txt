@@ -1,19 +1,23 @@
-Run Rust source lint rules on explicitly supplied files.
+Rewrite explicitly supplied Rust files using personal source preferences.
 
 Usage:
-  frs rsl [--debug] [--rules ID[,ID...]]... [--] FILE...
+  frs rsl [--rules ID[,ID...]]... [--] FILE...
 
 Arguments:
-  --debug                  Include rule codes in violations.
   --rules ID[,ID...]       Run only these rules. Supply comma-separated rule IDs.
                            May be repeated to select more rules.
   --                       Treat remaining arguments as file paths.
-  FILE                     Rust source file to check. Supply at least one file.
+  FILE                     Rust source file to rewrite. Supply at least one file.
 
 With no --rules options, all built-in rules run. Unknown or empty IDs are rejected.
+Safe fixes are written in place. Skipped fixes are reported; they do not prevent other fixes.
+Successful fixing exits zero, including when changes were skipped. Read, parse, and write errors fail.
+Files are parsed again between rules. No formatter is run; source trivia is preserved.
+Only supplied files are read and written, including their inline modules. Cargo is not invoked.
+Fixes that need the file's crate path or parent-module context are skipped.
+Exported aliases and aliases with unresolved references are skipped. Test-only super::* imports remain.
 Rule IDs:
-  ordering-rule,
-  unqualified-call, overqualified-call, qualified-item, aliased-import, relative-path
+  relative-path, aliased-import, unqualified-call, overqualified-call, qualified-item, ordering-rule
 
 Example:
   frs rsl --rules ordering-rule,relative-path src/main.rs

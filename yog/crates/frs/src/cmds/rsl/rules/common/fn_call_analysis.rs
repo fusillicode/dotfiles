@@ -1,88 +1,82 @@
+//! Collect path call sites and their lexical binding context within one module scope.
+
 use std::collections::HashSet;
 
 use proc_macro2::Span;
 use syn::Expr;
+use syn::ExprCall;
+use syn::ExprLet;
+use syn::Item;
+use syn::Path;
 use syn::spanned::Spanned;
 use syn::visit::Visit;
 
-use super::fn_path_resolution::FnCallSuggestion;
-use super::fn_path_resolution::expected_fn_path;
-use super::module_idx::ModuleIdx;
-use super::module_idx::module_idx;
-use super::path_resolution::path_label;
-use super::path_resolution::path_parts;
 use super::scope_bindings::add_pattern_bindings;
 use super::scope_bindings::block_fn_bindings;
 use super::scope_bindings::closure_bindings;
 use super::scope_bindings::parameter_bindings;
 use super::scope_bindings::pattern_bindings;
 
-#[derive(Debug)]
-#[cfg_attr(test, derive(Eq, PartialEq))]
-pub struct CallDetails {
-    pub actual_path: String,
-    pub replacement_path: String,
-    pub add_import: Option<String>,
-}
+pub fn calls_in_scope(items: &[Item]) -> Vec<CallSite<'_>> {
+    let mut visitor = FnCallVisitor {
+        calls: Vec::new(),
+        local_bindings: Vec::new(),
+    };
 
-#[derive(Clone, Copy)]
-pub enum FnCallKind {
-    Unqualified,
-    Overqualified,
-}
-
-pub struct FnCallFinding {
-    pub span: Span,
-    pub actual_path: String,
-    pub suggestion: FnCallSuggestion,
-}
-
-pub fn find_fn_calls(file: &syn::File, kind: FnCallKind) -> Vec<FnCallFinding> {
-    let idx = module_idx(file);
-    let mut findings = Vec::new();
-
-    for scope in &idx.scopes {
-        let mut visitor = FnCallVisitor {
-            idx: &idx,
-            current_module: &scope.path,
-            kind,
-            findings: &mut findings,
-            local_bindings: Vec::new(),
-        };
-        for item in scope.items {
-            visitor.visit_item(item);
-        }
+    for item in items {
+        visitor.visit_item(item);
     }
 
-    findings
+    visitor.calls
 }
 
-struct FnCallVisitor<'idx, 'ast, 'output> {
-    idx: &'idx ModuleIdx<'ast>,
-    current_module: &'idx [String],
-    kind: FnCallKind,
-    findings: &'output mut Vec<FnCallFinding>,
+pub struct CallSite<'ast> {
+    pub path: &'ast Path,
+    locally_bound: bool,
+}
+
+impl CallSite<'_> {
+    pub fn is_bare(&self) -> bool {
+        self.path.segments.len() == 1
+    }
+
+    pub const fn is_locally_bound(&self) -> bool {
+        self.locally_bound
+    }
+
+    pub fn span(&self) -> Span {
+        self.path
+            .segments
+            .first()
+            .and_then(|first| {
+                self.path
+                    .segments
+                    .last()
+                    .and_then(|last| first.ident.span().join(last.ident.span()))
+            })
+            .unwrap_or_else(|| self.path.span())
+    }
+}
+
+struct FnCallVisitor<'ast> {
+    calls: Vec<CallSite<'ast>>,
     local_bindings: Vec<HashSet<String>>,
 }
 
-impl<'ast> Visit<'ast> for FnCallVisitor<'_, '_, '_> {
-    fn visit_expr_call(&mut self, expression: &'ast syn::ExprCall) {
-        if let Expr::Path(path) = expression.func.as_ref()
-            && let Some(parts) = path_parts(&path.path)
-            && let Some(suggestion) = expected_fn_path(self.idx, self.current_module, &self.local_bindings, &path.path)
-        {
-            let is_relevant = match self.kind {
-                FnCallKind::Unqualified => parts.len() == 1,
-                FnCallKind::Overqualified => parts.len() > 1,
-            };
-            let actual_path = path_label(&path.path);
-            if is_relevant && actual_path != suggestion.expected_path {
-                self.findings.push(FnCallFinding {
-                    span: path.span(),
-                    actual_path,
-                    suggestion,
-                });
-            }
+impl<'ast> Visit<'ast> for FnCallVisitor<'ast> {
+    fn visit_expr_call(&mut self, expression: &'ast ExprCall) {
+        if let Expr::Path(path) = expression.func.as_ref() {
+            let locally_bound = path.path.segments.first().is_some_and(|segment| {
+                let name = segment.ident.to_string();
+                self.local_bindings
+                    .iter()
+                    .rev()
+                    .any(|bindings| bindings.contains(&name))
+            });
+            self.calls.push(CallSite {
+                path: &path.path,
+                locally_bound,
+            });
         }
 
         syn::visit::visit_expr_call(self, expression);
@@ -104,9 +98,11 @@ impl<'ast> Visit<'ast> for FnCallVisitor<'_, '_, '_> {
         for attribute in &expression.attrs {
             self.visit_attribute(attribute);
         }
+
         if let Some(label) = &expression.label {
             self.visit_label(label);
         }
+
         self.visit_pat(&expression.pat);
         self.visit_expr(&expression.expr);
 
@@ -120,18 +116,22 @@ impl<'ast> Visit<'ast> for FnCallVisitor<'_, '_, '_> {
             for attribute in &expression.attrs {
                 self.visit_attribute(attribute);
             }
+
             self.visit_expr(&expression.cond);
             self.local_bindings.push(pattern_bindings(&let_expression.pat));
             self.visit_block(&expression.then_branch);
             let _ = self.local_bindings.pop();
+
             if let Some((_, else_branch)) = &expression.else_branch {
                 self.visit_expr(else_branch);
             }
             return;
         }
 
-        // TODO: Carry bindings through let chains in compound conditions.
+        let bindings = condition_bindings(&expression.cond);
+        self.local_bindings.push(bindings);
         syn::visit::visit_expr_if(self, expression);
+        let _ = self.local_bindings.pop();
     }
 
     fn visit_expr_while(&mut self, expression: &'ast syn::ExprWhile) {
@@ -139,9 +139,11 @@ impl<'ast> Visit<'ast> for FnCallVisitor<'_, '_, '_> {
             for attribute in &expression.attrs {
                 self.visit_attribute(attribute);
             }
+
             if let Some(label) = &expression.label {
                 self.visit_label(label);
             }
+
             self.visit_expr(&expression.cond);
             self.local_bindings.push(pattern_bindings(&let_expression.pat));
             self.visit_block(&expression.body);
@@ -149,8 +151,10 @@ impl<'ast> Visit<'ast> for FnCallVisitor<'_, '_, '_> {
             return;
         }
 
-        // TODO: Carry bindings through let chains in compound conditions.
+        let bindings = condition_bindings(&expression.cond);
+        self.local_bindings.push(bindings);
         syn::visit::visit_expr_while(self, expression);
+        let _ = self.local_bindings.pop();
     }
 
     fn visit_impl_item_fn(&mut self, fn_item: &'ast syn::ImplItemFn) {
@@ -169,13 +173,17 @@ impl<'ast> Visit<'ast> for FnCallVisitor<'_, '_, '_> {
         for attribute in &local.attrs {
             self.visit_attribute(attribute);
         }
+
         self.visit_pat(&local.pat);
+
         if let Some(init) = &local.init {
             self.visit_expr(&init.expr);
+
             if let Some((_, diverge)) = &init.diverge {
                 self.visit_expr(diverge);
             }
         }
+
         if let Some(scope) = self.local_bindings.last_mut() {
             add_pattern_bindings(scope, &local.pat);
         }
@@ -199,5 +207,20 @@ impl<'ast> Visit<'ast> for FnCallVisitor<'_, '_, '_> {
 
     fn visit_macro(&mut self, _mac: &'ast syn::Macro) {
         // TODO: Resolve local bindings generated by macros.
+    }
+}
+
+fn condition_bindings(expression: &Expr) -> HashSet<String> {
+    let mut visitor = ConditionBindings(HashSet::new());
+    visitor.visit_expr(expression);
+    visitor.0
+}
+
+struct ConditionBindings(HashSet<String>);
+
+impl<'ast> Visit<'ast> for ConditionBindings {
+    fn visit_expr_let(&mut self, expression: &'ast ExprLet) {
+        self.0.extend(pattern_bindings(&expression.pat));
+        syn::visit::visit_expr_let(self, expression);
     }
 }

@@ -50,37 +50,45 @@ impl FnNameCandidateCollector {
     }
 
     fn scan_macro_tokens(&mut self, tokens: TokenStream) {
-        let tokens: Vec<_> = tokens.into_iter().collect();
-        let mut remaining = tokens.as_slice();
-        loop {
-            match remaining {
-                [TokenTree::Punct(punct), TokenTree::Ident(_), rest @ ..] if punct.as_char() == '$' => {
-                    remaining = rest;
-                }
-                [TokenTree::Group(group), rest @ ..] => {
-                    self.scan_macro_tokens(group.stream());
-                    remaining = rest;
+        let mut pending = vec![tokens.into_iter().collect::<Vec<_>>().into_iter()];
+
+        while let Some(tokens) = pending.last_mut() {
+            let remaining = tokens.as_slice();
+            let consumed = match remaining {
+                [TokenTree::Punct(punct), TokenTree::Ident(_), ..] if punct.as_char() == '$' => 2,
+                [TokenTree::Group(group), ..] => {
+                    let nested = group.stream().into_iter().collect::<Vec<_>>().into_iter();
+                    let _ = tokens.next();
+                    pending.push(nested);
+                    continue;
                 }
                 [TokenTree::Punct(first), TokenTree::Punct(second), rest @ ..]
                     if first.as_char() == ':' && second.as_char() == ':' =>
                 {
                     // Absolute paths are outside this local-name heuristic.
-                    remaining = self::take_identifier_path(rest).1;
+                    remaining.len().saturating_sub(self::take_identifier_path(rest).1.len())
                 }
                 [TokenTree::Ident(_), ..] => {
                     let (segments, rest) = self::take_identifier_path(remaining);
                     let is_macro_invocation =
                         matches!(rest.first(), Some(TokenTree::Punct(punct)) if punct.as_char() == '!');
+
                     if !is_macro_invocation
                         && let Some(name) = self::match_local_fn_path(segments.into_iter(), self.scope)
                     {
                         self.candidate_names.push(name);
                     }
-                    remaining = rest;
+
+                    remaining.len().saturating_sub(rest.len())
                 }
-                [_, rest @ ..] => remaining = rest,
-                [] => break,
-            }
+                [_, ..] => 1,
+                [] => {
+                    pending.pop();
+                    continue;
+                }
+            };
+
+            tokens.by_ref().take(consumed).for_each(drop);
         }
     }
 }

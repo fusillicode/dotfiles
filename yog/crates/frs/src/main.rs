@@ -17,7 +17,6 @@ fn main() -> rootcause::Result<()> {
                 return Ok(());
             }
             println!("{}", output.render());
-            std::process::exit(1);
         }
     }
     Ok(())

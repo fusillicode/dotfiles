@@ -1,0 +1,175 @@
+//! Source rewrites and conservative skips for qualified-item.
+
+pub mod import_type {
+    fn run(_: std::path::PathBuf) {}
+}
+
+pub mod preserve_generics {
+    fn run() -> std::collections::HashMap<String, u8> {
+        std::collections::HashMap::<String, u8>::new()
+    }
+}
+
+pub mod import_enum_receiver {
+    fn run() {
+        let _ = std::sync::atomic::Ordering::Relaxed;
+    }
+}
+
+pub mod associated_constructor {
+    fn run() {
+        let _ = std::path::PathBuf::new();
+    }
+}
+
+pub mod import_constant {
+    fn run() -> u32 {
+        std::u32::MAX
+    }
+}
+
+pub mod avoid_duplicate_import {
+    use std::path::PathBuf;
+    fn run(_: std::path::PathBuf) -> std::path::PathBuf {
+        std::path::PathBuf::new()
+    }
+}
+
+pub mod self_type {
+    struct Data;
+    fn run(_: self::Data) {}
+}
+
+pub mod qualified_result_aliases {
+    fn run() -> std::io::Result<std::fmt::Result> {
+        Ok(Ok(()))
+    }
+
+    fn core_format() -> core::fmt::Result {
+        Ok(())
+    }
+
+    fn custom(_: anyhow::Result<()>, _: rootcause::Result<()>) {}
+}
+
+pub mod unqualified_enum {
+    enum Kind {
+        Value,
+    }
+    fn run() -> Kind {
+        Kind::Value
+    }
+}
+
+pub mod function_call {
+    fn run() {
+        std::mem::drop(1);
+    }
+}
+
+pub mod macro_tokens {
+    fn run() {
+        m!(std::path::PathBuf);
+    }
+}
+
+pub mod qualified_clash {
+    struct PathBuf;
+    fn run(_: std::path::PathBuf) {}
+}
+
+pub mod generic_clash {
+    fn run<PathBuf>(_: std::path::PathBuf) {}
+}
+
+pub mod same_module_generic_clash {
+    struct Data;
+    fn run<Data>(_: crate::Data) {}
+}
+
+pub mod same_module_const_clash {
+    const VALUE: u8 = 1;
+    fn run<const VALUE: u8>() -> u8 {
+        crate::VALUE
+    }
+}
+
+pub mod conditional_import {
+    #[cfg(unix)]
+    use a::Thing;
+    fn run(_: b::Other) {}
+}
+
+pub mod qualified_comment {
+    fn run(_: std /* explanation */ ::path::PathBuf) {}
+}
+
+pub mod qualified_block_glob {
+    fn run(_: std::path::PathBuf) {
+        use local::*;
+    }
+}
+
+pub mod macro_generated_import {
+    m!();
+    fn run(_: std::path::PathBuf) {}
+}
+
+pub mod crate_type {
+    struct Data;
+    fn run(_: crate::Data) {}
+}
+
+pub mod same_name_imports {
+    fn run(_: a::Thing, _: b::Thing) {}
+}
+
+pub mod self_generic_shadow {
+    pub struct Data;
+
+    pub fn run<Data>(_: self::Data, _: Data) {}
+}
+
+pub mod standard_names {
+    fn run(_: std::string::String, _: alloc::vec::Vec<u8>, _: core::option::Option<()>, _: std::io::Error) {}
+}
+
+pub mod protected_names {
+    fn custom(
+        _: external::Error,
+        _: external::String,
+        _: external::Result<()>,
+        _: external::Option<()>,
+        _: external::Vec<u8>,
+        _: external::Box<u8>,
+    ) -> String {
+        String::new()
+    }
+
+    fn constructors() {
+        let _ = external::String::new();
+        let _ = external::Error::new();
+    }
+
+    fn traits(_: impl external::Clone + external::Future<Output = ()>) {}
+}
+
+pub mod function_values {
+    fn run(text: &str) {
+        let _ = text.trim_matches(char::is_whitespace);
+        let _ = Some(text).map(str::trim);
+        let _ = [1].into_iter().for_each(std::mem::drop);
+        let _ = std::mem::size_of::<std::path::PathBuf>;
+    }
+}
+
+pub mod standard_result {
+    fn run(_: std::result::Result<(), ()>) {}
+}
+
+pub mod standard_import_conflict {
+    use std::time::Duration;
+    fn run(_: external::Duration) -> Duration {
+        Duration::ZERO
+    }
+}

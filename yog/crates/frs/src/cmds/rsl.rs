@@ -7,28 +7,25 @@ use rootcause::report;
 use ytil_sys::pico_args::Arguments;
 
 pub use self::output::RslOutput;
-use self::output::ViolationOutputFormat;
 use self::rules::SelectedRules;
 
 mod ast;
 mod engine;
 mod output;
 mod rules;
-
-#[cfg(test)]
-mod tests;
+mod source;
 
 /// Runs `frs rsl`.
 ///
-/// Returns the lint violations for the supplied files.
+/// Rewrites supplied files and reports fixes that could not be applied safely.
 ///
 /// # Errors
 ///
-/// Returns an error when the arguments are invalid or a source file cannot be read or parsed.
+/// Returns an error when arguments are invalid or a file cannot be read, parsed, or written.
 pub fn run(mut cli_args: Arguments) -> rootcause::Result<RslOutput> {
     if cli_args.contains("--help") {
         print!("{}", crate::cmds::Help::Rsl.text());
-        return Ok(RslOutput::new(Vec::new(), ViolationOutputFormat::Compact));
+        return Ok(RslOutput::default());
     }
 
     let opts = match RslOpts::try_from(cli_args.finish()) {
@@ -38,18 +35,13 @@ pub fn run(mut cli_args: Arguments) -> rootcause::Result<RslOutput> {
             return Err(error);
         }
     };
-    let violations = crate::cmds::rsl::engine::check_paths(&opts.paths, &opts.rules)?;
-    let format = if opts.debug {
-        ViolationOutputFormat::Debug
-    } else {
-        ViolationOutputFormat::Compact
-    };
 
-    Ok(RslOutput::new(violations, format))
+    let skips = self::engine::fix_paths(&opts.paths, &opts.rules)?;
+
+    Ok(RslOutput::new(skips))
 }
 
 struct RslOpts {
-    debug: bool,
     paths: Vec<PathBuf>,
     rules: SelectedRules,
 }
@@ -73,13 +65,15 @@ impl TryFrom<Vec<OsString>> for RslOpts {
         }
 
         let mut cli_args = Arguments::from_vec(before_separator);
-        let debug = cli_args.contains("--debug");
         let mut rule_ids = Vec::new();
+
         while let Some(rule_list) = cli_args.opt_value_from_str::<_, String>("--rules")? {
             rule_ids.extend(rule_list.split(',').map(str::to_owned));
         }
+
         let rules = SelectedRules::try_from(rule_ids)?;
         let mut paths = cli_args.finish();
+
         if let Some(option) = paths.iter().find(|path| path.to_string_lossy().starts_with('-')) {
             return Err(report!("unknown rsl option").attach(format!("option={}", option.to_string_lossy())));
         }
@@ -90,7 +84,6 @@ impl TryFrom<Vec<OsString>> for RslOpts {
         }
 
         Ok(Self {
-            debug,
             paths: paths.into_iter().map(PathBuf::from).collect(),
             rules,
         })
