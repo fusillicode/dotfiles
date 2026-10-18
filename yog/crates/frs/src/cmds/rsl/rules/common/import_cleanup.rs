@@ -10,7 +10,7 @@ use syn::Visibility;
 use syn::punctuated::Iter;
 use syn::spanned::Spanned;
 
-use super::import_resolution::use_bindings;
+use super::import_resolution;
 use crate::cmds::rsl::analysis::RulePlan;
 use crate::cmds::rsl::engine::FileContext;
 use crate::cmds::rsl::source::SourceEditor;
@@ -31,7 +31,7 @@ pub(in crate::cmds::rsl::rules) fn removable_imports(
                 && import.attrs.is_empty()
                 && !text.contains("//")
                 && !text.contains("/*"))
-            .then(|| use_bindings(&import.tree, &[]).bindings)
+            .then(|| import_resolution::use_bindings(&import.tree, &[]).bindings)
         })
         .flatten()
         .map(|binding| editor.span_range(binding.span))

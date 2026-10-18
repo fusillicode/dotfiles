@@ -114,6 +114,85 @@ pub struct References {
     pub uncertain: HashSet<String>,
 }
 
+pub struct CallSite<'ast> {
+    pub path: &'ast Path,
+    pub conditional: bool,
+    scopes: Vec<Bindings>,
+    module_macros: bool,
+    module_value: bool,
+}
+
+impl CallSite<'_> {
+    pub fn is_bare(&self) -> bool {
+        self.path.segments.len() == 1
+    }
+
+    pub fn is_locally_bound(&self) -> bool {
+        self.module_value
+            || self.path.segments.first().is_some_and(|segment| {
+                let name = segment.ident.to_string();
+                self.scopes
+                    .iter()
+                    .any(|scope| scope.values.contains(&name) || scope.locals.contains(&name))
+            })
+    }
+
+    pub fn resolve_module(&self, suggestion: &FnCallSuggestion, info: &ScopeInfo) -> Result<ModuleAccess, ImportError> {
+        self.check_source()?;
+        let name = suggestion.expected_path.split("::").next().unwrap_or_default();
+        if let Some(binding) = self.scopes.iter().rev().find_map(|scope| scope.types.get(name)) {
+            return match binding {
+                TypeBinding::Import(path) if path == &suggestion.target_module => Ok(ModuleAccess::Local),
+                TypeBinding::Declaration | TypeBinding::Import(_) => {
+                    Err(ImportError::NameConflict { name: name.to_owned() })
+                }
+            };
+        }
+        if info.unknown_imports && !matches!(suggestion.module, ModuleAccess::Imported(_) | ModuleAccess::Declared) {
+            return Err(ImportError::UnknownImports);
+        }
+        Ok(suggestion.module.clone())
+    }
+
+    pub fn span(&self) -> Span {
+        self.path
+            .segments
+            .first()
+            .and_then(|first| {
+                self.path
+                    .segments
+                    .last()
+                    .and_then(|last| first.ident.span().join(last.ident.span()))
+            })
+            .unwrap_or_else(|| self.path.span())
+    }
+
+    fn check_module_name(&self, name: &str) -> Result<(), ImportError> {
+        if self.module_macros || self.scopes.iter().any(|scope| scope.unknown) {
+            return Err(ImportError::UnknownBindings);
+        }
+        if self.scopes.iter().any(|scope| scope.types.contains_key(name)) {
+            return Err(ImportError::NameConflict { name: name.to_owned() });
+        }
+        Ok(())
+    }
+
+    fn check_source(&self) -> Result<(), ImportError> {
+        // A qualified source may itself be shadowed by a block import or type.
+        // The module-only path resolver must not reinterpret that spelling.
+        let name = if self.is_bare() {
+            String::new()
+        } else {
+            self.path
+                .segments
+                .first()
+                .map(|segment| segment.ident.to_string())
+                .unwrap_or_default()
+        };
+        self.check_module_name(&name)
+    }
+}
+
 pub(super) fn has_opaque_module_macros(items: &[Item]) -> bool {
     items.iter().any(|item| {
         if let Item::Macro(mac) = item {
@@ -136,6 +215,10 @@ pub(super) fn has_opaque_attributes(items: &[Item]) -> bool {
         attributes.visit_item(item);
     }
     attributes.found
+}
+
+pub(super) fn module_type_names(items: &[Item]) -> HashSet<String> {
+    Bindings::declarations(items).types.into_keys().collect()
 }
 
 struct OpaqueAttributes {
@@ -234,89 +317,6 @@ fn item_may_expand(item: &Item) -> bool {
     attributes.iter().any(|attribute| attribute_may_expand(&attribute.meta))
 }
 
-pub(super) fn module_type_names(items: &[Item]) -> HashSet<String> {
-    Bindings::declarations(items).types.into_keys().collect()
-}
-
-pub struct CallSite<'ast> {
-    pub path: &'ast Path,
-    pub conditional: bool,
-    scopes: Vec<Bindings>,
-    module_macros: bool,
-    module_value: bool,
-}
-
-impl CallSite<'_> {
-    pub fn is_bare(&self) -> bool {
-        self.path.segments.len() == 1
-    }
-
-    pub fn is_locally_bound(&self) -> bool {
-        self.module_value
-            || self.path.segments.first().is_some_and(|segment| {
-                let name = segment.ident.to_string();
-                self.scopes
-                    .iter()
-                    .any(|scope| scope.values.contains(&name) || scope.locals.contains(&name))
-            })
-    }
-
-    fn check_module_name(&self, name: &str) -> Result<(), ImportError> {
-        if self.module_macros || self.scopes.iter().any(|scope| scope.unknown) {
-            return Err(ImportError::UnknownBindings);
-        }
-        if self.scopes.iter().any(|scope| scope.types.contains_key(name)) {
-            return Err(ImportError::NameConflict { name: name.to_owned() });
-        }
-        Ok(())
-    }
-
-    fn check_source(&self) -> Result<(), ImportError> {
-        // A qualified source may itself be shadowed by a block import or type.
-        // The module-only path resolver must not reinterpret that spelling.
-        let name = if self.is_bare() {
-            String::new()
-        } else {
-            self.path
-                .segments
-                .first()
-                .map(|segment| segment.ident.to_string())
-                .unwrap_or_default()
-        };
-        self.check_module_name(&name)
-    }
-
-    pub fn resolve_module(&self, suggestion: &FnCallSuggestion, info: &ScopeInfo) -> Result<ModuleAccess, ImportError> {
-        self.check_source()?;
-        let name = suggestion.expected_path.split("::").next().unwrap_or_default();
-        if let Some(binding) = self.scopes.iter().rev().find_map(|scope| scope.types.get(name)) {
-            return match binding {
-                TypeBinding::Import(path) if path == &suggestion.target_module => Ok(ModuleAccess::Local),
-                TypeBinding::Declaration | TypeBinding::Import(_) => {
-                    Err(ImportError::NameConflict { name: name.to_owned() })
-                }
-            };
-        }
-        if info.unknown_imports && !matches!(suggestion.module, ModuleAccess::Imported(_) | ModuleAccess::Declared) {
-            return Err(ImportError::UnknownImports);
-        }
-        Ok(suggestion.module.clone())
-    }
-
-    pub fn span(&self) -> Span {
-        self.path
-            .segments
-            .first()
-            .and_then(|first| {
-                self.path
-                    .segments
-                    .last()
-                    .and_then(|last| first.ident.span().join(last.ident.span()))
-            })
-            .unwrap_or_else(|| self.path.span())
-    }
-}
-
 /// Module qualifiers use the type namespace; callable locals use the value namespace.
 /// Imports are reserved in every namespace until their definitions are known.
 /// Macro names are separate, so a local value named println does not shadow println!.
@@ -401,6 +401,19 @@ impl Bindings {
         }
     }
 
+    fn parameters(inputs: &Punctuated<FnArg, Comma>, generics: &Generics) -> Self {
+        let mut bindings = Self::generics(generics);
+        for input in inputs {
+            match input {
+                FnArg::Receiver(_) => {
+                    bindings.locals.insert("self".to_owned());
+                }
+                FnArg::Typed(input) => add_pattern_bindings(&mut bindings.locals, &input.pat),
+            }
+        }
+        bindings
+    }
+
     fn generics(generics: &Generics) -> Self {
         let mut bindings = Self::default();
         for parameter in &generics.params {
@@ -414,19 +427,6 @@ impl Bindings {
                     bindings.locals.insert(parameter.ident.to_string());
                 }
                 GenericParam::Lifetime(_) => {}
-            }
-        }
-        bindings
-    }
-
-    fn parameters(inputs: &Punctuated<FnArg, Comma>, generics: &Generics) -> Self {
-        let mut bindings = Self::generics(generics);
-        for input in inputs {
-            match input {
-                FnArg::Receiver(_) => {
-                    bindings.locals.insert("self".to_owned());
-                }
-                FnArg::Typed(input) => add_pattern_bindings(&mut bindings.locals, &input.pat),
             }
         }
         bindings
@@ -558,43 +558,6 @@ impl<'ast> FnCallVisitor<'ast, '_> {
                 .iter()
                 .any(|scope| scope.types.contains_key(root) || scope.unknown)
     }
-}
-
-fn is_standard_expression_macro(name: &str) -> bool {
-    matches!(
-        name,
-        "println"
-            | "print"
-            | "eprintln"
-            | "eprint"
-            | "format"
-            | "format_args"
-            | "write"
-            | "writeln"
-            | "vec"
-            | "assert"
-            | "assert_eq"
-            | "assert_ne"
-            | "debug_assert"
-            | "debug_assert_eq"
-            | "debug_assert_ne"
-            | "matches"
-            | "panic"
-            | "todo"
-            | "unreachable"
-            | "concat"
-            | "stringify"
-            | "include_str"
-            | "include_bytes"
-            | "env"
-            | "option_env"
-            | "cfg"
-            | "column"
-            | "line"
-            | "file"
-            | "module_path"
-            | "dbg"
-    )
 }
 
 impl<'ast> Visit<'ast> for FnCallVisitor<'ast, '_> {
@@ -879,6 +842,43 @@ impl<'ast> Visit<'ast> for FnCallVisitor<'ast, '_> {
         }
         self.record_macro_tokens(mac.tokens.clone());
     }
+}
+
+fn is_standard_expression_macro(name: &str) -> bool {
+    matches!(
+        name,
+        "println"
+            | "print"
+            | "eprintln"
+            | "eprint"
+            | "format"
+            | "format_args"
+            | "write"
+            | "writeln"
+            | "vec"
+            | "assert"
+            | "assert_eq"
+            | "assert_ne"
+            | "debug_assert"
+            | "debug_assert_eq"
+            | "debug_assert_ne"
+            | "matches"
+            | "panic"
+            | "todo"
+            | "unreachable"
+            | "concat"
+            | "stringify"
+            | "include_str"
+            | "include_bytes"
+            | "env"
+            | "option_env"
+            | "cfg"
+            | "column"
+            | "line"
+            | "file"
+            | "module_path"
+            | "dbg"
+    )
 }
 
 fn pattern_bindings(pattern: &Pat) -> Bindings {

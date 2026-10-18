@@ -3,6 +3,7 @@ use std::path::Path;
 use ytil_sys::file;
 
 use crate::Installer;
+use crate::downloaders::npm;
 
 pub struct VsCodeLangServers<'a> {
     pub dev_tools_dir: &'a Path,
@@ -15,7 +16,7 @@ impl Installer for VsCodeLangServers<'_> {
     }
 
     fn install(&self) -> rootcause::Result<()> {
-        let target_dir = crate::downloaders::npm::run(self.dev_tools_dir, self.bin_name(), &[self.bin_name()])?;
+        let target_dir = npm::run(self.dev_tools_dir, self.bin_name(), &[self.bin_name()])?;
 
         file::ln_sf_files_in_dir(target_dir, (&self.bin_dir).into())?;
         file::chmod_x_files_in_dir(self.bin_dir)?;

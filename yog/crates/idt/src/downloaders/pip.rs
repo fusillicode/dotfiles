@@ -1,3 +1,4 @@
+use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -12,7 +13,7 @@ use rootcause::prelude::ResultExt;
 pub fn run(dev_tools_dir: &Path, tool: &str, packages: &[&str]) -> rootcause::Result<PathBuf> {
     let dev_tools_repo_dir = dev_tools_dir.join(tool);
 
-    std::fs::create_dir_all(&dev_tools_repo_dir)
+    fs::create_dir_all(&dev_tools_repo_dir)
         .context("error creating pip tool directory")
         .attach_with(|| format!("path={}", dev_tools_repo_dir.display()))?;
 

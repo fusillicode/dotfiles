@@ -1,26 +1,5 @@
 //! Source rewrites and conservative skips for path-anchoring.
 
-pub mod test_glob {
-    #[cfg(test)]
-    mod tests {
-        use super::*;
-        mod nested {
-            use super::*;
-        }
-    }
-}
-
-pub mod relative_import_and_type {
-    mod a {
-        mod b {
-            use super::Thing;
-            fn run(_: super::Thing) {
-                super::run();
-            }
-        }
-    }
-}
-
 pub mod multiple_parent_levels {
     mod a {
         mod b {
@@ -36,6 +15,27 @@ pub mod nested_relative_groups {
                 super::Thing,
                 {super::super::Other, super::Third},
             };
+        }
+    }
+}
+
+pub mod relative_import_and_type {
+    mod a {
+        mod b {
+            use super::Thing;
+            fn run(_: super::Thing) {
+                super::run();
+            }
+        }
+    }
+}
+
+pub mod test_glob {
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+        mod nested {
+            use super::*;
         }
     }
 }

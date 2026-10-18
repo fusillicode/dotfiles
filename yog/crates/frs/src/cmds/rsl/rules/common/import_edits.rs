@@ -15,16 +15,17 @@ use syn::PatIdent;
 use syn::Stmt;
 use syn::TypeParam;
 use syn::spanned::Spanned;
+use syn::visit;
 use syn::visit::Visit;
 
+use super::fn_call_analysis;
 use super::fn_call_analysis::CallAnalysis;
-use super::fn_call_analysis::module_type_names;
 use super::module_idx::ModuleScope;
 use super::module_idx::ScopeInfo;
 use crate::cmds::rsl::analysis::FixBlockReason;
 use crate::cmds::rsl::engine::FileContext;
+use crate::cmds::rsl::source;
 use crate::cmds::rsl::source::SourceEditor;
-use crate::cmds::rsl::source::item_ranges_with_attached_comments;
 
 pub(in crate::cmds::rsl::rules) enum ImportError {
     UnknownImports,
@@ -114,7 +115,7 @@ impl ImportEdits {
                 .map(|(_, binding)| (binding.name.clone(), binding.source_path.join("::")))
                 .collect(),
             reserved: LocalNames {
-                names: module_type_names(scope.items),
+                names: fn_call_analysis::module_type_names(scope.items),
                 unknown: analysis.opaque_expansions,
             },
             unknown: info.unknown_imports,
@@ -182,7 +183,7 @@ impl ImportEdits {
         }
 
         let spans: Vec<_> = scope.items.iter().map(Spanned::span).collect();
-        let ranges = item_ranges_with_attached_comments(ctx.source, &spans, scope.body_start);
+        let ranges = source::item_ranges_with_attached_comments(ctx.source, &spans, scope.body_start);
         let offset = ranges
             .first()
             .map_or_else(|| editor.offset(scope.body_start), |range| range.byte_range.start);
@@ -239,17 +240,17 @@ impl LocalNames {
 impl<'ast> Visit<'ast> for LocalNames {
     fn visit_pat_ident(&mut self, pattern: &'ast PatIdent) {
         self.names.insert(pattern.ident.to_string());
-        syn::visit::visit_pat_ident(self, pattern);
+        visit::visit_pat_ident(self, pattern);
     }
 
     fn visit_type_param(&mut self, parameter: &'ast TypeParam) {
         self.names.insert(parameter.ident.to_string());
-        syn::visit::visit_type_param(self, parameter);
+        visit::visit_type_param(self, parameter);
     }
 
     fn visit_const_param(&mut self, parameter: &'ast ConstParam) {
         self.names.insert(parameter.ident.to_string());
-        syn::visit::visit_const_param(self, parameter);
+        visit::visit_const_param(self, parameter);
     }
 
     fn visit_block(&mut self, block: &'ast Block) {
@@ -270,7 +271,7 @@ impl<'ast> Visit<'ast> for LocalNames {
             }
         }
 
-        syn::visit::visit_block(self, block);
+        visit::visit_block(self, block);
     }
 
     fn visit_item_mod(&mut self, _module: &'ast ItemMod) {}

@@ -1,6 +1,7 @@
 use std::path::Path;
 
 use rootcause::prelude::ResultExt;
+use ytil_sys::file;
 
 use crate::Installer;
 
@@ -46,8 +47,8 @@ impl Installer for Nvim<'_> {
             .attach_with(|| format!("source_dir={}", nvim_source_dir.display()))?;
 
         let target = nvim_release_dir.join("bin").join(self.bin_name());
-        ytil_sys::file::ln_sf(&target, &self.bin_dir.join(self.bin_name()))?;
-        ytil_sys::file::chmod_x(&target)?;
+        file::ln_sf(&target, &self.bin_dir.join(self.bin_name()))?;
+        file::chmod_x(&target)?;
 
         Ok(())
     }

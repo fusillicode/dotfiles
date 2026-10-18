@@ -1,5 +1,6 @@
 //! Provides functions for Neovim window operations.
 
+use nvim_oxi::api;
 use nvim_oxi::api::Buffer;
 use nvim_oxi::api::Window;
 use nvim_oxi::api::opts::OptionOptsBuilder;
@@ -14,7 +15,7 @@ use crate::buffer::BufferExt;
 /// # Errors
 /// - Setting the current window fails.
 pub fn set_current(window: &Window) -> Option<()> {
-    nvim_oxi::api::set_current_win(window)
+    api::set_current_win(window)
         .inspect_err(|err| {
             crate::notify::error(format!(
                 "error setting current window | window={window:?}, error={err:?}"
@@ -42,7 +43,7 @@ pub fn get_buffer(window: &Window) -> Option<Buffer> {
 }
 
 pub fn find_with_buffer(buffer_type: &str) -> Option<(Window, Buffer)> {
-    nvim_oxi::api::list_wins().find_map(|win| {
+    api::list_wins().find_map(|win| {
         if let Some(buffer) = get_buffer(&win)
             && buffer.get_buf_type().is_some_and(|bt| bt == buffer_type)
         {
@@ -64,17 +65,16 @@ pub fn find_with_buffer(buffer_type: &str) -> Option<(Window, Buffer)> {
 /// avoid full `WindowConfig` deserialization which fails when Neovim
 /// returns non-string `border` values.
 pub fn find_focusable_float(allowed_filetypes: &[&str]) -> Option<Window> {
-    for win in nvim_oxi::api::list_wins() {
+    for win in api::list_wins() {
         if !is_floating(&win) {
             continue;
         }
 
-        let is_focusable =
-            nvim_oxi::api::call_function::<_, nvim_oxi::Dictionary>("nvim_win_get_config", (win.clone(),))
-                .ok()
-                .and_then(|cfg| cfg.get("focusable").cloned())
-                .and_then(|obj| bool::from_object(obj).ok())
-                .unwrap_or(true);
+        let is_focusable = api::call_function::<_, nvim_oxi::Dictionary>("nvim_win_get_config", (win.clone(),))
+            .ok()
+            .and_then(|cfg| cfg.get("focusable").cloned())
+            .and_then(|obj| bool::from_object(obj).ok())
+            .unwrap_or(true);
 
         if !is_focusable {
             continue;
@@ -85,8 +85,8 @@ pub fn find_focusable_float(allowed_filetypes: &[&str]) -> Option<Window> {
         };
 
         let opts = OptionOptsBuilder::default().buf(buf).build();
-        let has_allowed_ft = nvim_oxi::api::get_option_value::<String>("filetype", &opts)
-            .is_ok_and(|ft| allowed_filetypes.contains(&ft.as_str()));
+        let has_allowed_ft =
+            api::get_option_value::<String>("filetype", &opts).is_ok_and(|ft| allowed_filetypes.contains(&ft.as_str()));
 
         if has_allowed_ft {
             return Some(win);
@@ -97,7 +97,7 @@ pub fn find_focusable_float(allowed_filetypes: &[&str]) -> Option<Window> {
 }
 
 pub fn is_floating(window: &Window) -> bool {
-    nvim_oxi::api::call_function::<_, nvim_oxi::Dictionary>("nvim_win_get_config", (window.clone(),))
+    api::call_function::<_, nvim_oxi::Dictionary>("nvim_win_get_config", (window.clone(),))
         .ok()
         .and_then(|cfg| cfg.get("relative").cloned())
         .and_then(|obj| String::from_object(obj).ok())

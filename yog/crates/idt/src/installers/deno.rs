@@ -3,9 +3,12 @@ use std::path::Path;
 use ytil_sys::Arch;
 use ytil_sys::Os;
 use ytil_sys::SysInfo;
+use ytil_sys::file;
 
+use crate::downloaders::http;
 use crate::downloaders::http::deflate::ChecksumSource;
 use crate::downloaders::http::deflate::HttpDeflateOption;
+use crate::downloaders::http::github;
 use crate::installers::Installer;
 use crate::installers::SystemDependent;
 
@@ -36,7 +39,7 @@ impl Installer for Deno<'_> {
 
     fn install(&self) -> rootcause::Result<()> {
         let repo = format!("{0}land/{0}", self.bin_name());
-        let latest_release = crate::downloaders::http::github::get_latest_release_tag(&repo)?;
+        let latest_release = github::get_latest_release_tag(&repo)?;
 
         let (arch, os) = self.target_arch_and_os();
 
@@ -44,7 +47,7 @@ impl Installer for Deno<'_> {
         let checksums_url =
             format!("https://github.com/{repo}/releases/download/{latest_release}/{filename}.sha256sum");
 
-        let target = crate::downloaders::http::run(
+        let target = http::run(
             &format!("https://github.com/{repo}/releases/download/{latest_release}/{filename}"),
             &HttpDeflateOption::ExtractZip {
                 dest_dir: self.bin_dir,
@@ -56,7 +59,7 @@ impl Installer for Deno<'_> {
             }),
         )?;
 
-        ytil_sys::file::chmod_x(&target)?;
+        file::chmod_x(&target)?;
 
         Ok(())
     }

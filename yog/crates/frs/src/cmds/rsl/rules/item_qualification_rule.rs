@@ -7,25 +7,24 @@
 //! Function calls are handled by the call-qualification rule. Leave names unchanged when shortening them could cause
 //! a conflict or when this file does not provide enough information to check the change.
 
+use std::iter;
+
 use proc_macro2::Span;
 use syn::Attribute;
 use syn::ItemMod;
 use syn::ItemUse;
 use syn::Macro;
 use syn::Path;
+use syn::visit;
 use syn::visit::Visit;
 
 use super::Rule;
+use super::common;
 use super::common::ImportEdits;
 use super::common::ImportError;
-use super::common::ensure_no_comments;
-use super::common::has_name_clash_parts;
-use super::common::is_import_style_path;
-use super::common::local_names;
-use super::common::module_idx;
 use super::common::module_idx::ModuleIdx;
 use super::common::module_idx::ModuleScope;
-use super::common::path_resolution::normalize_path;
+use super::common::path_resolution;
 use crate::cmds::rsl::analysis::FixBlockReason;
 use crate::cmds::rsl::analysis::RuleChange;
 use crate::cmds::rsl::analysis::RulePlan;
@@ -91,7 +90,7 @@ impl Rule for ItemQualificationRule {
             edits: SourceEditor::new(ctx.source),
             findings: Vec::new(),
         };
-        let idx = module_idx(ctx.file);
+        let idx = common::module_idx(ctx.file);
 
         for scope in &idx.scopes {
             analyze_scope(ctx, &idx, scope, &mut plan)?;
@@ -158,7 +157,7 @@ fn analyze_scope(
     }
 
     let mut imports = ImportEdits::new(scope, info);
-    let local = local_names(scope.items);
+    let local = common::local_names(scope.items);
 
     for (span, parts) in visitor.paths {
         let path = parts.join("::");
@@ -176,7 +175,7 @@ fn analyze_scope(
             name,
         };
 
-        if let Err(reason) = ensure_no_comments(&plan.edits, span) {
+        if let Err(reason) = common::ensure_no_comments(&plan.edits, span) {
             plan.record_blocked(&change, reason);
             continue;
         }
@@ -186,7 +185,7 @@ fn analyze_scope(
             continue;
         }
 
-        if has_name_clash_parts(idx, &scope.path, &parts) {
+        if common::has_name_clash_parts(idx, &scope.path, &parts) {
             plan.record_blocked(&change, ImportError::NameConflict { name: name.clone() });
             continue;
         }
@@ -196,12 +195,12 @@ fn analyze_scope(
             continue;
         }
 
-        let same_module = normalize_path(&scope.path, &parts)
+        let same_module = path_resolution::normalize_path(&scope.path, &parts)
             == scope
                 .path
                 .iter()
                 .cloned()
-                .chain(std::iter::once(name.clone()))
+                .chain(iter::once(name.clone()))
                 .collect::<Vec<_>>();
 
         if same_module && local.contains(name) {
@@ -254,7 +253,7 @@ impl ItemPaths {
 
         let parts: Vec<_> = prefix.iter().map(|segment| segment.ident.to_string()).collect();
 
-        if !is_import_style_path(&parts) {
+        if !common::is_import_style_path(&parts) {
             return;
         }
 
@@ -269,7 +268,7 @@ impl ItemPaths {
 impl<'ast> Visit<'ast> for ItemPaths {
     fn visit_path(&mut self, path: &'ast Path) {
         self.collect(path);
-        syn::visit::visit_path(self, path);
+        visit::visit_path(self, path);
     }
 
     fn visit_item_mod(&mut self, _module: &'ast ItemMod) {}

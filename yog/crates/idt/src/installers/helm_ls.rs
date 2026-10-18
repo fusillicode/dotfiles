@@ -3,8 +3,11 @@ use std::path::Path;
 use ytil_sys::Arch;
 use ytil_sys::Os;
 use ytil_sys::SysInfo;
+use ytil_sys::file;
 
+use crate::downloaders::http;
 use crate::downloaders::http::deflate::HttpDeflateOption;
+use crate::downloaders::http::github;
 use crate::installers::Installer;
 use crate::installers::SystemDependent;
 
@@ -36,9 +39,9 @@ impl Installer for HelmLs<'_> {
     fn install(&self) -> rootcause::Result<()> {
         let (arch, os) = self.target_arch_and_os();
         let repo = "mrjosh/helm-ls";
-        let latest_release = crate::downloaders::http::github::get_latest_release_tag(repo)?;
+        let latest_release = github::get_latest_release_tag(repo)?;
 
-        let target = crate::downloaders::http::run(
+        let target = http::run(
             &format!(
                 "https://github.com/{repo}/releases/download/{latest_release}/{}_{os}_{arch}",
                 self.bin_name()
@@ -49,7 +52,7 @@ impl Installer for HelmLs<'_> {
             None,
         )?;
 
-        ytil_sys::file::chmod_x(&target)?;
+        file::chmod_x(&target)?;
 
         Ok(())
     }

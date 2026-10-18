@@ -1,6 +1,7 @@
 use std::path::Path;
 
 use rootcause::prelude::ResultExt;
+use ytil_sys::file;
 
 use crate::Installer;
 
@@ -42,8 +43,8 @@ impl Installer for Zellij<'_> {
             .attach_with(|| format!("source_dir={}", source_dir.display()))?;
 
         let target = cargo_target.join("release").join(self.bin_name());
-        ytil_sys::file::ln_sf(&target, &self.bin_dir.join(self.bin_name()))?;
-        ytil_sys::file::chmod_x(&target)?;
+        file::ln_sf(&target, &self.bin_dir.join(self.bin_name()))?;
+        file::chmod_x(&target)?;
 
         Ok(())
     }

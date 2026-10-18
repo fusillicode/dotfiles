@@ -2,6 +2,7 @@
 
 use std::fmt::Debug;
 
+use nvim_oxi::api;
 use nvim_oxi::api::opts::CmdOpts;
 use nvim_oxi::api::opts::ExecOpts;
 use nvim_oxi::api::types::CmdInfosBuilder;
@@ -14,7 +15,7 @@ use nvim_oxi::conversion::ToObject;
 /// Errors are reported to Nvim via [`crate::notify::error`].
 pub fn set_g_var<V: ToObject + Debug>(name: &str, value: V) {
     let msg = format!("error setting global var | name={name} value={value:#?}");
-    if let Err(err) = nvim_oxi::api::set_var(name, value) {
+    if let Err(err) = api::set_var(name, value) {
         crate::notify::error(format!("{msg} | error={err:#?}"));
     }
 }
@@ -35,7 +36,7 @@ pub fn exec_vim_cmd(
     if let Some(args) = args {
         cmd_infos_builder.args(args.iter().map(|s| s.as_ref().to_string()));
     }
-    nvim_oxi::api::cmd(&cmd_infos_builder.build(), &CmdOpts::default()).inspect_err(|err| {
+    api::cmd(&cmd_infos_builder.build(), &CmdOpts::default()).inspect_err(|err| {
         crate::notify::error(format!(
             "error executing cmd | cmd={cmd:?} args={args:#?} error={err:#?}",
         ));
@@ -49,7 +50,7 @@ pub fn exec_vim_cmd(
 pub fn exec_vim_script(src: &str, opts: Option<ExecOpts>) -> Option<Option<String>> {
     let opts = opts.unwrap_or_default();
     Some(
-        nvim_oxi::api::exec2(src, &opts)
+        api::exec2(src, &opts)
             .inspect_err(|err| {
                 crate::notify::error(format!(
                     "error executing Vimscript | src={src:?} opts={opts:?} error={err:?}"

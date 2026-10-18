@@ -3,10 +3,12 @@
 //! Defines a small set of ergonomic commands (copy all, highlight listing, lazy maintenance, select all, fkr generator)
 //! and registers them with Nvim while notifying on failures.
 
+use nvim_oxi::api;
 use nvim_oxi::api::StringOrFunction;
 use nvim_oxi::api::opts::CreateCommandOpts;
 use nvim_oxi::api::opts::CreateCommandOptsBuilder;
 use nvim_oxi::api::types::CommandArgs;
+use ytil_noxi::notify;
 
 const USER_CMDS: [(&str, &str, &str); 6] = [
     ("CopyAll", "Copy all", ":%y+"),
@@ -33,8 +35,8 @@ fn create_user_cmd<Cmd>(name: &str, command: Cmd, opts: &CreateCommandOpts)
 where
     Cmd: StringOrFunction<CommandArgs, ()>,
 {
-    if let Err(err) = nvim_oxi::api::create_user_command(name, command, opts) {
-        ytil_noxi::notify::error(format!(
+    if let Err(err) = api::create_user_command(name, command, opts) {
+        notify::error(format!(
             "error creating user command | name={name:?} opts={opts:#?} error={err:#?}"
         ));
     }

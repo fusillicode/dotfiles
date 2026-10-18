@@ -4,17 +4,20 @@
 //! scrollback so the long-lived runtime does not inherit picker/UI-only CLI dependencies and memory attribution stays
 //! clear while debugging server footprint.
 
+use std::env;
+use std::process;
+
 use muxr_core::ServerRunnerArgs;
 
 fn main() {
     if let Err(error) = self::run() {
         eprintln!("{error:?}");
-        std::process::exit(1);
+        process::exit(1);
     }
 }
 
 fn run() -> rootcause::Result<()> {
-    let args = std::env::args_os().skip(1).collect::<Vec<_>>();
+    let args = env::args_os().skip(1).collect::<Vec<_>>();
     let ServerRunnerArgs {
         external_layout,
         session,

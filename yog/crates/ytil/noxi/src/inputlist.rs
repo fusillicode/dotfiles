@@ -1,8 +1,10 @@
 //! Utilities for user input selection from lists using Vimscript inputlist.
 
 use std::fmt::Display;
+use std::iter;
 
 use nvim_oxi::Array;
+use nvim_oxi::api;
 
 /// Prompt the user to select an item from a numbered list.
 ///
@@ -20,11 +22,11 @@ pub fn open<'a, I: Display>(prompt: &'a str, items: &'a [I]) -> rootcause::Resul
         .map(|(idx, item)| format!("{}. {item}", idx.saturating_add(1)))
         .collect();
 
-    let prompt_and_items = std::iter::once(prompt.to_string())
+    let prompt_and_items = iter::once(prompt.to_string())
         .chain(displayable_items)
         .collect::<Array>();
 
-    let idx = nvim_oxi::api::call_function::<_, i64>("inputlist", (prompt_and_items,))?;
+    let idx = api::call_function::<_, i64>("inputlist", (prompt_and_items,))?;
 
     Ok(usize::try_from(idx.saturating_sub(1))
         .ok()

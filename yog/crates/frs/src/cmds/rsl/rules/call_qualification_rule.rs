@@ -13,20 +13,15 @@ use std::ops::Range;
 use proc_macro2::Span;
 
 use super::Rule;
+use super::common;
 use super::common::ImportEdits;
-use super::common::analyze_calls;
-use super::common::ensure_no_comments;
-use super::common::expected_fn_path;
 use super::common::fn_call_analysis::CallAnalysis;
 use super::common::fn_path_resolution::ModuleAccess;
 use super::common::module_idx;
 use super::common::module_idx::ModuleIdx;
 use super::common::module_idx::ModuleScope;
 use super::common::module_idx::ScopeInfo;
-use super::common::module_idx::has_external_modules;
-use super::common::path_resolution::path_label;
-use super::common::plan_import_removals;
-use super::common::removable_imports;
+use super::common::path_resolution;
 use crate::cmds::rsl::analysis::FixBlockReason;
 use crate::cmds::rsl::analysis::RuleChange;
 use crate::cmds::rsl::analysis::RulePlan;
@@ -45,7 +40,7 @@ impl Rule for CallQualificationRule {
             edits: SourceEditor::new(ctx.source),
             findings: Vec::new(),
         };
-        let idx = module_idx(ctx.file);
+        let idx = common::module_idx(ctx.file);
         for scope in &idx.scopes {
             analyze_scope(ctx, &idx, scope, &mut plan)?;
         }
@@ -89,13 +84,13 @@ fn analyze_scope(
     let Some(info) = idx.info.get(&scope.path) else {
         return Ok(());
     };
-    let analysis = analyze_calls(scope, idx);
+    let analysis = common::analyze_calls(scope, idx);
     let mut rewrites = collect_rewrites(idx, scope, info, &analysis, plan);
     let usage = ImportUsage {
         scope,
         info,
         analysis: &analysis,
-        removable: removable_imports(ctx, scope.items, &plan.edits),
+        removable: common::removable_imports(ctx, scope.items, &plan.edits),
     };
 
     // Rejected calls keep their original references. Recompute dependencies until
@@ -130,7 +125,7 @@ fn analyze_scope(
             .filter_map(|index| info.imports.get(*index))
             .map(|binding| plan.edits.span_range(binding.span))
             .collect();
-        plan_import_removals(scope.items, &removed_ranges, plan)?;
+        common::plan_import_removals(scope.items, &removed_ranges, plan)?;
         return imports.apply(ctx, scope, &mut plan.edits);
     }
 }
@@ -147,10 +142,10 @@ fn collect_rewrites(
         if call.is_bare() && call.is_locally_bound() {
             continue;
         }
-        let Some(suggestion) = expected_fn_path(idx, &scope.path, call.path) else {
+        let Some(suggestion) = common::expected_fn_path(idx, &scope.path, call.path) else {
             continue;
         };
-        let source_path = path_label(call.path);
+        let source_path = path_resolution::path_label(call.path);
         if source_path == suggestion.expected_path {
             continue;
         }
@@ -170,7 +165,7 @@ fn collect_rewrites(
             );
             continue;
         }
-        let module = match ensure_no_comments(&plan.edits, change.span)
+        let module = match common::ensure_no_comments(&plan.edits, change.span)
             .and_then(|()| call.resolve_module(&suggestion, info).map_err(Into::into))
         {
             Ok(module) => module,
@@ -270,7 +265,7 @@ impl ImportUsage<'_, '_> {
                 return true;
             }
             let uncertain = analysis.opaque_expansions
-                || has_external_modules(self.scope.items)
+                || module_idx::has_external_modules(self.scope.items)
                 || analysis.references.uncertain.contains(&binding.name)
                 || analysis.references.types.contains_key(&binding.name)
                 || !self.removable.contains(&plan.edits.span_range(binding.span))
