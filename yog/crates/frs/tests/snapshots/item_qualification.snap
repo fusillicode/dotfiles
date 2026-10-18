@@ -19,9 +19,10 @@ pub mod avoid_duplicate_import {
 }
 
 pub mod conditional_import {
+    use b::Other;
     #[cfg(unix)]
     use a::Thing;
-    fn run(_: b::Other) {}
+    fn run(_: Other) {}
 }
 
 pub mod crate_type {
@@ -196,4 +197,26 @@ pub mod source_visible_macros {
 
     #[custom_attribute]
     fn attributed(_: Instant) {}
+}
+
+pub mod conditional_name_collision {
+    use std::time::Instant;
+    #[cfg(unix)]
+    use other::PathBuf;
+
+    fn run(_: std::path::PathBuf, _: Instant) {}
+}
+
+pub mod conditional_source_binding {
+    #[cfg(unix)]
+    use std as platform;
+
+    fn run(_: platform::path::PathBuf) {}
+}
+
+pub mod conditional_wildcard {
+    #[cfg(unix)]
+    use other::*;
+
+    fn run(_: std::path::PathBuf) {}
 }

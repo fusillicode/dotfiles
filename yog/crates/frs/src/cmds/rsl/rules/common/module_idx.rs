@@ -70,15 +70,23 @@ pub fn module_idx(file: &syn::File) -> ModuleIdx<'_> {
             }
 
             if let Item::Use(item_use) = item {
-                if item_use.leading_colon.is_some() || super::has_conditional_attributes(&item_use.attrs) {
+                if item_use.leading_colon.is_some() {
                     info.unknown_imports = true;
                     continue;
                 }
 
                 let bindings = super::import_resolution::use_bindings(&item_use.tree, &path);
-                info.imports.extend(bindings.bindings);
-                info.glob_imports.extend(bindings.glob_imports);
                 info.unknown_imports |= bindings.unknown;
+
+                // A conditional explicit import reserves its written name, but
+                // cannot provide a binding that rewrites rely on in every build.
+                if super::has_conditional_attributes(&item_use.attrs) {
+                    info.definitions
+                        .extend(bindings.bindings.into_iter().map(|binding| binding.name));
+                } else {
+                    info.imports.extend(bindings.bindings);
+                    info.glob_imports.extend(bindings.glob_imports);
+                }
             }
         }
         idx.info.insert(path.clone(), info);

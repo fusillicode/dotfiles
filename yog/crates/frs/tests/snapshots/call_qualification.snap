@@ -1099,3 +1099,53 @@ pub mod value_declaration_and_module_import {
         let _ = fs::read_to_string("x");
     }
 }
+
+pub mod conditional_explicit_imports {
+    use crate::fixture::conditional_target;
+    use std::fs;
+    #[cfg(unix)]
+    use std::os::unix::process::CommandExt;
+
+    fn run() {
+        conditional_target::selected();
+        fs::read_to_string("x");
+    }
+}
+
+pub mod conditional_target {
+    pub fn selected() {}
+}
+
+pub mod conditional_name_collision {
+    use std::mem;
+    #[cfg(unix)]
+    use other::fs;
+    #[cfg(not(unix))]
+    use another::fs;
+
+    fn run() {
+        std::fs::read_to_string("x");
+        mem::drop(1);
+    }
+}
+
+pub mod conditional_source_binding {
+    #[cfg(unix)]
+    use std as platform;
+    #[cfg(unix)]
+    use std::mem::drop as discard;
+
+    fn run() {
+        platform::fs::read_to_string("x");
+        discard(1);
+    }
+}
+
+pub mod conditional_wildcard {
+    #[cfg(unix)]
+    use other::*;
+
+    fn run() {
+        std::fs::read_to_string("x");
+    }
+}

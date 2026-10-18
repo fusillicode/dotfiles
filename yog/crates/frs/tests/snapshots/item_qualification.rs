@@ -190,3 +190,24 @@ pub mod source_visible_macros {
     #[custom_attribute]
     fn attributed(_: std::time::Instant) {}
 }
+
+pub mod conditional_name_collision {
+    #[cfg(unix)]
+    use other::PathBuf;
+
+    fn run(_: std::path::PathBuf, _: std::time::Instant) {}
+}
+
+pub mod conditional_source_binding {
+    #[cfg(unix)]
+    use std as platform;
+
+    fn run(_: platform::path::PathBuf) {}
+}
+
+pub mod conditional_wildcard {
+    #[cfg(unix)]
+    use other::*;
+
+    fn run(_: std::path::PathBuf) {}
+}

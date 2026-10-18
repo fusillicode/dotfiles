@@ -22,6 +22,7 @@ use super::Rule;
 use super::common;
 use super::common::ImportEdits;
 use super::common::ImportError;
+use super::common::import_resolution;
 use super::common::module_idx::ModuleIdx;
 use super::common::module_idx::ModuleScope;
 use super::common::path_resolution;
@@ -180,7 +181,11 @@ fn analyze_scope(
             continue;
         }
 
-        if info.unknown_imports {
+        if info.unknown_imports
+            || parts
+                .first()
+                .is_some_and(|root| import_resolution::has_conditional_import(scope.items, root))
+        {
             plan.record_blocked(&change, ImportError::UnknownImports);
             continue;
         }
