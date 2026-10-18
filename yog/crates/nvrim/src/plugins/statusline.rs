@@ -266,50 +266,6 @@ fn invalidate_git_stats(_: ()) {
     CACHED_GIT_STATS.with(|cache| *cache.borrow_mut() = None);
 }
 
-/// Retrieves Git statistics for the active buffer, or the current working directory when unnamed.
-fn get_git_stats(current_buffer: &Buffer, current_buffer_nr: i32) -> GitStats {
-    let current_buffer_path = ytil_noxi::buffer::get_absolute_path(Some(current_buffer));
-    let Some(discovery_path) = current_buffer_path.clone().or_else(get_current_working_directory) else {
-        return GitStats::default();
-    };
-
-    let cached_stats = CACHED_GIT_STATS.with(|cache| {
-        let cache = cache.borrow();
-        cache
-            .as_ref()
-            .filter(|cached| cached.buffer_nr == current_buffer_nr && cached.discovery_path == discovery_path)
-            .map(|cached| cached.stats)
-    });
-    if let Some(cached_stats) = cached_stats {
-        return cached_stats;
-    }
-
-    let Ok(repo) = ytil_git::repo::discover(&discovery_path) else {
-        return GitStats::default();
-    };
-    let repo_root = ytil_git::repo::get_root(&repo);
-    let Ok(relative_buffer_path) = current_buffer_path
-        .as_deref()
-        .map(|path| path.strip_prefix(&repo_root).map(Path::to_path_buf))
-        .transpose()
-    else {
-        return GitStats::default();
-    };
-
-    let stats = ytil_git::diff::get_line_stats(&repo_root).map_or_else(
-        |_| GitStats::default(),
-        |file_stats| GitStats::from_file_stats(file_stats, relative_buffer_path.as_deref()),
-    );
-    CACHED_GIT_STATS.with(|cache| {
-        *cache.borrow_mut() = Some(CachedGitStats {
-            buffer_nr: current_buffer_nr,
-            discovery_path,
-            stats,
-        });
-    });
-    stats
-}
-
 /// Retrieves Neovim's current working directory for Git discovery without a named buffer.
 fn get_current_working_directory() -> Option<PathBuf> {
     nvim_oxi::api::call_function::<_, String>("getcwd", Array::new())
@@ -362,6 +318,50 @@ fn draw(diagnostics: Vec<Diagnostic>) -> String {
     }
 
     statusline.draw()
+}
+
+/// Retrieves Git statistics for the active buffer, or the current working directory when unnamed.
+fn get_git_stats(current_buffer: &Buffer, current_buffer_nr: i32) -> GitStats {
+    let current_buffer_path = ytil_noxi::buffer::get_absolute_path(Some(current_buffer));
+    let Some(discovery_path) = current_buffer_path.clone().or_else(get_current_working_directory) else {
+        return GitStats::default();
+    };
+
+    let cached_stats = CACHED_GIT_STATS.with(|cache| {
+        let cache = cache.borrow();
+        cache
+            .as_ref()
+            .filter(|cached| cached.buffer_nr == current_buffer_nr && cached.discovery_path == discovery_path)
+            .map(|cached| cached.stats)
+    });
+    if let Some(cached_stats) = cached_stats {
+        return cached_stats;
+    }
+
+    let Ok(repo) = ytil_git::repo::discover(&discovery_path) else {
+        return GitStats::default();
+    };
+    let repo_root = ytil_git::repo::get_root(&repo);
+    let Ok(relative_buffer_path) = current_buffer_path
+        .as_deref()
+        .map(|path| path.strip_prefix(&repo_root).map(Path::to_path_buf))
+        .transpose()
+    else {
+        return GitStats::default();
+    };
+
+    let stats = ytil_git::diff::get_line_stats(&repo_root).map_or_else(
+        |_| GitStats::default(),
+        |file_stats| GitStats::from_file_stats(file_stats, relative_buffer_path.as_deref()),
+    );
+    CACHED_GIT_STATS.with(|cache| {
+        *cache.borrow_mut() = Some(CachedGitStats {
+            buffer_nr: current_buffer_nr,
+            discovery_path,
+            stats,
+        });
+    });
+    stats
 }
 
 /// Writes the diagnostic count directly to the target string, avoiding intermediate allocation.

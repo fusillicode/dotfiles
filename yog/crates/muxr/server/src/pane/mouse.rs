@@ -20,77 +20,6 @@ use crate::terminal::TerminalMouseProtocol;
 use crate::terminal::TerminalMouseProtocolEncoding;
 use crate::terminal::TerminalScreenMode;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum PaneMouseAction {
-    ForwardToPty {
-        focus: PaneMouseFocus,
-        // Keep the protocol chosen during action resolution so PTY output parsed before the write cannot reclassify or
-        // drop the same mouse event.
-        protocol: TerminalMouseProtocol,
-    },
-    FauxScrollPty {
-        cursor_key_mode: TerminalCursorKeyMode,
-        direction: PaneScrollDirection,
-    },
-    FocusPane,
-    NoAction,
-    ScrollHistory {
-        direction: PaneScrollDirection,
-    },
-}
-
-impl PaneMouseAction {
-    fn from_event(event: ClientMouseEvent, mode: TerminalApplicationMode) -> Self {
-        let focus = PaneMouseFocus::from(event);
-
-        if let Some(direction) = self::wheel_direction(event) {
-            if let Some(protocol) = mode.mouse_protocol
-                && protocol.event_report(event) == TerminalMouseEventReport::Report
-            {
-                return Self::ForwardToPty {
-                    focus: PaneMouseFocus::PreserveFocus,
-                    protocol,
-                };
-            }
-            if mode.screen_mode == TerminalScreenMode::Alternate {
-                return Self::FauxScrollPty {
-                    cursor_key_mode: mode.cursor_key_mode,
-                    direction,
-                };
-            }
-            return Self::ScrollHistory { direction };
-        }
-
-        if let Some(protocol) = mode.mouse_protocol
-            && protocol.event_report(event) == TerminalMouseEventReport::Report
-        {
-            return Self::ForwardToPty { focus, protocol };
-        }
-
-        if focus == PaneMouseFocus::FocusPointedPane {
-            return Self::FocusPane;
-        }
-
-        Self::NoAction
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum PaneMouseFocus {
-    FocusPointedPane,
-    PreserveFocus,
-}
-
-impl From<ClientMouseEvent> for PaneMouseFocus {
-    fn from(event: ClientMouseEvent) -> Self {
-        if event.phase == ClientMouseEventPhase::Press && event.button & (32 | 64) == 0 && event.button & 0b11 != 0b11 {
-            Self::FocusPointedPane
-        } else {
-            Self::PreserveFocus
-        }
-    }
-}
-
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PaneMouseClientOutcome {
     pub focus: PaneFocusClientOutcome,
@@ -218,6 +147,77 @@ pub fn encode_pty_mouse_event(
         TerminalMouseProtocolEncoding::Sgr => Ok(Some(self::sgr_mouse_event_bytes(event, row, col))),
         TerminalMouseProtocolEncoding::Default => Ok(self::default_mouse_event_bytes(event, row, col)),
         TerminalMouseProtocolEncoding::Utf8 => Ok(self::utf8_mouse_event_bytes(event, row, col)),
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum PaneMouseAction {
+    ForwardToPty {
+        focus: PaneMouseFocus,
+        // Keep the protocol chosen during action resolution so PTY output parsed before the write cannot reclassify or
+        // drop the same mouse event.
+        protocol: TerminalMouseProtocol,
+    },
+    FauxScrollPty {
+        cursor_key_mode: TerminalCursorKeyMode,
+        direction: PaneScrollDirection,
+    },
+    FocusPane,
+    NoAction,
+    ScrollHistory {
+        direction: PaneScrollDirection,
+    },
+}
+
+impl PaneMouseAction {
+    fn from_event(event: ClientMouseEvent, mode: TerminalApplicationMode) -> Self {
+        let focus = PaneMouseFocus::from(event);
+
+        if let Some(direction) = self::wheel_direction(event) {
+            if let Some(protocol) = mode.mouse_protocol
+                && protocol.event_report(event) == TerminalMouseEventReport::Report
+            {
+                return Self::ForwardToPty {
+                    focus: PaneMouseFocus::PreserveFocus,
+                    protocol,
+                };
+            }
+            if mode.screen_mode == TerminalScreenMode::Alternate {
+                return Self::FauxScrollPty {
+                    cursor_key_mode: mode.cursor_key_mode,
+                    direction,
+                };
+            }
+            return Self::ScrollHistory { direction };
+        }
+
+        if let Some(protocol) = mode.mouse_protocol
+            && protocol.event_report(event) == TerminalMouseEventReport::Report
+        {
+            return Self::ForwardToPty { focus, protocol };
+        }
+
+        if focus == PaneMouseFocus::FocusPointedPane {
+            return Self::FocusPane;
+        }
+
+        Self::NoAction
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum PaneMouseFocus {
+    FocusPointedPane,
+    PreserveFocus,
+}
+
+impl From<ClientMouseEvent> for PaneMouseFocus {
+    fn from(event: ClientMouseEvent) -> Self {
+        if event.phase == ClientMouseEventPhase::Press && event.button & (32 | 64) == 0 && event.button & 0b11 != 0b11 {
+            Self::FocusPointedPane
+        } else {
+            Self::PreserveFocus
+        }
     }
 }
 

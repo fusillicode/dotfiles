@@ -105,73 +105,6 @@ impl SelectionClickTracker {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-enum ClickTarget {
-    Cell {
-        pane_id: PaneId,
-        position: ClientMousePosition,
-    },
-    Word {
-        end: ClientMousePosition,
-        pane_id: PaneId,
-        start: ClientMousePosition,
-    },
-}
-
-impl ClickTarget {
-    fn region_state(&self, regions: &PaneRegionsSnapshot) -> ClickTargetRegion {
-        match self {
-            Self::Cell { pane_id, position } => {
-                if regions.pane_at(*position).is_some_and(|region| region.id() == pane_id) {
-                    ClickTargetRegion::Present
-                } else {
-                    ClickTargetRegion::Missing
-                }
-            }
-            Self::Word { end, pane_id, start } => {
-                if self::matching_region(regions, *pane_id).is_some_and(|region| {
-                    region.containment(start.row, start.col) == PaneRegionContainment::Inside
-                        && region.containment(end.row, end.col) == PaneRegionContainment::Inside
-                }) {
-                    ClickTargetRegion::Present
-                } else {
-                    ClickTargetRegion::Missing
-                }
-            }
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum ClickTargetRegion {
-    Missing,
-    Present,
-}
-
-#[derive(Clone, Debug)]
-struct TrackedClick {
-    at: Instant,
-    target: ClickTarget,
-}
-
-// Tracks one edge-scroll request through server ack and rendered-frame ack so retry cannot outrun viewport updates.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-enum SelectionEdgeScrollPendingState {
-    #[default]
-    Idle,
-    WaitingForViewportMove(SelectionEdgeScrollPending),
-    WaitingForRender(SelectionEdgeScrollPending),
-}
-
-impl SelectionEdgeScrollPendingState {
-    const fn pending(&self) -> Option<&SelectionEdgeScrollPending> {
-        match self {
-            Self::Idle => None,
-            Self::WaitingForRender(pending) | Self::WaitingForViewportMove(pending) => Some(pending),
-        }
-    }
-}
-
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct SelectionEdgeScrollState {
     drag: Option<SelectionEdgeDrag>,
@@ -367,13 +300,6 @@ pub enum SelectionEdgeScrollActive {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-struct SelectionEdgeDrag {
-    col: u16,
-    direction: PaneScrollDirection,
-    pane_id: PaneId,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SelectionEdgeScrollPending {
     direction: PaneScrollDirection,
     pane_id: PaneId,
@@ -391,12 +317,6 @@ impl SelectionEdgeScrollRequest {
     pub fn into_parts(self) -> (SelectionEdgeScrollPending, ClientRequest) {
         (self.pending, self.request)
     }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum SelectionEdgeScrollTrigger {
-    EdgeRow,
-    OutsideOnly,
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -483,6 +403,12 @@ impl SelectionState {
 
     pub fn refresh_visible_rows(&mut self, frame_buffer: &FrameBuffer) -> rootcause::Result<()> {
         self.rebuild_selected_text(frame_buffer)
+    }
+
+    pub(crate) fn clear(&mut self) {
+        self.cached_rows.clear();
+        self.drag = None;
+        self.selected = None;
     }
 
     fn start(&mut self, position: ClientMousePosition, regions: &PaneRegionsSnapshot, frame_buffer: &FrameBuffer) {
@@ -575,12 +501,6 @@ impl SelectionState {
         };
         self.cached_rows
             .retain(|content_row, _| selected.contains_content_row(*content_row));
-    }
-
-    pub(crate) fn clear(&mut self) {
-        self.cached_rows.clear();
-        self.drag = None;
-        self.selected = None;
     }
 }
 
@@ -678,6 +598,103 @@ impl SelectionRange {
     }
 }
 
+pub fn copy_to_clipboard(text: &str) -> rootcause::Result<()> {
+    let mut bytes = text.as_bytes();
+    Ok(ytil_sys::file::cp_to_system_clipboard(&mut bytes).context("failed to copy muxr selection to clipboard")?)
+}
+
+pub fn changed_selection_rows(previous: Option<&SelectionRange>, next: Option<&SelectionRange>) -> Vec<u16> {
+    let mut rows = BTreeSet::new();
+    for selection in [previous, next].into_iter().flatten() {
+        if let Some((start_row, end_row)) = selection.row_bounds() {
+            for row in start_row..=end_row {
+                rows.insert(row);
+            }
+        }
+    }
+    rows.into_iter().collect()
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum ClickTarget {
+    Cell {
+        pane_id: PaneId,
+        position: ClientMousePosition,
+    },
+    Word {
+        end: ClientMousePosition,
+        pane_id: PaneId,
+        start: ClientMousePosition,
+    },
+}
+
+impl ClickTarget {
+    fn region_state(&self, regions: &PaneRegionsSnapshot) -> ClickTargetRegion {
+        match self {
+            Self::Cell { pane_id, position } => {
+                if regions.pane_at(*position).is_some_and(|region| region.id() == pane_id) {
+                    ClickTargetRegion::Present
+                } else {
+                    ClickTargetRegion::Missing
+                }
+            }
+            Self::Word { end, pane_id, start } => {
+                if self::matching_region(regions, *pane_id).is_some_and(|region| {
+                    region.containment(start.row, start.col) == PaneRegionContainment::Inside
+                        && region.containment(end.row, end.col) == PaneRegionContainment::Inside
+                }) {
+                    ClickTargetRegion::Present
+                } else {
+                    ClickTargetRegion::Missing
+                }
+            }
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ClickTargetRegion {
+    Missing,
+    Present,
+}
+
+#[derive(Clone, Debug)]
+struct TrackedClick {
+    at: Instant,
+    target: ClickTarget,
+}
+
+// Tracks one edge-scroll request through server ack and rendered-frame ack so retry cannot outrun viewport updates.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+enum SelectionEdgeScrollPendingState {
+    #[default]
+    Idle,
+    WaitingForViewportMove(SelectionEdgeScrollPending),
+    WaitingForRender(SelectionEdgeScrollPending),
+}
+
+impl SelectionEdgeScrollPendingState {
+    const fn pending(&self) -> Option<&SelectionEdgeScrollPending> {
+        match self {
+            Self::Idle => None,
+            Self::WaitingForRender(pending) | Self::WaitingForViewportMove(pending) => Some(pending),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct SelectionEdgeDrag {
+    col: u16,
+    direction: PaneScrollDirection,
+    pane_id: PaneId,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum SelectionEdgeScrollTrigger {
+    EdgeRow,
+    OutsideOnly,
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct SelectionContentPosition {
     col: u16,
@@ -768,11 +785,6 @@ impl SelectedRowText {
     }
 }
 
-pub fn copy_to_clipboard(text: &str) -> rootcause::Result<()> {
-    let mut bytes = text.as_bytes();
-    Ok(ytil_sys::file::cp_to_system_clipboard(&mut bytes).context("failed to copy muxr selection to clipboard")?)
-}
-
 fn selected_inline_text(cached_rows: &BTreeMap<u64, CachedSelectionRow>, selection: &SelectionRange) -> Option<String> {
     let bounds = selection.bounds();
     let mut inlined = String::new();
@@ -809,18 +821,6 @@ fn selected_inline_text(cached_rows: &BTreeMap<u64, CachedSelectionRow>, selecti
         };
     }
     Some(inlined)
-}
-
-pub fn changed_selection_rows(previous: Option<&SelectionRange>, next: Option<&SelectionRange>) -> Vec<u16> {
-    let mut rows = BTreeSet::new();
-    for selection in [previous, next].into_iter().flatten() {
-        if let Some((start_row, end_row)) = selection.row_bounds() {
-            for row in start_row..=end_row {
-                rows.insert(row);
-            }
-        }
-    }
-    rows.into_iter().collect()
 }
 
 fn word_selection_at(

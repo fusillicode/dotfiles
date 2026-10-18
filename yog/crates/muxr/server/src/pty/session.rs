@@ -170,79 +170,6 @@ pub struct PtyHandle {
     writer: PtyWriter,
 }
 
-/// Pane render data captured under one terminal-state lock.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct PtyRenderMetadata {
-    mouse_mode: muxr_core::PaneMouseMode,
-    visible_row_wraps: Vec<muxr_core::RowWrap>,
-    visible_top_row: u64,
-}
-
-impl PtyRenderMetadata {
-    pub const fn mouse_mode(&self) -> muxr_core::PaneMouseMode {
-        self.mouse_mode
-    }
-
-    pub fn visible_row_wraps(&self) -> &[muxr_core::RowWrap] {
-        &self.visible_row_wraps
-    }
-
-    pub const fn visible_top_row(&self) -> u64 {
-        self.visible_top_row
-    }
-}
-
-/// Pane render data captured under one terminal-state lock.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct PtyRenderSnapshot {
-    terminal: TerminalSnapshot,
-}
-
-impl PtyRenderSnapshot {
-    pub const fn terminal(&self) -> &TerminalSnapshot {
-        &self.terminal
-    }
-
-    pub fn apply_update(&mut self, update: Self) -> rootcause::Result<Vec<u16>> {
-        self.terminal.apply_update(update.terminal)
-    }
-}
-
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub enum PtyViewportMove {
-    MovedToBottom,
-    #[default]
-    Unchanged,
-}
-
-impl From<TerminalScrollMove> for PtyViewportMove {
-    fn from(value: TerminalScrollMove) -> Self {
-        match value {
-            TerminalScrollMove::Moved => Self::MovedToBottom,
-            TerminalScrollMove::Unchanged => Self::Unchanged,
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum PtyMouseWrite {
-    Ignored,
-    Sent(PtyViewportMove),
-}
-
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub enum PtyScreenDmg {
-    Dirty,
-    #[default]
-    Clean,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum PtyExitState {
-    Exited,
-    Running,
-}
-
 impl PtyHandle {
     #[cfg(test)]
     pub fn attach_sink(&self, sender: Sender<PtyEvent>) -> PtySinkGuard {
@@ -461,6 +388,79 @@ impl PtyHandle {
     pub(crate) fn live_tail_text(&self, row_limit: usize) -> TerminalTextTail {
         self.state.terminal.lock().live_tail_text(row_limit)
     }
+}
+
+/// Pane render data captured under one terminal-state lock.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PtyRenderMetadata {
+    mouse_mode: muxr_core::PaneMouseMode,
+    visible_row_wraps: Vec<muxr_core::RowWrap>,
+    visible_top_row: u64,
+}
+
+impl PtyRenderMetadata {
+    pub const fn mouse_mode(&self) -> muxr_core::PaneMouseMode {
+        self.mouse_mode
+    }
+
+    pub fn visible_row_wraps(&self) -> &[muxr_core::RowWrap] {
+        &self.visible_row_wraps
+    }
+
+    pub const fn visible_top_row(&self) -> u64 {
+        self.visible_top_row
+    }
+}
+
+/// Pane render data captured under one terminal-state lock.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PtyRenderSnapshot {
+    terminal: TerminalSnapshot,
+}
+
+impl PtyRenderSnapshot {
+    pub const fn terminal(&self) -> &TerminalSnapshot {
+        &self.terminal
+    }
+
+    pub fn apply_update(&mut self, update: Self) -> rootcause::Result<Vec<u16>> {
+        self.terminal.apply_update(update.terminal)
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum PtyViewportMove {
+    MovedToBottom,
+    #[default]
+    Unchanged,
+}
+
+impl From<TerminalScrollMove> for PtyViewportMove {
+    fn from(value: TerminalScrollMove) -> Self {
+        match value {
+            TerminalScrollMove::Moved => Self::MovedToBottom,
+            TerminalScrollMove::Unchanged => Self::Unchanged,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PtyMouseWrite {
+    Ignored,
+    Sent(PtyViewportMove),
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum PtyScreenDmg {
+    Dirty,
+    #[default]
+    Clean,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PtyExitState {
+    Exited,
+    Running,
 }
 
 pub struct PtySinkGuard {
@@ -766,10 +766,6 @@ fn kill_and_wait_child(child: &mut dyn Child) -> Option<PtyExitStatus> {
     }
 }
 
-fn take_child_wait_handle(child: &SharedPtyChild) -> Option<PtyChild> {
-    child.lock().take()
-}
-
 fn spawn_child_wait_thread(child: PtyChild, state: &Arc<PtyState>) -> rootcause::Result<thread::JoinHandle<()>> {
     // Raw OS threads do not inherit thread-local tracing state, so carry both the dispatcher and span explicitly.
     let span = tracing::Span::current();
@@ -816,6 +812,10 @@ fn spawn_child_wait_thread(child: PtyChild, state: &Arc<PtyState>) -> rootcause:
             Err(report!("failed to spawn muxr pty child wait thread").attach(format!("error={error:#}")))
         }
     }
+}
+
+fn take_child_wait_handle(child: &SharedPtyChild) -> Option<PtyChild> {
+    child.lock().take()
 }
 
 fn run_reader_loop(reader: &mut dyn Read, state: &PtyState, writer: &PtyWriter) {
@@ -867,26 +867,6 @@ mod tests {
 
     use super::super::event::PtyExitResult;
     use super::*;
-
-    fn assert_replies_eq(replies: &TerminalReplies, expected: &[Vec<u8>]) {
-        assert_that!(replies.as_ref(), eq(expected));
-    }
-
-    fn pty_state(size: &TerminalSize) -> PtyState {
-        PtyState {
-            active_sink: Mutex::new(None),
-            exited: AtomicBool::new(false),
-            exit_status: Mutex::new(None),
-            pane_exit_notify: Arc::new(tokio::sync::Notify::new()),
-            output_waiter: (Mutex::new(0), Condvar::new()),
-            screen_dirty: AtomicBool::new(false),
-            terminal: Mutex::new(TerminalState::with_scrollback(
-                size,
-                MuxrConfig::new().unwrap().scrollback,
-            )),
-            title_changes: Mutex::new(Vec::new()),
-        }
-    }
 
     #[derive(Debug)]
     struct RecordingChild {
@@ -1380,18 +1360,6 @@ mod tests {
         Ok(())
     }
 
-    fn terminal_size() -> rootcause::Result<TerminalSize> {
-        TerminalSize::new(80, 24)
-    }
-
-    fn sink_pty_writer() -> Box<dyn Write + Send> {
-        Box::new(std::io::sink())
-    }
-
-    fn failing_pty_writer() -> Box<dyn Write + Send> {
-        Box::new(FailingWriter)
-    }
-
     struct FailingWriter;
 
     impl Write for FailingWriter {
@@ -1402,5 +1370,37 @@ mod tests {
         fn flush(&mut self) -> std::io::Result<()> {
             Ok(())
         }
+    }
+
+    fn assert_replies_eq(replies: &TerminalReplies, expected: &[Vec<u8>]) {
+        assert_that!(replies.as_ref(), eq(expected));
+    }
+
+    fn pty_state(size: &TerminalSize) -> PtyState {
+        PtyState {
+            active_sink: Mutex::new(None),
+            exited: AtomicBool::new(false),
+            exit_status: Mutex::new(None),
+            pane_exit_notify: Arc::new(tokio::sync::Notify::new()),
+            output_waiter: (Mutex::new(0), Condvar::new()),
+            screen_dirty: AtomicBool::new(false),
+            terminal: Mutex::new(TerminalState::with_scrollback(
+                size,
+                MuxrConfig::new().unwrap().scrollback,
+            )),
+            title_changes: Mutex::new(Vec::new()),
+        }
+    }
+
+    fn terminal_size() -> rootcause::Result<TerminalSize> {
+        TerminalSize::new(80, 24)
+    }
+
+    fn sink_pty_writer() -> Box<dyn Write + Send> {
+        Box::new(std::io::sink())
+    }
+
+    fn failing_pty_writer() -> Box<dyn Write + Send> {
+        Box::new(FailingWriter)
     }
 }

@@ -21,12 +21,6 @@ use crate::state::PaneMetadataSync;
 use crate::state::PaneSnapshotFields;
 use crate::state::SessionLayout;
 
-struct PaneRuntime {
-    id: PaneId,
-    session: PtySession,
-    startup_cmd_label: Option<String>,
-}
-
 /// Terminal-title sync result for layout metadata derived from live pane runtimes.
 pub struct SyncedTerminalTitles {
     metadata_sync: PaneMetadataSync,
@@ -42,14 +36,6 @@ impl SyncedTerminalTitles {
     pub fn titles(&self) -> &[(PaneId, Option<String>)] {
         &self.titles
     }
-}
-
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-struct PaneRuntimeMetadataEntry {
-    startup_cmd_label: Option<String>,
-    terminal_title: Option<String>,
-    tracked_cmd_label: Option<String>,
-    tracked_process_state: TrackedProcessState,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -95,30 +81,9 @@ impl PaneRuntimeMetadata {
     }
 }
 
-fn runtime_cmd_label(pane: &PaneRuntimeMetadataEntry) -> Option<String> {
-    pane.tracked_cmd_label
-        .as_ref()
-        .or_else(|| {
-            let has_terminal_title = pane
-                .terminal_title
-                .as_deref()
-                .is_some_and(|title| !title.trim().is_empty());
-            (!has_terminal_title)
-                .then_some(pane.startup_cmd_label.as_ref())
-                .flatten()
-        })
-        .cloned()
-}
-
 pub struct PaneRuntimes {
     pane_exit_notify: Arc<tokio::sync::Notify>,
     panes: Vec<PaneRuntime>,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum PaneRuntimeSetStatus {
-    Empty,
-    HasPanes,
 }
 
 impl PaneRuntimes {
@@ -333,6 +298,12 @@ impl PaneRuntimes {
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PaneRuntimeSetStatus {
+    Empty,
+    HasPanes,
+}
+
 pub fn spawn_pane_or_restore_layout(
     layout: &mut SessionLayout,
     previous_layout: SessionLayout,
@@ -353,6 +324,35 @@ pub fn spawn_pane_or_restore_layout(
         return Err(error).attach("rolled back muxr layout after pane spawn failure");
     }
     Ok(pane_id)
+}
+
+struct PaneRuntime {
+    id: PaneId,
+    session: PtySession,
+    startup_cmd_label: Option<String>,
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+struct PaneRuntimeMetadataEntry {
+    startup_cmd_label: Option<String>,
+    terminal_title: Option<String>,
+    tracked_cmd_label: Option<String>,
+    tracked_process_state: TrackedProcessState,
+}
+
+fn runtime_cmd_label(pane: &PaneRuntimeMetadataEntry) -> Option<String> {
+    pane.tracked_cmd_label
+        .as_ref()
+        .or_else(|| {
+            let has_terminal_title = pane
+                .terminal_title
+                .as_deref()
+                .is_some_and(|title| !title.trim().is_empty());
+            (!has_terminal_title)
+                .then_some(pane.startup_cmd_label.as_ref())
+                .flatten()
+        })
+        .cloned()
 }
 
 #[cfg(test)]

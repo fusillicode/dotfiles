@@ -18,21 +18,6 @@ pub enum CmdKind {
     Test,
 }
 
-impl FromStr for CmdKind {
-    type Err = rootcause::Report;
-
-    fn from_str(value: &str) -> Result<Self, Self::Err> {
-        match value {
-            "all" => Ok(Self::All),
-            "audit" => Ok(Self::Audit),
-            "lint" => Ok(Self::Lint),
-            "release-native" => Ok(Self::ReleaseNative),
-            "test" => Ok(Self::Test),
-            unknown => rootcause::bail!("unknown evoke ci command: {unknown}\n{CI_USAGE}"),
-        }
-    }
-}
-
 impl CmdKind {
     pub fn run(self, workspace_root: &Path) -> rootcause::Result<()> {
         match self {
@@ -50,6 +35,21 @@ impl CmdKind {
             ),
             Self::ReleaseNative => run_native_release_build(workspace_root, &["build"]),
             Self::Test => run_test(workspace_root),
+        }
+    }
+}
+
+impl FromStr for CmdKind {
+    type Err = rootcause::Report;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value {
+            "all" => Ok(Self::All),
+            "audit" => Ok(Self::Audit),
+            "lint" => Ok(Self::Lint),
+            "release-native" => Ok(Self::ReleaseNative),
+            "test" => Ok(Self::Test),
+            unknown => rootcause::bail!("unknown evoke ci command: {unknown}\n{CI_USAGE}"),
         }
     }
 }

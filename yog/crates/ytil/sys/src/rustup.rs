@@ -24,6 +24,17 @@ pub enum RequestedRustToolchain {
     Exact(RustToolchainName),
 }
 
+impl RequestedRustToolchain {
+    const fn channel_request(&self) -> Option<(RustToolchainChannel, Option<RustToolchainDate>)> {
+        match self {
+            Self::Stable(date) => Some((RustToolchainChannel::Stable, *date)),
+            Self::Beta(date) => Some((RustToolchainChannel::Beta, *date)),
+            Self::Nightly(date) => Some((RustToolchainChannel::Nightly, *date)),
+            Self::Exact(_) => None,
+        }
+    }
+}
+
 /// A validated date embedded in a Rustup toolchain name.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct RustToolchainDate(Date);
@@ -195,74 +206,6 @@ impl FromStr for RustToolchainName {
     }
 }
 
-#[derive(Clone, Copy, Debug, EnumString, Eq, PartialEq)]
-#[strum(serialize_all = "snake_case")]
-enum RustToolchainChannel {
-    Stable,
-    Beta,
-    Nightly,
-}
-
-impl RequestedRustToolchain {
-    const fn channel_request(&self) -> Option<(RustToolchainChannel, Option<RustToolchainDate>)> {
-        match self {
-            Self::Stable(date) => Some((RustToolchainChannel::Stable, *date)),
-            Self::Beta(date) => Some((RustToolchainChannel::Beta, *date)),
-            Self::Nightly(date) => Some((RustToolchainChannel::Nightly, *date)),
-            Self::Exact(_) => None,
-        }
-    }
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-struct InstalledChannelToolchain {
-    channel: RustToolchainChannel,
-    date: Option<RustToolchainDate>,
-    name: RustToolchainName,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-enum InstalledRustToolchain {
-    Channel(InstalledChannelToolchain),
-    Exact(RustToolchainName),
-}
-
-impl FromStr for InstalledRustToolchain {
-    type Err = rootcause::Report;
-
-    fn from_str(value: &str) -> Result<Self, Self::Err> {
-        let name = value.parse::<RustToolchainName>()?;
-        let (channel_name, channel_suffix) = value.split_once('-').unwrap_or((value, ""));
-        let Ok(channel) = channel_name.parse::<RustToolchainChannel>() else {
-            return Ok(Self::Exact(name));
-        };
-
-        let mut components = channel_suffix.split('-');
-        let date = match components.next() {
-            None => None,
-            Some(year) if year.len() != 4 || !year.chars().all(|character| character.is_ascii_digit()) => None,
-            Some(year) => {
-                let month = components.next().ok_or_else(|| {
-                    report!("installed Rust toolchain date is missing a month")
-                        .attach(format!("toolchain_name={value:?}"))
-                        .attach(format!("year={year:?}"))
-                })?;
-                let day = components.next().ok_or_else(|| {
-                    report!("installed Rust toolchain date is missing a day")
-                        .attach(format!("toolchain_name={value:?}"))
-                        .attach(format!("year={year:?}"))
-                })?;
-                Some(
-                    RustToolchainDate::try_from((year, month, day))
-                        .context("failed to parse installed Rust toolchain date")
-                        .attach(format!("toolchain_name={value:?}"))?,
-                )
-            }
-        };
-        Ok(Self::Channel(InstalledChannelToolchain { channel, date, name }))
-    }
-}
-
 /// Find the latest installed Rust toolchain matching the request.
 ///
 /// This does not update or install any Rust toolchain.
@@ -331,6 +274,63 @@ pub fn find_latest_installed_rust_toolchain(
     };
 
     Ok(name)
+}
+
+#[derive(Clone, Copy, Debug, EnumString, Eq, PartialEq)]
+#[strum(serialize_all = "snake_case")]
+enum RustToolchainChannel {
+    Stable,
+    Beta,
+    Nightly,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct InstalledChannelToolchain {
+    channel: RustToolchainChannel,
+    date: Option<RustToolchainDate>,
+    name: RustToolchainName,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum InstalledRustToolchain {
+    Channel(InstalledChannelToolchain),
+    Exact(RustToolchainName),
+}
+
+impl FromStr for InstalledRustToolchain {
+    type Err = rootcause::Report;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        let name = value.parse::<RustToolchainName>()?;
+        let (channel_name, channel_suffix) = value.split_once('-').unwrap_or((value, ""));
+        let Ok(channel) = channel_name.parse::<RustToolchainChannel>() else {
+            return Ok(Self::Exact(name));
+        };
+
+        let mut components = channel_suffix.split('-');
+        let date = match components.next() {
+            None => None,
+            Some(year) if year.len() != 4 || !year.chars().all(|character| character.is_ascii_digit()) => None,
+            Some(year) => {
+                let month = components.next().ok_or_else(|| {
+                    report!("installed Rust toolchain date is missing a month")
+                        .attach(format!("toolchain_name={value:?}"))
+                        .attach(format!("year={year:?}"))
+                })?;
+                let day = components.next().ok_or_else(|| {
+                    report!("installed Rust toolchain date is missing a day")
+                        .attach(format!("toolchain_name={value:?}"))
+                        .attach(format!("year={year:?}"))
+                })?;
+                Some(
+                    RustToolchainDate::try_from((year, month, day))
+                        .context("failed to parse installed Rust toolchain date")
+                        .attach(format!("toolchain_name={value:?}"))?,
+                )
+            }
+        };
+        Ok(Self::Channel(InstalledChannelToolchain { channel, date, name }))
+    }
 }
 
 fn list_rustup_toolchains() -> rootcause::Result<Output> {

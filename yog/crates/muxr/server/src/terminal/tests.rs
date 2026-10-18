@@ -13,10 +13,6 @@ mod scrollback;
 
 mod snapshot;
 
-fn assert_replies_eq(replies: &TerminalReplies, expected: &[Vec<u8>]) {
-    test_that::assert_that!(replies.as_ref(), eq(expected));
-}
-
 #[test]
 fn test_paste_input_bytes_when_bracketed_paste_is_enabled_wraps_payload() {
     test_that::assert_that!(
@@ -643,6 +639,10 @@ fn test_terminal_state_process_when_multi_param_status_report_requested_returns_
 
     self::assert_replies_eq(&terminal.process(b"\x1b[5;6n").into_replies(), &[b"\x1b[0n".to_vec()]);
     Ok(())
+}
+
+fn assert_replies_eq(replies: &TerminalReplies, expected: &[Vec<u8>]) {
+    test_that::assert_that!(replies.as_ref(), eq(expected));
 }
 
 fn terminal_size() -> rootcause::Result<TerminalSize> {

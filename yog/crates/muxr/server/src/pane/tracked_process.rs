@@ -89,18 +89,6 @@ impl TrackedProcessChanges {
         }
     }
 
-    const fn deadline_only() -> Self {
-        Self {
-            change: TrackedProcessChange::Deadline,
-        }
-    }
-
-    const fn state_and_deadline() -> Self {
-        Self {
-            change: TrackedProcessChange::State,
-        }
-    }
-
     #[cfg(test)]
     const fn include_state_change(&mut self) {
         self.change = TrackedProcessChange::State;
@@ -114,6 +102,18 @@ impl TrackedProcessChanges {
         match state_change {
             TrackedProcessStateChange::Changed => Self::state_and_deadline(),
             TrackedProcessStateChange::Unchanged => Self::deadline_only(),
+        }
+    }
+
+    const fn deadline_only() -> Self {
+        Self {
+            change: TrackedProcessChange::Deadline,
+        }
+    }
+
+    const fn state_and_deadline() -> Self {
+        Self {
+            change: TrackedProcessChange::State,
         }
     }
 }

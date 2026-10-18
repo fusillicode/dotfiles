@@ -7,164 +7,6 @@ const OSC_COMMAND_LIMIT: usize = 4;
 const OSC_PASSTHROUGH_LIMIT: usize = 8 * 1024;
 const XTGETTCAP_PAYLOAD_LIMIT: usize = 4096;
 
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-enum InputFilterState {
-    #[default]
-    Ground,
-    Escape,
-    Csi,
-    DiscardCsi,
-    DcsHeader,
-    DcsSyncMarker,
-    DcsSyncMarkerEscape,
-    OscPrefix,
-    BufferedOsc {
-        remaining: usize,
-    },
-    BufferedOscEscape {
-        remaining: usize,
-    },
-    DiscardString(StringTerminator),
-    DiscardStringEscape(StringTerminator),
-    PassthroughString {
-        limit: StringPassthroughLimit,
-        terminator: StringTerminator,
-    },
-    PassthroughStringEscape {
-        limit: StringPassthroughLimit,
-        terminator: StringTerminator,
-    },
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum StringTerminator {
-    BellOrStringTerminator,
-    StringTerminator,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum StringPassthroughLimit {
-    Remaining(usize),
-    Unlimited,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum OscCommandHandling {
-    Discard,
-    Passthrough,
-}
-
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-enum Utf8State {
-    Continuation {
-        remaining: u8,
-    },
-    FirstContinuation {
-        lower: u8,
-        remaining_after: u8,
-        upper: u8,
-    },
-    #[default]
-    Ground,
-}
-
-#[derive(Default)]
-struct C1Normalizer {
-    utf8_state: Utf8State,
-}
-
-impl C1Normalizer {
-    fn normalize(&mut self, bytes: &[u8]) -> Option<Vec<u8>> {
-        let mut normalized: Option<Vec<u8>> = None;
-        for (index, byte) in bytes.iter().enumerate() {
-            let Some(mapped) = self.observe_byte(*byte) else {
-                if let Some(normalized) = normalized.as_mut() {
-                    normalized.push(*byte);
-                }
-                continue;
-            };
-
-            let normalized = normalized.get_or_insert_with(|| {
-                let mut normalized = Vec::with_capacity(bytes.len().saturating_add(2));
-                if let Some(prefix) = bytes.get(..index) {
-                    normalized.extend_from_slice(prefix);
-                }
-                normalized
-            });
-            normalized.push(ESCAPE);
-            normalized.push(mapped);
-        }
-        normalized
-    }
-
-    fn observe_byte(&mut self, byte: u8) -> Option<u8> {
-        loop {
-            match self.utf8_state {
-                Utf8State::Continuation { remaining } if (0x80..=0xbf).contains(&byte) => {
-                    self.utf8_state = if remaining > 1 {
-                        Utf8State::Continuation {
-                            remaining: remaining.saturating_sub(1),
-                        }
-                    } else {
-                        Utf8State::Ground
-                    };
-                    return None;
-                }
-                Utf8State::FirstContinuation {
-                    lower,
-                    remaining_after,
-                    upper,
-                } if (lower..=upper).contains(&byte) => {
-                    self.utf8_state = Utf8State::Continuation {
-                        remaining: remaining_after,
-                    };
-                    return None;
-                }
-                Utf8State::Continuation { .. } | Utf8State::FirstContinuation { .. } => {
-                    self.utf8_state = Utf8State::Ground;
-                }
-                Utf8State::Ground => {
-                    self.utf8_state = match byte {
-                        0xc2..=0xdf => Utf8State::Continuation { remaining: 1 },
-                        0xe0 => Utf8State::FirstContinuation {
-                            lower: 0xa0,
-                            remaining_after: 1,
-                            upper: 0xbf,
-                        },
-                        0xe1..=0xec | 0xee..=0xef => Utf8State::FirstContinuation {
-                            lower: 0x80,
-                            remaining_after: 1,
-                            upper: 0xbf,
-                        },
-                        0xed => Utf8State::FirstContinuation {
-                            lower: 0x80,
-                            remaining_after: 1,
-                            upper: 0x9f,
-                        },
-                        0xf0 => Utf8State::FirstContinuation {
-                            lower: 0x90,
-                            remaining_after: 2,
-                            upper: 0xbf,
-                        },
-                        0xf1..=0xf3 => Utf8State::FirstContinuation {
-                            lower: 0x80,
-                            remaining_after: 2,
-                            upper: 0xbf,
-                        },
-                        0xf4 => Utf8State::FirstContinuation {
-                            lower: 0x80,
-                            remaining_after: 2,
-                            upper: 0x8f,
-                        },
-                        _ => Utf8State::Ground,
-                    };
-                    return (0x80..=0x9f).contains(&byte).then_some(byte.saturating_sub(0x40));
-                }
-            }
-        }
-    }
-}
-
 pub(in crate::terminal) enum FilteredInput<'a> {
     Original(&'a [u8]),
     Filtered(&'a [u8]),
@@ -663,6 +505,164 @@ impl RioInputFilter {
 
     fn is_sync_update_dcs_header(&self) -> bool {
         matches!(self.pending.as_slice(), b"\x1bP=1s" | b"\x1bP=2s")
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+enum InputFilterState {
+    #[default]
+    Ground,
+    Escape,
+    Csi,
+    DiscardCsi,
+    DcsHeader,
+    DcsSyncMarker,
+    DcsSyncMarkerEscape,
+    OscPrefix,
+    BufferedOsc {
+        remaining: usize,
+    },
+    BufferedOscEscape {
+        remaining: usize,
+    },
+    DiscardString(StringTerminator),
+    DiscardStringEscape(StringTerminator),
+    PassthroughString {
+        limit: StringPassthroughLimit,
+        terminator: StringTerminator,
+    },
+    PassthroughStringEscape {
+        limit: StringPassthroughLimit,
+        terminator: StringTerminator,
+    },
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum StringTerminator {
+    BellOrStringTerminator,
+    StringTerminator,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum StringPassthroughLimit {
+    Remaining(usize),
+    Unlimited,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum OscCommandHandling {
+    Discard,
+    Passthrough,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+enum Utf8State {
+    Continuation {
+        remaining: u8,
+    },
+    FirstContinuation {
+        lower: u8,
+        remaining_after: u8,
+        upper: u8,
+    },
+    #[default]
+    Ground,
+}
+
+#[derive(Default)]
+struct C1Normalizer {
+    utf8_state: Utf8State,
+}
+
+impl C1Normalizer {
+    fn normalize(&mut self, bytes: &[u8]) -> Option<Vec<u8>> {
+        let mut normalized: Option<Vec<u8>> = None;
+        for (index, byte) in bytes.iter().enumerate() {
+            let Some(mapped) = self.observe_byte(*byte) else {
+                if let Some(normalized) = normalized.as_mut() {
+                    normalized.push(*byte);
+                }
+                continue;
+            };
+
+            let normalized = normalized.get_or_insert_with(|| {
+                let mut normalized = Vec::with_capacity(bytes.len().saturating_add(2));
+                if let Some(prefix) = bytes.get(..index) {
+                    normalized.extend_from_slice(prefix);
+                }
+                normalized
+            });
+            normalized.push(ESCAPE);
+            normalized.push(mapped);
+        }
+        normalized
+    }
+
+    fn observe_byte(&mut self, byte: u8) -> Option<u8> {
+        loop {
+            match self.utf8_state {
+                Utf8State::Continuation { remaining } if (0x80..=0xbf).contains(&byte) => {
+                    self.utf8_state = if remaining > 1 {
+                        Utf8State::Continuation {
+                            remaining: remaining.saturating_sub(1),
+                        }
+                    } else {
+                        Utf8State::Ground
+                    };
+                    return None;
+                }
+                Utf8State::FirstContinuation {
+                    lower,
+                    remaining_after,
+                    upper,
+                } if (lower..=upper).contains(&byte) => {
+                    self.utf8_state = Utf8State::Continuation {
+                        remaining: remaining_after,
+                    };
+                    return None;
+                }
+                Utf8State::Continuation { .. } | Utf8State::FirstContinuation { .. } => {
+                    self.utf8_state = Utf8State::Ground;
+                }
+                Utf8State::Ground => {
+                    self.utf8_state = match byte {
+                        0xc2..=0xdf => Utf8State::Continuation { remaining: 1 },
+                        0xe0 => Utf8State::FirstContinuation {
+                            lower: 0xa0,
+                            remaining_after: 1,
+                            upper: 0xbf,
+                        },
+                        0xe1..=0xec | 0xee..=0xef => Utf8State::FirstContinuation {
+                            lower: 0x80,
+                            remaining_after: 1,
+                            upper: 0xbf,
+                        },
+                        0xed => Utf8State::FirstContinuation {
+                            lower: 0x80,
+                            remaining_after: 1,
+                            upper: 0x9f,
+                        },
+                        0xf0 => Utf8State::FirstContinuation {
+                            lower: 0x90,
+                            remaining_after: 2,
+                            upper: 0xbf,
+                        },
+                        0xf1..=0xf3 => Utf8State::FirstContinuation {
+                            lower: 0x80,
+                            remaining_after: 2,
+                            upper: 0xbf,
+                        },
+                        0xf4 => Utf8State::FirstContinuation {
+                            lower: 0x80,
+                            remaining_after: 2,
+                            upper: 0x8f,
+                        },
+                        _ => Utf8State::Ground,
+                    };
+                    return (0x80..=0x9f).contains(&byte).then_some(byte.saturating_sub(0x40));
+                }
+            }
+        }
     }
 }
 

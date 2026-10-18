@@ -27,21 +27,6 @@ use crate::cmds::rsl::analysis::RulePlan;
 use crate::cmds::rsl::engine::FileContext;
 use crate::cmds::rsl::source::SourceEditor;
 
-struct UnusedFunctionImportChange<'source> {
-    span: Span,
-    import: &'source str,
-}
-
-impl RuleChange for UnusedFunctionImportChange<'_> {
-    fn span(&self) -> Span {
-        self.span
-    }
-
-    fn description(&self) -> String {
-        format!("remove unused function import `{}`", self.import)
-    }
-}
-
 pub(in crate::cmds::rsl::rules) fn plan_unused_fn_import_removals(
     ctx: &FileContext<'_>,
     items: &[Item],
@@ -111,6 +96,21 @@ pub(in crate::cmds::rsl::rules) fn plan_unused_fn_import_removals(
     }
 
     Ok(())
+}
+
+struct UnusedFunctionImportChange<'source> {
+    span: Span,
+    import: &'source str,
+}
+
+impl RuleChange for UnusedFunctionImportChange<'_> {
+    fn span(&self) -> Span {
+        self.span
+    }
+
+    fn description(&self) -> String {
+        format!("remove unused function import `{}`", self.import)
+    }
 }
 
 enum TreeEdits {

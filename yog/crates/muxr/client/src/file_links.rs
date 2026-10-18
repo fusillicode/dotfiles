@@ -19,6 +19,35 @@ pub struct FileLink {
     pub column: Option<u32>,
 }
 
+impl FileLink {
+    #[cfg(test)]
+    fn resolve_from_cwd(&self, cwd: &str) -> Option<Self> {
+        self.resolve_with_existence(cwd).map(|resolved| resolved.link)
+    }
+
+    fn resolve_with_existence(&self, cwd: &str) -> Option<ResolvedFileLink> {
+        let raw_path = self.path.to_str()?;
+        let path = self::resolve_path(raw_path, cwd)?;
+        let existence = self::file_link_existence(&path);
+        // A bare word is ambiguous in TUI prose. Require it to name an existing file or directory when it has no
+        // extension, while allowing extension-bearing names so links to files that are about to be created still work.
+        if self::is_bare_name(raw_path)
+            && matches!(existence, FileLinkExistence::Missing)
+            && Path::new(raw_path).extension().is_none()
+        {
+            return None;
+        }
+        Some(ResolvedFileLink {
+            link: Self {
+                path,
+                line: self.line,
+                column: self.column,
+            },
+            existence,
+        })
+    }
+}
+
 #[derive(Clone, Copy)]
 enum FileLinkReferenceMode {
     Delimited,
@@ -72,32 +101,41 @@ struct FileLinkExtraction {
     wrap: FileLinkWrap,
 }
 
-impl FileLink {
-    #[cfg(test)]
-    fn resolve_from_cwd(&self, cwd: &str) -> Option<Self> {
-        self.resolve_with_existence(cwd).map(|resolved| resolved.link)
+impl FileLinkExtraction {
+    fn resolve_unquoted(&self, cwd: &str) -> Option<FileLink> {
+        if !self.raw.chars().any(char::is_whitespace) {
+            return self::resolve_first_file_link(self::file_link_candidates(&self.raw_reference), cwd, self.wrap);
+        }
+
+        let boundaries = self::whitespace_boundaries(&self.raw);
+
+        let clicked_word_start = boundaries
+            .partition_point(|boundary| *boundary <= self.clicked_index)
+            .saturating_sub(1);
+        let clicked_word_end = clicked_word_start.saturating_add(1);
+        if let Some(resolved) =
+            self::resolve_anchored_unquoted_reference(self, cwd, &boundaries, clicked_word_start, clicked_word_end)
+        {
+            return Some(resolved);
+        }
+        if let Some(resolved) = self::resolve_bare_unquoted_reference(self, cwd, &boundaries) {
+            return Some(resolved);
+        }
+
+        if self.raw.starts_with('[') && self.raw.contains("](") && self::markdown_target(&self.raw).is_none() {
+            return None;
+        }
+        self.resolve_single(cwd)
     }
 
-    fn resolve_with_existence(&self, cwd: &str) -> Option<ResolvedFileLink> {
-        let raw_path = self.path.to_str()?;
-        let path = self::resolve_path(raw_path, cwd)?;
-        let existence = self::file_link_existence(&path);
-        // A bare word is ambiguous in TUI prose. Require it to name an existing file or directory when it has no
-        // extension, while allowing extension-bearing names so links to files that are about to be created still work.
-        if self::is_bare_name(raw_path)
-            && matches!(existence, FileLinkExistence::Missing)
-            && Path::new(raw_path).extension().is_none()
+    fn resolve_single(&self, cwd: &str) -> Option<FileLink> {
+        let resolved = self::resolve_first_file_link(self::file_link_candidates(&self.raw_reference), cwd, self.wrap)?;
+        if matches!(self.explicitness, FileLinkExplicitness::Implicit)
+            && matches!(self::file_link_existence(&resolved.path), FileLinkExistence::Missing)
         {
             return None;
         }
-        Some(ResolvedFileLink {
-            link: Self {
-                path,
-                line: self.line,
-                column: self.column,
-            },
-            existence,
-        })
+        Some(resolved)
     }
 }
 
@@ -107,12 +145,6 @@ struct ResolvedFileLink {
 }
 
 impl FrameBuffer {
-    #[cfg(test)]
-    fn file_link_at(&self, region: &PaneRegionSnapshot, position: ClientMousePosition) -> Option<FileLink> {
-        self.at_with_reference_mode(region, position, FileLinkReferenceMode::Delimited)
-            .and_then(|extraction| self::file_link_from_reference(&extraction.raw))
-    }
-
     pub fn file_link_at_resolved(
         &self,
         region: &PaneRegionSnapshot,
@@ -134,6 +166,12 @@ impl FrameBuffer {
         let delimited = self.at_with_reference_mode(region, position, FileLinkReferenceMode::Delimited);
         let resolved_delimited = delimited.as_ref().and_then(|extraction| extraction.resolve_single(cwd));
         resolved_unquoted.or(resolved_delimited)
+    }
+
+    #[cfg(test)]
+    fn file_link_at(&self, region: &PaneRegionSnapshot, position: ClientMousePosition) -> Option<FileLink> {
+        self.at_with_reference_mode(region, position, FileLinkReferenceMode::Delimited)
+            .and_then(|extraction| self::file_link_from_reference(&extraction.raw))
     }
 
     fn at_with_reference_mode(
@@ -191,44 +229,6 @@ impl FrameBuffer {
             explicitness,
             wrap,
         })
-    }
-}
-
-impl FileLinkExtraction {
-    fn resolve_unquoted(&self, cwd: &str) -> Option<FileLink> {
-        if !self.raw.chars().any(char::is_whitespace) {
-            return self::resolve_first_file_link(self::file_link_candidates(&self.raw_reference), cwd, self.wrap);
-        }
-
-        let boundaries = self::whitespace_boundaries(&self.raw);
-
-        let clicked_word_start = boundaries
-            .partition_point(|boundary| *boundary <= self.clicked_index)
-            .saturating_sub(1);
-        let clicked_word_end = clicked_word_start.saturating_add(1);
-        if let Some(resolved) =
-            self::resolve_anchored_unquoted_reference(self, cwd, &boundaries, clicked_word_start, clicked_word_end)
-        {
-            return Some(resolved);
-        }
-        if let Some(resolved) = self::resolve_bare_unquoted_reference(self, cwd, &boundaries) {
-            return Some(resolved);
-        }
-
-        if self.raw.starts_with('[') && self.raw.contains("](") && self::markdown_target(&self.raw).is_none() {
-            return None;
-        }
-        self.resolve_single(cwd)
-    }
-
-    fn resolve_single(&self, cwd: &str) -> Option<FileLink> {
-        let resolved = self::resolve_first_file_link(self::file_link_candidates(&self.raw_reference), cwd, self.wrap)?;
-        if matches!(self.explicitness, FileLinkExplicitness::Implicit)
-            && matches!(self::file_link_existence(&resolved.path), FileLinkExistence::Missing)
-        {
-            return None;
-        }
-        Some(resolved)
     }
 }
 
@@ -582,6 +582,22 @@ fn collect_right(
     ReferenceParts { chars, wrap }
 }
 
+fn previous_reference_position(
+    frame_buffer: &FrameBuffer,
+    region: &PaneRegionSnapshot,
+    position: ClientMousePosition,
+) -> Option<ClientMousePosition> {
+    let mut position = self::previous_position(region, position);
+    while let Some(current) = position
+        && frame_buffer
+            .cell(current.row, current.col)
+            .is_some_and(|cell| cell.width() == RenderCellWidth::WideContinuation)
+    {
+        position = self::previous_position(region, current);
+    }
+    position
+}
+
 fn previous_position(region: &PaneRegionSnapshot, position: ClientMousePosition) -> Option<ClientMousePosition> {
     if position.col > region.col() {
         return Some(ClientMousePosition {
@@ -597,18 +613,18 @@ fn previous_position(region: &PaneRegionSnapshot, position: ClientMousePosition)
     self::previous_row_end(region, position.row)
 }
 
-fn previous_reference_position(
+fn next_reference_position(
     frame_buffer: &FrameBuffer,
     region: &PaneRegionSnapshot,
     position: ClientMousePosition,
 ) -> Option<ClientMousePosition> {
-    let mut position = self::previous_position(region, position);
+    let mut position = self::next_position(region, position);
     while let Some(current) = position
         && frame_buffer
             .cell(current.row, current.col)
             .is_some_and(|cell| cell.width() == RenderCellWidth::WideContinuation)
     {
-        position = self::previous_position(region, current);
+        position = self::next_position(region, current);
     }
     position
 }
@@ -630,22 +646,6 @@ fn next_position(region: &PaneRegionSnapshot, position: ClientMousePosition) -> 
         row: position.row.saturating_add(1),
         col: region.col(),
     })
-}
-
-fn next_reference_position(
-    frame_buffer: &FrameBuffer,
-    region: &PaneRegionSnapshot,
-    position: ClientMousePosition,
-) -> Option<ClientMousePosition> {
-    let mut position = self::next_position(region, position);
-    while let Some(current) = position
-        && frame_buffer
-            .cell(current.row, current.col)
-            .is_some_and(|cell| cell.width() == RenderCellWidth::WideContinuation)
-    {
-        position = self::next_position(region, current);
-    }
-    position
 }
 
 fn reference_position_for_click(

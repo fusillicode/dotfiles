@@ -141,17 +141,6 @@ enum SelectableOp {
     EnableAutoMerge,
 }
 
-impl Display for SelectableOp {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Approve => write!(f, "{}", "Approve".green().bold()),
-            Self::ApproveAndMerge => write!(f, "{}", "Approve & Merge".green().bold()),
-            Self::DependabotRebase => write!(f, "{}", "Dependabot Rebase".blue().bold()),
-            Self::EnableAutoMerge => write!(f, "{}", "Enable auto-merge".magenta().bold()),
-        }
-    }
-}
-
 impl SelectableOp {
     pub fn run(&self) -> Box<dyn Fn(&PullRequest)> {
         match self {
@@ -171,6 +160,17 @@ impl SelectableOp {
             Self::EnableAutoMerge => Box::new(|pr| {
                 drop(Op::EnableAutoMerge.report(pr, ytil_gh::pr::enable_auto_merge(pr.number)));
             }),
+        }
+    }
+}
+
+impl Display for SelectableOp {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Approve => write!(f, "{}", "Approve".green().bold()),
+            Self::ApproveAndMerge => write!(f, "{}", "Approve & Merge".green().bold()),
+            Self::DependabotRebase => write!(f, "{}", "Dependabot Rebase".blue().bold()),
+            Self::EnableAutoMerge => write!(f, "{}", "Enable auto-merge".magenta().bold()),
         }
     }
 }

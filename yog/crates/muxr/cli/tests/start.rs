@@ -24,53 +24,6 @@ const SERVER_EXECUTABLE: &str = "muxr-server";
 static SERVER_BUILD: OnceLock<()> = OnceLock::new();
 static SERVER_BUILD_LOCK: Mutex<()> = Mutex::new(());
 
-#[test]
-fn test_muxr_start_when_session_is_reused_attaches_to_same_server_and_cleans_up_on_exit() -> rootcause::Result<()> {
-    let home = tempfile::Builder::new()
-        .prefix("muxr-cli.")
-        .tempdir_in("/tmp")
-        .context("failed to create muxr cli test home")?;
-    let session: SessionName = "cli_public".parse()?;
-    let paths = session_paths(home.path(), &session);
-
-    let first = run_muxr(home.path(), ["start", session.as_ref()])?;
-    assert_success("first start", &first)?;
-    let first_pid = read_pid(&paths)?;
-
-    let second = run_muxr(home.path(), ["start", session.as_ref()])?;
-    assert_success("second start", &second)?;
-    assert_that!(read_pid(&paths)?, eq(first_pid));
-
-    let exit = run_muxr_with_stdin(home.path(), ["start", session.as_ref()], b"exit\n")?;
-    assert_success("exit start", &exit)?;
-    wait_for_cleanup(&paths)?;
-
-    assert_that!(paths.socket.exists(), eq(false));
-    assert_that!(paths.pid.exists(), eq(false));
-    assert_that!(paths.layout.exists(), eq(true));
-    Ok(())
-}
-
-#[test]
-fn test_muxr_when_no_args_and_no_sessions_starts_default_session() -> rootcause::Result<()> {
-    let home = tempfile::Builder::new()
-        .prefix("muxr-cli.")
-        .tempdir_in("/tmp")
-        .context("failed to create muxr cli test home")?;
-    let session = SessionName::default_name()?;
-    let paths = session_paths(home.path(), &session);
-
-    let output = run_muxr(home.path(), [])?;
-
-    assert_success("default start", &output)?;
-    let _pid = read_pid(&paths)?;
-
-    let exit = run_muxr_with_stdin(home.path(), ["start", session.as_ref()], b"exit\n")?;
-    assert_success("default exit", &exit)?;
-    wait_for_cleanup(&paths)?;
-    Ok(())
-}
-
 fn run_muxr<const N: usize>(home: &Path, args: [&str; N]) -> rootcause::Result<Output> {
     self::ensure_server_binary()?;
     let child = Command::new(env!("CARGO_BIN_EXE_muxr"))
@@ -262,4 +215,51 @@ fn wait_for_path(path: &Path) -> rootcause::Result<()> {
 
         thread::sleep(Duration::from_millis(10));
     }
+}
+
+#[test]
+fn test_muxr_start_when_session_is_reused_attaches_to_same_server_and_cleans_up_on_exit() -> rootcause::Result<()> {
+    let home = tempfile::Builder::new()
+        .prefix("muxr-cli.")
+        .tempdir_in("/tmp")
+        .context("failed to create muxr cli test home")?;
+    let session: SessionName = "cli_public".parse()?;
+    let paths = session_paths(home.path(), &session);
+
+    let first = run_muxr(home.path(), ["start", session.as_ref()])?;
+    assert_success("first start", &first)?;
+    let first_pid = read_pid(&paths)?;
+
+    let second = run_muxr(home.path(), ["start", session.as_ref()])?;
+    assert_success("second start", &second)?;
+    assert_that!(read_pid(&paths)?, eq(first_pid));
+
+    let exit = run_muxr_with_stdin(home.path(), ["start", session.as_ref()], b"exit\n")?;
+    assert_success("exit start", &exit)?;
+    wait_for_cleanup(&paths)?;
+
+    assert_that!(paths.socket.exists(), eq(false));
+    assert_that!(paths.pid.exists(), eq(false));
+    assert_that!(paths.layout.exists(), eq(true));
+    Ok(())
+}
+
+#[test]
+fn test_muxr_when_no_args_and_no_sessions_starts_default_session() -> rootcause::Result<()> {
+    let home = tempfile::Builder::new()
+        .prefix("muxr-cli.")
+        .tempdir_in("/tmp")
+        .context("failed to create muxr cli test home")?;
+    let session = SessionName::default_name()?;
+    let paths = session_paths(home.path(), &session);
+
+    let output = run_muxr(home.path(), [])?;
+
+    assert_success("default start", &output)?;
+    let _pid = read_pid(&paths)?;
+
+    let exit = run_muxr_with_stdin(home.path(), ["start", session.as_ref()], b"exit\n")?;
+    assert_success("default exit", &exit)?;
+    wait_for_cleanup(&paths)?;
+    Ok(())
 }

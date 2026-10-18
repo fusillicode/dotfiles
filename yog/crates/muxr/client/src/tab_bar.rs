@@ -1,3 +1,4 @@
+use std::env;
 use std::io::Write;
 
 use crossterm::Command;
@@ -24,20 +25,6 @@ use unicode_width::UnicodeWidthChar;
 
 const ROWS_PER_TAB: u16 = 3;
 const SEPARATOR: &str = "\u{2502}";
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum TabBarItemState {
-    Active,
-    Inactive,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-struct SidebarTab {
-    state: TabBarItemState,
-    tracked_process_state: TrackedProcessState,
-    cmd_label: Option<String>,
-    path_label: String,
-}
 
 /// Queue the left tab sidebar.
 ///
@@ -111,6 +98,20 @@ pub fn queue(
 pub fn tab_id_at_row(layout: &LayoutSnapshot, row: u16) -> Option<TabId> {
     let index = usize::from(row / ROWS_PER_TAB);
     layout.tabs().get(index).map(|tab| *tab.id())
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum TabBarItemState {
+    Active,
+    Inactive,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct SidebarTab {
+    state: TabBarItemState,
+    tracked_process_state: TrackedProcessState,
+    cmd_label: Option<String>,
+    path_label: String,
 }
 
 fn queue_sidebar_row(
@@ -221,7 +222,7 @@ const fn tracked_process_state_dot_color(
 }
 
 fn sidebar_tabs(layout: &LayoutSnapshot) -> Vec<SidebarTab> {
-    let home = std::env::var("HOME").ok();
+    let home = env::var("HOME").ok();
     self::sidebar_tabs_with_home(layout, home.as_deref())
 }
 
@@ -850,6 +851,30 @@ mod tests {
         Ok(())
     }
 
+    #[derive(Default)]
+    struct CountingWriter {
+        bytes: Vec<u8>,
+        flushes: usize,
+    }
+
+    impl CountingWriter {
+        fn rendered_string(&self) -> rootcause::Result<String> {
+            Ok(String::from_utf8(self.bytes.clone()).context("muxr tab bar test output was not utf8")?)
+        }
+    }
+
+    impl std::io::Write for CountingWriter {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            self.bytes.extend_from_slice(buf);
+            Ok(buf.len())
+        }
+
+        fn flush(&mut self) -> std::io::Result<()> {
+            self.flushes = self.flushes.saturating_add(1);
+            Ok(())
+        }
+    }
+
     fn layout_snapshot(active_tab: u32, tabs: Vec<TabSnapshot>) -> rootcause::Result<LayoutSnapshot> {
         LayoutSnapshot::new(TabId::new(active_tab)?, tabs)
     }
@@ -877,30 +902,6 @@ mod tests {
             id: PaneId::new(id)?,
             title: "shell".to_owned(),
         })
-    }
-
-    #[derive(Default)]
-    struct CountingWriter {
-        bytes: Vec<u8>,
-        flushes: usize,
-    }
-
-    impl CountingWriter {
-        fn rendered_string(&self) -> rootcause::Result<String> {
-            Ok(String::from_utf8(self.bytes.clone()).context("muxr tab bar test output was not utf8")?)
-        }
-    }
-
-    impl std::io::Write for CountingWriter {
-        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-            self.bytes.extend_from_slice(buf);
-            Ok(buf.len())
-        }
-
-        fn flush(&mut self) -> std::io::Result<()> {
-            self.flushes = self.flushes.saturating_add(1);
-            Ok(())
-        }
     }
 
     fn strip_ansi(s: &str) -> String {

@@ -81,6 +81,77 @@ impl ClientTimers {
         Ok(pane_ids)
     }
 
+    pub fn sync_render_deadline(&mut self, render_dmg: &ClientRenderDmg) -> rootcause::Result<()> {
+        if render_dmg.is_clean() {
+            if self.render_deadline.is_some() {
+                self.disable_render_sleep()?;
+            }
+            return Ok(());
+        }
+        let Some(current_deadline) = self.render_deadline else {
+            return self.schedule_render_frame();
+        };
+        let next_deadline = self.next_render_deadline(tokio::time::Instant::now())?;
+        if next_deadline < current_deadline {
+            self.set_render_deadline(next_deadline);
+        }
+        Ok(())
+    }
+
+    pub fn record_interactive_input(&mut self) -> rootcause::Result<()> {
+        let now = tokio::time::Instant::now();
+        let interactive_render_until = now
+            .checked_add(INTERACTIVE_RENDER_BOOST_FOR)
+            .ok_or_else(|| report!("muxr interactive render boost deadline overflowed"))?;
+        self.interactive_render_until = Some(interactive_render_until);
+        if let Some(current_deadline) = self.render_deadline {
+            let next_deadline = self.next_render_deadline(now)?;
+            if next_deadline < current_deadline {
+                self.set_render_deadline(next_deadline);
+            }
+        }
+        Ok(())
+    }
+
+    pub fn complete_render_frame(&mut self) -> rootcause::Result<()> {
+        // First dirty frame after idle renders immediately; completed frames move the next deadline forward so
+        // continuous output remains capped by the normal frame interval.
+        self.last_render_at = Some(tokio::time::Instant::now());
+        self.disable_render_sleep()
+    }
+
+    pub fn disable_render_sleep(&mut self) -> rootcause::Result<()> {
+        self.render_deadline = None;
+        self.render_sleep.as_mut().reset(self::disabled_sleep_deadline()?);
+        Ok(())
+    }
+
+    pub fn sync_tracked_process_quiet_deadline_for_layout(
+        &mut self,
+        pane_tracked_processes: &PaneTrackedProcesses,
+        layout: &SessionLayout,
+    ) -> rootcause::Result<()> {
+        // The quiet deadline is focus-sensitive: focused input can extend Busy, while unfocused panes use only tracked
+        // output/activity. Resync after active-pane changes so the sleep cannot keep using the old focused deadline.
+        self.sync_tracked_process_quiet_deadline(pane_tracked_processes.next_quiet_deadline(layout)?)
+    }
+
+    pub fn disable_tracked_process_quiet_sleep(&mut self) -> rootcause::Result<()> {
+        self.tracked_process_quiet_deadline = None;
+        self.tracked_process_quiet_sleep
+            .as_mut()
+            .reset(self::disabled_sleep_deadline()?);
+        Ok(())
+    }
+
+    pub fn tracked_process_quiet_deadline(&self) -> QuietDeadline {
+        if tokio::time::Instant::now() >= self.tracked_process_quiet_sleep.deadline() {
+            QuietDeadline::Elapsed
+        } else {
+            QuietDeadline::Pending
+        }
+    }
+
     pub(crate) fn schedule_output_activity_samples(&mut self, pane_ids: &[PaneId]) -> rootcause::Result<()> {
         let deadline = tokio::time::Instant::now()
             .checked_add(OUTPUT_ACTIVITY_SAMPLE_DELAY)
@@ -127,38 +198,6 @@ impl ClientTimers {
         Ok(pane_ids)
     }
 
-    pub fn sync_render_deadline(&mut self, render_dmg: &ClientRenderDmg) -> rootcause::Result<()> {
-        if render_dmg.is_clean() {
-            if self.render_deadline.is_some() {
-                self.disable_render_sleep()?;
-            }
-            return Ok(());
-        }
-        let Some(current_deadline) = self.render_deadline else {
-            return self.schedule_render_frame();
-        };
-        let next_deadline = self.next_render_deadline(tokio::time::Instant::now())?;
-        if next_deadline < current_deadline {
-            self.set_render_deadline(next_deadline);
-        }
-        Ok(())
-    }
-
-    pub fn record_interactive_input(&mut self) -> rootcause::Result<()> {
-        let now = tokio::time::Instant::now();
-        let interactive_render_until = now
-            .checked_add(INTERACTIVE_RENDER_BOOST_FOR)
-            .ok_or_else(|| report!("muxr interactive render boost deadline overflowed"))?;
-        self.interactive_render_until = Some(interactive_render_until);
-        if let Some(current_deadline) = self.render_deadline {
-            let next_deadline = self.next_render_deadline(now)?;
-            if next_deadline < current_deadline {
-                self.set_render_deadline(next_deadline);
-            }
-        }
-        Ok(())
-    }
-
     // Regression context: scheduling every dirty frame at `now + RENDER_FRAME_INTERVAL` made key echo wait a full
     // extra frame after PTY output arrived. Keep the low-wakeup model by rendering the first dirty frame after idle
     // immediately, then rate-limit follow-up frames from the last render attempt. The 10ms cap is limited to a short
@@ -193,19 +232,6 @@ impl ClientTimers {
         }
     }
 
-    pub fn complete_render_frame(&mut self) -> rootcause::Result<()> {
-        // First dirty frame after idle renders immediately; completed frames move the next deadline forward so
-        // continuous output remains capped by the normal frame interval.
-        self.last_render_at = Some(tokio::time::Instant::now());
-        self.disable_render_sleep()
-    }
-
-    pub fn disable_render_sleep(&mut self) -> rootcause::Result<()> {
-        self.render_deadline = None;
-        self.render_sleep.as_mut().reset(self::disabled_sleep_deadline()?);
-        Ok(())
-    }
-
     fn set_render_deadline(&mut self, deadline: tokio::time::Instant) {
         self.render_deadline = Some(deadline);
         self.render_sleep.as_mut().reset(deadline);
@@ -227,32 +253,6 @@ impl ClientTimers {
         })?;
         self.tracked_process_quiet_sleep.as_mut().reset(deadline);
         Ok(())
-    }
-
-    pub fn sync_tracked_process_quiet_deadline_for_layout(
-        &mut self,
-        pane_tracked_processes: &PaneTrackedProcesses,
-        layout: &SessionLayout,
-    ) -> rootcause::Result<()> {
-        // The quiet deadline is focus-sensitive: focused input can extend Busy, while unfocused panes use only tracked
-        // output/activity. Resync after active-pane changes so the sleep cannot keep using the old focused deadline.
-        self.sync_tracked_process_quiet_deadline(pane_tracked_processes.next_quiet_deadline(layout)?)
-    }
-
-    pub fn disable_tracked_process_quiet_sleep(&mut self) -> rootcause::Result<()> {
-        self.tracked_process_quiet_deadline = None;
-        self.tracked_process_quiet_sleep
-            .as_mut()
-            .reset(self::disabled_sleep_deadline()?);
-        Ok(())
-    }
-
-    pub fn tracked_process_quiet_deadline(&self) -> QuietDeadline {
-        if tokio::time::Instant::now() >= self.tracked_process_quiet_sleep.deadline() {
-            QuietDeadline::Elapsed
-        } else {
-            QuietDeadline::Pending
-        }
     }
 
     fn sync_output_activity_sample_sleep(&mut self) -> rootcause::Result<()> {
@@ -666,12 +666,6 @@ mod tests {
         }
     }
 
-    fn instant_after(instant: Instant, duration: Duration) -> rootcause::Result<Instant> {
-        instant
-            .checked_add(duration)
-            .ok_or_else(|| rootcause::report!("test instant overflowed"))
-    }
-
     fn tracked_process_quiet_sleep_deadline(
         instant: Instant,
         logical_delay: Duration,
@@ -680,5 +674,11 @@ mod tests {
             .checked_add(TRACKED_PROCESS_QUIET_SETTLE_DELAY)
             .ok_or_else(|| rootcause::report!("test quiet settle delay overflowed"))?;
         Ok(tokio::time::Instant::from_std(self::instant_after(instant, delay)?))
+    }
+
+    fn instant_after(instant: Instant, duration: Duration) -> rootcause::Result<Instant> {
+        instant
+            .checked_add(duration)
+            .ok_or_else(|| rootcause::report!("test instant overflowed"))
     }
 }

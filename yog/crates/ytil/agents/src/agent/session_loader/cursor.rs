@@ -1,6 +1,10 @@
 use std::collections::HashSet;
+use std::fs;
+use std::fs::DirEntry;
 use std::path::Path;
 use std::path::PathBuf;
+
+use ytil_sys::dir;
 
 use crate::agent::Agent;
 use crate::agent::session::Session;
@@ -13,7 +17,7 @@ use crate::agent::session::SessionKey;
 /// # Errors
 /// Returns an error when the Cursor session store cannot be enumerated.
 pub fn load_sessions() -> rootcause::Result<Vec<Session>> {
-    let chats_root = ytil_sys::dir::build_home_path(Agent::Cursor.sessions_root_path())?;
+    let chats_root = dir::build_home_path(Agent::Cursor.sessions_root_path())?;
     let session_paths = crate::agent::session_loader::find_session_paths(&chats_root, is_session_file, |_| false)?;
 
     Ok(load_sessions_from_paths(&session_paths, None))
@@ -30,13 +34,13 @@ pub fn load_sessions_by_key(keys: &[SessionKey]) -> rootcause::Result<Vec<Sessio
     if requested_ids.is_empty() {
         return Ok(Vec::new());
     }
-    let chats_root = ytil_sys::dir::build_home_path(Agent::Cursor.sessions_root_path())?;
+    let chats_root = dir::build_home_path(Agent::Cursor.sessions_root_path())?;
     let session_paths = crate::agent::session_loader::find_session_paths(&chats_root, is_session_file, |_| false)?;
 
     Ok(load_sessions_from_paths(&session_paths, Some(&requested_ids)))
 }
 
-pub(crate) fn is_session_file(entry: &std::fs::DirEntry) -> bool {
+pub(crate) fn is_session_file(entry: &DirEntry) -> bool {
     entry.path().file_name().is_some_and(|name| name == "meta.json")
 }
 
@@ -56,7 +60,7 @@ fn load_session_from_meta_json(meta_path: &Path, requested_ids: Option<&HashSet<
         return None;
     }
 
-    let json = std::fs::read_to_string(meta_path).ok()?;
+    let json = fs::read_to_string(meta_path).ok()?;
     let mut cursor_session =
         crate::agent::session_parser::cursor::parse_chat_meta(&json, session_id.to_owned()).ok()?;
     if !cursor_session.has_conversation || !cursor_session.workspace.is_dir() {
@@ -74,7 +78,7 @@ fn load_session_from_meta_json(meta_path: &Path, requested_ids: Option<&HashSet<
 
 fn read_prompt_history(session_dir: &Path) -> Vec<String> {
     let path = session_dir.join("prompt_history.json");
-    let Ok(content) = std::fs::read_to_string(path) else {
+    let Ok(content) = fs::read_to_string(path) else {
         return Vec::new();
     };
     serde_json::from_str(&content).unwrap_or_default()

@@ -104,6 +104,32 @@ pub fn session_state(paths: &SessionPaths) -> rootcause::Result<SessionState> {
         .block_on(self::session_state_async(paths))
 }
 
+/// Probe a muxr session socket without starting a nested Tokio runtime.
+///
+/// # Errors
+/// - The probe runtime IO fails after connecting to the socket.
+pub async fn session_state_async(paths: &SessionPaths) -> rootcause::Result<SessionState> {
+    let Ok(Ok(mut connection)) =
+        tokio::time::timeout(SESSION_PROBE_TIMEOUT, ClientConnection::connect(&paths.socket)).await
+    else {
+        return Ok(SessionState::Unknown);
+    };
+
+    match tokio::time::timeout(SESSION_PROBE_TIMEOUT, connection.send_request(&ClientRequest::Ping)).await {
+        Ok(Ok(())) => {}
+        Ok(Err(_)) | Err(_) => return Ok(SessionState::Unknown),
+    }
+
+    if matches!(
+        tokio::time::timeout(SESSION_PROBE_TIMEOUT, connection.recv_event()).await,
+        Ok(Ok(Some(ServerEvent::Pong)))
+    ) {
+        Ok(SessionState::Live)
+    } else {
+        Ok(SessionState::Unknown)
+    }
+}
+
 fn list_sessions_from_root(root: &Path) -> rootcause::Result<Vec<ListedSession>> {
     let entries = match fs::read_dir(root) {
         Ok(entries) => entries,
@@ -160,32 +186,6 @@ fn created_at_text(created_at: Option<SystemTime>) -> String {
             )
         },
     )
-}
-
-/// Probe a muxr session socket without starting a nested Tokio runtime.
-///
-/// # Errors
-/// - The probe runtime IO fails after connecting to the socket.
-pub async fn session_state_async(paths: &SessionPaths) -> rootcause::Result<SessionState> {
-    let Ok(Ok(mut connection)) =
-        tokio::time::timeout(SESSION_PROBE_TIMEOUT, ClientConnection::connect(&paths.socket)).await
-    else {
-        return Ok(SessionState::Unknown);
-    };
-
-    match tokio::time::timeout(SESSION_PROBE_TIMEOUT, connection.send_request(&ClientRequest::Ping)).await {
-        Ok(Ok(())) => {}
-        Ok(Err(_)) | Err(_) => return Ok(SessionState::Unknown),
-    }
-
-    if matches!(
-        tokio::time::timeout(SESSION_PROBE_TIMEOUT, connection.recv_event()).await,
-        Ok(Ok(Some(ServerEvent::Pong)))
-    ) {
-        Ok(SessionState::Live)
-    } else {
-        Ok(SessionState::Unknown)
-    }
 }
 
 #[cfg(test)]

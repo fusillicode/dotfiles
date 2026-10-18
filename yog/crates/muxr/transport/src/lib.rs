@@ -63,15 +63,6 @@ impl ClientConnection {
         Ok(Self::from_stream(stream))
     }
 
-    #[must_use]
-    fn from_stream(stream: LocalSocketStream) -> Self {
-        let (writer, reader) = frame_socket(stream);
-        Self {
-            reader: ClientEventReader { reader },
-            writer: ClientRequestWriter { writer },
-        }
-    }
-
     /// Split this client connection into independent event reader and request writer halves.
     #[must_use]
     pub fn split(self) -> (ClientEventReader, ClientRequestWriter) {
@@ -92,6 +83,15 @@ impl ClientConnection {
     /// - The request cannot be encoded or written.
     pub async fn send_request(&mut self, request: &ClientRequest) -> rootcause::Result<()> {
         self.writer.send_request(request).await
+    }
+
+    #[must_use]
+    fn from_stream(stream: LocalSocketStream) -> Self {
+        let (writer, reader) = frame_socket(stream);
+        Self {
+            reader: ClientEventReader { reader },
+            writer: ClientRequestWriter { writer },
+        }
     }
 }
 
@@ -129,12 +129,6 @@ pub struct ServerConnection {
 }
 
 impl ServerConnection {
-    #[must_use]
-    fn from_stream(stream: LocalSocketStream) -> Self {
-        let (writer, reader) = frame_socket(stream);
-        Self { reader, writer }
-    }
-
     /// Split this server connection into independent request reader and event writer halves.
     #[must_use]
     pub fn split(self) -> (ServerRequestReader, ServerEventWriter) {
@@ -158,6 +152,12 @@ impl ServerConnection {
     /// - The event cannot be encoded or written.
     pub async fn send_event(&mut self, event: &ServerEvent) -> rootcause::Result<()> {
         send_server_event_frame(&mut self.writer, event).await
+    }
+
+    #[must_use]
+    fn from_stream(stream: LocalSocketStream) -> Self {
+        let (writer, reader) = frame_socket(stream);
+        Self { reader, writer }
     }
 }
 
@@ -675,101 +675,12 @@ mod tests {
         assert_that!(error.to_string(), contains_substring("muxr socket path is too long"));
     }
 
-    fn layout_snapshot() -> rootcause::Result<LayoutSnapshot> {
-        let active_tab = TabId::new(1)?;
-        let active_pane = PaneId::new(1)?;
-        let pane = PaneSnapshot {
-            tracked_process_state: muxr_core::TrackedProcessState::None,
-            cwd: "/tmp".to_owned(),
-            cmd_label: None,
-            focus_seq: 1,
-            id: active_pane,
-            title: "shell".to_owned(),
-        };
-        let tab = TabSnapshot::new(active_tab, "default", active_pane, vec![pane])?;
-        LayoutSnapshot::new(active_tab, vec![tab])
-    }
-
-    fn pane_regions_snapshot() -> rootcause::Result<muxr_core::PaneRegionsSnapshot> {
-        muxr_core::PaneRegionsSnapshot::new(vec![muxr_core::PaneRegionSnapshot::new(
-            PaneId::new(1)?,
-            0,
-            0,
-            80,
-            24,
-            muxr_core::PaneMouseMode::None,
-            0,
-        )?])
-    }
-
-    fn test_frame_socket(
-        stream: tokio::io::DuplexStream,
-    ) -> (
-        FrameWriter<tokio::io::WriteHalf<tokio::io::DuplexStream>>,
-        FramedRead<tokio::io::ReadHalf<tokio::io::DuplexStream>, LengthDelimitedCodec>,
-    ) {
-        let (reader, writer) = tokio::io::split(stream);
-        (FrameWriter::new(writer), FramedRead::new(reader, frame_codec()))
-    }
-
-    fn framed_bytes(payload: &[u8]) -> Vec<u8> {
-        let mut frame = u32::try_from(payload.len()).unwrap().to_be_bytes().to_vec();
-        frame.extend_from_slice(payload);
-        frame
-    }
-
     struct PartialWriter {
         bytes: Vec<u8>,
         max_write: usize,
         write_lengths: Vec<usize>,
         writes_before_pending: Option<usize>,
         vectored_writes: usize,
-    }
-
-    struct PayloadIdentityWriter {
-        expected_payload_pointer: *const u8,
-        expected_payload_length: usize,
-        saw_original_payload: bool,
-    }
-
-    impl PayloadIdentityWriter {
-        const fn new(expected_payload_pointer: *const u8, expected_payload_length: usize) -> Self {
-            Self {
-                expected_payload_length,
-                expected_payload_pointer,
-                saw_original_payload: false,
-            }
-        }
-    }
-
-    impl AsyncWrite for PayloadIdentityWriter {
-        fn poll_write(self: Pin<&mut Self>, _cx: &mut Context<'_>, buffer: &[u8]) -> Poll<io::Result<usize>> {
-            Poll::Ready(Ok(buffer.len()))
-        }
-
-        fn poll_write_vectored(
-            self: Pin<&mut Self>,
-            _cx: &mut Context<'_>,
-            buffers: &[IoSlice<'_>],
-        ) -> Poll<io::Result<usize>> {
-            let writer = self.get_mut();
-            writer.saw_original_payload |= buffers.iter().any(|buffer| {
-                buffer.as_ptr() == writer.expected_payload_pointer && buffer.len() == writer.expected_payload_length
-            });
-            Poll::Ready(Ok(buffers.iter().map(|buffer| buffer.len()).sum()))
-        }
-
-        fn is_write_vectored(&self) -> bool {
-            true
-        }
-
-        fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-            Poll::Ready(Ok(()))
-        }
-
-        fn poll_shutdown(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-            Poll::Ready(Ok(()))
-        }
     }
 
     impl PartialWriter {
@@ -833,5 +744,94 @@ mod tests {
         fn poll_shutdown(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
             Poll::Ready(Ok(()))
         }
+    }
+
+    struct PayloadIdentityWriter {
+        expected_payload_pointer: *const u8,
+        expected_payload_length: usize,
+        saw_original_payload: bool,
+    }
+
+    impl PayloadIdentityWriter {
+        const fn new(expected_payload_pointer: *const u8, expected_payload_length: usize) -> Self {
+            Self {
+                expected_payload_length,
+                expected_payload_pointer,
+                saw_original_payload: false,
+            }
+        }
+    }
+
+    impl AsyncWrite for PayloadIdentityWriter {
+        fn poll_write(self: Pin<&mut Self>, _cx: &mut Context<'_>, buffer: &[u8]) -> Poll<io::Result<usize>> {
+            Poll::Ready(Ok(buffer.len()))
+        }
+
+        fn poll_write_vectored(
+            self: Pin<&mut Self>,
+            _cx: &mut Context<'_>,
+            buffers: &[IoSlice<'_>],
+        ) -> Poll<io::Result<usize>> {
+            let writer = self.get_mut();
+            writer.saw_original_payload |= buffers.iter().any(|buffer| {
+                buffer.as_ptr() == writer.expected_payload_pointer && buffer.len() == writer.expected_payload_length
+            });
+            Poll::Ready(Ok(buffers.iter().map(|buffer| buffer.len()).sum()))
+        }
+
+        fn is_write_vectored(&self) -> bool {
+            true
+        }
+
+        fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+            Poll::Ready(Ok(()))
+        }
+
+        fn poll_shutdown(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+            Poll::Ready(Ok(()))
+        }
+    }
+
+    fn layout_snapshot() -> rootcause::Result<LayoutSnapshot> {
+        let active_tab = TabId::new(1)?;
+        let active_pane = PaneId::new(1)?;
+        let pane = PaneSnapshot {
+            tracked_process_state: muxr_core::TrackedProcessState::None,
+            cwd: "/tmp".to_owned(),
+            cmd_label: None,
+            focus_seq: 1,
+            id: active_pane,
+            title: "shell".to_owned(),
+        };
+        let tab = TabSnapshot::new(active_tab, "default", active_pane, vec![pane])?;
+        LayoutSnapshot::new(active_tab, vec![tab])
+    }
+
+    fn pane_regions_snapshot() -> rootcause::Result<muxr_core::PaneRegionsSnapshot> {
+        muxr_core::PaneRegionsSnapshot::new(vec![muxr_core::PaneRegionSnapshot::new(
+            PaneId::new(1)?,
+            0,
+            0,
+            80,
+            24,
+            muxr_core::PaneMouseMode::None,
+            0,
+        )?])
+    }
+
+    fn test_frame_socket(
+        stream: tokio::io::DuplexStream,
+    ) -> (
+        FrameWriter<tokio::io::WriteHalf<tokio::io::DuplexStream>>,
+        FramedRead<tokio::io::ReadHalf<tokio::io::DuplexStream>, LengthDelimitedCodec>,
+    ) {
+        let (reader, writer) = tokio::io::split(stream);
+        (FrameWriter::new(writer), FramedRead::new(reader, frame_codec()))
+    }
+
+    fn framed_bytes(payload: &[u8]) -> Vec<u8> {
+        let mut frame = u32::try_from(payload.len()).unwrap().to_be_bytes().to_vec();
+        frame.extend_from_slice(payload);
+        frame
     }
 }

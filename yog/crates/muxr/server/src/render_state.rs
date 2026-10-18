@@ -64,14 +64,6 @@ impl ClientRenderDmg {
     }
 }
 
-fn extend_unique(current: &mut SmallVec<[PaneId; 4]>, incoming: SmallVec<[PaneId; 4]>) {
-    for pane_id in incoming {
-        if !current.contains(&pane_id) {
-            current.push(pane_id);
-        }
-    }
-}
-
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub enum PaneRenderSignal {
     #[default]
@@ -154,4 +146,12 @@ pub enum ClientLifecycleAction {
 pub enum ClientSessionSelectBias {
     Output,
     Request,
+}
+
+fn extend_unique(current: &mut SmallVec<[PaneId; 4]>, incoming: SmallVec<[PaneId; 4]>) {
+    for pane_id in incoming {
+        if !current.contains(&pane_id) {
+            current.push(pane_id);
+        }
+    }
 }

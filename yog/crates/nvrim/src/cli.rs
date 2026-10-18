@@ -2,6 +2,8 @@
 //!
 //! Centralizes glob blacklist + base flags for Rust and plugin-facing helpers.
 
+use fd::FdCliFlags;
+use rg::RgCliFlags;
 mod fd;
 mod rg;
 
@@ -36,10 +38,10 @@ pub trait CliFlags {
 
 /// Returns the `fd` flags used by `fzf-lua` file pickers.
 pub fn get_fd_flags((): ()) -> Vec<String> {
-    fd::FdCliFlags::get(())
+    FdCliFlags::get(())
 }
 
 /// Returns the `rg` flags used by `fzf-lua` grep pickers.
 pub fn get_rg_flags((): ()) -> Vec<String> {
-    rg::RgCliFlags::get(())
+    RgCliFlags::get(())
 }

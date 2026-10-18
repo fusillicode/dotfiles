@@ -34,14 +34,6 @@ pub fn is_import_style_path(parts: &[String]) -> bool {
         .is_some_and(|part| matches!(part.as_str(), "crate" | "self" | "super") || is_module_name(part))
 }
 
-fn is_module_name(name: &str) -> bool {
-    name.chars().next().is_some_and(char::is_lowercase)
-}
-
-fn is_type_name(name: &str) -> bool {
-    name.chars().next().is_some_and(char::is_uppercase)
-}
-
 pub fn normalize_path(current_module: &[String], parts: &[String]) -> Vec<String> {
     let mut normalized = current_module.to_vec();
     let mut first_item = 0;
@@ -74,4 +66,12 @@ pub fn normalize_path(current_module: &[String], parts: &[String]) -> Vec<String
 
 pub fn path_label(path: &syn::Path) -> String {
     self::path_parts(path).map_or_else(|| "qualified path".to_owned(), |parts| parts.join("::"))
+}
+
+fn is_module_name(name: &str) -> bool {
+    name.chars().next().is_some_and(char::is_lowercase)
+}
+
+fn is_type_name(name: &str) -> bool {
+    name.chars().next().is_some_and(char::is_uppercase)
 }

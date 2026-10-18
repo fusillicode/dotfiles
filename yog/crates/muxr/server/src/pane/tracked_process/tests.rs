@@ -12,19 +12,6 @@ use crate::pane::split::PaneSplitAxis;
 use crate::state::SessionMetadata;
 use crate::terminal::TerminalState;
 
-pub(super) fn tracked_process(executable: &str) -> rootcause::Result<TrackedProcess> {
-    MuxrConfig::new()?
-        .tracked_process_for_cmd(executable, None)
-        .cloned()
-        .ok_or_else(|| rootcause::report!("expected configured tracked process"))
-}
-
-pub(super) fn instant_after(instant: Instant, duration: Duration) -> rootcause::Result<Instant> {
-    instant
-        .checked_add(duration)
-        .ok_or_else(|| rootcause::report!("test instant overflowed"))
-}
-
 #[test]
 fn test_lifecycle_when_screen_observation_is_disabled_uses_activity_tracking() -> rootcause::Result<()> {
     let mut config = MuxrConfig::new()?;
@@ -42,29 +29,6 @@ fn test_lifecycle_when_screen_observation_is_disabled_uses_activity_tracking() -
         pane_tracked_process_status(&processes, pane_id),
         eq(TrackedProcessState::Busy)
     );
-    Ok(())
-}
-
-fn pane_tracked_process_status(pane_tracked_processes: &PaneTrackedProcesses, pane_id: PaneId) -> TrackedProcessState {
-    pane_tracked_processes
-        .by_pane
-        .get(&pane_id)
-        .map_or(TrackedProcessState::None, PaneTrackedProcessLifecycle::state)
-}
-
-fn mark_pane_quiet(
-    processes: &mut PaneTrackedProcesses,
-    pane_id: PaneId,
-    focus: TrackedProcessPaneFocus,
-) -> rootcause::Result<()> {
-    let lifecycle = processes
-        .by_pane
-        .get_mut(&pane_id)
-        .ok_or_else(|| rootcause::report!("missing test lifecycle"))?;
-    let deadline = lifecycle
-        .quiet_deadline(focus)?
-        .ok_or_else(|| rootcause::report!("test lifecycle has no quiet deadline"))?;
-    lifecycle.mark_quiet_if_due(deadline, focus);
     Ok(())
 }
 
@@ -771,6 +735,42 @@ fn test_guard_quiet_deadlines_when_cancellation_splits_words_clears_work(
         eq(TrackedProcessAttention::Unchanged)
     );
     test_that::assert_that!(processes.attention_pane_ids(&layout), eq(Vec::new()));
+    Ok(())
+}
+
+pub(super) fn tracked_process(executable: &str) -> rootcause::Result<TrackedProcess> {
+    MuxrConfig::new()?
+        .tracked_process_for_cmd(executable, None)
+        .cloned()
+        .ok_or_else(|| rootcause::report!("expected configured tracked process"))
+}
+
+pub(super) fn instant_after(instant: Instant, duration: Duration) -> rootcause::Result<Instant> {
+    instant
+        .checked_add(duration)
+        .ok_or_else(|| rootcause::report!("test instant overflowed"))
+}
+
+fn pane_tracked_process_status(pane_tracked_processes: &PaneTrackedProcesses, pane_id: PaneId) -> TrackedProcessState {
+    pane_tracked_processes
+        .by_pane
+        .get(&pane_id)
+        .map_or(TrackedProcessState::None, PaneTrackedProcessLifecycle::state)
+}
+
+fn mark_pane_quiet(
+    processes: &mut PaneTrackedProcesses,
+    pane_id: PaneId,
+    focus: TrackedProcessPaneFocus,
+) -> rootcause::Result<()> {
+    let lifecycle = processes
+        .by_pane
+        .get_mut(&pane_id)
+        .ok_or_else(|| rootcause::report!("missing test lifecycle"))?;
+    let deadline = lifecycle
+        .quiet_deadline(focus)?
+        .ok_or_else(|| rootcause::report!("test lifecycle has no quiet deadline"))?;
+    lifecycle.mark_quiet_if_due(deadline, focus);
     Ok(())
 }
 

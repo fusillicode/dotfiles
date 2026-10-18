@@ -118,13 +118,6 @@ mod tests {
     use super::*;
     use crate::diagnostics::filters::BufferWithPath;
 
-    fn create_buffer_with_path(path: &str) -> BufferWithPath {
-        BufferWithPath {
-            buffer: Box::new(ytil_noxi::buffer::mock::MockBuffer::new(vec![])),
-            path: path.to_string(),
-        }
-    }
-
     #[test]
     fn test_skip_diagnostic_when_buf_path_pattern_not_matched_returns_false() {
         let test_blacklist = set!["test"];
@@ -208,5 +201,12 @@ mod tests {
                 eq("missing dict value")
             ))
         );
+    }
+
+    fn create_buffer_with_path(path: &str) -> BufferWithPath {
+        BufferWithPath {
+            buffer: Box::new(ytil_noxi::buffer::mock::MockBuffer::new(vec![])),
+            path: path.to_string(),
+        }
     }
 }

@@ -20,15 +20,6 @@ impl Drop for ServerFilesGuard {
     }
 }
 
-fn remove_server_file(event: &str, path: &Path) {
-    match fs::remove_file(path) {
-        Ok(()) => {}
-        // Cleanup can race with explicit delete or partial startup rollback; only other errors leave stale state.
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-        Err(error) => crate::session::tracing::server::file_cleanup_failed(event, path, &error),
-    }
-}
-
 pub fn prepare_session_dirs(paths: &SessionPaths) -> rootcause::Result<()> {
     let sessions_root = paths
         .root
@@ -62,6 +53,15 @@ pub fn secure_socket_file(path: &Path) -> rootcause::Result<()> {
     fs::set_permissions(path, fs::Permissions::from_mode(PRIVATE_SOCKET_MODE))
         .context("failed to secure muxr socket file permissions")?;
     Ok(())
+}
+
+fn remove_server_file(event: &str, path: &Path) {
+    match fs::remove_file(path) {
+        Ok(()) => {}
+        // Cleanup can race with explicit delete or partial startup rollback; only other errors leave stale state.
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => crate::session::tracing::server::file_cleanup_failed(event, path, &error),
+    }
 }
 
 fn state_root(paths: &SessionPaths) -> rootcause::Result<&Path> {

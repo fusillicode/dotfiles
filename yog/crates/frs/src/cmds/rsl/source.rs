@@ -6,6 +6,33 @@ use proc_macro2::LineColumn;
 use proc_macro2::Span;
 use rootcause::report;
 
+#[derive(Clone, Debug)]
+pub struct SourceRange {
+    pub start: SourcePosition,
+    pub end: SourcePosition,
+    pub byte_range: Range<usize>,
+    pub whole_lines: bool,
+}
+
+impl SourceRange {
+    pub fn format_compact(&self) -> String {
+        if self.whole_lines {
+            format!("{}-{}", self.start.line, self.end.line)
+        } else {
+            format!(
+                "{}:{}-{}:{}",
+                self.start.line, self.start.column, self.end.line, self.end.column
+            )
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct SourcePosition {
+    pub line: usize,
+    pub column: usize,
+}
+
 pub(super) struct SourceEditor<'source> {
     source: &'source str,
     edits: Vec<Edit>,
@@ -122,33 +149,6 @@ impl<'source> SourceEditor<'source> {
     pub(super) fn finish(self) -> rootcause::Result<String> {
         self.render_range(0..self.source.len())
     }
-}
-
-#[derive(Clone, Debug)]
-pub struct SourceRange {
-    pub start: SourcePosition,
-    pub end: SourcePosition,
-    pub byte_range: Range<usize>,
-    pub whole_lines: bool,
-}
-
-impl SourceRange {
-    pub fn format_compact(&self) -> String {
-        if self.whole_lines {
-            format!("{}-{}", self.start.line, self.end.line)
-        } else {
-            format!(
-                "{}:{}-{}:{}",
-                self.start.line, self.start.column, self.end.line, self.end.column
-            )
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct SourcePosition {
-    pub line: usize,
-    pub column: usize,
 }
 
 pub(in crate::cmds::rsl) fn item_ranges_with_attached_comments(

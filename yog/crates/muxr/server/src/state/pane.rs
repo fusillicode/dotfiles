@@ -23,12 +23,6 @@ pub enum PaneTree {
     },
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum PaneTreeRightPane {
-    Pane(PaneId),
-    Missing,
-}
-
 impl PaneTree {
     pub fn pane_count(&self) -> usize {
         match self {
@@ -42,33 +36,6 @@ impl PaneTree {
             Self::Pane(pane) => pane.id == pane_id,
             Self::Split { first, second, .. } => first.contains_pane(pane_id) || second.contains_pane(pane_id),
         }
-    }
-
-    // A target is singular only when the closest containing vertical split has a leaf as its second branch; nested
-    // right branches do not identify one pane to reuse.
-    pub(crate) fn right_pane_of(&self, pane_id: PaneId) -> PaneTreeRightPane {
-        let Self::Split {
-            axis, first, second, ..
-        } = self
-        else {
-            return PaneTreeRightPane::Missing;
-        };
-
-        if first.contains_pane(pane_id) {
-            if let PaneTreeRightPane::Pane(right_pane_id) = first.right_pane_of(pane_id) {
-                return PaneTreeRightPane::Pane(right_pane_id);
-            }
-            if matches!(axis, PaneSplitAxis::Vertical)
-                && let Self::Pane(right_pane) = second.as_ref()
-            {
-                return PaneTreeRightPane::Pane(right_pane.id);
-            }
-            return PaneTreeRightPane::Missing;
-        }
-        if second.contains_pane(pane_id) {
-            return second.right_pane_of(pane_id);
-        }
-        PaneTreeRightPane::Missing
     }
 
     pub fn pane_mut(&mut self, pane_id: PaneId) -> Option<&mut Pane> {
@@ -99,6 +66,33 @@ impl PaneTree {
         }
     }
 
+    // A target is singular only when the closest containing vertical split has a leaf as its second branch; nested
+    // right branches do not identify one pane to reuse.
+    pub(crate) fn right_pane_of(&self, pane_id: PaneId) -> PaneTreeRightPane {
+        let Self::Split {
+            axis, first, second, ..
+        } = self
+        else {
+            return PaneTreeRightPane::Missing;
+        };
+
+        if first.contains_pane(pane_id) {
+            if let PaneTreeRightPane::Pane(right_pane_id) = first.right_pane_of(pane_id) {
+                return PaneTreeRightPane::Pane(right_pane_id);
+            }
+            if matches!(axis, PaneSplitAxis::Vertical)
+                && let Self::Pane(right_pane) = second.as_ref()
+            {
+                return PaneTreeRightPane::Pane(right_pane.id);
+            }
+            return PaneTreeRightPane::Missing;
+        }
+        if second.contains_pane(pane_id) {
+            return second.right_pane_of(pane_id);
+        }
+        PaneTreeRightPane::Missing
+    }
+
     pub(crate) fn last_focused_pane(&self) -> &Pane {
         match self {
             Self::Pane(pane) => pane,
@@ -113,6 +107,12 @@ impl PaneTree {
             }
         }
     }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PaneTreeRightPane {
+    Pane(PaneId),
+    Missing,
 }
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
@@ -332,6 +332,12 @@ mod tests {
         Ok(())
     }
 
+    fn pane_with_id(id: u32) -> rootcause::Result<Pane> {
+        let mut pane = self::pane()?;
+        pane.id = PaneId::new(id)?;
+        Ok(pane)
+    }
+
     fn pane() -> rootcause::Result<Pane> {
         Ok(Pane {
             attention_state: PaneAttentionState::Idle,
@@ -343,11 +349,5 @@ mod tests {
             state: PaneState::Running,
             title: "zsh".to_owned(),
         })
-    }
-
-    fn pane_with_id(id: u32) -> rootcause::Result<Pane> {
-        let mut pane = self::pane()?;
-        pane.id = PaneId::new(id)?;
-        Ok(pane)
     }
 }

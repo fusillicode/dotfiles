@@ -4,6 +4,13 @@ use std::process::ExitStatus;
 use tempfile::TempDir;
 use test_that::prelude::*;
 
+fn run_rmr(args: &[&str]) -> std::io::Result<ExitStatus> {
+    Command::new("cargo")
+        .args(["run", "--quiet", "--bin", "rmr", "--"])
+        .args(args)
+        .status()
+}
+
 #[test]
 fn test_rmr_with_single_file_with_suffix_deletes_file() {
     let tmp_dir = TempDir::new().unwrap();
@@ -40,11 +47,4 @@ fn test_rmr_with_nonexistent_path_returns_error_exit_code() {
     let res = run_rmr(&[&format!("{}:1:2", bogus.display())]);
 
     assert_that!(res, ok(matches_pattern!(ExitStatus { code(): eq(Some(1)) })));
-}
-
-fn run_rmr(args: &[&str]) -> std::io::Result<ExitStatus> {
-    Command::new("cargo")
-        .args(["run", "--quiet", "--bin", "rmr", "--"])
-        .args(args)
-        .status()
 }

@@ -84,27 +84,6 @@ pub enum TokenUnderCursor {
     },
 }
 
-impl nvim_oxi::lua::Pushable for TokenUnderCursor {
-    unsafe fn push(self, lstate: *mut State) -> Result<c_int, nvim_oxi::lua::Error> {
-        // SAFETY: The caller (nvim-oxi framework) guarantees that:
-        // 1. `lstate` is a valid pointer to an initialized Lua state
-        // 2. The Lua stack has sufficient capacity for the pushed value
-        unsafe {
-            nvim_oxi::lua::Pushable::push(
-                self.to_object()
-                    .map_err(nvim_oxi::lua::Error::push_error_from_err::<Self, _>)?,
-                lstate,
-            )
-        }
-    }
-}
-
-impl ToObject for TokenUnderCursor {
-    fn to_object(self) -> Result<Object, nvim_oxi::conversion::Error> {
-        self.serialize(Serializer::new()).map_err(Into::into)
-    }
-}
-
 /// Classify a [`String`] captured under the cursor into a [`TokenUnderCursor`].
 ///
 /// 1. If it parses as a URL with [`Url::parse`], returns [`TokenUnderCursor::Url`].
@@ -185,6 +164,27 @@ impl TokenUnderCursor {
             return Self::classify_not_url(&maybe_path);
         }
         Ok(self.clone())
+    }
+}
+
+impl nvim_oxi::lua::Pushable for TokenUnderCursor {
+    unsafe fn push(self, lstate: *mut State) -> Result<c_int, nvim_oxi::lua::Error> {
+        // SAFETY: The caller (nvim-oxi framework) guarantees that:
+        // 1. `lstate` is a valid pointer to an initialized Lua state
+        // 2. The Lua stack has sufficient capacity for the pushed value
+        unsafe {
+            nvim_oxi::lua::Pushable::push(
+                self.to_object()
+                    .map_err(nvim_oxi::lua::Error::push_error_from_err::<Self, _>)?,
+                lstate,
+            )
+        }
+    }
+}
+
+impl ToObject for TokenUnderCursor {
+    fn to_object(self) -> Result<Object, nvim_oxi::conversion::Error> {
+        self.serialize(Serializer::new()).map_err(Into::into)
     }
 }
 

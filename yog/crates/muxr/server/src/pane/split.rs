@@ -189,6 +189,25 @@ pub enum PaneSplit {
     Split,
 }
 
+pub fn handle_split_pane_cmd_client(
+    split_axis: PaneSplitAxis,
+    state: &mut ClientSessionState<'_>,
+) -> rootcause::Result<PaneSplitClientOutcome> {
+    let previous_pane = state.layout.active_pane_id()?;
+    crate::pane::fullscreen::clear_active_tab_for_layout_mutation(state);
+    let new_pane_id = self::handle_split_pane_cmd(
+        split_axis,
+        state.config,
+        state.layout,
+        state.runtimes,
+        &state.terminal_size,
+    )?;
+    Ok(PaneSplitClientOutcome {
+        new_pane_id,
+        previous_pane,
+    })
+}
+
 fn handle_split_pane_cmd(
     split_axis: PaneSplitAxis,
     config: &ServerConfig,
@@ -210,25 +229,6 @@ fn handle_split_pane_cmd(
     )?;
     crate::state::persisted::write_metadata(&config.paths, layout)?;
     Ok(pane_id)
-}
-
-pub fn handle_split_pane_cmd_client(
-    split_axis: PaneSplitAxis,
-    state: &mut ClientSessionState<'_>,
-) -> rootcause::Result<PaneSplitClientOutcome> {
-    let previous_pane = state.layout.active_pane_id()?;
-    crate::pane::fullscreen::clear_active_tab_for_layout_mutation(state);
-    let new_pane_id = self::handle_split_pane_cmd(
-        split_axis,
-        state.config,
-        state.layout,
-        state.runtimes,
-        &state.terminal_size,
-    )?;
-    Ok(PaneSplitClientOutcome {
-        new_pane_id,
-        previous_pane,
-    })
 }
 
 #[cfg(test)]

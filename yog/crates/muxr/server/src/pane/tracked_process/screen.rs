@@ -1,4 +1,4 @@
-use std::iter::once;
+use std::iter;
 
 use muxr_config::ScreenObservationConfig;
 use muxr_config::TrackedProcess;
@@ -85,7 +85,7 @@ fn matches_cancellation<'a>(
     }
     // Preserve padding so full-width hard rows can be joined within a word as well as between words. Limit the
     // ambiguous search to the same 12-row window and reuse one buffer; completion strings remain unchanged.
-    let rows: Vec<_> = once(line).chain(continuations).take(SCREEN_TAIL_ROWS).collect();
+    let rows: Vec<_> = iter::once(line).chain(continuations).take(SCREEN_TAIL_ROWS).collect();
     let mut candidate = status.to_owned();
     self::matches_continuations(patterns, &mut candidate, &rows)
 }
@@ -128,16 +128,6 @@ mod tests {
 
     use super::*;
     use crate::terminal::TerminalState;
-
-    fn patterns(agent: TrackedProcessId) -> Option<ScreenObservationConfig> {
-        MuxrConfig::new()
-            .unwrap()
-            .tracked_processes
-            .processes
-            .into_iter()
-            .find(|process| process.id == agent)
-            .and_then(|process| process.screen_observation)
-    }
 
     #[rstest::rstest]
     #[case("RUNNING", ScreenObservation::Busy)]
@@ -396,5 +386,15 @@ mod tests {
         patterns.cancelled = None;
         let text = "■ Conversation interrupted - use\n/feedback if something went wrong";
         assert_eq!(observe(&patterns, text_line_spans(text)), ScreenObservation::Unknown);
+    }
+
+    fn patterns(agent: TrackedProcessId) -> Option<ScreenObservationConfig> {
+        MuxrConfig::new()
+            .unwrap()
+            .tracked_processes
+            .processes
+            .into_iter()
+            .find(|process| process.id == agent)
+            .and_then(|process| process.screen_observation)
     }
 }

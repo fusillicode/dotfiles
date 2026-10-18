@@ -1,3 +1,6 @@
+use std::env;
+
+use pico_args::Arguments;
 const HELP_ARG: &str = "--help";
 
 /// Abstraction over command-line argument collections.
@@ -19,7 +22,7 @@ impl<T: AsRef<str> + Clone> Args<T> for Vec<T> {
     }
 }
 
-impl Args<String> for pico_args::Arguments {
+impl Args<String> for Arguments {
     fn has_help(&self) -> bool {
         self.clone().contains(HELP_ARG)
     }
@@ -35,7 +38,7 @@ impl Args<String> for pico_args::Arguments {
 
 /// Retrieves command-line arguments excluding the program name, returning them as a [`Vec`] of [`String`].
 pub fn get() -> Vec<String> {
-    let mut args = std::env::args();
+    let mut args = env::args();
     args.next();
     args.collect::<Vec<String>>()
 }

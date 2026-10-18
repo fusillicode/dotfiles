@@ -15,21 +15,21 @@ pub enum Help {
 }
 
 impl Help {
-    pub(crate) fn from_args(args: &[OsString]) -> Self {
-        match args.first().map(|arg| arg.to_string_lossy()).as_deref() {
-            Some("repo") if args.get(1).is_some_and(|arg| arg == "fix") => Self::RepoFix,
-            Some("repo") => Self::Repo,
-            Some("rsl") => Self::Rsl,
-            _ => Self::Root,
-        }
-    }
-
     pub const fn text(self) -> &'static str {
         match self {
             Self::Root => include_str!("../help.txt"),
             Self::Repo => include_str!("../help/repo/help.txt"),
             Self::RepoFix => include_str!("../help/repo/fix/help.txt"),
             Self::Rsl => include_str!("../help/rsl/help.txt"),
+        }
+    }
+
+    pub(crate) fn from_args(args: &[OsString]) -> Self {
+        match args.first().map(|arg| arg.to_string_lossy()).as_deref() {
+            Some("repo") if args.get(1).is_some_and(|arg| arg == "fix") => Self::RepoFix,
+            Some("repo") => Self::Repo,
+            Some("rsl") => Self::Rsl,
+            _ => Self::Root,
         }
     }
 }

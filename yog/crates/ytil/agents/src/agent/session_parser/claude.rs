@@ -150,34 +150,6 @@ struct ClaudeSessionMeta<'a> {
     timestamp: Timestamp,
 }
 
-#[derive(Debug, Deserialize)]
-struct ClaudeUserLine {
-    #[serde(rename = "sessionId")]
-    session_id: String,
-    cwd: String,
-    timestamp: Timestamp,
-    #[serde(default, rename = "isMeta")]
-    is_meta: bool,
-    message: ClaudeUserMessage,
-}
-
-#[derive(Debug, Deserialize)]
-struct ClaudeAssistantLine {
-    #[serde(rename = "sessionId")]
-    session_id: String,
-    cwd: String,
-    timestamp: Timestamp,
-    message: ClaudeAssistantMessage,
-}
-
-#[derive(Debug, Deserialize)]
-struct ClaudeMetadataLine {
-    #[serde(rename = "sessionId")]
-    session_id: String,
-    cwd: String,
-    timestamp: Timestamp,
-}
-
 impl<'a> From<&'a ClaudeUserLine> for ClaudeSessionMeta<'a> {
     fn from(value: &'a ClaudeUserLine) -> Self {
         Self {
@@ -206,6 +178,34 @@ impl<'a> From<&'a ClaudeMetadataLine> for ClaudeSessionMeta<'a> {
             timestamp: value.timestamp,
         }
     }
+}
+
+#[derive(Debug, Deserialize)]
+struct ClaudeUserLine {
+    #[serde(rename = "sessionId")]
+    session_id: String,
+    cwd: String,
+    timestamp: Timestamp,
+    #[serde(default, rename = "isMeta")]
+    is_meta: bool,
+    message: ClaudeUserMessage,
+}
+
+#[derive(Debug, Deserialize)]
+struct ClaudeAssistantLine {
+    #[serde(rename = "sessionId")]
+    session_id: String,
+    cwd: String,
+    timestamp: Timestamp,
+    message: ClaudeAssistantMessage,
+}
+
+#[derive(Debug, Deserialize)]
+struct ClaudeMetadataLine {
+    #[serde(rename = "sessionId")]
+    session_id: String,
+    cwd: String,
+    timestamp: Timestamp,
 }
 
 #[derive(Debug, Deserialize)]

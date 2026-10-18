@@ -52,12 +52,6 @@ mod tests;
 // to the request/output select loop before quiet clearing if the channel is full.
 const QUIET_OUTPUT_DRAIN_BATCH_LIMIT: usize = 32;
 
-struct ClientPtySink {
-    guard: PtySinkGuard,
-    pane_id: PaneId,
-    output_wakeup_pending: Arc<AtomicBool>,
-}
-
 pub struct ClientSessionState<'a> {
     pub pane_tracked_processes: PaneTrackedProcesses,
     pub config: &'a ServerConfig,
@@ -84,16 +78,6 @@ impl ClientSessionState<'_> {
         Ok(self::open_file_pane_route_for_right_pane(right_pane, nvim_state))
     }
 
-    fn pane_nvim_state(&self, pane_id: PaneId) -> NvimState {
-        let Ok(handle) = self.runtimes.handle(pane_id) else {
-            return NvimState::Unknown;
-        };
-        let Ok(snapshot) = PaneCmdSnapshot::try_from(&handle) else {
-            return NvimState::Unknown;
-        };
-        PaneCmdObservation::from(&snapshot).nvim_state()
-    }
-
     pub(crate) fn focus_pane_for_open_file(
         &mut self,
         pane_id: PaneId,
@@ -114,14 +98,15 @@ impl ClientSessionState<'_> {
         timers.sync_tracked_process_quiet_deadline_for_layout(&self.pane_tracked_processes, self.layout)?;
         Ok(())
     }
-}
 
-fn open_file_pane_route_for_right_pane(right_pane: PaneTreeRightPane, nvim_state: NvimState) -> OpenFilePaneRoute {
-    match right_pane {
-        PaneTreeRightPane::Pane(right_pane_id) if nvim_state == NvimState::Running => {
-            OpenFilePaneRoute::ExistingNvim(right_pane_id)
-        }
-        PaneTreeRightPane::Pane(_) | PaneTreeRightPane::Missing => OpenFilePaneRoute::NewRightSplit,
+    fn pane_nvim_state(&self, pane_id: PaneId) -> NvimState {
+        let Ok(handle) = self.runtimes.handle(pane_id) else {
+            return NvimState::Unknown;
+        };
+        let Ok(snapshot) = PaneCmdSnapshot::try_from(&handle) else {
+            return NvimState::Unknown;
+        };
+        PaneCmdObservation::from(&snapshot).nvim_state()
     }
 }
 
@@ -138,38 +123,6 @@ pub enum ReapedPanes {
     Stop,
 }
 
-fn attach_pane_sinks(runtimes: &PaneRuntimes, sender: &Sender<PtyEvent>) -> rootcause::Result<Vec<ClientPtySink>> {
-    let output_wakeup_pending = Arc::new(AtomicBool::new(false));
-    runtimes
-        .pane_ids()
-        .into_iter()
-        .map(|pane_id| {
-            Ok(ClientPtySink {
-                guard: runtimes
-                    .handle(pane_id)?
-                    .attach_sink_with_output_wakeup(sender.clone(), Arc::clone(&output_wakeup_pending)),
-                pane_id,
-                output_wakeup_pending: Arc::clone(&output_wakeup_pending),
-            })
-        })
-        .collect()
-}
-
-fn attach_pane_sink(
-    runtimes: &PaneRuntimes,
-    sender: &Sender<PtyEvent>,
-    pane_id: PaneId,
-    output_wakeup_pending: &Arc<AtomicBool>,
-) -> rootcause::Result<ClientPtySink> {
-    Ok(ClientPtySink {
-        guard: runtimes
-            .handle(pane_id)?
-            .attach_sink_with_output_wakeup(sender.clone(), Arc::clone(output_wakeup_pending)),
-        pane_id,
-        output_wakeup_pending: Arc::clone(output_wakeup_pending),
-    })
-}
-
 pub fn attach_pane_sink_to_state(state: &mut ClientSessionState<'_>, pane_id: PaneId) -> rootcause::Result<()> {
     let output_wakeup_pending = state.sink_guards.first().map_or_else(
         || Arc::new(AtomicBool::new(false)),
@@ -182,25 +135,6 @@ pub fn attach_pane_sink_to_state(state: &mut ClientSessionState<'_>, pane_id: Pa
         &output_wakeup_pending,
     )?);
     Ok(())
-}
-
-fn remove_pane_client_resources(state: &mut ClientSessionState<'_>, pane_id: PaneId) {
-    // This cleanup is used during attach/session teardown paths without live client timers.
-    state.sink_guards.retain(|sink| sink.pane_id != pane_id);
-    // Pane IDs are allocated from the live layout max, so a removed high ID can be reused before the next quiet sweep.
-    state.pane_tracked_processes.remove_pane(pane_id);
-}
-
-fn remove_live_pane_tracking(
-    state: &mut ClientSessionState<'_>,
-    timers: &mut ClientTimers,
-    pane_id: PaneId,
-) -> rootcause::Result<()> {
-    // Prompt-submit sampling fires after a short delay, so live pane removal must clear the timer entry before the
-    // runtime disappears; otherwise a later sample can ask for a stale pane handle and tear down the client session.
-    state.pane_tracked_processes.remove_pane(pane_id);
-    timers.remove_cmd_handoff_sample_pane(pane_id)?;
-    timers.remove_output_activity_sample_pane(pane_id)
 }
 
 pub fn remove_pane_from_client_state(
@@ -332,6 +266,135 @@ impl ClientSessionCompletion {
         self.render_worker.shutdown().await?;
         self.result
     }
+}
+
+pub async fn handle_reaped_panes(
+    state: &mut ClientSessionState<'_>,
+    event_writer: &mut impl crate::event_writer::ServerEventSink,
+    timers: &mut ClientTimers,
+) -> rootcause::Result<ReapedPanes> {
+    let previous_pane_before_restore = state.layout.active_pane_id()?;
+    let restored_editor = crate::scrollback_editor::restore_before_reap_if_needed(state)?;
+    if let Some(editor_pane_id) = restored_editor.editor_pane_id {
+        self::remove_pane_from_client_state(state, timers, editor_pane_id)?;
+    }
+    let previous_pane_before_reap = state.layout.active_pane_id()?;
+    match crate::session::runtime::reap_exited_panes(state.config, state.layout, state.runtimes)? {
+        ReapResult::Final => Ok(ReapedPanes::Stop),
+        ReapResult::NoExitedPanes => {
+            if restored_editor.status() == crate::scrollback_editor::ScrollbackEditorRestoreStatus::Unchanged {
+                return Ok(ReapedPanes::Unchanged);
+            }
+            crate::pane::focus::write_active_pane_focus_events(previous_pane_before_restore, state)?;
+            self::acknowledge_active_tracked_process(state)?;
+            match crate::screen_render::send_layout_and_baseline(event_writer, state).await? {
+                ClientSessionFlow::Continue => Ok(ReapedPanes::LayoutChanged),
+                ClientSessionFlow::Disconnect => Ok(ReapedPanes::Stop),
+            }
+        }
+        ReapResult::Removed { pane_ids } => {
+            for pane_id in &pane_ids {
+                self::remove_live_pane_tracking(state, timers, *pane_id)?;
+            }
+            // Keep the common single-pane reap allocation-free. Batched reaps build membership once so cleanup does
+            // not become sink_guards * removed_panes work.
+            match pane_ids.as_slice() {
+                [] => {}
+                [pane_id] => state.sink_guards.retain(|sink| sink.pane_id != *pane_id),
+                pane_ids => {
+                    let pane_ids: BTreeSet<_> = pane_ids.iter().copied().collect();
+                    state.sink_guards.retain(|sink| !pane_ids.contains(&sink.pane_id));
+                }
+            }
+            let previous_pane =
+                if restored_editor.status() == crate::scrollback_editor::ScrollbackEditorRestoreStatus::Restored {
+                    previous_pane_before_restore
+                } else {
+                    previous_pane_before_reap
+                };
+            crate::pane::focus::write_active_pane_focus_events(previous_pane, state)?;
+            self::acknowledge_active_tracked_process(state)?;
+            match crate::screen_render::resize_panes_and_render(event_writer, state).await? {
+                ClientSessionFlow::Continue => Ok(ReapedPanes::LayoutChanged),
+                ClientSessionFlow::Disconnect => Ok(ReapedPanes::Stop),
+            }
+        }
+    }
+}
+
+pub fn acknowledge_active_tracked_process(
+    state: &mut ClientSessionState<'_>,
+) -> rootcause::Result<crate::pane::tracked_process::TrackedProcessChanges> {
+    let active_pane = state.layout.active_pane_id()?;
+    // Close/reap fallback focus is not a runtime sample. Only acknowledge already-known attention here; command
+    // observation stays with output and explicit focus paths so a transient shell sample cannot clear unrelated work.
+    Ok(state.pane_tracked_processes.acknowledge_attention(active_pane))
+}
+
+struct ClientPtySink {
+    guard: PtySinkGuard,
+    pane_id: PaneId,
+    output_wakeup_pending: Arc<AtomicBool>,
+}
+
+fn open_file_pane_route_for_right_pane(right_pane: PaneTreeRightPane, nvim_state: NvimState) -> OpenFilePaneRoute {
+    match right_pane {
+        PaneTreeRightPane::Pane(right_pane_id) if nvim_state == NvimState::Running => {
+            OpenFilePaneRoute::ExistingNvim(right_pane_id)
+        }
+        PaneTreeRightPane::Pane(_) | PaneTreeRightPane::Missing => OpenFilePaneRoute::NewRightSplit,
+    }
+}
+
+fn attach_pane_sinks(runtimes: &PaneRuntimes, sender: &Sender<PtyEvent>) -> rootcause::Result<Vec<ClientPtySink>> {
+    let output_wakeup_pending = Arc::new(AtomicBool::new(false));
+    runtimes
+        .pane_ids()
+        .into_iter()
+        .map(|pane_id| {
+            Ok(ClientPtySink {
+                guard: runtimes
+                    .handle(pane_id)?
+                    .attach_sink_with_output_wakeup(sender.clone(), Arc::clone(&output_wakeup_pending)),
+                pane_id,
+                output_wakeup_pending: Arc::clone(&output_wakeup_pending),
+            })
+        })
+        .collect()
+}
+
+fn attach_pane_sink(
+    runtimes: &PaneRuntimes,
+    sender: &Sender<PtyEvent>,
+    pane_id: PaneId,
+    output_wakeup_pending: &Arc<AtomicBool>,
+) -> rootcause::Result<ClientPtySink> {
+    Ok(ClientPtySink {
+        guard: runtimes
+            .handle(pane_id)?
+            .attach_sink_with_output_wakeup(sender.clone(), Arc::clone(output_wakeup_pending)),
+        pane_id,
+        output_wakeup_pending: Arc::clone(output_wakeup_pending),
+    })
+}
+
+fn remove_pane_client_resources(state: &mut ClientSessionState<'_>, pane_id: PaneId) {
+    // This cleanup is used during attach/session teardown paths without live client timers.
+    state.sink_guards.retain(|sink| sink.pane_id != pane_id);
+    // Pane IDs are allocated from the live layout max, so a removed high ID can be reused before the next quiet sweep.
+    state.pane_tracked_processes.remove_pane(pane_id);
+}
+
+fn remove_live_pane_tracking(
+    state: &mut ClientSessionState<'_>,
+    timers: &mut ClientTimers,
+    pane_id: PaneId,
+) -> rootcause::Result<()> {
+    // Prompt-submit sampling fires after a short delay, so live pane removal must clear the timer entry before the
+    // runtime disappears; otherwise a later sample can ask for a stale pane handle and tear down the client session.
+    state.pane_tracked_processes.remove_pane(pane_id);
+    timers.remove_cmd_handoff_sample_pane(pane_id)?;
+    timers.remove_output_activity_sample_pane(pane_id)
 }
 
 fn spawn_pty_event_bridge(
@@ -714,67 +777,4 @@ async fn handle_session_runtime_timer_message(
             Ok(ClientSessionFlow::Continue)
         }
     }
-}
-
-pub async fn handle_reaped_panes(
-    state: &mut ClientSessionState<'_>,
-    event_writer: &mut impl crate::event_writer::ServerEventSink,
-    timers: &mut ClientTimers,
-) -> rootcause::Result<ReapedPanes> {
-    let previous_pane_before_restore = state.layout.active_pane_id()?;
-    let restored_editor = crate::scrollback_editor::restore_before_reap_if_needed(state)?;
-    if let Some(editor_pane_id) = restored_editor.editor_pane_id {
-        self::remove_pane_from_client_state(state, timers, editor_pane_id)?;
-    }
-    let previous_pane_before_reap = state.layout.active_pane_id()?;
-    match crate::session::runtime::reap_exited_panes(state.config, state.layout, state.runtimes)? {
-        ReapResult::Final => Ok(ReapedPanes::Stop),
-        ReapResult::NoExitedPanes => {
-            if restored_editor.status() == crate::scrollback_editor::ScrollbackEditorRestoreStatus::Unchanged {
-                return Ok(ReapedPanes::Unchanged);
-            }
-            crate::pane::focus::write_active_pane_focus_events(previous_pane_before_restore, state)?;
-            self::acknowledge_active_tracked_process(state)?;
-            match crate::screen_render::send_layout_and_baseline(event_writer, state).await? {
-                ClientSessionFlow::Continue => Ok(ReapedPanes::LayoutChanged),
-                ClientSessionFlow::Disconnect => Ok(ReapedPanes::Stop),
-            }
-        }
-        ReapResult::Removed { pane_ids } => {
-            for pane_id in &pane_ids {
-                self::remove_live_pane_tracking(state, timers, *pane_id)?;
-            }
-            // Keep the common single-pane reap allocation-free. Batched reaps build membership once so cleanup does
-            // not become sink_guards * removed_panes work.
-            match pane_ids.as_slice() {
-                [] => {}
-                [pane_id] => state.sink_guards.retain(|sink| sink.pane_id != *pane_id),
-                pane_ids => {
-                    let pane_ids: BTreeSet<_> = pane_ids.iter().copied().collect();
-                    state.sink_guards.retain(|sink| !pane_ids.contains(&sink.pane_id));
-                }
-            }
-            let previous_pane =
-                if restored_editor.status() == crate::scrollback_editor::ScrollbackEditorRestoreStatus::Restored {
-                    previous_pane_before_restore
-                } else {
-                    previous_pane_before_reap
-                };
-            crate::pane::focus::write_active_pane_focus_events(previous_pane, state)?;
-            self::acknowledge_active_tracked_process(state)?;
-            match crate::screen_render::resize_panes_and_render(event_writer, state).await? {
-                ClientSessionFlow::Continue => Ok(ReapedPanes::LayoutChanged),
-                ClientSessionFlow::Disconnect => Ok(ReapedPanes::Stop),
-            }
-        }
-    }
-}
-
-pub fn acknowledge_active_tracked_process(
-    state: &mut ClientSessionState<'_>,
-) -> rootcause::Result<crate::pane::tracked_process::TrackedProcessChanges> {
-    let active_pane = state.layout.active_pane_id()?;
-    // Close/reap fallback focus is not a runtime sample. Only acknowledge already-known attention here; command
-    // observation stays with output and explicit focus paths so a transient shell sample cannot clear unrelated work.
-    Ok(state.pane_tracked_processes.acknowledge_attention(active_pane))
 }

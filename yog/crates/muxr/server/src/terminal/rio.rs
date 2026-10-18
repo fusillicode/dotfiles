@@ -1,3 +1,4 @@
+use std::mem;
 use std::sync::Arc;
 
 use parking_lot::Mutex;
@@ -48,7 +49,7 @@ pub(super) struct Listener {
 
 impl Listener {
     fn take_events(&self) -> Events {
-        std::mem::take(&mut *self.events.lock())
+        mem::take(&mut *self.events.lock())
     }
 }
 

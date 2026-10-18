@@ -26,108 +26,14 @@ use crate::render_state::ClientRenderDmg;
 use crate::terminal::TerminalSnapshot;
 use crate::terminal::TerminalSnapshotScope;
 
-struct CompositeFrame {
-    active_pane: PaneId,
-    attention_panes: Vec<PaneId>,
-    cursor: RenderCursor,
-    pane_layout: Arc<PaneLayout>,
-    pane_render: PaneRenderConfig,
-    pane_snapshots: BTreeMap<PaneId, PtyRenderSnapshot>,
-    rows: Vec<Vec<RenderCell>>,
-    scratch_rows: Vec<Vec<RenderCell>>,
-    seq: u64,
-    size: TerminalSize,
-}
-
 pub struct RenderComposer {
     last_sent: Option<CompositeFrame>,
     next_seq: u64,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum RenderDiffReason {
-    DirtyFrame,
-    RegionChanged,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct PaneRenderConfig {
-    pub mode: BorderRenderMode,
-    pub border_styles: PaneBorderStyles,
-    pub pane_attention: PaneAttentionConfig,
-    pub pane_dim: PaneDimConfig,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct PaneRenderLayout<'a> {
-    pub active_pane: PaneId,
-    pub pane_layout: &'a PaneLayout,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum PaneVisualRole {
-    Normal,
-    Unfocused,
-    Attention,
-}
-
-impl PaneVisualRole {
-    fn for_pane(pane_id: PaneId, active_pane: PaneId, attention_panes: &[PaneId]) -> Self {
-        if pane_id == active_pane {
-            return Self::Normal;
-        }
-        if attention_panes.contains(&pane_id) {
-            return Self::Attention;
-        }
-        Self::Unfocused
-    }
-
-    const fn style(self, pane_dim: PaneDimConfig, pane_attention: PaneAttentionConfig) -> PaneVisualStyle {
-        let dim = match self {
-            Self::Unfocused | Self::Attention if pane_dim.unfocused => Some(pane_dim),
-            Self::Normal | Self::Unfocused | Self::Attention => None,
-        };
-        let bg_tint = match self {
-            Self::Attention => pane_attention.bg_tint,
-            Self::Normal | Self::Unfocused => None,
-        };
-        PaneVisualStyle {
-            attention_bg_tint: bg_tint,
-            dim,
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-struct PaneVisualStyle {
-    attention_bg_tint: Option<RenderColor>,
-    dim: Option<PaneDimConfig>,
-}
-
-impl Default for RenderComposer {
-    fn default() -> Self {
-        Self {
-            last_sent: None,
-            next_seq: 1,
-        }
-    }
-}
-
 impl RenderComposer {
     pub const fn has_baseline(&self) -> bool {
         self.last_sent.is_some()
-    }
-
-    fn render_frame_baseline(&mut self, mut frame: CompositeFrame) -> rootcause::Result<RenderUpdate> {
-        frame.seq = self.next_sequence()?;
-        let baseline = RenderBaseline::new(
-            frame.seq,
-            frame.size.clone(),
-            frame.cursor.clone(),
-            render_row_spans(&frame.rows, 0..frame.rows.len())?,
-        )?;
-        self.last_sent = Some(frame);
-        Ok(RenderUpdate::Baseline(baseline))
     }
 
     pub fn render_baseline_with_snapshot(
@@ -214,6 +120,18 @@ impl RenderComposer {
             ClientRenderDmg::Full => return Err(report!("muxr full render bypassed its cached composer path")),
         };
         self.render_pane_diff_with(pane_ids, reason, snapshot)
+    }
+
+    fn render_frame_baseline(&mut self, mut frame: CompositeFrame) -> rootcause::Result<RenderUpdate> {
+        frame.seq = self.next_sequence()?;
+        let baseline = RenderBaseline::new(
+            frame.seq,
+            frame.size.clone(),
+            frame.cursor.clone(),
+            render_row_spans(&frame.rows, 0..frame.rows.len())?,
+        )?;
+        self.last_sent = Some(frame);
+        Ok(RenderUpdate::Baseline(baseline))
     }
 
     fn render_frame_diff(
@@ -416,16 +334,92 @@ impl RenderComposer {
     }
 }
 
+impl Default for RenderComposer {
+    fn default() -> Self {
+        Self {
+            last_sent: None,
+            next_seq: 1,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum RenderDiffReason {
+    DirtyFrame,
+    RegionChanged,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct PaneRenderConfig {
+    pub mode: BorderRenderMode,
+    pub border_styles: PaneBorderStyles,
+    pub pane_attention: PaneAttentionConfig,
+    pub pane_dim: PaneDimConfig,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct PaneRenderLayout<'a> {
+    pub active_pane: PaneId,
+    pub pane_layout: &'a PaneLayout,
+}
+
+struct CompositeFrame {
+    active_pane: PaneId,
+    attention_panes: Vec<PaneId>,
+    cursor: RenderCursor,
+    pane_layout: Arc<PaneLayout>,
+    pane_render: PaneRenderConfig,
+    pane_snapshots: BTreeMap<PaneId, PtyRenderSnapshot>,
+    rows: Vec<Vec<RenderCell>>,
+    scratch_rows: Vec<Vec<RenderCell>>,
+    seq: u64,
+    size: TerminalSize,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum PaneVisualRole {
+    Normal,
+    Unfocused,
+    Attention,
+}
+
+impl PaneVisualRole {
+    fn for_pane(pane_id: PaneId, active_pane: PaneId, attention_panes: &[PaneId]) -> Self {
+        if pane_id == active_pane {
+            return Self::Normal;
+        }
+        if attention_panes.contains(&pane_id) {
+            return Self::Attention;
+        }
+        Self::Unfocused
+    }
+
+    const fn style(self, pane_dim: PaneDimConfig, pane_attention: PaneAttentionConfig) -> PaneVisualStyle {
+        let dim = match self {
+            Self::Unfocused | Self::Attention if pane_dim.unfocused => Some(pane_dim),
+            Self::Normal | Self::Unfocused | Self::Attention => None,
+        };
+        let bg_tint = match self {
+            Self::Attention => pane_attention.bg_tint,
+            Self::Normal | Self::Unfocused => None,
+        };
+        PaneVisualStyle {
+            attention_bg_tint: bg_tint,
+            dim,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct PaneVisualStyle {
+    attention_bg_tint: Option<RenderColor>,
+    dim: Option<PaneDimConfig>,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct AffectedRows {
     len: usize,
     rows: Vec<AffectedRow>,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum AffectedRow {
-    Affected,
-    Unaffected,
 }
 
 impl AffectedRows {
@@ -493,6 +487,12 @@ impl AffectedRows {
             })
             .collect()
     }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum AffectedRow {
+    Affected,
+    Unaffected,
 }
 
 struct PartialFrameBefore {

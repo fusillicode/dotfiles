@@ -14,17 +14,17 @@ pub enum Help {
 }
 
 impl Help {
-    pub(crate) fn from_args(args: &[String]) -> Self {
-        match args.first().map(String::as_str) {
-            Some("start") => Self::Start,
-            _ => Self::Root,
-        }
-    }
-
     pub const fn text(self) -> &'static str {
         match self {
             Self::Root => include_str!("../help.txt"),
             Self::Start => include_str!("../help/start/help.txt"),
+        }
+    }
+
+    pub(crate) fn from_args(args: &[String]) -> Self {
+        match args.first().map(String::as_str) {
+            Some("start") => Self::Start,
+            _ => Self::Root,
         }
     }
 }

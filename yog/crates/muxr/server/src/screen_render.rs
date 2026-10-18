@@ -29,24 +29,6 @@ use crate::render_worker::RenderWorker;
 use crate::server::ServerConfig;
 use crate::state::SessionLayout;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum LayoutPersistence {
-    Persist,
-    SnapshotOnly,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum LayoutRenderMode {
-    Baseline,
-    Diff,
-}
-
-impl LayoutRenderMode {
-    const fn forces_baseline(self) -> bool {
-        matches!(self, Self::Baseline)
-    }
-}
-
 pub fn resize_panes_to_layout(
     layout: &SessionLayout,
     runtimes: &PaneRuntimes,
@@ -107,95 +89,6 @@ pub fn initial_client_render_input(
     Ok((layout_snapshot, pane_regions, input))
 }
 
-fn layout_snapshot_and_persist(
-    paths: &SessionPaths,
-    layout: &mut SessionLayout,
-    runtimes: &PaneRuntimes,
-    tracked_processes: &PaneTrackedProcessSnapshot,
-) -> rootcause::Result<LayoutSnapshot> {
-    self::layout_snapshot_and_maybe_persist(paths, layout, runtimes, tracked_processes, LayoutPersistence::Persist)
-}
-
-fn layout_snapshot_and_maybe_persist(
-    paths: &SessionPaths,
-    layout: &mut SessionLayout,
-    runtimes: &PaneRuntimes,
-    tracked_processes: &PaneTrackedProcessSnapshot,
-    persistence: LayoutPersistence,
-) -> rootcause::Result<LayoutSnapshot> {
-    let synced = runtimes.sync_layout_terminal_titles(layout);
-    if persistence == LayoutPersistence::Persist && synced.metadata_sync() == crate::state::PaneMetadataSync::Changed {
-        crate::state::persisted::write_metadata(paths, layout)?;
-    }
-    let runtime_metadata = PaneRuntimeMetadata::from_sources(
-        synced.titles().to_vec(),
-        runtimes.startup_cmd_labels(),
-        tracked_processes,
-    );
-    layout.snapshot_with_runtime_metadata(&runtime_metadata.pane_snapshot_fields())
-}
-
-fn pane_region_snapshot(region: &PaneRegion, runtimes: &PaneRuntimes) -> rootcause::Result<PaneRegionSnapshot> {
-    let handle = runtimes.handle(region.id)?;
-    let mouse_mode = handle.mouse_mode();
-    let visible_top_row = handle.visible_top_row()?;
-    let wrapped_rows = handle.visible_row_wraps();
-    PaneRegionSnapshot::new(
-        region.id,
-        region.area.origin.col,
-        region.area.origin.row,
-        region.area.size.cols,
-        region.area.size.rows,
-        mouse_mode,
-        visible_top_row,
-    )
-    .and_then(|snapshot| snapshot.with_wrapped_rows(wrapped_rows))
-}
-
-#[expect(
-    clippy::too_many_arguments,
-    reason = "the state actor must publish every immutable render input"
-)]
-fn render_input(
-    render_worker: &mut RenderWorker,
-    pane_render: PaneRenderConfig,
-    active_pane: PaneId,
-    pane_layout: PaneLayout,
-    runtimes: &PaneRuntimes,
-    size: TerminalSize,
-    attention_panes: Vec<PaneId>,
-    damage: ClientRenderDmg,
-    force_baseline: bool,
-) -> rootcause::Result<RenderInput> {
-    let pane_handles = pane_layout
-        .regions()
-        .iter()
-        .map(|region| runtimes.handle(region.id).map(|handle| (region.id, handle)))
-        .collect::<rootcause::Result<BTreeMap<_, _>>>()?;
-    Ok(RenderInput::new(
-        render_worker.next_generation()?,
-        pane_render,
-        active_pane,
-        pane_layout,
-        pane_handles,
-        size,
-        attention_panes,
-        damage,
-        force_baseline,
-    ))
-}
-
-fn visible_pane_region_at_position(
-    state: &ClientSessionState<'_>,
-    position: ClientMousePosition,
-) -> rootcause::Result<Option<PaneRegion>> {
-    Ok(self::visible_pane_layout(state)?
-        .regions()
-        .iter()
-        .find(|region| region.containment(position.into()) == crate::pane::layout::PaneAreaContainment::Inside)
-        .cloned())
-}
-
 pub fn visible_pane_id_at_position(
     state: &ClientSessionState<'_>,
     position: ClientMousePosition,
@@ -211,16 +104,6 @@ pub fn visible_pane_region_snapshot_at_position(
         return Ok(None);
     };
     Ok(Some(self::pane_region_snapshot(&region, state.runtimes)?))
-}
-
-fn attention_pane_ids(layout: &SessionLayout, pane_tracked_processes: &PaneTrackedProcesses) -> Vec<PaneId> {
-    let mut pane_ids = layout.attention_pane_ids();
-    for pane_id in pane_tracked_processes.attention_pane_ids(layout) {
-        if !pane_ids.contains(&pane_id) {
-            pane_ids.push(pane_id);
-        }
-    }
-    pane_ids
 }
 
 pub fn pane_ids_visible_render_dmg(
@@ -276,13 +159,6 @@ pub async fn flush_render_diff(
     }
     render_dmg.clear();
     Ok(ClientSessionFlow::Continue)
-}
-
-fn runtime_pane_metadata(state: &ClientSessionState<'_>) -> PaneRuntimeMetadata {
-    let terminal_titles = state.runtimes.terminal_titles();
-    let startup_cmd_labels = state.runtimes.startup_cmd_labels();
-    let tracked_processes = state.pane_tracked_processes.snapshot(state.layout);
-    PaneRuntimeMetadata::from_sources(terminal_titles, startup_cmd_labels, &tracked_processes)
 }
 
 pub async fn flush_cmd_label_layout(
@@ -432,6 +308,154 @@ pub async fn flush_pane_attention(
     self::send_sidebar_layout_if_changed(event_writer, state, layout_snapshot).await
 }
 
+pub async fn send_layout_and_baseline(
+    event_writer: &mut impl crate::event_writer::ServerEventSink,
+    state: &mut ClientSessionState<'_>,
+) -> rootcause::Result<ClientSessionFlow> {
+    self::send_layout_and_render(event_writer, state, LayoutRenderMode::Baseline).await
+}
+
+/// Send changed layout metadata followed by a full comparison against the last client frame.
+pub async fn send_layout_and_render_diff(
+    event_writer: &mut impl crate::event_writer::ServerEventSink,
+    state: &mut ClientSessionState<'_>,
+) -> rootcause::Result<ClientSessionFlow> {
+    self::send_layout_and_render(event_writer, state, LayoutRenderMode::Diff).await
+}
+
+pub async fn resize_panes_and_render(
+    event_writer: &mut impl crate::event_writer::ServerEventSink,
+    state: &mut ClientSessionState<'_>,
+) -> rootcause::Result<ClientSessionFlow> {
+    let pane_layout = self::visible_pane_layout(state)?;
+    state.runtimes.resize_panes(pane_layout.regions())?;
+    self::send_layout_and_baseline(event_writer, state).await
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum LayoutPersistence {
+    Persist,
+    SnapshotOnly,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum LayoutRenderMode {
+    Baseline,
+    Diff,
+}
+
+impl LayoutRenderMode {
+    const fn forces_baseline(self) -> bool {
+        matches!(self, Self::Baseline)
+    }
+}
+
+fn layout_snapshot_and_persist(
+    paths: &SessionPaths,
+    layout: &mut SessionLayout,
+    runtimes: &PaneRuntimes,
+    tracked_processes: &PaneTrackedProcessSnapshot,
+) -> rootcause::Result<LayoutSnapshot> {
+    self::layout_snapshot_and_maybe_persist(paths, layout, runtimes, tracked_processes, LayoutPersistence::Persist)
+}
+
+fn layout_snapshot_and_maybe_persist(
+    paths: &SessionPaths,
+    layout: &mut SessionLayout,
+    runtimes: &PaneRuntimes,
+    tracked_processes: &PaneTrackedProcessSnapshot,
+    persistence: LayoutPersistence,
+) -> rootcause::Result<LayoutSnapshot> {
+    let synced = runtimes.sync_layout_terminal_titles(layout);
+    if persistence == LayoutPersistence::Persist && synced.metadata_sync() == crate::state::PaneMetadataSync::Changed {
+        crate::state::persisted::write_metadata(paths, layout)?;
+    }
+    let runtime_metadata = PaneRuntimeMetadata::from_sources(
+        synced.titles().to_vec(),
+        runtimes.startup_cmd_labels(),
+        tracked_processes,
+    );
+    layout.snapshot_with_runtime_metadata(&runtime_metadata.pane_snapshot_fields())
+}
+
+fn pane_region_snapshot(region: &PaneRegion, runtimes: &PaneRuntimes) -> rootcause::Result<PaneRegionSnapshot> {
+    let handle = runtimes.handle(region.id)?;
+    let mouse_mode = handle.mouse_mode();
+    let visible_top_row = handle.visible_top_row()?;
+    let wrapped_rows = handle.visible_row_wraps();
+    PaneRegionSnapshot::new(
+        region.id,
+        region.area.origin.col,
+        region.area.origin.row,
+        region.area.size.cols,
+        region.area.size.rows,
+        mouse_mode,
+        visible_top_row,
+    )
+    .and_then(|snapshot| snapshot.with_wrapped_rows(wrapped_rows))
+}
+
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the state actor must publish every immutable render input"
+)]
+fn render_input(
+    render_worker: &mut RenderWorker,
+    pane_render: PaneRenderConfig,
+    active_pane: PaneId,
+    pane_layout: PaneLayout,
+    runtimes: &PaneRuntimes,
+    size: TerminalSize,
+    attention_panes: Vec<PaneId>,
+    damage: ClientRenderDmg,
+    force_baseline: bool,
+) -> rootcause::Result<RenderInput> {
+    let pane_handles = pane_layout
+        .regions()
+        .iter()
+        .map(|region| runtimes.handle(region.id).map(|handle| (region.id, handle)))
+        .collect::<rootcause::Result<BTreeMap<_, _>>>()?;
+    Ok(RenderInput::new(
+        render_worker.next_generation()?,
+        pane_render,
+        active_pane,
+        pane_layout,
+        pane_handles,
+        size,
+        attention_panes,
+        damage,
+        force_baseline,
+    ))
+}
+
+fn visible_pane_region_at_position(
+    state: &ClientSessionState<'_>,
+    position: ClientMousePosition,
+) -> rootcause::Result<Option<PaneRegion>> {
+    Ok(self::visible_pane_layout(state)?
+        .regions()
+        .iter()
+        .find(|region| region.containment(position.into()) == crate::pane::layout::PaneAreaContainment::Inside)
+        .cloned())
+}
+
+fn attention_pane_ids(layout: &SessionLayout, pane_tracked_processes: &PaneTrackedProcesses) -> Vec<PaneId> {
+    let mut pane_ids = layout.attention_pane_ids();
+    for pane_id in pane_tracked_processes.attention_pane_ids(layout) {
+        if !pane_ids.contains(&pane_id) {
+            pane_ids.push(pane_id);
+        }
+    }
+    pane_ids
+}
+
+fn runtime_pane_metadata(state: &ClientSessionState<'_>) -> PaneRuntimeMetadata {
+    let terminal_titles = state.runtimes.terminal_titles();
+    let startup_cmd_labels = state.runtimes.startup_cmd_labels();
+    let tracked_processes = state.pane_tracked_processes.snapshot(state.layout);
+    PaneRuntimeMetadata::from_sources(terminal_titles, startup_cmd_labels, &tracked_processes)
+}
+
 async fn send_sidebar_layout_if_changed(
     event_writer: &mut impl crate::event_writer::ServerEventSink,
     state: &mut ClientSessionState<'_>,
@@ -450,21 +474,6 @@ async fn send_sidebar_layout_if_changed(
     }
     state.last_layout_snapshot = layout_snapshot;
     Ok(ClientSessionFlow::Continue)
-}
-
-pub async fn send_layout_and_baseline(
-    event_writer: &mut impl crate::event_writer::ServerEventSink,
-    state: &mut ClientSessionState<'_>,
-) -> rootcause::Result<ClientSessionFlow> {
-    self::send_layout_and_render(event_writer, state, LayoutRenderMode::Baseline).await
-}
-
-/// Send changed layout metadata followed by a full comparison against the last client frame.
-pub async fn send_layout_and_render_diff(
-    event_writer: &mut impl crate::event_writer::ServerEventSink,
-    state: &mut ClientSessionState<'_>,
-) -> rootcause::Result<ClientSessionFlow> {
-    self::send_layout_and_render(event_writer, state, LayoutRenderMode::Diff).await
 }
 
 async fn send_layout_and_render(
@@ -519,15 +528,6 @@ async fn send_layout_and_render(
     }
     state.last_layout_snapshot = layout_snapshot;
     Ok(ClientSessionFlow::Continue)
-}
-
-pub async fn resize_panes_and_render(
-    event_writer: &mut impl crate::event_writer::ServerEventSink,
-    state: &mut ClientSessionState<'_>,
-) -> rootcause::Result<ClientSessionFlow> {
-    let pane_layout = self::visible_pane_layout(state)?;
-    state.runtimes.resize_panes(pane_layout.regions())?;
-    self::send_layout_and_baseline(event_writer, state).await
 }
 
 fn visible_pane_layout(state: &ClientSessionState<'_>) -> rootcause::Result<PaneLayout> {

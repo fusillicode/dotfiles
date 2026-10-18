@@ -11,12 +11,6 @@ use crate::terminal::TerminalCursorKeyMode;
 
 const FAUX_SCROLL_LINES_PER_WHEEL_EVENT: usize = 3;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum PaneScrollAmount {
-    Line,
-    Wheel,
-}
-
 pub struct PaneScrollLineRequestOutcome {
     pub event: ServerEvent,
     pub render_signal: PaneRenderSignal,
@@ -25,31 +19,6 @@ pub struct PaneScrollLineRequestOutcome {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PaneScrollWheelRequestOutcome {
     pub render_signal: PaneRenderSignal,
-}
-
-fn scroll_pane_line_result(
-    position: ClientMousePosition,
-    direction: PaneScrollDirection,
-    movement: PaneScrollLineMove,
-    pane_id: Option<PaneId>,
-) -> PaneScrollLineRequestOutcome {
-    PaneScrollLineRequestOutcome {
-        event: ServerEvent::ScrollPaneLineResult {
-            position,
-            direction,
-            movement,
-        },
-        // Edge-drag autoscroll can outpace render IO; keep viewport changes coalesced on the render deadline.
-        render_signal: match movement {
-            PaneScrollLineMove::Moved => pane_id.map_or(
-                PaneRenderSignal::DirtyAndDeadline(crate::render_state::ClientRenderDmg::Full),
-                |pane_id| {
-                    PaneRenderSignal::DirtyAndDeadline(crate::render_state::ClientRenderDmg::region_changed(pane_id))
-                },
-            ),
-            PaneScrollLineMove::Unchanged => PaneRenderSignal::DeadlineOnly,
-        },
-    }
 }
 
 pub fn handle_scroll_pane_line_client_request(
@@ -94,6 +63,46 @@ pub fn handle_scroll_pane_wheel_client_request(
     })
 }
 
+pub fn faux_scroll_input_bytes(direction: PaneScrollDirection, cursor_key_mode: TerminalCursorKeyMode) -> Vec<u8> {
+    let sequence = self::faux_scroll_sequence(direction, cursor_key_mode);
+    let mut bytes = Vec::with_capacity(sequence.len().saturating_mul(FAUX_SCROLL_LINES_PER_WHEEL_EVENT));
+    for _ in 0..FAUX_SCROLL_LINES_PER_WHEEL_EVENT {
+        bytes.extend_from_slice(sequence);
+    }
+    bytes
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum PaneScrollAmount {
+    Line,
+    Wheel,
+}
+
+fn scroll_pane_line_result(
+    position: ClientMousePosition,
+    direction: PaneScrollDirection,
+    movement: PaneScrollLineMove,
+    pane_id: Option<PaneId>,
+) -> PaneScrollLineRequestOutcome {
+    PaneScrollLineRequestOutcome {
+        event: ServerEvent::ScrollPaneLineResult {
+            position,
+            direction,
+            movement,
+        },
+        // Edge-drag autoscroll can outpace render IO; keep viewport changes coalesced on the render deadline.
+        render_signal: match movement {
+            PaneScrollLineMove::Moved => pane_id.map_or(
+                PaneRenderSignal::DirtyAndDeadline(crate::render_state::ClientRenderDmg::Full),
+                |pane_id| {
+                    PaneRenderSignal::DirtyAndDeadline(crate::render_state::ClientRenderDmg::region_changed(pane_id))
+                },
+            ),
+            PaneScrollLineMove::Unchanged => PaneRenderSignal::DeadlineOnly,
+        },
+    }
+}
+
 fn scroll_pane(
     pane_id: PaneId,
     direction: PaneScrollDirection,
@@ -105,15 +114,6 @@ fn scroll_pane(
         PaneScrollAmount::Line => handle.scroll_one_line(direction),
         PaneScrollAmount::Wheel => handle.scroll(direction),
     })
-}
-
-pub fn faux_scroll_input_bytes(direction: PaneScrollDirection, cursor_key_mode: TerminalCursorKeyMode) -> Vec<u8> {
-    let sequence = self::faux_scroll_sequence(direction, cursor_key_mode);
-    let mut bytes = Vec::with_capacity(sequence.len().saturating_mul(FAUX_SCROLL_LINES_PER_WHEEL_EVENT));
-    for _ in 0..FAUX_SCROLL_LINES_PER_WHEEL_EVENT {
-        bytes.extend_from_slice(sequence);
-    }
-    bytes
 }
 
 const fn faux_scroll_sequence(direction: PaneScrollDirection, cursor_key_mode: TerminalCursorKeyMode) -> &'static [u8] {

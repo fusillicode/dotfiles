@@ -16,6 +16,53 @@ use ytil_git::IndexState;
 use ytil_git::WorktreeState;
 use ytil_sys::cli::Args;
 
+/// Newtype wrapper adding colored [`Display`] for a [`ytil_git::GitStatusEntry`].
+///
+/// Renders two status columns (index + worktree) plus the path.
+pub struct RenderableGitStatusEntry(pub GitStatusEntry);
+
+impl Deref for RenderableGitStatusEntry {
+    type Target = GitStatusEntry;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl Display for RenderableGitStatusEntry {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        // Conflict overrides everything
+        if self.conflicted {
+            return write!(f, "{} {}", "CC".red().bold(), self.path.display());
+        }
+
+        // Write index symbol directly to formatter, avoiding intermediate String allocations.
+        write_index_symbol(f, self.index_state.as_ref(), self.ignored)?;
+        write_worktree_symbol(f, self.worktree_state.as_ref(), self.ignored)?;
+
+        write!(f, " {}", self.path.display())
+    }
+}
+
+/// High-level Git working tree/index operations exposed by the UI.
+#[derive(EnumIter)]
+pub enum Op {
+    /// Add path contents to the index similar to `git add <path>`.
+    Add,
+    /// Discard changes in the worktree and/or reset the index for a path
+    /// similar in spirit to `git restore` / `git checkout -- <path>`.
+    Discard,
+}
+
+impl Display for Op {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Discard => write!(f, "{}", "Discard".red().bold()),
+            Self::Add => write!(f, "{}", "Add".green().bold()),
+        }
+    }
+}
+
 /// Stage or discard selected Git changes interactively.
 ///
 /// # Errors
@@ -62,53 +109,6 @@ fn main() -> rootcause::Result<()> {
     }
 
     Ok(())
-}
-
-/// Newtype wrapper adding colored [`Display`] for a [`ytil_git::GitStatusEntry`].
-///
-/// Renders two status columns (index + worktree) plus the path.
-pub struct RenderableGitStatusEntry(pub GitStatusEntry);
-
-impl Deref for RenderableGitStatusEntry {
-    type Target = GitStatusEntry;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl Display for RenderableGitStatusEntry {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        // Conflict overrides everything
-        if self.conflicted {
-            return write!(f, "{} {}", "CC".red().bold(), self.path.display());
-        }
-
-        // Write index symbol directly to formatter, avoiding intermediate String allocations.
-        write_index_symbol(f, self.index_state.as_ref(), self.ignored)?;
-        write_worktree_symbol(f, self.worktree_state.as_ref(), self.ignored)?;
-
-        write!(f, " {}", self.path.display())
-    }
-}
-
-/// High-level Git working tree/index operations exposed by the UI.
-#[derive(EnumIter)]
-pub enum Op {
-    /// Add path contents to the index similar to `git add <path>`.
-    Add,
-    /// Discard changes in the worktree and/or reset the index for a path
-    /// similar in spirit to `git restore` / `git checkout -- <path>`.
-    Discard,
-}
-
-impl Display for Op {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Discard => write!(f, "{}", "Discard".red().bold()),
-            Self::Add => write!(f, "{}", "Add".green().bold()),
-        }
-    }
 }
 
 /// Delete newly created paths then restore modified paths.

@@ -45,6 +45,51 @@ use crate::cmds::rsl::source::item_ranges_with_attached_comments;
 mod fn_references;
 mod item_ordering;
 
+impl From<OrderingConflict> for FixBlockReason {
+    fn from(conflict: OrderingConflict) -> Self {
+        Self {
+            code: "ordering-conflict",
+            message: format!(
+                "The declarations have incompatible ordering requirements: {}.",
+                conflict.0
+            ),
+            help: "Review the conflicting declarations and their required order manually.",
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct ItemOrderingMetadata {
+    pub range: SourceRange,
+    pub label: String,
+    pub kind: Option<ItemKind>,
+    pub visibility: Option<VisibilityClass>,
+}
+
+impl ItemOrderingMetadata {
+    fn group(&self) -> ItemGroup {
+        self.kind.map_or(ItemGroup::Items, ItemKind::group)
+    }
+}
+
+#[derive(Debug)]
+pub struct OrderingConstraint {
+    pub before_item_index: usize,
+    pub after_item_index: usize,
+    pub kind: OrderingConstraintKind,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum OrderingConstraintKind {
+    GroupOrSectionOrder,
+    InlineModuleOrder,
+    VisibilityOrder,
+    TypeImplAdjacency,
+    RecursiveFnAdjacency,
+    CallerBeforeHelper,
+    MacroBindingPreservation,
+}
+
 pub(super) struct OrderingRule;
 
 impl Rule for OrderingRule {
@@ -123,33 +168,6 @@ impl RuleChange for Change<'_> {
 
 struct OrderingConflict(String);
 
-impl From<OrderingConflict> for FixBlockReason {
-    fn from(conflict: OrderingConflict) -> Self {
-        Self {
-            code: "ordering-conflict",
-            message: format!(
-                "The declarations have incompatible ordering requirements: {}.",
-                conflict.0
-            ),
-            help: "Review the conflicting declarations and their required order manually.",
-        }
-    }
-}
-
-#[derive(Debug)]
-pub struct ItemOrderingMetadata {
-    pub range: SourceRange,
-    pub label: String,
-    pub kind: Option<ItemKind>,
-    pub visibility: Option<VisibilityClass>,
-}
-
-impl ItemOrderingMetadata {
-    fn group(&self) -> ItemGroup {
-        self.kind.map_or(ItemGroup::Items, ItemKind::group)
-    }
-}
-
 /// A complete permutation that satisfies every computed ordering constraint.
 struct ItemOrder(Vec<usize>);
 
@@ -167,24 +185,6 @@ impl ItemOrder {
     fn is_identity(&self) -> bool {
         self.0.iter().copied().eq(0..self.0.len())
     }
-}
-
-#[derive(Debug)]
-pub struct OrderingConstraint {
-    pub before_item_index: usize,
-    pub after_item_index: usize,
-    pub kind: OrderingConstraintKind,
-}
-
-#[derive(Clone, Copy, Debug)]
-pub enum OrderingConstraintKind {
-    GroupOrSectionOrder,
-    InlineModuleOrder,
-    VisibilityOrder,
-    TypeImplAdjacency,
-    RecursiveFnAdjacency,
-    CallerBeforeHelper,
-    MacroBindingPreservation,
 }
 
 fn validate_required_item_order(

@@ -324,17 +324,6 @@ mod tests {
         assert_eq!(WorktreeState::new(&input), expected);
     }
 
-    fn entry(index_state: Option<IndexState>, worktree_state: Option<WorktreeState>) -> GitStatusEntry {
-        GitStatusEntry {
-            path: "p".into(),
-            repo_root: Arc::new(".".into()),
-            conflicted: false,
-            ignored: false,
-            index_state,
-            worktree_state,
-        }
-    }
-
     pub fn init_test_repo(time: Option<Time>) -> (TempDir, Repository) {
         let temp_dir = TempDir::new().unwrap();
         let repo = Repository::init(temp_dir.path()).unwrap();
@@ -352,5 +341,16 @@ mod tests {
         drop(tree);
 
         (temp_dir, repo)
+    }
+
+    fn entry(index_state: Option<IndexState>, worktree_state: Option<WorktreeState>) -> GitStatusEntry {
+        GitStatusEntry {
+            path: "p".into(),
+            repo_root: Arc::new(".".into()),
+            conflicted: false,
+            ignored: false,
+            index_state,
+            worktree_state,
+        }
     }
 }

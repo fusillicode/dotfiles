@@ -30,11 +30,6 @@ pub struct AttachedSession {
     pub writer: ClientRequestWriter,
 }
 
-enum AttachFailure {
-    Rejected(rootcause::Report),
-    Unusable(rootcause::Report),
-}
-
 pub async fn open_session(
     session: &SessionName,
     terminal_size: TerminalSize,
@@ -43,6 +38,11 @@ pub async fn open_session(
 ) -> rootcause::Result<AttachedSession> {
     let paths = SessionPaths::from_home(session)?;
     self::open_session_with_paths(session, &paths, terminal_size, server_executable, external_layout).await
+}
+
+enum AttachFailure {
+    Rejected(rootcause::Report),
+    Unusable(rootcause::Report),
 }
 
 async fn open_session_with_paths(

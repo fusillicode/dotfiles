@@ -72,53 +72,6 @@ pub fn run_json(args: &[String], home_dir: &Path) -> rootcause::Result<()> {
     Ok(())
 }
 
-fn parse_json_session_keys(args: &[String]) -> rootcause::Result<Vec<SessionKey>> {
-    let mut session_keys = Vec::new();
-    let mut args = args.iter();
-    while let Some(arg) = args.next() {
-        match arg.as_str() {
-            "--session" => {
-                let Some(key) = args.next() else {
-                    return Err(report!("missing --session value"));
-                };
-                session_keys.push(key.parse()?);
-            }
-            unexpected => {
-                return Err(report!("unknown agg sessions list --json arg").attach(format!("arg={unexpected}")));
-            }
-        }
-    }
-    if session_keys.is_empty() {
-        return Err(report!("agg sessions list --json requires at least one --session"));
-    }
-    session_keys.sort();
-    session_keys.dedup();
-    Ok(session_keys)
-}
-
-fn load_sorted_sessions() -> rootcause::Result<Vec<Session>> {
-    let mut sessions = Vec::new();
-    sessions.extend(ytil_agents::agent::session_loader::load_sessions()?);
-    sort_sessions(&mut sessions);
-    Ok(sessions)
-}
-
-fn load_sorted_sessions_by_key(keys: &[SessionKey]) -> rootcause::Result<Vec<Session>> {
-    let mut sessions = ytil_agents::agent::session_loader::load_sessions_by_key(keys)?;
-    sort_sessions(&mut sessions);
-    Ok(sessions)
-}
-
-fn sort_sessions(sessions: &mut [Session]) {
-    sessions.sort_by(|a, b| {
-        b.updated_at
-            .cmp(&a.updated_at)
-            .then_with(|| b.created_at.cmp(&a.created_at))
-            .then_with(|| a.name.cmp(&b.name))
-            .then_with(|| a.id.cmp(&b.id))
-    });
-}
-
 pub(super) struct RenderableSession {
     pub(super) session: Session,
     branch: Option<String>,
@@ -255,6 +208,53 @@ impl Display for RenderableSession {
             )
         }
     }
+}
+
+fn parse_json_session_keys(args: &[String]) -> rootcause::Result<Vec<SessionKey>> {
+    let mut session_keys = Vec::new();
+    let mut args = args.iter();
+    while let Some(arg) = args.next() {
+        match arg.as_str() {
+            "--session" => {
+                let Some(key) = args.next() else {
+                    return Err(report!("missing --session value"));
+                };
+                session_keys.push(key.parse()?);
+            }
+            unexpected => {
+                return Err(report!("unknown agg sessions list --json arg").attach(format!("arg={unexpected}")));
+            }
+        }
+    }
+    if session_keys.is_empty() {
+        return Err(report!("agg sessions list --json requires at least one --session"));
+    }
+    session_keys.sort();
+    session_keys.dedup();
+    Ok(session_keys)
+}
+
+fn load_sorted_sessions() -> rootcause::Result<Vec<Session>> {
+    let mut sessions = Vec::new();
+    sessions.extend(ytil_agents::agent::session_loader::load_sessions()?);
+    sort_sessions(&mut sessions);
+    Ok(sessions)
+}
+
+fn load_sorted_sessions_by_key(keys: &[SessionKey]) -> rootcause::Result<Vec<Session>> {
+    let mut sessions = ytil_agents::agent::session_loader::load_sessions_by_key(keys)?;
+    sort_sessions(&mut sessions);
+    Ok(sessions)
+}
+
+fn sort_sessions(sessions: &mut [Session]) {
+    sessions.sort_by(|a, b| {
+        b.updated_at
+            .cmp(&a.updated_at)
+            .then_with(|| b.created_at.cmp(&a.created_at))
+            .then_with(|| a.name.cmp(&b.name))
+            .then_with(|| a.id.cmp(&b.id))
+    });
 }
 
 #[derive(Debug, Serialize)]

@@ -1,12 +1,15 @@
 use std::time::Duration;
 
 use muxr_core::ServerEvent;
+use tokio::sync::oneshot::Receiver;
+use tokio::time;
+use tokio::time::Instant;
 
 use crate::render_state::ClientEventSendOutcome;
 use crate::render_worker::RenderInput;
 use crate::session::tracing::ClientEventSendFailure;
 
-pub type HeartbeatDelivery = tokio::sync::oneshot::Receiver<Result<tokio::time::Instant, ClientEventSendFailure>>;
+pub type HeartbeatDelivery = Receiver<Result<Instant, ClientEventSendFailure>>;
 
 pub trait ServerEventSink {
     async fn send_event(&mut self, event: &ServerEvent) -> rootcause::Result<()>;
@@ -24,7 +27,7 @@ pub async fn send_heartbeat_with_timeout(
     writer: &mut impl ServerEventSink,
     client_write_timeout: Duration,
 ) -> Result<HeartbeatDelivery, ClientEventSendFailure> {
-    match tokio::time::timeout(client_write_timeout, writer.send_heartbeat()).await {
+    match time::timeout(client_write_timeout, writer.send_heartbeat()).await {
         Ok(Ok(delivery)) => Ok(delivery),
         Ok(Err(_)) => Err(ClientEventSendFailure::SendFailed),
         Err(_) => Err(ClientEventSendFailure::Timeout),
@@ -38,7 +41,7 @@ pub async fn send_event_and_render_with_timeout(
     client_write_timeout: Duration,
 ) -> rootcause::Result<ClientEventSendOutcome> {
     Ok(
-        tokio::time::timeout(client_write_timeout, writer.send_event_and_render(event, input))
+        time::timeout(client_write_timeout, writer.send_event_and_render(event, input))
             .await
             .map_or(
                 ClientEventSendOutcome::Failed(crate::session::tracing::ClientEventSendFailure::Timeout),
@@ -57,7 +60,7 @@ pub async fn send_render_with_timeout(
     input: &RenderInput,
     client_write_timeout: Duration,
 ) -> rootcause::Result<ClientEventSendOutcome> {
-    Ok(tokio::time::timeout(client_write_timeout, writer.send_render(input))
+    Ok(time::timeout(client_write_timeout, writer.send_render(input))
         .await
         .map_or(
             ClientEventSendOutcome::Failed(crate::session::tracing::ClientEventSendFailure::Timeout),
@@ -90,7 +93,7 @@ pub async fn send_event_failure(
     event: &ServerEvent,
     client_write_timeout: Duration,
 ) -> Option<ClientEventSendFailure> {
-    match tokio::time::timeout(client_write_timeout, writer.send_event(event)).await {
+    match time::timeout(client_write_timeout, writer.send_event(event)).await {
         Ok(Ok(())) => None,
         Ok(Err(_)) => Some(ClientEventSendFailure::SendFailed),
         Err(_) => Some(ClientEventSendFailure::Timeout),
@@ -102,7 +105,7 @@ pub async fn send_lifecycle_event_failure(
     event: &ServerEvent,
     client_write_timeout: Duration,
 ) -> Option<ClientEventSendFailure> {
-    match tokio::time::timeout(client_write_timeout, writer.send_lifecycle_event(event)).await {
+    match time::timeout(client_write_timeout, writer.send_lifecycle_event(event)).await {
         Ok(Ok(())) => None,
         Ok(Err(_)) => Some(ClientEventSendFailure::SendFailed),
         Err(_) => Some(ClientEventSendFailure::Timeout),

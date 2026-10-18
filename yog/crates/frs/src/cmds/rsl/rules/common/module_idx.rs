@@ -92,6 +92,10 @@ pub fn module_idx(file: &syn::File) -> ModuleIdx<'_> {
     idx
 }
 
+pub fn is_local_module_path(idx: &ModuleIdx<'_>, path: &[String]) -> bool {
+    path.is_empty() || idx.modules.contains(path)
+}
+
 pub(super) fn item_name(item: &Item) -> Option<String> {
     match item {
         Item::Const(item) => Some(item.ident.to_string()),
@@ -107,10 +111,6 @@ pub(super) fn item_name(item: &Item) -> Option<String> {
         Item::Union(item) => Some(item.ident.to_string()),
         Item::ForeignMod(_) | Item::Impl(_) | Item::Macro(_) | Item::Use(_) | Item::Verbatim(_) | _ => None,
     }
-}
-
-pub fn is_local_module_path(idx: &ModuleIdx<'_>, path: &[String]) -> bool {
-    path.is_empty() || idx.modules.contains(path)
 }
 
 pub(in crate::cmds::rsl::rules) fn has_external_modules(items: &[Item]) -> bool {

@@ -259,6 +259,16 @@ const DEFAULT_RESIZE_KEYBINDINGS: [(KeyChordSpec, ResizeAction); 9] = [
     ),
 ];
 
+const _: () = assert_unique_keybindings(&DEFAULT_LOCAL_KEYBINDINGS);
+
+const _: () = assert_unique_keybindings(&DEFAULT_NORMAL_KEYBINDINGS);
+
+const _: () = assert_unique_keybindings(&DEFAULT_RESIZE_KEYBINDINGS);
+
+const _: () = assert_disjoint_keybindings(&DEFAULT_LOCAL_KEYBINDINGS, &DEFAULT_NORMAL_KEYBINDINGS);
+
+const _: () = assert_disjoint_keybindings(&DEFAULT_LOCAL_KEYBINDINGS, &DEFAULT_RESIZE_KEYBINDINGS);
+
 /// The server input mode whose keybindings are being resolved.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum KeybindingMode {
@@ -300,11 +310,108 @@ pub enum KeybindingAction {
     TogglePaneFullscreen,
 }
 
+impl From<NormalAction> for KeybindingAction {
+    fn from(action: NormalAction) -> Self {
+        match action {
+            NormalAction::ClosePane => Self::ClosePane,
+            NormalAction::CreateTab => Self::CreateTab,
+            NormalAction::EnterResizeMode => Self::EnterResizeMode,
+            NormalAction::FocusNextTab => Self::FocusNextTab,
+            NormalAction::FocusPaneDown => Self::FocusPaneDown,
+            NormalAction::FocusPaneLeft => Self::FocusPaneLeft,
+            NormalAction::FocusPaneRight => Self::FocusPaneRight,
+            NormalAction::FocusPaneUp => Self::FocusPaneUp,
+            NormalAction::FocusPreviousTab => Self::FocusPreviousTab,
+            NormalAction::FocusTab1 => Self::FocusTab1,
+            NormalAction::FocusTab2 => Self::FocusTab2,
+            NormalAction::FocusTab3 => Self::FocusTab3,
+            NormalAction::FocusTab4 => Self::FocusTab4,
+            NormalAction::FocusTab5 => Self::FocusTab5,
+            NormalAction::FocusTab6 => Self::FocusTab6,
+            NormalAction::FocusTab7 => Self::FocusTab7,
+            NormalAction::FocusTab8 => Self::FocusTab8,
+            NormalAction::FocusTab9 => Self::FocusTab9,
+            NormalAction::MoveTabLeft => Self::MoveTabLeft,
+            NormalAction::MoveTabRight => Self::MoveTabRight,
+            NormalAction::OpenScrollbackEditor => Self::OpenScrollbackEditor,
+            NormalAction::SplitPaneBottom => Self::SplitPaneBottom,
+            NormalAction::SplitPaneRight => Self::SplitPaneRight,
+            NormalAction::TogglePaneFullscreen => Self::TogglePaneFullscreen,
+        }
+    }
+}
+
+impl From<ResizeAction> for KeybindingAction {
+    fn from(action: ResizeAction) -> Self {
+        match action {
+            ResizeAction::ExitResizeMode => Self::ExitResizeMode,
+            ResizeAction::ResizePaneDown => Self::ResizePaneDown,
+            ResizeAction::ResizePaneLeft => Self::ResizePaneLeft,
+            ResizeAction::ResizePaneRight => Self::ResizePaneRight,
+            ResizeAction::ResizePaneUp => Self::ResizePaneUp,
+        }
+    }
+}
+
 /// Semantic actions available to the compiled client-local keymap.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum LocalKeybindingAction {
     CopySelection,
     CopySelectionInline,
+}
+
+impl From<LocalAction> for LocalKeybindingAction {
+    fn from(action: LocalAction) -> Self {
+        match action {
+            LocalAction::CopySelection => Self::CopySelection,
+            LocalAction::CopySelectionInline => Self::CopySelectionInline,
+        }
+    }
+}
+
+/// Compiled keybinding tables shared by the muxr client and server.
+///
+/// The default inventory is compiled in. Normal mode uses Shift-Option-N/P for tab focus, Control-Option-N/P for tab
+/// movement, Shift-Option-1 through 9 for tab selection, Shift-Option-E for tab creation, Shift-Option-H/J/K/L for
+/// pane focus, Shift-Option-D/V for bottom/right splits, Shift-Option-W for pane close, Shift-Option-F for fullscreen,
+/// Shift-Option-R for resize mode, and Shift-Option-S for scrollback. Resize mode uses Esc and h/j/k/l or the arrow
+/// keys. Local mode uses Shift-Option-C/X for the two copy actions. Entries use decoder-canonical character forms.
+/// Only chords representable by both Kitty keyboard input and the legacy decoder are compiled. Changes require
+/// rebuilding muxr.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct KeybindingsConfig {
+    local: Keymap<LocalAction>,
+    normal: Keymap<NormalAction>,
+    resize: Keymap<ResizeAction>,
+}
+
+impl KeybindingsConfig {
+    /// Compile the static keybinding inventory into validated runtime keys.
+    ///
+    /// # Errors
+    /// Returns an error if a configured character is not printable ASCII.
+    pub fn new() -> rootcause::Result<Self> {
+        Ok(Self {
+            local: Keymap::new(DEFAULT_LOCAL_KEYBINDINGS)?,
+            normal: Keymap::new(DEFAULT_NORMAL_KEYBINDINGS)?,
+            resize: Keymap::new(DEFAULT_RESIZE_KEYBINDINGS)?,
+        })
+    }
+
+    /// Resolve a normalized client key in the client-local keymap.
+    pub fn resolve_local(&self, key: &ClientKey) -> Option<LocalKeybindingAction> {
+        let chord = KeyChord::from_client_key(key)?;
+        self.local.resolve(chord).map(LocalKeybindingAction::from)
+    }
+
+    /// Resolve a normalized client key in one compiled server keymap.
+    pub fn resolve(&self, mode: KeybindingMode, key: &ClientKey) -> Option<KeybindingAction> {
+        let chord = KeyChord::from_client_key(key)?;
+        match mode {
+            KeybindingMode::Normal => self.normal.resolve(chord).map(KeybindingAction::from),
+            KeybindingMode::Resize => self.resize.resolve(chord).map(KeybindingAction::from),
+        }
+    }
 }
 
 #[nutype(
@@ -426,7 +533,6 @@ enum KeyCodeSpec {
     Right,
     Up,
 }
-
 impl KeyCodeSpec {
     const fn from_character(character: char) -> Self {
         assert!(character.is_ascii() && !character.is_ascii_control());
@@ -455,7 +561,6 @@ impl KeyCodeSpec {
         }
     }
 }
-
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum LegacyCharacterSupport {
     Alt,
@@ -463,26 +568,11 @@ enum LegacyCharacterSupport {
     ShiftAlt,
     Unsupported,
 }
-
-// These variants mirror the bytes that the legacy decoder can turn into an Alt or Shift-Alt key. The legacy escape
-// prefix for `[` and `]` starts a control sequence, so neither byte can represent an Alt chord.
-const fn legacy_character_support(byte: u8) -> LegacyCharacterSupport {
-    match byte {
-        b'a'..=b'z' | b' ' => LegacyCharacterSupport::Alt,
-        b'A'..=b'Z' | b'[' | b']' => LegacyCharacterSupport::ShiftAlt,
-        b'0'..=b'9' | b'-' | b'=' | b'\\' | b';' | b'\'' | b',' | b'.' | b'/' | b'`' => {
-            LegacyCharacterSupport::AltAndShiftAlt
-        }
-        _ => LegacyCharacterSupport::Unsupported,
-    }
-}
-
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 struct KeyChord {
     code: SupportedKeyCode,
     modifiers: KeyModifiers,
 }
-
 impl KeyChord {
     fn from_client_key(key: &ClientKey) -> Option<Self> {
         let code = match key.code {
@@ -593,6 +683,19 @@ impl KeyChordSpec {
     }
 }
 
+// These variants mirror the bytes that the legacy decoder can turn into an Alt or Shift-Alt key. The legacy escape
+// prefix for `[` and `]` starts a control sequence, so neither byte can represent an Alt chord.
+const fn legacy_character_support(byte: u8) -> LegacyCharacterSupport {
+    match byte {
+        b'a'..=b'z' | b' ' => LegacyCharacterSupport::Alt,
+        b'A'..=b'Z' | b'[' | b']' => LegacyCharacterSupport::ShiftAlt,
+        b'0'..=b'9' | b'-' | b'=' | b'\\' | b';' | b'\'' | b',' | b'.' | b'/' | b'`' => {
+            LegacyCharacterSupport::AltAndShiftAlt
+        }
+        _ => LegacyCharacterSupport::Unsupported,
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum KeyChordComparison {
     Different,
@@ -605,12 +708,6 @@ enum KeyChordValidation {
     Supported,
     Unsupported,
 }
-
-const _: () = assert_unique_keybindings(&DEFAULT_LOCAL_KEYBINDINGS);
-const _: () = assert_unique_keybindings(&DEFAULT_NORMAL_KEYBINDINGS);
-const _: () = assert_unique_keybindings(&DEFAULT_RESIZE_KEYBINDINGS);
-const _: () = assert_disjoint_keybindings(&DEFAULT_LOCAL_KEYBINDINGS, &DEFAULT_NORMAL_KEYBINDINGS);
-const _: () = assert_disjoint_keybindings(&DEFAULT_LOCAL_KEYBINDINGS, &DEFAULT_RESIZE_KEYBINDINGS);
 
 const fn assert_unique_keybindings<Action>(bindings: &[(KeyChordSpec, Action)]) {
     let mut remaining = bindings;
@@ -697,58 +794,6 @@ enum ResizeAction {
     ResizePaneUp,
 }
 
-impl From<LocalAction> for LocalKeybindingAction {
-    fn from(action: LocalAction) -> Self {
-        match action {
-            LocalAction::CopySelection => Self::CopySelection,
-            LocalAction::CopySelectionInline => Self::CopySelectionInline,
-        }
-    }
-}
-
-impl From<NormalAction> for KeybindingAction {
-    fn from(action: NormalAction) -> Self {
-        match action {
-            NormalAction::ClosePane => Self::ClosePane,
-            NormalAction::CreateTab => Self::CreateTab,
-            NormalAction::EnterResizeMode => Self::EnterResizeMode,
-            NormalAction::FocusNextTab => Self::FocusNextTab,
-            NormalAction::FocusPaneDown => Self::FocusPaneDown,
-            NormalAction::FocusPaneLeft => Self::FocusPaneLeft,
-            NormalAction::FocusPaneRight => Self::FocusPaneRight,
-            NormalAction::FocusPaneUp => Self::FocusPaneUp,
-            NormalAction::FocusPreviousTab => Self::FocusPreviousTab,
-            NormalAction::FocusTab1 => Self::FocusTab1,
-            NormalAction::FocusTab2 => Self::FocusTab2,
-            NormalAction::FocusTab3 => Self::FocusTab3,
-            NormalAction::FocusTab4 => Self::FocusTab4,
-            NormalAction::FocusTab5 => Self::FocusTab5,
-            NormalAction::FocusTab6 => Self::FocusTab6,
-            NormalAction::FocusTab7 => Self::FocusTab7,
-            NormalAction::FocusTab8 => Self::FocusTab8,
-            NormalAction::FocusTab9 => Self::FocusTab9,
-            NormalAction::MoveTabLeft => Self::MoveTabLeft,
-            NormalAction::MoveTabRight => Self::MoveTabRight,
-            NormalAction::OpenScrollbackEditor => Self::OpenScrollbackEditor,
-            NormalAction::SplitPaneBottom => Self::SplitPaneBottom,
-            NormalAction::SplitPaneRight => Self::SplitPaneRight,
-            NormalAction::TogglePaneFullscreen => Self::TogglePaneFullscreen,
-        }
-    }
-}
-
-impl From<ResizeAction> for KeybindingAction {
-    fn from(action: ResizeAction) -> Self {
-        match action {
-            ResizeAction::ExitResizeMode => Self::ExitResizeMode,
-            ResizeAction::ResizePaneDown => Self::ResizePaneDown,
-            ResizeAction::ResizePaneLeft => Self::ResizePaneLeft,
-            ResizeAction::ResizePaneRight => Self::ResizePaneRight,
-            ResizeAction::ResizePaneUp => Self::ResizePaneUp,
-        }
-    }
-}
-
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct Keymap<Action> {
     bindings: BTreeMap<KeyChord, Action>,
@@ -767,51 +812,6 @@ impl<Action> Keymap<Action> {
 impl<Action: Copy> Keymap<Action> {
     fn resolve(&self, chord: KeyChord) -> Option<Action> {
         self.bindings.get(&chord).copied()
-    }
-}
-
-/// Compiled keybinding tables shared by the muxr client and server.
-///
-/// The default inventory is compiled in. Normal mode uses Shift-Option-N/P for tab focus, Control-Option-N/P for tab
-/// movement, Shift-Option-1 through 9 for tab selection, Shift-Option-E for tab creation, Shift-Option-H/J/K/L for
-/// pane focus, Shift-Option-D/V for bottom/right splits, Shift-Option-W for pane close, Shift-Option-F for fullscreen,
-/// Shift-Option-R for resize mode, and Shift-Option-S for scrollback. Resize mode uses Esc and h/j/k/l or the arrow
-/// keys. Local mode uses Shift-Option-C/X for the two copy actions. Entries use decoder-canonical character forms.
-/// Only chords representable by both Kitty keyboard input and the legacy decoder are compiled. Changes require
-/// rebuilding muxr.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct KeybindingsConfig {
-    local: Keymap<LocalAction>,
-    normal: Keymap<NormalAction>,
-    resize: Keymap<ResizeAction>,
-}
-
-impl KeybindingsConfig {
-    /// Compile the static keybinding inventory into validated runtime keys.
-    ///
-    /// # Errors
-    /// Returns an error if a configured character is not printable ASCII.
-    pub fn new() -> rootcause::Result<Self> {
-        Ok(Self {
-            local: Keymap::new(DEFAULT_LOCAL_KEYBINDINGS)?,
-            normal: Keymap::new(DEFAULT_NORMAL_KEYBINDINGS)?,
-            resize: Keymap::new(DEFAULT_RESIZE_KEYBINDINGS)?,
-        })
-    }
-
-    /// Resolve a normalized client key in the client-local keymap.
-    pub fn resolve_local(&self, key: &ClientKey) -> Option<LocalKeybindingAction> {
-        let chord = KeyChord::from_client_key(key)?;
-        self.local.resolve(chord).map(LocalKeybindingAction::from)
-    }
-
-    /// Resolve a normalized client key in one compiled server keymap.
-    pub fn resolve(&self, mode: KeybindingMode, key: &ClientKey) -> Option<KeybindingAction> {
-        let chord = KeyChord::from_client_key(key)?;
-        match mode {
-            KeybindingMode::Normal => self.normal.resolve(chord).map(KeybindingAction::from),
-            KeybindingMode::Resize => self.resize.resolve(chord).map(KeybindingAction::from),
-        }
     }
 }
 

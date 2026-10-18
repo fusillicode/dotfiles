@@ -29,41 +29,6 @@ impl MruBuffer {
     }
 }
 
-impl From<&MruBuffer> for Buffer {
-    fn from(value: &MruBuffer) -> Self {
-        Self::from(value.id)
-    }
-}
-
-/// Categorizes buffers by their type based on name patterns.
-#[derive(Debug)]
-#[cfg_attr(test, derive(Eq, PartialEq))]
-pub enum BufferKind {
-    /// Terminal buffers starting with "term://".
-    Term,
-    /// Grug FAR results buffers.
-    GrugFar,
-    /// Regular file path buffers.
-    Path,
-    /// No name buffers.
-    NoName,
-}
-
-impl<T: AsRef<str>> From<T> for BufferKind {
-    fn from(value: T) -> Self {
-        let str = value.as_ref();
-        if str.starts_with("term://") {
-            Self::Term
-        } else if str.starts_with("Grug FAR") {
-            Self::GrugFar
-        } else if str.starts_with("[No Name]") {
-            Self::NoName
-        } else {
-            Self::Path
-        }
-    }
-}
-
 /// Parses a line from Nvim's buffer list output into an [`MruBuffer`].
 ///
 /// # Errors
@@ -123,6 +88,41 @@ impl FromStr for MruBuffer {
             name: name.to_string(),
             kind: BufferKind::from(name),
         })
+    }
+}
+
+impl From<&MruBuffer> for Buffer {
+    fn from(value: &MruBuffer) -> Self {
+        Self::from(value.id)
+    }
+}
+
+/// Categorizes buffers by their type based on name patterns.
+#[derive(Debug)]
+#[cfg_attr(test, derive(Eq, PartialEq))]
+pub enum BufferKind {
+    /// Terminal buffers starting with "term://".
+    Term,
+    /// Grug FAR results buffers.
+    GrugFar,
+    /// Regular file path buffers.
+    Path,
+    /// No name buffers.
+    NoName,
+}
+
+impl<T: AsRef<str>> From<T> for BufferKind {
+    fn from(value: T) -> Self {
+        let str = value.as_ref();
+        if str.starts_with("term://") {
+            Self::Term
+        } else if str.starts_with("Grug FAR") {
+            Self::GrugFar
+        } else if str.starts_with("[No Name]") {
+            Self::NoName
+        } else {
+            Self::Path
+        }
     }
 }
 

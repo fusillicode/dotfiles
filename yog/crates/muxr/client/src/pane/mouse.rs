@@ -109,22 +109,6 @@ pub async fn handle_mouse_input_action(
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum AltLeftClickPhase {
-    Press,
-    Release,
-}
-
-const fn alt_left_click_phase(event: ClientMouseEvent) -> Option<AltLeftClickPhase> {
-    if event.button != 8 {
-        return None;
-    }
-    match event.phase {
-        ClientMouseEventPhase::Press => Some(AltLeftClickPhase::Press),
-        ClientMouseEventPhase::Release => Some(AltLeftClickPhase::Release),
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum MouseEventDrop {
     Droppable,
     Required,
@@ -142,6 +126,22 @@ impl From<ClientMouseEvent> for MouseEventDrop {
         } else {
             Self::Required
         }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum AltLeftClickPhase {
+    Press,
+    Release,
+}
+
+const fn alt_left_click_phase(event: ClientMouseEvent) -> Option<AltLeftClickPhase> {
+    if event.button != 8 {
+        return None;
+    }
+    match event.phase {
+        ClientMouseEventPhase::Press => Some(AltLeftClickPhase::Press),
+        ClientMouseEventPhase::Release => Some(AltLeftClickPhase::Release),
     }
 }
 

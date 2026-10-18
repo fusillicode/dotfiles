@@ -82,6 +82,20 @@ impl PtyWriter {
         Ok(())
     }
 
+    pub fn shutdown(&self) -> rootcause::Result<()> {
+        self.state.close();
+        match self::try_send_pty_write_request(&self.sender, PtyWriteRequest::Shutdown)? {
+            PtyWriteSendOutcome::Sent | PtyWriteSendOutcome::Full(PtyWriteRequest::Shutdown) => Ok(()),
+            PtyWriteSendOutcome::Disconnected(PtyWriteRequest::Shutdown) => {
+                Err(self.state.stopped_report("reason=pty writer channel disconnected"))
+            }
+            PtyWriteSendOutcome::Full(PtyWriteRequest::Write(_))
+            | PtyWriteSendOutcome::Disconnected(PtyWriteRequest::Write(_)) => {
+                Err(report!("unexpected muxr pty writer shutdown send result"))
+            }
+        }
+    }
+
     fn enqueue(&self, mut write: PtyWrite) -> rootcause::Result<()> {
         let write_len = write.len();
         let mut queue_guard = self.state.queue.lock();
@@ -122,20 +136,28 @@ impl PtyWriter {
             }
         }
     }
+}
 
-    pub fn shutdown(&self) -> rootcause::Result<()> {
-        self.state.close();
-        match self::try_send_pty_write_request(&self.sender, PtyWriteRequest::Shutdown)? {
-            PtyWriteSendOutcome::Sent | PtyWriteSendOutcome::Full(PtyWriteRequest::Shutdown) => Ok(()),
-            PtyWriteSendOutcome::Disconnected(PtyWriteRequest::Shutdown) => {
-                Err(self.state.stopped_report("reason=pty writer channel disconnected"))
-            }
-            PtyWriteSendOutcome::Full(PtyWriteRequest::Write(_))
-            | PtyWriteSendOutcome::Disconnected(PtyWriteRequest::Write(_)) => {
-                Err(report!("unexpected muxr pty writer shutdown send result"))
-            }
-        }
-    }
+pub fn spawn(mut writer: Box<dyn Write + Send>) -> rootcause::Result<(PtyWriter, thread::JoinHandle<()>)> {
+    let (sender, receiver) = kanal::bounded(PTY_WRITE_QUEUE_LIMIT);
+    let state = Arc::new(PtyWriteState::new());
+    let queue = PtyWriter {
+        sender,
+        state: Arc::clone(&state),
+    };
+    // Raw OS threads do not inherit thread-local tracing state, so carry both the dispatcher and span explicitly.
+    let span = tracing::Span::current();
+    let dispatch = tracing::dispatcher::get_default(Clone::clone);
+    let writer_handle = thread::Builder::new()
+        .name("muxr-pty-writer".to_owned())
+        .spawn(move || {
+            tracing::dispatcher::with_default(&dispatch, || {
+                let _guard = span.enter();
+                self::run_writer_loop(&mut *writer, &receiver, state.as_ref());
+            });
+        })
+        .context("failed to spawn muxr pty writer thread")?;
+    Ok((queue, writer_handle))
 }
 
 // Client input used to lock and flush the PTY writer inline, so held-key latency paid for writer backpressure on the
@@ -248,14 +270,14 @@ impl PtyWriteState {
         Ok(PtyWriteReservation::Reserved)
     }
 
-    const fn release_reserved_write_bytes(queue: &mut PtyWriteQueueState, write_len: usize) {
-        queue.queued_bytes = queue.queued_bytes.saturating_sub(write_len);
-        self::advance_queue_progress(queue);
-    }
-
     fn release_queued_bytes(&self, bytes: usize) {
         Self::release_reserved_write_bytes(&mut self.queue.lock(), bytes);
         self.queue_progress.notify_all();
+    }
+
+    const fn release_reserved_write_bytes(queue: &mut PtyWriteQueueState, write_len: usize) {
+        queue.queued_bytes = queue.queued_bytes.saturating_sub(write_len);
+        self::advance_queue_progress(queue);
     }
 
     fn stopped_report(&self, reason: &'static str) -> rootcause::Report {
@@ -327,28 +349,6 @@ enum PtyWriteReservation {
 
 const fn advance_queue_progress(queue: &mut PtyWriteQueueState) {
     queue.progress_version = queue.progress_version.wrapping_add(1);
-}
-
-pub fn spawn(mut writer: Box<dyn Write + Send>) -> rootcause::Result<(PtyWriter, thread::JoinHandle<()>)> {
-    let (sender, receiver) = kanal::bounded(PTY_WRITE_QUEUE_LIMIT);
-    let state = Arc::new(PtyWriteState::new());
-    let queue = PtyWriter {
-        sender,
-        state: Arc::clone(&state),
-    };
-    // Raw OS threads do not inherit thread-local tracing state, so carry both the dispatcher and span explicitly.
-    let span = tracing::Span::current();
-    let dispatch = tracing::dispatcher::get_default(Clone::clone);
-    let writer_handle = thread::Builder::new()
-        .name("muxr-pty-writer".to_owned())
-        .spawn(move || {
-            tracing::dispatcher::with_default(&dispatch, || {
-                let _guard = span.enter();
-                self::run_writer_loop(&mut *writer, &receiver, state.as_ref());
-            });
-        })
-        .context("failed to spawn muxr pty writer thread")?;
-    Ok((queue, writer_handle))
 }
 
 fn queue_pty_write(
@@ -902,54 +902,6 @@ mod tests {
         Ok(())
     }
 
-    fn queued_pty_writer() -> (PtyWriter, Receiver<PtyWriteRequest>) {
-        self::queued_pty_writer_with_limit(PTY_WRITE_QUEUE_LIMIT)
-    }
-
-    fn queued_pty_writer_with_limit(limit: usize) -> (PtyWriter, Receiver<PtyWriteRequest>) {
-        self::queued_pty_writer_with_limits(limit, PTY_WRITE_QUEUE_BYTE_LIMIT)
-    }
-
-    fn queued_pty_writer_with_limits(
-        message_limit: usize,
-        byte_limit: usize,
-    ) -> (PtyWriter, Receiver<PtyWriteRequest>) {
-        let (sender, receiver) = kanal::bounded(message_limit);
-        (
-            PtyWriter {
-                sender,
-                state: Arc::new(PtyWriteState::with_byte_limit(byte_limit)),
-            },
-            receiver,
-        )
-    }
-
-    fn drain_queued_writes(
-        queue: &PtyWriter,
-        receiver: &Receiver<PtyWriteRequest>,
-        mut writer: Box<dyn Write + Send>,
-    ) -> rootcause::Result<()> {
-        queue.shutdown()?;
-        self::run_writer_loop(&mut *writer, receiver, queue.state.as_ref());
-        Ok(())
-    }
-
-    fn capturing_pty_writer(written: Arc<Mutex<Vec<u8>>>) -> Box<dyn Write + Send> {
-        Box::new(CapturingWriter { written })
-    }
-
-    fn failing_pty_writer() -> Box<dyn Write + Send> {
-        Box::new(FailingWriter)
-    }
-
-    fn captured_pty_bytes(written: &Mutex<Vec<u8>>) -> Vec<u8> {
-        written.lock().clone()
-    }
-
-    fn captured_flushes(flushes: &Mutex<usize>) -> usize {
-        *flushes.lock()
-    }
-
     struct CapturingWriter {
         written: Arc<Mutex<Vec<u8>>>,
     }
@@ -1000,5 +952,53 @@ mod tests {
         fn flush(&mut self) -> std::io::Result<()> {
             Ok(())
         }
+    }
+
+    fn queued_pty_writer() -> (PtyWriter, Receiver<PtyWriteRequest>) {
+        self::queued_pty_writer_with_limit(PTY_WRITE_QUEUE_LIMIT)
+    }
+
+    fn queued_pty_writer_with_limit(limit: usize) -> (PtyWriter, Receiver<PtyWriteRequest>) {
+        self::queued_pty_writer_with_limits(limit, PTY_WRITE_QUEUE_BYTE_LIMIT)
+    }
+
+    fn queued_pty_writer_with_limits(
+        message_limit: usize,
+        byte_limit: usize,
+    ) -> (PtyWriter, Receiver<PtyWriteRequest>) {
+        let (sender, receiver) = kanal::bounded(message_limit);
+        (
+            PtyWriter {
+                sender,
+                state: Arc::new(PtyWriteState::with_byte_limit(byte_limit)),
+            },
+            receiver,
+        )
+    }
+
+    fn drain_queued_writes(
+        queue: &PtyWriter,
+        receiver: &Receiver<PtyWriteRequest>,
+        mut writer: Box<dyn Write + Send>,
+    ) -> rootcause::Result<()> {
+        queue.shutdown()?;
+        self::run_writer_loop(&mut *writer, receiver, queue.state.as_ref());
+        Ok(())
+    }
+
+    fn capturing_pty_writer(written: Arc<Mutex<Vec<u8>>>) -> Box<dyn Write + Send> {
+        Box::new(CapturingWriter { written })
+    }
+
+    fn failing_pty_writer() -> Box<dyn Write + Send> {
+        Box::new(FailingWriter)
+    }
+
+    fn captured_pty_bytes(written: &Mutex<Vec<u8>>) -> Vec<u8> {
+        written.lock().clone()
+    }
+
+    fn captured_flushes(flushes: &Mutex<usize>) -> usize {
+        *flushes.lock()
     }
 }

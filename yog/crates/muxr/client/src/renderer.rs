@@ -45,30 +45,6 @@ pub enum ClientRenderOutcome {
     NeedsResync,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-struct MouseCapture {
-    region: PaneRegionSnapshot,
-}
-
-impl MouseCapture {
-    fn retain_for_regions(self, regions: &PaneRegionsSnapshot) -> Option<Self> {
-        self::region_for_pane_id(regions, *self.region.id())
-            .cloned()
-            .map(|region| Self { region })
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum TabBarDmg {
-    Clean,
-    Dirty,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum FileOpenCapture {
-    Armed,
-}
-
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum FileOpenRelease {
     Consumed,
@@ -95,16 +71,6 @@ pub struct ClientRenderer {
     edge_scroll_render_generation: Option<u64>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ClientPresentationSnapshot {
-    any_motion_capture: MouseAnyMotionCapture,
-    edge_scroll_pending: Option<crate::copy_selection::SelectionEdgeScrollPending>,
-    frame_buffer: FrameBuffer,
-    layout: LayoutSnapshot,
-    edge_scroll_render_generation: Option<u64>,
-    selection: Option<SelectionRange>,
-}
-
 impl ClientRenderer {
     pub fn new(config: &MuxrConfig, layout: LayoutSnapshot, pane_regions: PaneRegionsSnapshot) -> Self {
         Self::with_config_and_synchronized_output(
@@ -125,33 +91,6 @@ impl ClientRenderer {
         Self::with_config_and_synchronized_output(&config, layout, pane_regions, synchronized_output)
     }
 
-    fn with_config_and_synchronized_output(
-        config: &MuxrConfig,
-        layout: LayoutSnapshot,
-        pane_regions: PaneRegionsSnapshot,
-        synchronized_output: SynchronizedOutput,
-    ) -> Self {
-        Self {
-            any_motion_capture: MouseAnyMotionCapture::Disabled,
-            tab_bar_dmg: TabBarDmg::Dirty,
-            selection_style: config.selection,
-            tab_bar_config: config.tab_bar,
-            clicks: SelectionClickTracker::default(),
-            frame_buffer: FrameBuffer::default(),
-            layout,
-            mouse_capture: None,
-            file_open_capture: None,
-            pane_regions,
-            selection_edge_scroll: SelectionEdgeScrollState::default(),
-            selection: SelectionState::default(),
-            synchronized_output,
-            terminal_encoder: TerminalUpdateEncoder::default(),
-            render_transaction: Vec::new(),
-            render_generation: 0,
-            edge_scroll_render_generation: None,
-        }
-    }
-
     pub fn apply_layout(&mut self, layout: LayoutSnapshot) {
         // Layout events precede their matching render baseline; defer tab bar writes so the user never sees new tab
         // state over an old pane frame.
@@ -165,14 +104,6 @@ impl ClientRenderer {
 
     pub fn tab_id_at_sidebar_row(&self, row: u16) -> Option<TabId> {
         crate::tab_bar::tab_id_at_row(&self.layout, row)
-    }
-
-    pub(crate) fn tab_focus_request_for_sidebar_click(&self, event: ClientMouseEvent) -> Option<ClientRequest> {
-        if event.phase != ClientMouseEventPhase::Press || event.button != 0 {
-            return None;
-        }
-        self.tab_id_at_sidebar_row(event.position.row)
-            .map(ClientRequest::FocusTab)
     }
 
     pub fn file_open_request(&self, position: ClientMousePosition) -> Option<ClientRequest> {
@@ -217,19 +148,6 @@ impl ClientRenderer {
 
     pub fn sync_mouse_capture_logical(&mut self) {
         self.any_motion_capture = self.next_mouse_capture();
-    }
-
-    fn next_mouse_capture(&self) -> MouseAnyMotionCapture {
-        if self
-            .pane_regions
-            .regions()
-            .iter()
-            .any(|region| region.mouse_mode() == PaneMouseMode::AnyMotion)
-        {
-            MouseAnyMotionCapture::Enabled
-        } else {
-            MouseAnyMotionCapture::Disabled
-        }
     }
 
     pub fn apply_render_logical(&mut self, update: RenderUpdate) -> rootcause::Result<ClientRenderOutcome> {
@@ -330,57 +248,8 @@ impl ClientRenderer {
         }
     }
 
-    fn reset_render_transaction(&mut self) {
-        self.render_transaction.clear();
-        if self.render_transaction.capacity() > MAX_RETAINED_RENDER_TRANSACTION_BYTES {
-            self.render_transaction = Vec::new();
-        }
-    }
-
     pub fn apply_selection_input_logical(&mut self, input: SelectionInput) -> rootcause::Result<()> {
         self.apply_selection_input_at_logical(input, Instant::now())
-    }
-
-    pub(crate) fn clear_selection(&mut self) {
-        self.clicks.reset();
-        self.selection.clear();
-        self.selection_edge_scroll.clear();
-        self.edge_scroll_render_generation = None;
-    }
-
-    pub(crate) fn apply_selection_input_at_logical(
-        &mut self,
-        input: SelectionInput,
-        now: Instant,
-    ) -> rootcause::Result<()> {
-        if matches!(input, SelectionInput::Start(_) | SelectionInput::End(_)) {
-            self.selection_edge_scroll.clear();
-            self.edge_scroll_render_generation = None;
-        }
-        match input {
-            SelectionInput::Start(position)
-                if self
-                    .clicks
-                    .record_selection_start(position, &self.pane_regions, &self.frame_buffer, now)
-                    == SelectionClickOutcome::Double =>
-            {
-                self.selection
-                    .select_word(position, &self.pane_regions, &self.frame_buffer)?
-            }
-            SelectionInput::Start(position) => {
-                self.selection
-                    .apply(SelectionInput::Start(position), &self.pane_regions, &self.frame_buffer)?
-            }
-            SelectionInput::Update(position) => {
-                self.selection
-                    .apply(SelectionInput::Update(position), &self.pane_regions, &self.frame_buffer)?
-            }
-            SelectionInput::End(position) => {
-                self.selection
-                    .apply(SelectionInput::End(position), &self.pane_regions, &self.frame_buffer)?
-            }
-        };
-        Ok(())
     }
 
     pub fn mouse_request_for_event(&mut self, event: ClientMouseEvent) -> Option<ClientMouseEvent> {
@@ -442,15 +311,6 @@ impl ClientRenderer {
             .set_outside_edge_drag(position, drag_region.as_ref())
     }
 
-    fn refresh_edge_drag_selection_logical(&mut self) -> rootcause::Result<()> {
-        let Some(position) = self.selection_edge_scroll.drag_position(&self.pane_regions) else {
-            self.selection_edge_scroll.clear();
-            self.edge_scroll_render_generation = None;
-            return Ok(());
-        };
-        self.apply_selection_input_logical(SelectionInput::Update(position))
-    }
-
     pub fn selection_edge_scroll_request(&self) -> Option<SelectionEdgeScrollRequest> {
         self.selection_edge_scroll.scroll_request(&self.pane_regions)
     }
@@ -463,6 +323,130 @@ impl ClientRenderer {
     ) {
         self.selection_edge_scroll
             .apply_scroll_pane_line_result(position, direction, movement);
+    }
+
+    pub const fn mouse_capture_state(&self) -> MouseCaptureState {
+        match self.mouse_capture {
+            Some(_) => MouseCaptureState::Captured,
+            None => MouseCaptureState::None,
+        }
+    }
+
+    pub const fn selection_edge_drag(&self) -> SelectionEdgeDrag {
+        match self.selection_edge_scroll.active_state() {
+            crate::copy_selection::SelectionEdgeScrollActive::Active => SelectionEdgeDrag::Active,
+            crate::copy_selection::SelectionEdgeScrollActive::Inactive => SelectionEdgeDrag::Inactive,
+        }
+    }
+
+    pub const fn mark_selection_edge_scroll_sent(&mut self, pending: SelectionEdgeScrollPending) {
+        self.selection_edge_scroll.mark_sent(pending);
+    }
+
+    pub(crate) fn tab_focus_request_for_sidebar_click(&self, event: ClientMouseEvent) -> Option<ClientRequest> {
+        if event.phase != ClientMouseEventPhase::Press || event.button != 0 {
+            return None;
+        }
+        self.tab_id_at_sidebar_row(event.position.row)
+            .map(ClientRequest::FocusTab)
+    }
+
+    pub(crate) fn clear_selection(&mut self) {
+        self.clicks.reset();
+        self.selection.clear();
+        self.selection_edge_scroll.clear();
+        self.edge_scroll_render_generation = None;
+    }
+
+    pub(crate) fn apply_selection_input_at_logical(
+        &mut self,
+        input: SelectionInput,
+        now: Instant,
+    ) -> rootcause::Result<()> {
+        if matches!(input, SelectionInput::Start(_) | SelectionInput::End(_)) {
+            self.selection_edge_scroll.clear();
+            self.edge_scroll_render_generation = None;
+        }
+        match input {
+            SelectionInput::Start(position)
+                if self
+                    .clicks
+                    .record_selection_start(position, &self.pane_regions, &self.frame_buffer, now)
+                    == SelectionClickOutcome::Double =>
+            {
+                self.selection
+                    .select_word(position, &self.pane_regions, &self.frame_buffer)?
+            }
+            SelectionInput::Start(position) => {
+                self.selection
+                    .apply(SelectionInput::Start(position), &self.pane_regions, &self.frame_buffer)?
+            }
+            SelectionInput::Update(position) => {
+                self.selection
+                    .apply(SelectionInput::Update(position), &self.pane_regions, &self.frame_buffer)?
+            }
+            SelectionInput::End(position) => {
+                self.selection
+                    .apply(SelectionInput::End(position), &self.pane_regions, &self.frame_buffer)?
+            }
+        };
+        Ok(())
+    }
+
+    fn with_config_and_synchronized_output(
+        config: &MuxrConfig,
+        layout: LayoutSnapshot,
+        pane_regions: PaneRegionsSnapshot,
+        synchronized_output: SynchronizedOutput,
+    ) -> Self {
+        Self {
+            any_motion_capture: MouseAnyMotionCapture::Disabled,
+            tab_bar_dmg: TabBarDmg::Dirty,
+            selection_style: config.selection,
+            tab_bar_config: config.tab_bar,
+            clicks: SelectionClickTracker::default(),
+            frame_buffer: FrameBuffer::default(),
+            layout,
+            mouse_capture: None,
+            file_open_capture: None,
+            pane_regions,
+            selection_edge_scroll: SelectionEdgeScrollState::default(),
+            selection: SelectionState::default(),
+            synchronized_output,
+            terminal_encoder: TerminalUpdateEncoder::default(),
+            render_transaction: Vec::new(),
+            render_generation: 0,
+            edge_scroll_render_generation: None,
+        }
+    }
+
+    fn next_mouse_capture(&self) -> MouseAnyMotionCapture {
+        if self
+            .pane_regions
+            .regions()
+            .iter()
+            .any(|region| region.mouse_mode() == PaneMouseMode::AnyMotion)
+        {
+            MouseAnyMotionCapture::Enabled
+        } else {
+            MouseAnyMotionCapture::Disabled
+        }
+    }
+
+    fn reset_render_transaction(&mut self) {
+        self.render_transaction.clear();
+        if self.render_transaction.capacity() > MAX_RETAINED_RENDER_TRANSACTION_BYTES {
+            self.render_transaction = Vec::new();
+        }
+    }
+
+    fn refresh_edge_drag_selection_logical(&mut self) -> rootcause::Result<()> {
+        let Some(position) = self.selection_edge_scroll.drag_position(&self.pane_regions) else {
+            self.selection_edge_scroll.clear();
+            self.edge_scroll_render_generation = None;
+            return Ok(());
+        };
+        self.apply_selection_input_logical(SelectionInput::Update(position))
     }
 
     fn presentation_changes(
@@ -500,24 +484,52 @@ impl ClientRenderer {
         }
         self.frame_buffer.row_redraw_changes(&rows)
     }
+}
 
-    pub const fn mouse_capture_state(&self) -> MouseCaptureState {
-        match self.mouse_capture {
-            Some(_) => MouseCaptureState::Captured,
-            None => MouseCaptureState::None,
-        }
-    }
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ClientPresentationSnapshot {
+    any_motion_capture: MouseAnyMotionCapture,
+    edge_scroll_pending: Option<crate::copy_selection::SelectionEdgeScrollPending>,
+    frame_buffer: FrameBuffer,
+    layout: LayoutSnapshot,
+    edge_scroll_render_generation: Option<u64>,
+    selection: Option<SelectionRange>,
+}
 
-    pub const fn selection_edge_drag(&self) -> SelectionEdgeDrag {
-        match self.selection_edge_scroll.active_state() {
-            crate::copy_selection::SelectionEdgeScrollActive::Active => SelectionEdgeDrag::Active,
-            crate::copy_selection::SelectionEdgeScrollActive::Inactive => SelectionEdgeDrag::Inactive,
-        }
-    }
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum MouseCaptureState {
+    Captured,
+    None,
+}
 
-    pub const fn mark_selection_edge_scroll_sent(&mut self, pending: SelectionEdgeScrollPending) {
-        self.selection_edge_scroll.mark_sent(pending);
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SelectionEdgeDrag {
+    Active,
+    Inactive,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct MouseCapture {
+    region: PaneRegionSnapshot,
+}
+
+impl MouseCapture {
+    fn retain_for_regions(self, regions: &PaneRegionsSnapshot) -> Option<Self> {
+        self::region_for_pane_id(regions, *self.region.id())
+            .cloned()
+            .map(|region| Self { region })
     }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum TabBarDmg {
+    Clean,
+    Dirty,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum FileOpenCapture {
+    Armed,
 }
 
 fn region_for_pane_id(regions: &PaneRegionsSnapshot, pane_id: PaneId) -> Option<&PaneRegionSnapshot> {
@@ -541,18 +553,6 @@ const fn last_region_col_saturating(region: &PaneRegionSnapshot) -> u16 {
 
 const fn last_region_row_saturating(region: &PaneRegionSnapshot) -> u16 {
     region.row().saturating_add(region.rows().saturating_sub(1))
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum MouseCaptureState {
-    Captured,
-    None,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum SelectionEdgeDrag {
-    Active,
-    Inactive,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -656,55 +656,6 @@ mod tests {
             }))
         );
         Ok(())
-    }
-
-    fn file_open_request_for_text(cwd: &str, text: &str) -> rootcause::Result<Option<ClientRequest>> {
-        let width = u16::try_from(text.chars().count())?;
-        let layout = LayoutSnapshot::new(
-            TabId::new(1)?,
-            vec![TabSnapshot::new(
-                TabId::new(1)?,
-                "default",
-                PaneId::new(1)?,
-                vec![PaneSnapshot {
-                    tracked_process_state: muxr_core::TrackedProcessState::None,
-                    cwd: cwd.to_owned(),
-                    cmd_label: None,
-                    focus_seq: 1,
-                    id: PaneId::new(1)?,
-                    title: "shell".to_owned(),
-                }],
-            )?],
-        )?;
-        let pane_regions = PaneRegionsSnapshot::new(vec![PaneRegionSnapshot::new(
-            PaneId::new(1)?,
-            0,
-            0,
-            width,
-            1,
-            PaneMouseMode::None,
-            0,
-        )?])?;
-        let mut renderer = ClientRenderer::with_synchronized_output(layout, pane_regions, SynchronizedOutput::Csi);
-        let baseline = RenderBaseline::new(
-            1,
-            muxr_core::TerminalSize::new(width, 1)?,
-            muxr_core::RenderCursor {
-                row: 0,
-                col: 0,
-                shape: muxr_core::RenderCursorShape::Default,
-                visibility: muxr_core::RenderCursorVisibility::Visible,
-            },
-            vec![muxr_core::RenderRowSpan::new(
-                0,
-                0,
-                text.chars()
-                    .map(|ch| muxr_core::RenderCell::narrow(ch.to_string(), muxr_core::RenderStyle::default()))
-                    .collect(),
-            )?],
-        )?;
-        renderer.apply_render_logical(RenderUpdate::Baseline(baseline))?;
-        Ok(renderer.file_open_request(ClientMousePosition { row: 0, col: 1 }))
     }
 
     #[test]
@@ -1284,6 +1235,55 @@ mod tests {
 
         assert_that!(test_helpers::selected_text(&renderer), eq(Some("two".to_owned())));
         Ok(())
+    }
+
+    fn file_open_request_for_text(cwd: &str, text: &str) -> rootcause::Result<Option<ClientRequest>> {
+        let width = u16::try_from(text.chars().count())?;
+        let layout = LayoutSnapshot::new(
+            TabId::new(1)?,
+            vec![TabSnapshot::new(
+                TabId::new(1)?,
+                "default",
+                PaneId::new(1)?,
+                vec![PaneSnapshot {
+                    tracked_process_state: muxr_core::TrackedProcessState::None,
+                    cwd: cwd.to_owned(),
+                    cmd_label: None,
+                    focus_seq: 1,
+                    id: PaneId::new(1)?,
+                    title: "shell".to_owned(),
+                }],
+            )?],
+        )?;
+        let pane_regions = PaneRegionsSnapshot::new(vec![PaneRegionSnapshot::new(
+            PaneId::new(1)?,
+            0,
+            0,
+            width,
+            1,
+            PaneMouseMode::None,
+            0,
+        )?])?;
+        let mut renderer = ClientRenderer::with_synchronized_output(layout, pane_regions, SynchronizedOutput::Csi);
+        let baseline = RenderBaseline::new(
+            1,
+            muxr_core::TerminalSize::new(width, 1)?,
+            muxr_core::RenderCursor {
+                row: 0,
+                col: 0,
+                shape: muxr_core::RenderCursorShape::Default,
+                visibility: muxr_core::RenderCursorVisibility::Visible,
+            },
+            vec![muxr_core::RenderRowSpan::new(
+                0,
+                0,
+                text.chars()
+                    .map(|ch| muxr_core::RenderCell::narrow(ch.to_string(), muxr_core::RenderStyle::default()))
+                    .collect(),
+            )?],
+        )?;
+        renderer.apply_render_logical(RenderUpdate::Baseline(baseline))?;
+        Ok(renderer.file_open_request(ClientMousePosition { row: 0, col: 1 }))
     }
 
     fn layout_snapshot() -> rootcause::Result<LayoutSnapshot> {

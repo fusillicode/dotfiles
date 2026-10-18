@@ -9,6 +9,20 @@ use rootcause::report;
 
 const ASSETS_DIR: &str = "assets";
 
+fn main() -> rootcause::Result<()> {
+    println!("cargo:rerun-if-changed=assets/style.css");
+
+    let manifest_dir = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR")?);
+    let css_raw_path = manifest_dir.join(ASSETS_DIR).join("style.css");
+    let css_raw = std::fs::read_to_string(&css_raw_path)?;
+
+    let css_minified_path = manifest_dir.join(ASSETS_DIR).join("style.min.css");
+    let css_minified = minify_css(&css_raw)?;
+
+    std::fs::write(&css_minified_path, css_minified)?;
+    Ok(())
+}
+
 /// Minifies raw CSS source into an optimized string.
 ///
 /// # Errors
@@ -31,18 +45,4 @@ fn minify_css(css_code: &str) -> rootcause::Result<String> {
         })
         .map_err(|error| report!("error printing CSS").attach(error.to_string()))?
         .code)
-}
-
-fn main() -> rootcause::Result<()> {
-    println!("cargo:rerun-if-changed=assets/style.css");
-
-    let manifest_dir = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR")?);
-    let css_raw_path = manifest_dir.join(ASSETS_DIR).join("style.css");
-    let css_raw = std::fs::read_to_string(&css_raw_path)?;
-
-    let css_minified_path = manifest_dir.join(ASSETS_DIR).join("style.min.css");
-    let css_minified = minify_css(&css_raw)?;
-
-    std::fs::write(&css_minified_path, css_minified)?;
-    Ok(())
 }

@@ -45,13 +45,6 @@ impl TerminalSize {
 )]
 pub(super) struct TerminalDimension(u16);
 
-impl From<TerminalDimension> for NonZeroU16 {
-    fn from(value: TerminalDimension) -> Self {
-        // Nutype validates every construction path; zero cannot reach this infallible conversion.
-        Self::new(value.into_inner()).unwrap_or(Self::MIN)
-    }
-}
-
 impl rkyv::Archive for TerminalDimension {
     type Archived = rkyv::Archived<NonZeroU16>;
     type Resolver = rkyv::Resolver<NonZeroU16>;
@@ -68,6 +61,13 @@ where
 {
     fn serialize(&self, serializer: &mut S) -> Result<Self::Resolver, S::Error> {
         rkyv::Serialize::serialize(&NonZeroU16::from(*self), serializer)
+    }
+}
+
+impl From<TerminalDimension> for NonZeroU16 {
+    fn from(value: TerminalDimension) -> Self {
+        // Nutype validates every construction path; zero cannot reach this infallible conversion.
+        Self::new(value.into_inner()).unwrap_or(Self::MIN)
     }
 }
 

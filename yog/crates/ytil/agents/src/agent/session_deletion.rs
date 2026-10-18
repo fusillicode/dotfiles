@@ -21,6 +21,14 @@ pub struct DeletionPlan {
 }
 
 impl DeletionPlan {
+    pub const fn key(&self) -> &SessionKey {
+        &self.key
+    }
+
+    pub const fn related_session_count(&self) -> usize {
+        self.related_session_count
+    }
+
     pub(crate) const fn new(
         key: SessionKey,
         paths: Vec<PathBuf>,
@@ -33,14 +41,6 @@ impl DeletionPlan {
             related_session_count,
             skipped_paths,
         }
-    }
-
-    pub const fn key(&self) -> &SessionKey {
-        &self.key
-    }
-
-    pub const fn related_session_count(&self) -> usize {
-        self.related_session_count
     }
 }
 

@@ -8,21 +8,6 @@ use rootcause::report;
 use strum::EnumIter;
 use strum::IntoEnumIterator;
 
-#[derive(Clone, Copy, Debug, EnumIter, Eq, PartialEq)]
-enum SessionAction {
-    Attach,
-    Delete,
-}
-
-impl fmt::Display for SessionAction {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Attach => write!(f, "{}", "Attach".green().bold()),
-            Self::Delete => write!(f, "{}", "Delete".red().bold()),
-        }
-    }
-}
-
 pub fn run() -> rootcause::Result<()> {
     let sessions = muxr_client::list_sessions()?;
     if sessions.is_empty() {
@@ -50,6 +35,21 @@ pub fn run() -> rootcause::Result<()> {
         .map(|session| session.name().clone())
         .collect::<Vec<_>>();
     self::execute_session_action(action, &sessions)
+}
+
+#[derive(Clone, Copy, Debug, EnumIter, Eq, PartialEq)]
+enum SessionAction {
+    Attach,
+    Delete,
+}
+
+impl fmt::Display for SessionAction {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Attach => write!(f, "{}", "Attach".green().bold()),
+            Self::Delete => write!(f, "{}", "Delete".red().bold()),
+        }
+    }
 }
 
 fn execute_session_action(action: SessionAction, selected: &[SessionName]) -> rootcause::Result<()> {

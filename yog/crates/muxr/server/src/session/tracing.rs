@@ -8,171 +8,6 @@ use rootcause::prelude::ResultExt;
 use tracing::Dispatch;
 use tracing_appender::non_blocking::WorkerGuard;
 
-pub mod server {
-    use std::path::Path;
-
-    use muxr_core::SessionPaths;
-
-    pub fn starting(paths: &SessionPaths) {
-        tracing::info!(
-            kind = "server_starting",
-            socket_path = %paths.socket.display(),
-            pid_path = %paths.pid.display(),
-            "muxr server starting"
-        );
-    }
-
-    pub fn ready(paths: &SessionPaths) {
-        tracing::info!(
-            kind = "server_ready",
-            socket_path = %paths.socket.display(),
-            pid_path = %paths.pid.display(),
-            "muxr server ready"
-        );
-    }
-
-    pub fn shutdown(reason: &str) {
-        tracing::info!(kind = "server_shutdown", reason = reason, "muxr server shutdown");
-    }
-
-    pub fn error(error: &rootcause::Report) {
-        tracing::error!(
-            kind = "server_error",
-            error = %error,
-            summary = "muxr server stopped with error",
-            "muxr server stopped with error"
-        );
-    }
-
-    pub fn file_cleanup_failed(event: &str, path: &Path, error: &std::io::Error) {
-        tracing::warn!(
-            kind = "server_file_cleanup_failed",
-            event = event,
-            path = %path.display(),
-            error = %error,
-            summary = "muxr server file cleanup failed",
-            "muxr server file cleanup failed"
-        );
-    }
-}
-
-pub mod client {
-    pub fn state_handoff_failed(reason: &str) {
-        tracing::warn!(
-            kind = "client_session_state_handoff_failed",
-            event = "finished_state_send",
-            reason = reason,
-            summary = "muxr client session failed to return session state",
-            "muxr client session failed to return session state"
-        );
-    }
-}
-
-pub mod ack {
-    use super::ClientEventSendFailure;
-
-    pub fn delete_failed(reason: ClientEventSendFailure) {
-        tracing::warn!(
-            kind = "delete_ack_send_failed",
-            event = "deleted",
-            reason = reason.as_str(),
-            summary = "muxr delete acknowledgement was not delivered",
-            "muxr delete acknowledgement was not delivered"
-        );
-    }
-
-    pub fn detach_failed(reason: ClientEventSendFailure) {
-        tracing::warn!(
-            kind = "detach_ack_send_failed",
-            event = "detached",
-            reason = reason.as_str(),
-            summary = "muxr detach acknowledgement was not delivered",
-            "muxr detach acknowledgement was not delivered"
-        );
-    }
-}
-
-pub mod scrollback {
-    use std::path::Path;
-
-    use muxr_core::PaneId;
-
-    pub fn restore_failed(error: &rootcause::Report) {
-        tracing::warn!(
-            kind = "scrollback_editor_restore_failed",
-            event = "restore_after_client_error",
-            error = %error,
-            summary = "muxr scrollback editor restore failed while handling client error",
-            "muxr scrollback editor restore failed while handling client error"
-        );
-    }
-
-    pub fn cleanup_failed(event: &str, pane_id: Option<PaneId>, path: &Path, error: &std::io::Error) {
-        let Some(pane_id) = pane_id else {
-            tracing::warn!(
-                kind = "scrollback_cleanup_failed",
-                event = event,
-                path = %path.display(),
-                error = %error,
-                summary = "muxr scrollback cleanup failed",
-                "muxr scrollback cleanup failed"
-            );
-            return;
-        };
-        tracing::warn!(
-            pane_id = %pane_id,
-            kind = "scrollback_cleanup_failed",
-            event = event,
-            path = %path.display(),
-            error = %error,
-            summary = "muxr scrollback cleanup failed",
-            "muxr scrollback cleanup failed"
-        );
-    }
-}
-
-pub mod pty {
-    pub fn exit_wakeup_not_queued(reason: &str) {
-        tracing::warn!(
-            kind = "pty_exit_wakeup_not_queued",
-            event = "send_exit_wakeup",
-            reason = reason,
-            summary = "muxr pty exit wakeup was not queued",
-            "muxr pty exit wakeup was not queued"
-        );
-    }
-
-    pub fn shutdown_failed(event: &str, error: impl std::fmt::Display) {
-        tracing::warn!(
-            kind = "pty_shutdown_failed",
-            event = event,
-            error = %error,
-            summary = "muxr pty shutdown cleanup failed",
-            "muxr pty shutdown cleanup failed"
-        );
-    }
-
-    pub fn reader_stopped_after_error(event: &str, error: impl std::fmt::Display) {
-        tracing::warn!(
-            kind = "pty_reader_stopped_after_error",
-            event = event,
-            error = %error,
-            summary = "muxr pty reader stopped after recoverable processing error",
-            "muxr pty reader stopped after recoverable processing error"
-        );
-    }
-
-    pub fn writer_stopped_after_error(event: &str, error: impl std::fmt::Display) {
-        tracing::warn!(
-            kind = "pty_writer_stopped_after_error",
-            event = event,
-            error = %error,
-            summary = "muxr pty writer stopped after recoverable processing error",
-            "muxr pty writer stopped after recoverable processing error"
-        );
-    }
-}
-
 pub struct SessionTracing {
     _guard: WorkerGuard,
     log_path: PathBuf,
@@ -223,19 +58,6 @@ impl SessionTracing {
     }
 }
 
-fn install_panic_hook() {
-    static PANIC_HOOK: std::sync::Once = std::sync::Once::new();
-    PANIC_HOOK.call_once(|| {
-        let previous_hook = std::panic::take_hook();
-        // Panic hooks are process-global. Install once so muxr records tracing-panic fields and then delegates to the
-        // previously installed hook's behavior.
-        std::panic::set_hook(Box::new(move |panic_info| {
-            tracing_panic::panic_hook(panic_info);
-            previous_hook(panic_info);
-        }));
-    });
-}
-
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ClientEventSendFailure {
     SendFailed,
@@ -275,11 +97,189 @@ pub fn collect_test_log(
     }
 }
 
+fn install_panic_hook() {
+    static PANIC_HOOK: std::sync::Once = std::sync::Once::new();
+    PANIC_HOOK.call_once(|| {
+        let previous_hook = std::panic::take_hook();
+        // Panic hooks are process-global. Install once so muxr records tracing-panic fields and then delegates to the
+        // previously installed hook's behavior.
+        std::panic::set_hook(Box::new(move |panic_info| {
+            tracing_panic::panic_hook(panic_info);
+            previous_hook(panic_info);
+        }));
+    });
+}
+
 fn current_server_log_timestamp() -> rootcause::Result<ServerLogTimestamp> {
     jiff::Zoned::now()
         .strftime(SERVER_LOG_TIMESTAMP_FORMAT)
         .to_string()
         .parse()
+}
+
+pub mod ack {
+    use super::ClientEventSendFailure;
+
+    pub fn delete_failed(reason: ClientEventSendFailure) {
+        tracing::warn!(
+            kind = "delete_ack_send_failed",
+            event = "deleted",
+            reason = reason.as_str(),
+            summary = "muxr delete acknowledgement was not delivered",
+            "muxr delete acknowledgement was not delivered"
+        );
+    }
+
+    pub fn detach_failed(reason: ClientEventSendFailure) {
+        tracing::warn!(
+            kind = "detach_ack_send_failed",
+            event = "detached",
+            reason = reason.as_str(),
+            summary = "muxr detach acknowledgement was not delivered",
+            "muxr detach acknowledgement was not delivered"
+        );
+    }
+}
+
+pub mod client {
+    pub fn state_handoff_failed(reason: &str) {
+        tracing::warn!(
+            kind = "client_session_state_handoff_failed",
+            event = "finished_state_send",
+            reason = reason,
+            summary = "muxr client session failed to return session state",
+            "muxr client session failed to return session state"
+        );
+    }
+}
+
+pub mod pty {
+    pub fn exit_wakeup_not_queued(reason: &str) {
+        tracing::warn!(
+            kind = "pty_exit_wakeup_not_queued",
+            event = "send_exit_wakeup",
+            reason = reason,
+            summary = "muxr pty exit wakeup was not queued",
+            "muxr pty exit wakeup was not queued"
+        );
+    }
+
+    pub fn shutdown_failed(event: &str, error: impl std::fmt::Display) {
+        tracing::warn!(
+            kind = "pty_shutdown_failed",
+            event = event,
+            error = %error,
+            summary = "muxr pty shutdown cleanup failed",
+            "muxr pty shutdown cleanup failed"
+        );
+    }
+
+    pub fn reader_stopped_after_error(event: &str, error: impl std::fmt::Display) {
+        tracing::warn!(
+            kind = "pty_reader_stopped_after_error",
+            event = event,
+            error = %error,
+            summary = "muxr pty reader stopped after recoverable processing error",
+            "muxr pty reader stopped after recoverable processing error"
+        );
+    }
+
+    pub fn writer_stopped_after_error(event: &str, error: impl std::fmt::Display) {
+        tracing::warn!(
+            kind = "pty_writer_stopped_after_error",
+            event = event,
+            error = %error,
+            summary = "muxr pty writer stopped after recoverable processing error",
+            "muxr pty writer stopped after recoverable processing error"
+        );
+    }
+}
+
+pub mod scrollback {
+    use std::path::Path;
+
+    use muxr_core::PaneId;
+
+    pub fn restore_failed(error: &rootcause::Report) {
+        tracing::warn!(
+            kind = "scrollback_editor_restore_failed",
+            event = "restore_after_client_error",
+            error = %error,
+            summary = "muxr scrollback editor restore failed while handling client error",
+            "muxr scrollback editor restore failed while handling client error"
+        );
+    }
+
+    pub fn cleanup_failed(event: &str, pane_id: Option<PaneId>, path: &Path, error: &std::io::Error) {
+        let Some(pane_id) = pane_id else {
+            tracing::warn!(
+                kind = "scrollback_cleanup_failed",
+                event = event,
+                path = %path.display(),
+                error = %error,
+                summary = "muxr scrollback cleanup failed",
+                "muxr scrollback cleanup failed"
+            );
+            return;
+        };
+        tracing::warn!(
+            pane_id = %pane_id,
+            kind = "scrollback_cleanup_failed",
+            event = event,
+            path = %path.display(),
+            error = %error,
+            summary = "muxr scrollback cleanup failed",
+            "muxr scrollback cleanup failed"
+        );
+    }
+}
+
+pub mod server {
+    use std::path::Path;
+
+    use muxr_core::SessionPaths;
+
+    pub fn starting(paths: &SessionPaths) {
+        tracing::info!(
+            kind = "server_starting",
+            socket_path = %paths.socket.display(),
+            pid_path = %paths.pid.display(),
+            "muxr server starting"
+        );
+    }
+
+    pub fn ready(paths: &SessionPaths) {
+        tracing::info!(
+            kind = "server_ready",
+            socket_path = %paths.socket.display(),
+            pid_path = %paths.pid.display(),
+            "muxr server ready"
+        );
+    }
+
+    pub fn shutdown(reason: &str) {
+        tracing::info!(kind = "server_shutdown", reason = reason, "muxr server shutdown");
+    }
+
+    pub fn error(error: &rootcause::Report) {
+        tracing::error!(
+            kind = "server_error",
+            error = %error,
+            summary = "muxr server stopped with error",
+            "muxr server stopped with error"
+        );
+    }
+
+    pub fn file_cleanup_failed(event: &str, path: &Path, error: &std::io::Error) {
+        tracing::warn!(
+            kind = "server_file_cleanup_failed",
+            event = event,
+            path = %path.display(),
+            error = %error,
+            summary = "muxr server file cleanup failed",
+            "muxr server file cleanup failed"
+        );
+    }
 }
 
 #[cfg(test)]

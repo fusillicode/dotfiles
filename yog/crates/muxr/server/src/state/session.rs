@@ -22,13 +22,6 @@ const INITIAL_TAB_ID: u32 = 1;
 const INITIAL_TAB_TITLE: &str = "default";
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-struct PaneSnapshotFieldsEntry {
-    cmd_label: Option<String>,
-    terminal_title: Option<String>,
-    tracked_process_state: TrackedProcessState,
-}
-
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct PaneSnapshotFields {
     panes: BTreeMap<PaneId, PaneSnapshotFieldsEntry>,
 }
@@ -259,6 +252,13 @@ impl PaneMetadataSync {
             (Self::Unchanged, Self::Unchanged) => Self::Unchanged,
         }
     }
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+struct PaneSnapshotFieldsEntry {
+    cmd_label: Option<String>,
+    terminal_title: Option<String>,
+    tracked_process_state: TrackedProcessState,
 }
 
 fn next_number(ids: impl Iterator<Item = u32>, kind: &str) -> rootcause::Result<u32> {

@@ -106,6 +106,228 @@ pub fn get_from_visual_marks(_: ()) -> Option<Selection> {
     get_selection(&mut bounds, last_visual_mode().as_deref() == Some("V"))
 }
 
+/// Owned selection content plus bounds.
+#[derive(Debug)]
+pub struct Selection {
+    bounds: SelectionBounds,
+    lines: Vec<String>,
+}
+
+impl Selection {
+    /// Create a new [`Selection`] from bounds and raw line objects.
+    pub fn new(bounds: SelectionBounds, lines: impl SuperIterator<nvim_oxi::String>) -> Self {
+        Self {
+            bounds,
+            lines: lines.into_iter().map(|line| line.to_string()).collect(),
+        }
+    }
+}
+
+impl Selection {
+    /// Buffer id containing the selection.
+    pub const fn buf_id(&self) -> i32 {
+        self.bounds.buf_id()
+    }
+
+    /// Start bound of the selection.
+    pub const fn start(&self) -> &Bound {
+        self.bounds.start()
+    }
+
+    /// End bound of the selection.
+    pub const fn end(&self) -> &Bound {
+        self.bounds.end()
+    }
+
+    /// Collected selected lines.
+    pub fn lines(&self) -> &[String] {
+        &self.lines
+    }
+
+    /// Range of starting (inclusive) to ending (exclusive) line indices.
+    pub const fn line_range(&self) -> Range<usize> {
+        self.bounds.line_range()
+    }
+
+    fn matches_ex_range(&self, line1: usize, line2: usize) -> bool {
+        self.start().lnum.checked_add(1) == Some(line1) && self.end().lnum.checked_add(1) == Some(line2)
+    }
+}
+
+/// Start / end bounds plus owning buffer id for a Visual selection.
+#[derive(Clone, Debug)]
+pub struct SelectionBounds {
+    #[cfg(feature = "testing")]
+    pub buf_id: i32,
+    #[cfg(feature = "testing")]
+    pub start: Bound,
+    #[cfg(feature = "testing")]
+    pub end: Bound,
+    #[cfg(not(feature = "testing"))]
+    buf_id: i32,
+    #[cfg(not(feature = "testing"))]
+    start: Bound,
+    #[cfg(not(feature = "testing"))]
+    end: Bound,
+}
+
+impl SelectionBounds {
+    /// Builds selection bounds from the current cursor (`.`) and visual start (`v`) marks.
+    ///
+    /// Retrieves positions using Nvim's `getpos()` function and normalizes them to 0-based indices.
+    /// The start and end are sorted to ensure start is before end.
+    ///
+    /// # Errors
+    /// - Fails if retrieving either mark fails.
+    /// - Fails if the two marks reference different buffers.
+    pub fn new() -> rootcause::Result<Self> {
+        let cursor_pos = get_pos(".")?;
+        let visual_pos = get_pos("v")?;
+
+        Self::from_positions(cursor_pos, visual_pos)
+    }
+
+    /// Builds selection bounds from the persisted Visual selection marks.
+    ///
+    /// # Errors
+    /// - Fails if retrieving either mark fails.
+    /// - Fails if the two marks reference different buffers.
+    pub fn from_visual_marks() -> rootcause::Result<Self> {
+        let start_pos = get_pos("'<")?;
+        let end_pos = get_pos("'>")?;
+
+        Self::from_positions(start_pos, end_pos)
+    }
+
+    /// Range of starting (inclusive) to ending (exclusive) line indices.
+    pub const fn line_range(&self) -> Range<usize> {
+        self.start.lnum..self.end.lnum
+    }
+
+    /// Owning buffer id.
+    pub const fn buf_id(&self) -> i32 {
+        self.buf_id
+    }
+
+    /// Start bound.
+    pub const fn start(&self) -> &Bound {
+        &self.start
+    }
+
+    /// End bound (exclusive line, exclusive column for charwise mode after adjustment).
+    pub const fn end(&self) -> &Bound {
+        &self.end
+    }
+
+    fn from_positions(first: Pos, second: Pos) -> rootcause::Result<Self> {
+        let (start, end) = first.sort(second);
+
+        if start.buf_id != end.buf_id {
+            Err(report!("mismatched buffer ids")).attach_with(|| format!("start={start:#?} end={end:#?}"))?;
+        }
+
+        Ok(Self {
+            buf_id: start.buf_id,
+            start: Bound::from(start),
+            end: Bound::from(end),
+        })
+    }
+
+    /// Increment end column (making it exclusive for charwise selections).
+    const fn incr_end_col(&mut self) {
+        self.end.col = self.end.col.saturating_add(1);
+    }
+}
+
+/// Single position (line, column) inside a buffer.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct Bound {
+    /// 0-based line number.
+    pub lnum: usize,
+    /// 0-based byte column.
+    pub col: usize,
+}
+
+impl From<Pos> for Bound {
+    fn from(value: Pos) -> Self {
+        Self {
+            lnum: value.lnum,
+            col: value.col,
+        }
+    }
+}
+
+/// Normalized, 0-based indexed output of Nvim `getpos()`.
+///
+/// Built from internal `RawPos` (private). Represents a single position inside a buffer using
+/// zero-based (line, column) indices.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct Pos {
+    buf_id: i32,
+    /// 0-based line index.
+    lnum: usize,
+    /// 0-based byte column within the line.
+    col: usize,
+}
+
+impl Pos {
+    /// Return `(self, other)` sorted by position, swapping if needed so the first
+    /// has the lower (line, column) tuple (columns compared only when on the same line).
+    pub const fn sort(self, other: Self) -> (Self, Self) {
+        if self.lnum > other.lnum || (self.lnum == other.lnum && self.col > other.col) {
+            (other, self)
+        } else {
+            (self, other)
+        }
+    }
+}
+
+/// Custom [`Deserialize`] from Lua tuple produced by `getpos()` (via internal `RawPos`).
+impl<'de> Deserialize<'de> for Pos {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let t = RawPos::deserialize(deserializer)?;
+        Ok(Self::from(t))
+    }
+}
+
+/// Convert internal `RawPos` to [`Pos`] by switching to 0-based indexing from Lua 1-based.
+impl From<RawPos> for Pos {
+    fn from(raw: RawPos) -> Self {
+        fn to_0_based_usize(v: i64) -> usize {
+            usize::try_from(v.saturating_sub(1)).unwrap_or_default()
+        }
+
+        Self {
+            buf_id: raw.0,
+            lnum: to_0_based_usize(raw.1),
+            col: to_0_based_usize(raw.2),
+        }
+    }
+}
+
+/// Implementation of [`FromObject`] for [`Pos`].
+impl FromObject for Pos {
+    fn from_object(obj: Object) -> Result<Self, nvim_oxi::conversion::Error> {
+        Self::deserialize(nvim_oxi::serde::Deserializer::new(obj)).map_err(Into::into)
+    }
+}
+
+/// Implementation of [`Poppable`] for [`Pos`].
+impl Poppable for Pos {
+    unsafe fn pop(lstate: *mut State) -> Result<Self, nvim_oxi::lua::Error> {
+        // SAFETY: The caller (nvim-oxi framework) guarantees that:
+        // 1. `lstate` is a valid pointer to an initialized Lua state
+        // 2. The Lua stack has at least one value to pop
+        unsafe {
+            let obj = Object::pop(lstate)?;
+            Self::from_object(obj).map_err(nvim_oxi::lua::Error::pop_error_from_err::<Self, _>)
+        }
+    }
+}
+
 fn get_selection(bounds: &mut SelectionBounds, is_linewise: bool) -> Option<Selection> {
     let current_buffer = Buffer::from(bounds.buf_id());
 
@@ -228,232 +450,10 @@ fn get_line_range_selection(line1: usize, line2: usize) -> Option<Selection> {
     Some(Selection::new(bounds, selected_lines))
 }
 
-/// Owned selection content plus bounds.
-#[derive(Debug)]
-pub struct Selection {
-    bounds: SelectionBounds,
-    lines: Vec<String>,
-}
-
-impl Selection {
-    /// Create a new [`Selection`] from bounds and raw line objects.
-    pub fn new(bounds: SelectionBounds, lines: impl SuperIterator<nvim_oxi::String>) -> Self {
-        Self {
-            bounds,
-            lines: lines.into_iter().map(|line| line.to_string()).collect(),
-        }
-    }
-}
-
-/// Start / end bounds plus owning buffer id for a Visual selection.
-#[derive(Clone, Debug)]
-pub struct SelectionBounds {
-    #[cfg(feature = "testing")]
-    pub buf_id: i32,
-    #[cfg(feature = "testing")]
-    pub start: Bound,
-    #[cfg(feature = "testing")]
-    pub end: Bound,
-    #[cfg(not(feature = "testing"))]
-    buf_id: i32,
-    #[cfg(not(feature = "testing"))]
-    start: Bound,
-    #[cfg(not(feature = "testing"))]
-    end: Bound,
-}
-
-impl SelectionBounds {
-    /// Builds selection bounds from the current cursor (`.`) and visual start (`v`) marks.
-    ///
-    /// Retrieves positions using Nvim's `getpos()` function and normalizes them to 0-based indices.
-    /// The start and end are sorted to ensure start is before end.
-    ///
-    /// # Errors
-    /// - Fails if retrieving either mark fails.
-    /// - Fails if the two marks reference different buffers.
-    pub fn new() -> rootcause::Result<Self> {
-        let cursor_pos = get_pos(".")?;
-        let visual_pos = get_pos("v")?;
-
-        Self::from_positions(cursor_pos, visual_pos)
-    }
-
-    /// Builds selection bounds from the persisted Visual selection marks.
-    ///
-    /// # Errors
-    /// - Fails if retrieving either mark fails.
-    /// - Fails if the two marks reference different buffers.
-    pub fn from_visual_marks() -> rootcause::Result<Self> {
-        let start_pos = get_pos("'<")?;
-        let end_pos = get_pos("'>")?;
-
-        Self::from_positions(start_pos, end_pos)
-    }
-
-    fn from_positions(first: Pos, second: Pos) -> rootcause::Result<Self> {
-        let (start, end) = first.sort(second);
-
-        if start.buf_id != end.buf_id {
-            Err(report!("mismatched buffer ids")).attach_with(|| format!("start={start:#?} end={end:#?}"))?;
-        }
-
-        Ok(Self {
-            buf_id: start.buf_id,
-            start: Bound::from(start),
-            end: Bound::from(end),
-        })
-    }
-
-    /// Range of starting (inclusive) to ending (exclusive) line indices.
-    pub const fn line_range(&self) -> Range<usize> {
-        self.start.lnum..self.end.lnum
-    }
-
-    /// Owning buffer id.
-    pub const fn buf_id(&self) -> i32 {
-        self.buf_id
-    }
-
-    /// Start bound.
-    pub const fn start(&self) -> &Bound {
-        &self.start
-    }
-
-    /// End bound (exclusive line, exclusive column for charwise mode after adjustment).
-    pub const fn end(&self) -> &Bound {
-        &self.end
-    }
-
-    /// Increment end column (making it exclusive for charwise selections).
-    const fn incr_end_col(&mut self) {
-        self.end.col = self.end.col.saturating_add(1);
-    }
-}
-
-/// Single position (line, column) inside a buffer.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct Bound {
-    /// 0-based line number.
-    pub lnum: usize,
-    /// 0-based byte column.
-    pub col: usize,
-}
-
-impl From<Pos> for Bound {
-    fn from(value: Pos) -> Self {
-        Self {
-            lnum: value.lnum,
-            col: value.col,
-        }
-    }
-}
-
-impl Selection {
-    /// Buffer id containing the selection.
-    pub const fn buf_id(&self) -> i32 {
-        self.bounds.buf_id()
-    }
-
-    /// Start bound of the selection.
-    pub const fn start(&self) -> &Bound {
-        self.bounds.start()
-    }
-
-    /// End bound of the selection.
-    pub const fn end(&self) -> &Bound {
-        self.bounds.end()
-    }
-
-    /// Collected selected lines.
-    pub fn lines(&self) -> &[String] {
-        &self.lines
-    }
-
-    fn matches_ex_range(&self, line1: usize, line2: usize) -> bool {
-        self.start().lnum.checked_add(1) == Some(line1) && self.end().lnum.checked_add(1) == Some(line2)
-    }
-
-    /// Range of starting (inclusive) to ending (exclusive) line indices.
-    pub const fn line_range(&self) -> Range<usize> {
-        self.bounds.line_range()
-    }
-}
-
-/// Normalized, 0-based indexed output of Nvim `getpos()`.
-///
-/// Built from internal `RawPos` (private). Represents a single position inside a buffer using
-/// zero-based (line, column) indices.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct Pos {
-    buf_id: i32,
-    /// 0-based line index.
-    lnum: usize,
-    /// 0-based byte column within the line.
-    col: usize,
-}
-
-impl Pos {
-    /// Return `(self, other)` sorted by position, swapping if needed so the first
-    /// has the lower (line, column) tuple (columns compared only when on the same line).
-    pub const fn sort(self, other: Self) -> (Self, Self) {
-        if self.lnum > other.lnum || (self.lnum == other.lnum && self.col > other.col) {
-            (other, self)
-        } else {
-            (self, other)
-        }
-    }
-}
-
-/// Custom [`Deserialize`] from Lua tuple produced by `getpos()` (via internal `RawPos`).
-impl<'de> Deserialize<'de> for Pos {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let t = RawPos::deserialize(deserializer)?;
-        Ok(Self::from(t))
-    }
-}
-
-/// Convert internal `RawPos` to [`Pos`] by switching to 0-based indexing from Lua 1-based.
-impl From<RawPos> for Pos {
-    fn from(raw: RawPos) -> Self {
-        fn to_0_based_usize(v: i64) -> usize {
-            usize::try_from(v.saturating_sub(1)).unwrap_or_default()
-        }
-
-        Self {
-            buf_id: raw.0,
-            lnum: to_0_based_usize(raw.1),
-            col: to_0_based_usize(raw.2),
-        }
-    }
-}
-
 /// Raw `getpos()` tuple: (`bufnum`, `lnum`, `col`, `off`).
 #[derive(Clone, Copy, Debug, Deserialize)]
 #[expect(dead_code, reason = "Unused fields are kept for completeness")]
 struct RawPos(i32, i64, i64, i64);
-
-/// Implementation of [`FromObject`] for [`Pos`].
-impl FromObject for Pos {
-    fn from_object(obj: Object) -> Result<Self, nvim_oxi::conversion::Error> {
-        Self::deserialize(nvim_oxi::serde::Deserializer::new(obj)).map_err(Into::into)
-    }
-}
-
-/// Implementation of [`Poppable`] for [`Pos`].
-impl Poppable for Pos {
-    unsafe fn pop(lstate: *mut State) -> Result<Self, nvim_oxi::lua::Error> {
-        // SAFETY: The caller (nvim-oxi framework) guarantees that:
-        // 1. `lstate` is a valid pointer to an initialized Lua state
-        // 2. The Lua stack has at least one value to pop
-        unsafe {
-            let obj = Object::pop(lstate)?;
-            Self::from_object(obj).map_err(nvim_oxi::lua::Error::pop_error_from_err::<Self, _>)
-        }
-    }
-}
 
 /// Calls Nvim's `getpos()` function for the supplied mark identifier and returns a normalized [`Pos`].
 ///
@@ -499,10 +499,6 @@ mod tests {
         assert_that!(second, eq(expected_second));
     }
 
-    fn pos(lnum: usize, col: usize) -> Pos {
-        Pos { buf_id: 1, lnum, col }
-    }
-
     #[test]
     fn test_selection_bounds_from_positions_normalizes_reversed_coordinates() {
         let result = SelectionBounds::from_positions(pos(4, 10), pos(2, 3));
@@ -538,5 +534,9 @@ mod tests {
                 eq("'<,'>")
             ))
         );
+    }
+
+    fn pos(lnum: usize, col: usize) -> Pos {
+        Pos { buf_id: 1, lnum, col }
     }
 }
