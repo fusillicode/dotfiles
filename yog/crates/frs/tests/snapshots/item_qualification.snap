@@ -220,3 +220,31 @@ pub mod conditional_wildcard {
 
     fn run(_: std::path::PathBuf) {}
 }
+
+pub mod primitive_associated_constants {
+    fn limits() {
+        let _ = i8::MAX;
+        let _ = i16::MAX;
+        let _ = i32::MAX;
+        let _ = i64::MAX;
+        let _ = i128::MAX;
+        let _ = isize::MAX;
+        let _ = u8::MAX;
+        let _ = u16::MAX;
+        let _ = u32::MAX;
+        let _ = u64::MAX;
+        let _ = u128::MAX;
+        let _ = usize::MAX;
+        let _ = f16::INFINITY;
+        let _ = f32::INFINITY;
+        let _ = f64::INFINITY;
+        let _ = f128::INFINITY;
+        let _ = char::MAX;
+        let _ = std::primitive::i64::MAX;
+        let _ = core::primitive::f64::INFINITY;
+    }
+
+    fn convert(value: usize) -> i64 {
+        i64::try_from(value).unwrap_or(i64::MAX)
+    }
+}
