@@ -45,7 +45,7 @@ pub mod same_module_calls {
         self::helper::<u8>();
     }
 
-    fn unknown_bindings() {
+    fn macro_invocation() {
         generate_bindings!();
         self::helper::<u8>();
     }
@@ -70,6 +70,59 @@ pub mod same_module_calls {
 }
 
 fn root_function() {}
+
+pub mod source_visible_macros {
+    use std::mem;
+    use std::mem::drop as discard;
+
+    macro_rules! generate {
+        () => {};
+    }
+    generate!();
+
+    fn helper() {}
+
+    fn assertions() {
+        test_that::assert_that!(true, eq(true));
+        self::helper();
+        crate::fixture::source_visible_macros::helper();
+    }
+
+    fn visible_shadow(helper: fn()) {
+        arbitrary_macro!();
+        self::helper();
+    }
+
+    fn visible_token_use() {
+        observe!(discard);
+        discard(1);
+    }
+}
+
+pub mod visible_attribute_qualifier {
+    #[trace::instrument]
+    fn observed() {}
+
+    fn run() {
+        facade::trace::call();
+    }
+}
+
+pub mod written_attribute_uses {
+    use facade::drop as attribute_on_import;
+    use facade::drop as attribute_on_module;
+
+    #[attribute_on_import]
+    use other::Thing;
+
+    #[attribute_on_module]
+    mod child {}
+
+    fn run() {
+        attribute_on_import(1);
+        attribute_on_module(2);
+    }
+}
 
 pub mod attribute_macro_calls {
     use std::mem::drop as imported_drop;
@@ -140,7 +193,7 @@ pub mod attribute_macro_calls {
     }
 
     #[custom_attribute]
-    async fn preserve_imports() {
+    async fn rewrite_imports() {
         imported_drop(1);
         std::fs::read_to_string("x");
         self::helper();

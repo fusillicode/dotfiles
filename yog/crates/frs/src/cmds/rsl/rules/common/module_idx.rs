@@ -70,7 +70,7 @@ pub fn module_idx(file: &syn::File) -> ModuleIdx<'_> {
             }
 
             if let Item::Use(item_use) = item {
-                if item_use.leading_colon.is_some() || !item_use.attrs.is_empty() {
+                if item_use.leading_colon.is_some() || super::has_conditional_attributes(&item_use.attrs) {
                     info.unknown_imports = true;
                     continue;
                 }

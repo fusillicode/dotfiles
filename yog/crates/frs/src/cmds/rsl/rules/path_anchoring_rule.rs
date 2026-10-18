@@ -119,8 +119,8 @@ fn module_context_reason(reason: &ResolutionError) -> FixBlockReason {
         },
         ResolutionError::UnexpandedModules => FixBlockReason {
             code: "unexpanded-modules",
-            message: "Macros may introduce additional module locations in this crate.".to_owned(),
-            help: "Keep relative paths when module locations depend on macro expansion.",
+            message: "A module path or included source cannot be resolved in this crate.".to_owned(),
+            help: "Use valid literal module and include paths before anchoring relative references.",
         },
     }
 }

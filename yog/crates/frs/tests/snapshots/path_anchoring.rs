@@ -88,3 +88,15 @@ pub mod preserve_comments {
 }
 
 use super::OutsideCrate;
+
+#[custom_attribute]
+pub mod source_visible_macros {
+    declare_modules!();
+
+    use self::inner::Thing;
+    use super::Other;
+
+    mod inner {
+        pub struct Thing;
+    }
+}

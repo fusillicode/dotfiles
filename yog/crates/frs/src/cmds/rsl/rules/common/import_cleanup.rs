@@ -28,7 +28,7 @@ pub(in crate::cmds::rsl::rules) fn removable_imports(
             };
             let text = ctx.source.get(editor.span_range(import.span())).unwrap_or_default();
             (matches!(import.vis, Visibility::Inherited)
-                && import.attrs.is_empty()
+                && !super::has_conditional_attributes(&import.attrs)
                 && !text.contains("//")
                 && !text.contains("/*"))
             .then(|| import_resolution::use_bindings(&import.tree, &[]).bindings)

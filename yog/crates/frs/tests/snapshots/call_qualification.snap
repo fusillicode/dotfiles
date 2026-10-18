@@ -49,9 +49,9 @@ pub mod same_module_calls {
         helper::<u8>();
     }
 
-    fn unknown_bindings() {
+    fn macro_invocation() {
         generate_bindings!();
-        self::helper::<u8>();
+        helper::<u8>();
     }
 
     fn preserved_comment() {
@@ -75,8 +75,63 @@ pub mod same_module_calls {
 
 fn root_function() {}
 
+pub mod source_visible_macros {
+    use std::mem;
+    use std::mem::drop as discard;
+
+    macro_rules! generate {
+        () => {};
+    }
+    generate!();
+
+    fn helper() {}
+
+    fn assertions() {
+        test_that::assert_that!(true, eq(true));
+        helper();
+        helper();
+    }
+
+    fn visible_shadow(helper: fn()) {
+        arbitrary_macro!();
+        self::helper();
+    }
+
+    fn visible_token_use() {
+        observe!(discard);
+        mem::drop(1);
+    }
+}
+
+pub mod visible_attribute_qualifier {
+    #[trace::instrument]
+    fn observed() {}
+
+    fn run() {
+        facade::trace::call();
+    }
+}
+
+pub mod written_attribute_uses {
+    use facade::drop as attribute_on_import;
+    use facade::drop as attribute_on_module;
+
+    #[attribute_on_import]
+    use other::Thing;
+
+    #[attribute_on_module]
+    mod child {}
+
+    fn run() {
+        facade::drop(1);
+        facade::drop(2);
+    }
+}
+
 pub mod attribute_macro_calls {
-    use std::mem::drop as imported_drop;
+    use std::fs;
+    use std::mem;
+
 
     fn helper() {}
 
@@ -105,7 +160,7 @@ pub mod attribute_macro_calls {
     #[tokio::test]
     async fn unknown_block_macro() {
         make_bindings!();
-        self::helper();
+        helper();
     }
 
     #[tokio::test]
@@ -144,9 +199,9 @@ pub mod attribute_macro_calls {
     }
 
     #[custom_attribute]
-    async fn preserve_imports() {
-        imported_drop(1);
-        std::fs::read_to_string("x");
+    async fn rewrite_imports() {
+        mem::drop(1);
+        fs::read_to_string("x");
         helper();
     }
 }
@@ -155,7 +210,7 @@ pub mod attribute_function_import {
     use facade::drop;
     #[drop]
     fn run() {
-        drop(1);
+        facade::drop(1);
     }
 }
 
@@ -473,10 +528,11 @@ pub mod local_let {
 }
 
 pub mod macro_bindings {
-    use std::mem::drop as drop_macro_bindings;
+    use std::mem;
+
     fn run() {
         make_bindings!();
-        drop_macro_bindings(1);
+        mem::drop(1);
     }
 }
 
@@ -496,7 +552,7 @@ pub mod macro_shadowed_remaining_reference {
     }
     pub fn run() {
         let _ = mem::size_of::<u8>();
-        discard(String::new());
+        mem::drop(String::new());
     }
 }
 
@@ -534,7 +590,7 @@ pub mod nested_attribute_function_reference {
     use facade::drop as drop_nested_attribute_function_reference;
     #[keep(nested(drop_nested_attribute_function_reference))]
     fn run() {
-        drop_nested_attribute_function_reference(1);
+        facade::drop(1);
     }
 }
 
@@ -564,17 +620,17 @@ pub mod nested_item_function {
 
 pub mod opaque_attribute_reference {
     use std::mem;
-    use std::mem::drop as discard;
+
     #[make_reference]
     fn other() {}
     fn run() {
-        discard(1);
+        mem::drop(1);
     }
 }
 
 pub mod opaque_expansion {
     use std::mem;
-    use std::mem::drop as discard;
+
 
     macro_rules! hidden {
         () => {{ 1usize }};
@@ -585,7 +641,7 @@ pub mod opaque_expansion {
     }
     pub fn run() {
         let _ = mem::size_of::<u8>();
-        discard(String::new());
+        mem::drop(String::new());
     }
 }
 
@@ -778,10 +834,11 @@ mod shortened_calls {
     }
 
     pub mod generated_type_bindings {
+        use std::fs;
         #[derive(MakeBindings)]
         struct Input;
         fn run() {
-            std::fs::read_to_string("x");
+            fs::read_to_string("x");
         }
     }
 
@@ -799,9 +856,10 @@ mod shortened_calls {
             () => { mod fs {} };
         }
         mod child {
+            use std::fs;
             fn run() {
                 println!();
-                std::fs::read_to_string("x");
+                fs::read_to_string("x");
             }
         }
     }
@@ -811,7 +869,7 @@ mod shortened_calls {
         use unknown::*;
         fn run() {
             std::println!("reading");
-            std::fs::read_to_string("x");
+            fs::read_to_string("x");
         }
     }
 
@@ -839,18 +897,20 @@ mod shortened_calls {
     }
 
     pub mod opaque_macro {
+        use std::fs;
         fn run() {
             make_bindings!();
-            std::fs::read_to_string("x");
+            fs::read_to_string("x");
         }
     }
 
     pub mod opaque_macro_may_observe_new_import {
+        use std::fs;
         fn other() {
             let _ = generated_expression!();
         }
         fn run() {
-            std::fs::read_to_string("x");
+            fs::read_to_string("x");
         }
     }
 
@@ -862,9 +922,10 @@ mod shortened_calls {
     }
 
     pub mod procedural_attribute {
+        use std::fs;
         #[make_bindings]
         fn run() {
-            std::fs::read_to_string("x");
+            fs::read_to_string("x");
         }
     }
 
@@ -1012,12 +1073,12 @@ pub mod type_parameter {
 
 pub mod unrelated_macro {
     use std::fs;
-    use std::fs::read_to_string;
+
     fn other() {
         make_bindings!();
     }
     fn run() {
-        read_to_string("x");
+        fs::read_to_string("x");
     }
 }
 
