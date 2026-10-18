@@ -24,13 +24,41 @@ allowed-duplicate-crates = [
   "windows_x86_64_gnullvm",
   "windows_x86_64_msvc",
 ]
+# Clippy groups external and inline modules together. RSL orders them separately,
+# so leave declarations after imports in one group and let RSL order that group.
 module-item-order-groupings = [
-  ["extern_crate", ["extern_crate"]],
-  ["imports", ["use"]],
-  ["modules", ["foreign_mod", "mod"]],
-  ["global_asm", ["global_asm"]],
-  ["constants", ["const", "static"]],
-  ["aliases", ["ty_alias"]],
-  ["items", ["macro", "enum", "struct", "union", "trait", "trait_alias", "impl", "fn", "test_binder_constraints"]],
+  [
+    "extern_crate",
+    [
+      "extern_crate",
+    ],
+  ],
+  [
+    "imports",
+    [
+      "use",
+    ],
+  ],
+  [
+    "items",
+    [
+      "foreign_mod",
+      "mod",
+      "global_asm",
+      "const",
+      "static",
+      "ty_alias",
+      "macro",
+      "enum",
+      "struct",
+      "union",
+      "trait",
+      "trait_alias",
+      "impl",
+      "fn",
+      "test_binder_constraints",
+    ],
+  ],
 ]
+module-items-ordered-within-groupings = "none"
 source-item-ordering = ["module"]

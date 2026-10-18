@@ -17,6 +17,8 @@ pub mod production {
         fn foreign_function();
     }
 
+    global_asm!("");
+
     pub mod declarations {
         #[cfg(test)]
         mod tests;
@@ -118,8 +120,6 @@ pub mod production {
             }
         }
     }
-
-    global_asm!("");
 
     type PrivateAlias = u8;
 
@@ -556,6 +556,47 @@ pub mod test_module_placement {
                 2
             };
         }
+    }
+}
+
+pub mod inline_module_placement {
+    //! Inline modules follow other declarations, alphabetically, with tests last regardless of visibility.
+
+    pub mod tests {}
+
+    pub mod zebra {}
+
+    mod external;
+
+    #[cfg(test)]
+    mod checks {}
+
+    // This comment and the nested module move together.
+    mod alpha {
+        mod tests {}
+
+        pub mod zebra {}
+
+        mod alpha {}
+
+        fn entry() {}
+    }
+
+    fn entry() {}
+}
+
+pub mod alphabetical_macro_conflict {
+    //! Preserve macro bindings when alphabetical module order would change them.
+
+    #[macro_use]
+    mod zebra {
+        macro_rules! m {
+            () => {};
+        }
+    }
+
+    mod alpha {
+        m!();
     }
 }
 

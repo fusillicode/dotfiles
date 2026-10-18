@@ -23,7 +23,7 @@ use super::ItemOrder;
 use super::OrderingConstraint;
 use super::OrderingConstraintKind;
 use super::OrderingItem;
-use super::TestOrderSection;
+use super::OrderingSection;
 use super::ast;
 use super::fn_references;
 use super::fn_references::FnPathScope;
@@ -264,7 +264,7 @@ impl BlockPrecedenceGraph {
 
         if matches!(
             kind,
-            OrderingConstraintKind::GroupOrTestSectionOrder
+            OrderingConstraintKind::GroupOrSectionOrder
                 | OrderingConstraintKind::VisibilityOrder
                 | OrderingConstraintKind::CallerBeforeHelper
         ) && self.has_macro_preserving_path(after_block_index, before_block_index)
@@ -693,14 +693,33 @@ fn add_section_group_visibility_constraints(
 
             if item.section != other.section {
                 if item.section < other.section {
-                    // Unlike soft preferences, test-module placement must report macro conflicts.
-                    let kind = if other.section == TestOrderSection::TrailingTestModules {
-                        OrderingConstraintKind::TrailingTestModuleOrder
+                    // Required module placement must report conflicts with macro binding order.
+                    let kind = if matches!(
+                        other.section,
+                        OrderingSection::InlineModules | OrderingSection::TestsModule
+                    ) {
+                        OrderingConstraintKind::InlineModuleOrder
                     } else {
-                        OrderingConstraintKind::GroupOrTestSectionOrder
+                        OrderingConstraintKind::GroupOrSectionOrder
                     };
 
                     precedence_graph.add_precedence(before_block_index, after_block_index, kind, blocks);
+                }
+                continue;
+            }
+
+            if let (ItemAst::ModuleItem(Item::Mod(module)), ItemAst::ModuleItem(Item::Mod(other_module))) =
+                (item.ast, other.ast)
+                && module.content.is_some()
+                && other_module.content.is_some()
+            {
+                if module.ident < other_module.ident {
+                    precedence_graph.add_precedence(
+                        before_block_index,
+                        after_block_index,
+                        OrderingConstraintKind::InlineModuleOrder,
+                        blocks,
+                    );
                 }
                 continue;
             }
@@ -713,7 +732,7 @@ fn add_section_group_visibility_constraints(
                 precedence_graph.add_precedence(
                     before_block_index,
                     after_block_index,
-                    OrderingConstraintKind::GroupOrTestSectionOrder,
+                    OrderingConstraintKind::GroupOrSectionOrder,
                     blocks,
                 );
             } else if item.ast.allows_visibility_order_with(other.ast)
