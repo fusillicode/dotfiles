@@ -5,6 +5,7 @@
 
 use nvim_oxi::Dictionary;
 use nvim_oxi::api::Buffer;
+use ytil_noxi::notify;
 
 use crate::diagnostics::filters::BufferWithPath;
 use crate::diagnostics::filters::DiagnosticsFilter;
@@ -17,7 +18,7 @@ pub fn filter(lsp_diags: Vec<Dictionary>) -> Vec<Dictionary> {
     let current_buffer = Buffer::current();
 
     let Ok(buffer_with_path) = BufferWithPath::try_from(current_buffer).inspect_err(|err| {
-        ytil_noxi::notify::error(format!("error creating BufferWithContent | error={err:#?}"));
+        notify::error(format!("error creating BufferWithContent | error={err:#?}"));
     }) else {
         return vec![];
     };
@@ -28,7 +29,7 @@ pub fn filter(lsp_diags: Vec<Dictionary>) -> Vec<Dictionary> {
     if buffer_filter
         .skip_diagnostic(&buffer_with_path)
         .inspect_err(|err| {
-            ytil_noxi::notify::error(format!("error getting filter by buffer | error={err:#?}"));
+            notify::error(format!("error getting filter by buffer | error={err:#?}"));
         })
         .unwrap_or(false)
     {
@@ -36,7 +37,7 @@ pub fn filter(lsp_diags: Vec<Dictionary>) -> Vec<Dictionary> {
     }
 
     let Ok(filters) = DiagnosticsFilters::all(&lsp_diags).inspect_err(|err| {
-        ytil_noxi::notify::error(format!("error getting diagnostics filters | error={err:#?}"));
+        notify::error(format!("error getting diagnostics filters | error={err:#?}"));
     }) else {
         return vec![];
     };
@@ -46,7 +47,7 @@ pub fn filter(lsp_diags: Vec<Dictionary>) -> Vec<Dictionary> {
         if filters
             .skip_diagnostic(&buffer_with_path, &lsp_diag)
             .inspect_err(|err| {
-                ytil_noxi::notify::error(format!(
+                notify::error(format!(
                     "error filtering diagnostic | buffer={:?} diagnostic={lsp_diag:#?} error={err:#?}",
                     buffer_with_path.path()
                 ));

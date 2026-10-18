@@ -2594,7 +2594,7 @@ fn wait_for_pane_exit(runtimes: &PaneRuntimes, pane_id: PaneId) -> rootcause::Re
                 rootcause::report!("timed out waiting for muxr test pane exit").attach(format!("pane_id={pane_id}"))
             );
         }
-        std::thread::sleep(Duration::from_millis(10));
+        thread::sleep(Duration::from_millis(10));
     }
     Ok(())
 }

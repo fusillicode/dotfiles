@@ -1,6 +1,9 @@
 use nvim_oxi::api;
 use nvim_oxi::api::opts::CreateAugroupOpts;
 use nvim_oxi::api::opts::CreateAutocmdOpts;
+use ytil_noxi::notify;
+
+use crate::plugins::scrolloff;
 
 /// Creates Nvim autocommands and their augroups.
 ///
@@ -45,7 +48,7 @@ vim.cmd('resize 7')
         "vim.api.nvim_set_hl(0, '@lsp.mod.inactive', { underline = false, undercurl = false, sp = 'none' })",
     );
 
-    crate::plugins::scrolloff::create_autocmd();
+    scrolloff::create_autocmd();
     crate::layout::create_autocmd();
 }
 
@@ -55,7 +58,7 @@ pub fn create_lua_autocmd(events: &[&str], augroup_name: &str, patterns: Option<
     let group = match api::create_augroup(augroup_name, &augroup_opts) {
         Ok(group) => group,
         Err(err) => {
-            ytil_noxi::notify::error(format!(
+            notify::error(format!(
                 "error creating augroup | augroup={augroup_name:?} error={err:#?}"
             ));
             return;
@@ -73,7 +76,7 @@ pub fn create_lua_autocmd(events: &[&str], augroup_name: &str, patterns: Option<
 
     let autocmd_opts = autocmd_opts.build();
     if let Err(err) = api::create_autocmd(events.iter().copied(), &autocmd_opts) {
-        ytil_noxi::notify::error(format!(
+        notify::error(format!(
             "error creating auto command | augroup={augroup_name:?} events={events:#?} error={err:#?}"
         ));
     }

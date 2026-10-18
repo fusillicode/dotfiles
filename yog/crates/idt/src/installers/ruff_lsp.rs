@@ -3,6 +3,7 @@ use std::path::Path;
 use ytil_sys::file;
 
 use crate::Installer;
+use crate::downloaders::pip;
 
 pub struct RuffLsp<'a> {
     pub dev_tools_dir: &'a Path,
@@ -15,7 +16,7 @@ impl Installer for RuffLsp<'_> {
     }
 
     fn install(&self) -> rootcause::Result<()> {
-        let target_dir = crate::downloaders::pip::run(self.dev_tools_dir, self.bin_name(), &[self.bin_name()])?;
+        let target_dir = pip::run(self.dev_tools_dir, self.bin_name(), &[self.bin_name()])?;
 
         let target = target_dir.join(self.bin_name());
         file::ln_sf(&target, &self.bin_dir.join(self.bin_name()))?;

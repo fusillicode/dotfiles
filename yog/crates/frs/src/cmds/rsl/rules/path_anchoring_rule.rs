@@ -14,14 +14,15 @@ use syn::Macro;
 use syn::Path;
 use syn::UseTree;
 use syn::Visibility;
+use syn::visit;
 use syn::visit::Visit;
 
 use super::Rule;
-use super::common::ensure_no_comments;
+use super::common;
 use crate::cmds::rsl::analysis::FixBlockReason;
 use crate::cmds::rsl::analysis::RuleChange;
 use crate::cmds::rsl::analysis::RulePlan;
-use crate::cmds::rsl::ast::is_test_module_declaration;
+use crate::cmds::rsl::ast;
 use crate::cmds::rsl::engine::FileContext;
 use crate::cmds::rsl::source::SourceEditor;
 
@@ -49,7 +50,7 @@ impl Rule for PathAnchoringRule {
                 span: prefix,
                 path: text,
             };
-            let reason = match ensure_no_comments(&plan.edits, prefix) {
+            let reason = match common::ensure_no_comments(&plan.edits, prefix) {
                 Ok(()) => BlockReason::MissingModuleContext.into(),
                 Err(reason) => reason,
             };
@@ -144,9 +145,9 @@ impl ParentModuleReferences {
 impl<'ast> Visit<'ast> for ParentModuleReferences {
     fn visit_item_mod(&mut self, module: &'ast ItemMod) {
         let previous = self.test_module;
-        self.test_module |= is_test_module_declaration(module);
+        self.test_module |= ast::is_test_module_declaration(module);
 
-        syn::visit::visit_item_mod(self, module);
+        visit::visit_item_mod(self, module);
 
         self.test_module = previous;
     }
@@ -172,7 +173,7 @@ impl<'ast> Visit<'ast> for ParentModuleReferences {
             self.prefix(&spans);
         }
 
-        syn::visit::visit_path(self, path);
+        visit::visit_path(self, path);
     }
 
     fn visit_attribute(&mut self, _attribute: &'ast Attribute) {}

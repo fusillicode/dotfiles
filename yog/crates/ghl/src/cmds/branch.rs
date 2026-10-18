@@ -5,11 +5,12 @@ use std::fmt::Formatter;
 use std::ops::Deref;
 
 use owo_colors::OwoColorize;
+use ytil_gh::issue;
 use ytil_gh::issue::ListedIssue;
 
 /// Interactively create a GitHub branch from a selected issue.
 pub fn run() -> rootcause::Result<()> {
-    let issues = ytil_gh::issue::list()?;
+    let issues = issue::list()?;
 
     let Some(issue) = ytil_tui::minimal_select(issues.into_iter().map(RenderableListedIssue).collect())? else {
         return Ok(());
@@ -19,7 +20,7 @@ pub fn run() -> rootcause::Result<()> {
         return Ok(());
     };
 
-    let develop_output = ytil_gh::issue::develop(&issue.number.to_string(), checkout_branch)?;
+    let develop_output = issue::develop(&issue.number.to_string(), checkout_branch)?;
     println!(
         "{} with name={:?}",
         "Branch created".green().bold(),

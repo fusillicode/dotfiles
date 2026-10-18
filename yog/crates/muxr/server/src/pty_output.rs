@@ -1,5 +1,6 @@
 use std::time::Instant;
 
+use crate::client::session;
 use crate::client::session::ClientSessionState;
 use crate::client::session::ReapedPanes;
 use crate::client::timers::ClientTimers;
@@ -23,7 +24,7 @@ pub async fn handle_pane_output_message(
             // may remain dirty behind the exited pane's marker.
             state.runtimes.acknowledge_output_wakeups();
             state.runtimes.retry_output_wakeups()?;
-            match crate::client::session::handle_reaped_panes(state, event_writer, timers).await? {
+            match session::handle_reaped_panes(state, event_writer, timers).await? {
                 ReapedPanes::Unchanged => {}
                 ReapedPanes::LayoutChanged => {
                     timers
@@ -85,7 +86,7 @@ pub async fn handle_pane_output_message(
             }
             // PTY exit status is sticky state. Detached exits wake the server loop through `pane_exit_notify`; while
             // attached, the bounded output channel is only a wakeup hint, so sweep the sticky state here.
-            let reap = crate::client::session::handle_reaped_panes(state, event_writer, timers).await?;
+            let reap = session::handle_reaped_panes(state, event_writer, timers).await?;
             let layout_changed = match reap {
                 ReapedPanes::Unchanged => false,
                 ReapedPanes::LayoutChanged => true,

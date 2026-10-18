@@ -1,11 +1,15 @@
+use std::fs;
 use std::path::Path;
 
 use rootcause::prelude::ResultExt;
 use ytil_sys::Arch;
 use ytil_sys::Os;
 use ytil_sys::SysInfo;
+use ytil_sys::file;
 
+use crate::downloaders::http;
 use crate::downloaders::http::deflate::HttpDeflateOption;
+use crate::downloaders::http::github;
 use crate::installers::Installer;
 use crate::installers::SystemDependent;
 
@@ -42,10 +46,10 @@ impl Installer for Shellcheck<'_> {
         let (arch, os) = self.target_arch_and_os();
 
         let repo = format!("koalaman/{}", self.bin_name());
-        let latest_release = crate::downloaders::http::github::get_latest_release_tag(&repo)?;
+        let latest_release = github::get_latest_release_tag(&repo)?;
         let dest_dir = Path::new("/tmp");
 
-        crate::downloaders::http::run(
+        http::run(
             &format!(
                 "https://github.com/{repo}/releases/download/{latest_release}/{}-{latest_release}.{os}.{arch}.tar.xz",
                 self.bin_name()
@@ -61,11 +65,11 @@ impl Installer for Shellcheck<'_> {
         let extracted = dest_dir
             .join(format!("{0}-{latest_release}", self.bin_name()))
             .join(self.bin_name());
-        std::fs::rename(&extracted, &target)
+        fs::rename(&extracted, &target)
             .context("error moving extracted shellcheck binary")
             .attach_with(|| format!("from={}", extracted.display()))
             .attach_with(|| format!("to={}", target.display()))?;
-        ytil_sys::file::chmod_x(target)?;
+        file::chmod_x(target)?;
 
         Ok(())
     }

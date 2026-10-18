@@ -1,10 +1,14 @@
+use std::fs;
 use std::path::Path;
 
 use ytil_sys::Arch;
 use ytil_sys::Os;
 use ytil_sys::SysInfo;
+use ytil_sys::file;
 
+use crate::downloaders::http;
 use crate::downloaders::http::deflate::HttpDeflateOption;
+use crate::downloaders::http::github;
 use crate::installers::Installer;
 use crate::installers::SystemDependent;
 
@@ -40,10 +44,10 @@ impl Installer for LuaLanguageServer<'_> {
         // point to the `bin` there.
         let repo = format!("LuaLS/{}", self.bin_name());
         let dev_tools_repo_dir = self.dev_tools_dir.join(self.bin_name());
-        let latest_release = crate::downloaders::http::github::get_latest_release_tag(&repo)?;
-        std::fs::create_dir_all(&dev_tools_repo_dir)?;
+        let latest_release = github::get_latest_release_tag(&repo)?;
+        fs::create_dir_all(&dev_tools_repo_dir)?;
 
-        let target_dir = crate::downloaders::http::run(
+        let target_dir = http::run(
             &format!(
                 "https://github.com/{repo}/releases/download/{latest_release}/{}-{latest_release}-{os}-{arch}.tar.gz",
                 self.bin_name()
@@ -55,7 +59,7 @@ impl Installer for LuaLanguageServer<'_> {
             None,
         )?;
 
-        ytil_sys::file::chmod_x(target_dir.join("bin").join(self.bin_name()))?;
+        file::chmod_x(target_dir.join("bin").join(self.bin_name()))?;
 
         Ok(())
     }

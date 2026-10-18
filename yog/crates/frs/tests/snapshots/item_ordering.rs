@@ -1,271 +1,99 @@
 //! Ordering preferences across production, test-only, macro, and source-boundary scopes.
 
-pub mod production {
-    //! Item sections, visibility, impl adjacency, callers, and attached comments.
+pub mod alphabetical_macro_conflict {
+    //! Preserve macro bindings when alphabetical module order would change them.
 
-    extern crate core;
-
-    fn unrelated() {}
-
-    use std::fmt;
-    pub use std::io;
-
-    mod private_external;
-    pub mod public_external;
-
-    unsafe extern "C" {
-        fn foreign_function();
-    }
-
-    global_asm!("");
-
-    pub mod declarations {
-        #[cfg(test)]
-        mod tests;
-
-        mod child;
-    }
-
-    pub mod nested {
-        //! Each inline module and inherent impl has its own ordering.
-
-        const PRIVATE: u8 = 0;
-        pub(super) static RESTRICTED: u8 = 1;
-        pub(crate) const CRATE: u8 = 2;
-        pub const PUBLIC: u8 = 3;
-
-        type Private = u8;
-        pub(super) type Restricted = u8;
-        pub(crate) type Crate = u8;
-        pub type Public = u8;
-
-        fn shared() {}
-
-        fn private_caller() {
-            shared();
-        }
-
-        pub(super) fn restricted() {}
-
-        pub(crate) fn crate_visible() {}
-
-        struct PrivateRecord;
-
-        impl Display for Record {
-            fn display(&self) -> u8 {
-                self.value
-            }
-        }
-
-        /// The record and both inherent impls must stay together.
-        pub struct Record {
-            value: u8,
-        }
-
-        pub fn first() {
-            shared();
-        }
-
-        impl Record {
-            fn normalize(&mut self) {
-                self.value = 0;
-            }
-
-            pub(super) fn restricted(&self) -> u8 {
-                self.value
-            }
-
-            pub(crate) fn crate_visible(&self) -> u8 {
-                self.value
-            }
-
-            pub fn reset(&mut self) {
-                self.normalize();
-            }
-        }
-
-        pub fn second() {
-            shared();
-        }
-
-        impl Record {
-            const EMPTY: u8 = 0;
-
-            fn validate(&self) -> bool {
-                self.value == 0
-            }
-
-            pub fn is_valid(&self) -> bool {
-                self.validate()
-            }
-        }
-
-        pub trait Display {
-            fn display(&self) -> u8;
-        }
-
-        mod private_inline {}
-
-        pub mod public_inline {}
-
-        #[cfg(test)]
-        mod tests {
-            fn sample() -> u8 {
-                0
-            }
-
-            #[test]
-            fn record_starts_empty() {
-                let _ = sample();
-            }
+    #[macro_use]
+    mod zebra {
+        macro_rules! m {
+            () => {};
         }
     }
 
-    type PrivateAlias = u8;
-
-    const PRIVATE_LIMIT: u8 = 1;
-
-    pub static PUBLIC_LIMIT: u8 = 2;
-
-    pub type PublicAlias = u8;
-
-    // Private helper documentation travels with its function.
-    fn helper() -> u8 {
-        1
-    } // Keep this trailing comment with helper.
-
-    /// Public entry documentation travels with its function.
-    pub fn entry() -> u8 {
-        helper()
-    }
-
-    pub enum Mode {
-        Ready,
-    }
-
-    pub union Storage {
-        byte: u8,
-        word: u32,
-    }
-
-    #[test]
-    fn production_test_stays_after_helpers() {
-        let _ = helper();
-    }
-
-    #[cfg(test)]
-    mod tests {
-        fn sample() -> u8 {
-            1
-        }
-
-        #[test]
-        fn entry_returns_sample() {
-            let _ = sample();
-        }
+    mod alpha {
+        m!();
     }
 }
 
-#[cfg(test)]
-pub mod tests {
-    //! Test-only scopes put tests before helpers, including inside nested modules and impls.
+pub mod boundaries {
+    //! Preserve comments, Unicode, same-line boundaries, and conditional declarations.
 
-    fn sample() -> u8 {
-        1
+    pub mod comments {
+        //! Scope documentation stays in this module.
+
+        // Blank-separated scope header stays in its original slot.
+
+        /* Public documentation */
+        /// Public API documentation stays with beta.
+        pub fn β() {}
+        // private tail
+
+        // Private documentation stays with alpha.
+        #[cfg(unix)]
+        fn α() {} /* first */
     }
 
-    fn build() -> u8 {
-        sample()
-    }
+    pub mod conditional_types {
+        #[cfg(feature = "first")]
+        pub struct Data;
 
-    #[test]
-    fn first_uses_builder() {
-        let _ = build();
-    }
+        #[cfg(not(feature = "first"))]
+        pub struct Data;
 
-    #[rstest::rstest]
-    #[case(1)]
-    fn parameterized_uses_sample(#[case] expected: u8) {
-        let _ = (sample(), expected);
-    }
-
-    pub mod nested {
-        fn helper() {}
-
-        pub struct Fixture;
-
-        impl Fixture {
-            fn helper() {}
-
-            #[test]
-            fn example() {
-                Self::helper();
+        impl Data {
+            pub fn new() -> Self {
+                Self
             }
         }
 
-        #[custom::integration_test]
-        fn nested_test() {
-            helper();
+        pub fn entry() -> Data {
+            Data::new()
         }
     }
 
-    #[cfg(test)]
-    mod tests {
-        fn helper() {}
+    pub mod inner_docs {
+        #![allow(dead_code)]
+        pub fn public() {}
 
-        #[test]
-        fn example() {
-            helper();
+        /* Private note stays with its function. */
+        fn private() {}
+    }
+
+    pub mod nested_comments {
+        pub fn public() {}
+
+        fn private() {} /* trailing
+        //
+        /* nested */
+         */
+    }
+
+    pub mod repeated_impl_labels {
+        pub struct Data;
+
+        #[cfg(unix)]
+        impl Data {
+            pub fn public() {}
+
+            fn private() {}
+        }
+
+        #[cfg(windows)]
+        impl Data {
+            pub fn public() {}
+
+            fn private() {}
         }
     }
 
-    // Attribute arguments do not turn this helper into a test.
-    #[tracing::instrument(name = "test")]
-    fn traced_helper() {}
-
-    pub mod recursive_tests {
-        #[test]
-        fn first() {
-            second();
-        }
-
-        fn helper() {}
-
-        #[test]
-        fn second() {
-            first();
-        }
-    }
-
-    pub mod sections {
-        fn helper() {
-            example();
-        }
-
-        #[test]
-        fn example() {
-            helper();
-        }
-
-        fn unrelated() {}
+    pub mod same_line {
+        pub fn β() {}
+        fn α() {}
     }
 }
 
 pub mod exceptions {
     //! Ordering exceptions preserve macro binding and independent safe inner fixes.
-
-    pub mod imported_macros {
-        fn private_before() {}
-
-        pub fn public_before() {}
-
-        #[macro_use]
-        mod macros;
-
-        fn private_after() {}
-
-        pub fn public_after() {}
-    }
 
     pub mod conditional_macro_imports {
         mod before;
@@ -281,21 +109,68 @@ pub mod exceptions {
         pub mod after;
     }
 
-    pub mod local_references {
-        fn direct() {}
+    pub mod conflicting_outer_scope {
+        #[custom]
+        struct Data;
 
-        fn attribute() {}
-
-        fn assertion() -> bool {
-            true
+        macro_rules! m {
+            () => {};
         }
 
-        fn nested_tokens() {}
+        impl Data {
+            pub fn public() {}
 
-        fn stringified() {}
+            fn private() {
+                m!();
+            }
+        }
+    }
 
-        fn identifier() {}
+    pub mod helper_chain {
+        pub fn entry() {
+            middle();
+        }
 
+        fn middle() {
+            leaf();
+        }
+
+        fn leaf() {}
+
+        fn unrelated() {}
+    }
+
+    pub mod imported_macros {
+        #[macro_use]
+        mod macros;
+
+        pub fn public_before() {}
+
+        pub fn public_after() {}
+
+        fn private_before() {}
+
+        fn private_after() {}
+    }
+
+    pub mod imported_then_local_macro {
+        #[macro_use]
+        mod macros;
+
+        mod before {
+            m!();
+        }
+
+        macro_rules! m {
+            () => {};
+        }
+
+        mod after {
+            m!();
+        }
+    }
+
+    pub mod local_references {
         fn macro_name() {}
 
         fn text_only() {}
@@ -320,43 +195,33 @@ pub mod exceptions {
                 nested_only();
             }
         }
+
+        fn direct() {}
+
+        fn attribute() {}
+
+        fn assertion() -> bool {
+            true
+        }
+
+        fn nested_tokens() {}
+
+        fn stringified() {}
+
+        fn identifier() {}
     }
 
-    pub mod helper_chain {
-        fn leaf() {}
+    pub mod macro_sections {
+        const VALUE: u8 = 1;
 
-        fn middle() {
-            leaf();
+        macro_rules! m {
+            () => {
+                pub const V: u8 = super::VALUE;
+            };
         }
 
-        fn unrelated() {}
-
-        pub fn entry() {
-            middle();
-        }
-    }
-
-    pub mod recursive_block {
-        fn odd(n: u32) -> bool {
-            n != 0 && even(n - 1)
-        }
-
-        pub fn parity(n: u32) -> bool {
-            even(n)
-        }
-
-        pub struct Data {
-            pub value: u32,
-        }
-
-        impl Data {
-            pub fn new(value: u32) -> Self {
-                Self { value }
-            }
-        }
-
-        fn even(n: u32) -> bool {
-            n == 0 || odd(n - 1)
+        pub mod child {
+            m!();
         }
     }
 
@@ -382,31 +247,51 @@ pub mod exceptions {
         }
     }
 
-    pub mod imported_then_local_macro {
-        #[macro_use]
-        mod macros;
-
-        mod before {
-            m!();
+    pub mod production_sections {
+        fn helper() {
+            example();
         }
 
-        macro_rules! m {
-            () => {};
+        fn unrelated() {}
+
+        #[test]
+        fn example() {
+            helper();
+        }
+    }
+
+    pub mod recursive_block {
+        pub fn parity(n: u32) -> bool {
+            even(n)
         }
 
-        mod after {
-            m!();
+        pub struct Data {
+            pub value: u32,
+        }
+
+        impl Data {
+            pub fn new(value: u32) -> Self {
+                Self { value }
+            }
+        }
+
+        fn odd(n: u32) -> bool {
+            n != 0 && even(n - 1)
+        }
+
+        fn even(n: u32) -> bool {
+            n == 0 || odd(n - 1)
         }
     }
 
     pub mod type_crosses_macro_source {
-        struct Data;
-
         macro_rules! value {
             () => {
                 7
             };
         }
+
+        struct Data;
 
         impl Data {
             fn value() -> u8 {
@@ -416,9 +301,9 @@ pub mod exceptions {
     }
 
     pub mod type_crosses_opaque_source {
-        struct Data;
-
         declare_macros!();
+
+        struct Data;
 
         impl Data {
             fn value() -> u8 {
@@ -430,41 +315,11 @@ pub mod exceptions {
     pub mod unused_macro_between_type_and_impl {
         struct Data;
 
+        impl Data {}
+
         macro_rules! unused {
             () => {};
         }
-
-        impl Data {}
-    }
-
-    pub mod conflicting_outer_scope {
-        #[custom]
-        struct Data;
-
-        macro_rules! m {
-            () => {};
-        }
-
-        impl Data {
-            fn private() {
-                m!();
-            }
-
-            pub fn public() {}
-        }
-    }
-
-    pub mod production_sections {
-        fn helper() {
-            example();
-        }
-
-        #[test]
-        fn example() {
-            helper();
-        }
-
-        fn unrelated() {}
     }
 
     #[cfg(test)]
@@ -473,63 +328,231 @@ pub mod exceptions {
             struct Data;
 
             impl Data {
-                pub fn helper() {}
-
                 #[test]
                 fn example() {}
-            }
 
-            fn helper() {}
+                pub fn helper() {}
+            }
 
             #[test]
             fn example() {}
-        }
-    }
 
-    pub mod macro_sections {
-        macro_rules! m {
-            () => {
-                pub const V: u8 = super::VALUE;
-            };
+            fn helper() {}
         }
-
-        pub mod child {
-            m!();
-        }
-
-        const VALUE: u8 = 1;
     }
 }
 
-pub mod test_module_placement {
-    #[cfg(test)]
-    pub mod test {
-        fn helper() {}
+pub mod inline_module_placement {
+    //! Inline modules follow other declarations, alphabetically, with tests last regardless of visibility.
 
-        #[test]
-        fn example() {}
+    mod external;
+
+    fn entry() {}
+
+    // This comment and the nested module move together.
+    mod alpha {
+        fn entry() {}
+
+        mod alpha {}
+
+        pub mod zebra {}
+
+        mod tests {}
     }
 
     #[cfg(test)]
     mod checks {}
 
-    fn production() {}
+    pub mod zebra {}
 
+    pub mod tests {}
+}
+
+pub mod production {
+    //! Item sections, visibility, impl adjacency, callers, and attached comments.
+
+    extern crate core;
+
+    use std::fmt;
+
+    pub use std::io;
+    mod private_external;
+
+    pub mod public_external;
+    unsafe extern "C" {
+        fn foreign_function();
+    }
+
+    global_asm!("");
+
+    pub static PUBLIC_LIMIT: u8 = 2;
+
+    const PRIVATE_LIMIT: u8 = 1;
+
+    pub type PublicAlias = u8;
+
+    type PrivateAlias = u8;
+
+    /// Public entry documentation travels with its function.
+    pub fn entry() -> u8 {
+        helper()
+    }
+
+    pub enum Mode {
+        Ready,
+    }
+
+    pub union Storage {
+        byte: u8,
+        word: u32,
+    }
+
+    fn unrelated() {}
+
+    // Private helper documentation travels with its function.
+    fn helper() -> u8 {
+        1
+    } // Keep this trailing comment with helper.
+
+    #[test]
+    fn production_test_stays_after_helpers() {
+        let _ = helper();
+    }
+
+    pub mod declarations {
+        mod child;
+
+        #[cfg(test)]
+        mod tests;
+    }
+
+    pub mod nested {
+        //! Each inline module and inherent impl has its own ordering.
+
+        pub const PUBLIC: u8 = 3;
+        pub(crate) const CRATE: u8 = 2;
+        pub(super) static RESTRICTED: u8 = 1;
+        const PRIVATE: u8 = 0;
+
+        pub type Public = u8;
+        pub(crate) type Crate = u8;
+        pub(super) type Restricted = u8;
+        type Private = u8;
+
+        /// The record and both inherent impls must stay together.
+        pub struct Record {
+            value: u8,
+        }
+
+        impl Record {
+            pub fn reset(&mut self) {
+                self.normalize();
+            }
+
+            pub(crate) fn crate_visible(&self) -> u8 {
+                self.value
+            }
+
+            pub(super) fn restricted(&self) -> u8 {
+                self.value
+            }
+
+            fn normalize(&mut self) {
+                self.value = 0;
+            }
+        }
+
+        impl Record {
+            const EMPTY: u8 = 0;
+
+            pub fn is_valid(&self) -> bool {
+                self.validate()
+            }
+
+            fn validate(&self) -> bool {
+                self.value == 0
+            }
+        }
+
+        impl Display for Record {
+            fn display(&self) -> u8 {
+                self.value
+            }
+        }
+
+        pub fn first() {
+            shared();
+        }
+
+        pub fn second() {
+            shared();
+        }
+
+        pub trait Display {
+            fn display(&self) -> u8;
+        }
+
+        pub(crate) fn crate_visible() {}
+
+        pub(super) fn restricted() {}
+
+        fn shared() {}
+
+        fn private_caller() {
+            shared();
+        }
+
+        struct PrivateRecord;
+
+        mod private_inline {}
+
+        pub mod public_inline {}
+
+        #[cfg(test)]
+        mod tests {
+            #[test]
+            fn record_starts_empty() {
+                let _ = sample();
+            }
+
+            fn sample() -> u8 {
+                0
+            }
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        #[test]
+        fn entry_returns_sample() {
+            let _ = sample();
+        }
+
+        fn sample() -> u8 {
+            1
+        }
+    }
+}
+
+pub mod test_module_placement {
     const VALUE: u8 = 1;
 
-    mod ordinary {}
+    fn production() {}
+
+    #[cfg(test)]
+    mod checks {}
 
     pub mod external_declarations {
-        const VALUE: u8 = 1;
-
         #[cfg(test)]
         mod test;
 
         #[cfg(test)]
-        mod tests;
+        mod checks;
 
         #[cfg(test)]
-        mod checks;
+        mod tests;
+
+        const VALUE: u8 = 1;
     }
 
     pub mod macro_conflict {
@@ -541,13 +564,13 @@ pub mod test_module_placement {
 
         #[cfg(test)]
         mod test {
-            fn helper() -> u8 {
-                value!()
-            }
-
             #[test]
             fn example() {
                 assert_eq!(helper(), 1);
+            }
+
+            fn helper() -> u8 {
+                value!()
             }
         }
 
@@ -557,122 +580,99 @@ pub mod test_module_placement {
             };
         }
     }
-}
 
-pub mod inline_module_placement {
-    //! Inline modules follow other declarations, alphabetically, with tests last regardless of visibility.
-
-    pub mod tests {}
-
-    pub mod zebra {}
-
-    mod external;
+    mod ordinary {}
 
     #[cfg(test)]
-    mod checks {}
+    pub mod test {
+        #[test]
+        fn example() {}
 
-    // This comment and the nested module move together.
-    mod alpha {
-        mod tests {}
-
-        pub mod zebra {}
-
-        mod alpha {}
-
-        fn entry() {}
-    }
-
-    fn entry() {}
-}
-
-pub mod alphabetical_macro_conflict {
-    //! Preserve macro bindings when alphabetical module order would change them.
-
-    #[macro_use]
-    mod zebra {
-        macro_rules! m {
-            () => {};
-        }
-    }
-
-    mod alpha {
-        m!();
+        fn helper() {}
     }
 }
 
-pub mod boundaries {
-    //! Preserve comments, Unicode, same-line boundaries, and conditional declarations.
+#[cfg(test)]
+pub mod tests {
+    //! Test-only scopes put tests before helpers, including inside nested modules and impls.
 
-    pub mod comments {
-        //! Scope documentation stays in this module.
-
-        // Blank-separated scope header stays in its original slot.
-
-        // Private documentation stays with alpha.
-        #[cfg(unix)]
-        fn α() {} /* first */
-        // private tail
-
-        /* Public documentation */
-        /// Public API documentation stays with beta.
-        pub fn β() {}
+    #[test]
+    fn first_uses_builder() {
+        let _ = build();
     }
 
-    pub mod same_line {
-        fn α() {}
-        pub fn β() {}
+    #[rstest::rstest]
+    #[case(1)]
+    fn parameterized_uses_sample(#[case] expected: u8) {
+        let _ = (sample(), expected);
     }
 
-    pub mod inner_docs {
-        #![allow(dead_code)]
-        /* Private note stays with its function. */
-        fn private() {}
-
-        pub fn public() {}
+    fn build() -> u8 {
+        sample()
     }
 
-    pub mod nested_comments {
-        fn private() {} /* trailing
-        //
-        /* nested */
-         */
-
-        pub fn public() {}
+    fn sample() -> u8 {
+        1
     }
 
-    pub mod conditional_types {
-        #[cfg(feature = "first")]
-        pub struct Data;
+    // Attribute arguments do not turn this helper into a test.
+    #[tracing::instrument(name = "test")]
+    fn traced_helper() {}
 
-        #[cfg(not(feature = "first"))]
-        pub struct Data;
+    pub mod nested {
+        pub struct Fixture;
 
-        pub fn entry() -> Data {
-            Data::new()
-        }
-
-        impl Data {
-            pub fn new() -> Self {
-                Self
+        impl Fixture {
+            #[test]
+            fn example() {
+                Self::helper();
             }
+
+            fn helper() {}
         }
+
+        #[custom::integration_test]
+        fn nested_test() {
+            helper();
+        }
+
+        fn helper() {}
     }
 
-    pub mod repeated_impl_labels {
-        pub struct Data;
-
-        #[cfg(unix)]
-        impl Data {
-            fn private() {}
-
-            pub fn public() {}
+    pub mod recursive_tests {
+        #[test]
+        fn first() {
+            second();
         }
 
-        #[cfg(windows)]
-        impl Data {
-            fn private() {}
-
-            pub fn public() {}
+        #[test]
+        fn second() {
+            first();
         }
+
+        fn helper() {}
+    }
+
+    pub mod sections {
+        #[test]
+        fn example() {
+            helper();
+        }
+
+        fn helper() {
+            example();
+        }
+
+        fn unrelated() {}
+    }
+
+    #[cfg(test)]
+    mod tests {
+        #[test]
+        fn example() {
+            helper();
+        }
+
+        fn helper() {}
     }
 }

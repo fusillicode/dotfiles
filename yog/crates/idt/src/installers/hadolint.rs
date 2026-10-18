@@ -3,7 +3,9 @@ use std::path::Path;
 use ytil_sys::Arch;
 use ytil_sys::Os;
 use ytil_sys::SysInfo;
+use ytil_sys::file;
 
+use crate::downloaders::http;
 use crate::downloaders::http::deflate::ChecksumSource;
 use crate::downloaders::http::deflate::HttpDeflateOption;
 use crate::installers::Installer;
@@ -43,7 +45,7 @@ impl Installer for Hadolint<'_> {
             self.bin_name()
         );
 
-        let target = crate::downloaders::http::run(
+        let target = http::run(
             &format!(
                 "https://github.com/{0}/{0}/releases/latest/download/{filename}",
                 self.bin_name()
@@ -57,7 +59,7 @@ impl Installer for Hadolint<'_> {
             }),
         )?;
 
-        ytil_sys::file::chmod_x(&target)?;
+        file::chmod_x(&target)?;
 
         Ok(())
     }

@@ -25,16 +25,16 @@ use syn::Path;
 use syn::UseRename;
 use syn::UseTree;
 use syn::Visibility;
+use syn::visit;
 use syn::visit::Visit;
 
 use super::Rule;
+use super::common;
 use super::common::ImportError;
-use super::common::comments_reason;
-use super::common::local_names;
+use super::common::import_resolution;
 use super::common::module_idx;
 use super::common::module_idx::ModuleIdx;
 use super::common::module_idx::ModuleScope;
-use super::common::module_idx::has_external_modules;
 use crate::cmds::rsl::analysis::FixBlockReason;
 use crate::cmds::rsl::analysis::RuleChange;
 use crate::cmds::rsl::analysis::RulePlan;
@@ -53,7 +53,7 @@ impl Rule for ImportAliasingRule {
             edits: SourceEditor::new(ctx.source),
             findings: Vec::new(),
         };
-        let idx = module_idx(ctx.file);
+        let idx = common::module_idx(ctx.file);
 
         for scope in &idx.scopes {
             analyze_scope(&idx, scope, &mut plan)?;
@@ -144,7 +144,7 @@ fn analyze_scope(idx: &ModuleIdx<'_>, scope: &ModuleScope<'_>, plan: &mut RulePl
         .cloned()
         .chain(info.imports.iter().map(|binding| binding.name.clone()))
         .collect();
-    let local = local_names(scope.items);
+    let local = common::local_names(scope.items);
     let mut aliases = Vec::new();
 
     for item in scope.items {
@@ -208,7 +208,7 @@ fn analyze_scope(idx: &ModuleIdx<'_>, scope: &ModuleScope<'_>, plan: &mut RulePl
             Some(BlockReason::CrossModuleReferences.into())
         } else if references.opaque {
             Some(BlockReason::UnresolvedReferences.into())
-        } else if has_external_modules(scope.items) {
+        } else if module_idx::has_external_modules(scope.items) {
             Some(BlockReason::ExternalModules.into())
         } else {
             None
@@ -230,7 +230,7 @@ fn analyze_scope(idx: &ModuleIdx<'_>, scope: &ModuleScope<'_>, plan: &mut RulePl
 
         let text = plan.edits.source_range(change.alias_suffix.clone());
         if text.contains("/*") || text.contains("//") {
-            plan.record_blocked(&change, comments_reason());
+            plan.record_blocked(&change, common::comments_reason());
             continue;
         }
 
@@ -318,7 +318,7 @@ impl<'ast> Visit<'ast> for AliasReferences<'_> {
             self.opaque = true;
         }
 
-        syn::visit::visit_path(self, path);
+        visit::visit_path(self, path);
     }
 
     fn visit_field_value(&mut self, field: &'ast FieldValue) {
@@ -336,13 +336,13 @@ impl<'ast> Visit<'ast> for AliasReferences<'_> {
             return;
         }
 
-        syn::visit::visit_field_value(self, field);
+        visit::visit_field_value(self, field);
     }
 
     fn visit_item_mod(&mut self, _module: &'ast ItemMod) {}
 
     fn visit_item_use(&mut self, item: &'ast ItemUse) {
-        let bindings = super::common::import_resolution::use_bindings(&item.tree, &[]);
+        let bindings = import_resolution::use_bindings(&item.tree, &[]);
 
         if bindings
             .bindings
@@ -371,7 +371,7 @@ impl<'ast> Visit<'ast> for AliasReferences<'_> {
             self.tokens(tokens.clone());
         }
 
-        syn::visit::visit_expr(self, expression);
+        visit::visit_expr(self, expression);
     }
 
     fn visit_item(&mut self, item: &'ast Item) {
@@ -379,6 +379,6 @@ impl<'ast> Visit<'ast> for AliasReferences<'_> {
             self.tokens(tokens.clone());
         }
 
-        syn::visit::visit_item(self, item);
+        visit::visit_item(self, item);
     }
 }
