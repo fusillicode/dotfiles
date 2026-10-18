@@ -71,6 +71,82 @@ pub mod same_module_calls {
 
 fn root_function() {}
 
+pub mod attribute_macro_calls {
+    use std::mem::drop as imported_drop;
+
+    fn helper() {}
+
+    #[test]
+    fn builtin_test() {
+        self::helper();
+    }
+
+    #[tokio::test]
+    async fn async_test() {
+        self::helper();
+        crate::fixture::attribute_macro_calls::helper();
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn configured_async_test() {
+        self::helper();
+    }
+
+    #[tokio::test]
+    async fn shadowed_test() {
+        let helper = || ();
+        self::helper();
+    }
+
+    #[tokio::test]
+    async fn unknown_block_macro() {
+        make_bindings!();
+        self::helper();
+    }
+
+    #[tokio::test]
+    #[make_bindings]
+    async fn mixed_attributes() {
+        self::helper();
+    }
+
+    #[test]
+    #[make_bindings]
+    fn builtin_with_unknown_attribute() {
+        self::helper();
+    }
+
+    #[other::test]
+    fn test_named_function_with_unknown_attribute() {
+        self::helper();
+    }
+
+    #[other::tokio::test]
+    async fn qualified_attribute_path() {
+        self::helper();
+    }
+
+    #[custom_attribute]
+    fn unknown_attribute_with_shadow(helper: fn()) {
+        self::helper();
+    }
+
+    #[custom_attribute]
+    fn nested_attributes() {
+        #[another_attribute]
+        fn nested() {}
+
+        self::helper();
+    }
+
+    #[custom_attribute]
+    async fn preserve_imports() {
+        imported_drop(1);
+        std::fs::read_to_string("x");
+        self::helper();
+    }
+}
+
 pub mod attribute_function_import {
     use facade::drop;
     #[drop]
