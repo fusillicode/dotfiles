@@ -10,16 +10,13 @@ use proc_macro2::Span;
 
 use super::Rule;
 use super::common::ImportEdits;
-use super::common::ImportError;
-use super::common::calls_in_scope;
+use super::common::analyze_calls;
 use super::common::ensure_no_comments;
 use super::common::expected_fn_path;
-use super::common::local_names;
 use super::common::module_idx;
 use super::common::module_idx::ModuleIdx;
 use super::common::module_idx::ModuleScope;
 use super::common::path_resolution::path_label;
-use crate::cmds::rsl::analysis::FixBlockReason;
 use crate::cmds::rsl::analysis::RuleChange;
 use crate::cmds::rsl::analysis::RulePlan;
 use crate::cmds::rsl::engine::FileContext;
@@ -71,22 +68,6 @@ impl RuleChange for Change<'_> {
     }
 }
 
-enum BlockReason {
-    MissingModuleContext,
-}
-
-impl From<BlockReason> for FixBlockReason {
-    fn from(reason: BlockReason) -> Self {
-        match reason {
-            BlockReason::MissingModuleContext => Self {
-                code: "parent-module-unknown",
-                message: "The required crate or parent-module context is outside this file.".to_owned(),
-                help: "Use the correct crate:: path after checking the surrounding modules.",
-            },
-        }
-    }
-}
-
 fn analyze_scope(
     ctx: &FileContext<'_>,
     idx: &ModuleIdx<'_>,
@@ -97,10 +78,10 @@ fn analyze_scope(
         return Ok(());
     };
 
-    let mut imports = ImportEdits::new(scope, info);
-    let reserved = local_names(scope.items);
+    let analysis = analyze_calls(scope, idx);
+    let mut imports = ImportEdits::for_calls(scope, info, &analysis);
 
-    for call in calls_in_scope(scope.items) {
+    for call in &analysis.calls {
         if call.is_bare() {
             continue;
         }
@@ -127,33 +108,7 @@ fn analyze_scope(
             continue;
         }
 
-        let module_name = suggestion.expected_path.split("::").next().unwrap_or_default();
-
-        let reason = if info.unknown_imports {
-            Some(ImportError::UnknownImports.into())
-        } else if suggestion.requires_crate_context(source_path) {
-            Some(FixBlockReason::from(BlockReason::MissingModuleContext))
-        } else if reserved.has_unknown_bindings() {
-            Some(ImportError::UnknownBindings.into())
-        } else if reserved.contains(module_name) {
-            Some(
-                ImportError::NameConflict {
-                    name: module_name.to_owned(),
-                }
-                .into(),
-            )
-        } else {
-            None
-        };
-
-        if let Some(reason) = reason {
-            plan.record_blocked(&change, reason);
-            continue;
-        }
-
-        if let Some(import) = &suggestion.required_import
-            && let Err(reason) = imports.request(import)
-        {
+        if let Err(reason) = call.prepare_rewrite(&suggestion, scope, info, &mut imports) {
             plan.record_blocked(&change, reason);
             continue;
         }

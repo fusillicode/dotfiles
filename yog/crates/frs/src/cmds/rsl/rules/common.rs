@@ -1,12 +1,10 @@
 //! Shared name resolution and supporting edit plans for rule analysis.
 
-pub(super) use fn_call_analysis::calls_in_scope;
-pub(super) use fn_path_resolution::FnCallSuggestion;
+pub(super) use fn_call_analysis::analyze_calls;
 pub(super) use fn_path_resolution::expected_fn_path;
 pub(super) use import_cleanup::plan_unused_fn_import_removals;
 pub(super) use import_edits::ImportEdits;
 pub(super) use import_edits::ImportError;
-pub(super) use import_edits::LocalNames;
 pub(super) use import_edits::local_names;
 pub(super) use import_resolution::has_name_clash_parts;
 pub(super) use module_idx::module_idx;

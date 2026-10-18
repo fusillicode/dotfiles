@@ -17,6 +17,8 @@ use syn::TypeParam;
 use syn::spanned::Spanned;
 use syn::visit::Visit;
 
+use super::fn_call_analysis::CallAnalysis;
+use super::fn_call_analysis::module_type_names;
 use super::module_idx::ModuleScope;
 use super::module_idx::ScopeInfo;
 use crate::cmds::rsl::analysis::FixBlockReason;
@@ -29,6 +31,8 @@ pub(in crate::cmds::rsl::rules) enum ImportError {
     UnknownBindings,
     NameConflict { name: String },
     ConflictingImport { name: String, existing: String },
+    ExistingReferences { name: String },
+    ExternalModuleReferences,
 }
 
 impl From<ImportError> for FixBlockReason {
@@ -54,6 +58,16 @@ impl From<ImportError> for FixBlockReason {
                 message: format!("The name `{name}` is already imported from `{existing}`."),
                 help: "Keep the existing spelling, or rename the conflicting item.",
             },
+            ImportError::ExistingReferences { name } => Self {
+                code: "import-capture",
+                message: format!("Adding an import named `{name}` could change existing references."),
+                help: "Check the existing references before introducing this module import.",
+            },
+            ImportError::ExternalModuleReferences => Self {
+                code: "external-modules",
+                message: "A child module in another file may observe the new module import.".to_owned(),
+                help: "Check child-module references before introducing this import.",
+            },
         }
     }
 }
@@ -63,6 +77,7 @@ pub(in crate::cmds::rsl::rules) struct ImportEdits {
     reserved: LocalNames,
     unknown: bool,
     additions: BTreeSet<String>,
+    capture_names: HashSet<String>,
 }
 
 impl ImportEdits {
@@ -80,6 +95,28 @@ impl ImportEdits {
             reserved,
             unknown: info.unknown_imports,
             additions: BTreeSet::new(),
+            capture_names: HashSet::new(),
+        }
+    }
+
+    pub(in crate::cmds::rsl::rules) fn for_calls(
+        scope: &ModuleScope<'_>,
+        info: &ScopeInfo,
+        analysis: &CallAnalysis<'_>,
+    ) -> Self {
+        Self {
+            bindings: info
+                .imports
+                .iter()
+                .map(|binding| (binding.name.clone(), binding.source_path.join("::")))
+                .collect(),
+            reserved: LocalNames {
+                names: module_type_names(scope.items),
+                unknown: analysis.opaque_expansions,
+            },
+            unknown: info.unknown_imports,
+            additions: BTreeSet::new(),
+            capture_names: analysis.free_type_names.clone(),
         }
     }
 
@@ -111,6 +148,24 @@ impl ImportEdits {
         self.additions.insert(path.to_owned());
 
         Ok(())
+    }
+
+    pub(in crate::cmds::rsl::rules) fn request_call_module(
+        &mut self,
+        path: &str,
+        scope: &ModuleScope<'_>,
+    ) -> Result<(), ImportError> {
+        let name = path.rsplit("::").next().unwrap_or(path);
+        if self.bindings.get(name).is_some_and(|existing| existing == path) {
+            return Ok(());
+        }
+        if super::module_idx::has_external_modules(scope.items) {
+            return Err(ImportError::ExternalModuleReferences);
+        }
+        if self.capture_names.contains(name) {
+            return Err(ImportError::ExistingReferences { name: name.to_owned() });
+        }
+        self.request(path)
     }
 
     pub(in crate::cmds::rsl::rules) fn apply(

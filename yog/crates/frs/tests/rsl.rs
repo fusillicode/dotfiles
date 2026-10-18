@@ -167,31 +167,71 @@ mod tests {
     #[rstest::rstest]
     #[case::name_conflict(
         "qualified-item",
-        "struct PathBuf;\nfn run(_: std::path::PathBuf) {}\n",
-        "<file>:2:11: skipped [qualified-item/name-conflict]: replace `std::path::PathBuf` with `PathBuf`\n  \
+        r"
+            struct PathBuf;
+
+            fn run(_: std::path::PathBuf) {}
+        ",
+        "<file>:4:23: skipped [qualified-item/name-conflict]: replace `std::path::PathBuf` with `PathBuf`\n  \
          Reason: The name `PathBuf` may refer to another item or local binding.\n  \
          Help: Keep the existing spelling, or rename the conflicting item.\n"
     )]
     #[case::comments(
         "qualified-item",
-        "fn run(_: std /* keep */ ::path::PathBuf) {}\n",
-        "<file>:1:11: skipped [qualified-item/comments]: replace `std::path::PathBuf` with `PathBuf`\n  \
+        r"
+            fn run(_: std /* keep */ ::path::PathBuf) {}
+        ",
+        "<file>:2:23: skipped [qualified-item/comments]: replace `std::path::PathBuf` with `PathBuf`\n  \
          Reason: The change could remove comments inside the affected code.\n  \
          Help: Move or preserve the comments before making this change manually.\n"
     )]
     #[case::unknown_imports(
         "qualified-item",
-        "use other::*;\nfn run(_: std::path::PathBuf) {}\n",
-        "<file>:2:11: skipped [qualified-item/unknown-imports]: replace `std::path::PathBuf` with `PathBuf`\n  \
+        r"
+            use other::*;
+
+            fn run(_: std::path::PathBuf) {}
+        ",
+        "<file>:4:23: skipped [qualified-item/unknown-imports]: replace `std::path::PathBuf` with `PathBuf`\n  \
          Reason: A wildcard, attributed, or absolute import prevents checking all available names.\n  \
          Help: Use explicit imports so the names available in this module can be checked.\n"
     )]
     #[case::exported_alias(
         "aliased-import",
-        "pub use std::path::PathBuf as Buffer;\n",
-        "<file>:1:31: skipped [aliased-import/exported-alias]: replace alias `Buffer` with `PathBuf`\n  \
+        r"
+            pub use std::path::PathBuf as Buffer;
+        ",
+        "<file>:2:43: skipped [aliased-import/exported-alias]: replace alias `Buffer` with `PathBuf`\n  \
          Reason: Other code may depend on the name exported by this import.\n  \
          Help: Keep this exported name unless its callers can also be updated.\n"
+    )]
+    #[case::module_import_capture(
+        "overqualified-call",
+        r#"
+            fn other(value: &str) {
+                str::len(value);
+            }
+
+            fn run() {
+                std::str::from_utf8(b"x");
+            }
+        "#,
+        "<file>:7:17: skipped [overqualified-call/import-capture]: replace `std::str::from_utf8` with `str::from_utf8`\n  \
+         Reason: Adding an import named `str` could change existing references.\n  \
+         Help: Check the existing references before introducing this module import.\n"
+    )]
+    #[case::module_import_external_references(
+        "overqualified-call",
+        r#"
+            mod child;
+
+            fn run() {
+                std::fs::read_to_string("x");
+            }
+        "#,
+        "<file>:5:17: skipped [overqualified-call/external-modules]: replace `std::fs::read_to_string` with `fs::read_to_string`\n  \
+         Reason: A child module in another file may observe the new module import.\n  \
+         Help: Check child-module references before introducing this import.\n"
     )]
     fn test_rsl_when_a_change_is_blocked_reports_its_exact_cause(
         #[case] rule: &str,

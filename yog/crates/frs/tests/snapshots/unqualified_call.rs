@@ -197,6 +197,7 @@ pub mod block_static {
 
 pub mod external_references {
     use std::mem::drop as drop_external_references;
+    use std::mem;
     mod child;
     fn run() {
         drop_external_references(1);
@@ -240,4 +241,175 @@ pub mod function_name_binding {
     }
 
     fn other(drop_function_name_binding: fn(u8)) {}
+}
+
+pub mod standard_macros {
+    use std::fs::read_to_string;
+    fn run() {
+        println!("reading");
+        read_to_string("x");
+    }
+}
+
+pub mod unrelated_macro {
+    use std::fs;
+    use std::fs::read_to_string;
+    fn other() {
+        make_bindings!();
+    }
+    fn run() {
+        read_to_string("x");
+    }
+}
+
+pub mod known_module_with_glob {
+    use std::fs;
+    use std::fs::read_to_string;
+    use unknown::*;
+    fn run() {
+        read_to_string("x");
+    }
+}
+
+pub mod glob_could_capture_module {
+    use std::fs::read_to_string;
+    use unknown::*;
+    fn run() {
+        read_to_string("x");
+    }
+}
+
+pub mod let_binding_order {
+    use std::mem::drop as discard;
+    fn run() {
+        discard(1);
+        let discard = |_: u8| ();
+        discard(2);
+    }
+}
+
+pub mod nested_block {
+    use std::mem;
+    use std::mem::drop as discard;
+    fn run() {
+        {
+            mod mem {}
+            discard(1);
+        }
+        discard(2);
+    }
+}
+
+pub mod let_chain_else {
+    use std::mem::drop as discard;
+    fn run() {
+        if let Some(discard) = None::<fn(u8)> && { discard(1); true } {
+            discard(2);
+        } else {
+            discard(3);
+        }
+    }
+}
+
+pub mod initializer_uses_outer_binding {
+    use std::mem::drop as discard;
+    fn run() {
+        let discard = { discard(1); |_: u8| () };
+        discard(2);
+    }
+}
+
+pub mod nested_item_function {
+    use std::mem::drop as discard;
+    fn run() {
+        fn nested() {
+            discard(1);
+        }
+        let discard = |_: u8| ();
+        discard(2);
+    }
+}
+
+pub mod external_crate_qualifier {
+    use rootcause::report;
+    mod child;
+    fn run() {
+        report("failure");
+    }
+}
+
+pub mod external_import_insertion {
+    use std::mem::drop as discard;
+    mod child;
+    fn run() {
+        discard(1);
+    }
+}
+
+pub mod type_parameter {
+    use std::mem::drop as discard;
+    fn run<mem>() {
+        discard(1);
+    }
+}
+
+pub mod known_block_module {
+    use std::mem::drop as discard;
+    fn run() {
+        use std::mem;
+        discard(1);
+    }
+}
+
+pub mod conflicting_block_module {
+    use std::mem::drop as discard;
+    fn run() {
+        use other::mem;
+        discard(1);
+    }
+}
+
+pub mod opaque_attribute_reference {
+    use std::mem;
+    use std::mem::drop as discard;
+    #[make_reference]
+    fn other() {}
+    fn run() {
+        discard(1);
+    }
+}
+
+pub mod match_guard_binding {
+    use std::mem::drop as discard;
+    fn run() {
+        match () {
+            _ if let Some(discard) = None::<fn(u8)> => discard(1),
+            _ => discard(2),
+        }
+    }
+}
+
+pub mod crate_root_function {
+    use crate::root_function as run;
+    fn entry() {
+        run();
+    }
+}
+
+pub mod parent_function {
+    use super::root_function as run;
+    fn entry() {
+        run();
+    }
+}
+
+fn root_function() {}
+
+pub mod same_spelling_in_type_namespace {
+    use std::mem::drop as discard;
+    fn run() {
+        struct discard { value: u8 }
+        let value: discard = discard { value: 1 };
+        discard(value);
+    }
 }
