@@ -4,7 +4,7 @@
 //! The same applies to uses such as `PathBuf::new()`.
 //!
 //! Keep module names on common names such as `Result`, `Error`, and `Option` to make their meaning clear.
-//! Function calls are handled by separate rules. Leave names unchanged when shortening them could cause
+//! Function calls are handled by the call-qualification rule. Leave names unchanged when shortening them could cause
 //! a conflict or when this file does not provide enough information to check the change.
 
 use proc_macro2::Span;
@@ -79,11 +79,11 @@ const KEEP_QUALIFIED_NAMES: &[&str] = &[
     "Vec",
 ];
 
-pub(super) struct QualifiedItemRule;
+pub(super) struct ItemQualificationRule;
 
-impl Rule for QualifiedItemRule {
+impl Rule for ItemQualificationRule {
     fn id(&self) -> &'static str {
-        "qualified-item"
+        "item-qualification"
     }
 
     fn analyze<'source>(&self, ctx: &FileContext<'source>) -> rootcause::Result<RulePlan<'source>> {
@@ -151,7 +151,7 @@ fn analyze_scope(
         return Ok(());
     };
 
-    let mut visitor = QualifiedPaths { paths: Vec::new() };
+    let mut visitor = ItemPaths { paths: Vec::new() };
 
     for item in scope.items {
         visitor.visit_item(item);
@@ -227,11 +227,11 @@ fn analyze_scope(
     imports.apply(ctx, scope, &mut plan.edits)
 }
 
-struct QualifiedPaths {
+struct ItemPaths {
     paths: Vec<(Span, Vec<String>)>,
 }
 
-impl QualifiedPaths {
+impl ItemPaths {
     fn collect(&mut self, path: &Path) {
         if path.leading_colon.is_some() {
             return;
@@ -266,7 +266,7 @@ impl QualifiedPaths {
     }
 }
 
-impl<'ast> Visit<'ast> for QualifiedPaths {
+impl<'ast> Visit<'ast> for ItemPaths {
     fn visit_path(&mut self, path: &'ast Path) {
         self.collect(path);
         syn::visit::visit_path(self, path);

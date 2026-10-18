@@ -1,4 +1,3 @@
-use super::fn_call_analysis::module_type_names;
 use super::import_resolution::imported_binding;
 use super::module_idx::ModuleIdx;
 use super::module_idx::ScopeInfo;
@@ -14,8 +13,11 @@ pub struct FnCallSuggestion {
     pub module: ModuleAccess,
 }
 
+#[derive(Clone)]
 pub enum ModuleAccess {
-    InScope,
+    Local,
+    Declared,
+    Imported(usize),
     Import(String),
     ExternalCrate,
     Anchored,
@@ -41,7 +43,7 @@ pub fn expected_fn_path(idx: &ModuleIdx<'_>, current_module: &[String], path: &s
 
     let qualified = fn_path_tail(&parts);
 
-    if qualified.len() <= 2 || !can_use_shortened_module(idx, current_module, &parts) {
+    if qualified.len() <= 2 {
         return None;
     }
 
@@ -62,10 +64,6 @@ fn imported_fn_path(idx: &ModuleIdx<'_>, current_module: &[String], name: &str) 
     let binding = imported_binding(idx, current_module, name)?;
     let source_path = &binding.path;
     let source_module = binding.source_path.get(..binding.source_path.len().saturating_sub(1))?;
-
-    if !is_module_root(source_module) && !can_use_imported_module(idx, current_module, source_path) {
-        return None;
-    }
 
     let fn_idx = source_path.len().saturating_sub(1);
     let target_module = source_path.get(..fn_idx)?;
@@ -97,8 +95,8 @@ fn module_access(
     }
     let module_name = target_module.last()?;
 
-    if module_is_available(idx, current_module, module_name, target_module) {
-        return Some(ModuleAccess::InScope);
+    if let Some(access) = available_module(idx, current_module, module_name, target_module) {
+        return Some(access);
     }
 
     let import_path = match source_module_path.first().map(String::as_str) {
@@ -123,88 +121,23 @@ fn is_module_root(parts: &[String]) -> bool {
             .all(|part| matches!(part.as_str(), "crate" | "self" | "super"))
 }
 
-fn module_is_available(
+fn available_module(
     idx: &ModuleIdx<'_>,
     current_module: &[String],
     module_name: &str,
     target_module: &[String],
-) -> bool {
-    let Some(scope) = idx.info.get(current_module) else {
-        return false;
-    };
-
-    if scope
-        .imports
-        .iter()
-        .any(|binding| binding.name == module_name && binding.path == target_module)
-    {
-        return true;
-    }
-
+) -> Option<ModuleAccess> {
+    let scope = idx.info.get(current_module)?;
     let mut local_module = current_module.to_vec();
     local_module.push(module_name.to_owned());
-    scope.definitions.contains(module_name) && local_module == target_module && idx.modules.contains(&local_module)
-}
-
-fn can_use_shortened_module(idx: &ModuleIdx<'_>, current_module: &[String], parts: &[String]) -> bool {
-    let Some(fn_idx) = parts.len().checked_sub(1) else {
-        return false;
-    };
-
-    let Some(module_name) = parts.get(fn_idx.saturating_sub(1)) else {
-        return false;
-    };
-
-    let target_module = normalize_path(current_module, parts.get(..fn_idx).unwrap_or_default());
-
-    can_use_module_name(idx, current_module, module_name, &target_module)
-}
-
-fn can_use_imported_module(idx: &ModuleIdx<'_>, current_module: &[String], source_path: &[String]) -> bool {
-    let Some(fn_idx) = source_path.len().checked_sub(1) else {
-        return false;
-    };
-
-    let Some(module_name) = source_path.get(fn_idx.saturating_sub(1)) else {
-        return false;
-    };
-
-    let target_module = source_path.get(..fn_idx).unwrap_or_default();
-
-    // The explicit import resolves the callable; defer only the module-name conflict to future glob resolution.
-    if idx.info.get(current_module).is_some_and(|scope| scope.unknown_imports) {
-        return true;
+    if scope.definitions.contains(module_name) && local_module == target_module && idx.modules.contains(&local_module) {
+        return Some(ModuleAccess::Declared);
     }
-
-    can_use_module_name(idx, current_module, module_name, target_module)
-}
-
-fn can_use_module_name(idx: &ModuleIdx<'_>, current_module: &[String], name: &str, target_module: &[String]) -> bool {
-    let Some(scope) = idx.info.get(current_module) else {
-        return false;
-    };
-    // TODO: Resolve glob imports before deciding whether the shortened module name conflicts.
-    if scope.unknown_imports {
-        return false;
-    }
-
-    let mut local_module = current_module.to_vec();
-    local_module.push(name.to_owned());
-
-    let type_definition = idx
-        .scopes
-        .iter()
-        .find(|scope| scope.path == current_module)
-        .is_some_and(|scope| module_type_names(scope.items).contains(name));
-    if type_definition && (!idx.modules.contains(&local_module) || local_module != target_module) {
-        return false;
-    }
-
     scope
         .imports
         .iter()
-        .filter(|binding| binding.name == name)
-        .all(|binding| binding.path == target_module)
+        .position(|binding| binding.name == module_name && binding.path == target_module)
+        .map(ModuleAccess::Imported)
 }
 
 fn fn_path_tail(parts: &[String]) -> &[String] {

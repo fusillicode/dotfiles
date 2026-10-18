@@ -1,52 +1,43 @@
----
-source: crates/frs/tests/rsl.rs
-expression: "&rewritten"
----
-//! Source rewrites and conservative skips for qualified-item.
+//! Source rewrites and conservative skips for item-qualification.
 
 pub mod import_type {
-    use std::path::PathBuf;
-    fn run(_: PathBuf) {}
+    fn run(_: std::path::PathBuf) {}
 }
 
 pub mod preserve_generics {
-    use std::collections::HashMap;
-    fn run() -> HashMap<String, u8> {
-        HashMap::<String, u8>::new()
+    fn run() -> std::collections::HashMap<String, u8> {
+        std::collections::HashMap::<String, u8>::new()
     }
 }
 
 pub mod import_enum_receiver {
-    use std::sync::atomic::Ordering;
     fn run() {
-        let _ = Ordering::Relaxed;
+        let _ = std::sync::atomic::Ordering::Relaxed;
     }
 }
 
 pub mod associated_constructor {
-    use std::path::PathBuf;
     fn run() {
-        let _ = PathBuf::new();
+        let _ = std::path::PathBuf::new();
     }
 }
 
 pub mod import_constant {
-    use std::u32::MAX;
     fn run() -> u32 {
-        MAX
+        std::u32::MAX
     }
 }
 
 pub mod avoid_duplicate_import {
     use std::path::PathBuf;
-    fn run(_: PathBuf) -> PathBuf {
-        PathBuf::new()
+    fn run(_: std::path::PathBuf) -> std::path::PathBuf {
+        std::path::PathBuf::new()
     }
 }
 
 pub mod self_type {
     struct Data;
-    fn run(_: Data) {}
+    fn run(_: self::Data) {}
 }
 
 pub mod qualified_result_aliases {
@@ -130,8 +121,7 @@ pub mod crate_type {
 }
 
 pub mod same_name_imports {
-    use a::Thing;
-    fn run(_: Thing, _: b::Thing) {}
+    fn run(_: a::Thing, _: b::Thing) {}
 }
 
 pub mod self_generic_shadow {
@@ -165,12 +155,11 @@ pub mod protected_names {
 }
 
 pub mod function_values {
-    use std::path::PathBuf;
     fn run(text: &str) {
         let _ = text.trim_matches(char::is_whitespace);
         let _ = Some(text).map(str::trim);
         let _ = [1].into_iter().for_each(std::mem::drop);
-        let _ = std::mem::size_of::<PathBuf>;
+        let _ = std::mem::size_of::<std::path::PathBuf>;
     }
 }
 

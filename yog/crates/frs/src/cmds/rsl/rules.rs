@@ -5,33 +5,30 @@
 //! `Rule::analyze` returns the plan; the engine alone applies edits or collects findings.
 //! No rule-specific types or reason codes belong in the engine, analysis layer, or renderer.
 
-use aliased_import_rule::AliasedImportRule;
-use ordering_rule::OrderingRule;
-use overqualified_call_rule::OverqualifiedCallRule;
-use qualified_item_rule::QualifiedItemRule;
-use relative_path_rule::RelativePathRule;
+use call_qualification_rule::CallQualificationRule;
+use import_aliasing_rule::ImportAliasingRule;
+use item_ordering_rule::ItemOrderingRule;
+use item_qualification_rule::ItemQualificationRule;
+use path_anchoring_rule::PathAnchoringRule;
 use rootcause::report;
-use unqualified_call_rule::UnqualifiedCallRule;
 
 use super::analysis::RulePlan;
 use super::engine::FileContext;
 
-mod aliased_import_rule;
+mod call_qualification_rule;
 mod common;
-mod ordering_rule;
-mod overqualified_call_rule;
-mod qualified_item_rule;
-mod relative_path_rule;
-mod unqualified_call_rule;
+mod import_aliasing_rule;
+mod item_ordering_rule;
+mod item_qualification_rule;
+mod path_anchoring_rule;
 
 /// Registry order resolves paths and aliases before imports and calls, then orders the resulting items.
 static RULES: &[&dyn Rule] = &[
-    &RelativePathRule,
-    &AliasedImportRule,
-    &UnqualifiedCallRule,
-    &OverqualifiedCallRule,
-    &QualifiedItemRule,
-    &OrderingRule,
+    &PathAnchoringRule,
+    &ImportAliasingRule,
+    &CallQualificationRule,
+    &ItemQualificationRule,
+    &ItemOrderingRule,
 ];
 
 pub(super) trait Rule: Send + Sync {

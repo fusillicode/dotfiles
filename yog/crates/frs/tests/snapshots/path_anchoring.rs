@@ -1,8 +1,4 @@
----
-source: crates/frs/tests/rsl.rs
-expression: "&rewritten"
----
-//! Source rewrites and conservative skips for relative-path.
+//! Source rewrites and conservative skips for path-anchoring.
 
 pub mod test_glob {
     #[cfg(test)]

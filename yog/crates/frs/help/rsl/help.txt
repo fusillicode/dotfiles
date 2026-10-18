@@ -20,12 +20,11 @@ Each report identifies the file, line, column, and rule. Skipped changes include
 Only the supplied files are changed. Run your Rust formatter afterward if needed.
 
 Rules:
-  relative-path            Report references to parent modules through super::.
-  aliased-import           Remove unnecessary import aliases.
-  unqualified-call         Add module names to imported function calls.
-  overqualified-call       Shorten function calls while keeping their module names.
-  qualified-item           Import items so they can be used by their short names.
-  ordering-rule            Group related declarations and place helpers after callers.
+  path-anchoring           Report references to parent modules through super::.
+  import-aliasing          Remove unnecessary import aliases.
+  call-qualification       Call functions through their module using short, clear paths.
+  item-qualification       Import items so they can be used by their short names.
+  item-ordering            Group related declarations and place helpers after callers.
 
 Exit status:
   0                        Completed, including when findings remain or changes were skipped.
@@ -34,5 +33,5 @@ Exit status:
 Examples:
   frs rsl src/main.rs src/lib.rs
   frs rsl --mode report src/main.rs
-  frs rsl --rules ordering-rule,relative-path src/main.rs
+  frs rsl --rules item-ordering,path-anchoring src/main.rs
   frs rsl -- -example.rs

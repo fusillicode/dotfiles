@@ -1,10 +1,13 @@
+use proc_macro2::Span;
 use syn::UseTree;
+use syn::spanned::Spanned;
 
 use super::module_idx::ModuleIdx;
 use super::module_idx::ScopeInfo;
 use super::path_resolution::normalize_path;
 
 pub struct ImportBinding {
+    pub span: Span,
     pub name: String,
     pub path: Vec<String>,
     pub source_path: Vec<String>,
@@ -35,6 +38,7 @@ pub fn use_bindings(tree: &UseTree, current_module: &[String]) -> UseBindings {
                 if name.ident == "self" {
                     if let Some(binding) = prefix.last() {
                         bindings.bindings.push(ImportBinding {
+                            span: tree.span(),
                             name: binding.clone(),
                             path: normalize_path(current_module, &prefix),
                             source_path: prefix,
@@ -44,6 +48,7 @@ pub fn use_bindings(tree: &UseTree, current_module: &[String]) -> UseBindings {
                     let mut path = prefix;
                     path.push(name.ident.to_string());
                     bindings.bindings.push(ImportBinding {
+                        span: tree.span(),
                         name: name.ident.to_string(),
                         path: normalize_path(current_module, &path),
                         source_path: path,
@@ -55,6 +60,7 @@ pub fn use_bindings(tree: &UseTree, current_module: &[String]) -> UseBindings {
                     let mut path = prefix;
                     path.push(rename.ident.to_string());
                     bindings.bindings.push(ImportBinding {
+                        span: tree.span(),
                         name: rename.rename.to_string(),
                         path: normalize_path(current_module, &path),
                         source_path: path,

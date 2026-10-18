@@ -50,7 +50,6 @@ use syn::visit::Visit;
 
 use super::fn_path_resolution::FnCallSuggestion;
 use super::fn_path_resolution::ModuleAccess;
-use super::import_edits::ImportEdits;
 use super::import_edits::ImportError;
 use super::import_resolution::use_bindings;
 use super::module_idx::ModuleIdx;
@@ -79,13 +78,15 @@ pub fn analyze_calls<'ast>(scope: &ModuleScope<'ast>, idx: &ModuleIdx<'ast>) -> 
         idx,
         calls: Vec::new(),
         scopes: Vec::new(),
+        declarations: Bindings::declarations(items),
         module_bindings,
         current_module: scope.path.clone(),
         module_macros: has_opaque_module_macros(items),
         opaque_expansions: has_opaque_module_macros(items) || has_opaque_attributes(items),
-        references: HashMap::new(),
+        references: References::default(),
         free_type_names: HashSet::new(),
         path_namespace: Namespace::Type,
+        conditional: false,
     };
     for item in items {
         visitor.visit_item(item);
@@ -101,8 +102,16 @@ pub fn analyze_calls<'ast>(scope: &ModuleScope<'ast>, idx: &ModuleIdx<'ast>) -> 
 pub struct CallAnalysis<'ast> {
     pub calls: Vec<CallSite<'ast>>,
     pub opaque_expansions: bool,
-    pub references: HashMap<String, usize>,
+    pub references: References,
     pub free_type_names: HashSet<String>,
+}
+
+/// Proven references in this module stay separate from names in opaque syntax or children.
+#[derive(Default)]
+pub struct References {
+    pub values: HashMap<String, usize>,
+    pub types: HashMap<String, usize>,
+    pub uncertain: HashSet<String>,
 }
 
 pub(super) fn has_opaque_module_macros(items: &[Item]) -> bool {
@@ -136,6 +145,18 @@ struct OpaqueAttributes {
 impl<'ast> Visit<'ast> for OpaqueAttributes {
     fn visit_attribute(&mut self, attribute: &'ast Attribute) {
         self.found |= attribute_may_expand(&attribute.meta);
+    }
+}
+
+struct ConditionalAttributes {
+    found: bool,
+}
+
+impl<'ast> Visit<'ast> for ConditionalAttributes {
+    fn visit_attribute(&mut self, attribute: &'ast Attribute) {
+        // Keep a containing item's imports stable across all configurations,
+        // including cfg attributes on statements, arms, and expressions.
+        self.found |= attribute.path().is_ident("cfg") || attribute.path().is_ident("cfg_attr");
     }
 }
 
@@ -214,19 +235,15 @@ fn item_may_expand(item: &Item) -> bool {
 }
 
 pub(super) fn module_type_names(items: &[Item]) -> HashSet<String> {
-    let mut bindings = Bindings::default();
-    for item in items {
-        if !matches!(item, Item::Use(_)) {
-            bindings.add_item(item, &[]);
-        }
-    }
-    bindings.types.into_keys().collect()
+    Bindings::declarations(items).types.into_keys().collect()
 }
 
 pub struct CallSite<'ast> {
     pub path: &'ast Path,
+    pub conditional: bool,
     scopes: Vec<Bindings>,
     module_macros: bool,
+    module_value: bool,
 }
 
 impl CallSite<'_> {
@@ -235,12 +252,13 @@ impl CallSite<'_> {
     }
 
     pub fn is_locally_bound(&self) -> bool {
-        self.path.segments.first().is_some_and(|segment| {
-            let name = segment.ident.to_string();
-            self.scopes
-                .iter()
-                .any(|scope| scope.values.contains(&name) || scope.locals.contains(&name))
-        })
+        self.module_value
+            || self.path.segments.first().is_some_and(|segment| {
+                let name = segment.ident.to_string();
+                self.scopes
+                    .iter()
+                    .any(|scope| scope.values.contains(&name) || scope.locals.contains(&name))
+            })
     }
 
     fn check_module_name(&self, name: &str) -> Result<(), ImportError> {
@@ -268,30 +286,21 @@ impl CallSite<'_> {
         self.check_module_name(&name)
     }
 
-    pub fn prepare_rewrite(
-        &self,
-        suggestion: &FnCallSuggestion,
-        scope: &ModuleScope<'_>,
-        info: &ScopeInfo,
-        imports: &mut ImportEdits,
-    ) -> Result<(), ImportError> {
+    pub fn resolve_module(&self, suggestion: &FnCallSuggestion, info: &ScopeInfo) -> Result<ModuleAccess, ImportError> {
         self.check_source()?;
         let name = suggestion.expected_path.split("::").next().unwrap_or_default();
         if let Some(binding) = self.scopes.iter().rev().find_map(|scope| scope.types.get(name)) {
             return match binding {
-                TypeBinding::Import(path) if path == &suggestion.target_module => Ok(()),
+                TypeBinding::Import(path) if path == &suggestion.target_module => Ok(ModuleAccess::Local),
                 TypeBinding::Declaration | TypeBinding::Import(_) => {
                     Err(ImportError::NameConflict { name: name.to_owned() })
                 }
             };
         }
-        if info.unknown_imports && !matches!(suggestion.module, ModuleAccess::InScope) {
+        if info.unknown_imports && !matches!(suggestion.module, ModuleAccess::Imported(_) | ModuleAccess::Declared) {
             return Err(ImportError::UnknownImports);
         }
-        if let ModuleAccess::Import(path) = &suggestion.module {
-            imports.request_call_module(path, scope)?;
-        }
-        Ok(())
+        Ok(suggestion.module.clone())
     }
 
     pub fn span(&self) -> Span {
@@ -321,6 +330,16 @@ struct Bindings {
 }
 
 impl Bindings {
+    fn declarations(items: &[Item]) -> Self {
+        let mut bindings = Self::default();
+        for item in items {
+            if !matches!(item, Item::Use(_)) {
+                bindings.add_item(item, &[]);
+            }
+        }
+        bindings
+    }
+
     fn items(items: &[Item], current_module: &[String]) -> Self {
         let mut bindings = Self::default();
         for item in items {
@@ -431,25 +450,38 @@ struct FnCallVisitor<'ast, 'index> {
     calls: Vec<CallSite<'ast>>,
     scopes: Vec<Bindings>,
     module_bindings: Bindings,
+    declarations: Bindings,
     current_module: Vec<String>,
     module_macros: bool,
     opaque_expansions: bool,
-    references: HashMap<String, usize>,
+    references: References,
     free_type_names: HashSet<String>,
     path_namespace: Namespace,
+    conditional: bool,
 }
 
 impl<'ast> FnCallVisitor<'ast, '_> {
     fn record_reference(&mut self, name: String) {
-        let count = self.references.entry(name).or_default();
+        if self.conditional || self.module_macros || self.scopes.iter().any(|scope| scope.unknown) {
+            self.references.uncertain.insert(name);
+            return;
+        }
+        let references = match self.path_namespace {
+            Namespace::Value => &mut self.references.values,
+            Namespace::Type => &mut self.references.types,
+        };
+        let count = references.entry(name).or_default();
         *count = count.saturating_add(1);
     }
 
     fn path_is_locally_bound(&self, name: &str) -> bool {
-        self.scopes.iter().any(|scope| match self.path_namespace {
-            Namespace::Type => scope.types.contains_key(name),
-            Namespace::Value => scope.values.contains(name) || scope.locals.contains(name),
-        })
+        self.scopes
+            .iter()
+            .chain([&self.declarations])
+            .any(|scope| match self.path_namespace {
+                Namespace::Type => scope.types.contains_key(name),
+                Namespace::Value => scope.values.contains(name) || scope.locals.contains(name),
+            })
     }
 
     fn record_free_type_name(&mut self, name: String) {
@@ -464,7 +496,7 @@ impl<'ast> FnCallVisitor<'ast, '_> {
         for token in tokens {
             match token {
                 TokenTree::Ident(name) => {
-                    self.record_reference(name.to_string());
+                    self.references.uncertain.insert(name.to_string());
                     self.record_free_type_name(name.to_string());
                 }
                 TokenTree::Group(group) => self.record_macro_tokens(group.stream()),
@@ -566,6 +598,15 @@ fn is_standard_expression_macro(name: &str) -> bool {
 }
 
 impl<'ast> Visit<'ast> for FnCallVisitor<'ast, '_> {
+    fn visit_item(&mut self, item: &'ast Item) {
+        let mut conditions = ConditionalAttributes { found: false };
+        conditions.visit_item(item);
+        let outer = self.conditional;
+        self.conditional |= conditions.found;
+        visit::visit_item(self, item);
+        self.conditional = outer;
+    }
+
     fn visit_path(&mut self, path: &'ast Path) {
         if path.leading_colon.is_none()
             && let Some(segment) = path.segments.first()
@@ -573,7 +614,7 @@ impl<'ast> Visit<'ast> for FnCallVisitor<'ast, '_> {
             let name = segment.ident.to_string();
             if matches!(name.as_str(), "crate" | "self" | "super") {
                 for segment in &path.segments {
-                    self.record_reference(segment.ident.to_string());
+                    self.references.uncertain.insert(segment.ident.to_string());
                 }
             } else if !self.path_is_locally_bound(&name) {
                 self.record_reference(name.clone());
@@ -617,6 +658,10 @@ impl<'ast> Visit<'ast> for FnCallVisitor<'ast, '_> {
                 && let Some(root) = path.first()
             {
                 self.free_type_names.insert(root.clone());
+                let dependency = if root == "self" { path.get(1) } else { Some(root) };
+                if let Some(name) = dependency {
+                    self.references.uncertain.insert(name.clone());
+                }
             }
         }
     }
@@ -641,8 +686,15 @@ impl<'ast> Visit<'ast> for FnCallVisitor<'ast, '_> {
         {
             self.calls.push(CallSite {
                 path: &path.path,
+                conditional: self.conditional,
                 scopes: self.scopes.clone(),
                 module_macros: self.module_macros,
+                module_value: path.path.segments.len() == 1
+                    && path
+                        .path
+                        .segments
+                        .first()
+                        .is_some_and(|segment| self.declarations.values.contains(&segment.ident.to_string())),
             });
         }
         visit::visit_expr_call(self, expression);
@@ -784,10 +836,9 @@ impl<'ast> Visit<'ast> for FnCallVisitor<'ast, '_> {
             let analysis = analyze_calls(&scope, self.idx);
             self.opaque_expansions |= analysis.opaque_expansions;
             self.free_type_names.extend(analysis.free_type_names);
-            for (name, count) in analysis.references {
-                let total = self.references.entry(name).or_default();
-                *total = total.saturating_add(count);
-            }
+            self.references.uncertain.extend(analysis.references.values.into_keys());
+            self.references.uncertain.extend(analysis.references.types.into_keys());
+            self.references.uncertain.extend(analysis.references.uncertain);
             // Child imports may re-export a private name without calling it.
             for item in items {
                 if let Item::Use(import) = item {
@@ -799,7 +850,7 @@ impl<'ast> Visit<'ast> for FnCallVisitor<'ast, '_> {
                             .is_some_and(|root| matches!(root.as_str(), "crate" | "self" | "super"))
                         {
                             for name in binding.source_path {
-                                self.record_reference(name);
+                                self.references.uncertain.insert(name);
                             }
                         }
                     }
