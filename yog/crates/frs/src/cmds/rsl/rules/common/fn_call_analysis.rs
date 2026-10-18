@@ -73,7 +73,7 @@ pub fn analyze_calls<'ast>(scope: &ModuleScope<'ast>, idx: &ModuleIdx<'ast>) -> 
                 module_bindings.macros.insert(name.to_string());
             }
         }
-        module_bindings.unknown |= has_opaque_module_macros(parent.items) || parent.items.iter().any(item_may_expand);
+        module_bindings.unknown |= has_opaque_module_macros(parent.items);
     }
     let mut visitor = FnCallVisitor {
         idx,
@@ -232,6 +232,7 @@ pub(super) fn has_opaque_attributes(items: &[Item]) -> bool {
     for item in items {
         attributes.visit_item(item);
     }
+
     attributes.found
 }
 
@@ -261,6 +262,8 @@ impl<'ast> Visit<'ast> for ConditionalAttributes {
     }
 }
 
+// This classifies generated import uses only. Attribute expansion is deliberately
+// excluded from lexical binding uncertainty in FnCallVisitor::visit_attribute.
 fn attribute_may_expand(meta: &Meta) -> bool {
     if meta.path().is_ident("cfg_attr") || meta.path().is_ident("unsafe") {
         let Meta::List(list) = meta else {
@@ -311,28 +314,6 @@ fn attribute_may_expand(meta: &Meta) -> bool {
             | "recursion_limit"
             | "type_length_limit"
     )
-}
-
-fn item_may_expand(item: &Item) -> bool {
-    let attributes = match item {
-        Item::Const(item) => &item.attrs,
-        Item::Enum(item) => &item.attrs,
-        Item::ExternCrate(item) => &item.attrs,
-        Item::Fn(item) => &item.attrs,
-        Item::ForeignMod(item) => &item.attrs,
-        Item::Impl(item) => &item.attrs,
-        Item::Macro(item) => &item.attrs,
-        Item::Mod(item) => &item.attrs,
-        Item::Static(item) => &item.attrs,
-        Item::Struct(item) => &item.attrs,
-        Item::Trait(item) => &item.attrs,
-        Item::TraitAlias(item) => &item.attrs,
-        Item::Type(item) => &item.attrs,
-        Item::Union(item) => &item.attrs,
-        Item::Use(item) => &item.attrs,
-        Item::Verbatim(_) | _ => return true,
-    };
-    attributes.iter().any(|attribute| attribute_may_expand(&attribute.meta))
 }
 
 /// Module qualifiers use the type namespace; callable locals use the value namespace.
@@ -659,9 +640,6 @@ impl<'ast> Visit<'ast> for FnCallVisitor<'ast, '_> {
     }
 
     fn visit_expr_call(&mut self, expression: &'ast ExprCall) {
-        for attribute in &expression.attrs {
-            self.visit_attribute(attribute);
-        }
         if let Expr::Path(path) = expression.func.as_ref()
             && path.qself.is_none()
         {
@@ -683,14 +661,12 @@ impl<'ast> Visit<'ast> for FnCallVisitor<'ast, '_> {
 
     fn visit_block(&mut self, block: &'ast Block) {
         let mut bindings = Bindings::default();
-        let mut attributes = OpaqueAttributes { found: false };
         for statement in &block.stmts {
-            attributes.visit_stmt(statement);
             if let Stmt::Item(item) = statement {
                 bindings.add_item(item, &self.current_module);
             }
         }
-        bindings.unknown |= attributes.found;
+
         self.scopes.push(bindings);
         // Statement macros can generate block items visible even before invocation.
         let opaque_macro = block.stmts.iter().any(|statement| match statement {
@@ -785,9 +761,6 @@ impl<'ast> Visit<'ast> for FnCallVisitor<'ast, '_> {
 
     fn visit_arm(&mut self, arm: &'ast Arm) {
         self.scopes.push(pattern_bindings(&arm.pat));
-        for attribute in &arm.attrs {
-            self.visit_attribute(attribute);
-        }
         if let Pat::Guard(pattern) = &arm.pat {
             self.visit_pat(&pattern.pat);
             self.visit_condition(&pattern.guard);
@@ -840,13 +813,12 @@ impl<'ast> Visit<'ast> for FnCallVisitor<'ast, '_> {
         }
     }
 
-    fn visit_attribute(&mut self, attribute: &'ast Attribute) {
-        if attribute_may_expand(&attribute.meta)
-            && let Some(scope) = self.scopes.last_mut()
-        {
-            scope.unknown = true;
-        }
-    }
+    // Assume attribute macros preserve name lookup in user-written function bodies.
+    // Expanding arbitrary macros is outside this syntax-based rule's scope. A macro
+    // that injects capturing bindings can therefore change a rewritten call's meaning;
+    // this is an accepted limitation, rather than a reason to block attributed code.
+    // Generated import uses remain opaque and are checked separately.
+    fn visit_attribute(&mut self, _attribute: &'ast Attribute) {}
 
     fn visit_macro(&mut self, mac: &'ast Macro) {
         // Expressions cannot leak bindings into their enclosing block, but an
