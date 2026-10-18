@@ -45,8 +45,8 @@ use crate::cmds::rsl::source::item_ranges_with_attached_comments;
 mod fn_references;
 mod item_ordering;
 
-impl From<OrderingConflict> for FixBlockReason {
-    fn from(conflict: OrderingConflict) -> Self {
+impl From<ItemOrderingConflict> for FixBlockReason {
+    fn from(conflict: ItemOrderingConflict) -> Self {
         Self {
             code: "ordering-conflict",
             message: format!(
@@ -73,14 +73,14 @@ impl ItemOrderingMetadata {
 }
 
 #[derive(Debug)]
-pub struct OrderingConstraint {
+pub struct ItemOrderingConstraint {
     pub before_item_index: usize,
     pub after_item_index: usize,
-    pub kind: OrderingConstraintKind,
+    pub kind: ItemOrderingConstraintKind,
 }
 
 #[derive(Clone, Copy, Debug)]
-pub enum OrderingConstraintKind {
+pub enum ItemOrderingConstraintKind {
     GroupOrSectionOrder,
     InlineModuleOrder,
     VisibilityOrder,
@@ -90,11 +90,11 @@ pub enum OrderingConstraintKind {
     MacroBindingPreservation,
 }
 
-pub(super) struct OrderingRule;
+pub(super) struct ItemOrderingRule;
 
-impl Rule for OrderingRule {
+impl Rule for ItemOrderingRule {
     fn id(&self) -> &'static str {
-        "ordering-rule"
+        "item-ordering"
     }
 
     fn analyze<'source>(&self, ctx: &FileContext<'source>) -> rootcause::Result<RulePlan<'source>> {
@@ -166,7 +166,7 @@ impl RuleChange for Change<'_> {
     }
 }
 
-struct OrderingConflict(String);
+struct ItemOrderingConflict(String);
 
 /// A complete permutation that satisfies every computed ordering constraint.
 struct ItemOrder(Vec<usize>);
@@ -175,7 +175,7 @@ impl ItemOrder {
     fn new(
         items: &[OrderingItem<'_>],
         indices: Vec<usize>,
-        constraints: &[OrderingConstraint],
+        constraints: &[ItemOrderingConstraint],
     ) -> Result<Self, String> {
         validate_required_item_order(items.len(), &indices, constraints).map_err(str::to_owned)?;
 
@@ -190,7 +190,7 @@ impl ItemOrder {
 fn validate_required_item_order(
     item_count: usize,
     required_item_order: &[usize],
-    constraints: &[OrderingConstraint],
+    constraints: &[ItemOrderingConstraint],
 ) -> Result<(), &'static str> {
     let mut permutation = required_item_order.to_vec();
     permutation.sort_unstable();
@@ -211,14 +211,14 @@ fn validate_required_item_order(
         };
 
         match constraint.kind {
-            OrderingConstraintKind::TypeImplAdjacency | OrderingConstraintKind::RecursiveFnAdjacency => {
+            ItemOrderingConstraintKind::TypeImplAdjacency | ItemOrderingConstraintKind::RecursiveFnAdjacency => {
                 before_position.saturating_add(1) == after_position
             }
-            OrderingConstraintKind::GroupOrSectionOrder
-            | OrderingConstraintKind::InlineModuleOrder
-            | OrderingConstraintKind::VisibilityOrder
-            | OrderingConstraintKind::CallerBeforeHelper
-            | OrderingConstraintKind::MacroBindingPreservation => before_position < after_position,
+            ItemOrderingConstraintKind::GroupOrSectionOrder
+            | ItemOrderingConstraintKind::InlineModuleOrder
+            | ItemOrderingConstraintKind::VisibilityOrder
+            | ItemOrderingConstraintKind::CallerBeforeHelper
+            | ItemOrderingConstraintKind::MacroBindingPreservation => before_position < after_position,
         }
     });
 
@@ -512,7 +512,7 @@ fn analyze_scope<'ast>(
             change.add_to_plan(&items, &order, plan)?;
         }
         Ok(_) => {}
-        Err(message) => plan.record_blocked(&change, OrderingConflict(message)),
+        Err(message) => plan.record_blocked(&change, ItemOrderingConflict(message)),
     }
 
     Ok(())
@@ -553,25 +553,25 @@ mod test {
     #[case(vec![0, 0], Vec::new(), Err("incomplete item permutation"))]
     #[case(
         vec![0, 1],
-        vec![OrderingConstraint {
+        vec![ItemOrderingConstraint {
             before_item_index: 0,
             after_item_index: 1,
-            kind: OrderingConstraintKind::CallerBeforeHelper,
+            kind: ItemOrderingConstraintKind::CallerBeforeHelper,
         }],
         Ok(()),
     )]
     #[case(
         vec![1, 0],
-        vec![OrderingConstraint {
+        vec![ItemOrderingConstraint {
             before_item_index: 0,
             after_item_index: 1,
-            kind: OrderingConstraintKind::CallerBeforeHelper,
+            kind: ItemOrderingConstraintKind::CallerBeforeHelper,
         }],
         Err("invalid item identity or ordering constraint"),
     )]
-    fn test_ordering_rule_when_required_item_order_is_validated_reports_invalid_item_order(
+    fn test_item_ordering_when_required_item_order_is_validated_reports_invalid_item_order(
         #[case] required_item_order: Vec<usize>,
-        #[case] constraints: Vec<OrderingConstraint>,
+        #[case] constraints: Vec<ItemOrderingConstraint>,
         #[case] expected: Result<(), &'static str>,
     ) {
         assert_eq!(

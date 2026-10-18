@@ -2,7 +2,7 @@
 source: crates/frs/tests/rsl.rs
 expression: "&rewritten"
 ---
-//! Source rewrites and conservative skips for aliased-import.
+//! Source rewrites and conservative skips for import-aliasing.
 
 pub mod private_alias {
     use std::fmt::Debug;

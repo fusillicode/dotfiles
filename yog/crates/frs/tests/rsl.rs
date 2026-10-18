@@ -7,12 +7,11 @@ mod tests {
     const INPUTS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/snapshots");
 
     #[rstest::rstest]
-    #[case::ordering("ordering-rule")]
-    #[case::unqualified_calls("unqualified-call")]
-    #[case::overqualified_calls("overqualified-call")]
-    #[case::qualified_items("qualified-item")]
-    #[case::aliases("aliased-import")]
-    #[case::relative_paths("relative-path")]
+    #[case::item_ordering("item-ordering")]
+    #[case::call_qualification("call-qualification")]
+    #[case::item_qualification("item-qualification")]
+    #[case::import_aliasing("import-aliasing")]
+    #[case::path_anchoring("path-anchoring")]
     fn test_rsl_when_rule_runs_rewrites_the_file_and_stays_stable(#[case] rule: &str) {
         let directory = tempfile::tempdir().unwrap();
         let name = rule.replace('-', "_");
@@ -22,7 +21,6 @@ mod tests {
 
         let mut command = Command::new(env!("CARGO_BIN_EXE_frs"));
         command.args(["rsl", "--rules", rule]).arg(&path);
-
         let output = command.output().unwrap();
         assert!(output.status.success(), "{output:?}");
 
@@ -33,16 +31,15 @@ mod tests {
 
         let output = command.output().unwrap();
         assert!(output.status.success(), "{output:?}");
-        assert_eq!(fs::read_to_string(path).unwrap(), rewritten);
+        assert_eq!(fs::read_to_string(&path).unwrap(), rewritten);
     }
 
     #[rstest::rstest]
-    #[case::ordering("ordering-rule")]
-    #[case::unqualified_calls("unqualified-call")]
-    #[case::overqualified_calls("overqualified-call")]
-    #[case::qualified_items("qualified-item")]
-    #[case::aliases("aliased-import")]
-    #[case::relative_paths("relative-path")]
+    #[case::item_ordering("item-ordering")]
+    #[case::call_qualification("call-qualification")]
+    #[case::item_qualification("item-qualification")]
+    #[case::import_aliasing("import-aliasing")]
+    #[case::path_anchoring("path-anchoring")]
     fn test_rsl_when_reporting_each_rule_preserves_the_source(#[case] rule: &str) {
         let directory = tempfile::tempdir().unwrap();
         let filename = format!("{}.rs", rule.replace('-', "_"));
@@ -74,7 +71,7 @@ mod tests {
         let modified = fs::metadata(&path).unwrap().modified().unwrap();
 
         let output = Command::new(env!("CARGO_BIN_EXE_frs"))
-            .args(["rsl", "--mode", "report", "--rules", "qualified-item"])
+            .args(["rsl", "--mode", "report", "--rules", "item-qualification"])
             .arg(&path)
             .output()
             .unwrap();
@@ -85,7 +82,7 @@ mod tests {
         assert_eq!(
             String::from_utf8(output.stdout).unwrap(),
             format!(
-                "{}:1:11: available [qualified-item]: replace `std::path::PathBuf` with `PathBuf`\n  \
+                "{}:1:11: available [item-qualification]: replace `std::path::PathBuf` with `PathBuf`\n  \
                  Help: Run with --mode write to apply this change.\n",
                 path.display(),
             ),
@@ -121,7 +118,7 @@ mod tests {
         assert_eq!(
             String::from_utf8(output.stdout.clone()).unwrap(),
             format!(
-                "{}:3:23: skipped [relative-path/parent-module-unknown]: replace parent-module reference `super`\n  \
+                "{}:3:23: skipped [path-anchoring/parent-module-unknown]: replace parent-module reference `super`\n  \
                  Reason: The required crate or parent-module context is outside this file.\n  \
                  Help: Use the correct crate:: path after checking the surrounding modules.\n",
                 path.display(),
@@ -166,47 +163,47 @@ mod tests {
 
     #[rstest::rstest]
     #[case::name_conflict(
-        "qualified-item",
+        "item-qualification",
         r"
             struct PathBuf;
 
             fn run(_: std::path::PathBuf) {}
         ",
-        "<file>:4:23: skipped [qualified-item/name-conflict]: replace `std::path::PathBuf` with `PathBuf`\n  \
+        "<file>:4:23: skipped [item-qualification/name-conflict]: replace `std::path::PathBuf` with `PathBuf`\n  \
          Reason: The name `PathBuf` may refer to another item or local binding.\n  \
          Help: Keep the existing spelling, or rename the conflicting item.\n"
     )]
     #[case::comments(
-        "qualified-item",
+        "item-qualification",
         r"
             fn run(_: std /* keep */ ::path::PathBuf) {}
         ",
-        "<file>:2:23: skipped [qualified-item/comments]: replace `std::path::PathBuf` with `PathBuf`\n  \
+        "<file>:2:23: skipped [item-qualification/comments]: replace `std::path::PathBuf` with `PathBuf`\n  \
          Reason: The change could remove comments inside the affected code.\n  \
          Help: Move or preserve the comments before making this change manually.\n"
     )]
     #[case::unknown_imports(
-        "qualified-item",
+        "item-qualification",
         r"
             use other::*;
 
             fn run(_: std::path::PathBuf) {}
         ",
-        "<file>:4:23: skipped [qualified-item/unknown-imports]: replace `std::path::PathBuf` with `PathBuf`\n  \
+        "<file>:4:23: skipped [item-qualification/unknown-imports]: replace `std::path::PathBuf` with `PathBuf`\n  \
          Reason: A wildcard, attributed, or absolute import prevents checking all available names.\n  \
          Help: Use explicit imports so the names available in this module can be checked.\n"
     )]
     #[case::exported_alias(
-        "aliased-import",
+        "import-aliasing",
         r"
             pub use std::path::PathBuf as Buffer;
         ",
-        "<file>:2:43: skipped [aliased-import/exported-alias]: replace alias `Buffer` with `PathBuf`\n  \
+        "<file>:2:43: skipped [import-aliasing/exported-alias]: replace alias `Buffer` with `PathBuf`\n  \
          Reason: Other code may depend on the name exported by this import.\n  \
          Help: Keep this exported name unless its callers can also be updated.\n"
     )]
     #[case::module_import_capture(
-        "overqualified-call",
+        "call-qualification",
         r#"
             fn other(value: &str) {
                 str::len(value);
@@ -216,12 +213,12 @@ mod tests {
                 std::str::from_utf8(b"x");
             }
         "#,
-        "<file>:7:17: skipped [overqualified-call/import-capture]: replace `std::str::from_utf8` with `str::from_utf8`\n  \
+        "<file>:7:17: skipped [call-qualification/import-capture]: replace `std::str::from_utf8` with `str::from_utf8`\n  \
          Reason: Adding an import named `str` could change existing references.\n  \
          Help: Check the existing references before introducing this module import.\n"
     )]
     #[case::module_import_external_references(
-        "overqualified-call",
+        "call-qualification",
         r#"
             mod child;
 
@@ -229,7 +226,7 @@ mod tests {
                 std::fs::read_to_string("x");
             }
         "#,
-        "<file>:5:17: skipped [overqualified-call/external-modules]: replace `std::fs::read_to_string` with `fs::read_to_string`\n  \
+        "<file>:5:17: skipped [call-qualification/external-modules]: replace `std::fs::read_to_string` with `fs::read_to_string`\n  \
          Reason: A child module in another file may observe the new module import.\n  \
          Help: Check child-module references before introducing this import.\n"
     )]
@@ -265,7 +262,13 @@ mod tests {
         fs::write(&path, source).unwrap();
 
         let output = Command::new(env!("CARGO_BIN_EXE_frs"))
-            .args(["rsl", "--mode", "report", "--rules", "aliased-import,unqualified-call"])
+            .args([
+                "rsl",
+                "--mode",
+                "report",
+                "--rules",
+                "import-aliasing,call-qualification",
+            ])
             .arg(&path)
             .output()
             .unwrap();
@@ -277,9 +280,9 @@ mod tests {
             .replace(path.to_str().unwrap(), "<file>");
         assert_eq!(
             reported,
-            "<file>:1:32: available [aliased-import]: replace alias `read` with `read_to_string`\n  \
+            "<file>:1:32: available [import-aliasing]: replace alias `read` with `read_to_string`\n  \
              Help: Run with --mode write to apply this change.\n\n\
-             <file>:2:12: available [unqualified-call]: replace `read` with `fs::read_to_string`\n  \
+             <file>:2:12: available [call-qualification]: replace `read` with `fs::read_to_string`\n  \
              Help: Run with --mode write to apply this change.\n",
         );
     }

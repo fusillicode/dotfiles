@@ -103,12 +103,15 @@ impl ImportEdits {
         scope: &ModuleScope<'_>,
         info: &ScopeInfo,
         analysis: &CallAnalysis<'_>,
+        removed: &HashSet<usize>,
     ) -> Self {
         Self {
             bindings: info
                 .imports
                 .iter()
-                .map(|binding| (binding.name.clone(), binding.source_path.join("::")))
+                .enumerate()
+                .filter(|(index, _)| !removed.contains(index))
+                .map(|(_, binding)| (binding.name.clone(), binding.source_path.join("::")))
                 .collect(),
             reserved: LocalNames {
                 names: module_type_names(scope.items),

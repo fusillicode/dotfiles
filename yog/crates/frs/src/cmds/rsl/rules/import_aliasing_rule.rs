@@ -41,11 +41,11 @@ use crate::cmds::rsl::analysis::RulePlan;
 use crate::cmds::rsl::engine::FileContext;
 use crate::cmds::rsl::source::SourceEditor;
 
-pub(super) struct AliasedImportRule;
+pub(super) struct ImportAliasingRule;
 
-impl Rule for AliasedImportRule {
+impl Rule for ImportAliasingRule {
     fn id(&self) -> &'static str {
-        "aliased-import"
+        "import-aliasing"
     }
 
     fn analyze<'source>(&self, ctx: &FileContext<'source>) -> rootcause::Result<RulePlan<'source>> {

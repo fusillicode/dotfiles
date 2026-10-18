@@ -1,4 +1,4 @@
-//! Source rewrites and conservative skips for aliased-import.
+//! Source rewrites and conservative skips for import-aliasing.
 
 pub mod private_alias {
     use std::fmt::Debug as DPrivateAlias;

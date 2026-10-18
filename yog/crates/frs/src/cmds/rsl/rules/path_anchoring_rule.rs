@@ -25,11 +25,11 @@ use crate::cmds::rsl::ast::is_test_module_declaration;
 use crate::cmds::rsl::engine::FileContext;
 use crate::cmds::rsl::source::SourceEditor;
 
-pub(super) struct RelativePathRule;
+pub(super) struct PathAnchoringRule;
 
-impl Rule for RelativePathRule {
+impl Rule for PathAnchoringRule {
     fn id(&self) -> &'static str {
-        "relative-path"
+        "path-anchoring"
     }
 
     fn analyze<'source>(&self, ctx: &FileContext<'source>) -> rootcause::Result<RulePlan<'source>> {
@@ -37,7 +37,7 @@ impl Rule for RelativePathRule {
             edits: SourceEditor::new(ctx.source),
             findings: Vec::new(),
         };
-        let mut visitor = RelativePaths {
+        let mut visitor = ParentModuleReferences {
             test_module: false,
             prefixes: Vec::new(),
         };
@@ -91,12 +91,12 @@ impl From<BlockReason> for FixBlockReason {
     }
 }
 
-struct RelativePaths {
+struct ParentModuleReferences {
     test_module: bool,
     prefixes: Vec<Span>,
 }
 
-impl RelativePaths {
+impl ParentModuleReferences {
     fn prefix(&mut self, spans: &[Span]) {
         let (Some(first), Some(last)) = (spans.first(), spans.last()) else {
             return;
@@ -141,7 +141,7 @@ impl RelativePaths {
     }
 }
 
-impl<'ast> Visit<'ast> for RelativePaths {
+impl<'ast> Visit<'ast> for ParentModuleReferences {
     fn visit_item_mod(&mut self, module: &'ast ItemMod) {
         let previous = self.test_module;
         self.test_module |= is_test_module_declaration(module);

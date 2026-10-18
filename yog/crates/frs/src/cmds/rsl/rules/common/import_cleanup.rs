@@ -1,10 +1,8 @@
-//! Remove only private function imports whose references were all rewritten.
+//! Apply import removals selected by the call qualification plan.
 
-use std::collections::HashMap;
 use std::collections::HashSet;
 use std::ops::Range;
 
-use proc_macro2::Span;
 use syn::Item;
 use syn::UseGroup;
 use syn::UseTree;
@@ -12,95 +10,53 @@ use syn::Visibility;
 use syn::punctuated::Iter;
 use syn::spanned::Spanned;
 
-use super::comments_reason;
 use super::import_resolution::use_bindings;
-use crate::cmds::rsl::analysis::RuleChange;
 use crate::cmds::rsl::analysis::RulePlan;
 use crate::cmds::rsl::engine::FileContext;
 use crate::cmds::rsl::source::SourceEditor;
 
-pub(in crate::cmds::rsl::rules) fn plan_unused_fn_import_removals(
+pub(in crate::cmds::rsl::rules) fn removable_imports(
     ctx: &FileContext<'_>,
     items: &[Item],
-    changed: &[Span],
-    references: &HashMap<String, usize>,
+    editor: &SourceEditor<'_>,
+) -> HashSet<Range<usize>> {
+    items
+        .iter()
+        .filter_map(|item| {
+            let Item::Use(import) = item else {
+                return None;
+            };
+            let text = ctx.source.get(editor.span_range(import.span())).unwrap_or_default();
+            (matches!(import.vis, Visibility::Inherited)
+                && import.attrs.is_empty()
+                && !text.contains("//")
+                && !text.contains("/*"))
+            .then(|| use_bindings(&import.tree, &[]).bindings)
+        })
+        .flatten()
+        .map(|binding| editor.span_range(binding.span))
+        .collect()
+}
+
+pub(in crate::cmds::rsl::rules) fn plan_import_removals(
+    items: &[Item],
+    removed: &HashSet<Range<usize>>,
     plan: &mut RulePlan<'_>,
 ) -> rootcause::Result<()> {
-    if changed.is_empty() {
+    if removed.is_empty() {
         return Ok(());
     }
-
-    let mut rewritten: HashMap<&str, usize> = HashMap::new();
-
-    for span in changed {
-        let name = ctx.source.get(plan.edits.span_range(*span)).unwrap_or_default();
-        let count = rewritten.entry(name).or_default();
-        *count = count.saturating_add(1);
-    }
-
-    let unused: HashSet<_> = rewritten
-        .into_iter()
-        .filter(|(name, count)| references.get(*name) == Some(count))
-        .map(|(name, _)| name)
-        .collect();
-
     for item in items {
-        let Item::Use(item_use) = item else {
+        let Item::Use(import) = item else {
             continue;
         };
-
-        if !matches!(item_use.vis, Visibility::Inherited) || !item_use.attrs.is_empty() {
-            continue;
-        }
-
-        let bindings = use_bindings(&item_use.tree, &[]);
-
-        if !bindings
-            .bindings
-            .iter()
-            .any(|binding| unused.contains(binding.name.as_str()))
-        {
-            continue;
-        }
-
-        let text = ctx
-            .source
-            .get(plan.edits.span_range(item_use.span()))
-            .unwrap_or_default();
-
-        if text.contains("//") || text.contains("/*") {
-            let change = UnusedFunctionImportChange {
-                span: item_use.span(),
-                import: text,
-            };
-            plan.record_blocked(&change, comments_reason());
-            continue;
-        }
-
         let ranges =
-            removed_ranges(&item_use.tree, &unused, &plan.edits).into_ranges(plan.edits.span_range(item_use.span()));
-
+            removed_ranges(&import.tree, removed, &plan.edits).into_ranges(plan.edits.span_range(import.span()));
         for range in ranges {
             plan.edits.remove(range)?;
         }
     }
-
     Ok(())
-}
-
-struct UnusedFunctionImportChange<'source> {
-    span: Span,
-    import: &'source str,
-}
-
-impl RuleChange for UnusedFunctionImportChange<'_> {
-    fn span(&self) -> Span {
-        self.span
-    }
-
-    fn description(&self) -> String {
-        format!("remove unused function import `{}`", self.import)
-    }
 }
 
 enum TreeEdits {
@@ -123,20 +79,20 @@ struct PendingGroup<'ast> {
     edits: Vec<TreeEdits>,
 }
 
-fn removed_ranges(mut tree: &UseTree, unused: &HashSet<&str>, editor: &SourceEditor<'_>) -> TreeEdits {
+fn removed_ranges(mut tree: &UseTree, unused: &HashSet<Range<usize>>, editor: &SourceEditor<'_>) -> TreeEdits {
     let mut groups: Vec<PendingGroup<'_>> = Vec::new();
 
     'visit: loop {
         let mut edits = match tree {
             UseTree::Name(name) => {
-                if unused.contains(name.ident.to_string().as_str()) {
+                if unused.contains(&editor.span_range(name.span())) {
                     TreeEdits::Remove
                 } else {
                     TreeEdits::Keep(Vec::new())
                 }
             }
             UseTree::Rename(rename) => {
-                if unused.contains(rename.rename.to_string().as_str()) {
+                if unused.contains(&editor.span_range(rename.span())) {
                     TreeEdits::Remove
                 } else {
                     TreeEdits::Keep(Vec::new())
@@ -160,7 +116,7 @@ fn removed_ranges(mut tree: &UseTree, unused: &HashSet<&str>, editor: &SourceEdi
                     continue;
                 }
 
-                TreeEdits::Remove
+                TreeEdits::Keep(Vec::new())
             }
         };
 

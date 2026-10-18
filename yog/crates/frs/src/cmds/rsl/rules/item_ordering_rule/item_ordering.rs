@@ -20,8 +20,8 @@ use syn::visit::Visit;
 
 use super::ItemAst;
 use super::ItemOrder;
-use super::OrderingConstraint;
-use super::OrderingConstraintKind;
+use super::ItemOrderingConstraint;
+use super::ItemOrderingConstraintKind;
 use super::OrderingItem;
 use super::OrderingSection;
 use super::ast;
@@ -79,7 +79,7 @@ pub(super) fn compute_required_item_order(items: &[OrderingItem<'_>]) -> Result<
 
 struct AtomicItemBlocks {
     members: Vec<Vec<usize>>,
-    constraints: Vec<OrderingConstraint>,
+    constraints: Vec<ItemOrderingConstraint>,
 }
 
 impl AtomicItemBlocks {
@@ -87,10 +87,10 @@ impl AtomicItemBlocks {
         self.members.iter().position(|members| members.contains(&item_index))
     }
 
-    fn merge(&mut self, members: Vec<usize>, kind: OrderingConstraintKind) {
+    fn merge(&mut self, members: Vec<usize>, kind: ItemOrderingConstraintKind) {
         for pair in members.windows(2) {
             if let [before_item_index, after_item_index] = pair {
-                self.constraints.push(OrderingConstraint {
+                self.constraints.push(ItemOrderingConstraint {
                     before_item_index: *before_item_index,
                     after_item_index: *after_item_index,
                     kind,
@@ -210,7 +210,7 @@ fn add_macro_source_order_constraints(
                 precedence_graph.add_precedence(
                     before_block,
                     after_block,
-                    OrderingConstraintKind::MacroBindingPreservation,
+                    ItemOrderingConstraintKind::MacroBindingPreservation,
                     blocks,
                 );
             }
@@ -242,12 +242,12 @@ fn is_macro_import_attribute(meta: &Meta) -> bool {
 
 struct BlockPrecedenceEdge {
     successor_block_index: usize,
-    kind: OrderingConstraintKind,
+    kind: ItemOrderingConstraintKind,
 }
 
 struct BlockPrecedenceGraph {
     outgoing_edges: Vec<Vec<BlockPrecedenceEdge>>,
-    constraints: Vec<OrderingConstraint>,
+    constraints: Vec<ItemOrderingConstraint>,
 }
 
 impl BlockPrecedenceGraph {
@@ -255,7 +255,7 @@ impl BlockPrecedenceGraph {
         &mut self,
         before_block_index: usize,
         after_block_index: usize,
-        kind: OrderingConstraintKind,
+        kind: ItemOrderingConstraintKind,
         blocks: &AtomicItemBlocks,
     ) {
         if before_block_index == after_block_index {
@@ -264,9 +264,9 @@ impl BlockPrecedenceGraph {
 
         if matches!(
             kind,
-            OrderingConstraintKind::GroupOrSectionOrder
-                | OrderingConstraintKind::VisibilityOrder
-                | OrderingConstraintKind::CallerBeforeHelper
+            ItemOrderingConstraintKind::GroupOrSectionOrder
+                | ItemOrderingConstraintKind::VisibilityOrder
+                | ItemOrderingConstraintKind::CallerBeforeHelper
         ) && self.has_macro_preserving_path(after_block_index, before_block_index)
         {
             return;
@@ -286,7 +286,7 @@ impl BlockPrecedenceGraph {
                 blocks.members.get(before_block_index).and_then(|m| m.last()),
                 blocks.members.get(after_block_index).and_then(|m| m.first()),
             ) {
-                self.constraints.push(OrderingConstraint {
+                self.constraints.push(ItemOrderingConstraint {
                     before_item_index: *before_item_index,
                     after_item_index: *after_item_index,
                     kind,
@@ -302,7 +302,7 @@ impl BlockPrecedenceGraph {
         while let Some((block_index, preserves_macro_order)) = pending.pop_front() {
             for edge in self.outgoing_edges.get(block_index).into_iter().flatten() {
                 let preserves_macro_order =
-                    preserves_macro_order || matches!(edge.kind, OrderingConstraintKind::MacroBindingPreservation);
+                    preserves_macro_order || matches!(edge.kind, ItemOrderingConstraintKind::MacroBindingPreservation);
                 let successor = (edge.successor_block_index, preserves_macro_order);
 
                 if successor == (target, true) {
@@ -471,7 +471,7 @@ fn merge_type_impl_blocks(items: &[OrderingItem<'_>], blocks: &mut AtomicItemBlo
             .chain(inherent_impl_indices)
             .chain(trait_impl_indices)
             .collect();
-        blocks.merge(members, OrderingConstraintKind::TypeImplAdjacency);
+        blocks.merge(members, ItemOrderingConstraintKind::TypeImplAdjacency);
     }
 
     Ok(())
@@ -602,7 +602,7 @@ fn merge_recursive_fn_blocks(
 
         if recursive_item_indices.len() > 1 {
             recursive_item_indices.sort_unstable();
-            blocks.merge(recursive_item_indices, OrderingConstraintKind::RecursiveFnAdjacency);
+            blocks.merge(recursive_item_indices, ItemOrderingConstraintKind::RecursiveFnAdjacency);
         }
     }
 }
@@ -698,9 +698,9 @@ fn add_section_group_visibility_constraints(
                         other.section,
                         OrderingSection::InlineModules | OrderingSection::TestsModule
                     ) {
-                        OrderingConstraintKind::InlineModuleOrder
+                        ItemOrderingConstraintKind::InlineModuleOrder
                     } else {
-                        OrderingConstraintKind::GroupOrSectionOrder
+                        ItemOrderingConstraintKind::GroupOrSectionOrder
                     };
 
                     precedence_graph.add_precedence(before_block_index, after_block_index, kind, blocks);
@@ -717,7 +717,7 @@ fn add_section_group_visibility_constraints(
                     precedence_graph.add_precedence(
                         before_block_index,
                         after_block_index,
-                        OrderingConstraintKind::InlineModuleOrder,
+                        ItemOrderingConstraintKind::InlineModuleOrder,
                         blocks,
                     );
                 }
@@ -732,7 +732,7 @@ fn add_section_group_visibility_constraints(
                 precedence_graph.add_precedence(
                     before_block_index,
                     after_block_index,
-                    OrderingConstraintKind::GroupOrSectionOrder,
+                    ItemOrderingConstraintKind::GroupOrSectionOrder,
                     blocks,
                 );
             } else if item.ast.allows_visibility_order_with(other.ast)
@@ -745,7 +745,7 @@ fn add_section_group_visibility_constraints(
                 precedence_graph.add_precedence(
                     before_block_index,
                     after_block_index,
-                    OrderingConstraintKind::VisibilityOrder,
+                    ItemOrderingConstraintKind::VisibilityOrder,
                     blocks,
                 );
             }
@@ -839,7 +839,7 @@ fn add_caller_before_helper_constraints(
             precedence_graph.add_precedence(
                 earliest_eligible_caller_block,
                 helper_block_index,
-                OrderingConstraintKind::CallerBeforeHelper,
+                ItemOrderingConstraintKind::CallerBeforeHelper,
                 blocks,
             );
         }
