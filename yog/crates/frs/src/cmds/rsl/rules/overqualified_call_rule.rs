@@ -1,14 +1,27 @@
-//! Shorten qualified function calls to their shortest safe module path.
+//! Shorten function calls while keeping the module name that shows where the function comes from.
+//!
+//! For example, import `std::fs` and write `fs::read_to_string("notes.txt")`
+//! instead of `std::fs::read_to_string("notes.txt")`.
+//!
+//! Leave the call unchanged when the shorter name could refer to something else,
+//! or when this file does not provide enough information to check the change.
+
+use proc_macro2::Span;
 
 use super::Rule;
 use super::common::ImportEdits;
+use super::common::ImportError;
 use super::common::calls_in_scope;
+use super::common::ensure_no_comments;
 use super::common::expected_fn_path;
 use super::common::local_names;
 use super::common::module_idx;
 use super::common::module_idx::ModuleIdx;
 use super::common::module_idx::ModuleScope;
 use super::common::path_resolution::path_label;
+use crate::cmds::rsl::analysis::FixBlockReason;
+use crate::cmds::rsl::analysis::RuleChange;
+use crate::cmds::rsl::analysis::RulePlan;
 use crate::cmds::rsl::engine::FileContext;
 use crate::cmds::rsl::source::SourceEditor;
 
@@ -19,22 +32,66 @@ impl Rule for OverqualifiedCallRule {
         "overqualified-call"
     }
 
-    fn fix(&self, ctx: &FileContext<'_>, editor: &mut SourceEditor<'_>) -> rootcause::Result<()> {
+    fn analyze<'source>(&self, ctx: &FileContext<'source>) -> rootcause::Result<RulePlan<'source>> {
+        let mut plan = RulePlan {
+            edits: SourceEditor::new(ctx.source),
+            findings: Vec::new(),
+        };
         let idx = module_idx(ctx.file);
 
         for scope in &idx.scopes {
-            fix_scope(ctx, &idx, scope, editor)?;
+            analyze_scope(ctx, &idx, scope, &mut plan)?;
         }
 
+        Ok(plan)
+    }
+}
+
+struct Change<'path> {
+    span: Span,
+    source_path: &'path str,
+    expected_path: &'path str,
+}
+
+impl Change<'_> {
+    fn add_to_plan(&self, plan: &mut RulePlan<'_>) -> rootcause::Result<()> {
+        plan.edits.replace_span(self.span, self.expected_path)?;
+        plan.record_fixable(self);
         Ok(())
     }
 }
 
-fn fix_scope(
+impl RuleChange for Change<'_> {
+    fn span(&self) -> Span {
+        self.span
+    }
+
+    fn description(&self) -> String {
+        format!("replace `{}` with `{}`", self.source_path, self.expected_path)
+    }
+}
+
+enum BlockReason {
+    MissingModuleContext,
+}
+
+impl From<BlockReason> for FixBlockReason {
+    fn from(reason: BlockReason) -> Self {
+        match reason {
+            BlockReason::MissingModuleContext => Self {
+                code: "parent-module-unknown",
+                message: "The required crate or parent-module context is outside this file.".to_owned(),
+                help: "Use the correct crate:: path after checking the surrounding modules.",
+            },
+        }
+    }
+}
+
+fn analyze_scope(
     ctx: &FileContext<'_>,
     idx: &ModuleIdx<'_>,
     scope: &ModuleScope<'_>,
-    editor: &mut SourceEditor<'_>,
+    plan: &mut RulePlan<'_>,
 ) -> rootcause::Result<()> {
     let Some(info) = idx.info.get(&scope.path) else {
         return Ok(());
@@ -58,26 +115,51 @@ fn fix_scope(
 
         let span = call.span();
 
-        if !editor.can_replace_path(span) {
+        let source_path = ctx.source.get(plan.edits.span_range(span)).unwrap_or_default();
+        let change = Change {
+            span,
+            source_path,
+            expected_path: &suggestion.expected_path,
+        };
+
+        if let Err(reason) = ensure_no_comments(&plan.edits, span) {
+            plan.record_blocked(&change, reason);
             continue;
         }
 
-        let source_path = ctx.source.get(editor.span_range(span)).unwrap_or_default();
         let module_name = suggestion.expected_path.split("::").next().unwrap_or_default();
 
-        if info.unknown_imports || suggestion.requires_crate_context(source_path) || reserved.contains(module_name) {
-            editor.skip("cannot resolve an unshadowed module name");
+        let reason = if info.unknown_imports {
+            Some(ImportError::UnknownImports.into())
+        } else if suggestion.requires_crate_context(source_path) {
+            Some(FixBlockReason::from(BlockReason::MissingModuleContext))
+        } else if reserved.has_unknown_bindings() {
+            Some(ImportError::UnknownBindings.into())
+        } else if reserved.contains(module_name) {
+            Some(
+                ImportError::NameConflict {
+                    name: module_name.to_owned(),
+                }
+                .into(),
+            )
+        } else {
+            None
+        };
+
+        if let Some(reason) = reason {
+            plan.record_blocked(&change, reason);
             continue;
         }
 
         if let Some(import) = &suggestion.required_import
-            && !imports.request(import, editor)
+            && let Err(reason) = imports.request(import)
         {
+            plan.record_blocked(&change, reason);
             continue;
         }
 
-        editor.replace_span(span, &suggestion.expected_path)?;
+        change.add_to_plan(plan)?;
     }
 
-    imports.apply(ctx, scope, editor)
+    imports.apply(ctx, scope, &mut plan.edits)
 }

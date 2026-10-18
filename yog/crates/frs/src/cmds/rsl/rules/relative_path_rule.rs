@@ -1,4 +1,10 @@
-//! Report parent-module prefixes that need unavailable crate context.
+//! Flag references that start with `super::`, which point to a parent module.
+//!
+//! Prefer a path that names the module from the crate's root, so its meaning does not depend on nesting.
+//! For example, prefer `crate::settings::Config` over `super::Config` when the parent module is `settings`.
+//!
+//! This rule reports these references without changing them because the parent module cannot be identified
+//! from this file alone. A private `use super::*;` inside a test module is allowed.
 
 use proc_macro2::Span;
 use syn::Attribute;
@@ -11,6 +17,10 @@ use syn::Visibility;
 use syn::visit::Visit;
 
 use super::Rule;
+use super::common::ensure_no_comments;
+use crate::cmds::rsl::analysis::FixBlockReason;
+use crate::cmds::rsl::analysis::RuleChange;
+use crate::cmds::rsl::analysis::RulePlan;
 use crate::cmds::rsl::ast::is_test_module_declaration;
 use crate::cmds::rsl::engine::FileContext;
 use crate::cmds::rsl::source::SourceEditor;
@@ -22,7 +32,11 @@ impl Rule for RelativePathRule {
         "relative-path"
     }
 
-    fn fix(&self, ctx: &FileContext<'_>, editor: &mut SourceEditor<'_>) -> rootcause::Result<()> {
+    fn analyze<'source>(&self, ctx: &FileContext<'source>) -> rootcause::Result<RulePlan<'source>> {
+        let mut plan = RulePlan {
+            edits: SourceEditor::new(ctx.source),
+            findings: Vec::new(),
+        };
         let mut visitor = RelativePaths {
             test_module: false,
             prefixes: Vec::new(),
@@ -30,14 +44,50 @@ impl Rule for RelativePathRule {
         visitor.visit_file(ctx.file);
 
         for prefix in visitor.prefixes {
-            if !editor.can_replace_path(prefix) {
-                continue;
-            }
-
-            editor.skip("cannot resolve the parent module from this file");
+            let text = plan.edits.source_range(plan.edits.span_range(prefix));
+            let change = Change {
+                span: prefix,
+                path: text,
+            };
+            let reason = match ensure_no_comments(&plan.edits, prefix) {
+                Ok(()) => BlockReason::MissingModuleContext.into(),
+                Err(reason) => reason,
+            };
+            plan.record_blocked(&change, reason);
         }
 
-        Ok(())
+        Ok(plan)
+    }
+}
+
+struct Change<'path> {
+    span: Span,
+    path: &'path str,
+}
+
+impl RuleChange for Change<'_> {
+    fn span(&self) -> Span {
+        self.span
+    }
+
+    fn description(&self) -> String {
+        format!("replace parent-module reference `{}`", self.path)
+    }
+}
+
+enum BlockReason {
+    MissingModuleContext,
+}
+
+impl From<BlockReason> for FixBlockReason {
+    fn from(reason: BlockReason) -> Self {
+        match reason {
+            BlockReason::MissingModuleContext => Self {
+                code: "parent-module-unknown",
+                message: "The required crate or parent-module context is outside this file.".to_owned(),
+                help: "Use the correct crate:: path after checking the surrounding modules.",
+            },
+        }
     }
 }
 

@@ -1,6 +1,13 @@
-//! Remove private import aliases only when every reference can be rewritten in this file.
+//! Use an imported item's original name instead of giving it another name with `as`.
+//!
+//! For example, change `use std::path::PathBuf as FilePath;` to `use std::path::PathBuf;`
+//! and use `PathBuf` wherever that import was used as `FilePath`.
+//!
+//! Keep the alias when removing it could cause a name conflict, change a name exposed to other code,
+//! or require changes that cannot be checked from this file. Imports named `_` stay unchanged.
 
 use std::collections::HashSet;
+use std::ops::Range;
 
 use proc_macro2::Span;
 use proc_macro2::TokenStream;
@@ -21,11 +28,16 @@ use syn::Visibility;
 use syn::visit::Visit;
 
 use super::Rule;
+use super::common::ImportError;
+use super::common::comments_reason;
 use super::common::local_names;
 use super::common::module_idx;
 use super::common::module_idx::ModuleIdx;
 use super::common::module_idx::ModuleScope;
 use super::common::module_idx::has_external_modules;
+use crate::cmds::rsl::analysis::FixBlockReason;
+use crate::cmds::rsl::analysis::RuleChange;
+use crate::cmds::rsl::analysis::RulePlan;
 use crate::cmds::rsl::engine::FileContext;
 use crate::cmds::rsl::source::SourceEditor;
 
@@ -36,23 +48,92 @@ impl Rule for AliasedImportRule {
         "aliased-import"
     }
 
-    fn fix(&self, ctx: &FileContext<'_>, editor: &mut SourceEditor<'_>) -> rootcause::Result<()> {
+    fn analyze<'source>(&self, ctx: &FileContext<'source>) -> rootcause::Result<RulePlan<'source>> {
+        let mut plan = RulePlan {
+            edits: SourceEditor::new(ctx.source),
+            findings: Vec::new(),
+        };
         let idx = module_idx(ctx.file);
 
         for scope in &idx.scopes {
-            fix_scope(ctx, &idx, scope, editor)?;
+            analyze_scope(&idx, scope, &mut plan)?;
         }
 
+        Ok(plan)
+    }
+}
+
+struct Change {
+    span: Span,
+    alias: String,
+    original: String,
+    alias_suffix: Range<usize>,
+    references: Vec<(Span, String)>,
+}
+
+impl Change {
+    fn add_to_plan(&self, plan: &mut RulePlan<'_>) -> rootcause::Result<()> {
+        plan.edits.replace(self.alias_suffix.clone(), String::new())?;
+        for (span, replacement) in &self.references {
+            plan.edits.replace_span(*span, replacement)?;
+        }
+        plan.record_fixable(self);
         Ok(())
     }
 }
 
-fn fix_scope(
-    ctx: &FileContext<'_>,
-    idx: &ModuleIdx<'_>,
-    scope: &ModuleScope<'_>,
-    editor: &mut SourceEditor<'_>,
-) -> rootcause::Result<()> {
+impl RuleChange for Change {
+    fn span(&self) -> Span {
+        self.span
+    }
+
+    fn description(&self) -> String {
+        format!("replace alias `{}` with `{}`", self.alias, self.original)
+    }
+}
+
+enum BlockReason {
+    ExportedAlias,
+    AttributedImport,
+    CrossModuleReferences,
+    UnresolvedReferences,
+    ExternalModules,
+}
+
+impl From<BlockReason> for FixBlockReason {
+    fn from(reason: BlockReason) -> Self {
+        match reason {
+            BlockReason::ExportedAlias => Self {
+                code: "exported-alias",
+                message: "Other code may depend on the name exported by this import.".to_owned(),
+                help: "Keep this exported name unless its callers can also be updated.",
+            },
+            BlockReason::AttributedImport => Self {
+                code: "attributed-import",
+                message: "The import has attributes whose effects cannot be checked here.".to_owned(),
+                help: "Review the import's attributes before changing it manually.",
+            },
+            BlockReason::CrossModuleReferences => Self {
+                code: "cross-module-references",
+                message: "Other modules in this file may still use this alias.".to_owned(),
+                help: "Review references in the other modules before changing this name.",
+            },
+            BlockReason::UnresolvedReferences => Self {
+                code: "unresolved-references",
+                message: "References inside macros, attributes, or other unresolved syntax cannot be updated safely."
+                    .to_owned(),
+                help: "Review the affected names and make this change manually if appropriate.",
+            },
+            BlockReason::ExternalModules => Self {
+                code: "external-modules",
+                message: "A child module in another file may still use the existing import.".to_owned(),
+                help: "Review references in the other modules before changing this name.",
+            },
+        }
+    }
+}
+
+fn analyze_scope(idx: &ModuleIdx<'_>, scope: &ModuleScope<'_>, plan: &mut RulePlan<'_>) -> rootcause::Result<()> {
     let Some(info) = idx.info.get(&scope.path) else {
         return Ok(());
     };
@@ -84,14 +165,24 @@ fn fix_scope(
             continue;
         }
 
-        let mut references = AliasReferences::new(&alias, &original);
+        let mut references = AliasReferences {
+            alias: &alias,
+            original: &original,
+            replacements: Vec::new(),
+            opaque: false,
+        };
 
         for item in scope.items {
             references.visit_item(item);
         }
 
         let cross_module = idx.scopes.iter().filter(|other| other.path != scope.path).any(|other| {
-            let mut references = AliasReferences::new(&alias, &original);
+            let mut references = AliasReferences {
+                alias: &alias,
+                original: &original,
+                replacements: Vec::new(),
+                opaque: false,
+            };
 
             for item in other.items {
                 references.visit_item(item);
@@ -102,34 +193,49 @@ fn fix_scope(
 
         let clash =
             alias != original && (claimed.contains(&original) || local.contains(&original) || local.contains(&alias));
-        let unknown = info.unknown_imports || cross_module || references.opaque || has_external_modules(scope.items);
         let exported = !matches!(import.vis, Visibility::Inherited);
+        let reason = if exported && alias != original {
+            Some(FixBlockReason::from(BlockReason::ExportedAlias))
+        } else if !import.attrs.is_empty() {
+            Some(BlockReason::AttributedImport.into())
+        } else if info.unknown_imports {
+            Some(ImportError::UnknownImports.into())
+        } else if alias != original && local.has_unknown_bindings() {
+            Some(ImportError::UnknownBindings.into())
+        } else if clash {
+            Some(ImportError::NameConflict { name: original.clone() }.into())
+        } else if cross_module {
+            Some(BlockReason::CrossModuleReferences.into())
+        } else if references.opaque {
+            Some(BlockReason::UnresolvedReferences.into())
+        } else if has_external_modules(scope.items) {
+            Some(BlockReason::ExternalModules.into())
+        } else {
+            None
+        };
 
-        if clash || unknown || !import.attrs.is_empty() || (exported && alias != original) {
-            editor.skip(format!(
-                "cannot remove alias {alias}: clashes, exported references, or unresolved syntax"
-            ));
+        let replacements = references.replacements;
+        let change = Change {
+            span: rename.rename.span(),
+            alias,
+            original,
+            alias_suffix: plan.edits.offset(rename.ident.span().end())..plan.edits.offset(rename.rename.span().end()),
+            references: replacements,
+        };
+
+        if let Some(reason) = reason {
+            plan.record_blocked(&change, reason);
             continue;
         }
 
-        let suffix = editor.offset(rename.ident.span().end())..editor.offset(rename.rename.span().end());
-
-        if ctx
-            .source
-            .get(suffix.clone())
-            .is_some_and(|text| text.contains("/*") || text.contains("//"))
-        {
-            editor.skip("alias contains comments");
+        let text = plan.edits.source_range(change.alias_suffix.clone());
+        if text.contains("/*") || text.contains("//") {
+            plan.record_blocked(&change, comments_reason());
             continue;
         }
 
-        editor.replace(suffix, String::new())?;
-
-        for (span, replacement) in references.replacements {
-            editor.replace_span(span, replacement)?;
-        }
-
-        claimed.insert(original);
+        change.add_to_plan(plan)?;
+        claimed.insert(change.original);
     }
 
     Ok(())
@@ -182,16 +288,7 @@ struct AliasReferences<'name> {
     opaque: bool,
 }
 
-impl<'name> AliasReferences<'name> {
-    const fn new(alias: &'name str, original: &'name str) -> Self {
-        Self {
-            alias,
-            original,
-            replacements: Vec::new(),
-            opaque: false,
-        }
-    }
-
+impl AliasReferences<'_> {
     fn tokens(&mut self, tokens: TokenStream) {
         let mut pending = vec![tokens.into_iter()];
 

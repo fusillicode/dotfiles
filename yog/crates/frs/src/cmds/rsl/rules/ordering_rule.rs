@@ -1,33 +1,20 @@
-//! Deterministic item ordering, with one complete arrangement per affected scope.
+//! Arrange declarations so readers can find related code together and read callers before their helpers.
 //!
-//! ```text
-//! extern_crate -> use -> foreign_mod/mod -> #[cfg(test)] mod tests;
-//! -> global_asm -> const/static -> ty_alias -> macros/types/traits/impls/functions
-//! -> inline #[cfg(test)] modules (any name)
-//! ```
+//! Put crate declarations, imports, and module declarations first, followed by global assembly,
+//! constants and statics, type aliases, and then the remaining definitions.
+//! Keep each type beside its own methods, followed by its trait implementations.
+//! Within each group and among a type's methods, put more widely visible code before private code.
 //!
-//! Keep contiguous blocks: `type -> inherent impls -> trait impls`, and mutually recursive private helpers.
-//! Within each group or inherent impl: `pub -> pub(crate) -> restricted -> private`.
-//! Imports, external module declarations, and associated items other than methods follow the formatter.
-//! Test-only files (`tests.rs`, `test_*.rs`, `*_test.rs`, `*_tests.rs`) and inline `#[cfg(test)]`
-//! modules inherit `tests -> helpers`; production scopes keep test functions last.
-//! Test attribute path segments match `(?:^|_)test(?:_|$)|^rstest$`; arguments do not classify functions.
-//! Sections override visibility and callers. Calls and recursive blocks stay within their section.
-//! Private helpers follow their earliest eligible caller; shared helpers prefer public callers.
-//! Duplicate-name impls attach to the last preceding declaration, without cfg evaluation.
+//! Place private helper functions after the functions that use them. When several functions share a helper,
+//! prefer placing it after a public caller. Keep helpers that call each other together.
+//! Keep the existing order when these preferences do not require a change.
 //!
-//! Preserve source order between macro sources and possible consumers, without resolving macro names.
-//! Sources include macro definitions/invocations, imports, and opaque items. Consumers include attributed items,
-//! external modules, and items containing macros or opaque syntax. Plain items can cross macro sources.
-//! Ordering preferences yield to macro preservation, except inline test modules must be last.
-//! Incompatible test-module placement or adjacency emits a conflict without moves.
+//! In production code, put test functions after other definitions and inline test modules at the end.
+//! In test-only files and modules, put tests before their helper functions.
+//! Leave import ordering and the order of module declarations in separate files to the formatter.
 //!
-//! Conflicting scopes are skipped; independent nested scopes can still be fixed.
-//!
-//! Apply inner scopes first, retaining original-snapshot identities as earlier edits shift positions.
-//! Ranges include attributes and attached comments: `9-11` is inclusive; `9:3-11:2` uses one-based columns
-//! and an exclusive end. Same-line trailing comments attach backward; contiguous leading comments attach forward.
-//! Blank-separated comments and inner docs stay scope-owned; whitespace gaps stay in their slots.
+//! Move attached comments and attributes with their declarations. Preserve order where macros may depend on it.
+//! If the requirements cannot be met together, report the conflict and leave that part unchanged.
 
 use std::path::Path;
 
@@ -42,14 +29,17 @@ use syn::Meta;
 use syn::spanned::Spanned;
 
 use super::Rule;
+use crate::cmds::rsl::analysis::FixBlockReason;
+use crate::cmds::rsl::analysis::RuleChange;
+use crate::cmds::rsl::analysis::RulePlan;
 use crate::cmds::rsl::ast;
 use crate::cmds::rsl::ast::ItemGroup;
 use crate::cmds::rsl::ast::ItemKind;
 use crate::cmds::rsl::ast::VisibilityClass;
 use crate::cmds::rsl::engine::FileContext;
 use crate::cmds::rsl::source::SourceEditor;
-use crate::cmds::rsl::source::item_ranges;
-use crate::cmds::rsl::source::item_ranges::SourceRange;
+use crate::cmds::rsl::source::SourceRange;
+use crate::cmds::rsl::source::item_ranges_with_attached_comments;
 
 mod fn_references;
 mod item_ordering;
@@ -61,10 +51,14 @@ impl Rule for OrderingRule {
         "ordering-rule"
     }
 
-    fn fix(&self, ctx: &FileContext<'_>, editor: &mut SourceEditor<'_>) -> rootcause::Result<()> {
+    fn analyze<'source>(&self, ctx: &FileContext<'source>) -> rootcause::Result<RulePlan<'source>> {
+        let mut plan = RulePlan {
+            edits: SourceEditor::new(ctx.source),
+            findings: Vec::new(),
+        };
         let test_ordering = TestOrdering::from(ctx.path);
         let mut pending = vec![
-            ScopeWork::Fix {
+            ScopeWork::Analyze {
                 items: ctx.file.items.iter().map(ItemAst::ModuleItem).collect(),
                 scope: OrderingScope {
                     label: "module crate".to_owned(),
@@ -88,13 +82,56 @@ impl Rule for OrderingRule {
                 } => {
                     schedule_nested_scopes(items, &name, test_ordering, &mut pending);
                 }
-                ScopeWork::Fix { items, scope } => {
-                    fix_scope(ctx, items.into_iter(), &scope, editor)?;
+                ScopeWork::Analyze { items, scope } => {
+                    analyze_scope(ctx, items.into_iter(), &scope, &mut plan)?;
                 }
             }
         }
 
+        Ok(plan)
+    }
+}
+
+struct Change<'scope> {
+    span: Span,
+    scope: &'scope str,
+}
+
+impl Change<'_> {
+    fn add_to_plan(
+        &self,
+        items: &[OrderingItem<'_>],
+        order: &ItemOrder,
+        plan: &mut RulePlan<'_>,
+    ) -> rootcause::Result<()> {
+        reorder_scope(items, &order.0, &mut plan.edits)?;
+        plan.record_fixable(self);
         Ok(())
+    }
+}
+
+impl RuleChange for Change<'_> {
+    fn span(&self) -> Span {
+        self.span
+    }
+
+    fn description(&self) -> String {
+        format!("reorder declarations in {}", self.scope)
+    }
+}
+
+struct OrderingConflict(String);
+
+impl From<OrderingConflict> for FixBlockReason {
+    fn from(conflict: OrderingConflict) -> Self {
+        Self {
+            code: "ordering-conflict",
+            message: format!(
+                "The declarations have incompatible ordering requirements: {}.",
+                conflict.0
+            ),
+            help: "Review the conflicting declarations and their required order manually.",
+        }
     }
 }
 
@@ -109,39 +146,6 @@ pub struct ItemOrderingMetadata {
 impl ItemOrderingMetadata {
     fn group(&self) -> ItemGroup {
         self.kind.map_or(ItemGroup::Items, ItemKind::group)
-    }
-
-    fn new(ast: ItemAst<'_>, range: SourceRange) -> Self {
-        let (kind, label, visibility) = match ast {
-            ItemAst::ModuleItem(item) => {
-                let kind = ast::classify_item(item);
-                let label = kind.map_or_else(|| "opaque item".to_owned(), |kind| ast::item_label(item, kind));
-                (kind, label, ast::item_visibility(item))
-            }
-            ItemAst::ImplItem(ImplItem::Fn(item)) => (
-                Some(ItemKind::Fn),
-                format!("fn {}", item.sig.ident),
-                Some((&item.vis).into()),
-            ),
-            ItemAst::ImplItem(ImplItem::Const(item)) => (
-                Some(ItemKind::Const),
-                format!("const {}", item.ident),
-                Some((&item.vis).into()),
-            ),
-            ItemAst::ImplItem(ImplItem::Type(item)) => (
-                Some(ItemKind::TypeAlias),
-                format!("type {}", item.ident),
-                Some((&item.vis).into()),
-            ),
-            ItemAst::ImplItem(ImplItem::Macro(_) | ImplItem::Verbatim(_) | _) => (None, "opaque item".to_owned(), None),
-        };
-
-        Self {
-            range,
-            label,
-            kind,
-            visibility,
-        }
     }
 }
 
@@ -242,7 +246,7 @@ enum ScopeWork<'ast> {
         name: String,
         test_ordering: TestOrdering,
     },
-    Fix {
+    Analyze {
         items: Vec<ItemAst<'ast>>,
         scope: OrderingScope,
     },
@@ -335,6 +339,39 @@ enum ItemAst<'ast> {
 }
 
 impl<'ast> ItemAst<'ast> {
+    fn ordering_metadata(self, range: SourceRange) -> ItemOrderingMetadata {
+        let (kind, label, visibility) = match self {
+            ItemAst::ModuleItem(item) => {
+                let kind = ast::classify_item(item);
+                let label = kind.map_or_else(|| "opaque item".to_owned(), |kind| ast::item_label(item, kind));
+                (kind, label, ast::item_visibility(item))
+            }
+            ItemAst::ImplItem(ImplItem::Fn(item)) => (
+                Some(ItemKind::Fn),
+                format!("fn {}", item.sig.ident),
+                Some((&item.vis).into()),
+            ),
+            ItemAst::ImplItem(ImplItem::Const(item)) => (
+                Some(ItemKind::Const),
+                format!("const {}", item.ident),
+                Some((&item.vis).into()),
+            ),
+            ItemAst::ImplItem(ImplItem::Type(item)) => (
+                Some(ItemKind::TypeAlias),
+                format!("type {}", item.ident),
+                Some((&item.vis).into()),
+            ),
+            ItemAst::ImplItem(ImplItem::Macro(_) | ImplItem::Verbatim(_) | _) => (None, "opaque item".to_owned(), None),
+        };
+
+        ItemOrderingMetadata {
+            range,
+            label,
+            kind,
+            visibility,
+        }
+    }
+
     const fn is_fn(self) -> bool {
         matches!(self, Self::ModuleItem(Item::Fn(_)) | Self::ImplItem(ImplItem::Fn(_)))
     }
@@ -389,7 +426,7 @@ fn schedule_nested_scopes<'ast>(
 
                 let test_ordering = test_ordering.for_nested_module(module);
                 let name = format!("{parent}::{}", module.ident);
-                pending.push(ScopeWork::Fix {
+                pending.push(ScopeWork::Analyze {
                     items: items.iter().map(ItemAst::ModuleItem).collect(),
                     scope: OrderingScope {
                         label: format!("module {name}"),
@@ -404,7 +441,7 @@ fn schedule_nested_scopes<'ast>(
                 });
             }
             Item::Impl(item) if item.trait_.is_none() => {
-                pending.push(ScopeWork::Fix {
+                pending.push(ScopeWork::Analyze {
                     items: item.items.iter().map(ItemAst::ImplItem).collect(),
                     scope: OrderingScope {
                         label: format!(
@@ -436,11 +473,11 @@ fn schedule_nested_scopes<'ast>(
     }
 }
 
-fn fix_scope<'ast>(
+fn analyze_scope<'ast>(
     ctx: &FileContext<'_>,
     ast_items: impl Iterator<Item = ItemAst<'ast>>,
     scope: &OrderingScope,
-    editor: &mut SourceEditor<'_>,
+    plan: &mut RulePlan<'_>,
 ) -> rootcause::Result<()> {
     let ast_items: Vec<_> = ast_items.collect();
 
@@ -449,21 +486,30 @@ fn fix_scope<'ast>(
     }
 
     let spans: Vec<_> = ast_items.iter().map(|item| item.span()).collect();
-    let ranges = item_ranges::item_ranges_with_attached_comments(ctx.source, &spans, scope.body_start);
+    let Some(&location) = spans.first() else {
+        return Ok(());
+    };
+    let ranges = item_ranges_with_attached_comments(ctx.source, &spans, scope.body_start);
     let items: Vec<_> = ast_items
         .into_iter()
         .zip(ranges)
         .map(|(ast, range)| OrderingItem {
-            metadata: ItemOrderingMetadata::new(ast, range),
+            metadata: ast.ordering_metadata(range),
             ast,
             section: scope.test_ordering.classify_item_section(ast),
         })
         .collect();
 
+    let change = Change {
+        span: location,
+        scope: &scope.label,
+    };
     match item_ordering::compute_required_item_order(&items) {
-        Ok(order) if !order.is_identity() => reorder_scope(&items, &order.0, editor)?,
+        Ok(order) if !order.is_identity() => {
+            change.add_to_plan(&items, &order, plan)?;
+        }
         Ok(_) => {}
-        Err(message) => editor.skip(format!("{}: {message}", scope.label)),
+        Err(message) => plan.record_blocked(&change, OrderingConflict(message)),
     }
 
     Ok(())

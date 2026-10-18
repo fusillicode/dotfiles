@@ -1,15 +1,20 @@
-//! Shared resolution and source-edit support for the direct fixes.
+//! Shared name resolution and supporting edit plans for rule analysis.
 
 pub(super) use fn_call_analysis::calls_in_scope;
 pub(super) use fn_path_resolution::FnCallSuggestion;
 pub(super) use fn_path_resolution::expected_fn_path;
-pub(super) use import_cleanup::remove_unused_fn_imports;
+pub(super) use import_cleanup::plan_unused_fn_import_removals;
 pub(super) use import_edits::ImportEdits;
+pub(super) use import_edits::ImportError;
 pub(super) use import_edits::LocalNames;
 pub(super) use import_edits::local_names;
 pub(super) use import_resolution::has_name_clash_parts;
 pub(super) use module_idx::module_idx;
 pub(super) use path_resolution::is_import_style_path;
+use proc_macro2::Span;
+
+use crate::cmds::rsl::analysis::FixBlockReason;
+use crate::cmds::rsl::source::SourceEditor;
 
 mod fn_call_analysis;
 mod fn_path_resolution;
@@ -18,4 +23,21 @@ mod import_edits;
 pub(super) mod import_resolution;
 pub(super) mod module_idx;
 pub(super) mod path_resolution;
-mod scope_bindings;
+
+pub(super) fn ensure_no_comments(edits: &SourceEditor<'_>, span: Span) -> Result<(), FixBlockReason> {
+    let text = edits.source_range(edits.span_range(span));
+
+    if text.contains("/*") || text.contains("//") {
+        Err(comments_reason())
+    } else {
+        Ok(())
+    }
+}
+
+pub(super) fn comments_reason() -> FixBlockReason {
+    FixBlockReason {
+        code: "comments",
+        message: "The change could remove comments inside the affected code.".to_owned(),
+        help: "Move or preserve the comments before making this change manually.",
+    }
+}

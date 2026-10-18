@@ -1,5 +1,11 @@
-//! Import qualified items and replace only their module prefix, preserving generic arguments.
-//! Keep listed type names qualified, regardless of their path; leave lowercase function paths alone.
+//! Import items such as types so their names are easier to read where they are used.
+//!
+//! For example, add `use std::path::PathBuf;` and write `PathBuf` instead of `std::path::PathBuf`.
+//! The same applies to uses such as `PathBuf::new()`.
+//!
+//! Keep module names on common names such as `Result`, `Error`, and `Option` to make their meaning clear.
+//! Function calls are handled by separate rules. Leave names unchanged when shortening them could cause
+//! a conflict or when this file does not provide enough information to check the change.
 
 use proc_macro2::Span;
 use syn::Attribute;
@@ -11,12 +17,18 @@ use syn::visit::Visit;
 
 use super::Rule;
 use super::common::ImportEdits;
+use super::common::ImportError;
+use super::common::ensure_no_comments;
 use super::common::has_name_clash_parts;
 use super::common::is_import_style_path;
 use super::common::local_names;
 use super::common::module_idx;
 use super::common::module_idx::ModuleIdx;
 use super::common::module_idx::ModuleScope;
+use super::common::path_resolution::normalize_path;
+use crate::cmds::rsl::analysis::FixBlockReason;
+use crate::cmds::rsl::analysis::RuleChange;
+use crate::cmds::rsl::analysis::RulePlan;
 use crate::cmds::rsl::engine::FileContext;
 use crate::cmds::rsl::source::SourceEditor;
 
@@ -74,22 +86,66 @@ impl Rule for QualifiedItemRule {
         "qualified-item"
     }
 
-    fn fix(&self, ctx: &FileContext<'_>, editor: &mut SourceEditor<'_>) -> rootcause::Result<()> {
+    fn analyze<'source>(&self, ctx: &FileContext<'source>) -> rootcause::Result<RulePlan<'source>> {
+        let mut plan = RulePlan {
+            edits: SourceEditor::new(ctx.source),
+            findings: Vec::new(),
+        };
         let idx = module_idx(ctx.file);
 
         for scope in &idx.scopes {
-            fix_scope(ctx, &idx, scope, editor)?;
+            analyze_scope(ctx, &idx, scope, &mut plan)?;
         }
 
+        Ok(plan)
+    }
+}
+
+struct Change<'path> {
+    span: Span,
+    path: &'path str,
+    name: &'path str,
+}
+
+impl Change<'_> {
+    fn add_to_plan(&self, plan: &mut RulePlan<'_>) -> rootcause::Result<()> {
+        plan.edits.replace_span(self.span, self.name)?;
+        plan.record_fixable(self);
         Ok(())
     }
 }
 
-fn fix_scope(
+impl RuleChange for Change<'_> {
+    fn span(&self) -> Span {
+        self.span
+    }
+
+    fn description(&self) -> String {
+        format!("replace `{}` with `{}`", self.path, self.name)
+    }
+}
+
+enum BlockReason {
+    MissingModuleContext,
+}
+
+impl From<BlockReason> for FixBlockReason {
+    fn from(reason: BlockReason) -> Self {
+        match reason {
+            BlockReason::MissingModuleContext => Self {
+                code: "parent-module-unknown",
+                message: "The required crate or parent-module context is outside this file.".to_owned(),
+                help: "Use the correct crate:: path after checking the surrounding modules.",
+            },
+        }
+    }
+}
+
+fn analyze_scope(
     ctx: &FileContext<'_>,
     idx: &ModuleIdx<'_>,
     scope: &ModuleScope<'_>,
-    editor: &mut SourceEditor<'_>,
+    plan: &mut RulePlan<'_>,
 ) -> rootcause::Result<()> {
     let Some(info) = idx.info.get(&scope.path) else {
         return Ok(());
@@ -114,21 +170,33 @@ fn fix_scope(
             continue;
         }
 
-        if !editor.can_replace_path(span) {
+        let change = Change {
+            span,
+            path: &path,
+            name,
+        };
+
+        if let Err(reason) = ensure_no_comments(&plan.edits, span) {
+            plan.record_blocked(&change, reason);
+            continue;
+        }
+
+        if info.unknown_imports {
+            plan.record_blocked(&change, ImportError::UnknownImports);
             continue;
         }
 
         if has_name_clash_parts(idx, &scope.path, &parts) {
-            editor.skip(format!("cannot import {path}: name may clash"));
+            plan.record_blocked(&change, ImportError::NameConflict { name: name.clone() });
             continue;
         }
 
         if matches!(parts.first().map(String::as_str), Some("crate" | "super")) {
-            editor.skip("cannot resolve this path from the supplied file alone");
+            plan.record_blocked(&change, BlockReason::MissingModuleContext);
             continue;
         }
 
-        let same_module = super::common::path_resolution::normalize_path(&scope.path, &parts)
+        let same_module = normalize_path(&scope.path, &parts)
             == scope
                 .path
                 .iter()
@@ -137,18 +205,26 @@ fn fix_scope(
                 .collect::<Vec<_>>();
 
         if same_module && local.contains(name) {
-            editor.skip(format!("cannot shorten {path}: {name} is shadowed"));
+            let reason = if local.has_unknown_bindings() {
+                ImportError::UnknownBindings
+            } else {
+                ImportError::NameConflict { name: name.clone() }
+            };
+            plan.record_blocked(&change, reason);
             continue;
         }
 
-        if !(same_module && info.definitions.contains(name) || imports.request(&path, editor)) {
+        if !(same_module && info.definitions.contains(name))
+            && let Err(reason) = imports.request(&path)
+        {
+            plan.record_blocked(&change, reason);
             continue;
         }
 
-        editor.replace_span(span, name)?;
+        change.add_to_plan(plan)?;
     }
 
-    imports.apply(ctx, scope, editor)
+    imports.apply(ctx, scope, &mut plan.edits)
 }
 
 struct QualifiedPaths {

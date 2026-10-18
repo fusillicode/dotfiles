@@ -20,15 +20,33 @@ use syn::punctuated::Iter;
 use syn::spanned::Spanned;
 use syn::visit::Visit;
 
+use super::comments_reason;
 use super::import_resolution::use_bindings;
+use crate::cmds::rsl::analysis::RuleChange;
+use crate::cmds::rsl::analysis::RulePlan;
 use crate::cmds::rsl::engine::FileContext;
 use crate::cmds::rsl::source::SourceEditor;
 
-pub(in crate::cmds::rsl::rules) fn remove_unused_fn_imports(
+struct UnusedFunctionImportChange<'source> {
+    span: Span,
+    import: &'source str,
+}
+
+impl RuleChange for UnusedFunctionImportChange<'_> {
+    fn span(&self) -> Span {
+        self.span
+    }
+
+    fn description(&self) -> String {
+        format!("remove unused function import `{}`", self.import)
+    }
+}
+
+pub(in crate::cmds::rsl::rules) fn plan_unused_fn_import_removals(
     ctx: &FileContext<'_>,
     items: &[Item],
     changed: &[Span],
-    editor: &mut SourceEditor<'_>,
+    plan: &mut RulePlan<'_>,
 ) -> rootcause::Result<()> {
     if changed.is_empty() {
         return Ok(());
@@ -40,7 +58,7 @@ pub(in crate::cmds::rsl::rules) fn remove_unused_fn_imports(
     let mut rewritten: HashMap<&str, usize> = HashMap::new();
 
     for span in changed {
-        let name = ctx.source.get(editor.span_range(*span)).unwrap_or_default();
+        let name = ctx.source.get(plan.edits.span_range(*span)).unwrap_or_default();
         let count = rewritten.entry(name).or_default();
         *count = count.saturating_add(1);
     }
@@ -70,17 +88,25 @@ pub(in crate::cmds::rsl::rules) fn remove_unused_fn_imports(
             continue;
         }
 
-        let text = ctx.source.get(editor.span_range(item_use.span())).unwrap_or_default();
+        let text = ctx
+            .source
+            .get(plan.edits.span_range(item_use.span()))
+            .unwrap_or_default();
 
         if text.contains("//") || text.contains("/*") {
-            editor.skip("retained function import containing comments");
+            let change = UnusedFunctionImportChange {
+                span: item_use.span(),
+                import: text,
+            };
+            plan.record_blocked(&change, comments_reason());
             continue;
         }
 
-        let ranges = removed_ranges(&item_use.tree, &unused, editor).into_ranges(editor.span_range(item_use.span()));
+        let ranges =
+            removed_ranges(&item_use.tree, &unused, &plan.edits).into_ranges(plan.edits.span_range(item_use.span()));
 
         for range in ranges {
-            editor.replace(range, String::new())?;
+            plan.edits.remove(range)?;
         }
     }
 

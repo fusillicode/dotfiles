@@ -19,9 +19,44 @@ use syn::visit::Visit;
 
 use super::module_idx::ModuleScope;
 use super::module_idx::ScopeInfo;
+use crate::cmds::rsl::analysis::FixBlockReason;
 use crate::cmds::rsl::engine::FileContext;
 use crate::cmds::rsl::source::SourceEditor;
-use crate::cmds::rsl::source::item_ranges;
+use crate::cmds::rsl::source::item_ranges_with_attached_comments;
+
+pub(in crate::cmds::rsl::rules) enum ImportError {
+    UnknownImports,
+    UnknownBindings,
+    NameConflict { name: String },
+    ConflictingImport { name: String, existing: String },
+}
+
+impl From<ImportError> for FixBlockReason {
+    fn from(error: ImportError) -> Self {
+        match error {
+            ImportError::UnknownImports => Self {
+                code: "unknown-imports",
+                message: "A wildcard, attributed, or absolute import prevents checking all available names.".to_owned(),
+                help: "Use explicit imports so the names available in this module can be checked.",
+            },
+            ImportError::UnknownBindings => Self {
+                code: "unknown-bindings",
+                message: "A macro or unresolved block import may introduce conflicting names.".to_owned(),
+                help: "Review the affected names and make this change manually if appropriate.",
+            },
+            ImportError::NameConflict { name } => Self {
+                code: "name-conflict",
+                message: format!("The name `{name}` may refer to another item or local binding."),
+                help: "Keep the existing spelling, or rename the conflicting item.",
+            },
+            ImportError::ConflictingImport { name, existing } => Self {
+                code: "name-conflict",
+                message: format!("The name `{name}` is already imported from `{existing}`."),
+                help: "Keep the existing spelling, or rename the conflicting item.",
+            },
+        }
+    }
+}
 
 pub(in crate::cmds::rsl::rules) struct ImportEdits {
     bindings: HashMap<String, String>,
@@ -31,6 +66,7 @@ pub(in crate::cmds::rsl::rules) struct ImportEdits {
 }
 
 impl ImportEdits {
+    // Seed reservations from the scope before requests can introduce any new names.
     pub(in crate::cmds::rsl::rules) fn new(scope: &ModuleScope<'_>, info: &ScopeInfo) -> Self {
         let mut reserved = local_names(scope.items);
         reserved.names.extend(info.definitions.iter().cloned());
@@ -47,29 +83,34 @@ impl ImportEdits {
         }
     }
 
-    pub(in crate::cmds::rsl::rules) fn request(&mut self, path: &str, editor: &mut SourceEditor<'_>) -> bool {
-        let Some(name) = path.rsplit("::").next() else {
-            return false;
-        };
+    pub(in crate::cmds::rsl::rules) fn request(&mut self, path: &str) -> Result<(), ImportError> {
+        let name = path.rsplit("::").next().unwrap_or(path);
 
-        if self.unknown || self.reserved.contains(name) {
-            editor.skip(format!("cannot import {path}: name may be shadowed"));
-            return false;
+        if self.unknown {
+            return Err(ImportError::UnknownImports);
+        }
+        if self.reserved.has_unknown_bindings() {
+            return Err(ImportError::UnknownBindings);
+        }
+        if self.reserved.contains(name) {
+            return Err(ImportError::NameConflict { name: name.to_owned() });
         }
 
         if let Some(existing) = self.bindings.get(name) {
             if existing == path {
-                return true;
+                return Ok(());
             }
 
-            editor.skip(format!("cannot import {path}: {name} is already bound"));
-            return false;
+            return Err(ImportError::ConflictingImport {
+                name: name.to_owned(),
+                existing: existing.clone(),
+            });
         }
 
         self.bindings.insert(name.to_owned(), path.to_owned());
         self.additions.insert(path.to_owned());
 
-        true
+        Ok(())
     }
 
     pub(in crate::cmds::rsl::rules) fn apply(
@@ -83,7 +124,7 @@ impl ImportEdits {
         }
 
         let spans: Vec<_> = scope.items.iter().map(Spanned::span).collect();
-        let ranges = item_ranges::item_ranges_with_attached_comments(ctx.source, &spans, scope.body_start);
+        let ranges = item_ranges_with_attached_comments(ctx.source, &spans, scope.body_start);
         let offset = ranges
             .first()
             .map_or_else(|| editor.offset(scope.body_start), |range| range.byte_range.start);

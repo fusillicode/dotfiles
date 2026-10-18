@@ -31,13 +31,19 @@ use crate::cmds::rsl::ast::ItemGroup;
 use crate::cmds::rsl::ast::VisibilityClass;
 
 pub(super) fn compute_required_item_order(items: &[OrderingItem<'_>]) -> Result<ItemOrder, String> {
-    let mut blocks = AtomicItemBlocks::new(items);
+    let mut blocks = AtomicItemBlocks {
+        members: (0..items.len()).map(|index| vec![index]).collect(),
+        constraints: Vec::new(),
+    };
     merge_type_impl_blocks(items, &mut blocks)?;
 
     let fn_indices_by_name = unique_fn_indices_by_name(items);
     let helper_call_graph = build_private_helper_call_graph(items, &fn_indices_by_name);
     merge_recursive_fn_blocks(items, &helper_call_graph, &mut blocks);
-    let mut precedence_graph = BlockPrecedenceGraph::new(&blocks);
+    let mut precedence_graph = BlockPrecedenceGraph {
+        outgoing_edges: (0..blocks.members.len()).map(|_| Vec::new()).collect(),
+        constraints: Vec::new(),
+    };
     add_macro_source_order_constraints(items, &blocks, &mut precedence_graph);
     add_section_group_visibility_constraints(items, &blocks, &mut precedence_graph);
     add_caller_before_helper_constraints(items, &blocks, &helper_call_graph, &mut precedence_graph);
@@ -77,13 +83,6 @@ struct AtomicItemBlocks {
 }
 
 impl AtomicItemBlocks {
-    fn new(items: &[OrderingItem<'_>]) -> Self {
-        Self {
-            members: (0..items.len()).map(|index| vec![index]).collect(),
-            constraints: Vec::new(),
-        }
-    }
-
     fn block_index_containing_item(&self, item_index: usize) -> Option<usize> {
         self.members.iter().position(|members| members.contains(&item_index))
     }
@@ -252,13 +251,6 @@ struct BlockPrecedenceGraph {
 }
 
 impl BlockPrecedenceGraph {
-    fn new(blocks: &AtomicItemBlocks) -> Self {
-        Self {
-            outgoing_edges: (0..blocks.members.len()).map(|_| Vec::new()).collect(),
-            constraints: Vec::new(),
-        }
-    }
-
     fn add_precedence(
         &mut self,
         before_block_index: usize,
