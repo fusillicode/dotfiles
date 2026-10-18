@@ -19,9 +19,29 @@ mod tests {
         let path = directory.path().join(&filename);
         fs::copy(Path::new(INPUTS).join(filename), &path).unwrap();
 
+        if rule == "path-anchoring" {
+            fs::write(
+                directory.path().join("Cargo.toml"),
+                format!(
+                    r#"
+                    [package]
+                    name = "path-anchoring-fixture"
+                    version = "0.1.0"
+                    edition = "2024"
+                    [lib]
+                    path = "{name}.rs"
+                    [workspace]
+                "#
+                ),
+            )
+            .unwrap();
+        }
+
         let mut command = Command::new(env!("CARGO_BIN_EXE_frs"));
         command.args(["rsl", "--rules", rule]).arg(&path);
+
         let output = command.output().unwrap();
+
         assert!(output.status.success(), "{output:?}");
 
         let rewritten = fs::read_to_string(&path).unwrap();
@@ -30,6 +50,7 @@ mod tests {
         });
 
         let output = command.output().unwrap();
+
         assert!(output.status.success(), "{output:?}");
         assert_eq!(fs::read_to_string(&path).unwrap(), rewritten);
     }
@@ -57,6 +78,72 @@ mod tests {
         assert_eq!(fs::read(&path).unwrap(), original);
         assert!(!output.stdout.is_empty(), "{output:?}");
         assert!(String::from_utf8(output.stdout).unwrap().contains(&format!("[{rule}")));
+    }
+
+    #[test]
+    fn test_rsl_when_a_file_has_multiple_modules_only_anchors_agreed_paths() {
+        let directory = tempfile::tempdir().unwrap();
+        fs::write(
+            directory.path().join("Cargo.toml"),
+            r#"
+            [package]
+            name = "shared-module-fixture"
+            version = "0.1.0"
+            edition = "2024"
+            [lib]
+            path = "lib.rs"
+            [workspace]
+        "#,
+        )
+        .unwrap();
+        let root = directory.path().join("lib.rs");
+        let root_source = r#"
+            #[path = "shared.rs"]
+            mod first;
+            #[path = "shared.rs"]
+            mod second;
+        "#;
+        fs::write(&root, root_source).unwrap();
+
+        let path = directory.path().join("shared.rs");
+        let original = r"
+            use super::Root;
+            use self::Child;
+
+            mod nested {
+                use super::Child;
+            }
+        ";
+        fs::write(&path, original).unwrap();
+
+        let mut command = Command::new(env!("CARGO_BIN_EXE_frs"));
+        command.args(["rsl", "--rules", "path-anchoring"]).arg(&path);
+
+        let report = command.args(["--mode", "report"]).output().unwrap();
+
+        assert!(report.status.success(), "{report:?}");
+        assert_eq!(fs::read_to_string(&path).unwrap(), original);
+
+        let findings = String::from_utf8(report.stdout).unwrap();
+
+        assert_eq!(findings.matches("available [path-anchoring]").count(), 1);
+        assert_eq!(
+            findings.matches("path-anchoring/conflicting-module-contexts").count(),
+            2
+        );
+
+        let output = Command::new(env!("CARGO_BIN_EXE_frs"))
+            .args(["rsl", "--rules", "path-anchoring"])
+            .arg(&path)
+            .output()
+            .unwrap();
+
+        assert!(output.status.success(), "{output:?}");
+
+        let expected = original.replacen("super::Root", "crate::Root", 1);
+
+        assert_eq!(fs::read_to_string(&path).unwrap(), expected);
+        assert_eq!(fs::read_to_string(&root).unwrap(), root_source);
     }
 
     #[test]

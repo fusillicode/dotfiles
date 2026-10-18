@@ -12,7 +12,9 @@ use self::rules::SelectedRules;
 
 mod analysis;
 mod ast;
+mod crate_roots;
 mod engine;
+mod mod_resolution;
 mod output;
 mod rules;
 mod source;

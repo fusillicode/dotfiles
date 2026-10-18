@@ -34,6 +34,10 @@ static RULES: &[&dyn Rule] = &[
 pub(super) trait Rule: Send + Sync {
     fn id(&self) -> &'static str;
 
+    fn needs_module_context(&self) -> bool {
+        false
+    }
+
     fn analyze<'source>(&self, ctx: &FileContext<'source>) -> rootcause::Result<RulePlan<'source>>;
 }
 

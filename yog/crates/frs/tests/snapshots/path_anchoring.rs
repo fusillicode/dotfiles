@@ -43,3 +43,48 @@ pub mod test_glob {
 pub mod unresolved_parent {
     use super::Thing;
 }
+
+pub mod self_paths {
+    use self::inner::Thing;
+
+    mod inner {
+        pub struct Thing;
+    }
+
+    pub(super) fn run(_: self::inner::Thing) {}
+
+    struct Container;
+    impl Container {
+        fn unchanged(&self) -> &Self {
+            self
+        }
+    }
+}
+
+pub mod local_module {
+    fn run() {
+        mod local {
+            use super::Thing;
+        }
+    }
+}
+
+pub mod visibility_context {
+    mod parent {
+        pub(in super::super::visibility_context) mod child {}
+    }
+}
+
+pub mod nested_type_arguments {
+    mod inner {
+        fn run(_: self::Container<super::Thing>) {}
+    }
+}
+
+pub mod preserve_comments {
+    mod inner {
+        use super /* keep */ ::super::Thing;
+    }
+}
+
+use super::OutsideCrate;
