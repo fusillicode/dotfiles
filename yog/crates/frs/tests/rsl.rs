@@ -19,17 +19,32 @@ mod tests {
         let path = directory.path().join(&filename);
         fs::copy(Path::new(INPUTS).join(filename), &path).unwrap();
 
-        if rule == "path-anchoring" {
+        if matches!(rule, "path-anchoring" | "call-qualification") {
+            let crate_root = if rule == "call-qualification" {
+                fs::write(
+                    directory.path().join("lib.rs"),
+                    r#"
+                    #[path = "call_qualification.rs"]
+                    mod fixture;
+                "#,
+                )
+                .unwrap();
+
+                "lib"
+            } else {
+                &name
+            };
+
             fs::write(
                 directory.path().join("Cargo.toml"),
                 format!(
                     r#"
                     [package]
-                    name = "path-anchoring-fixture"
+                    name = "rsl-fixture"
                     version = "0.1.0"
                     edition = "2024"
                     [lib]
-                    path = "{name}.rs"
+                    path = "{crate_root}.rs"
                     [workspace]
                 "#
                 ),
@@ -144,6 +159,65 @@ mod tests {
 
         assert_eq!(fs::read_to_string(&path).unwrap(), expected);
         assert_eq!(fs::read_to_string(&root).unwrap(), root_source);
+    }
+
+    #[rstest::rstest]
+    #[case::multiple_occurrences(
+        r#"
+        #[path = "shared.rs"]
+        mod first;
+        #[path = "shared.rs"]
+        mod second;
+    "#
+    )]
+    #[case::opaque_module_macro(
+        r#"
+        macro_rules! make_modules {
+            () => {};
+        }
+        make_modules!();
+        #[path = "shared.rs"]
+        mod first;
+    "#
+    )]
+    fn test_rsl_when_module_identity_is_uncertain_keeps_calls_qualified(#[case] root_source: &str) {
+        let directory = tempfile::tempdir().unwrap();
+        fs::write(
+            directory.path().join("Cargo.toml"),
+            r#"
+            [package]
+            name = "uncertain-module-fixture"
+            version = "0.1.0"
+            edition = "2024"
+            [lib]
+            path = "lib.rs"
+            [workspace]
+        "#,
+        )
+        .unwrap();
+        fs::write(directory.path().join("lib.rs"), root_source).unwrap();
+        fs::write(directory.path().join("child.rs"), "").unwrap();
+
+        let path = directory.path().join("shared.rs");
+        let original = r"
+            mod child;
+
+            pub(crate) fn helper() {}
+
+            fn run() {
+                crate::first::helper();
+            }
+        ";
+        fs::write(&path, original).unwrap();
+
+        let output = Command::new(env!("CARGO_BIN_EXE_frs"))
+            .args(["rsl", "--rules", "call-qualification"])
+            .arg(&path)
+            .output()
+            .unwrap();
+
+        assert!(output.status.success(), "{output:?}");
+        assert_eq!(fs::read_to_string(path).unwrap(), original);
     }
 
     #[test]

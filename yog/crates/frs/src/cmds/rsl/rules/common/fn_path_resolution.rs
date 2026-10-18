@@ -6,11 +6,17 @@ use super::path_resolution::is_associated_fn_path;
 use super::path_resolution::is_non_fn_call_path;
 use super::path_resolution::normalize_path;
 use super::path_resolution::path_parts;
+use crate::cmds::rsl::engine::FileContext;
 
 pub struct FnCallSuggestion {
     pub expected_path: String,
-    pub target_module: Vec<String>,
-    pub module: ModuleAccess,
+    pub target: CallTarget,
+}
+
+#[derive(Clone)]
+pub enum CallTarget {
+    SameModule,
+    Module { path: Vec<String>, access: ModuleAccess },
 }
 
 #[derive(Clone)]
@@ -23,11 +29,23 @@ pub enum ModuleAccess {
     Anchored,
 }
 
-pub fn expected_fn_path(idx: &ModuleIdx<'_>, current_module: &[String], path: &syn::Path) -> Option<FnCallSuggestion> {
+pub fn expected_fn_path(
+    ctx: &FileContext<'_>,
+    idx: &ModuleIdx<'_>,
+    current_module: &[String],
+    path: &syn::Path,
+) -> Option<FnCallSuggestion> {
     let parts = path_parts(path)?;
 
     if is_non_fn_call_path(&parts) || is_associated_fn_path(&parts) {
         return None;
+    }
+
+    if is_same_module_fn(ctx, idx, current_module, &parts) {
+        return Some(FnCallSuggestion {
+            expected_path: parts.last()?.clone(),
+            target: CallTarget::SameModule,
+        });
     }
 
     if local_fn(idx, current_module, path).is_some() && fn_path_tail(&parts).len() <= 2 {
@@ -55,9 +73,34 @@ pub fn expected_fn_path(idx: &ModuleIdx<'_>, current_module: &[String], path: &s
 
     Some(FnCallSuggestion {
         expected_path,
-        module: module_access(idx, current_module, &parts, &target_module)?,
-        target_module,
+        target: CallTarget::Module {
+            access: module_access(idx, current_module, &parts, &target_module)?,
+            path: target_module,
+        },
     })
+}
+
+fn is_same_module_fn(ctx: &FileContext<'_>, idx: &ModuleIdx<'_>, current_module: &[String], parts: &[String]) -> bool {
+    let Some((name, module)) = parts.split_last() else {
+        return false;
+    };
+
+    if !idx
+        .info
+        .get(current_module)
+        .is_some_and(|scope| scope.fns.contains(name))
+    {
+        return false;
+    }
+
+    match module.first().map(String::as_str) {
+        Some("self") => module.len() == 1,
+        Some("crate") => ctx
+            .modules
+            .anchor(ctx.path, current_module, 0)
+            .is_ok_and(|current| current == module.join("::")),
+        Some(_) | None => false,
+    }
 }
 
 fn imported_fn_path(idx: &ModuleIdx<'_>, current_module: &[String], name: &str) -> Option<FnCallSuggestion> {
@@ -78,8 +121,10 @@ fn imported_fn_path(idx: &ModuleIdx<'_>, current_module: &[String], name: &str) 
 
     Some(FnCallSuggestion {
         expected_path,
-        module: module_access(idx, current_module, &binding.source_path, target_module)?,
-        target_module: target_module.to_vec(),
+        target: CallTarget::Module {
+            access: module_access(idx, current_module, &binding.source_path, target_module)?,
+            path: target_module.to_vec(),
+        },
     })
 }
 
