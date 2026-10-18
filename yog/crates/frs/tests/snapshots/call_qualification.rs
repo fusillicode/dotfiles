@@ -1,5 +1,74 @@
 //! Source rewrites and conservative skips for call-qualification.
 
+pub mod same_module_calls {
+    mod child;
+
+    fn helper<T>() {}
+
+    fn run() {
+        self::helper::<u8>();
+        crate::fixture::same_module_calls::helper::<u8>();
+    }
+
+    fn recursive() {
+        crate::fixture::same_module_calls::recursive();
+    }
+
+    fn parameter_shadow(helper: fn()) {
+        self::helper::<u8>();
+        crate::fixture::same_module_calls::helper::<u8>();
+    }
+
+    fn local_shadow() {
+        self::helper::<u8>();
+        let helper = || ();
+        self::helper::<u8>();
+    }
+
+    fn block_function_shadow() {
+        self::helper::<u8>();
+        fn helper() {}
+    }
+
+    fn block_import_shadow() {
+        use other::helper;
+        self::helper::<u8>();
+    }
+
+    fn constructor_shadow() {
+        struct helper;
+        self::helper::<u8>();
+    }
+
+    fn separate_namespaces() {
+        struct helper { value: u8 }
+        self::helper::<u8>();
+    }
+
+    fn unknown_bindings() {
+        generate_bindings!();
+        self::helper::<u8>();
+    }
+
+    fn preserved_comment() {
+        self /* keep */ ::helper::<u8>();
+    }
+
+    fn different_module() {
+        crate::elsewhere::helper();
+    }
+
+    mod nested {
+        fn helper() {}
+
+        fn run() {
+            self::helper();
+            crate::fixture::same_module_calls::nested::helper();
+            super::helper::<u8>();
+        }
+    }
+}
+
 fn root_function() {}
 
 pub mod attribute_function_import {

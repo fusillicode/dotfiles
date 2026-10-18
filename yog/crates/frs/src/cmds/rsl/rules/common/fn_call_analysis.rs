@@ -48,6 +48,7 @@ use syn::token::Comma;
 use syn::visit;
 use syn::visit::Visit;
 
+use super::fn_path_resolution::CallTarget;
 use super::fn_path_resolution::FnCallSuggestion;
 use super::fn_path_resolution::ModuleAccess;
 use super::import_edits::ImportError;
@@ -137,21 +138,38 @@ impl CallSite<'_> {
             })
     }
 
-    pub fn resolve_module(&self, suggestion: &FnCallSuggestion, info: &ScopeInfo) -> Result<ModuleAccess, ImportError> {
+    pub fn resolve_target(&self, suggestion: &FnCallSuggestion, info: &ScopeInfo) -> Result<CallTarget, ImportError> {
         self.check_source()?;
+
+        let CallTarget::Module { path, access } = &suggestion.target else {
+            let name = &suggestion.expected_path;
+            if self
+                .scopes
+                .iter()
+                .any(|scope| scope.values.contains(name) || scope.locals.contains(name))
+            {
+                return Err(ImportError::NameConflict { name: name.clone() });
+            }
+
+            return Ok(CallTarget::SameModule);
+        };
+
         let name = suggestion.expected_path.split("::").next().unwrap_or_default();
         if let Some(binding) = self.scopes.iter().rev().find_map(|scope| scope.types.get(name)) {
             return match binding {
-                TypeBinding::Import(path) if path == &suggestion.target_module => Ok(ModuleAccess::Local),
+                TypeBinding::Import(imported) if imported == path => Ok(CallTarget::Module {
+                    path: path.clone(),
+                    access: ModuleAccess::Local,
+                }),
                 TypeBinding::Declaration | TypeBinding::Import(_) => {
                     Err(ImportError::NameConflict { name: name.to_owned() })
                 }
             };
         }
-        if info.unknown_imports && !matches!(suggestion.module, ModuleAccess::Imported(_) | ModuleAccess::Declared) {
+        if info.unknown_imports && !matches!(access, ModuleAccess::Imported(_) | ModuleAccess::Declared) {
             return Err(ImportError::UnknownImports);
         }
-        Ok(suggestion.module.clone())
+        Ok(suggestion.target.clone())
     }
 
     pub fn span(&self) -> Span {

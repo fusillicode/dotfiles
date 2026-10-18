@@ -5,6 +5,9 @@
 //!
 //! Keep an existing function import when another use still needs it. Leave a call unchanged
 //! when its import cannot safely be removed or its module name could mean something else.
+//!
+//! Call functions defined in the current module directly, such as `helper()` instead of
+//! `self::helper()`, when no local name hides the function.
 
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -16,6 +19,7 @@ use super::Rule;
 use super::common;
 use super::common::ImportEdits;
 use super::common::fn_call_analysis::CallAnalysis;
+use super::common::fn_path_resolution::CallTarget;
 use super::common::fn_path_resolution::ModuleAccess;
 use super::common::module_idx;
 use super::common::module_idx::ModuleIdx;
@@ -33,6 +37,10 @@ pub(super) struct CallQualificationRule;
 impl Rule for CallQualificationRule {
     fn id(&self) -> &'static str {
         "call-qualification"
+    }
+
+    fn needs_module_context(&self) -> bool {
+        true
     }
 
     fn analyze<'source>(&self, ctx: &FileContext<'source>) -> rootcause::Result<RulePlan<'source>> {
@@ -66,7 +74,7 @@ impl RuleChange for Change {
 
 struct CallRewrite {
     change: Change,
-    module: ModuleAccess,
+    target: CallTarget,
     source: CallSource,
 }
 
@@ -85,7 +93,7 @@ fn analyze_scope(
         return Ok(());
     };
     let analysis = common::analyze_calls(scope, idx);
-    let mut rewrites = collect_rewrites(idx, scope, info, &analysis, plan);
+    let mut rewrites = collect_rewrites(ctx, idx, scope, info, &analysis, plan);
     let usage = ImportUsage {
         scope,
         info,
@@ -102,7 +110,11 @@ fn analyze_scope(
         }
         let mut imports = ImportEdits::for_calls(scope, info, &analysis, &removed);
         if let Some((index, reason)) = rewrites.iter().enumerate().find_map(|(index, rewrite)| {
-            let ModuleAccess::Import(path) = &rewrite.module else {
+            let CallTarget::Module {
+                access: ModuleAccess::Import(path),
+                ..
+            } = &rewrite.target
+            else {
                 return None;
             };
             imports
@@ -131,6 +143,7 @@ fn analyze_scope(
 }
 
 fn collect_rewrites(
+    ctx: &FileContext<'_>,
     idx: &ModuleIdx<'_>,
     scope: &ModuleScope<'_>,
     info: &ScopeInfo,
@@ -142,7 +155,7 @@ fn collect_rewrites(
         if call.is_bare() && call.is_locally_bound() {
             continue;
         }
-        let Some(suggestion) = common::expected_fn_path(idx, &scope.path, call.path) else {
+        let Some(suggestion) = common::expected_fn_path(ctx, idx, &scope.path, call.path) else {
             continue;
         };
         let source_path = path_resolution::path_label(call.path);
@@ -165,10 +178,10 @@ fn collect_rewrites(
             );
             continue;
         }
-        let module = match common::ensure_no_comments(&plan.edits, change.span)
-            .and_then(|()| call.resolve_module(&suggestion, info).map_err(Into::into))
+        let target = match common::ensure_no_comments(&plan.edits, change.span)
+            .and_then(|()| call.resolve_target(&suggestion, info).map_err(Into::into))
         {
-            Ok(module) => module,
+            Ok(target) => target,
             Err(reason) => {
                 plan.record_blocked(&change, reason);
                 continue;
@@ -189,7 +202,7 @@ fn collect_rewrites(
         } else {
             CallSource::Qualified
         };
-        rewrites.push(CallRewrite { change, module, source });
+        rewrites.push(CallRewrite { change, target, source });
     }
     rewrites
 }
@@ -212,15 +225,12 @@ impl ImportUsage<'_, '_> {
                 let count = rewritten.entry(index).or_default();
                 *count = count.saturating_add(1);
             }
-            match &rewrite.module {
-                ModuleAccess::Imported(index) => {
-                    needed.insert(*index);
-                }
-                ModuleAccess::Import(_)
-                | ModuleAccess::Local
-                | ModuleAccess::Declared
-                | ModuleAccess::ExternalCrate
-                | ModuleAccess::Anchored => {}
+            if let CallTarget::Module {
+                access: ModuleAccess::Imported(index),
+                ..
+            } = &rewrite.target
+            {
+                needed.insert(*index);
             }
         }
         rewritten
@@ -246,7 +256,11 @@ impl ImportUsage<'_, '_> {
         let import_roots: HashSet<_> = rewrites
             .iter()
             .filter_map(|rewrite| {
-                let ModuleAccess::Import(path) = &rewrite.module else {
+                let CallTarget::Module {
+                    access: ModuleAccess::Import(path),
+                    ..
+                } = &rewrite.target
+                else {
                     return None;
                 };
                 path.strip_prefix("self::").unwrap_or(path).split("::").next()
