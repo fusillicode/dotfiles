@@ -43,8 +43,7 @@ impl From<ImportError> for FixBlockReason {
         match error {
             ImportError::UnknownImports => Self {
                 code: "unknown-imports",
-                message: "A wildcard, conditional, or absolute import prevents checking all available names."
-                    .to_owned(),
+                message: "An import leaves names unresolved, or this path depends on a conditional import.".to_owned(),
                 help: "Use explicit imports so the names available in this module can be checked.",
             },
             ImportError::UnknownBindings => Self {

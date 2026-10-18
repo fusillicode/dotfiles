@@ -1,4 +1,5 @@
 use proc_macro2::Span;
+use syn::Item;
 use syn::UseTree;
 use syn::spanned::Spanned;
 
@@ -75,6 +76,20 @@ pub fn use_bindings(tree: &UseTree, current_module: &[String]) -> UseBindings {
     }
 
     bindings
+}
+
+pub fn has_conditional_import(items: &[Item], name: &str) -> bool {
+    items.iter().any(|item| {
+        let Item::Use(import) = item else {
+            return false;
+        };
+
+        super::has_conditional_attributes(&import.attrs)
+            && use_bindings(&import.tree, &[])
+                .bindings
+                .iter()
+                .any(|binding| binding.name == name)
+    })
 }
 
 pub fn has_name_clash_parts(idx: &ModuleIdx<'_>, current_module: &[String], parts: &[String]) -> bool {

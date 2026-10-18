@@ -89,3 +89,26 @@ pub mod source_visible_macros {
         arbitrary_macro!();
     }
 }
+
+pub mod conditional_explicit_imports {
+    #[cfg(unix)]
+    use std::os::unix::process::CommandExt;
+    use std::path::PathBuf as ConditionalBuffer;
+
+    fn run(_: ConditionalBuffer) {}
+}
+
+pub mod conditional_alias {
+    #[cfg(unix)]
+    use std::path::PathBuf as ConditionalAliasBuffer;
+
+    fn run(_: ConditionalAliasBuffer) {}
+}
+
+pub mod conditional_name_collision {
+    #[cfg(unix)]
+    use other::PathBuf;
+    use std::path::PathBuf as CollisionBuffer;
+
+    fn run(_: CollisionBuffer) {}
+}

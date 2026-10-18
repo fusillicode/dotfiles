@@ -358,7 +358,7 @@ mod tests {
             fn run(_: std::path::PathBuf) {}
         ",
         "<file>:4:23: skipped [item-qualification/unknown-imports]: replace `std::path::PathBuf` with `PathBuf`\n  \
-         Reason: A wildcard, conditional, or absolute import prevents checking all available names.\n  \
+         Reason: An import leaves names unresolved, or this path depends on a conditional import.\n  \
          Help: Use explicit imports so the names available in this module can be checked.\n"
     )]
     #[case::exported_alias(

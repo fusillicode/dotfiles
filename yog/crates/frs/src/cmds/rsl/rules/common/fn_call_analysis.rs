@@ -222,7 +222,7 @@ impl Bindings {
     fn declarations(items: &[Item]) -> Self {
         let mut bindings = Self::default();
         for item in items {
-            if !matches!(item, Item::Use(_)) {
+            if !matches!(item, Item::Use(import) if !super::has_conditional_attributes(&import.attrs)) {
                 bindings.add_item(item, &[]);
             }
         }
@@ -274,10 +274,14 @@ impl Bindings {
     fn add_import(&mut self, item: &Item, current_module: &[String]) {
         if let Item::Use(import) = item {
             let imported = use_bindings(&import.tree, current_module);
-            self.unknown |= imported.unknown || super::has_conditional_attributes(&import.attrs);
+            self.unknown |= imported.unknown;
             for binding in imported.bindings {
-                self.types
-                    .insert(binding.name.clone(), TypeBinding::Import(binding.path));
+                let kind = if super::has_conditional_attributes(&import.attrs) {
+                    TypeBinding::Declaration
+                } else {
+                    TypeBinding::Import(binding.path)
+                };
+                self.types.insert(binding.name.clone(), kind);
                 self.values.insert(binding.name.clone());
             }
         }

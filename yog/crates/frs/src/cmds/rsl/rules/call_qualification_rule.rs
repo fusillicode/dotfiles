@@ -18,9 +18,11 @@ use proc_macro2::Span;
 use super::Rule;
 use super::common;
 use super::common::ImportEdits;
+use super::common::ImportError;
 use super::common::fn_call_analysis::CallAnalysis;
 use super::common::fn_path_resolution::CallTarget;
 use super::common::fn_path_resolution::ModuleAccess;
+use super::common::import_resolution;
 use super::common::module_idx;
 use super::common::module_idx::ModuleIdx;
 use super::common::module_idx::ModuleScope;
@@ -167,6 +169,16 @@ fn collect_rewrites(
             source_path,
             expected_path: suggestion.expected_path.clone(),
         };
+        if call
+            .path
+            .segments
+            .first()
+            .is_some_and(|segment| import_resolution::has_conditional_import(scope.items, &segment.ident.to_string()))
+        {
+            plan.record_blocked(&change, ImportError::UnknownImports);
+            continue;
+        }
+
         if call.conditional {
             plan.record_blocked(
                 &change,
