@@ -18,9 +18,10 @@ Write mode updates the supplied files in place, then reports remaining findings 
 Report mode leaves files unchanged and shows available changes and reasons other changes cannot be made.
 Each report identifies the file, line, column, and rule. Skipped changes include a reason and guidance.
 Only the supplied files are changed. Run your Rust formatter afterward if needed.
+Path anchoring discovers modules from Cargo targets. Unknown or conflicting module locations are reported without changes.
 
 Rules:
-  path-anchoring           Report references to parent modules through super::.
+  path-anchoring           Replace self:: and super:: references with paths starting at crate:: when possible.
   import-aliasing          Remove unnecessary import aliases.
   call-qualification       Call functions through their module using short, clear paths.
   item-qualification       Import items so they can be used by their short names.

@@ -4,6 +4,36 @@ expression: "&rewritten"
 ---
 //! Source rewrites and conservative skips for path-anchoring.
 
+pub mod multiple_parent_levels {
+    mod a {
+        mod b {
+            use {crate::multiple_parent_levels::Thing, crate::multiple_parent_levels::a::Other};
+        }
+    }
+}
+
+pub mod nested_relative_groups {
+    mod a {
+        mod b {
+            use {
+                crate::nested_relative_groups::a::Thing,
+                {crate::nested_relative_groups::Other, crate::nested_relative_groups::a::Third},
+            };
+        }
+    }
+}
+
+pub mod relative_import_and_type {
+    mod a {
+        mod b {
+            use crate::relative_import_and_type::a::Thing;
+            fn run(_: crate::relative_import_and_type::a::Thing) {
+                crate::relative_import_and_type::a::run();
+            }
+        }
+    }
+}
+
 pub mod test_glob {
     #[cfg(test)]
     mod tests {
@@ -14,36 +44,51 @@ pub mod test_glob {
     }
 }
 
-pub mod relative_import_and_type {
-    mod a {
-        mod b {
-            use super::Thing;
-            fn run(_: super::Thing) {
-                super::run();
-            }
-        }
-    }
-}
-
-pub mod multiple_parent_levels {
-    mod a {
-        mod b {
-            use {super::super::Thing, super::Other};
-        }
-    }
-}
-
-pub mod nested_relative_groups {
-    mod a {
-        mod b {
-            use {
-                super::Thing,
-                {super::super::Other, super::Third},
-            };
-        }
-    }
-}
-
 pub mod unresolved_parent {
-    use super::Thing;
+    use crate::Thing;
 }
+
+pub mod self_paths {
+    use crate::self_paths::inner::Thing;
+
+    mod inner {
+        pub struct Thing;
+    }
+
+    pub(super) fn run(_: crate::self_paths::inner::Thing) {}
+
+    struct Container;
+    impl Container {
+        fn unchanged(&self) -> &Self {
+            self
+        }
+    }
+}
+
+pub mod local_module {
+    fn run() {
+        mod local {
+            use super::Thing;
+        }
+    }
+}
+
+pub mod visibility_context {
+    mod parent {
+        pub(in crate::visibility_context) mod child {}
+    }
+}
+
+pub mod nested_type_arguments {
+    mod inner {
+        fn run(_: crate::nested_type_arguments::inner::Container<crate::nested_type_arguments::Thing>) {}
+    }
+}
+
+pub mod preserve_comments {
+    mod inner {
+        use super /* keep */ ::super::Thing;
+    }
+}
+
+use super::OutsideCrate;
