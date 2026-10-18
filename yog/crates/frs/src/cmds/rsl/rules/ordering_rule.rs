@@ -1,6 +1,6 @@
 //! Arrange declarations so readers can find related code together and read callers before their helpers.
 //!
-//! Put crate declarations, imports, and module declarations first, followed by global assembly,
+//! Put crate declarations, imports, and external module declarations first, followed by global assembly,
 //! constants and statics, type aliases, and then the remaining definitions.
 //! Keep each type beside its own methods, followed by its trait implementations.
 //! Within each group and among a type's methods, put more widely visible code before private code.
@@ -9,7 +9,8 @@
 //! prefer placing it after a public caller. Keep helpers that call each other together.
 //! Keep the existing order when these preferences do not require a change.
 //!
-//! In production code, put test functions after other definitions and inline test modules at the end.
+//! Put inline modules after all other declarations, in alphabetical order, with `tests` last.
+//! In production code, put test functions after other definitions, before inline modules.
 //! In test-only files and modules, put tests before their helper functions.
 //! Leave import ordering and the order of module declarations in separate files to the formatter.
 //!
@@ -177,8 +178,8 @@ pub struct OrderingConstraint {
 
 #[derive(Clone, Copy, Debug)]
 pub enum OrderingConstraintKind {
-    GroupOrTestSectionOrder,
-    TrailingTestModuleOrder,
+    GroupOrSectionOrder,
+    InlineModuleOrder,
     VisibilityOrder,
     TypeImplAdjacency,
     RecursiveFnAdjacency,
@@ -213,8 +214,8 @@ fn validate_required_item_order(
             OrderingConstraintKind::TypeImplAdjacency | OrderingConstraintKind::RecursiveFnAdjacency => {
                 before_position.saturating_add(1) == after_position
             }
-            OrderingConstraintKind::GroupOrTestSectionOrder
-            | OrderingConstraintKind::TrailingTestModuleOrder
+            OrderingConstraintKind::GroupOrSectionOrder
+            | OrderingConstraintKind::InlineModuleOrder
             | OrderingConstraintKind::VisibilityOrder
             | OrderingConstraintKind::CallerBeforeHelper
             | OrderingConstraintKind::MacroBindingPreservation => before_position < after_position,
@@ -231,7 +232,7 @@ fn validate_required_item_order(
 struct OrderingItem<'ast> {
     metadata: ItemOrderingMetadata,
     ast: ItemAst<'ast>,
-    section: TestOrderSection,
+    section: OrderingSection,
 }
 
 struct OrderingScope {
@@ -267,12 +268,15 @@ impl TestOrdering {
         }
     }
 
-    fn classify_item_section(self, ast: ItemAst<'_>) -> TestOrderSection {
+    fn classify_item_section(self, ast: ItemAst<'_>) -> OrderingSection {
         if let ItemAst::ModuleItem(Item::Mod(module)) = ast
             && module.content.is_some()
-            && is_test_only_module(module)
         {
-            return TestOrderSection::TrailingTestModules;
+            return if module.ident == "tests" {
+                OrderingSection::TestsModule
+            } else {
+                OrderingSection::InlineModules
+            };
         }
 
         let test_attribute_pattern = lazy_regex::regex!(r"(?:^|_)test(?:_|$)|^rstest$");
@@ -288,10 +292,8 @@ impl TestOrdering {
         });
 
         match (self, ast.is_fn(), is_test_fn) {
-            (Self::InProdModule, _, true) | (Self::InTestOnlyModule, true, false) => TestOrderSection::TrailingFns,
-            (Self::InProdModule, _, false) | (Self::InTestOnlyModule, _, true | false) => {
-                TestOrderSection::LeadingItems
-            }
+            (Self::InProdModule, _, true) | (Self::InTestOnlyModule, true, false) => OrderingSection::TrailingFns,
+            (Self::InProdModule, _, false) | (Self::InTestOnlyModule, _, true | false) => OrderingSection::LeadingItems,
         }
     }
 }
@@ -315,10 +317,11 @@ impl From<&Path> for TestOrdering {
 }
 
 #[derive(Clone, Copy, Eq, Ord, PartialEq, PartialOrd)]
-enum TestOrderSection {
+enum OrderingSection {
     LeadingItems,
     TrailingFns,
-    TrailingTestModules,
+    InlineModules,
+    TestsModule,
 }
 
 fn is_test_only_module(module: &ItemMod) -> bool {
