@@ -1,3 +1,4 @@
+use super::fn_call_analysis::module_type_names;
 use super::import_resolution::imported_binding;
 use super::module_idx::ModuleIdx;
 use super::module_idx::ScopeInfo;
@@ -9,16 +10,15 @@ use super::path_resolution::path_parts;
 
 pub struct FnCallSuggestion {
     pub expected_path: String,
-    pub required_import: Option<String>,
+    pub target_module: Vec<String>,
+    pub module: ModuleAccess,
 }
 
-impl FnCallSuggestion {
-    pub fn requires_crate_context(&self, source_path: &str) -> bool {
-        [Some(source_path), self.required_import.as_deref()]
-            .into_iter()
-            .flatten()
-            .any(|path| ["crate::", "super::"].iter().any(|prefix| path.starts_with(prefix)))
-    }
+pub enum ModuleAccess {
+    InScope,
+    Import(String),
+    ExternalCrate,
+    Anchored,
 }
 
 pub fn expected_fn_path(idx: &ModuleIdx<'_>, current_module: &[String], path: &syn::Path) -> Option<FnCallSuggestion> {
@@ -53,53 +53,74 @@ pub fn expected_fn_path(idx: &ModuleIdx<'_>, current_module: &[String], path: &s
 
     Some(FnCallSuggestion {
         expected_path,
-        required_import: required_module_import(idx, current_module, &parts, &target_module),
+        module: module_access(idx, current_module, &parts, &target_module)?,
+        target_module,
     })
 }
 
 fn imported_fn_path(idx: &ModuleIdx<'_>, current_module: &[String], name: &str) -> Option<FnCallSuggestion> {
     let binding = imported_binding(idx, current_module, name)?;
     let source_path = &binding.path;
+    let source_module = binding.source_path.get(..binding.source_path.len().saturating_sub(1))?;
 
-    if !can_use_imported_module(idx, current_module, source_path) {
+    if !is_module_root(source_module) && !can_use_imported_module(idx, current_module, source_path) {
         return None;
     }
 
-    let expected_path = (source_path.len() >= 2)
-        .then(|| source_path.get(source_path.len().saturating_sub(2)..))
-        .flatten()
-        .map(|parts| parts.join("::"))?;
     let fn_idx = source_path.len().saturating_sub(1);
     let target_module = source_path.get(..fn_idx)?;
+    let expected_path = if is_module_root(source_module) {
+        binding.source_path.join("::")
+    } else {
+        (source_path.len() >= 2)
+            .then(|| source_path.get(source_path.len().saturating_sub(2)..))
+            .flatten()
+            .map(|parts| parts.join("::"))?
+    };
 
     Some(FnCallSuggestion {
         expected_path,
-        required_import: required_module_import(idx, current_module, &binding.source_path, target_module),
+        module: module_access(idx, current_module, &binding.source_path, target_module)?,
+        target_module: target_module.to_vec(),
     })
 }
 
-fn required_module_import(
+fn module_access(
     idx: &ModuleIdx<'_>,
     current_module: &[String],
     source_path: &[String],
     target_module: &[String],
-) -> Option<String> {
+) -> Option<ModuleAccess> {
+    let source_module_path = source_path.get(..source_path.len().saturating_sub(1))?;
+    if is_module_root(source_module_path) {
+        return Some(ModuleAccess::Anchored);
+    }
     let module_name = target_module.last()?;
 
     if module_is_available(idx, current_module, module_name, target_module) {
-        return None;
+        return Some(ModuleAccess::InScope);
     }
 
-    let source_module_path = source_path.get(..source_path.len().saturating_sub(1))?;
     let import_path = match source_module_path.first().map(String::as_str) {
         Some("crate" | "self" | "super") => source_module_path.join("::"),
-        Some(_) if source_module_path.len() == 1 && !idx.modules.contains(target_module) => return None,
+        Some(_) if source_module_path.len() == 1 && !idx.modules.contains(target_module) => {
+            return Some(ModuleAccess::ExternalCrate);
+        }
         Some(_) if idx.modules.contains(target_module) => format!("self::{}", source_module_path.join("::")),
         Some(_) => source_module_path.join("::"),
         None => return None,
     };
 
-    Some(import_path)
+    // Retain crate:: and super:: anchors verbatim. Moving that prefix to a use
+    // in the same module does not require discovering the file's crate position.
+    Some(ModuleAccess::Import(import_path))
+}
+
+fn is_module_root(parts: &[String]) -> bool {
+    !parts.is_empty()
+        && parts
+            .iter()
+            .all(|part| matches!(part.as_str(), "crate" | "self" | "super"))
 }
 
 fn module_is_available(
@@ -170,7 +191,12 @@ fn can_use_module_name(idx: &ModuleIdx<'_>, current_module: &[String], name: &st
     let mut local_module = current_module.to_vec();
     local_module.push(name.to_owned());
 
-    if scope.definitions.contains(name) && (!idx.modules.contains(&local_module) || local_module != target_module) {
+    let type_definition = idx
+        .scopes
+        .iter()
+        .find(|scope| scope.path == current_module)
+        .is_some_and(|scope| module_type_names(scope.items).contains(name));
+    if type_definition && (!idx.modules.contains(&local_module) || local_module != target_module) {
         return false;
     }
 

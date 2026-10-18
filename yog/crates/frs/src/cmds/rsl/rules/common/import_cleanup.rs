@@ -5,20 +5,12 @@ use std::collections::HashSet;
 use std::ops::Range;
 
 use proc_macro2::Span;
-use proc_macro2::TokenStream;
-use proc_macro2::TokenTree;
-use syn::Attribute;
 use syn::Item;
-use syn::ItemUse;
-use syn::Macro;
-use syn::Meta;
-use syn::Path;
 use syn::UseGroup;
 use syn::UseTree;
 use syn::Visibility;
 use syn::punctuated::Iter;
 use syn::spanned::Spanned;
-use syn::visit::Visit;
 
 use super::comments_reason;
 use super::import_resolution::use_bindings;
@@ -31,14 +23,12 @@ pub(in crate::cmds::rsl::rules) fn plan_unused_fn_import_removals(
     ctx: &FileContext<'_>,
     items: &[Item],
     changed: &[Span],
+    references: &HashMap<String, usize>,
     plan: &mut RulePlan<'_>,
 ) -> rootcause::Result<()> {
     if changed.is_empty() {
         return Ok(());
     }
-
-    let mut references = References { counts: HashMap::new() };
-    references.visit_file(ctx.file);
 
     let mut rewritten: HashMap<&str, usize> = HashMap::new();
 
@@ -50,7 +40,7 @@ pub(in crate::cmds::rsl::rules) fn plan_unused_fn_import_removals(
 
     let unused: HashSet<_> = rewritten
         .into_iter()
-        .filter(|(name, count)| references.counts.get(*name) == Some(count))
+        .filter(|(name, count)| references.get(*name) == Some(count))
         .map(|(name, _)| name)
         .collect();
 
@@ -234,55 +224,4 @@ fn group_removed_ranges(group: &UseGroup, edits: Vec<TreeEdits>, editor: &Source
     }
 
     TreeEdits::Keep(merged)
-}
-
-struct References {
-    counts: HashMap<String, usize>,
-}
-
-impl References {
-    fn add(&mut self, name: String) {
-        let count = self.counts.entry(name).or_default();
-        *count = count.saturating_add(1);
-    }
-
-    fn tokens(&mut self, tokens: TokenStream) {
-        let mut pending = vec![tokens.into_iter()];
-
-        while let Some(tokens) = pending.last_mut() {
-            match tokens.next() {
-                Some(TokenTree::Ident(ident)) => self.add(ident.to_string()),
-                Some(TokenTree::Group(group)) => pending.push(group.stream().into_iter()),
-                Some(TokenTree::Punct(_) | TokenTree::Literal(_)) => {}
-                None => {
-                    pending.pop();
-                }
-            }
-        }
-    }
-}
-
-impl<'ast> Visit<'ast> for References {
-    fn visit_path(&mut self, path: &'ast Path) {
-        for segment in &path.segments {
-            self.add(segment.ident.to_string());
-        }
-
-        syn::visit::visit_path(self, path);
-    }
-
-    fn visit_macro(&mut self, mac: &'ast Macro) {
-        self.tokens(mac.tokens.clone());
-        syn::visit::visit_macro(self, mac);
-    }
-
-    fn visit_attribute(&mut self, attribute: &'ast Attribute) {
-        self.visit_path(attribute.path());
-
-        if let Meta::List(meta) = &attribute.meta {
-            self.tokens(meta.tokens.clone());
-        }
-    }
-
-    fn visit_item_use(&mut self, _item: &'ast ItemUse) {}
 }
