@@ -125,74 +125,6 @@ impl Tab {
     }
 }
 
-fn handle_focus_pane_cmd(
-    direction: PaneFocusDirection,
-    config: &ServerConfig,
-    layout: &mut SessionLayout,
-    terminal_size: &TerminalSize,
-) -> rootcause::Result<PaneFocusChange> {
-    let focus_change = layout.focus_pane_direction(terminal_size, direction)?;
-    if focus_change == PaneFocusChange::Changed {
-        crate::state::persisted::write_metadata(&config.paths, layout)?;
-    }
-    Ok(focus_change)
-}
-
-fn handle_focus_pane_cmd_with_tracked_process_ack(
-    direction: PaneFocusDirection,
-    config: &ServerConfig,
-    layout: &mut SessionLayout,
-    runtimes: &PaneRuntimes,
-    pane_tracked_processes: &mut PaneTrackedProcesses,
-    terminal_size: &TerminalSize,
-    now: Instant,
-) -> rootcause::Result<PaneFocusChange> {
-    let focus_change = self::handle_focus_pane_cmd(direction, config, layout, terminal_size)?;
-    if focus_change == PaneFocusChange::Changed {
-        let _acknowledged = pane_tracked_processes.acknowledge_active_pane_attention(
-            config.user_config.as_ref(),
-            layout,
-            runtimes,
-            now,
-        )?;
-    }
-    Ok(focus_change)
-}
-
-fn handle_focus_pane_at_request(
-    position: ClientMousePosition,
-    config: &ServerConfig,
-    layout: &mut SessionLayout,
-    terminal_size: &TerminalSize,
-) -> rootcause::Result<PaneFocusChange> {
-    let focus_change = layout.focus_pane_at(terminal_size, position)?;
-    if focus_change == PaneFocusChange::Changed {
-        crate::state::persisted::write_metadata(&config.paths, layout)?;
-    }
-    Ok(focus_change)
-}
-
-fn handle_focus_pane_at_request_with_tracked_process_ack(
-    position: ClientMousePosition,
-    config: &ServerConfig,
-    layout: &mut SessionLayout,
-    runtimes: &PaneRuntimes,
-    pane_tracked_processes: &mut PaneTrackedProcesses,
-    terminal_size: &TerminalSize,
-    now: Instant,
-) -> rootcause::Result<PaneFocusChange> {
-    let focus_change = self::handle_focus_pane_at_request(position, config, layout, terminal_size)?;
-    if focus_change == PaneFocusChange::Changed {
-        let _acknowledged = pane_tracked_processes.acknowledge_active_pane_attention(
-            config.user_config.as_ref(),
-            layout,
-            runtimes,
-            now,
-        )?;
-    }
-    Ok(focus_change)
-}
-
 pub fn handle_focus_pane_at_client_request(
     position: ClientMousePosition,
     state: &mut ClientSessionState<'_>,
@@ -255,6 +187,74 @@ pub fn handle_focus_pane_cmd_client(
 pub fn write_active_pane_focus_events(previous_pane: PaneId, state: &ClientSessionState<'_>) -> rootcause::Result<()> {
     let next_pane = state.layout.active_pane_id()?;
     self::write_pane_focus_transition(previous_pane, next_pane, state.runtimes)
+}
+
+fn handle_focus_pane_cmd_with_tracked_process_ack(
+    direction: PaneFocusDirection,
+    config: &ServerConfig,
+    layout: &mut SessionLayout,
+    runtimes: &PaneRuntimes,
+    pane_tracked_processes: &mut PaneTrackedProcesses,
+    terminal_size: &TerminalSize,
+    now: Instant,
+) -> rootcause::Result<PaneFocusChange> {
+    let focus_change = self::handle_focus_pane_cmd(direction, config, layout, terminal_size)?;
+    if focus_change == PaneFocusChange::Changed {
+        let _acknowledged = pane_tracked_processes.acknowledge_active_pane_attention(
+            config.user_config.as_ref(),
+            layout,
+            runtimes,
+            now,
+        )?;
+    }
+    Ok(focus_change)
+}
+
+fn handle_focus_pane_cmd(
+    direction: PaneFocusDirection,
+    config: &ServerConfig,
+    layout: &mut SessionLayout,
+    terminal_size: &TerminalSize,
+) -> rootcause::Result<PaneFocusChange> {
+    let focus_change = layout.focus_pane_direction(terminal_size, direction)?;
+    if focus_change == PaneFocusChange::Changed {
+        crate::state::persisted::write_metadata(&config.paths, layout)?;
+    }
+    Ok(focus_change)
+}
+
+fn handle_focus_pane_at_request_with_tracked_process_ack(
+    position: ClientMousePosition,
+    config: &ServerConfig,
+    layout: &mut SessionLayout,
+    runtimes: &PaneRuntimes,
+    pane_tracked_processes: &mut PaneTrackedProcesses,
+    terminal_size: &TerminalSize,
+    now: Instant,
+) -> rootcause::Result<PaneFocusChange> {
+    let focus_change = self::handle_focus_pane_at_request(position, config, layout, terminal_size)?;
+    if focus_change == PaneFocusChange::Changed {
+        let _acknowledged = pane_tracked_processes.acknowledge_active_pane_attention(
+            config.user_config.as_ref(),
+            layout,
+            runtimes,
+            now,
+        )?;
+    }
+    Ok(focus_change)
+}
+
+fn handle_focus_pane_at_request(
+    position: ClientMousePosition,
+    config: &ServerConfig,
+    layout: &mut SessionLayout,
+    terminal_size: &TerminalSize,
+) -> rootcause::Result<PaneFocusChange> {
+    let focus_change = layout.focus_pane_at(terminal_size, position)?;
+    if focus_change == PaneFocusChange::Changed {
+        crate::state::persisted::write_metadata(&config.paths, layout)?;
+    }
+    Ok(focus_change)
 }
 
 fn write_pane_focus_transition(

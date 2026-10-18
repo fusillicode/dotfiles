@@ -1,5 +1,7 @@
 use std::time::Duration;
 
+use tokio::time::Instant;
+
 use crate::render_state::ClientLifecycleAction;
 use crate::render_state::OutputFreshness;
 use crate::session::delete::DeleteSessionRequest;
@@ -10,7 +12,7 @@ pub fn client_should_exit(
     output_freshness: impl IntoIterator<Item = OutputFreshness>,
     client_heartbeat_timeout: Duration,
     delete_sessions: &DeleteSessions,
-    heartbeat_started_at: Option<tokio::time::Instant>,
+    heartbeat_started_at: Option<Instant>,
 ) -> ClientLifecycleAction {
     // A dropped PTY sink means live output is already stale; release the active slot instead of draining old frames
     // into a slow client.

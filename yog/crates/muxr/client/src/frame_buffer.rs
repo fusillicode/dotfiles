@@ -65,30 +65,6 @@ impl FrameBuffer {
         }
     }
 
-    fn apply_diff(&mut self, diff: RenderDiff) -> rootcause::Result<ApplyOutcome> {
-        let (base_seq, seq, size, cursor, spans) = diff.into_parts();
-        if self.seq != Some(base_seq) || self.size.as_ref() != Some(&size) {
-            return Ok(ApplyOutcome::NeedsResync);
-        }
-
-        // Validate the full diff before mutating so a stale frame cannot leave a partial buffer.
-        for row in &spans {
-            validate_span_against_rows(&self.rows, row)?;
-        }
-        for row in &spans {
-            apply_span_to_rows(&mut self.rows, row)?;
-        }
-
-        self.cursor = Some(cursor.clone());
-        self.seq = Some(seq);
-        self.size = Some(size);
-        Ok(ApplyOutcome::Applied(RenderFrameChanges {
-            cursor,
-            scope: RenderFrameScope::Partial,
-            rows: spans,
-        }))
-    }
-
     pub fn row_redraw_changes(&self, changed_rows: &[u16]) -> rootcause::Result<Option<RenderFrameChanges>> {
         let Some(cursor) = self.cursor.clone() else {
             return Ok(None);
@@ -160,6 +136,30 @@ impl FrameBuffer {
     #[must_use]
     pub const fn size(&self) -> Option<&TerminalSize> {
         self.size.as_ref()
+    }
+
+    fn apply_diff(&mut self, diff: RenderDiff) -> rootcause::Result<ApplyOutcome> {
+        let (base_seq, seq, size, cursor, spans) = diff.into_parts();
+        if self.seq != Some(base_seq) || self.size.as_ref() != Some(&size) {
+            return Ok(ApplyOutcome::NeedsResync);
+        }
+
+        // Validate the full diff before mutating so a stale frame cannot leave a partial buffer.
+        for row in &spans {
+            validate_span_against_rows(&self.rows, row)?;
+        }
+        for row in &spans {
+            apply_span_to_rows(&mut self.rows, row)?;
+        }
+
+        self.cursor = Some(cursor.clone());
+        self.seq = Some(seq);
+        self.size = Some(size);
+        Ok(ApplyOutcome::Applied(RenderFrameChanges {
+            cursor,
+            scope: RenderFrameScope::Partial,
+            rows: spans,
+        }))
     }
 }
 
@@ -341,6 +341,14 @@ pub enum RenderFrameScope {
     Partial,
 }
 
+pub const fn crossterm_color(color: RenderColor) -> Color {
+    match color {
+        RenderColor::Default => Color::Reset,
+        RenderColor::Indexed(index) => Color::AnsiValue(index),
+        RenderColor::Rgb { r, g, b } => Color::Rgb { r, g, b },
+    }
+}
+
 fn apply_span_to_rows(rows: &mut [Arc<[RenderCell]>], span: &RenderRowSpan) -> rootcause::Result<()> {
     validate_span_against_rows(rows, span)?;
     let Some(row) = rows.get_mut(usize::from(span.row())) else {
@@ -504,14 +512,6 @@ const fn cursor_shape_sequence(shape: RenderCursorShape) -> &'static [u8] {
         RenderCursorShape::SteadyUnderline => b"\x1b[4 q",
         RenderCursorShape::BlinkingBar => b"\x1b[5 q",
         RenderCursorShape::SteadyBar => b"\x1b[6 q",
-    }
-}
-
-pub const fn crossterm_color(color: RenderColor) -> Color {
-    match color {
-        RenderColor::Default => Color::Reset,
-        RenderColor::Indexed(index) => Color::AnsiValue(index),
-        RenderColor::Rgb { r, g, b } => Color::Rgb { r, g, b },
     }
 }
 
@@ -1055,6 +1055,13 @@ mod tests {
         }
     }
 
+    #[derive(Clone, Copy)]
+    enum ExpectedEscape {
+        Attribute(Attribute),
+        Background(RenderColor),
+        Foreground(RenderColor),
+    }
+
     fn encode_terminal_render(output: &mut impl Write, render: TerminalRender<'_>) -> rootcause::Result<()> {
         TerminalUpdateEncoder::default().encode(output, render)
     }
@@ -1213,13 +1220,6 @@ mod tests {
 
     fn occurrence_count(haystack: &str, needle: &str) -> usize {
         haystack.matches(needle).count()
-    }
-
-    #[derive(Clone, Copy)]
-    enum ExpectedEscape {
-        Attribute(Attribute),
-        Background(RenderColor),
-        Foreground(RenderColor),
     }
 
     fn expected_escape(expected: ExpectedEscape) -> rootcause::Result<String> {

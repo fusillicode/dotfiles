@@ -273,18 +273,6 @@ mod tests {
         assert!(screen.matches_busy(screen.normalize_line(text)));
     }
 
-    fn codex_screen_observation() -> ScreenObservationConfig {
-        MuxrConfig::new()
-            .unwrap()
-            .tracked_processes
-            .processes
-            .into_iter()
-            .find(|process| process.id == TrackedProcessId::Codex)
-            .unwrap()
-            .screen_observation
-            .unwrap()
-    }
-
     #[rstest::rstest]
     #[case("Worked for 22m 38s • 11:37", "Worked for 22m 38s • 11:37")]
     #[case("── Worked for 0s • 00:01 ───", "Worked for 0s • 00:01")]
@@ -375,5 +363,17 @@ mod tests {
         let config = MuxrConfig::new().unwrap();
 
         test_that::assert_that!(config.tracked_process_for_cmd(executable, path).is_none(), eq(true));
+    }
+
+    fn codex_screen_observation() -> ScreenObservationConfig {
+        MuxrConfig::new()
+            .unwrap()
+            .tracked_processes
+            .processes
+            .into_iter()
+            .find(|process| process.id == TrackedProcessId::Codex)
+            .unwrap()
+            .screen_observation
+            .unwrap()
     }
 }

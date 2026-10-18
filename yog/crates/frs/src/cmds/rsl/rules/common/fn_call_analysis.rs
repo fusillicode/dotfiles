@@ -3,12 +3,32 @@
 use std::collections::HashSet;
 
 use proc_macro2::Span;
+use syn::Arm;
+use syn::Attribute;
+use syn::Block;
 use syn::Expr;
 use syn::ExprCall;
+use syn::ExprClosure;
+use syn::ExprForLoop;
+use syn::ExprIf;
 use syn::ExprLet;
+use syn::ExprWhile;
+use syn::FnArg;
+use syn::ImplItemFn;
 use syn::Item;
+use syn::ItemFn;
+use syn::ItemMod;
+use syn::Local;
+use syn::Macro;
+use syn::Pat;
+use syn::PatIdent;
 use syn::Path;
+use syn::Stmt;
+use syn::TraitItemFn;
+use syn::punctuated::Punctuated;
 use syn::spanned::Spanned;
+use syn::token::Comma;
+use syn::visit;
 use syn::visit::Visit;
 
 pub fn calls_in_scope(items: &[Item]) -> Vec<CallSite<'_>> {
@@ -73,22 +93,22 @@ impl<'ast> Visit<'ast> for FnCallVisitor<'ast> {
             });
         }
 
-        syn::visit::visit_expr_call(self, expression);
+        visit::visit_expr_call(self, expression);
     }
 
-    fn visit_block(&mut self, block: &'ast syn::Block) {
+    fn visit_block(&mut self, block: &'ast Block) {
         self.local_bindings.push(block_fn_bindings(block));
-        syn::visit::visit_block(self, block);
+        visit::visit_block(self, block);
         let _ = self.local_bindings.pop();
     }
 
-    fn visit_expr_closure(&mut self, closure: &'ast syn::ExprClosure) {
+    fn visit_expr_closure(&mut self, closure: &'ast ExprClosure) {
         self.local_bindings.push(closure_bindings(&closure.inputs));
-        syn::visit::visit_expr_closure(self, closure);
+        visit::visit_expr_closure(self, closure);
         let _ = self.local_bindings.pop();
     }
 
-    fn visit_expr_for_loop(&mut self, expression: &'ast syn::ExprForLoop) {
+    fn visit_expr_for_loop(&mut self, expression: &'ast ExprForLoop) {
         for attribute in &expression.attrs {
             self.visit_attribute(attribute);
         }
@@ -105,7 +125,7 @@ impl<'ast> Visit<'ast> for FnCallVisitor<'ast> {
         let _ = self.local_bindings.pop();
     }
 
-    fn visit_expr_if(&mut self, expression: &'ast syn::ExprIf) {
+    fn visit_expr_if(&mut self, expression: &'ast ExprIf) {
         if let Expr::Let(let_expression) = expression.cond.as_ref() {
             for attribute in &expression.attrs {
                 self.visit_attribute(attribute);
@@ -124,11 +144,11 @@ impl<'ast> Visit<'ast> for FnCallVisitor<'ast> {
 
         let bindings = condition_bindings(&expression.cond);
         self.local_bindings.push(bindings);
-        syn::visit::visit_expr_if(self, expression);
+        visit::visit_expr_if(self, expression);
         let _ = self.local_bindings.pop();
     }
 
-    fn visit_expr_while(&mut self, expression: &'ast syn::ExprWhile) {
+    fn visit_expr_while(&mut self, expression: &'ast ExprWhile) {
         if let Expr::Let(let_expression) = expression.cond.as_ref() {
             for attribute in &expression.attrs {
                 self.visit_attribute(attribute);
@@ -147,23 +167,23 @@ impl<'ast> Visit<'ast> for FnCallVisitor<'ast> {
 
         let bindings = condition_bindings(&expression.cond);
         self.local_bindings.push(bindings);
-        syn::visit::visit_expr_while(self, expression);
+        visit::visit_expr_while(self, expression);
         let _ = self.local_bindings.pop();
     }
 
-    fn visit_impl_item_fn(&mut self, fn_item: &'ast syn::ImplItemFn) {
+    fn visit_impl_item_fn(&mut self, fn_item: &'ast ImplItemFn) {
         self.local_bindings.push(parameter_bindings(&fn_item.sig.inputs));
-        syn::visit::visit_impl_item_fn(self, fn_item);
+        visit::visit_impl_item_fn(self, fn_item);
         let _ = self.local_bindings.pop();
     }
 
-    fn visit_item_fn(&mut self, fn_item: &'ast syn::ItemFn) {
+    fn visit_item_fn(&mut self, fn_item: &'ast ItemFn) {
         self.local_bindings.push(parameter_bindings(&fn_item.sig.inputs));
-        syn::visit::visit_item_fn(self, fn_item);
+        visit::visit_item_fn(self, fn_item);
         let _ = self.local_bindings.pop();
     }
 
-    fn visit_local(&mut self, local: &'ast syn::Local) {
+    fn visit_local(&mut self, local: &'ast Local) {
         for attribute in &local.attrs {
             self.visit_attribute(attribute);
         }
@@ -183,23 +203,23 @@ impl<'ast> Visit<'ast> for FnCallVisitor<'ast> {
         }
     }
 
-    fn visit_arm(&mut self, arm: &'ast syn::Arm) {
+    fn visit_arm(&mut self, arm: &'ast Arm) {
         self.local_bindings.push(pattern_bindings(&arm.pat));
-        syn::visit::visit_arm(self, arm);
+        visit::visit_arm(self, arm);
         let _ = self.local_bindings.pop();
     }
 
-    fn visit_trait_item_fn(&mut self, fn_item: &'ast syn::TraitItemFn) {
+    fn visit_trait_item_fn(&mut self, fn_item: &'ast TraitItemFn) {
         self.local_bindings.push(parameter_bindings(&fn_item.sig.inputs));
-        syn::visit::visit_trait_item_fn(self, fn_item);
+        visit::visit_trait_item_fn(self, fn_item);
         let _ = self.local_bindings.pop();
     }
 
-    fn visit_item_mod(&mut self, _module: &'ast syn::ItemMod) {}
+    fn visit_item_mod(&mut self, _module: &'ast ItemMod) {}
 
-    fn visit_attribute(&mut self, _attribute: &'ast syn::Attribute) {}
+    fn visit_attribute(&mut self, _attribute: &'ast Attribute) {}
 
-    fn visit_macro(&mut self, _mac: &'ast syn::Macro) {
+    fn visit_macro(&mut self, _mac: &'ast Macro) {
         // TODO: Resolve local bindings generated by macros.
     }
 }
@@ -209,24 +229,24 @@ struct BindingCollector<'bindings> {
 }
 
 impl<'ast> Visit<'ast> for BindingCollector<'_> {
-    fn visit_pat_ident(&mut self, pattern: &'ast syn::PatIdent) {
+    fn visit_pat_ident(&mut self, pattern: &'ast PatIdent) {
         self.bindings.insert(pattern.ident.to_string());
-        syn::visit::visit_pat_ident(self, pattern);
+        visit::visit_pat_ident(self, pattern);
     }
 }
 
-fn add_pattern_bindings(bindings: &mut HashSet<String>, pattern: &syn::Pat) {
+fn add_pattern_bindings(bindings: &mut HashSet<String>, pattern: &Pat) {
     let mut collector = BindingCollector { bindings };
     collector.visit_pat(pattern);
 }
 
-fn pattern_bindings(pattern: &syn::Pat) -> HashSet<String> {
+fn pattern_bindings(pattern: &Pat) -> HashSet<String> {
     let mut bindings = HashSet::new();
     add_pattern_bindings(&mut bindings, pattern);
     bindings
 }
 
-fn closure_bindings(inputs: &syn::punctuated::Punctuated<syn::Pat, syn::token::Comma>) -> HashSet<String> {
+fn closure_bindings(inputs: &Punctuated<Pat, Comma>) -> HashSet<String> {
     let mut bindings = HashSet::new();
     for input in inputs {
         add_pattern_bindings(&mut bindings, input);
@@ -234,26 +254,26 @@ fn closure_bindings(inputs: &syn::punctuated::Punctuated<syn::Pat, syn::token::C
     bindings
 }
 
-fn parameter_bindings(inputs: &syn::punctuated::Punctuated<syn::FnArg, syn::token::Comma>) -> HashSet<String> {
+fn parameter_bindings(inputs: &Punctuated<FnArg, Comma>) -> HashSet<String> {
     let mut bindings = HashSet::new();
     for input in inputs {
         match input {
-            syn::FnArg::Receiver(_) => {
+            FnArg::Receiver(_) => {
                 bindings.insert("self".to_owned());
             }
-            syn::FnArg::Typed(input) => add_pattern_bindings(&mut bindings, &input.pat),
+            FnArg::Typed(input) => add_pattern_bindings(&mut bindings, &input.pat),
         }
     }
     bindings
 }
 
-fn block_fn_bindings(block: &syn::Block) -> HashSet<String> {
+fn block_fn_bindings(block: &Block) -> HashSet<String> {
     block
         .stmts
         .iter()
         .filter_map(|statement| match statement {
-            syn::Stmt::Item(Item::Fn(fn_item)) => Some(fn_item.sig.ident.to_string()),
-            syn::Stmt::Expr(_, _) | syn::Stmt::Item(_) | syn::Stmt::Local(_) | syn::Stmt::Macro(_) => None,
+            Stmt::Item(Item::Fn(fn_item)) => Some(fn_item.sig.ident.to_string()),
+            Stmt::Expr(_, _) | Stmt::Item(_) | Stmt::Local(_) | Stmt::Macro(_) => None,
         })
         .collect()
 }
@@ -269,6 +289,6 @@ struct ConditionBindings(HashSet<String>);
 impl<'ast> Visit<'ast> for ConditionBindings {
     fn visit_expr_let(&mut self, expression: &'ast ExprLet) {
         self.0.extend(pattern_bindings(&expression.pat));
-        syn::visit::visit_expr_let(self, expression);
+        visit::visit_expr_let(self, expression);
     }
 }

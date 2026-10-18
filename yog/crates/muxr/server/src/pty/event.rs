@@ -15,13 +15,6 @@ pub struct PtyExitStatus {
     pub result: PtyExitResult,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum PtyExitResult {
-    Failed,
-    Succeeded,
-}
-
 impl From<&ExitStatus> for PtyExitStatus {
     fn from(status: &ExitStatus) -> Self {
         Self {
@@ -34,4 +27,11 @@ impl From<&ExitStatus> for PtyExitStatus {
             },
         }
     }
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PtyExitResult {
+    Failed,
+    Succeeded,
 }

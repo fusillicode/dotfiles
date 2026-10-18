@@ -77,10 +77,6 @@ pub fn global_scope() -> OptionOpts {
     OptionOptsBuilder::default().scope(OptionScope::Global).build()
 }
 
-fn local_scope() -> OptionOpts {
-    OptionOptsBuilder::default().scope(OptionScope::Local).build()
-}
-
 /// Sets the desired Nvim options.
 fn set_all(_: ()) {
     let global_scope = global_scope();
@@ -127,4 +123,8 @@ fn set_all(_: ()) {
     append("clipboard", "unnamedplus", &global_scope);
     append("iskeyword", "-", &global_scope);
     append("jumpoptions", "stack", &global_scope);
+}
+
+fn local_scope() -> OptionOpts {
+    OptionOptsBuilder::default().scope(OptionScope::Local).build()
 }

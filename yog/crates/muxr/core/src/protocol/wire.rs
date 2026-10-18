@@ -31,25 +31,6 @@ use super::TerminalSize;
 use super::pane_render::RenderHyperlinkPresence;
 use crate::SessionName;
 
-#[repr(u8)]
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum ProtocolFrameKind {
-    Domain = 0,
-    HyperlinkTableRender = 1,
-}
-
-impl TryFrom<u8> for ProtocolFrameKind {
-    type Error = rootcause::Report;
-
-    fn try_from(value: u8) -> Result<Self, Self::Error> {
-        match value {
-            0 => Ok(Self::Domain),
-            1 => Ok(Self::HyperlinkTableRender),
-            _ => Err(report!("invalid muxr protocol frame kind").attach(format!("kind={value}"))),
-        }
-    }
-}
-
 /// Owned muxr protocol frame bytes.
 ///
 /// This intentionally wraps [`Bytes`] instead of exposing it directly from the encoder API: muxr keeps a domain-owned
@@ -200,6 +181,80 @@ pub enum ServerEvent {
     },
     Error(ServerError),
     Detached,
+}
+
+/// Encode a client request as a muxr protocol frame containing a rkyv payload.
+///
+/// # Errors
+/// - The request cannot be serialized.
+pub fn encode_client_request(request: &ClientRequest) -> rootcause::Result<ProtocolFrame> {
+    ProtocolFrame::try_from(request)
+}
+
+/// Decode a client request from one muxr protocol frame containing a rkyv payload.
+///
+/// # Errors
+/// - The frame is empty or not a valid client request frame.
+/// - The decoded request cannot be deserialized into valid domain values.
+pub fn decode_client_request(line: &[u8]) -> rootcause::Result<ClientRequest> {
+    let payload = self::decode_domain_payload(line)?;
+    let archived = rkyv::access::<rkyv::Archived<ClientRequest>, rkyv::rancor::Error>(&payload)
+        .map_err(|error| report!("failed to validate muxr protocol frame").attach(format!("{error:?}")))?;
+    rkyv::deserialize::<ClientRequest, rkyv::rancor::Error>(archived)
+        .map_err(|error| report!("failed to deserialize muxr protocol frame").attach(format!("{error:?}")))
+}
+
+/// Encode a server event as a muxr protocol frame containing a rkyv payload.
+///
+/// # Errors
+/// - The event cannot be serialized.
+pub fn encode_server_event(event: &ServerEvent) -> rootcause::Result<ProtocolFrame> {
+    ProtocolFrame::try_from(event)
+}
+
+/// Decode a server event from one muxr protocol frame containing a rkyv payload.
+///
+/// # Errors
+/// - The frame is empty or not a valid server event frame.
+/// - The decoded event cannot be deserialized into valid domain values.
+pub fn decode_server_event(line: &[u8]) -> rootcause::Result<ServerEvent> {
+    let (kind, payload) = self::protocol_payload(line)?;
+    let payload = self::align_protocol_payload(payload);
+    match kind {
+        ProtocolFrameKind::Domain => {
+            let archived = rkyv::access::<rkyv::Archived<ServerEvent>, rkyv::rancor::Error>(&payload)
+                .map_err(|error| report!("failed to validate muxr protocol frame").attach(format!("{error:?}")))?;
+            rkyv::deserialize::<ServerEvent, rkyv::rancor::Error>(archived)
+                .map_err(|error| report!("failed to deserialize muxr protocol frame").attach(format!("{error:?}")))
+        }
+        ProtocolFrameKind::HyperlinkTableRender => {
+            let archived = rkyv::access::<rkyv::Archived<HyperlinkTableRenderUpdate>, rkyv::rancor::Error>(&payload)
+                .map_err(|error| report!("failed to validate muxr protocol frame").attach(format!("{error:?}")))?;
+            let update = rkyv::deserialize::<HyperlinkTableRenderUpdate, rkyv::rancor::Error>(archived)
+                .map_err(|error| report!("failed to deserialize muxr protocol frame").attach(format!("{error:?}")))?
+                .into_domain()?;
+            Ok(ServerEvent::Render(update))
+        }
+    }
+}
+
+#[repr(u8)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ProtocolFrameKind {
+    Domain = 0,
+    HyperlinkTableRender = 1,
+}
+
+impl TryFrom<u8> for ProtocolFrameKind {
+    type Error = rootcause::Report;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(Self::Domain),
+            1 => Ok(Self::HyperlinkTableRender),
+            _ => Err(report!("invalid muxr protocol frame kind").attach(format!("kind={value}"))),
+        }
+    }
 }
 
 #[derive(rkyv::Archive, Debug, rkyv::Deserialize, rkyv::Serialize)]
@@ -397,12 +452,6 @@ struct ResolvedHyperlinks {
     references: Vec<HyperlinkReference>,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum HyperlinkReference {
-    Unreferenced,
-    Referenced,
-}
-
 impl ResolvedHyperlinks {
     fn new(uris: Vec<String>) -> rootcause::Result<Self> {
         let mut seen = HashSet::with_capacity(uris.len());
@@ -448,59 +497,10 @@ impl ResolvedHyperlinks {
     }
 }
 
-/// Encode a client request as a muxr protocol frame containing a rkyv payload.
-///
-/// # Errors
-/// - The request cannot be serialized.
-pub fn encode_client_request(request: &ClientRequest) -> rootcause::Result<ProtocolFrame> {
-    ProtocolFrame::try_from(request)
-}
-
-/// Decode a client request from one muxr protocol frame containing a rkyv payload.
-///
-/// # Errors
-/// - The frame is empty or not a valid client request frame.
-/// - The decoded request cannot be deserialized into valid domain values.
-pub fn decode_client_request(line: &[u8]) -> rootcause::Result<ClientRequest> {
-    let payload = self::decode_domain_payload(line)?;
-    let archived = rkyv::access::<rkyv::Archived<ClientRequest>, rkyv::rancor::Error>(&payload)
-        .map_err(|error| report!("failed to validate muxr protocol frame").attach(format!("{error:?}")))?;
-    rkyv::deserialize::<ClientRequest, rkyv::rancor::Error>(archived)
-        .map_err(|error| report!("failed to deserialize muxr protocol frame").attach(format!("{error:?}")))
-}
-
-/// Encode a server event as a muxr protocol frame containing a rkyv payload.
-///
-/// # Errors
-/// - The event cannot be serialized.
-pub fn encode_server_event(event: &ServerEvent) -> rootcause::Result<ProtocolFrame> {
-    ProtocolFrame::try_from(event)
-}
-
-/// Decode a server event from one muxr protocol frame containing a rkyv payload.
-///
-/// # Errors
-/// - The frame is empty or not a valid server event frame.
-/// - The decoded event cannot be deserialized into valid domain values.
-pub fn decode_server_event(line: &[u8]) -> rootcause::Result<ServerEvent> {
-    let (kind, payload) = self::protocol_payload(line)?;
-    let payload = self::align_protocol_payload(payload);
-    match kind {
-        ProtocolFrameKind::Domain => {
-            let archived = rkyv::access::<rkyv::Archived<ServerEvent>, rkyv::rancor::Error>(&payload)
-                .map_err(|error| report!("failed to validate muxr protocol frame").attach(format!("{error:?}")))?;
-            rkyv::deserialize::<ServerEvent, rkyv::rancor::Error>(archived)
-                .map_err(|error| report!("failed to deserialize muxr protocol frame").attach(format!("{error:?}")))
-        }
-        ProtocolFrameKind::HyperlinkTableRender => {
-            let archived = rkyv::access::<rkyv::Archived<HyperlinkTableRenderUpdate>, rkyv::rancor::Error>(&payload)
-                .map_err(|error| report!("failed to validate muxr protocol frame").attach(format!("{error:?}")))?;
-            let update = rkyv::deserialize::<HyperlinkTableRenderUpdate, rkyv::rancor::Error>(archived)
-                .map_err(|error| report!("failed to deserialize muxr protocol frame").attach(format!("{error:?}")))?
-                .into_domain()?;
-            Ok(ServerEvent::Render(update))
-        }
-    }
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum HyperlinkReference {
+    Unreferenced,
+    Referenced,
 }
 
 fn decode_domain_payload(frame: &[u8]) -> rootcause::Result<AlignedVec> {

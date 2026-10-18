@@ -1,3 +1,5 @@
+use std::env;
+use std::io;
 use std::io::IsTerminal;
 use std::io::Write;
 
@@ -8,6 +10,7 @@ use crossterm::cursor::Show;
 use crossterm::style::Attribute;
 use crossterm::style::ResetColor;
 use crossterm::style::SetAttribute;
+use crossterm::terminal;
 use crossterm::terminal::Clear;
 use crossterm::terminal::ClearType;
 use crossterm::terminal::EnterAlternateScreen;
@@ -67,27 +70,21 @@ pub struct TerminalGuard {
     raw_mode: TerminalGuardMode,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum TerminalGuardMode {
-    Disabled,
-    Enabled,
-}
-
 impl TerminalGuard {
     pub fn enable_if_terminal() -> rootcause::Result<Self> {
-        let raw_mode = if std::io::stdin().is_terminal() {
-            crossterm::terminal::enable_raw_mode().context("failed to enable muxr client raw mode")?;
+        let raw_mode = if io::stdin().is_terminal() {
+            terminal::enable_raw_mode().context("failed to enable muxr client raw mode")?;
             TerminalGuardMode::Enabled
         } else {
             TerminalGuardMode::Disabled
         };
-        let render_screen = if std::io::stdout().is_terminal() {
-            let mut stdout = std::io::stdout();
+        let render_screen = if io::stdout().is_terminal() {
+            let mut stdout = io::stdout();
             if let Err(error) = enter_terminal(&mut stdout) {
                 // Enter can fail after partial mode writes, so restore before returning without a guard.
                 drop(restore_terminal(&mut stdout));
                 if raw_mode == TerminalGuardMode::Enabled {
-                    drop(crossterm::terminal::disable_raw_mode());
+                    drop(terminal::disable_raw_mode());
                 }
                 return Err(error).context("failed to enter muxr client terminal screen")?;
             }
@@ -106,17 +103,17 @@ impl TerminalGuard {
 impl Drop for TerminalGuard {
     fn drop(&mut self) {
         if self.render_screen == TerminalGuardMode::Enabled {
-            let mut stdout = std::io::stdout();
+            let mut stdout = io::stdout();
             drop(restore_terminal(&mut stdout));
         }
         if self.raw_mode == TerminalGuardMode::Enabled {
-            drop(crossterm::terminal::disable_raw_mode());
+            drop(terminal::disable_raw_mode());
         }
     }
 }
 
 pub fn current_terminal_size() -> rootcause::Result<TerminalSize> {
-    match crossterm::terminal::size() {
+    match terminal::size() {
         Ok((cols, rows)) => TerminalSize::new(cols, rows),
         Err(error) => {
             // Headless callers cannot be queried by crossterm; explicit COLUMNS/LINES is the only fallback, so
@@ -179,8 +176,14 @@ pub fn queue_mouse_any_motion_capture(
     Ok(())
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum TerminalGuardMode {
+    Disabled,
+    Enabled,
+}
+
 fn terminal_size_from_env() -> rootcause::Result<Option<TerminalSize>> {
-    let (Some(cols), Some(rows)) = (std::env::var("COLUMNS").ok(), std::env::var("LINES").ok()) else {
+    let (Some(cols), Some(rows)) = (env::var("COLUMNS").ok(), env::var("LINES").ok()) else {
         return Ok(None);
     };
     TerminalSize::new(

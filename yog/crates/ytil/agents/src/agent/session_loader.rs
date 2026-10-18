@@ -36,13 +36,6 @@ pub fn load_sessions_by_key(keys: &[SessionKey]) -> rootcause::Result<Vec<Sessio
     Ok(sessions)
 }
 
-fn requested_ids(keys: &[SessionKey], agent: Agent) -> HashSet<&str> {
-    keys.iter()
-        .filter(|key| key.agent() == agent)
-        .map(SessionKey::id)
-        .collect()
-}
-
 pub(crate) fn find_session_paths(
     root: &Path,
     matching_file_fn: impl Fn(&std::fs::DirEntry) -> bool,
@@ -53,6 +46,13 @@ pub(crate) fn find_session_paths(
     }
 
     ytil_sys::file::find_matching_recursively_in_dir(root, matching_file_fn, skip_dir_fn)
+}
+
+fn requested_ids(keys: &[SessionKey], agent: Agent) -> HashSet<&str> {
+    keys.iter()
+        .filter(|key| key.agent() == agent)
+        .map(SessionKey::id)
+        .collect()
 }
 
 fn file_updated_at(path: &Path) -> rootcause::Result<Option<jiff::Timestamp>> {

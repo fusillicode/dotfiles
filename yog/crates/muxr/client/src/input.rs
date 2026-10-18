@@ -23,6 +23,151 @@ pub enum DecodedInput {
     Paste(Vec<u8>),
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct InputDecoder {
+    pending: PendingInput,
+    keybindings: KeybindingsConfig,
+}
+
+impl InputDecoder {
+    /// Build an input decoder with the configured keybinding tables.
+    ///
+    /// # Errors
+    /// Returns an error if a configured keybinding character is invalid.
+    #[cfg(test)]
+    pub fn new() -> rootcause::Result<Self> {
+        Ok(Self::with_keybindings(KeybindingsConfig::new()?))
+    }
+
+    #[must_use]
+    pub fn decode(&mut self, bytes: &[u8]) -> Vec<DecodedInput> {
+        let mut decoded = Vec::new();
+        let mut input = Vec::new();
+
+        for byte in bytes {
+            self.push_byte(*byte, &mut input, &mut decoded);
+        }
+
+        self::push_input(&mut decoded, &mut input);
+        decoded
+    }
+
+    #[must_use]
+    pub fn finalize(&mut self) -> Vec<DecodedInput> {
+        let mut decoded = Vec::new();
+        let mut input = Vec::new();
+
+        self::finalize_pending_input(self, &mut input, &mut decoded);
+
+        self::push_input(&mut decoded, &mut input);
+        decoded
+    }
+
+    #[must_use]
+    pub const fn idle_timeout(&self) -> InputIdleTimeout {
+        match self.pending {
+            PendingInput::EscapeSequence(_) | PendingInput::AmbiguousControlString(_) => InputIdleTimeout::Needed,
+            PendingInput::None | PendingInput::ControlString { .. } | PendingInput::Paste(_) => {
+                InputIdleTimeout::NotNeeded
+            }
+        }
+    }
+
+    pub(crate) const fn with_keybindings(keybindings: KeybindingsConfig) -> Self {
+        Self {
+            pending: PendingInput::None,
+            keybindings,
+        }
+    }
+
+    fn push_byte(&mut self, byte: u8, input: &mut Vec<u8>, decoded: &mut Vec<DecodedInput>) {
+        match std::mem::take(&mut self.pending) {
+            PendingInput::None => {
+                if byte == ESC {
+                    self.pending = PendingInput::EscapeSequence(vec![ESC]);
+                } else if let Some(key) = self::key_for_plain_byte(byte) {
+                    self::push_key(decoded, input, key);
+                } else {
+                    input.push(byte);
+                }
+            }
+            PendingInput::EscapeSequence(mut bytes) => {
+                bytes.push(byte);
+                if bytes.len() == 2
+                    && let Some(kind) = ControlStringKind::from_prefix(byte)
+                {
+                    self.pending = if self::key_for_escaped_byte(byte, &self.keybindings).is_some() {
+                        PendingInput::AmbiguousControlString(bytes)
+                    } else {
+                        PendingInput::ControlString { bytes, kind }
+                    };
+                } else if PendingEscapeStatus::from(bytes.as_slice()) == PendingEscapeStatus::Incomplete {
+                    self.pending = PendingInput::EscapeSequence(bytes);
+                } else if bytes == BRACKETED_PASTE_START {
+                    self::push_input(decoded, input);
+                    self.pending = PendingInput::Paste(Vec::new());
+                } else {
+                    self::finish_escape_sequence(bytes, &self.keybindings, input, decoded);
+                }
+            }
+            PendingInput::AmbiguousControlString(mut bytes) => {
+                bytes.push(byte);
+                if let Some(&prefix) = bytes.get(1)
+                    && let Some(kind) = ControlStringKind::from_prefix(prefix)
+                {
+                    match self::control_string_status(&bytes, kind) {
+                        ControlStringStatus::Complete => input.extend(bytes),
+                        ControlStringStatus::Incomplete if bytes.len() >= MAX_PENDING_CONTROL_STRING_BYTES => {
+                            self::flush_control_string(bytes, input, decoded);
+                            self.pending = PendingInput::ControlString {
+                                bytes: Vec::new(),
+                                kind,
+                            };
+                        }
+                        ControlStringStatus::Incomplete => {
+                            self.pending = PendingInput::AmbiguousControlString(bytes);
+                        }
+                    }
+                } else {
+                    self.pending = PendingInput::AmbiguousControlString(bytes);
+                }
+            }
+            PendingInput::ControlString { mut bytes, kind } => {
+                bytes.push(byte);
+                match self::control_string_status(&bytes, kind) {
+                    ControlStringStatus::Complete => input.extend(bytes),
+                    ControlStringStatus::Incomplete if bytes.len() >= MAX_PENDING_CONTROL_STRING_BYTES => {
+                        self::flush_control_string(bytes, input, decoded);
+                        self.pending = PendingInput::ControlString {
+                            bytes: Vec::new(),
+                            kind,
+                        };
+                    }
+                    ControlStringStatus::Incomplete => {
+                        self.pending = PendingInput::ControlString { bytes, kind };
+                    }
+                }
+            }
+            PendingInput::Paste(mut bytes) => {
+                bytes.push(byte);
+                if bytes.ends_with(BRACKETED_PASTE_END) {
+                    let paste_len = bytes.len().saturating_sub(BRACKETED_PASTE_END.len());
+                    bytes.truncate(paste_len);
+                    decoded.push(DecodedInput::Paste(bytes));
+                } else {
+                    self.pending = PendingInput::Paste(bytes);
+                }
+            }
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum InputIdleTimeout {
+    Needed,
+    NotNeeded,
+}
+
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 enum PendingInput {
     #[default]
@@ -116,140 +261,29 @@ impl KittyKeyModifiers {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct InputDecoder {
-    pending: PendingInput,
-    keybindings: KeybindingsConfig,
-}
-
-impl InputDecoder {
-    /// Build an input decoder with the configured keybinding tables.
-    ///
-    /// # Errors
-    /// Returns an error if a configured keybinding character is invalid.
-    #[cfg(test)]
-    pub fn new() -> rootcause::Result<Self> {
-        Ok(Self::with_keybindings(KeybindingsConfig::new()?))
-    }
-
-    pub(crate) const fn with_keybindings(keybindings: KeybindingsConfig) -> Self {
-        Self {
-            pending: PendingInput::None,
-            keybindings,
-        }
-    }
-
-    #[must_use]
-    pub fn decode(&mut self, bytes: &[u8]) -> Vec<DecodedInput> {
-        let mut decoded = Vec::new();
-        let mut input = Vec::new();
-
-        for byte in bytes {
-            self.push_byte(*byte, &mut input, &mut decoded);
-        }
-
-        self::push_input(&mut decoded, &mut input);
-        decoded
-    }
-
-    #[must_use]
-    pub fn finalize(&mut self) -> Vec<DecodedInput> {
-        let mut decoded = Vec::new();
-        let mut input = Vec::new();
-
-        self::finalize_pending_input(self, &mut input, &mut decoded);
-
-        self::push_input(&mut decoded, &mut input);
-        decoded
-    }
-
-    #[must_use]
-    pub const fn idle_timeout(&self) -> InputIdleTimeout {
-        match self.pending {
-            PendingInput::EscapeSequence(_) | PendingInput::AmbiguousControlString(_) => InputIdleTimeout::Needed,
-            PendingInput::None | PendingInput::ControlString { .. } | PendingInput::Paste(_) => {
-                InputIdleTimeout::NotNeeded
+fn finalize_pending_input(decoder: &mut InputDecoder, input: &mut Vec<u8>, events: &mut Vec<DecodedInput>) {
+    loop {
+        match std::mem::take(&mut decoder.pending) {
+            PendingInput::None => return,
+            PendingInput::EscapeSequence(bytes) if bytes.as_slice() == [ESC] => {
+                self::push_key(
+                    events,
+                    input,
+                    self::key(ClientKeyCode::Esc, ClientKeyModifiers::NONE, &bytes),
+                );
+                return;
             }
-        }
-    }
-
-    fn push_byte(&mut self, byte: u8, input: &mut Vec<u8>, decoded: &mut Vec<DecodedInput>) {
-        match std::mem::take(&mut self.pending) {
-            PendingInput::None => {
-                if byte == ESC {
-                    self.pending = PendingInput::EscapeSequence(vec![ESC]);
-                } else if let Some(key) = self::key_for_plain_byte(byte) {
-                    self::push_key(decoded, input, key);
-                } else {
-                    input.push(byte);
-                }
+            PendingInput::AmbiguousControlString(bytes) => {
+                self::finish_ambiguous_control_string(decoder, bytes, input, events);
             }
-            PendingInput::EscapeSequence(mut bytes) => {
-                bytes.push(byte);
-                if bytes.len() == 2
-                    && let Some(kind) = ControlStringKind::from_prefix(byte)
-                {
-                    self.pending = if self::key_for_escaped_byte(byte, &self.keybindings).is_some() {
-                        PendingInput::AmbiguousControlString(bytes)
-                    } else {
-                        PendingInput::ControlString { bytes, kind }
-                    };
-                } else if PendingEscapeStatus::from(bytes.as_slice()) == PendingEscapeStatus::Incomplete {
-                    self.pending = PendingInput::EscapeSequence(bytes);
-                } else if bytes == BRACKETED_PASTE_START {
-                    self::push_input(decoded, input);
-                    self.pending = PendingInput::Paste(Vec::new());
-                } else {
-                    self::finish_escape_sequence(bytes, &self.keybindings, input, decoded);
-                }
+            PendingInput::EscapeSequence(bytes) | PendingInput::ControlString { bytes, .. } => {
+                input.extend(bytes);
+                return;
             }
-            PendingInput::AmbiguousControlString(mut bytes) => {
-                bytes.push(byte);
-                if let Some(&prefix) = bytes.get(1)
-                    && let Some(kind) = ControlStringKind::from_prefix(prefix)
-                {
-                    match self::control_string_status(&bytes, kind) {
-                        ControlStringStatus::Complete => input.extend(bytes),
-                        ControlStringStatus::Incomplete if bytes.len() >= MAX_PENDING_CONTROL_STRING_BYTES => {
-                            self::flush_control_string(bytes, input, decoded);
-                            self.pending = PendingInput::ControlString {
-                                bytes: Vec::new(),
-                                kind,
-                            };
-                        }
-                        ControlStringStatus::Incomplete => {
-                            self.pending = PendingInput::AmbiguousControlString(bytes);
-                        }
-                    }
-                } else {
-                    self.pending = PendingInput::AmbiguousControlString(bytes);
-                }
-            }
-            PendingInput::ControlString { mut bytes, kind } => {
-                bytes.push(byte);
-                match self::control_string_status(&bytes, kind) {
-                    ControlStringStatus::Complete => input.extend(bytes),
-                    ControlStringStatus::Incomplete if bytes.len() >= MAX_PENDING_CONTROL_STRING_BYTES => {
-                        self::flush_control_string(bytes, input, decoded);
-                        self.pending = PendingInput::ControlString {
-                            bytes: Vec::new(),
-                            kind,
-                        };
-                    }
-                    ControlStringStatus::Incomplete => {
-                        self.pending = PendingInput::ControlString { bytes, kind };
-                    }
-                }
-            }
-            PendingInput::Paste(mut bytes) => {
-                bytes.push(byte);
-                if bytes.ends_with(BRACKETED_PASTE_END) {
-                    let paste_len = bytes.len().saturating_sub(BRACKETED_PASTE_END.len());
-                    bytes.truncate(paste_len);
-                    decoded.push(DecodedInput::Paste(bytes));
-                } else {
-                    self.pending = PendingInput::Paste(bytes);
-                }
+            PendingInput::Paste(bytes) => {
+                input.extend(BRACKETED_PASTE_START);
+                input.extend(bytes);
+                return;
             }
         }
     }
@@ -277,34 +311,6 @@ fn finish_ambiguous_control_string(
     self::push_key(events, input, key);
     for byte in rest {
         decoder.push_byte(*byte, input, events);
-    }
-}
-
-fn finalize_pending_input(decoder: &mut InputDecoder, input: &mut Vec<u8>, events: &mut Vec<DecodedInput>) {
-    loop {
-        match std::mem::take(&mut decoder.pending) {
-            PendingInput::None => return,
-            PendingInput::EscapeSequence(bytes) if bytes.as_slice() == [ESC] => {
-                self::push_key(
-                    events,
-                    input,
-                    self::key(ClientKeyCode::Esc, ClientKeyModifiers::NONE, &bytes),
-                );
-                return;
-            }
-            PendingInput::AmbiguousControlString(bytes) => {
-                self::finish_ambiguous_control_string(decoder, bytes, input, events);
-            }
-            PendingInput::EscapeSequence(bytes) | PendingInput::ControlString { bytes, .. } => {
-                input.extend(bytes);
-                return;
-            }
-            PendingInput::Paste(bytes) => {
-                input.extend(BRACKETED_PASTE_START);
-                input.extend(bytes);
-                return;
-            }
-        }
     }
 }
 
@@ -518,12 +524,6 @@ fn parse_mouse_number(raw: &[u8]) -> Option<u16> {
 fn push_key(decoded: &mut Vec<DecodedInput>, input: &mut Vec<u8>, key: ClientKey) {
     self::push_input(decoded, input);
     decoded.push(DecodedInput::Key(key));
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum InputIdleTimeout {
-    Needed,
-    NotNeeded,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

@@ -8,25 +8,6 @@ const HTTP_SCHEME: &str = "http://";
 const HTTPS_SCHEME: &str = "https://";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-struct UrlCandidate {
-    end: UrlCandidateEnd,
-    positions: Vec<CellPosition>,
-    text: String,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum UrlCandidateEnd {
-    Delimiter,
-    VisibleEdge,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-struct CellPosition {
-    cell: usize,
-    row: usize,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PaneUrlLink {
     hyperlink: RenderHyperlink,
     position: CellPosition,
@@ -157,6 +138,25 @@ pub fn expand_visible_url_rows(rows: &[RenderRowSpan], row_wraps: &[RowWrap], ch
     }
     self::append_changed_component(&mut selected, component_start..rows.len(), component_changed);
     selected
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct UrlCandidate {
+    end: UrlCandidateEnd,
+    positions: Vec<CellPosition>,
+    text: String,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum UrlCandidateEnd {
+    Delimiter,
+    VisibleEdge,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct CellPosition {
+    cell: usize,
+    row: usize,
 }
 
 fn append_changed_component(selected: &mut Vec<u16>, rows: std::ops::Range<usize>, changed: bool) {
@@ -638,6 +638,14 @@ mod tests {
         }
     }
 
+    fn soft_wraps(rows: &[RenderRowSpan]) -> Vec<RowWrap> {
+        let mut wraps = vec![RowWrap::EndsWithSoftWrap; rows.len()];
+        if let Some(last) = wraps.last_mut() {
+            *last = RowWrap::EndsBeforeSoftWrap;
+        }
+        wraps
+    }
+
     fn rows(lines: &[&str]) -> rootcause::Result<Vec<RenderRowSpan>> {
         lines
             .iter()
@@ -647,14 +655,6 @@ mod tests {
                 RenderRowSpan::new(row, 0, line.chars().map(self::cell).collect())
             })
             .collect()
-    }
-
-    fn soft_wraps(rows: &[RenderRowSpan]) -> Vec<RowWrap> {
-        let mut wraps = vec![RowWrap::EndsWithSoftWrap; rows.len()];
-        if let Some(last) = wraps.last_mut() {
-            *last = RowWrap::EndsBeforeSoftWrap;
-        }
-        wraps
     }
 
     fn cell(ch: char) -> RenderCell {

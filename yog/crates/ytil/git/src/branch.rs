@@ -110,36 +110,6 @@ pub fn get_at_many(path: &Path, timestamps: &[Timestamp]) -> Vec<Option<String>>
         .collect()
 }
 
-fn reflog_entries(reflog: &git2::Reflog) -> Vec<(i64, String)> {
-    reflog
-        .iter()
-        .filter_map(|entry| {
-            // git2 decodes reflog messages lazily; unreadable or missing messages cannot
-            // prove branch history, so this lookup skips only that entry.
-            let message = entry.message().ok()??;
-            Some((entry.committer().when().seconds(), branch_from_reflog_message(message)?))
-        })
-        .collect()
-}
-
-fn branch_at(entries: &[(i64, String)], timestamp: Timestamp) -> Option<String> {
-    let timestamp = timestamp.as_second();
-    entries
-        .iter()
-        .filter(|(entry_timestamp, _)| *entry_timestamp <= timestamp)
-        .max_by_key(|(entry_timestamp, _)| *entry_timestamp)
-        .map(|(_, branch)| branch.clone())
-}
-
-fn branch_at_sorted(entries: &[(i64, String)], timestamp: Timestamp) -> Option<String> {
-    let timestamp = timestamp.as_second();
-    let index = entries.partition_point(|(entry_timestamp, _)| *entry_timestamp <= timestamp);
-    index
-        .checked_sub(1)
-        .and_then(|index| entries.get(index))
-        .map(|(_, branch)| branch.clone())
-}
-
 /// Create a new local branch at current HEAD (no checkout).
 ///
 /// # Errors
@@ -490,6 +460,36 @@ impl<'a> TryFrom<(git2::Branch<'a>, git2::BranchType)> for Branch {
             },
         })
     }
+}
+
+fn reflog_entries(reflog: &git2::Reflog) -> Vec<(i64, String)> {
+    reflog
+        .iter()
+        .filter_map(|entry| {
+            // git2 decodes reflog messages lazily; unreadable or missing messages cannot
+            // prove branch history, so this lookup skips only that entry.
+            let message = entry.message().ok()??;
+            Some((entry.committer().when().seconds(), branch_from_reflog_message(message)?))
+        })
+        .collect()
+}
+
+fn branch_at(entries: &[(i64, String)], timestamp: Timestamp) -> Option<String> {
+    let timestamp = timestamp.as_second();
+    entries
+        .iter()
+        .filter(|(entry_timestamp, _)| *entry_timestamp <= timestamp)
+        .max_by_key(|(entry_timestamp, _)| *entry_timestamp)
+        .map(|(_, branch)| branch.clone())
+}
+
+fn branch_at_sorted(entries: &[(i64, String)], timestamp: Timestamp) -> Option<String> {
+    let timestamp = timestamp.as_second();
+    let index = entries.partition_point(|(entry_timestamp, _)| *entry_timestamp <= timestamp);
+    index
+        .checked_sub(1)
+        .and_then(|index| entries.get(index))
+        .map(|(_, branch)| branch.clone())
 }
 
 /// Fetches branches using a pre-discovered repository, avoiding redundant filesystem walks.

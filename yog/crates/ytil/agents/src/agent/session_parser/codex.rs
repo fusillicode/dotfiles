@@ -18,32 +18,6 @@ const AGENTS_INSTRUCTIONS_PREFIX: &str = "# AGENTS.md instructions";
 const ENVIRONMENT_CONTEXT_PREFIX: &str = "<environment_context>";
 const REVERSE_SCAN_BUFFER_BYTES: u64 = 8 * 1024;
 
-struct SearchTextSnippet {
-    text: String,
-    normalized: bool,
-}
-
-impl SearchTextSnippet {
-    const fn raw(text: String) -> Self {
-        Self {
-            text,
-            normalized: false,
-        }
-    }
-
-    const fn normalized(text: String) -> Self {
-        Self { text, normalized: true }
-    }
-
-    fn push_to(&self, search_text: &mut SearchTextBuilder) {
-        if self.normalized {
-            search_text.push_normalized(&self.text);
-        } else {
-            search_text.push(&self.text);
-        }
-    }
-}
-
 /// Parse one Codex JSONL session file.
 ///
 /// # Errors
@@ -56,6 +30,29 @@ pub fn parse(content: &str, session_name: &str) -> rootcause::Result<CodexSessio
     }
 
     parser.finish(session_name)
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CodexSession {
+    pub id: String,
+    pub name: String,
+    pub last_user_prompt: Option<String>,
+    pub search_text: String,
+    pub workspace: PathBuf,
+    pub created_at: Timestamp,
+    pub updated_at: Timestamp,
+    pub is_subagent: bool,
+}
+
+impl CodexSession {
+    pub fn into_session(self, path: PathBuf) -> Session {
+        let mut session = Session::new(Agent::Codex, self.id, self.workspace, path, None, self.created_at);
+        session.name = self.name;
+        session.last_user_prompt = self.last_user_prompt;
+        session.search_text = self.search_text;
+        session.updated_at = self.updated_at;
+        session
+    }
 }
 
 /// Parse the metadata and first user prompt from a Codex session reader.
@@ -144,6 +141,39 @@ pub(crate) fn parse_metadata_for_deletion(
     Err(report!("no Codex session_meta record found").attach(format!("session_name={session_name}")))
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct CodexSessionMetadata {
+    pub(crate) id: String,
+    pub(crate) parent_thread_id: Option<String>,
+    pub(crate) is_subagent: bool,
+}
+
+struct SearchTextSnippet {
+    text: String,
+    normalized: bool,
+}
+
+impl SearchTextSnippet {
+    const fn raw(text: String) -> Self {
+        Self {
+            text,
+            normalized: false,
+        }
+    }
+
+    const fn normalized(text: String) -> Self {
+        Self { text, normalized: true }
+    }
+
+    fn push_to(&self, search_text: &mut SearchTextBuilder) {
+        if self.normalized {
+            search_text.push_normalized(&self.text);
+        } else {
+            search_text.push(&self.text);
+        }
+    }
+}
+
 #[derive(Default)]
 struct CodexSessionParser {
     session_id: Option<String>,
@@ -230,36 +260,6 @@ fn user_prompt_from_ndjson_line(line: &[u8]) -> Option<String> {
         .ok()?
         .user_search_text()
         .map(|snippet| snippet.text)
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct CodexSession {
-    pub id: String,
-    pub name: String,
-    pub last_user_prompt: Option<String>,
-    pub search_text: String,
-    pub workspace: PathBuf,
-    pub created_at: Timestamp,
-    pub updated_at: Timestamp,
-    pub is_subagent: bool,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct CodexSessionMetadata {
-    pub(crate) id: String,
-    pub(crate) parent_thread_id: Option<String>,
-    pub(crate) is_subagent: bool,
-}
-
-impl CodexSession {
-    pub fn into_session(self, path: PathBuf) -> Session {
-        let mut session = Session::new(Agent::Codex, self.id, self.workspace, path, None, self.created_at);
-        session.name = self.name;
-        session.last_user_prompt = self.last_user_prompt;
-        session.search_text = self.search_text;
-        session.updated_at = self.updated_at;
-        session
-    }
 }
 
 #[derive(Debug, Deserialize)]

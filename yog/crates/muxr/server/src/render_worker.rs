@@ -45,23 +45,6 @@ pub struct RenderInput {
     size: TerminalSize,
 }
 
-impl std::fmt::Debug for RenderInput {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter
-            .debug_struct("RenderInput")
-            .field("active_pane", &self.active_pane)
-            .field("attention_panes", &self.attention_panes)
-            .field("damage", &self.damage)
-            .field("force_baseline", &self.force_baseline)
-            .field("generation", &self.generation)
-            .field("pane_layout", &self.pane_layout)
-            .field("pane_render", &self.pane_render)
-            .field("pane_handle_count", &self.pane_handles.len())
-            .field("size", &self.size)
-            .finish()
-    }
-}
-
 impl RenderInput {
     #[expect(
         clippy::too_many_arguments,
@@ -141,9 +124,21 @@ impl RenderInput {
     }
 }
 
-struct AttachedRenderWorker {
-    sender: RenderWorkerSender,
-    task: Option<tokio::task::JoinHandle<()>>,
+impl std::fmt::Debug for RenderInput {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("RenderInput")
+            .field("active_pane", &self.active_pane)
+            .field("attention_panes", &self.attention_panes)
+            .field("damage", &self.damage)
+            .field("force_baseline", &self.force_baseline)
+            .field("generation", &self.generation)
+            .field("pane_layout", &self.pane_layout)
+            .field("pane_render", &self.pane_render)
+            .field("pane_handle_count", &self.pane_handles.len())
+            .field("size", &self.size)
+            .finish()
+    }
 }
 
 /// Render coordinator stored by attached-client state.
@@ -151,22 +146,6 @@ struct AttachedRenderWorker {
 pub struct RenderWorker {
     generation: u64,
     attached: Option<AttachedRenderWorker>,
-}
-
-#[derive(Clone)]
-pub struct RenderWorkerSender {
-    output: Arc<OutputShared>,
-}
-
-struct OutputShared {
-    closed: AtomicBool,
-    state: Mutex<OutputState>,
-    wake: Notify,
-}
-
-struct OutputState {
-    failure: Option<String>,
-    queue: ServerOutputQueue,
 }
 
 impl RenderWorker {
@@ -216,6 +195,19 @@ impl RenderWorker {
             return Err(rootcause::report!("muxr render worker has no event writer"));
         }
         Ok(input)
+    }
+
+    pub async fn shutdown(&mut self) -> rootcause::Result<()> {
+        let Some(attached) = &mut self.attached else {
+            return Ok(());
+        };
+        attached.sender.output.closed.store(true, Ordering::Release);
+        attached.sender.output.wake.notify_waiters();
+        if let Some(task) = attached.task.take() {
+            task.await
+                .map_err(|error| rootcause::report!("muxr render/output worker panicked").attach(error.to_string()))?;
+        }
+        Ok(())
     }
 
     async fn run_output(
@@ -356,19 +348,6 @@ impl RenderWorker {
             |pane_id, scope| input.pane_render_snapshot(pane_id, scope),
         )
     }
-
-    pub async fn shutdown(&mut self) -> rootcause::Result<()> {
-        let Some(attached) = &mut self.attached else {
-            return Ok(());
-        };
-        attached.sender.output.closed.store(true, Ordering::Release);
-        attached.sender.output.wake.notify_waiters();
-        if let Some(task) = attached.task.take() {
-            task.await
-                .map_err(|error| rootcause::report!("muxr render/output worker panicked").attach(error.to_string()))?;
-        }
-        Ok(())
-    }
 }
 
 impl Drop for RenderWorker {
@@ -378,6 +357,23 @@ impl Drop for RenderWorker {
         };
         attached.sender.output.closed.store(true, Ordering::Release);
         attached.sender.output.wake.notify_waiters();
+    }
+}
+
+#[derive(Clone)]
+pub struct RenderWorkerSender {
+    output: Arc<OutputShared>,
+}
+
+impl RenderWorkerSender {
+    fn ensure_open(&self, state: &OutputState) -> rootcause::Result<()> {
+        if let Some(error) = &state.failure {
+            return Err(rootcause::report!("muxr render/output worker failed").attach(error.clone()));
+        }
+        if self.output.closed.load(Ordering::Acquire) {
+            return Err(rootcause::report!("muxr render/output worker is closed"));
+        }
+        Ok(())
     }
 }
 
@@ -431,72 +427,6 @@ impl ServerEventSink for RenderWorkerSender {
     }
 }
 
-impl RenderWorkerSender {
-    fn ensure_open(&self, state: &OutputState) -> rootcause::Result<()> {
-        if let Some(error) = &state.failure {
-            return Err(rootcause::report!("muxr render/output worker failed").attach(error.clone()));
-        }
-        if self.output.closed.load(Ordering::Acquire) {
-            return Err(rootcause::report!("muxr render/output worker is closed"));
-        }
-        Ok(())
-    }
-}
-
-#[derive(Debug)]
-enum ServerOutputCommand {
-    Mandatory(MandatoryOutput),
-    Render(RenderInput),
-}
-
-#[derive(Debug)]
-struct MandatoryOutput {
-    event: ServerEvent,
-    lifecycle: Option<LifecycleEvent>,
-    delivered: Option<tokio::sync::oneshot::Sender<Result<tokio::time::Instant, ClientEventSendFailure>>>,
-}
-
-#[derive(Clone, Copy, Debug)]
-enum LifecycleEvent {
-    Deleted,
-    Detached,
-}
-
-impl LifecycleEvent {
-    fn record(self, reason: ClientEventSendFailure) {
-        match self {
-            Self::Deleted => crate::session::delete::record_delete_ack_send_failure(Some(reason)),
-            Self::Detached => crate::client::lifecycle::record_detach_ack_send_failure(Some(reason)),
-        }
-    }
-}
-
-struct WorkerWriteFailure {
-    message: String,
-    reason: ClientEventSendFailure,
-}
-
-struct WorkerCommandFailure {
-    message: String,
-    reason: Option<ClientEventSendFailure>,
-}
-
-impl WorkerCommandFailure {
-    fn from_write(failure: WorkerWriteFailure) -> Self {
-        Self {
-            message: failure.message,
-            reason: Some(failure.reason),
-        }
-    }
-
-    fn from_local(error: &rootcause::Report) -> Self {
-        Self {
-            message: error.to_string(),
-            reason: None,
-        }
-    }
-}
-
 /// Bounded ingress queue for the single server render/output owner.
 ///
 /// Mandatory events retain FIFO order and are always emitted before the latest pending render. Replacements carry a
@@ -506,12 +436,6 @@ pub struct ServerOutputQueue {
     mandatory: VecDeque<MandatoryOutput>,
     pending_render: Option<RenderInput>,
     mandatory_limit: usize,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum QueueRender {
-    Queued,
-    Replaced,
 }
 
 impl ServerOutputQueue {
@@ -529,6 +453,33 @@ impl ServerOutputQueue {
             lifecycle: None,
             delivered: None,
         })
+    }
+
+    pub fn push_mandatory_and_replace_render(
+        &mut self,
+        event: ServerEvent,
+        input: RenderInput,
+    ) -> rootcause::Result<QueueRender> {
+        if self.mandatory.len() == self.mandatory_limit {
+            return Err(rootcause::report!("muxr server mandatory output queue is full"));
+        }
+        self.mandatory.push_back(MandatoryOutput {
+            event,
+            lifecycle: None,
+            delivered: None,
+        });
+        Ok(self.replace_render(input))
+    }
+
+    pub fn replace_render(&mut self, input: RenderInput) -> QueueRender {
+        let replaced = self.pending_render.is_some();
+        let input = if replaced { input.with_complete_damage() } else { input };
+        self.pending_render = Some(input);
+        if replaced {
+            QueueRender::Replaced
+        } else {
+            QueueRender::Queued
+        }
     }
 
     fn push_lifecycle(&mut self, event: ServerEvent) -> rootcause::Result<()> {
@@ -587,33 +538,6 @@ impl ServerOutputQueue {
         }
     }
 
-    pub fn push_mandatory_and_replace_render(
-        &mut self,
-        event: ServerEvent,
-        input: RenderInput,
-    ) -> rootcause::Result<QueueRender> {
-        if self.mandatory.len() == self.mandatory_limit {
-            return Err(rootcause::report!("muxr server mandatory output queue is full"));
-        }
-        self.mandatory.push_back(MandatoryOutput {
-            event,
-            lifecycle: None,
-            delivered: None,
-        });
-        Ok(self.replace_render(input))
-    }
-
-    pub fn replace_render(&mut self, input: RenderInput) -> QueueRender {
-        let replaced = self.pending_render.is_some();
-        let input = if replaced { input.with_complete_damage() } else { input };
-        self.pending_render = Some(input);
-        if replaced {
-            QueueRender::Replaced
-        } else {
-            QueueRender::Queued
-        }
-    }
-
     fn pop(&mut self) -> Option<ServerOutputCommand> {
         if self
             .mandatory
@@ -629,6 +553,82 @@ impl ServerOutputQueue {
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum QueueRender {
+    Queued,
+    Replaced,
+}
+
+struct AttachedRenderWorker {
+    sender: RenderWorkerSender,
+    task: Option<tokio::task::JoinHandle<()>>,
+}
+
+struct OutputShared {
+    closed: AtomicBool,
+    state: Mutex<OutputState>,
+    wake: Notify,
+}
+
+struct OutputState {
+    failure: Option<String>,
+    queue: ServerOutputQueue,
+}
+
+#[derive(Debug)]
+enum ServerOutputCommand {
+    Mandatory(MandatoryOutput),
+    Render(RenderInput),
+}
+
+#[derive(Debug)]
+struct MandatoryOutput {
+    event: ServerEvent,
+    lifecycle: Option<LifecycleEvent>,
+    delivered: Option<tokio::sync::oneshot::Sender<Result<tokio::time::Instant, ClientEventSendFailure>>>,
+}
+
+#[derive(Clone, Copy, Debug)]
+enum LifecycleEvent {
+    Deleted,
+    Detached,
+}
+
+impl LifecycleEvent {
+    fn record(self, reason: ClientEventSendFailure) {
+        match self {
+            Self::Deleted => crate::session::delete::record_delete_ack_send_failure(Some(reason)),
+            Self::Detached => crate::client::lifecycle::record_detach_ack_send_failure(Some(reason)),
+        }
+    }
+}
+
+struct WorkerWriteFailure {
+    message: String,
+    reason: ClientEventSendFailure,
+}
+
+struct WorkerCommandFailure {
+    message: String,
+    reason: Option<ClientEventSendFailure>,
+}
+
+impl WorkerCommandFailure {
+    fn from_write(failure: WorkerWriteFailure) -> Self {
+        Self {
+            message: failure.message,
+            reason: Some(failure.reason),
+        }
+    }
+
+    fn from_local(error: &rootcause::Report) -> Self {
+        Self {
+            message: error.to_string(),
+            reason: None,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;
@@ -640,26 +640,6 @@ mod tests {
     use test_that::prelude::*;
 
     use super::*;
-
-    fn input(generation: u64) -> rootcause::Result<RenderInput> {
-        let config = MuxrConfig::new()?;
-        Ok(RenderInput::new(
-            generation,
-            PaneRenderConfig {
-                mode: crate::pane::borders::BorderRenderMode::Focus,
-                border_styles: config.pane_borders,
-                pane_attention: config.pane_attention,
-                pane_dim: config.pane_dim,
-            },
-            PaneId::new(1)?,
-            PaneLayout::default(),
-            BTreeMap::new(),
-            TerminalSize::new(1, 1)?,
-            Vec::new(),
-            ClientRenderDmg::Full,
-            false,
-        ))
-    }
 
     #[test]
     fn test_server_output_queue_marks_replaced_render_with_complete_damage() -> rootcause::Result<()> {
@@ -787,5 +767,25 @@ mod tests {
         let successor = RenderWorker::compose(&mut composer, &successor_input)?;
         assert_that!(matches!(successor, Some(RenderUpdate::Baseline(_))), eq(false));
         Ok(())
+    }
+
+    fn input(generation: u64) -> rootcause::Result<RenderInput> {
+        let config = MuxrConfig::new()?;
+        Ok(RenderInput::new(
+            generation,
+            PaneRenderConfig {
+                mode: crate::pane::borders::BorderRenderMode::Focus,
+                border_styles: config.pane_borders,
+                pane_attention: config.pane_attention,
+                pane_dim: config.pane_dim,
+            },
+            PaneId::new(1)?,
+            PaneLayout::default(),
+            BTreeMap::new(),
+            TerminalSize::new(1, 1)?,
+            Vec::new(),
+            ClientRenderDmg::Full,
+            false,
+        ))
     }
 }

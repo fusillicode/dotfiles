@@ -145,18 +145,6 @@ impl TerminalTextTail {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum CursorShapeSource {
-    Default,
-    Explicit,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum RenderedViewport {
-    Live,
-    Scrolled { top_row: u64 },
-}
-
 pub struct TerminalState {
     input_filter: RioInputFilter,
     control_parser: ControlParser,
@@ -165,6 +153,264 @@ pub struct TerminalState {
     rio: RioTerminal,
     title: Option<String>,
     title_changes: Vec<Option<String>>,
+}
+
+impl TerminalState {
+    pub fn with_scrollback(size: &TerminalSize, scrollback: ScrollbackConfig) -> Self {
+        Self {
+            input_filter: RioInputFilter::default(),
+            control_parser: ControlParser::default(),
+            cursor_shape_source: CursorShapeSource::Default,
+            rendered_viewport: None,
+            rio: RioTerminal::new(usize::from(size.cols()), usize::from(size.rows()), scrollback.rows),
+            title: None,
+            title_changes: Vec::new(),
+        }
+    }
+
+    pub fn process(&mut self, bytes: &[u8]) -> TerminalProcessOutcome {
+        if bytes.is_empty() {
+            return TerminalProcessOutcome::Clean {
+                replies: TerminalReplies::default(),
+            };
+        }
+
+        let cursor_before = self.rio.terminal().cursor_shape;
+        let blinking_before = self.rio.terminal().blinking_cursor;
+        let cursor_visibility_before = self.rio.terminal().cursor().is_visible();
+        let mouse_protocol_before = self.mouse_protocol();
+
+        let filtered_input = self.input_filter.process(bytes);
+        let bytes = filtered_input.as_ref();
+        let terminal_control = self.control_parser.process(bytes);
+        let events = self
+            .rio
+            .advance_with_alternate_screen_controls(bytes, &terminal_control.alternate_screen);
+
+        let terminal = self.rio.terminal();
+        let cursor_values_changed =
+            terminal.cursor_shape != cursor_before || terminal.blinking_cursor != blinking_before;
+
+        self.cursor_shape_source = match terminal_control.cursor {
+            CursorControl::DefaultShape | CursorControl::Reset => CursorShapeSource::Default,
+            CursorControl::ExplicitShape => CursorShapeSource::Explicit,
+            CursorControl::Unchanged if cursor_values_changed => {
+                if terminal.cursor_shape == terminal.default_cursor_shape && !terminal.blinking_cursor {
+                    CursorShapeSource::Default
+                } else {
+                    CursorShapeSource::Explicit
+                }
+            }
+            CursorControl::Unchanged => self.cursor_shape_source,
+        };
+
+        let mut replies = TerminalReplies::default();
+        for reply in events.replies {
+            replies.push(reply);
+        }
+
+        for title in events.titles {
+            if self.title != title {
+                self.title.clone_from(&title);
+                self.title_changes.push(title);
+            }
+        }
+
+        let cursor_changed = terminal_control.cursor != CursorControl::Unchanged
+            || cursor_values_changed
+            || events.cursor_change == self::rio::CursorChange::Changed;
+
+        let metadata_changed = cursor_visibility_before != terminal.cursor().is_visible()
+            || mouse_protocol_before != self.mouse_protocol();
+
+        if self.rio.terminal().peek_damage_event().is_some() {
+            TerminalProcessOutcome::ScreenDirty { replies }
+        } else if cursor_changed || metadata_changed {
+            TerminalProcessOutcome::MetadataDirty { replies }
+        } else {
+            TerminalProcessOutcome::Clean { replies }
+        }
+    }
+
+    pub fn resize(&mut self, size: &TerminalSize) {
+        self.rio.resize(usize::from(size.cols()), usize::from(size.rows()));
+    }
+
+    pub fn title(&self) -> Option<String> {
+        self.title.clone()
+    }
+
+    pub fn take_title_changes(&mut self) -> Vec<Option<String>> {
+        std::mem::take(&mut self.title_changes)
+    }
+
+    pub fn scroll(&mut self, direction: PaneScrollDirection) -> TerminalScrollMove {
+        self.scroll_lines(direction, SCROLL_LINES_PER_WHEEL_EVENT)
+    }
+
+    pub fn scroll_one_line(&mut self, direction: PaneScrollDirection) -> TerminalScrollMove {
+        self.scroll_lines(direction, 1)
+    }
+
+    pub fn scroll_to_bottom(&mut self) -> TerminalScrollMove {
+        let before = self.rio.terminal().display_offset();
+        self.rio.terminal_mut().scroll_display(Scroll::Bottom);
+        Self::scroll_move(before, self.rio.terminal().display_offset())
+    }
+
+    pub fn visible_top_row(&self) -> rootcause::Result<u64> {
+        let grid = &self.rio.terminal().grid;
+        let retained_top = grid.history_size().saturating_sub(grid.display_offset());
+        let retained_top = u64::try_from(retained_top).context("muxr pane visible top row overflowed")?;
+        Ok(grid.lines_evicted().saturating_add(retained_top))
+    }
+
+    pub fn visible_row_wraps(&self) -> Vec<RowWrap> {
+        let terminal = self.rio.terminal();
+        (0..terminal.screen_lines())
+            .map(|row| render::row_wrap(&terminal.grid[render::visible_line(terminal, row)]))
+            .collect()
+    }
+
+    pub fn paste_mode(&self) -> TerminalPasteMode {
+        if self.rio.terminal().mode().contains(Mode::BRACKETED_PASTE) {
+            TerminalPasteMode::Bracketed
+        } else {
+            TerminalPasteMode::Plain
+        }
+    }
+
+    pub fn application_mode(&self) -> TerminalApplicationMode {
+        let terminal = self.rio.terminal();
+        let mode = terminal.mode();
+
+        TerminalApplicationMode {
+            screen_mode: if mode.contains(Mode::ALT_SCREEN) {
+                TerminalScreenMode::Alternate
+            } else {
+                TerminalScreenMode::Normal
+            },
+            cursor_key_mode: if mode.contains(Mode::APP_CURSOR) {
+                TerminalCursorKeyMode::Application
+            } else {
+                TerminalCursorKeyMode::Normal
+            },
+            keyboard_protocol: TerminalKeyboardProtocol::from(u16::from(terminal.keyboard_mode().bits())),
+            focus_reporting: if mode.contains(Mode::FOCUS_IN_OUT) {
+                TerminalFocusReporting::Enabled
+            } else {
+                TerminalFocusReporting::Disabled
+            },
+            mouse_protocol: self.mouse_protocol(),
+        }
+    }
+
+    pub fn mouse_protocol(&self) -> Option<TerminalMouseProtocol> {
+        let terminal_mode = self.rio.terminal().mode();
+        let mode = if terminal_mode.contains(Mode::MOUSE_MOTION) {
+            TerminalMouseProtocolMode::AnyMotion
+        } else if terminal_mode.contains(Mode::MOUSE_DRAG) {
+            TerminalMouseProtocolMode::ButtonMotion
+        } else if terminal_mode.contains(Mode::MOUSE_REPORT_CLICK) {
+            TerminalMouseProtocolMode::PressRelease
+        } else if terminal_mode.contains(Mode::MOUSE_REPORT_X10) {
+            TerminalMouseProtocolMode::Press
+        } else {
+            return None;
+        };
+
+        let encoding = if terminal_mode.contains(Mode::SGR_MOUSE) {
+            TerminalMouseProtocolEncoding::Sgr
+        } else if terminal_mode.contains(Mode::UTF8_MOUSE) {
+            TerminalMouseProtocolEncoding::Utf8
+        } else {
+            TerminalMouseProtocolEncoding::Default
+        };
+
+        Some(TerminalMouseProtocol { encoding, mode })
+    }
+
+    pub fn render_snapshot(&mut self, requested_scope: TerminalSnapshotScope) -> rootcause::Result<TerminalSnapshot> {
+        let rendered_viewport = self.rendered_viewport()?;
+        let viewport_changed = self
+            .rendered_viewport
+            .is_none_or(|previous_viewport| previous_viewport != rendered_viewport);
+
+        let scope = if matches!(requested_scope, TerminalSnapshotScope::Full)
+            || matches!(self.rio.terminal().peek_damage_event(), Some(TerminalDamage::Full))
+            || viewport_changed
+        {
+            TerminalSnapshotScope::Full
+        } else {
+            TerminalSnapshotScope::ChangedRows
+        };
+
+        let snapshot = self.snapshot_rows(scope)?;
+        let terminal = self.rio.terminal_mut();
+        for row in snapshot.rows() {
+            let line = render::visible_line(terminal, usize::from(row.row()));
+            terminal.grid[line].dirty = false;
+        }
+        terminal.reset_damage();
+        self.rendered_viewport = Some(rendered_viewport);
+
+        Ok(snapshot)
+    }
+
+    pub fn scrollback_dump(&mut self, style: ScrollbackDumpStyle) -> Vec<u8> {
+        let terminal = self.rio.terminal();
+        let history = i32::try_from(terminal.grid.history_size()).unwrap_or(i32::MAX);
+        let screen_lines = i32::try_from(terminal.screen_lines()).unwrap_or(i32::MAX);
+        if !terminal.mode().contains(Mode::ALT_SCREEN) {
+            return render::scrollback_grid_dump(terminal, history.saturating_neg()..screen_lines, style);
+        }
+
+        let alternate_dump = render::scrollback_grid_dump(terminal, 0..screen_lines, style);
+        let mut dump = self.rio.with_primary_screen(|primary| {
+            let history = i32::try_from(primary.grid.history_size()).unwrap_or(i32::MAX);
+            render::scrollback_grid_dump(primary, history.saturating_neg()..0, style)
+        });
+        dump.extend_from_slice(&alternate_dump);
+        dump
+    }
+
+    /// Read the bottom live rows without moving the viewport or consuming render damage.
+    pub(crate) fn live_tail_text(&self, row_limit: usize) -> TerminalTextTail {
+        render::live_tail_text(self.rio.terminal(), row_limit)
+    }
+
+    fn scroll_lines(&mut self, direction: PaneScrollDirection, lines: usize) -> TerminalScrollMove {
+        let before = self.rio.terminal().display_offset();
+        let lines = i32::try_from(lines).unwrap_or(i32::MAX);
+        let delta = match direction {
+            PaneScrollDirection::Down => lines.saturating_neg(),
+            PaneScrollDirection::Up => lines,
+        };
+        self.rio.terminal_mut().scroll_display(Scroll::Delta(delta));
+        Self::scroll_move(before, self.rio.terminal().display_offset())
+    }
+
+    fn rendered_viewport(&self) -> rootcause::Result<RenderedViewport> {
+        if self.rio.terminal().display_offset() == 0 {
+            Ok(RenderedViewport::Live)
+        } else {
+            Ok(RenderedViewport::Scrolled {
+                top_row: self.visible_top_row()?,
+            })
+        }
+    }
+
+    fn snapshot_rows(&self, scope: TerminalSnapshotScope) -> rootcause::Result<TerminalSnapshot> {
+        render::snapshot_rows(self.rio.terminal(), scope, self.cursor_shape_source)
+    }
+
+    const fn scroll_move(before: usize, after: usize) -> TerminalScrollMove {
+        if before == after {
+            TerminalScrollMove::Unchanged
+        } else {
+            TerminalScrollMove::Moved
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -360,264 +606,6 @@ impl TerminalFocusEvent {
     }
 }
 
-impl TerminalState {
-    pub fn with_scrollback(size: &TerminalSize, scrollback: ScrollbackConfig) -> Self {
-        Self {
-            input_filter: RioInputFilter::default(),
-            control_parser: ControlParser::default(),
-            cursor_shape_source: CursorShapeSource::Default,
-            rendered_viewport: None,
-            rio: RioTerminal::new(usize::from(size.cols()), usize::from(size.rows()), scrollback.rows),
-            title: None,
-            title_changes: Vec::new(),
-        }
-    }
-
-    pub fn process(&mut self, bytes: &[u8]) -> TerminalProcessOutcome {
-        if bytes.is_empty() {
-            return TerminalProcessOutcome::Clean {
-                replies: TerminalReplies::default(),
-            };
-        }
-
-        let cursor_before = self.rio.terminal().cursor_shape;
-        let blinking_before = self.rio.terminal().blinking_cursor;
-        let cursor_visibility_before = self.rio.terminal().cursor().is_visible();
-        let mouse_protocol_before = self.mouse_protocol();
-
-        let filtered_input = self.input_filter.process(bytes);
-        let bytes = filtered_input.as_ref();
-        let terminal_control = self.control_parser.process(bytes);
-        let events = self
-            .rio
-            .advance_with_alternate_screen_controls(bytes, &terminal_control.alternate_screen);
-
-        let terminal = self.rio.terminal();
-        let cursor_values_changed =
-            terminal.cursor_shape != cursor_before || terminal.blinking_cursor != blinking_before;
-
-        self.cursor_shape_source = match terminal_control.cursor {
-            CursorControl::DefaultShape | CursorControl::Reset => CursorShapeSource::Default,
-            CursorControl::ExplicitShape => CursorShapeSource::Explicit,
-            CursorControl::Unchanged if cursor_values_changed => {
-                if terminal.cursor_shape == terminal.default_cursor_shape && !terminal.blinking_cursor {
-                    CursorShapeSource::Default
-                } else {
-                    CursorShapeSource::Explicit
-                }
-            }
-            CursorControl::Unchanged => self.cursor_shape_source,
-        };
-
-        let mut replies = TerminalReplies::default();
-        for reply in events.replies {
-            replies.push(reply);
-        }
-
-        for title in events.titles {
-            if self.title != title {
-                self.title.clone_from(&title);
-                self.title_changes.push(title);
-            }
-        }
-
-        let cursor_changed = terminal_control.cursor != CursorControl::Unchanged
-            || cursor_values_changed
-            || events.cursor_change == self::rio::CursorChange::Changed;
-
-        let metadata_changed = cursor_visibility_before != terminal.cursor().is_visible()
-            || mouse_protocol_before != self.mouse_protocol();
-
-        if self.rio.terminal().peek_damage_event().is_some() {
-            TerminalProcessOutcome::ScreenDirty { replies }
-        } else if cursor_changed || metadata_changed {
-            TerminalProcessOutcome::MetadataDirty { replies }
-        } else {
-            TerminalProcessOutcome::Clean { replies }
-        }
-    }
-
-    pub fn resize(&mut self, size: &TerminalSize) {
-        self.rio.resize(usize::from(size.cols()), usize::from(size.rows()));
-    }
-
-    pub fn title(&self) -> Option<String> {
-        self.title.clone()
-    }
-
-    pub fn take_title_changes(&mut self) -> Vec<Option<String>> {
-        std::mem::take(&mut self.title_changes)
-    }
-
-    pub fn scroll(&mut self, direction: PaneScrollDirection) -> TerminalScrollMove {
-        self.scroll_lines(direction, SCROLL_LINES_PER_WHEEL_EVENT)
-    }
-
-    pub fn scroll_one_line(&mut self, direction: PaneScrollDirection) -> TerminalScrollMove {
-        self.scroll_lines(direction, 1)
-    }
-
-    fn scroll_lines(&mut self, direction: PaneScrollDirection, lines: usize) -> TerminalScrollMove {
-        let before = self.rio.terminal().display_offset();
-        let lines = i32::try_from(lines).unwrap_or(i32::MAX);
-        let delta = match direction {
-            PaneScrollDirection::Down => lines.saturating_neg(),
-            PaneScrollDirection::Up => lines,
-        };
-        self.rio.terminal_mut().scroll_display(Scroll::Delta(delta));
-        Self::scroll_move(before, self.rio.terminal().display_offset())
-    }
-
-    pub fn scroll_to_bottom(&mut self) -> TerminalScrollMove {
-        let before = self.rio.terminal().display_offset();
-        self.rio.terminal_mut().scroll_display(Scroll::Bottom);
-        Self::scroll_move(before, self.rio.terminal().display_offset())
-    }
-
-    pub fn visible_top_row(&self) -> rootcause::Result<u64> {
-        let grid = &self.rio.terminal().grid;
-        let retained_top = grid.history_size().saturating_sub(grid.display_offset());
-        let retained_top = u64::try_from(retained_top).context("muxr pane visible top row overflowed")?;
-        Ok(grid.lines_evicted().saturating_add(retained_top))
-    }
-
-    fn rendered_viewport(&self) -> rootcause::Result<RenderedViewport> {
-        if self.rio.terminal().display_offset() == 0 {
-            Ok(RenderedViewport::Live)
-        } else {
-            Ok(RenderedViewport::Scrolled {
-                top_row: self.visible_top_row()?,
-            })
-        }
-    }
-
-    pub fn visible_row_wraps(&self) -> Vec<RowWrap> {
-        let terminal = self.rio.terminal();
-        (0..terminal.screen_lines())
-            .map(|row| render::row_wrap(&terminal.grid[render::visible_line(terminal, row)]))
-            .collect()
-    }
-
-    pub fn paste_mode(&self) -> TerminalPasteMode {
-        if self.rio.terminal().mode().contains(Mode::BRACKETED_PASTE) {
-            TerminalPasteMode::Bracketed
-        } else {
-            TerminalPasteMode::Plain
-        }
-    }
-
-    pub fn application_mode(&self) -> TerminalApplicationMode {
-        let terminal = self.rio.terminal();
-        let mode = terminal.mode();
-
-        TerminalApplicationMode {
-            screen_mode: if mode.contains(Mode::ALT_SCREEN) {
-                TerminalScreenMode::Alternate
-            } else {
-                TerminalScreenMode::Normal
-            },
-            cursor_key_mode: if mode.contains(Mode::APP_CURSOR) {
-                TerminalCursorKeyMode::Application
-            } else {
-                TerminalCursorKeyMode::Normal
-            },
-            keyboard_protocol: TerminalKeyboardProtocol::from(u16::from(terminal.keyboard_mode().bits())),
-            focus_reporting: if mode.contains(Mode::FOCUS_IN_OUT) {
-                TerminalFocusReporting::Enabled
-            } else {
-                TerminalFocusReporting::Disabled
-            },
-            mouse_protocol: self.mouse_protocol(),
-        }
-    }
-
-    pub fn mouse_protocol(&self) -> Option<TerminalMouseProtocol> {
-        let terminal_mode = self.rio.terminal().mode();
-        let mode = if terminal_mode.contains(Mode::MOUSE_MOTION) {
-            TerminalMouseProtocolMode::AnyMotion
-        } else if terminal_mode.contains(Mode::MOUSE_DRAG) {
-            TerminalMouseProtocolMode::ButtonMotion
-        } else if terminal_mode.contains(Mode::MOUSE_REPORT_CLICK) {
-            TerminalMouseProtocolMode::PressRelease
-        } else if terminal_mode.contains(Mode::MOUSE_REPORT_X10) {
-            TerminalMouseProtocolMode::Press
-        } else {
-            return None;
-        };
-
-        let encoding = if terminal_mode.contains(Mode::SGR_MOUSE) {
-            TerminalMouseProtocolEncoding::Sgr
-        } else if terminal_mode.contains(Mode::UTF8_MOUSE) {
-            TerminalMouseProtocolEncoding::Utf8
-        } else {
-            TerminalMouseProtocolEncoding::Default
-        };
-
-        Some(TerminalMouseProtocol { encoding, mode })
-    }
-
-    pub fn render_snapshot(&mut self, requested_scope: TerminalSnapshotScope) -> rootcause::Result<TerminalSnapshot> {
-        let rendered_viewport = self.rendered_viewport()?;
-        let viewport_changed = self
-            .rendered_viewport
-            .is_none_or(|previous_viewport| previous_viewport != rendered_viewport);
-
-        let scope = if matches!(requested_scope, TerminalSnapshotScope::Full)
-            || matches!(self.rio.terminal().peek_damage_event(), Some(TerminalDamage::Full))
-            || viewport_changed
-        {
-            TerminalSnapshotScope::Full
-        } else {
-            TerminalSnapshotScope::ChangedRows
-        };
-
-        let snapshot = self.snapshot_rows(scope)?;
-        let terminal = self.rio.terminal_mut();
-        for row in snapshot.rows() {
-            let line = render::visible_line(terminal, usize::from(row.row()));
-            terminal.grid[line].dirty = false;
-        }
-        terminal.reset_damage();
-        self.rendered_viewport = Some(rendered_viewport);
-
-        Ok(snapshot)
-    }
-
-    fn snapshot_rows(&self, scope: TerminalSnapshotScope) -> rootcause::Result<TerminalSnapshot> {
-        render::snapshot_rows(self.rio.terminal(), scope, self.cursor_shape_source)
-    }
-
-    pub fn scrollback_dump(&mut self, style: ScrollbackDumpStyle) -> Vec<u8> {
-        let terminal = self.rio.terminal();
-        let history = i32::try_from(terminal.grid.history_size()).unwrap_or(i32::MAX);
-        let screen_lines = i32::try_from(terminal.screen_lines()).unwrap_or(i32::MAX);
-        if !terminal.mode().contains(Mode::ALT_SCREEN) {
-            return render::scrollback_grid_dump(terminal, history.saturating_neg()..screen_lines, style);
-        }
-
-        let alternate_dump = render::scrollback_grid_dump(terminal, 0..screen_lines, style);
-        let mut dump = self.rio.with_primary_screen(|primary| {
-            let history = i32::try_from(primary.grid.history_size()).unwrap_or(i32::MAX);
-            render::scrollback_grid_dump(primary, history.saturating_neg()..0, style)
-        });
-        dump.extend_from_slice(&alternate_dump);
-        dump
-    }
-
-    /// Read the bottom live rows without moving the viewport or consuming render damage.
-    pub(crate) fn live_tail_text(&self, row_limit: usize) -> TerminalTextTail {
-        render::live_tail_text(self.rio.terminal(), row_limit)
-    }
-
-    const fn scroll_move(before: usize, after: usize) -> TerminalScrollMove {
-        if before == after {
-            TerminalScrollMove::Unchanged
-        } else {
-            TerminalScrollMove::Moved
-        }
-    }
-}
-
 pub fn paste_input_bytes(bytes: &[u8], paste_mode: TerminalPasteMode) -> Vec<u8> {
     match paste_mode {
         TerminalPasteMode::Plain => bytes.to_vec(),
@@ -634,4 +622,16 @@ pub fn paste_input_bytes(bytes: &[u8], paste_mode: TerminalPasteMode) -> Vec<u8>
             framed
         }
     }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum CursorShapeSource {
+    Default,
+    Explicit,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum RenderedViewport {
+    Live,
+    Scrolled { top_row: u64 },
 }

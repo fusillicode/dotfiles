@@ -15,33 +15,7 @@ pub struct PaneFullscreen {
     panes: BTreeMap<TabId, PaneId>,
 }
 
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub enum PaneFullscreenChange {
-    Cleared,
-    #[default]
-    Unchanged,
-}
-
 impl PaneFullscreen {
-    fn toggle_active_pane(&mut self, layout: &SessionLayout) -> rootcause::Result<()> {
-        let active_tab = layout.active_tab;
-        let active_pane = layout.active_pane_id()?;
-        if self.panes.get(&active_tab).copied() == Some(active_pane) {
-            self.panes.remove(&active_tab);
-        } else {
-            self.panes.insert(active_tab, active_pane);
-        }
-        Ok(())
-    }
-
-    fn clear_active_tab(&mut self, layout: &SessionLayout) -> PaneFullscreenChange {
-        if self.panes.remove(&layout.active_tab).is_some() {
-            PaneFullscreenChange::Cleared
-        } else {
-            PaneFullscreenChange::Unchanged
-        }
-    }
-
     pub fn replace_active_tab_pane(&mut self, layout: &SessionLayout, old_pane: PaneId, new_pane: PaneId) {
         if self.panes.get(&layout.active_tab).copied() == Some(old_pane) {
             self.panes.insert(layout.active_tab, new_pane);
@@ -71,6 +45,32 @@ impl PaneFullscreen {
         }
         Ok(Some(pane_id))
     }
+
+    fn toggle_active_pane(&mut self, layout: &SessionLayout) -> rootcause::Result<()> {
+        let active_tab = layout.active_tab;
+        let active_pane = layout.active_pane_id()?;
+        if self.panes.get(&active_tab).copied() == Some(active_pane) {
+            self.panes.remove(&active_tab);
+        } else {
+            self.panes.insert(active_tab, active_pane);
+        }
+        Ok(())
+    }
+
+    fn clear_active_tab(&mut self, layout: &SessionLayout) -> PaneFullscreenChange {
+        if self.panes.remove(&layout.active_tab).is_some() {
+            PaneFullscreenChange::Cleared
+        } else {
+            PaneFullscreenChange::Unchanged
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum PaneFullscreenChange {
+    Cleared,
+    #[default]
+    Unchanged,
 }
 
 pub fn clear_active_tab_for_layout_mutation(state: &mut ClientSessionState<'_>) -> PaneFullscreenChange {

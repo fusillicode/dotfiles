@@ -1,6 +1,9 @@
 use std::path::Path;
 
+use libproc::proc_pid;
+use libproc::processes;
 use libproc::processes::ProcFilter;
+use rootcause::Report;
 
 use crate::pty::PtyHandle;
 
@@ -19,8 +22,8 @@ impl PaneProcess {
         Some(Self {
             // Process lookup can race with foreground-process exit. Treat misses as absent metadata; observation stays
             // Unknown instead of clearing a live command from one failed sample.
-            name: libproc::proc_pid::name(pid_i32).ok(),
-            path: libproc::proc_pid::pidpath(pid_i32).ok(),
+            name: proc_pid::name(pid_i32).ok(),
+            path: proc_pid::pidpath(pid_i32).ok(),
             pid,
         })
     }
@@ -51,7 +54,7 @@ pub struct PaneCmdSnapshot {
 }
 
 impl TryFrom<&PtyHandle> for PaneCmdSnapshot {
-    type Error = rootcause::Report;
+    type Error = Report;
 
     fn try_from(handle: &PtyHandle) -> rootcause::Result<Self> {
         let shell_pid = handle.process_id();
@@ -71,13 +74,6 @@ pub enum PaneCmdObservation {
     FgCmd(FgCmd),
     Shell,
     Unknown { reason: PaneCmdUnknownReason },
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum NvimState {
-    Running,
-    NotRunning,
-    Unknown,
 }
 
 impl PaneCmdObservation {
@@ -101,6 +97,38 @@ impl PaneCmdObservation {
     }
 }
 
+impl From<&PaneCmdSnapshot> for PaneCmdObservation {
+    fn from(snapshot: &PaneCmdSnapshot) -> Self {
+        let Some(fg_process_group) = snapshot.fg_process_group else {
+            return Self::Unknown {
+                reason: PaneCmdUnknownReason::MissingFgProcessGroup,
+            };
+        };
+        if snapshot
+            .shell_pid
+            .is_some_and(|shell_pid| fg_process_group == shell_pid)
+        {
+            return Self::Shell;
+        }
+
+        if let Some(process) = &snapshot.fg_process_group_leader {
+            if snapshot.shell_pid.is_some_and(|shell_pid| process.pid == shell_pid) {
+                return Self::Shell;
+            }
+            return Self::FgCmd(FgCmd::live(process.cmd(), fg_process_group, snapshot.shell_pid));
+        }
+
+        Self::FgCmd(FgCmd::live(None, fg_process_group, snapshot.shell_pid))
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum NvimState {
+    Running,
+    NotRunning,
+    Unknown,
+}
+
 /// Fg command observation with a lazy same-process-group fallback.
 ///
 /// Wrappers such as `agg` can stay the fg group leader while a configured agent is a child process. Consumers
@@ -113,17 +141,6 @@ pub struct FgCmd {
 }
 
 impl FgCmd {
-    const fn live(leader_cmd: Option<PaneCmd>, process_group: u32, shell_pid: Option<u32>) -> Self {
-        Self {
-            leader_cmd,
-            process_group: FgProcessGroup {
-                pid: process_group,
-                shell_pid,
-            },
-            process_group_cmds: None,
-        }
-    }
-
     pub const fn leader_cmd(&self) -> Option<&PaneCmd> {
         self.leader_cmd.as_ref()
     }
@@ -154,6 +171,27 @@ impl FgCmd {
             process_group_cmds: Some(process_group_cmds),
         }
     }
+
+    const fn live(leader_cmd: Option<PaneCmd>, process_group: u32, shell_pid: Option<u32>) -> Self {
+        Self {
+            leader_cmd,
+            process_group: FgProcessGroup {
+                pid: process_group,
+                shell_pid,
+            },
+            process_group_cmds: None,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ProcessGroupLookupError {
+    Failed,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PaneCmdUnknownReason {
+    MissingFgProcessGroup,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -174,41 +212,6 @@ impl FgProcessGroup {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ProcessGroupLookupError {
-    Failed,
-}
-
-impl From<&PaneCmdSnapshot> for PaneCmdObservation {
-    fn from(snapshot: &PaneCmdSnapshot) -> Self {
-        let Some(fg_process_group) = snapshot.fg_process_group else {
-            return Self::Unknown {
-                reason: PaneCmdUnknownReason::MissingFgProcessGroup,
-            };
-        };
-        if snapshot
-            .shell_pid
-            .is_some_and(|shell_pid| fg_process_group == shell_pid)
-        {
-            return Self::Shell;
-        }
-
-        if let Some(process) = &snapshot.fg_process_group_leader {
-            if snapshot.shell_pid.is_some_and(|shell_pid| process.pid == shell_pid) {
-                return Self::Shell;
-            }
-            return Self::FgCmd(FgCmd::live(process.cmd(), fg_process_group, snapshot.shell_pid));
-        }
-
-        Self::FgCmd(FgCmd::live(None, fg_process_group, snapshot.shell_pid))
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum PaneCmdUnknownReason {
-    MissingFgProcessGroup,
-}
-
 fn process_executable(raw: Option<&str>) -> Option<&str> {
     let raw = raw?.trim();
     if raw.is_empty() {
@@ -219,7 +222,7 @@ fn process_executable(raw: Option<&str>) -> Option<&str> {
 }
 
 fn process_group_members(process_group: u32) -> Result<Vec<PaneProcess>, ProcessGroupLookupError> {
-    let Ok(mut pids) = libproc::processes::pids_by_type(ProcFilter::ByProgramGroup { pgrpid: process_group }) else {
+    let Ok(mut pids) = processes::pids_by_type(ProcFilter::ByProgramGroup { pgrpid: process_group }) else {
         return Err(ProcessGroupLookupError::Failed);
     };
     pids.sort_unstable();

@@ -18,6 +18,16 @@ pub enum Help {
 }
 
 impl Help {
+    pub const fn text(self) -> &'static str {
+        match self {
+            Self::Root => include_str!("../help.txt"),
+            Self::List => include_str!("../help/list/help.txt"),
+            Self::Issue => include_str!("../help/issue/help.txt"),
+            Self::Pr => include_str!("../help/pr/help.txt"),
+            Self::Branch => include_str!("../help/branch/help.txt"),
+        }
+    }
+
     pub(crate) fn from_args(args: &[OsString]) -> Self {
         if has_command(args, "issue") {
             return Self::Issue;
@@ -32,16 +42,6 @@ impl Help {
             Self::Root
         } else {
             Self::List
-        }
-    }
-
-    pub const fn text(self) -> &'static str {
-        match self {
-            Self::Root => include_str!("../help.txt"),
-            Self::List => include_str!("../help/list/help.txt"),
-            Self::Issue => include_str!("../help/issue/help.txt"),
-            Self::Pr => include_str!("../help/pr/help.txt"),
-            Self::Branch => include_str!("../help/branch/help.txt"),
         }
     }
 }

@@ -29,100 +29,6 @@ pub(super) struct ControlParser {
     state: CursorControlState,
 }
 
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-enum CursorControlState {
-    #[default]
-    Ground,
-    Escape,
-    CsiParameter(CursorParameter),
-    CsiPrivateParameter {
-        alternate_screen: AlternateScreenParameter,
-        parameter: CursorParameter,
-    },
-    CsiSpace(CursorParameter),
-    CsiInvalid,
-    OscCursorShape(OscCursorShapeState),
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum OscCursorShapeState {
-    CommandStart,
-    CommandFive,
-    CommandFifty,
-    Prefix(usize),
-    Value,
-    Valid,
-    Invalid,
-}
-
-impl OscCursorShapeState {
-    fn next(self, byte: u8) -> Self {
-        match self {
-            Self::CommandStart if byte == b'5' => Self::CommandFive,
-            Self::CommandFive if byte == b'0' => Self::CommandFifty,
-            Self::CommandFifty if byte == b';' => Self::Prefix(0),
-            Self::Prefix(index) if OSC_CURSOR_SHAPE_PREFIX.get(index) == Some(&byte) => {
-                let next = index.saturating_add(1);
-                if next == OSC_CURSOR_SHAPE_PREFIX.len() {
-                    Self::Value
-                } else {
-                    Self::Prefix(next)
-                }
-            }
-            Self::Value if matches!(byte, b'0'..=b'2') => Self::Valid,
-            Self::Valid => Self::Valid,
-            Self::CommandStart
-            | Self::CommandFive
-            | Self::CommandFifty
-            | Self::Prefix(_)
-            | Self::Value
-            | Self::Invalid => Self::Invalid,
-        }
-    }
-
-    const fn cursor_control(self) -> CursorControl {
-        if matches!(self, Self::Valid) {
-            CursorControl::ExplicitShape
-        } else {
-            CursorControl::Unchanged
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum CursorParameter {
-    Empty,
-    Value(u16),
-    Invalid,
-}
-
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-enum ControlAction {
-    AlternateScreen(AlternateScreenControl),
-    Cursor(CursorControl),
-    Reset,
-    #[default]
-    Unchanged,
-}
-
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-enum AlternateScreenParameter {
-    #[default]
-    Absent,
-    Legacy,
-    Native,
-}
-
-impl AlternateScreenParameter {
-    const fn record(self, parameter: CursorParameter) -> Self {
-        match (self, parameter) {
-            (_, CursorParameter::Value(1049)) => Self::Native,
-            (Self::Absent, CursorParameter::Value(47)) => Self::Legacy,
-            (current, _) => current,
-        }
-    }
-}
-
 impl ControlParser {
     pub(super) fn process(&mut self, bytes: &[u8]) -> ControlEffects {
         let mut effects = ControlEffects::default();
@@ -328,6 +234,100 @@ impl ControlParser {
                 .and_then(|value| value.checked_add(digit))
                 .map_or(CursorParameter::Invalid, CursorParameter::Value),
             CursorParameter::Invalid => CursorParameter::Invalid,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+enum CursorControlState {
+    #[default]
+    Ground,
+    Escape,
+    CsiParameter(CursorParameter),
+    CsiPrivateParameter {
+        alternate_screen: AlternateScreenParameter,
+        parameter: CursorParameter,
+    },
+    CsiSpace(CursorParameter),
+    CsiInvalid,
+    OscCursorShape(OscCursorShapeState),
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum OscCursorShapeState {
+    CommandStart,
+    CommandFive,
+    CommandFifty,
+    Prefix(usize),
+    Value,
+    Valid,
+    Invalid,
+}
+
+impl OscCursorShapeState {
+    fn next(self, byte: u8) -> Self {
+        match self {
+            Self::CommandStart if byte == b'5' => Self::CommandFive,
+            Self::CommandFive if byte == b'0' => Self::CommandFifty,
+            Self::CommandFifty if byte == b';' => Self::Prefix(0),
+            Self::Prefix(index) if OSC_CURSOR_SHAPE_PREFIX.get(index) == Some(&byte) => {
+                let next = index.saturating_add(1);
+                if next == OSC_CURSOR_SHAPE_PREFIX.len() {
+                    Self::Value
+                } else {
+                    Self::Prefix(next)
+                }
+            }
+            Self::Value if matches!(byte, b'0'..=b'2') => Self::Valid,
+            Self::Valid => Self::Valid,
+            Self::CommandStart
+            | Self::CommandFive
+            | Self::CommandFifty
+            | Self::Prefix(_)
+            | Self::Value
+            | Self::Invalid => Self::Invalid,
+        }
+    }
+
+    const fn cursor_control(self) -> CursorControl {
+        if matches!(self, Self::Valid) {
+            CursorControl::ExplicitShape
+        } else {
+            CursorControl::Unchanged
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum CursorParameter {
+    Empty,
+    Value(u16),
+    Invalid,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+enum ControlAction {
+    AlternateScreen(AlternateScreenControl),
+    Cursor(CursorControl),
+    Reset,
+    #[default]
+    Unchanged,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+enum AlternateScreenParameter {
+    #[default]
+    Absent,
+    Legacy,
+    Native,
+}
+
+impl AlternateScreenParameter {
+    const fn record(self, parameter: CursorParameter) -> Self {
+        match (self, parameter) {
+            (_, CursorParameter::Value(1049)) => Self::Native,
+            (Self::Absent, CursorParameter::Value(47)) => Self::Legacy,
+            (current, _) => current,
         }
     }
 }

@@ -9,12 +9,6 @@ use crate::state::PaneTree;
 use crate::state::SessionLayout;
 use crate::state::Tab;
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-enum ClosePaneOutcome {
-    Final { pane_id: PaneId },
-    Removed { pane_id: PaneId },
-}
-
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ClosePaneClientOutcome {
     Final { pane_id: PaneId },
@@ -28,49 +22,6 @@ pub enum PaneExitOutcome {
 }
 
 impl SessionLayout {
-    fn close_active_pane(&mut self, exited_at: u64) -> rootcause::Result<ClosePaneOutcome> {
-        let active_tab_index = self.active_tab_index()?;
-        let final_pane = self.entries.len() == 1
-            && self
-                .entries
-                .get(active_tab_index)
-                .ok_or_else(|| report!("muxr active tab index is outside server layout"))?
-                .pane_count()
-                == 1;
-        let active_pane = self
-            .entries
-            .get(active_tab_index)
-            .ok_or_else(|| report!("muxr active tab index is outside server layout"))?
-            .active_pane;
-
-        if final_pane {
-            self.entries
-                .get_mut(active_tab_index)
-                .ok_or_else(|| report!("muxr active tab index is outside server layout"))?
-                .mark_pane_closed(active_pane, exited_at)?;
-            return Ok(ClosePaneOutcome::Final { pane_id: active_pane });
-        }
-
-        if self
-            .entries
-            .get(active_tab_index)
-            .ok_or_else(|| report!("muxr active tab index is outside server layout"))?
-            .pane_count()
-            == 1
-        {
-            self.remove_tab_at(active_tab_index)?;
-        } else {
-            let tab = self
-                .entries
-                .get_mut(active_tab_index)
-                .ok_or_else(|| report!("muxr active tab index is outside server layout"))?;
-            let fallback_pane = tab.remove_pane(active_pane)?;
-            let _focused = tab.focus_pane(fallback_pane)?;
-        }
-
-        Ok(ClosePaneOutcome::Removed { pane_id: active_pane })
-    }
-
     pub fn remove_exited_pane(
         &mut self,
         pane_id: PaneId,
@@ -116,6 +67,49 @@ impl SessionLayout {
             let _focused = tab.focus_pane(fallback_pane)?;
         }
         Ok(PaneExitOutcome::Removed)
+    }
+
+    fn close_active_pane(&mut self, exited_at: u64) -> rootcause::Result<ClosePaneOutcome> {
+        let active_tab_index = self.active_tab_index()?;
+        let final_pane = self.entries.len() == 1
+            && self
+                .entries
+                .get(active_tab_index)
+                .ok_or_else(|| report!("muxr active tab index is outside server layout"))?
+                .pane_count()
+                == 1;
+        let active_pane = self
+            .entries
+            .get(active_tab_index)
+            .ok_or_else(|| report!("muxr active tab index is outside server layout"))?
+            .active_pane;
+
+        if final_pane {
+            self.entries
+                .get_mut(active_tab_index)
+                .ok_or_else(|| report!("muxr active tab index is outside server layout"))?
+                .mark_pane_closed(active_pane, exited_at)?;
+            return Ok(ClosePaneOutcome::Final { pane_id: active_pane });
+        }
+
+        if self
+            .entries
+            .get(active_tab_index)
+            .ok_or_else(|| report!("muxr active tab index is outside server layout"))?
+            .pane_count()
+            == 1
+        {
+            self.remove_tab_at(active_tab_index)?;
+        } else {
+            let tab = self
+                .entries
+                .get_mut(active_tab_index)
+                .ok_or_else(|| report!("muxr active tab index is outside server layout"))?;
+            let fallback_pane = tab.remove_pane(active_pane)?;
+            let _focused = tab.focus_pane(fallback_pane)?;
+        }
+
+        Ok(ClosePaneOutcome::Removed { pane_id: active_pane })
     }
 }
 
@@ -193,6 +187,21 @@ impl PaneTree {
     }
 }
 
+pub fn handle_close_pane_cmd_client(state: &mut ClientSessionState<'_>) -> rootcause::Result<ClosePaneClientOutcome> {
+    let previous_pane = state.layout.active_pane_id()?;
+    crate::pane::fullscreen::clear_active_tab_for_layout_mutation(state);
+    match self::handle_close_pane_cmd(state.config, state.layout, state.runtimes)? {
+        ClosePaneOutcome::Final { pane_id } => Ok(ClosePaneClientOutcome::Final { pane_id }),
+        ClosePaneOutcome::Removed { pane_id } => Ok(ClosePaneClientOutcome::Removed { pane_id, previous_pane }),
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum ClosePaneOutcome {
+    Final { pane_id: PaneId },
+    Removed { pane_id: PaneId },
+}
+
 fn handle_close_pane_cmd(
     config: &ServerConfig,
     layout: &mut SessionLayout,
@@ -208,15 +217,6 @@ fn handle_close_pane_cmd(
     runtimes.remove(pane_id);
     crate::state::persisted::write_metadata(&config.paths, layout)?;
     Ok(outcome)
-}
-
-pub fn handle_close_pane_cmd_client(state: &mut ClientSessionState<'_>) -> rootcause::Result<ClosePaneClientOutcome> {
-    let previous_pane = state.layout.active_pane_id()?;
-    crate::pane::fullscreen::clear_active_tab_for_layout_mutation(state);
-    match self::handle_close_pane_cmd(state.config, state.layout, state.runtimes)? {
-        ClosePaneOutcome::Final { pane_id } => Ok(ClosePaneClientOutcome::Final { pane_id }),
-        ClosePaneOutcome::Removed { pane_id } => Ok(ClosePaneClientOutcome::Removed { pane_id, previous_pane }),
-    }
 }
 
 #[cfg(test)]

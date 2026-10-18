@@ -29,21 +29,21 @@ pub enum Help {
 }
 
 impl Help {
-    pub(crate) fn from_args(args: &[String]) -> Self {
-        match args.first().map(String::as_str) {
-            Some("install") => Self::Install,
-            Some("init") => Self::Init,
-            Some("--pick") => Self::Pick,
-            _ => Self::Root,
-        }
-    }
-
     pub const fn text(self) -> &'static str {
         match self {
             Self::Root => include_str!("../help.txt"),
             Self::Install => include_str!("../help/install/help.txt"),
             Self::Init => include_str!("../help/init/help.txt"),
             Self::Pick => include_str!("../help/pick/help.txt"),
+        }
+    }
+
+    pub(crate) fn from_args(args: &[String]) -> Self {
+        match args.first().map(String::as_str) {
+            Some("install") => Self::Install,
+            Some("init") => Self::Init,
+            Some("--pick") => Self::Pick,
+            _ => Self::Root,
         }
     }
 }

@@ -52,13 +52,6 @@ impl fmt::Display for TabId {
     }
 }
 
-impl From<TabId> for NonZeroU32 {
-    fn from(value: TabId) -> Self {
-        // Nutype validates every construction path; zero cannot reach this infallible conversion.
-        Self::new(value.get()).unwrap_or(Self::MIN)
-    }
-}
-
 impl rkyv::Archive for TabId {
     type Archived = rkyv::Archived<NonZeroU32>;
     type Resolver = rkyv::Resolver<NonZeroU32>;
@@ -75,6 +68,13 @@ where
 {
     fn serialize(&self, serializer: &mut S) -> Result<Self::Resolver, S::Error> {
         rkyv::Serialize::serialize(&NonZeroU32::from(*self), serializer)
+    }
+}
+
+impl From<TabId> for NonZeroU32 {
+    fn from(value: TabId) -> Self {
+        // Nutype validates every construction path; zero cannot reach this infallible conversion.
+        Self::new(value.get()).unwrap_or(Self::MIN)
     }
 }
 
@@ -129,13 +129,6 @@ impl fmt::Display for PaneId {
     }
 }
 
-impl From<PaneId> for NonZeroU32 {
-    fn from(value: PaneId) -> Self {
-        // Nutype validates every construction path; zero cannot reach this infallible conversion.
-        Self::new(value.get()).unwrap_or(Self::MIN)
-    }
-}
-
 impl rkyv::Archive for PaneId {
     type Archived = rkyv::Archived<NonZeroU32>;
     type Resolver = rkyv::Resolver<NonZeroU32>;
@@ -152,6 +145,13 @@ where
 {
     fn serialize(&self, serializer: &mut S) -> Result<Self::Resolver, S::Error> {
         rkyv::Serialize::serialize(&NonZeroU32::from(*self), serializer)
+    }
+}
+
+impl From<PaneId> for NonZeroU32 {
+    fn from(value: PaneId) -> Self {
+        // Nutype validates every construction path; zero cannot reach this infallible conversion.
+        Self::new(value.get()).unwrap_or(Self::MIN)
     }
 }
 

@@ -38,6 +38,81 @@ const STDIN_BUFFER_SIZE: usize = 8192;
 const CONTROL_REQUEST_CHANNEL_LIMIT: usize = 128;
 const INPUT_REQUEST_CHANNEL_LIMIT: usize = 1024;
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ClientInputSend {
+    Accepted,
+    Closed,
+}
+
+impl RenderSink for StdoutSender {
+    fn send_render(&self, transaction: Vec<u8>) -> rootcause::Result<()> {
+        Self::send_render(self, transaction)
+    }
+}
+
+/// Start or attach to a muxr session and run an interactive client.
+///
+/// # Errors
+/// - The session paths cannot be resolved.
+/// - The server cannot be started or attached.
+/// - The current terminal size cannot be read.
+/// - Terminal input/output or protocol IO fails.
+pub fn start(session: &SessionName, server_executable: &Path, external_layout: Option<&Path>) -> rootcause::Result<()> {
+    tokio::runtime::Runtime::new()
+        .context("failed to build muxr tokio runtime")?
+        .block_on(async {
+            let muxr_config = MuxrConfig::new()?;
+            let terminal_size = crate::terminal::current_terminal_size()?;
+            let pane_size = crate::terminal::pane_size_for_terminal(muxr_config.tab_bar.width, &terminal_size)?;
+            let attached_session =
+                crate::session::attach::open_session(session, pane_size.clone(), server_executable, external_layout)
+                    .await?;
+            self::run_interactive(&muxr_config, attached_session, pane_size).await
+        })
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum DroppableSendOutcome {
+    Closed,
+    Dropped,
+    Sent,
+}
+
+pub fn send_droppable_request(
+    input_sender: &tokio::sync::mpsc::Sender<ClientRequest>,
+    request: ClientRequest,
+) -> DroppableSendOutcome {
+    match input_sender.try_send(request) {
+        Ok(()) => DroppableSendOutcome::Sent,
+        Err(tokio::sync::mpsc::error::TrySendError::Full(request)) => {
+            drop(request);
+            DroppableSendOutcome::Dropped
+        }
+        Err(tokio::sync::mpsc::error::TrySendError::Closed(request)) => {
+            drop(request);
+            DroppableSendOutcome::Closed
+        }
+    }
+}
+
+pub fn send_edge_scroll_request(
+    input_sender: &tokio::sync::mpsc::Sender<ClientRequest>,
+    renderer: &mut ClientRenderer,
+    request: SelectionEdgeScrollRequest,
+) -> ClientInputSend {
+    let (pending, request) = request.into_parts();
+    match self::send_droppable_request(input_sender, request) {
+        DroppableSendOutcome::Sent => {
+            // One queued edge-scroll request must be paired with one moved viewport and its render before another
+            // request is queued; otherwise coalesced renders can skip selected content rows.
+            renderer.mark_selection_edge_scroll_sent(pending);
+            ClientInputSend::Accepted
+        }
+        DroppableSendOutcome::Dropped => ClientInputSend::Accepted,
+        DroppableSendOutcome::Closed => ClientInputSend::Closed,
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 enum StdinRead {
     Bytes(Vec<u8>),
@@ -72,12 +147,6 @@ enum LocalActionCompletion {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ClientInputSend {
-    Accepted,
-    Closed,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum InteractiveFlow {
     Continue,
     Stop,
@@ -86,16 +155,6 @@ enum InteractiveFlow {
 struct RenderCoordinator {
     committed: Option<ClientPresentationSnapshot>,
     in_flight: Option<ClientPresentationSnapshot>,
-}
-
-trait RenderSink {
-    fn send_render(&self, transaction: Vec<u8>) -> rootcause::Result<()>;
-}
-
-impl RenderSink for StdoutSender {
-    fn send_render(&self, transaction: Vec<u8>) -> rootcause::Result<()> {
-        Self::send_render(self, transaction)
-    }
 }
 
 impl RenderCoordinator {
@@ -130,25 +189,8 @@ impl RenderCoordinator {
     }
 }
 
-/// Start or attach to a muxr session and run an interactive client.
-///
-/// # Errors
-/// - The session paths cannot be resolved.
-/// - The server cannot be started or attached.
-/// - The current terminal size cannot be read.
-/// - Terminal input/output or protocol IO fails.
-pub fn start(session: &SessionName, server_executable: &Path, external_layout: Option<&Path>) -> rootcause::Result<()> {
-    tokio::runtime::Runtime::new()
-        .context("failed to build muxr tokio runtime")?
-        .block_on(async {
-            let muxr_config = MuxrConfig::new()?;
-            let terminal_size = crate::terminal::current_terminal_size()?;
-            let pane_size = crate::terminal::pane_size_for_terminal(muxr_config.tab_bar.width, &terminal_size)?;
-            let attached_session =
-                crate::session::attach::open_session(session, pane_size.clone(), server_executable, external_layout)
-                    .await?;
-            self::run_interactive(&muxr_config, attached_session, pane_size).await
-        })
+trait RenderSink {
+    fn send_render(&self, transaction: Vec<u8>) -> rootcause::Result<()>;
 }
 
 async fn run_interactive(
@@ -343,48 +385,6 @@ async fn handle_client_input_action(
         ClientInputAction::Mouse(event) => {
             crate::pane::mouse::handle_mouse_input_action(muxr_config, event, input_sender, renderer).await
         }
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum DroppableSendOutcome {
-    Closed,
-    Dropped,
-    Sent,
-}
-
-pub fn send_droppable_request(
-    input_sender: &tokio::sync::mpsc::Sender<ClientRequest>,
-    request: ClientRequest,
-) -> DroppableSendOutcome {
-    match input_sender.try_send(request) {
-        Ok(()) => DroppableSendOutcome::Sent,
-        Err(tokio::sync::mpsc::error::TrySendError::Full(request)) => {
-            drop(request);
-            DroppableSendOutcome::Dropped
-        }
-        Err(tokio::sync::mpsc::error::TrySendError::Closed(request)) => {
-            drop(request);
-            DroppableSendOutcome::Closed
-        }
-    }
-}
-
-pub fn send_edge_scroll_request(
-    input_sender: &tokio::sync::mpsc::Sender<ClientRequest>,
-    renderer: &mut ClientRenderer,
-    request: SelectionEdgeScrollRequest,
-) -> ClientInputSend {
-    let (pending, request) = request.into_parts();
-    match self::send_droppable_request(input_sender, request) {
-        DroppableSendOutcome::Sent => {
-            // One queued edge-scroll request must be paired with one moved viewport and its render before another
-            // request is queued; otherwise coalesced renders can skip selected content rows.
-            renderer.mark_selection_edge_scroll_sent(pending);
-            ClientInputSend::Accepted
-        }
-        DroppableSendOutcome::Dropped => ClientInputSend::Accepted,
-        DroppableSendOutcome::Closed => ClientInputSend::Closed,
     }
 }
 

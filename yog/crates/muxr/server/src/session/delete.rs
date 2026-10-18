@@ -1,4 +1,5 @@
 use std::fs;
+use std::io::ErrorKind;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
@@ -7,18 +8,13 @@ use muxr_core::ServerEvent;
 use muxr_core::SessionPaths;
 use muxr_transport::ServerConnection;
 use rootcause::prelude::ResultExt;
+use tokio::time;
 
 use crate::session::tracing::ClientEventSendFailure;
 
 #[derive(Debug, Default)]
 pub struct DeleteSessions {
     requested: AtomicBool,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum DeleteSessionRequest {
-    NotRequested,
-    Requested,
 }
 
 impl DeleteSessions {
@@ -33,6 +29,12 @@ impl DeleteSessions {
     pub fn request(&self) {
         self.requested.store(true, Ordering::Release);
     }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum DeleteSessionRequest {
+    NotRequested,
+    Requested,
 }
 
 pub async fn handle_handshake_delete(
@@ -64,15 +66,21 @@ pub fn remove_session_files(paths: &SessionPaths) -> rootcause::Result<()> {
     // Live deletion is server-owned so pane processes are dropped before their persisted state is removed.
     match fs::remove_dir_all(&paths.root) {
         Ok(()) => {}
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) if error.kind() == ErrorKind::NotFound => {}
         Err(error) => return Err(error).context("failed to remove muxr session dir")?,
     }
     match fs::remove_file(&paths.socket) {
         Ok(()) => {}
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) if error.kind() == ErrorKind::NotFound => {}
         Err(error) => return Err(error).context("failed to remove muxr session socket")?,
     }
     Ok(())
+}
+
+pub fn record_delete_ack_send_failure(reason: Option<ClientEventSendFailure>) {
+    if let Some(reason) = reason {
+        crate::session::tracing::ack::delete_failed(reason);
+    }
 }
 
 async fn send_connection_event_failure(
@@ -80,16 +88,10 @@ async fn send_connection_event_failure(
     event: &ServerEvent,
     client_write_timeout: Duration,
 ) -> Option<ClientEventSendFailure> {
-    match tokio::time::timeout(client_write_timeout, connection.send_event(event)).await {
+    match time::timeout(client_write_timeout, connection.send_event(event)).await {
         Ok(Ok(())) => None,
         Ok(Err(_)) => Some(ClientEventSendFailure::SendFailed),
         Err(_) => Some(ClientEventSendFailure::Timeout),
-    }
-}
-
-pub fn record_delete_ack_send_failure(reason: Option<ClientEventSendFailure>) {
-    if let Some(reason) = reason {
-        crate::session::tracing::ack::delete_failed(reason);
     }
 }
 

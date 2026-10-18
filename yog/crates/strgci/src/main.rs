@@ -85,13 +85,6 @@ mod tests {
 
     use super::*;
 
-    /// Helper: write to a `Vec<u8>` and return the resulting UTF-8 string.
-    fn collect(f: impl FnOnce(&mut Vec<u8>) -> std::io::Result<()>) -> String {
-        let mut buf = Vec::new();
-        f(&mut buf).unwrap();
-        String::from_utf8(buf).unwrap()
-    }
-
     #[rstest]
     #[case::zero_seconds(0, "0s")]
     #[case::thirty_seconds(30, "30s")]
@@ -134,5 +127,12 @@ mod tests {
     ) {
         let result = collect(|buf| write_commit_truncated_msg(buf, input, max));
         assert_that!(result, eq(expected));
+    }
+
+    /// Helper: write to a `Vec<u8>` and return the resulting UTF-8 string.
+    fn collect(f: impl FnOnce(&mut Vec<u8>) -> std::io::Result<()>) -> String {
+        let mut buf = Vec::new();
+        f(&mut buf).unwrap();
+        String::from_utf8(buf).unwrap()
     }
 }

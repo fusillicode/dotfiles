@@ -16,28 +16,6 @@ pub struct StdoutWorker {
     handle: Option<thread::JoinHandle<()>>,
 }
 
-#[derive(Clone)]
-pub struct StdoutSender {
-    shared: Arc<Shared>,
-}
-
-struct Shared {
-    completed: tokio::sync::mpsc::UnboundedSender<()>,
-    state: Mutex<State>,
-    wake: Condvar,
-}
-
-struct State {
-    closed: bool,
-    failed: Option<String>,
-    output: VecDeque<OutputCmd>,
-    queued_bytes: usize,
-}
-
-enum OutputCmd {
-    Render(Vec<u8>),
-}
-
 impl StdoutWorker {
     pub fn spawn() -> (
         StdoutSender,
@@ -89,6 +67,11 @@ impl Drop for StdoutWorker {
     }
 }
 
+#[derive(Clone)]
+pub struct StdoutSender {
+    shared: Arc<Shared>,
+}
+
 impl StdoutSender {
     pub fn send_render(&self, transaction: Vec<u8>) -> rootcause::Result<()> {
         if transaction.is_empty() {
@@ -108,6 +91,31 @@ impl StdoutSender {
     }
 }
 
+struct Shared {
+    completed: tokio::sync::mpsc::UnboundedSender<()>,
+    state: Mutex<State>,
+    wake: Condvar,
+}
+
+struct State {
+    closed: bool,
+    failed: Option<String>,
+    output: VecDeque<OutputCmd>,
+    queued_bytes: usize,
+}
+
+enum OutputCmd {
+    Render(Vec<u8>),
+}
+
+impl OutputCmd {
+    const fn len(&self) -> usize {
+        match self {
+            Self::Render(transaction) => transaction.len(),
+        }
+    }
+}
+
 fn reserve_queued_bytes(state: &State, additional_bytes: usize) -> rootcause::Result<()> {
     let next = state
         .queued_bytes
@@ -117,14 +125,6 @@ fn reserve_queued_bytes(state: &State, additional_bytes: usize) -> rootcause::Re
         return Err(report!("muxr client stdout queued byte budget is exhausted"));
     }
     Ok(())
-}
-
-impl OutputCmd {
-    const fn len(&self) -> usize {
-        match self {
-            Self::Render(transaction) => transaction.len(),
-        }
-    }
 }
 
 fn ensure_open(state: &State) -> rootcause::Result<()> {

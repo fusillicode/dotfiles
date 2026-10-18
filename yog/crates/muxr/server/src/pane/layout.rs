@@ -75,15 +75,6 @@ pub enum PaneAreaContainment {
     Outside,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-struct PaneSplitLayout {
-    border_axis: PaneBorderAxis,
-    border_len: u16,
-    border_position: PanePosition,
-    first_area: PaneArea,
-    second_area: PaneArea,
-}
-
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct PaneLayout {
     borders: Vec<PaneBorder>,
@@ -339,6 +330,15 @@ impl PaneRegion {
     pub fn containment(&self, position: PanePosition) -> PaneAreaContainment {
         self.area.containment(position)
     }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct PaneSplitLayout {
+    border_axis: PaneBorderAxis,
+    border_len: u16,
+    border_position: PanePosition,
+    first_area: PaneArea,
+    second_area: PaneArea,
 }
 
 #[cfg(test)]

@@ -1,4 +1,11 @@
 use fake::Fake;
+use fake::faker::internet::en::IPv4;
+use fake::faker::internet::en::IPv6;
+use fake::faker::internet::en::MACAddress;
+use fake::faker::internet::en::SafeEmail;
+use fake::faker::internet::en::UserAgent;
+use fake::uuid::UUIDv4;
+use fake::uuid::UUIDv7;
 use strum::EnumIter;
 use strum::IntoEnumIterator;
 
@@ -18,13 +25,13 @@ impl FkrOption {
     /// Generates a fake string value.
     pub fn gen_string(&self) -> String {
         match self {
-            Self::Uuidv4 => fake::uuid::UUIDv4.fake::<String>(),
-            Self::Uuidv7 => fake::uuid::UUIDv7.fake::<String>(),
-            Self::Email => fake::faker::internet::en::SafeEmail().fake::<String>(),
-            Self::UserAgent => fake::faker::internet::en::UserAgent().fake::<String>(),
-            Self::MACAddress => fake::faker::internet::en::MACAddress().fake::<String>(),
-            Self::IPv4 => fake::faker::internet::en::IPv4().fake::<String>(),
-            Self::IPv6 => fake::faker::internet::en::IPv6().fake::<String>(),
+            Self::Uuidv4 => UUIDv4.fake::<String>(),
+            Self::Uuidv7 => UUIDv7.fake::<String>(),
+            Self::Email => SafeEmail().fake::<String>(),
+            Self::UserAgent => UserAgent().fake::<String>(),
+            Self::MACAddress => MACAddress().fake::<String>(),
+            Self::IPv4 => IPv4().fake::<String>(),
+            Self::IPv6 => IPv6().fake::<String>(),
         }
     }
 

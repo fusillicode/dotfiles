@@ -13,16 +13,6 @@ use crate::session::runtime::SessionHandshakeMessage;
 
 const CLIENT_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(2);
 
-// Client task completion must wake the server even if the task returns an error or panics; otherwise task joins would
-// rely on the old lifecycle poll.
-struct TaskFinishedNotify(Arc<tokio::sync::Notify>);
-
-impl Drop for TaskFinishedNotify {
-    fn drop(&mut self) {
-        self.0.notify_one();
-    }
-}
-
 pub fn spawn_client_handshake_task(
     connection: ServerConnection,
     handshake_sender: &tokio::sync::mpsc::Sender<SessionClientHandshake>,
@@ -92,14 +82,6 @@ pub async fn join_finished_client_tasks(
     first_error.map_or(Ok(()), Err)
 }
 
-async fn read_client_handshake(connection: &mut ServerConnection) -> rootcause::Result<SessionHandshakeMessage> {
-    match tokio::time::timeout(CLIENT_HANDSHAKE_TIMEOUT, connection.recv_request()).await {
-        Ok(Ok(request)) => Ok(SessionHandshakeMessage::from_first_request(request)),
-        Ok(Err(error)) => Err(error),
-        Err(_elapsed) => Ok(SessionHandshakeMessage::ClientDisconnected),
-    }
-}
-
 /// Send one event on a pre-attach connection with the server's bounded write timeout.
 ///
 /// # Errors
@@ -119,6 +101,24 @@ pub async fn send_connection_event_with_timeout(
 pub enum ConnectionEventSend {
     Failed,
     Sent,
+}
+
+// Client task completion must wake the server even if the task returns an error or panics; otherwise task joins would
+// rely on the old lifecycle poll.
+struct TaskFinishedNotify(Arc<tokio::sync::Notify>);
+
+impl Drop for TaskFinishedNotify {
+    fn drop(&mut self) {
+        self.0.notify_one();
+    }
+}
+
+async fn read_client_handshake(connection: &mut ServerConnection) -> rootcause::Result<SessionHandshakeMessage> {
+    match tokio::time::timeout(CLIENT_HANDSHAKE_TIMEOUT, connection.recv_request()).await {
+        Ok(Ok(request)) => Ok(SessionHandshakeMessage::from_first_request(request)),
+        Ok(Err(error)) => Err(error),
+        Err(_elapsed) => Ok(SessionHandshakeMessage::ClientDisconnected),
+    }
 }
 
 async fn join_client_task(handle: tokio::task::JoinHandle<rootcause::Result<()>>) -> rootcause::Result<()> {

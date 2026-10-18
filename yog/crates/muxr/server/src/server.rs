@@ -35,19 +35,6 @@ const CLIENT_HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
 const CLIENT_HEARTBEAT_TIMEOUT: Duration = Duration::from_secs(15);
 const CLIENT_WRITE_TIMEOUT: Duration = Duration::from_secs(2);
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum ConnectionAccepting {
-    Accepting,
-    Draining,
-}
-
-struct SessionHandshakeContext<'a> {
-    client_task_sender: &'a tokio::sync::mpsc::Sender<SessionClientTaskMessage>,
-    client_task_finished_notify: &'a Arc<tokio::sync::Notify>,
-    config: &'a ServerConfig,
-    delete_sessions: &'a Arc<DeleteSessions>,
-}
-
 #[derive(Clone, Debug)]
 pub struct ServerConfig {
     pub client_heartbeat_interval: Duration,
@@ -93,16 +80,6 @@ pub fn serve_session(session: &SessionName, external_layout: Option<PathBuf>) ->
         })
 }
 
-#[tracing::instrument(name = "muxr_session", skip_all, fields(session = %config.session))]
-async fn serve_session_traced(config: &ServerConfig) -> rootcause::Result<()> {
-    crate::session::tracing::server::starting(&config.paths);
-    self::serve_prepared_async(config).await.inspect_err(|error| {
-        // Fatal server errors are logged once at the session boundary after lower layers add context. Handled,
-        // swallowed, or downgraded errors must log at their handling site because they never reach this boundary.
-        crate::session::tracing::server::error(error);
-    })
-}
-
 pub fn unix_timestamp_millis() -> rootcause::Result<u64> {
     let millis = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -131,6 +108,29 @@ pub fn active_pane_session_metadata(
         cmd_label: config.shell_cmd.label(),
         cwd,
         started_at: self::unix_timestamp_millis()?,
+    })
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ConnectionAccepting {
+    Accepting,
+    Draining,
+}
+
+struct SessionHandshakeContext<'a> {
+    client_task_sender: &'a tokio::sync::mpsc::Sender<SessionClientTaskMessage>,
+    client_task_finished_notify: &'a Arc<tokio::sync::Notify>,
+    config: &'a ServerConfig,
+    delete_sessions: &'a Arc<DeleteSessions>,
+}
+
+#[tracing::instrument(name = "muxr_session", skip_all, fields(session = %config.session))]
+async fn serve_session_traced(config: &ServerConfig) -> rootcause::Result<()> {
+    crate::session::tracing::server::starting(&config.paths);
+    self::serve_prepared_async(config).await.inspect_err(|error| {
+        // Fatal server errors are logged once at the session boundary after lower layers add context. Handled,
+        // swallowed, or downgraded errors must log at their handling site because they never reach this boundary.
+        crate::session::tracing::server::error(error);
     })
 }
 
@@ -2258,6 +2258,18 @@ mod tests {
         Ok(())
     }
 
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    enum PaneRegionsMatch {
+        Matched,
+        Waiting,
+    }
+
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    enum PaneScrollLineStep {
+        Moved,
+        Noop,
+    }
+
     fn spawn_test_server(
         session: &SessionName,
         paths: &SessionPaths,
@@ -2318,21 +2330,11 @@ mod tests {
         })
     }
 
-    async fn connect_client(paths: &SessionPaths) -> rootcause::Result<ClientConnection> {
-        let started_at = Instant::now();
+    async fn attach_and_detach(session: &SessionName, paths: &SessionPaths) -> rootcause::Result<()> {
+        let client = self::open_attached_client(session, paths).await?;
 
-        loop {
-            match ClientConnection::connect(&paths.socket).await {
-                Ok(connection) => return Ok(connection),
-                Err(error) => {
-                    if started_at.elapsed() > SERVER_READY_TIMEOUT {
-                        return Err(error);
-                    }
-                }
-            }
-
-            tokio::time::sleep(Duration::from_millis(10)).await;
-        }
+        self::detach_client(client).await?;
+        Ok(())
     }
 
     async fn open_attached_client(
@@ -2358,11 +2360,21 @@ mod tests {
         })
     }
 
-    async fn attach_and_detach(session: &SessionName, paths: &SessionPaths) -> rootcause::Result<()> {
-        let client = self::open_attached_client(session, paths).await?;
+    async fn connect_client(paths: &SessionPaths) -> rootcause::Result<ClientConnection> {
+        let started_at = Instant::now();
 
-        self::detach_client(client).await?;
-        Ok(())
+        loop {
+            match ClientConnection::connect(&paths.socket).await {
+                Ok(connection) => return Ok(connection),
+                Err(error) => {
+                    if started_at.elapsed() > SERVER_READY_TIMEOUT {
+                        return Err(error);
+                    }
+                }
+            }
+
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
     }
 
     async fn detach_client(mut client: AttachedTestClient) -> rootcause::Result<()> {
@@ -2390,12 +2402,6 @@ mod tests {
         Ok(())
     }
 
-    fn join_server(handle: thread::JoinHandle<rootcause::Result<()>>) -> rootcause::Result<()> {
-        handle
-            .join()
-            .unwrap_or_else(|_| Err(report!("test muxr server thread panicked")))
-    }
-
     fn join_server_with_timeout(handle: thread::JoinHandle<rootcause::Result<()>>) -> rootcause::Result<()> {
         let started_at = Instant::now();
         while !handle.is_finished() {
@@ -2407,6 +2413,12 @@ mod tests {
         }
 
         self::join_server(handle)
+    }
+
+    fn join_server(handle: thread::JoinHandle<rootcause::Result<()>>) -> rootcause::Result<()> {
+        handle
+            .join()
+            .unwrap_or_else(|_| Err(report!("test muxr server thread panicked")))
     }
 
     fn metadata(cmd_label: &str, started_at: u64) -> SessionMetadata {
@@ -2597,6 +2609,43 @@ mod tests {
         }
     }
 
+    async fn scroll_pane_line_until_noop(
+        client: &mut AttachedTestClient,
+        position: ClientMousePosition,
+        direction: PaneScrollDirection,
+        description: &str,
+    ) -> rootcause::Result<()> {
+        let started_at = Instant::now();
+        loop {
+            if started_at.elapsed() > SERVER_READY_TIMEOUT {
+                return Err(report!("timed out preparing muxr scroll state").attach(description.to_owned()));
+            }
+
+            let scrolled = self::scroll_pane_line(client, position, direction).await?;
+            if scrolled == PaneScrollLineStep::Noop {
+                return Ok(());
+            }
+        }
+    }
+
+    async fn scroll_pane_line(
+        client: &mut AttachedTestClient,
+        position: ClientMousePosition,
+        direction: PaneScrollDirection,
+    ) -> rootcause::Result<PaneScrollLineStep> {
+        client
+            .writer
+            .send_request(&ClientRequest::ScrollPaneLineAt { position, direction })
+            .await?;
+        let (actual_position, actual_direction, movement) = self::read_until_scroll_pane_line_result(client).await?;
+        assert_that!((actual_position, actual_direction), eq((position, direction)));
+        if matches!(movement, muxr_core::PaneScrollLineMove::Moved) {
+            Ok(PaneScrollLineStep::Moved)
+        } else {
+            Ok(PaneScrollLineStep::Noop)
+        }
+    }
+
     async fn read_until_scroll_pane_line_result(
         client: &mut AttachedTestClient,
     ) -> rootcause::Result<(ClientMousePosition, PaneScrollDirection, muxr_core::PaneScrollLineMove)> {
@@ -2635,49 +2684,6 @@ mod tests {
         }
     }
 
-    async fn scroll_pane_line(
-        client: &mut AttachedTestClient,
-        position: ClientMousePosition,
-        direction: PaneScrollDirection,
-    ) -> rootcause::Result<PaneScrollLineStep> {
-        client
-            .writer
-            .send_request(&ClientRequest::ScrollPaneLineAt { position, direction })
-            .await?;
-        let (actual_position, actual_direction, movement) = self::read_until_scroll_pane_line_result(client).await?;
-        assert_that!((actual_position, actual_direction), eq((position, direction)));
-        if matches!(movement, muxr_core::PaneScrollLineMove::Moved) {
-            Ok(PaneScrollLineStep::Moved)
-        } else {
-            Ok(PaneScrollLineStep::Noop)
-        }
-    }
-
-    async fn scroll_pane_line_until_noop(
-        client: &mut AttachedTestClient,
-        position: ClientMousePosition,
-        direction: PaneScrollDirection,
-        description: &str,
-    ) -> rootcause::Result<()> {
-        let started_at = Instant::now();
-        loop {
-            if started_at.elapsed() > SERVER_READY_TIMEOUT {
-                return Err(report!("timed out preparing muxr scroll state").attach(description.to_owned()));
-            }
-
-            let scrolled = self::scroll_pane_line(client, position, direction).await?;
-            if scrolled == PaneScrollLineStep::Noop {
-                return Ok(());
-            }
-        }
-    }
-
-    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-    enum PaneRegionsMatch {
-        Matched,
-        Waiting,
-    }
-
     fn both_panes_have_scrollback(regions: &PaneRegionsSnapshot) -> rootcause::Result<PaneRegionsMatch> {
         Ok(
             if self::pane_region(regions, "pane-1")?.visible_top_row() > 0
@@ -2704,12 +2710,6 @@ mod tests {
                 PaneRegionsMatch::Waiting
             },
         )
-    }
-
-    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-    enum PaneScrollLineStep {
-        Moved,
-        Noop,
     }
 
     async fn read_until_sidebar_layout(client: &mut AttachedTestClient) -> rootcause::Result<LayoutSnapshot> {

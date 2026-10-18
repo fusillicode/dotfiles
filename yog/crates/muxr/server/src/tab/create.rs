@@ -52,6 +52,15 @@ impl SessionLayout {
     }
 }
 
+pub fn handle_create_tab_cmd_client(state: &mut ClientSessionState<'_>) -> rootcause::Result<TabCreateClientOutcome> {
+    let previous_pane = state.layout.active_pane_id()?;
+    let new_pane_id = self::handle_create_tab_cmd(state.config, state.layout, state.runtimes, &state.terminal_size)?;
+    Ok(TabCreateClientOutcome {
+        new_pane_id,
+        previous_pane,
+    })
+}
+
 fn handle_create_tab_cmd(
     config: &ServerConfig,
     layout: &mut SessionLayout,
@@ -61,15 +70,6 @@ fn handle_create_tab_cmd(
     let pane_id = self::handle_create_tab(layout, config, runtimes, terminal_size)?;
     crate::state::persisted::write_metadata(&config.paths, layout)?;
     Ok(pane_id)
-}
-
-pub fn handle_create_tab_cmd_client(state: &mut ClientSessionState<'_>) -> rootcause::Result<TabCreateClientOutcome> {
-    let previous_pane = state.layout.active_pane_id()?;
-    let new_pane_id = self::handle_create_tab_cmd(state.config, state.layout, state.runtimes, &state.terminal_size)?;
-    Ok(TabCreateClientOutcome {
-        new_pane_id,
-        previous_pane,
-    })
 }
 
 fn handle_create_tab(

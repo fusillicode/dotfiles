@@ -9,20 +9,6 @@ pub struct HeartbeatTracker {
     phase: HeartbeatPhase,
 }
 
-pub trait HeartbeatStatus {
-    fn acknowledge(&mut self);
-    fn response_started_at(&self) -> Option<tokio::time::Instant>;
-    fn is_idle(&self) -> bool;
-    fn track(&mut self, delivery: HeartbeatDelivery);
-    fn sync_delivery(&mut self) -> ClientSessionFlow;
-}
-
-enum HeartbeatPhase {
-    Idle,
-    Queued(tokio::sync::oneshot::Receiver<Result<tokio::time::Instant, ClientEventSendFailure>>),
-    AwaitingPong(tokio::time::Instant),
-}
-
 impl Default for HeartbeatTracker {
     fn default() -> Self {
         Self {
@@ -66,6 +52,14 @@ impl HeartbeatStatus for HeartbeatTracker {
     }
 }
 
+pub trait HeartbeatStatus {
+    fn acknowledge(&mut self);
+    fn response_started_at(&self) -> Option<tokio::time::Instant>;
+    fn is_idle(&self) -> bool;
+    fn track(&mut self, delivery: HeartbeatDelivery);
+    fn sync_delivery(&mut self) -> ClientSessionFlow;
+}
+
 #[cfg(test)]
 impl HeartbeatStatus for Option<tokio::time::Instant> {
     fn acknowledge(&mut self) {
@@ -104,6 +98,12 @@ pub async fn send_if_idle(
         Err(_) => return Ok(ClientSessionFlow::Disconnect),
     }
     Ok(ClientSessionFlow::Continue)
+}
+
+enum HeartbeatPhase {
+    Idle,
+    Queued(tokio::sync::oneshot::Receiver<Result<tokio::time::Instant, ClientEventSendFailure>>),
+    AwaitingPong(tokio::time::Instant),
 }
 
 #[cfg(test)]

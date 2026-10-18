@@ -1,3 +1,6 @@
+use std::fmt::Display;
+use std::io::ErrorKind;
+
 pub use keyboard_input::ClientKey;
 pub use keyboard_input::ClientKeyCode;
 pub use keyboard_input::ClientKeyModifiers;
@@ -29,6 +32,7 @@ pub use pane_render::RenderTextStyle;
 pub use pane_render::RenderUpdate;
 pub use pane_scroll::PaneScrollDirection;
 pub use pane_scroll::PaneScrollLineMove;
+use rkyv::rancor::Source;
 pub use session_attach::AttachAccepted;
 pub use session_attach::AttachRequest;
 pub use terminal::TerminalSize;
@@ -52,9 +56,9 @@ mod terminal;
 mod tracked_process;
 mod wire;
 
-fn rkyv_deserialize_error<E>(error: impl std::fmt::Display) -> E
+fn rkyv_deserialize_error<E>(error: impl Display) -> E
 where
-    E: rkyv::rancor::Source,
+    E: Source,
 {
-    <E as rkyv::rancor::Source>::new(std::io::Error::new(std::io::ErrorKind::InvalidData, error.to_string()))
+    <E as Source>::new(std::io::Error::new(ErrorKind::InvalidData, error.to_string()))
 }

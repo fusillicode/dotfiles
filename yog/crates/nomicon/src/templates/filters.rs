@@ -9,11 +9,12 @@
     reason = "askama filter signature is framework-defined"
 )]
 
+use askama::Values;
 use jiff::Timestamp;
 
 /// Format a [`Timestamp`] as ISO-8601 / RFC3339 (UTC, whole seconds).
 #[askama::filter_fn]
-pub fn format_to_iso_8601(timestamp: &Timestamp, _args: &dyn askama::Values) -> askama::Result<String> {
+pub fn format_to_iso_8601(timestamp: &Timestamp, _args: &dyn Values) -> askama::Result<String> {
     Ok(timestamp.strftime("%Y-%m-%dT%H:%M:%SZ").to_string())
 }
 
@@ -22,10 +23,6 @@ mod tests {
     use askama::Template;
     use jiff::Timestamp;
     use test_that::prelude::*;
-
-    mod filters {
-        pub use crate::templates::filters::format_to_iso_8601;
-    }
 
     #[test]
     fn test_format_to_iso_8601_when_datetime_valid_returns_iso_8601_string() {
@@ -39,5 +36,9 @@ mod tests {
             value: Timestamp::from_second(1_735_787_045).unwrap(),
         };
         assert_that!(dummy_filter_template.render(), ok(eq("2025-01-02T03:04:05Z")));
+    }
+
+    mod filters {
+        pub use crate::templates::filters::format_to_iso_8601;
     }
 }

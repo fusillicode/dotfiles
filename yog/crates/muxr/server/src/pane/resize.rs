@@ -1,4 +1,5 @@
 use muxr_config::LayoutConfig;
+use muxr_core::PaneId;
 
 use crate::client::session::ClientSessionState;
 use crate::pane::split::PaneSplitAxis;
@@ -59,7 +60,7 @@ impl PaneTree {
     pub fn resize_pane(
         &mut self,
         layout_config: LayoutConfig,
-        pane_id: muxr_core::PaneId,
+        pane_id: PaneId,
         direction: PaneResizeDirection,
     ) -> rootcause::Result<PaneResizeChange> {
         match self {
@@ -109,18 +110,6 @@ impl PaneSplitResize {
     }
 }
 
-fn handle_resize_pane_cmd(
-    direction: PaneResizeDirection,
-    config: &ServerConfig,
-    layout: &mut SessionLayout,
-) -> rootcause::Result<PaneResizeChange> {
-    let resize_change = layout.resize_active_pane(config.user_config.layout, direction)?;
-    if resize_change == PaneResizeChange::Changed {
-        crate::state::persisted::write_metadata(&config.paths, layout)?;
-    }
-    Ok(resize_change)
-}
-
 pub fn handle_resize_pane_cmd_client(
     direction: PaneResizeDirection,
     state: &mut ClientSessionState<'_>,
@@ -144,6 +133,18 @@ pub const fn handle_exit_resize_mode_cmd_client() -> PaneResizeClientOutcome {
     PaneResizeClientOutcome::Render {
         render: PaneResizeRender::SendLayoutAndBaseline,
     }
+}
+
+fn handle_resize_pane_cmd(
+    direction: PaneResizeDirection,
+    config: &ServerConfig,
+    layout: &mut SessionLayout,
+) -> rootcause::Result<PaneResizeChange> {
+    let resize_change = layout.resize_active_pane(config.user_config.layout, direction)?;
+    if resize_change == PaneResizeChange::Changed {
+        crate::state::persisted::write_metadata(&config.paths, layout)?;
+    }
+    Ok(resize_change)
 }
 
 #[cfg(test)]

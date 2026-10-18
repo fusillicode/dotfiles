@@ -16,6 +16,18 @@ pub enum Help {
 }
 
 impl Help {
+    pub const fn text(self) -> &'static str {
+        match self {
+            Self::Root => include_str!("../help.txt"),
+            Self::Ci => include_str!("../help/ci/help.txt"),
+            Self::CiAll => include_str!("../help/ci/all/help.txt"),
+            Self::CiLint => include_str!("../help/ci/lint/help.txt"),
+            Self::CiTest => include_str!("../help/ci/test/help.txt"),
+            Self::CiReleaseNative => include_str!("../help/ci/release-native/help.txt"),
+            Self::CiAudit => include_str!("../help/ci/audit/help.txt"),
+        }
+    }
+
     pub(crate) fn from_args(args: &[String]) -> Self {
         if args.first().is_none_or(|arg| arg != "ci") {
             return Self::Root;
@@ -28,18 +40,6 @@ impl Help {
             Some("release-native") => Self::CiReleaseNative,
             Some("audit") => Self::CiAudit,
             _ => Self::Ci,
-        }
-    }
-
-    pub const fn text(self) -> &'static str {
-        match self {
-            Self::Root => include_str!("../help.txt"),
-            Self::Ci => include_str!("../help/ci/help.txt"),
-            Self::CiAll => include_str!("../help/ci/all/help.txt"),
-            Self::CiLint => include_str!("../help/ci/lint/help.txt"),
-            Self::CiTest => include_str!("../help/ci/test/help.txt"),
-            Self::CiReleaseNative => include_str!("../help/ci/release-native/help.txt"),
-            Self::CiAudit => include_str!("../help/ci/audit/help.txt"),
         }
     }
 }

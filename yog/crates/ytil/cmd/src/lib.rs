@@ -104,43 +104,6 @@ pub struct Cmd {
     name: String,
 }
 
-/// Creates a [`Command`] for `program`; silences stdout/stderr in release builds.
-///
-/// In debug (`debug_assertions`), output is inherited for easier troubleshooting.
-/// In release, both streams are redirected to [`Stdio::null()`] to keep logs quiet.
-pub fn silent_cmd(program: &str) -> Command {
-    let mut cmd = Command::new(program);
-    if !cfg!(debug_assertions) {
-        cmd.stdout(Stdio::null()).stderr(Stdio::null());
-    }
-    cmd
-}
-
-fn to_utf8_string(cmd: &Command, bytes: Vec<u8>) -> Result<String, CmdError> {
-    String::from_utf8(bytes).map_err(|error| CmdError::FromUtf8 {
-        cmd: Cmd::from(cmd),
-        source: error,
-    })
-}
-
-impl CmdExt for Command {
-    fn exec(&mut self) -> Result<Output, CmdError> {
-        let output = self.output().map_err(|source| CmdError::Io {
-            cmd: Cmd::from(&*self),
-            source,
-        })?;
-        if !output.status.success() {
-            return Err(CmdError::CmdFailure {
-                cmd: Cmd::from(&*self),
-                stderr: to_utf8_string(self, output.stderr)?,
-                stdout: to_utf8_string(self, output.stdout)?,
-                status: output.status,
-            });
-        }
-        Ok(output)
-    }
-}
-
 /// Formats [`Cmd`] for display, showing command name, arguments, and working directory.
 impl Display for Cmd {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -174,6 +137,43 @@ impl From<&mut Command> for Cmd {
             cur_dir: value.get_current_dir().map(Path::to_path_buf),
         }
     }
+}
+
+/// Creates a [`Command`] for `program`; silences stdout/stderr in release builds.
+///
+/// In debug (`debug_assertions`), output is inherited for easier troubleshooting.
+/// In release, both streams are redirected to [`Stdio::null()`] to keep logs quiet.
+pub fn silent_cmd(program: &str) -> Command {
+    let mut cmd = Command::new(program);
+    if !cfg!(debug_assertions) {
+        cmd.stdout(Stdio::null()).stderr(Stdio::null());
+    }
+    cmd
+}
+
+impl CmdExt for Command {
+    fn exec(&mut self) -> Result<Output, CmdError> {
+        let output = self.output().map_err(|source| CmdError::Io {
+            cmd: Cmd::from(&*self),
+            source,
+        })?;
+        if !output.status.success() {
+            return Err(CmdError::CmdFailure {
+                cmd: Cmd::from(&*self),
+                stderr: to_utf8_string(self, output.stderr)?,
+                stdout: to_utf8_string(self, output.stdout)?,
+                status: output.status,
+            });
+        }
+        Ok(output)
+    }
+}
+
+fn to_utf8_string(cmd: &Command, bytes: Vec<u8>) -> Result<String, CmdError> {
+    String::from_utf8(bytes).map_err(|error| CmdError::FromUtf8 {
+        cmd: Cmd::from(cmd),
+        source: error,
+    })
 }
 
 #[cfg(test)]

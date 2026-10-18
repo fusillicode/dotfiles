@@ -1,5 +1,7 @@
 use std::path::Path;
 
+use ytil_sys::file;
+
 use crate::Installer;
 
 pub struct RuffLsp<'a> {
@@ -16,8 +18,8 @@ impl Installer for RuffLsp<'_> {
         let target_dir = crate::downloaders::pip::run(self.dev_tools_dir, self.bin_name(), &[self.bin_name()])?;
 
         let target = target_dir.join(self.bin_name());
-        ytil_sys::file::ln_sf(&target, &self.bin_dir.join(self.bin_name()))?;
-        ytil_sys::file::chmod_x(target)?;
+        file::ln_sf(&target, &self.bin_dir.join(self.bin_name()))?;
+        file::chmod_x(target)?;
 
         Ok(())
     }

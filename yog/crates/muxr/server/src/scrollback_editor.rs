@@ -31,11 +31,6 @@ use crate::terminal::TerminalFocusEvent;
 const SCROLLBACK_EDITOR_TITLE: &str = "scrollback";
 
 #[derive(Debug)]
-struct OpenScrollbackEditor {
-    state: ScrollbackEditorState,
-}
-
-#[derive(Debug)]
 pub struct ScrollbackEditorState {
     dump_path: PathBuf,
     editor_pane_id: PaneId,
@@ -65,15 +60,15 @@ pub struct ScrollbackEditorRestoreOutcome {
 }
 
 impl ScrollbackEditorRestoreOutcome {
-    const fn unchanged() -> Self {
-        Self { editor_pane_id: None }
-    }
-
     pub const fn status(self) -> ScrollbackEditorRestoreStatus {
         match self.editor_pane_id {
             Some(_) => ScrollbackEditorRestoreStatus::Restored,
             None => ScrollbackEditorRestoreStatus::Unchanged,
         }
+    }
+
+    const fn unchanged() -> Self {
+        Self { editor_pane_id: None }
     }
 }
 
@@ -205,6 +200,11 @@ pub fn write_focus_lost_if_live(
     Ok(())
 }
 
+#[derive(Debug)]
+struct OpenScrollbackEditor {
+    state: ScrollbackEditorState,
+}
+
 impl SessionLayout {
     fn replace_active_pane_with_scrollback_editor(&mut self, metadata: SessionMetadata) -> rootcause::Result<PaneId> {
         let editor_pane_id = PaneId::new(self.next_pane_number()?)?;
@@ -260,18 +260,6 @@ impl PaneTree {
 enum PaneReplacement {
     Missing,
     Replaced,
-}
-
-fn create_focused_pane_dump(
-    config: &ServerConfig,
-    layout: &SessionLayout,
-    runtimes: &PaneRuntimes,
-    dump_style: ScrollbackDumpStyle,
-) -> rootcause::Result<PathBuf> {
-    let pane_id = layout.active_pane_id()?;
-    self::write_scrollback_dump_file(&config.paths.root, pane_id, dump_style, |file| {
-        runtimes.write_scrollback_dump(pane_id, dump_style, file)
-    })
 }
 
 fn open(
@@ -331,6 +319,18 @@ fn open(
             original_fullscreen,
             original_layout,
         },
+    })
+}
+
+fn create_focused_pane_dump(
+    config: &ServerConfig,
+    layout: &SessionLayout,
+    runtimes: &PaneRuntimes,
+    dump_style: ScrollbackDumpStyle,
+) -> rootcause::Result<PathBuf> {
+    let pane_id = layout.active_pane_id()?;
+    self::write_scrollback_dump_file(&config.paths.root, pane_id, dump_style, |file| {
+        runtimes.write_scrollback_dump(pane_id, dump_style, file)
     })
 }
 
@@ -795,6 +795,30 @@ mod tests {
         Ok(())
     }
 
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    enum SnapshotMatch {
+        Contains,
+        Missing,
+    }
+
+    impl SnapshotMatch {
+        fn from_rendered(rendered: &str, needle: &str) -> Self {
+            if rendered.contains(needle) {
+                return Self::Contains;
+            }
+            let needle_tokens = needle.split_whitespace().collect::<Vec<_>>();
+            let rendered_tokens = rendered.split_whitespace().collect::<Vec<_>>();
+            if rendered_tokens
+                .windows(needle_tokens.len())
+                .any(|window| window == needle_tokens.as_slice())
+            {
+                Self::Contains
+            } else {
+                Self::Missing
+            }
+        }
+    }
+
     fn wait_for_runtime_snapshot_contains(
         runtimes: &PaneRuntimes,
         pane_id: PaneId,
@@ -833,29 +857,5 @@ mod tests {
         instant
             .checked_add(duration)
             .ok_or_else(|| report!("test instant overflowed"))
-    }
-
-    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-    enum SnapshotMatch {
-        Contains,
-        Missing,
-    }
-
-    impl SnapshotMatch {
-        fn from_rendered(rendered: &str, needle: &str) -> Self {
-            if rendered.contains(needle) {
-                return Self::Contains;
-            }
-            let needle_tokens = needle.split_whitespace().collect::<Vec<_>>();
-            let rendered_tokens = rendered.split_whitespace().collect::<Vec<_>>();
-            if rendered_tokens
-                .windows(needle_tokens.len())
-                .any(|window| window == needle_tokens.as_slice())
-            {
-                Self::Contains
-            } else {
-                Self::Missing
-            }
-        }
     }
 }

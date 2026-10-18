@@ -14,12 +14,6 @@ pub enum RenderUpdate {
     Diff(RenderDiff),
 }
 
-#[derive(rkyv::Archive, Clone, Copy, Debug, Eq, PartialEq, rkyv::Serialize)]
-pub(super) enum RenderHyperlinkPresence {
-    Absent,
-    Present,
-}
-
 #[derive(rkyv::Archive, Clone, Debug, Eq, PartialEq, Serialize, rkyv::Serialize)]
 pub struct RenderBaseline {
     cursor: RenderCursor,
@@ -73,11 +67,6 @@ impl RenderBaseline {
     }
 
     #[must_use]
-    pub(super) const fn hyperlink_presence(&self) -> RenderHyperlinkPresence {
-        self.hyperlink_presence
-    }
-
-    #[must_use]
     pub const fn seq(&self) -> u64 {
         self.seq.into_inner()
     }
@@ -85,6 +74,11 @@ impl RenderBaseline {
     #[must_use]
     pub const fn size(&self) -> &TerminalSize {
         &self.size
+    }
+
+    #[must_use]
+    pub(super) const fn hyperlink_presence(&self) -> RenderHyperlinkPresence {
+        self.hyperlink_presence
     }
 
     fn validate(&self) -> rootcause::Result<()> {
@@ -214,11 +208,6 @@ impl RenderDiff {
     }
 
     #[must_use]
-    pub(super) const fn hyperlink_presence(&self) -> RenderHyperlinkPresence {
-        self.hyperlink_presence
-    }
-
-    #[must_use]
     pub const fn seq(&self) -> u64 {
         self.seq.into_inner()
     }
@@ -226,6 +215,11 @@ impl RenderDiff {
     #[must_use]
     pub const fn size(&self) -> &TerminalSize {
         &self.size
+    }
+
+    #[must_use]
+    pub(super) const fn hyperlink_presence(&self) -> RenderHyperlinkPresence {
+        self.hyperlink_presence
     }
 
     fn validate(&self) -> rootcause::Result<()> {
@@ -455,77 +449,6 @@ where
         let col = rkyv::Deserialize::<u16, D>::deserialize(&self.col, deserializer)?;
         let row = rkyv::Deserialize::<u16, D>::deserialize(&self.row, deserializer)?;
         RenderRowSpan::new(row, col, cells).map_err(super::rkyv_deserialize_error::<D::Error>)
-    }
-}
-
-fn invalid_wide_cell_sequence(reason: &'static str, index: usize) -> rootcause::Report {
-    report!("invalid muxr render row span")
-        .attach("reason=invalid wide-cell sequence")
-        .attach(reason)
-        .attach(format!("cell_index={index}"))
-}
-
-#[nutype::nutype(
-    const_fn,
-    validate(greater = 0),
-    derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize)
-)]
-struct RenderSequence(u64);
-
-impl rkyv::Archive for RenderSequence {
-    type Archived = rkyv::primitive::ArchivedU64;
-    type Resolver = ();
-
-    fn resolve(&self, resolver: Self::Resolver, out: rkyv::Place<Self::Archived>) {
-        rkyv::Archive::resolve(&self.into_inner(), resolver, out);
-    }
-}
-
-impl<S> rkyv::Serialize<S> for RenderSequence
-where
-    S: rkyv::rancor::Fallible + ?Sized,
-    u64: rkyv::Serialize<S>,
-{
-    fn serialize(&self, serializer: &mut S) -> Result<Self::Resolver, S::Error> {
-        rkyv::Serialize::serialize(&self.into_inner(), serializer)
-    }
-}
-
-#[nutype::nutype(
-    validate(with = SharedRenderUri::validate, error = rootcause::Report),
-    derive(Debug, Eq, Hash, PartialEq, AsRef),
-)]
-struct SharedRenderUri(String);
-
-impl SharedRenderUri {
-    fn validate(uri: &str) -> rootcause::Result<()> {
-        if uri.is_empty() {
-            return Err(report!("invalid muxr render hyperlink").attach("reason=uri must be nonempty"));
-        }
-        if uri.chars().any(char::is_control) {
-            return Err(report!("invalid muxr render hyperlink").attach("reason=uri must not contain control chars"));
-        }
-        Ok(())
-    }
-}
-
-impl rkyv::Archive for SharedRenderUri {
-    type Archived = rkyv::string::ArchivedString;
-    type Resolver = rkyv::string::StringResolver;
-
-    fn resolve(&self, resolver: Self::Resolver, out: rkyv::Place<Self::Archived>) {
-        rkyv::string::ArchivedString::resolve_from_str(self.as_ref(), resolver, out);
-    }
-}
-
-impl<S> rkyv::Serialize<S> for SharedRenderUri
-where
-    S: rkyv::rancor::Fallible + ?Sized,
-    S::Error: rkyv::rancor::Source,
-    str: rkyv::SerializeUnsized<S>,
-{
-    fn serialize(&self, serializer: &mut S) -> Result<Self::Resolver, S::Error> {
-        rkyv::string::ArchivedString::serialize_from_str(self.as_ref(), serializer)
     }
 }
 
@@ -817,6 +740,83 @@ pub enum RenderColor {
     Indexed(u8),
     /// Explicit 24-bit RGB color (`38;2;r;g;b` / `48;2;r;g;b`) for exact colors.
     Rgb { r: u8, g: u8, b: u8 },
+}
+
+#[derive(rkyv::Archive, Clone, Copy, Debug, Eq, PartialEq, rkyv::Serialize)]
+pub(super) enum RenderHyperlinkPresence {
+    Absent,
+    Present,
+}
+
+fn invalid_wide_cell_sequence(reason: &'static str, index: usize) -> rootcause::Report {
+    report!("invalid muxr render row span")
+        .attach("reason=invalid wide-cell sequence")
+        .attach(reason)
+        .attach(format!("cell_index={index}"))
+}
+
+#[nutype::nutype(
+    const_fn,
+    validate(greater = 0),
+    derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize)
+)]
+struct RenderSequence(u64);
+
+impl rkyv::Archive for RenderSequence {
+    type Archived = rkyv::primitive::ArchivedU64;
+    type Resolver = ();
+
+    fn resolve(&self, resolver: Self::Resolver, out: rkyv::Place<Self::Archived>) {
+        rkyv::Archive::resolve(&self.into_inner(), resolver, out);
+    }
+}
+
+impl<S> rkyv::Serialize<S> for RenderSequence
+where
+    S: rkyv::rancor::Fallible + ?Sized,
+    u64: rkyv::Serialize<S>,
+{
+    fn serialize(&self, serializer: &mut S) -> Result<Self::Resolver, S::Error> {
+        rkyv::Serialize::serialize(&self.into_inner(), serializer)
+    }
+}
+
+#[nutype::nutype(
+    validate(with = SharedRenderUri::validate, error = rootcause::Report),
+    derive(Debug, Eq, Hash, PartialEq, AsRef),
+)]
+struct SharedRenderUri(String);
+
+impl SharedRenderUri {
+    fn validate(uri: &str) -> rootcause::Result<()> {
+        if uri.is_empty() {
+            return Err(report!("invalid muxr render hyperlink").attach("reason=uri must be nonempty"));
+        }
+        if uri.chars().any(char::is_control) {
+            return Err(report!("invalid muxr render hyperlink").attach("reason=uri must not contain control chars"));
+        }
+        Ok(())
+    }
+}
+
+impl rkyv::Archive for SharedRenderUri {
+    type Archived = rkyv::string::ArchivedString;
+    type Resolver = rkyv::string::StringResolver;
+
+    fn resolve(&self, resolver: Self::Resolver, out: rkyv::Place<Self::Archived>) {
+        rkyv::string::ArchivedString::resolve_from_str(self.as_ref(), resolver, out);
+    }
+}
+
+impl<S> rkyv::Serialize<S> for SharedRenderUri
+where
+    S: rkyv::rancor::Fallible + ?Sized,
+    S::Error: rkyv::rancor::Source,
+    str: rkyv::SerializeUnsized<S>,
+{
+    fn serialize(&self, serializer: &mut S) -> Result<Self::Resolver, S::Error> {
+        rkyv::string::ArchivedString::serialize_from_str(self.as_ref(), serializer)
+    }
 }
 
 #[cfg(test)]

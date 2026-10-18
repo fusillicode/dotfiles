@@ -61,83 +61,6 @@ where
     minimal_multi_select_internal(items, display_text, |item| Some(preview_text(item)), true, search_text)
 }
 
-fn minimal_multi_select_internal<T, D, P, S>(
-    items: Vec<T>,
-    mut display_text: D,
-    mut preview_text: P,
-    has_preview: bool,
-    mut search_text: S,
-) -> rootcause::Result<Option<Vec<T>>>
-where
-    D: FnMut(&T) -> String,
-    P: FnMut(&T) -> Option<String>,
-    S: FnMut(&T) -> String,
-{
-    if items.is_empty() {
-        return Ok(None);
-    }
-
-    let normalize = |value: &str| value.split_whitespace().collect::<Vec<_>>().join(" ");
-    let display_texts: Vec<String> = items.iter().map(|item| normalize(&display_text(item))).collect();
-    let display_items = preview::build_ansi_display_items(&display_texts)?;
-    let skim_items: Vec<Arc<dyn SkimItem>> = items
-        .iter()
-        .enumerate()
-        .map(|(index, item)| {
-            let display_item = Arc::clone(display_items.get(index)?);
-            let visible_match_text = display_item.text().into_owned();
-            let hidden_search = normalize(&search_text(item));
-            let search_corpus = if hidden_search.is_empty() || hidden_search == visible_match_text {
-                visible_match_text.clone()
-            } else {
-                format!("{visible_match_text} {hidden_search}")
-            };
-
-            Some(Arc::new(IndexedSkimItem {
-                output: index.to_string(),
-                display_item,
-                visible_text: visible_match_text,
-                preview_text: preview_text(item),
-                search_corpus,
-            }) as Arc<dyn SkimItem>)
-        })
-        .collect::<Option<Vec<_>>>()
-        .ok_or_else(|| report!("missing ANSI display item while building skim rows"))?;
-
-    let (tx_items, rx_items) = skim::prelude::unbounded();
-    tx_items
-        .send(skim_items)
-        .map_err(|e| report!("failed to queue skim items").attach(e.to_string()))?;
-    drop(tx_items);
-
-    let options = select_options(true, has_preview);
-    let output = run_skim_with_matcher(options, rx_items)?;
-
-    if output.is_abort || output.selected_items.is_empty() {
-        return Ok(None);
-    }
-
-    let mut selected_indices: Vec<usize> = output
-        .selected_items
-        .iter()
-        .filter_map(|mi| mi.item.output().parse().ok())
-        .collect();
-    selected_indices.sort_unstable();
-    selected_indices.dedup();
-
-    let mut indexed_items: Vec<Option<T>> = items.into_iter().map(Some).collect();
-    let selected: Vec<T> = selected_indices
-        .into_iter()
-        .filter_map(|i| indexed_items.get_mut(i).and_then(Option::take))
-        .collect();
-
-    if selected.is_empty() {
-        Ok(None)
-    } else {
-        Ok(Some(selected))
-    }
-}
-
 /// Minimal interactive single-select returning [`Option::None`] if `items` is empty or the user cancels.
 ///
 /// # Errors
@@ -241,6 +164,83 @@ where
     Ok(Some(items.iter().find(|x| item_find(*x)).cloned().ok_or_else(
         || report!("missing item matching CLI arg").attach(format!("cli_arg={cli_arg} items={items:#?}")),
     )?))
+}
+
+fn minimal_multi_select_internal<T, D, P, S>(
+    items: Vec<T>,
+    mut display_text: D,
+    mut preview_text: P,
+    has_preview: bool,
+    mut search_text: S,
+) -> rootcause::Result<Option<Vec<T>>>
+where
+    D: FnMut(&T) -> String,
+    P: FnMut(&T) -> Option<String>,
+    S: FnMut(&T) -> String,
+{
+    if items.is_empty() {
+        return Ok(None);
+    }
+
+    let normalize = |value: &str| value.split_whitespace().collect::<Vec<_>>().join(" ");
+    let display_texts: Vec<String> = items.iter().map(|item| normalize(&display_text(item))).collect();
+    let display_items = preview::build_ansi_display_items(&display_texts)?;
+    let skim_items: Vec<Arc<dyn SkimItem>> = items
+        .iter()
+        .enumerate()
+        .map(|(index, item)| {
+            let display_item = Arc::clone(display_items.get(index)?);
+            let visible_match_text = display_item.text().into_owned();
+            let hidden_search = normalize(&search_text(item));
+            let search_corpus = if hidden_search.is_empty() || hidden_search == visible_match_text {
+                visible_match_text.clone()
+            } else {
+                format!("{visible_match_text} {hidden_search}")
+            };
+
+            Some(Arc::new(IndexedSkimItem {
+                output: index.to_string(),
+                display_item,
+                visible_text: visible_match_text,
+                preview_text: preview_text(item),
+                search_corpus,
+            }) as Arc<dyn SkimItem>)
+        })
+        .collect::<Option<Vec<_>>>()
+        .ok_or_else(|| report!("missing ANSI display item while building skim rows"))?;
+
+    let (tx_items, rx_items) = skim::prelude::unbounded();
+    tx_items
+        .send(skim_items)
+        .map_err(|e| report!("failed to queue skim items").attach(e.to_string()))?;
+    drop(tx_items);
+
+    let options = select_options(true, has_preview);
+    let output = run_skim_with_matcher(options, rx_items)?;
+
+    if output.is_abort || output.selected_items.is_empty() {
+        return Ok(None);
+    }
+
+    let mut selected_indices: Vec<usize> = output
+        .selected_items
+        .iter()
+        .filter_map(|mi| mi.item.output().parse().ok())
+        .collect();
+    selected_indices.sort_unstable();
+    selected_indices.dedup();
+
+    let mut indexed_items: Vec<Option<T>> = items.into_iter().map(Some).collect();
+    let selected: Vec<T> = selected_indices
+        .into_iter()
+        .filter_map(|i| indexed_items.get_mut(i).and_then(Option::take))
+        .collect();
+
+    if selected.is_empty() {
+        Ok(None)
+    } else {
+        Ok(Some(selected))
+    }
 }
 
 struct SearchCorpusEngineFactory {
@@ -367,6 +367,14 @@ fn run_skim_prompt<T: Display>(items: &[T], options: SkimOptions) -> rootcause::
     Ok((output, display_texts))
 }
 
+/// Lightweight prompt options with a visible prompt string and fixed height.
+fn simple_prompt_options(prompt: &str, height: &str) -> SkimOptions {
+    let mut options = base_skim_options();
+    options.height = height.into();
+    options.prompt = format!("{prompt} ");
+    options
+}
+
 /// Shared [`SkimOptions`] base: reverse layout, no info line, accept/abort keybindings,
 /// input-order preserved during filtering.
 fn base_skim_options() -> SkimOptions {
@@ -377,14 +385,6 @@ fn base_skim_options() -> SkimOptions {
     options.no_sort = true;
     options.cycle = true;
     options.bind = vec!["enter:accept".into(), "esc:abort".into(), "ctrl-c:abort".into()];
-    options
-}
-
-/// Lightweight prompt options with a visible prompt string and fixed height.
-fn simple_prompt_options(prompt: &str, height: &str) -> SkimOptions {
-    let mut options = base_skim_options();
-    options.height = height.into();
-    options.prompt = format!("{prompt} ");
     options
 }
 

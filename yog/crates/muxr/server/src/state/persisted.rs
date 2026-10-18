@@ -12,22 +12,6 @@ use crate::state::SessionLayout;
 use crate::state::Tab;
 use crate::state::VERSION;
 
-#[derive(Serialize)]
-struct PersistedLayout<'a> {
-    version: u16,
-    session: &'a SessionName,
-    active_tab: &'a TabId,
-    tabs: &'a [Tab],
-}
-
-#[derive(Deserialize)]
-struct PersistedLayoutOwned {
-    version: u16,
-    session: SessionName,
-    active_tab: TabId,
-    tabs: Vec<Tab>,
-}
-
 impl SessionLayout {
     fn from_persisted(session: &SessionName, persisted: PersistedLayoutOwned) -> rootcause::Result<Self> {
         if persisted.version != VERSION {
@@ -76,6 +60,22 @@ pub fn load_metadata(paths: &SessionPaths, session: &SessionName) -> rootcause::
         serde_json::from_slice(&bytes).context("failed to parse muxr layout metadata")?;
 
     Ok(Some(SessionLayout::from_persisted(session, persisted)?))
+}
+
+#[derive(Serialize)]
+struct PersistedLayout<'a> {
+    version: u16,
+    session: &'a SessionName,
+    active_tab: &'a TabId,
+    tabs: &'a [Tab],
+}
+
+#[derive(Deserialize)]
+struct PersistedLayoutOwned {
+    version: u16,
+    session: SessionName,
+    active_tab: TabId,
+    tabs: Vec<Tab>,
 }
 
 #[cfg(test)]

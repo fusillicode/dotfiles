@@ -114,12 +114,6 @@ impl PaneBorder {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-struct PaneBorderCellOwners {
-    offset: u16,
-    pane_ids: Vec<PaneId>,
-}
-
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PaneBorderAxis {
     Horizontal,
@@ -233,6 +227,12 @@ impl BorderCellOwner {
             }
         }
     }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct PaneBorderCellOwners {
+    offset: u16,
+    pane_ids: Vec<PaneId>,
 }
 
 fn compose_border_cells(
@@ -668,17 +668,6 @@ mod tests {
     use crate::pane::layout::PanePosition;
     use crate::pane::layout::PaneRegion;
     use crate::pane::layout::PaneSize;
-
-    fn pane_region(id: PaneId, row: u16, col: u16, rows: u16, cols: u16, focus_seq: u64) -> PaneRegion {
-        PaneRegion {
-            area: PaneArea {
-                origin: PanePosition { row, col },
-                size: PaneSize { rows, cols },
-            },
-            focus_seq,
-            id,
-        }
-    }
 
     #[derive(Clone, Copy, Debug)]
     enum NestedBorderFixture {
@@ -1222,6 +1211,17 @@ mod tests {
         assert_that!(self::border_cell_at(&border_cells, 1, 1)?.visual, eq(expected_visual));
         assert_that!(self::border_cell_at(&border_cells, 2, 1)?.visual, eq(expected_visual));
         Ok(())
+    }
+
+    fn pane_region(id: PaneId, row: u16, col: u16, rows: u16, cols: u16, focus_seq: u64) -> PaneRegion {
+        PaneRegion {
+            area: PaneArea {
+                origin: PanePosition { row, col },
+                size: PaneSize { rows, cols },
+            },
+            focus_seq,
+            id,
+        }
     }
 
     fn empty_render_rows(size: &TerminalSize) -> Vec<Vec<RenderCell>> {

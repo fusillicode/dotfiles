@@ -7,6 +7,28 @@ use std::ops::Deref;
 use owo_colors::OwoColorize;
 use ytil_gh::issue::ListedIssue;
 
+/// Interactively create a GitHub branch from a selected issue.
+pub fn run() -> rootcause::Result<()> {
+    let issues = ytil_gh::issue::list()?;
+
+    let Some(issue) = ytil_tui::minimal_select(issues.into_iter().map(RenderableListedIssue).collect())? else {
+        return Ok(());
+    };
+
+    let Some(checkout_branch) = ytil_tui::yes_no_select("Checkout branch?")? else {
+        return Ok(());
+    };
+
+    let develop_output = ytil_gh::issue::develop(&issue.number.to_string(), checkout_branch)?;
+    println!(
+        "{} with name={:?}",
+        "Branch created".green().bold(),
+        develop_output.branch_name
+    );
+
+    Ok(())
+}
+
 struct RenderableListedIssue(pub ListedIssue);
 
 impl Deref for RenderableListedIssue {
@@ -28,26 +50,4 @@ impl Display for RenderableListedIssue {
             self.title
         )
     }
-}
-
-/// Interactively create a GitHub branch from a selected issue.
-pub fn run() -> rootcause::Result<()> {
-    let issues = ytil_gh::issue::list()?;
-
-    let Some(issue) = ytil_tui::minimal_select(issues.into_iter().map(RenderableListedIssue).collect())? else {
-        return Ok(());
-    };
-
-    let Some(checkout_branch) = ytil_tui::yes_no_select("Checkout branch?")? else {
-        return Ok(());
-    };
-
-    let develop_output = ytil_gh::issue::develop(&issue.number.to_string(), checkout_branch)?;
-    println!(
-        "{} with name={:?}",
-        "Branch created".green().bold(),
-        develop_output.branch_name
-    );
-
-    Ok(())
 }

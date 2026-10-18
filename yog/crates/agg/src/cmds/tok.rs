@@ -14,13 +14,6 @@ pub struct Opts {
     pub input: Input,
 }
 
-#[derive(Debug, Eq, PartialEq)]
-pub enum Input {
-    File(PathBuf),
-    Stdin,
-    Text(String),
-}
-
 impl TryFrom<Vec<OsString>> for Opts {
     type Error = rootcause::Report;
 
@@ -50,6 +43,13 @@ impl TryFrom<Vec<OsString>> for Opts {
 
         Ok(Self { encoding, input })
     }
+}
+
+#[derive(Debug, Eq, PartialEq)]
+pub enum Input {
+    File(PathBuf),
+    Stdin,
+    Text(String),
 }
 
 impl Input {
