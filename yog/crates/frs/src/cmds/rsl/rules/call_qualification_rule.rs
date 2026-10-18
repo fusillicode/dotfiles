@@ -237,8 +237,10 @@ impl ImportUsage<'_, '_> {
             .into_iter()
             .filter_map(|(index, count)| {
                 let binding = info.imports.get(index)?;
-                (analysis.references.values.get(&binding.name) == Some(&count) && !needed.contains(&index))
-                    .then_some(index)
+                (analysis.references.values.get(&binding.name) == Some(&count)
+                    && !needed.contains(&index)
+                    && !analysis.references.tokens.contains(&binding.name))
+                .then_some(index)
             })
             .collect()
     }
@@ -278,8 +280,7 @@ impl ImportUsage<'_, '_> {
             if !removed.contains(&index) {
                 return true;
             }
-            let uncertain = analysis.opaque_expansions
-                || module_idx::has_external_modules(self.scope.items)
+            let uncertain = module_idx::has_external_modules(self.scope.items)
                 || analysis.references.uncertain.contains(&binding.name)
                 || analysis.references.types.contains_key(&binding.name)
                 || !self.removable.contains(&plan.edits.span_range(binding.span))
@@ -298,6 +299,6 @@ fn import_usage_reason() -> FixBlockReason {
         code: "import-usage-unknown",
         message: "Changing these calls would require removing a function import whose other uses cannot be checked."
             .to_owned(),
-        help: "Check macro, child-module, and import uses before changing these calls and their import together.",
+        help: "Check child-module references, import dependencies, and comments before removing this import.",
     }
 }

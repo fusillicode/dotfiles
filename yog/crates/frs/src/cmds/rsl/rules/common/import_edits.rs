@@ -5,12 +5,14 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fmt::Write;
 
+use syn::Attribute;
 use syn::Block;
 use syn::ConstParam;
 use syn::Item;
 use syn::ItemMacro;
 use syn::ItemMod;
 use syn::Macro;
+use syn::Meta;
 use syn::PatIdent;
 use syn::Stmt;
 use syn::TypeParam;
@@ -41,13 +43,14 @@ impl From<ImportError> for FixBlockReason {
         match error {
             ImportError::UnknownImports => Self {
                 code: "unknown-imports",
-                message: "A wildcard, attributed, or absolute import prevents checking all available names.".to_owned(),
+                message: "A wildcard, conditional, or absolute import prevents checking all available names."
+                    .to_owned(),
                 help: "Use explicit imports so the names available in this module can be checked.",
             },
             ImportError::UnknownBindings => Self {
                 code: "unknown-bindings",
-                message: "A macro or unresolved block import may introduce conflicting names.".to_owned(),
-                help: "Review the affected names and make this change manually if appropriate.",
+                message: "An unresolved block import prevents checking all available names.".to_owned(),
+                help: "Use explicit block imports so the available names can be checked.",
             },
             ImportError::NameConflict { name } => Self {
                 code: "name-conflict",
@@ -116,7 +119,7 @@ impl ImportEdits {
                 .collect(),
             reserved: LocalNames {
                 names: fn_call_analysis::module_type_names(scope.items),
-                unknown: analysis.opaque_expansions,
+                unknown: false,
             },
             unknown: info.unknown_imports,
             additions: BTreeSet::new(),
@@ -238,6 +241,19 @@ impl LocalNames {
 }
 
 impl<'ast> Visit<'ast> for LocalNames {
+    fn visit_attribute(&mut self, attribute: &'ast Attribute) {
+        self.names.extend(
+            attribute
+                .path()
+                .segments
+                .iter()
+                .map(|segment| segment.ident.to_string()),
+        );
+        if let Meta::List(meta) = &attribute.meta {
+            self.names.extend(super::token_names(meta.tokens.clone()));
+        }
+    }
+
     fn visit_pat_ident(&mut self, pattern: &'ast PatIdent) {
         self.names.insert(pattern.ident.to_string());
         visit::visit_pat_ident(self, pattern);
@@ -274,16 +290,22 @@ impl<'ast> Visit<'ast> for LocalNames {
         visit::visit_block(self, block);
     }
 
-    fn visit_item_mod(&mut self, _module: &'ast ItemMod) {}
+    fn visit_item_mod(&mut self, module: &'ast ItemMod) {
+        for attribute in &module.attrs {
+            self.visit_attribute(attribute);
+        }
+    }
 
-    fn visit_macro(&mut self, _mac: &'ast Macro) {
-        // An expansion can introduce imports or local bindings that the syntax tree cannot resolve.
-        self.unknown = true;
+    fn visit_macro(&mut self, mac: &'ast Macro) {
+        if mac.path.leading_colon.is_none()
+            && let Some(root) = mac.path.segments.first()
+        {
+            self.names.insert(root.ident.to_string());
+        }
+        self.names.extend(super::token_names(mac.tokens.clone()));
     }
 
     fn visit_item_macro(&mut self, item: &'ast ItemMacro) {
-        if item.ident.is_none() {
-            self.unknown = true;
-        }
+        self.visit_macro(&item.mac);
     }
 }

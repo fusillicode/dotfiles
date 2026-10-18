@@ -168,7 +168,8 @@ mod tests {
         mod first;
         #[path = "shared.rs"]
         mod second;
-    "#
+    "#,
+        "crate::first::helper"
     )]
     #[case::opaque_module_macro(
         r#"
@@ -178,9 +179,13 @@ mod tests {
         make_modules!();
         #[path = "shared.rs"]
         mod first;
-    "#
+    "#,
+        "helper"
     )]
-    fn test_rsl_when_module_identity_is_uncertain_keeps_calls_qualified(#[case] root_source: &str) {
+    fn test_rsl_when_macros_or_shared_files_are_present_uses_visible_module_identity(
+        #[case] root_source: &str,
+        #[case] expected_call: &str,
+    ) {
         let directory = tempfile::tempdir().unwrap();
         fs::write(
             directory.path().join("Cargo.toml"),
@@ -217,7 +222,9 @@ mod tests {
             .unwrap();
 
         assert!(output.status.success(), "{output:?}");
-        assert_eq!(fs::read_to_string(path).unwrap(), original);
+        let expected = original.replace("crate::first::helper", expected_call);
+
+        assert_eq!(fs::read_to_string(path).unwrap(), expected);
     }
 
     #[test]
@@ -351,7 +358,7 @@ mod tests {
             fn run(_: std::path::PathBuf) {}
         ",
         "<file>:4:23: skipped [item-qualification/unknown-imports]: replace `std::path::PathBuf` with `PathBuf`\n  \
-         Reason: A wildcard, attributed, or absolute import prevents checking all available names.\n  \
+         Reason: A wildcard, conditional, or absolute import prevents checking all available names.\n  \
          Help: Use explicit imports so the names available in this module can be checked.\n"
     )]
     #[case::exported_alias(

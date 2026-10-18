@@ -155,7 +155,6 @@ fn resolve_declarations(
         .map(|declaration| match declaration {
             Declaration::Module { item, local } => resolve_module(parent, item, local, directory, sources, ancestors),
             Declaration::Include(mac) => resolve_include(mac, directory, sources, ancestors),
-            Declaration::OpaqueExpansion => Ok(vec![ModuleResolution::UnexpandedModules]),
         })
         .collect::<io::Result<Vec<_>>>()?;
 

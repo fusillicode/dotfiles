@@ -80,3 +80,12 @@ pub mod private_alias {
 pub mod wildcard_alias {
     use std::fmt::Debug as _;
 }
+
+pub mod source_visible_macros {
+    #[allow(unused_imports)]
+    use std::path::PathBuf as FilePath;
+
+    fn run(_: FilePath) {
+        arbitrary_macro!();
+    }
+}

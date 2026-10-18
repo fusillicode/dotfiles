@@ -92,3 +92,15 @@ pub mod preserve_comments {
 }
 
 use super::OutsideCrate;
+
+#[custom_attribute]
+pub mod source_visible_macros {
+    declare_modules!();
+
+    use crate::source_visible_macros::inner::Thing;
+    use crate::Other;
+
+    mod inner {
+        pub struct Thing;
+    }
+}

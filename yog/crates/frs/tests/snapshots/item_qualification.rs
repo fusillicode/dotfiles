@@ -181,3 +181,12 @@ pub mod unqualified_enum {
         Kind::Value
     }
 }
+
+pub mod source_visible_macros {
+    fn run(_: std::path::PathBuf) {
+        arbitrary_macro!();
+    }
+
+    #[custom_attribute]
+    fn attributed(_: std::time::Instant) {}
+}

@@ -3,6 +3,10 @@
 //! A source file can occur in several modules. Keep those occurrences separate and only answer an
 //! anchoring query when they all agree. Locations use inline module names rather than byte offsets,
 //! so ordinary edits and item reordering do not invalidate ancestry.
+//!
+//! Like the rewriting rules, discovery trusts explicit declarations: arbitrary macro
+//! and attribute expansions are assumed not to relocate them or add hidden occurrences.
+//! Literal includes are still followed; computed include paths remain unresolved.
 
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -574,7 +578,7 @@ mod tests {
     }
 
     #[test]
-    fn test_module_graph_when_a_module_has_an_unknown_attribute_rejects_its_context() {
+    fn test_module_graph_when_a_module_has_an_unknown_attribute_uses_its_declared_context() {
         let graph = discover(
             &[(
                 "/src/lib.rs",
@@ -595,29 +599,41 @@ mod tests {
                 &["altered".to_owned(), "nested".to_owned()],
                 0
             ),
-            Err(ResolutionError::UnexpandedModules)
+            Ok("crate::altered::nested".to_owned())
         );
 
         assert_eq!(
             graph.anchor(Path::new("/src/lib.rs"), &["ordinary".to_owned()], 0),
-            Err(ResolutionError::UnexpandedModules)
+            Ok("crate::ordinary".to_owned())
         );
     }
 
-    #[rstest::rstest]
-    #[case::computed_include(
-        r#"
-        include!(concat!(env!("OUT_DIR"), "/generated.rs"));
-        mod ordinary {}
-    "#
-    )]
-    #[case::item_macro(
-        r"
-        generate_modules!();
-        mod ordinary {}
-    "
-    )]
-    fn test_module_graph_when_module_expansion_is_unknown_blocks_the_affected_crate(#[case] source: &str) {
+    #[test]
+    fn test_module_graph_when_an_item_macro_is_present_uses_explicit_modules() {
+        let graph = discover(
+            &[(
+                "/src/lib.rs",
+                r"
+                generate_modules!();
+                mod ordinary {}
+            ",
+            )],
+            &["/src/lib.rs"],
+        );
+
+        assert_eq!(
+            graph.anchor(Path::new("/src/lib.rs"), &["ordinary".to_owned()], 0),
+            Ok("crate::ordinary".to_owned())
+        );
+    }
+
+    #[test]
+    fn test_module_graph_when_an_include_path_is_computed_blocks_the_affected_crate() {
+        let source = r#"
+            include!(concat!(env!("OUT_DIR"), "/generated.rs"));
+            mod ordinary {}
+        "#;
+
         let graph = discover(
             &[
                 ("/src/lib.rs", source),

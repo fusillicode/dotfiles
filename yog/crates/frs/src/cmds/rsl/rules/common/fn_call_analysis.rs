@@ -6,7 +6,6 @@ use std::mem;
 
 use proc_macro2::Span;
 use proc_macro2::TokenStream;
-use proc_macro2::TokenTree;
 use syn::Arm;
 use syn::Attribute;
 use syn::BinOp;
@@ -59,22 +58,7 @@ use super::module_idx::ScopeInfo;
 
 pub fn analyze_calls<'ast>(scope: &ModuleScope<'ast>, idx: &ModuleIdx<'ast>) -> CallAnalysis<'ast> {
     let items = scope.items;
-    let mut module_bindings = Bindings::items(items, &scope.path);
-    for parent in &idx.scopes {
-        if parent.path.len() >= scope.path.len() || !scope.path.starts_with(&parent.path) {
-            continue;
-        }
-        // macro_rules! names have textual scope extending into child modules.
-        // Ordinary module imports and type/value declarations do not.
-        for item in parent.items {
-            if let Item::Macro(mac) = item
-                && let Some(name) = &mac.ident
-            {
-                module_bindings.macros.insert(name.to_string());
-            }
-        }
-        module_bindings.unknown |= has_opaque_module_macros(parent.items);
-    }
+    let module_bindings = Bindings::items(items, &scope.path);
     let mut visitor = FnCallVisitor {
         idx,
         calls: Vec::new(),
@@ -82,8 +66,6 @@ pub fn analyze_calls<'ast>(scope: &ModuleScope<'ast>, idx: &ModuleIdx<'ast>) -> 
         declarations: Bindings::declarations(items),
         module_bindings,
         current_module: scope.path.clone(),
-        module_macros: has_opaque_module_macros(items),
-        opaque_expansions: has_opaque_module_macros(items) || has_opaque_attributes(items),
         references: References::default(),
         free_type_names: HashSet::new(),
         path_namespace: Namespace::Type,
@@ -94,7 +76,6 @@ pub fn analyze_calls<'ast>(scope: &ModuleScope<'ast>, idx: &ModuleIdx<'ast>) -> 
     }
     CallAnalysis {
         calls: visitor.calls,
-        opaque_expansions: visitor.opaque_expansions,
         references: visitor.references,
         free_type_names: visitor.free_type_names,
     }
@@ -102,7 +83,6 @@ pub fn analyze_calls<'ast>(scope: &ModuleScope<'ast>, idx: &ModuleIdx<'ast>) -> 
 
 pub struct CallAnalysis<'ast> {
     pub calls: Vec<CallSite<'ast>>,
-    pub opaque_expansions: bool,
     pub references: References,
     pub free_type_names: HashSet<String>,
 }
@@ -112,6 +92,7 @@ pub struct CallAnalysis<'ast> {
 pub struct References {
     pub values: HashMap<String, usize>,
     pub types: HashMap<String, usize>,
+    pub tokens: HashSet<String>,
     pub uncertain: HashSet<String>,
 }
 
@@ -119,7 +100,6 @@ pub struct CallSite<'ast> {
     pub path: &'ast Path,
     pub conditional: bool,
     scopes: Vec<Bindings>,
-    module_macros: bool,
     module_value: bool,
 }
 
@@ -186,7 +166,7 @@ impl CallSite<'_> {
     }
 
     fn check_module_name(&self, name: &str) -> Result<(), ImportError> {
-        if self.module_macros || self.scopes.iter().any(|scope| scope.unknown) {
+        if self.scopes.iter().any(|scope| scope.unknown) {
             return Err(ImportError::UnknownBindings);
         }
         if self.scopes.iter().any(|scope| scope.types.contains_key(name)) {
@@ -211,43 +191,8 @@ impl CallSite<'_> {
     }
 }
 
-pub(super) fn has_opaque_module_macros(items: &[Item]) -> bool {
-    items.iter().any(|item| {
-        if let Item::Macro(mac) = item {
-            return mac.ident.is_none();
-        }
-        let attrs = if let Item::Mod(module) = item {
-            &module.attrs
-        } else if let Item::ExternCrate(item) = item {
-            &item.attrs
-        } else {
-            return false;
-        };
-        attrs.iter().any(|attr| attr.path().is_ident("macro_use"))
-    })
-}
-
-pub(super) fn has_opaque_attributes(items: &[Item]) -> bool {
-    let mut attributes = OpaqueAttributes { found: false };
-    for item in items {
-        attributes.visit_item(item);
-    }
-
-    attributes.found
-}
-
 pub(super) fn module_type_names(items: &[Item]) -> HashSet<String> {
     Bindings::declarations(items).types.into_keys().collect()
-}
-
-struct OpaqueAttributes {
-    found: bool,
-}
-
-impl<'ast> Visit<'ast> for OpaqueAttributes {
-    fn visit_attribute(&mut self, attribute: &'ast Attribute) {
-        self.found |= attribute_may_expand(&attribute.meta);
-    }
 }
 
 struct ConditionalAttributes {
@@ -262,60 +207,6 @@ impl<'ast> Visit<'ast> for ConditionalAttributes {
     }
 }
 
-// This classifies generated import uses only. Attribute expansion is deliberately
-// excluded from lexical binding uncertainty in FnCallVisitor::visit_attribute.
-fn attribute_may_expand(meta: &Meta) -> bool {
-    if meta.path().is_ident("cfg_attr") || meta.path().is_ident("unsafe") {
-        let Meta::List(list) = meta else {
-            return true;
-        };
-        let Ok(arguments) = list.parse_args_with(Punctuated::<Meta, Comma>::parse_terminated) else {
-            return true;
-        };
-        let skip = usize::from(meta.path().is_ident("cfg_attr"));
-        return arguments.iter().skip(skip).any(attribute_may_expand);
-    }
-    let Some(name) = meta.path().get_ident() else {
-        return true;
-    };
-    !matches!(
-        name.to_string().as_str(),
-        "allow"
-            | "warn"
-            | "deny"
-            | "forbid"
-            | "expect"
-            | "cfg"
-            | "doc"
-            | "inline"
-            | "cold"
-            | "must_use"
-            | "deprecated"
-            | "track_caller"
-            | "repr"
-            | "non_exhaustive"
-            | "path"
-            | "test"
-            | "ignore"
-            | "should_panic"
-            | "no_mangle"
-            | "export_name"
-            | "link"
-            | "link_name"
-            | "link_section"
-            | "used"
-            | "target_feature"
-            | "feature"
-            | "no_std"
-            | "no_implicit_prelude"
-            | "macro_export"
-            | "macro_use"
-            | "automatically_derived"
-            | "recursion_limit"
-            | "type_length_limit"
-    )
-}
-
 /// Module qualifiers use the type namespace; callable locals use the value namespace.
 /// Imports are reserved in every namespace until their definitions are known.
 /// Macro names are separate, so a local value named println does not shadow println!.
@@ -324,7 +215,6 @@ struct Bindings {
     types: HashMap<String, TypeBinding>,
     values: HashSet<String>,
     locals: HashSet<String>,
-    macros: HashSet<String>,
     unknown: bool,
 }
 
@@ -377,25 +267,18 @@ impl Bindings {
                 self.values.insert(name);
             }
         } else {
-            self.add_import_or_macro(item, current_module);
+            self.add_import(item, current_module);
         }
     }
 
-    fn add_import_or_macro(&mut self, item: &Item, current_module: &[String]) {
+    fn add_import(&mut self, item: &Item, current_module: &[String]) {
         if let Item::Use(import) = item {
             let imported = use_bindings(&import.tree, current_module);
-            self.unknown |= imported.unknown || !import.attrs.is_empty();
+            self.unknown |= imported.unknown || super::has_conditional_attributes(&import.attrs);
             for binding in imported.bindings {
                 self.types
                     .insert(binding.name.clone(), TypeBinding::Import(binding.path));
                 self.values.insert(binding.name.clone());
-                self.macros.insert(binding.name);
-            }
-        } else if let Item::Macro(mac) = item {
-            if let Some(name) = &mac.ident {
-                self.macros.insert(name.to_string());
-            } else {
-                self.unknown = true;
             }
         }
     }
@@ -451,8 +334,6 @@ struct FnCallVisitor<'ast, 'index> {
     module_bindings: Bindings,
     declarations: Bindings,
     current_module: Vec<String>,
-    module_macros: bool,
-    opaque_expansions: bool,
     references: References,
     free_type_names: HashSet<String>,
     path_namespace: Namespace,
@@ -461,7 +342,7 @@ struct FnCallVisitor<'ast, 'index> {
 
 impl<'ast> FnCallVisitor<'ast, '_> {
     fn record_reference(&mut self, name: String) {
-        if self.conditional || self.module_macros || self.scopes.iter().any(|scope| scope.unknown) {
+        if self.conditional || self.scopes.iter().any(|scope| scope.unknown) {
             self.references.uncertain.insert(name);
             return;
         }
@@ -492,15 +373,9 @@ impl<'ast> FnCallVisitor<'ast, '_> {
     }
 
     fn record_macro_tokens(&mut self, tokens: TokenStream) {
-        for token in tokens {
-            match token {
-                TokenTree::Ident(name) => {
-                    self.references.uncertain.insert(name.to_string());
-                    self.record_free_type_name(name.to_string());
-                }
-                TokenTree::Group(group) => self.record_macro_tokens(group.stream()),
-                TokenTree::Punct(_) | TokenTree::Literal(_) => {}
-            }
+        for name in super::token_names(tokens) {
+            self.references.tokens.insert(name.clone());
+            self.record_free_type_name(name);
         }
     }
 
@@ -520,42 +395,6 @@ impl<'ast> FnCallVisitor<'ast, '_> {
         } else {
             self.visit_expr(expression);
         }
-    }
-
-    fn macro_may_bind(&self, mac: &Macro) -> bool {
-        let parts: Vec<_> = mac
-            .path
-            .segments
-            .iter()
-            .map(|segment| segment.ident.to_string())
-            .collect();
-        let Some(name) = parts.last() else {
-            return true;
-        };
-        // Only standard expression macros are known not to introduce surrounding
-        // items when used as statements. A shadowing macro keeps the scope opaque.
-        if !is_standard_expression_macro(name) {
-            return true;
-        }
-        if parts.len() == 1 {
-            return self.module_bindings.macros.contains(name)
-                || self.module_bindings.unknown
-                || self
-                    .scopes
-                    .iter()
-                    .any(|scope| scope.macros.contains(name) || scope.unknown);
-        }
-        let Some(root) = parts.first() else {
-            return true;
-        };
-        parts.len() != 2
-            || !matches!(root.as_str(), "std" | "core" | "alloc")
-            || (mac.path.leading_colon.is_none() && self.module_bindings.unknown)
-            || self.module_bindings.types.contains_key(root)
-            || self
-                .scopes
-                .iter()
-                .any(|scope| scope.types.contains_key(root) || scope.unknown)
     }
 }
 
@@ -607,6 +446,10 @@ impl<'ast> Visit<'ast> for FnCallVisitor<'ast, '_> {
     }
 
     fn visit_item_use(&mut self, import: &'ast ItemUse) {
+        for attribute in &import.attrs {
+            self.visit_attribute(attribute);
+        }
+
         let imported = use_bindings(&import.tree, &[]);
         // Import paths can themselves be captured, even when the import defines
         // a same-spelled local binding.
@@ -647,7 +490,6 @@ impl<'ast> Visit<'ast> for FnCallVisitor<'ast, '_> {
                 path: &path.path,
                 conditional: self.conditional,
                 scopes: self.scopes.clone(),
-                module_macros: self.module_macros,
                 module_value: path.path.segments.len() == 1
                     && path
                         .path
@@ -668,19 +510,6 @@ impl<'ast> Visit<'ast> for FnCallVisitor<'ast, '_> {
         }
 
         self.scopes.push(bindings);
-        // Statement macros can generate block items visible even before invocation.
-        let opaque_macro = block.stmts.iter().any(|statement| match statement {
-            Stmt::Macro(statement) => self.macro_may_bind(&statement.mac),
-            Stmt::Local(_) | Stmt::Item(_) | Stmt::Expr(..) => false,
-        });
-        self.opaque_expansions |= opaque_macro
-            || block
-                .stmts
-                .iter()
-                .any(|statement| matches!(statement, Stmt::Item(Item::Macro(mac)) if mac.ident.is_none()));
-        if let Some(bindings) = self.scopes.last_mut() {
-            bindings.unknown |= opaque_macro;
-        }
         visit::visit_block(self, block);
         let _ = self.scopes.pop();
     }
@@ -779,6 +608,10 @@ impl<'ast> Visit<'ast> for FnCallVisitor<'ast, '_> {
     }
 
     fn visit_item_mod(&mut self, module: &'ast ItemMod) {
+        for attribute in &module.attrs {
+            self.visit_attribute(attribute);
+        }
+
         if let Some((brace, items)) = &module.content {
             let mut path = self.current_module.clone();
             path.push(module.ident.to_string());
@@ -788,10 +621,10 @@ impl<'ast> Visit<'ast> for FnCallVisitor<'ast, '_> {
                 body_start: brace.span.open().end(),
             };
             let analysis = analyze_calls(&scope, self.idx);
-            self.opaque_expansions |= analysis.opaque_expansions;
             self.free_type_names.extend(analysis.free_type_names);
             self.references.uncertain.extend(analysis.references.values.into_keys());
             self.references.uncertain.extend(analysis.references.types.into_keys());
+            self.references.uncertain.extend(analysis.references.tokens);
             self.references.uncertain.extend(analysis.references.uncertain);
             // Child imports may re-export a private name without calling it.
             for item in items {
@@ -813,62 +646,30 @@ impl<'ast> Visit<'ast> for FnCallVisitor<'ast, '_> {
         }
     }
 
-    // Assume attribute macros preserve name lookup in user-written function bodies.
-    // Expanding arbitrary macros is outside this syntax-based rule's scope. A macro
-    // that injects capturing bindings can therefore change a rewritten call's meaning;
-    // this is an accepted limitation, rather than a reason to block attributed code.
-    // Generated import uses remain opaque and are checked separately.
-    fn visit_attribute(&mut self, _attribute: &'ast Attribute) {}
+    // Follow the source-visible macro policy documented in common: record written
+    // names without guessing bindings or references generated by expansion.
+    fn visit_attribute(&mut self, attribute: &'ast Attribute) {
+        for segment in &attribute.path().segments {
+            self.references.tokens.insert(segment.ident.to_string());
+        }
+        if attribute.path().leading_colon.is_none()
+            && let Some(root) = attribute.path().segments.first()
+        {
+            self.record_free_type_name(root.ident.to_string());
+        }
+        if let Meta::List(meta) = &attribute.meta {
+            self.record_macro_tokens(meta.tokens.clone());
+        }
+    }
 
     fn visit_macro(&mut self, mac: &'ast Macro) {
-        // Expressions cannot leak bindings into their enclosing block, but an
-        // expansion can still observe a new module import or use an old one.
-        self.opaque_expansions |= self.macro_may_bind(mac);
         if mac.path.leading_colon.is_none()
-            && mac.path.segments.len() > 1
             && let Some(root) = mac.path.segments.first()
         {
             self.record_free_type_name(root.ident.to_string());
         }
         self.record_macro_tokens(mac.tokens.clone());
     }
-}
-
-fn is_standard_expression_macro(name: &str) -> bool {
-    matches!(
-        name,
-        "println"
-            | "print"
-            | "eprintln"
-            | "eprint"
-            | "format"
-            | "format_args"
-            | "write"
-            | "writeln"
-            | "vec"
-            | "assert"
-            | "assert_eq"
-            | "assert_ne"
-            | "debug_assert"
-            | "debug_assert_eq"
-            | "debug_assert_ne"
-            | "matches"
-            | "panic"
-            | "todo"
-            | "unreachable"
-            | "concat"
-            | "stringify"
-            | "include_str"
-            | "include_bytes"
-            | "env"
-            | "option_env"
-            | "cfg"
-            | "column"
-            | "line"
-            | "file"
-            | "module_path"
-            | "dbg"
-    )
 }
 
 fn pattern_bindings(pattern: &Pat) -> Bindings {

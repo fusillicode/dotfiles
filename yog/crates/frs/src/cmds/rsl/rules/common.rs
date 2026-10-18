@@ -1,4 +1,12 @@
 //! Shared name resolution and supporting edit plans for rule analysis.
+//!
+//! Rules use names and references written in source. Macro and attribute expansions
+//! are assumed to preserve surrounding name lookup and explicit module declarations.
+//! Hidden generated bindings or uses can therefore change the meaning of a rewrite;
+//! this is an accepted limitation, not a reason to skip otherwise supported edits.
+//! Identifiers actually present in macro and attribute tokens still count as uses.
+
+use std::collections::HashSet;
 
 pub(super) use fn_call_analysis::analyze_calls;
 pub(super) use fn_path_resolution::expected_fn_path;
@@ -11,6 +19,9 @@ pub(super) use import_resolution::has_name_clash_parts;
 pub(super) use module_idx::module_idx;
 pub(super) use path_resolution::is_import_style_path;
 use proc_macro2::Span;
+use proc_macro2::TokenStream;
+use proc_macro2::TokenTree;
+use syn::Attribute;
 
 use crate::cmds::rsl::analysis::FixBlockReason;
 use crate::cmds::rsl::source::SourceEditor;
@@ -22,6 +33,32 @@ mod import_edits;
 pub(super) mod import_resolution;
 pub(super) mod module_idx;
 pub(super) mod path_resolution;
+
+pub(super) fn has_conditional_attributes(attributes: &[Attribute]) -> bool {
+    attributes
+        .iter()
+        .any(|attribute| attribute.path().is_ident("cfg") || attribute.path().is_ident("cfg_attr"))
+}
+
+pub(super) fn token_names(tokens: TokenStream) -> HashSet<String> {
+    let mut pending = vec![tokens.into_iter()];
+    let mut names = HashSet::new();
+
+    while let Some(tokens) = pending.last_mut() {
+        match tokens.next() {
+            Some(TokenTree::Ident(name)) => {
+                names.insert(name.to_string());
+            }
+            Some(TokenTree::Group(group)) => pending.push(group.stream().into_iter()),
+            Some(TokenTree::Punct(_) | TokenTree::Literal(_)) => {}
+            None => {
+                pending.pop();
+            }
+        }
+    }
+
+    names
+}
 
 pub(super) fn ensure_no_comments(edits: &SourceEditor<'_>, span: Span) -> Result<(), FixBlockReason> {
     let text = edits.source_range(edits.span_range(span));

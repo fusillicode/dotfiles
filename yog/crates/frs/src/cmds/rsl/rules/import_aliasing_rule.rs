@@ -11,7 +11,6 @@ use std::ops::Range;
 
 use proc_macro2::Span;
 use proc_macro2::TokenStream;
-use proc_macro2::TokenTree;
 use syn::Attribute;
 use syn::Expr;
 use syn::FieldValue;
@@ -110,8 +109,8 @@ impl From<BlockReason> for FixBlockReason {
             },
             BlockReason::AttributedImport => Self {
                 code: "attributed-import",
-                message: "The import has attributes whose effects cannot be checked here.".to_owned(),
-                help: "Review the import's attributes before changing it manually.",
+                message: "Conditional attributes may change whether this import is available.".to_owned(),
+                help: "Review the import in each supported configuration before changing it manually.",
             },
             BlockReason::CrossModuleReferences => Self {
                 code: "cross-module-references",
@@ -196,7 +195,7 @@ fn analyze_scope(idx: &ModuleIdx<'_>, scope: &ModuleScope<'_>, plan: &mut RulePl
         let exported = !matches!(import.vis, Visibility::Inherited);
         let reason = if exported && alias != original {
             Some(FixBlockReason::from(BlockReason::ExportedAlias))
-        } else if !import.attrs.is_empty() {
+        } else if common::has_conditional_attributes(&import.attrs) {
             Some(BlockReason::AttributedImport.into())
         } else if info.unknown_imports {
             Some(ImportError::UnknownImports.into())
@@ -290,18 +289,7 @@ struct AliasReferences<'name> {
 
 impl AliasReferences<'_> {
     fn tokens(&mut self, tokens: TokenStream) {
-        let mut pending = vec![tokens.into_iter()];
-
-        while let Some(tokens) = pending.last_mut() {
-            match tokens.next() {
-                Some(TokenTree::Ident(ident)) if ident == self.alias => self.opaque = true,
-                Some(TokenTree::Group(group)) => pending.push(group.stream().into_iter()),
-                Some(TokenTree::Ident(_) | TokenTree::Punct(_) | TokenTree::Literal(_)) => {}
-                None => {
-                    pending.pop();
-                }
-            }
-        }
+        self.opaque |= common::token_names(tokens).contains(self.alias);
     }
 }
 
@@ -339,9 +327,17 @@ impl<'ast> Visit<'ast> for AliasReferences<'_> {
         visit::visit_field_value(self, field);
     }
 
-    fn visit_item_mod(&mut self, _module: &'ast ItemMod) {}
+    fn visit_item_mod(&mut self, module: &'ast ItemMod) {
+        for attribute in &module.attrs {
+            self.visit_attribute(attribute);
+        }
+    }
 
     fn visit_item_use(&mut self, item: &'ast ItemUse) {
+        for attribute in &item.attrs {
+            self.visit_attribute(attribute);
+        }
+
         let bindings = import_resolution::use_bindings(&item.tree, &[]);
 
         if bindings

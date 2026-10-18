@@ -108,7 +108,6 @@ pub(super) enum FileLayout {
 pub(super) enum Declaration<'ast> {
     Module { item: &'ast ItemMod, local: bool },
     Include(&'ast syn::Macro),
-    OpaqueExpansion,
 }
 
 impl<'ast> Declaration<'ast> {
@@ -135,7 +134,6 @@ pub(super) enum ModuleStructure {
         children: Option<Vec<Self>>,
     },
     Include(String),
-    OpaqueExpansion,
 }
 
 impl ModuleStructure {
@@ -150,7 +148,6 @@ impl ModuleStructure {
                     children: item.content.as_ref().map(|(_, items)| Self::collect(items)),
                 },
                 Declaration::Include(mac) => Self::Include(mac.tokens.to_string()),
-                Declaration::OpaqueExpansion => Self::OpaqueExpansion,
             })
             .collect();
 
@@ -184,12 +181,7 @@ impl<'ast> Visit<'ast> for Declarations<'ast> {
             return;
         }
 
-        if item.mac.path.is_ident("include") {
-            self.visit_macro(&item.mac);
-        } else if !self.local {
-            // An item macro can introduce additional modules or include existing source files.
-            self.modules.push(Declaration::OpaqueExpansion);
-        }
+        self.visit_macro(&item.mac);
     }
 
     fn visit_block(&mut self, block: &'ast syn::Block) {
@@ -246,20 +238,9 @@ impl AttributePaths {
                 }
             }
             Meta::Path(_) | Meta::List(_) | Meta::NameValue(_) => {
-                let known = meta.path().get_ident().is_some_and(|name| {
-                    matches!(
-                        name.to_string().as_str(),
-                        "cfg" | "doc" | "allow" | "warn" | "deny" | "forbid" | "expect" | "deprecated" | "macro_use"
-                    )
-                });
-                let tool = meta.path().segments.first().is_some_and(|segment| {
-                    matches!(
-                        segment.ident.to_string().as_str(),
-                        "rustfmt" | "clippy" | "rust_analyzer"
-                    )
-                });
-
-                self.supported &= known || tool;
+                if meta.path().is_ident("path") || meta.path().is_ident("cfg_attr") {
+                    self.supported = false;
+                }
             }
         }
     }
