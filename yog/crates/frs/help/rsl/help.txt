@@ -1,23 +1,38 @@
-Rewrite explicitly supplied Rust files using personal source preferences.
+Rewrite or inspect explicitly supplied Rust files using personal source preferences.
 
 Usage:
-  frs rsl [--rules ID[,ID...]]... [--] FILE...
+  frs rsl [--mode write|report] [--rules ID[,ID...]]... [--] FILE...
 
 Arguments:
+  FILE                     Rust source file to inspect or rewrite. Supply at least one file.
+
+Options:
+  --mode write|report      Write safe fixes, or report without changing files (default: write).
   --rules ID[,ID...]       Run only these rules. Supply comma-separated rule IDs.
                            May be repeated to select more rules.
+  --help                   Show this help text.
   --                       Treat remaining arguments as file paths.
-  FILE                     Rust source file to rewrite. Supply at least one file.
 
-With no --rules options, all built-in rules run. Unknown or empty IDs are rejected.
-Safe fixes are written in place. Skipped fixes are reported; they do not prevent other fixes.
-Successful fixing exits zero, including when changes were skipped. Read, parse, and write errors fail.
-Files are parsed again between rules. No formatter is run; source trivia is preserved.
-Only supplied files are read and written, including their inline modules. Cargo is not invoked.
-Fixes that need the file's crate path or parent-module context are skipped.
-Exported aliases and aliases with unresolved references are skipped. Test-only super::* imports remain.
-Rule IDs:
-  relative-path, aliased-import, unqualified-call, overqualified-call, qualified-item, ordering-rule
+All rules run unless a selection is supplied via --rules. Unknown or empty rule IDs are rejected.
+Write mode updates the supplied files in place, then reports remaining findings at their final locations.
+Report mode leaves files unchanged and shows available changes and reasons other changes cannot be made.
+Each report identifies the file, line, column, and rule. Skipped changes include a reason and guidance.
+Only the supplied files are changed. Run your Rust formatter afterward if needed.
 
-Example:
+Rules:
+  relative-path            Report references to parent modules through super::.
+  aliased-import           Remove unnecessary import aliases.
+  unqualified-call         Add module names to imported function calls.
+  overqualified-call       Shorten function calls while keeping their module names.
+  qualified-item           Import items so they can be used by their short names.
+  ordering-rule            Group related declarations and place helpers after callers.
+
+Exit status:
+  0                        Completed, including when findings remain or changes were skipped.
+  Nonzero                  Invalid arguments or a file could not be read, parsed, or written.
+
+Examples:
+  frs rsl src/main.rs src/lib.rs
+  frs rsl --mode report src/main.rs
   frs rsl --rules ordering-rule,relative-path src/main.rs
+  frs rsl -- -example.rs

@@ -2,6 +2,7 @@
 
 use std::ffi::OsString;
 use std::path::PathBuf;
+use std::str::FromStr;
 
 use rootcause::report;
 use ytil_sys::pico_args::Arguments;
@@ -9,6 +10,7 @@ use ytil_sys::pico_args::Arguments;
 pub use self::output::RslOutput;
 use self::rules::SelectedRules;
 
+mod analysis;
 mod ast;
 mod engine;
 mod output;
@@ -17,7 +19,7 @@ mod source;
 
 /// Runs `frs rsl`.
 ///
-/// Rewrites supplied files and reports fixes that could not be applied safely.
+/// Writes safe fixes and reports remaining findings, or reports without changing files.
 ///
 /// # Errors
 ///
@@ -36,14 +38,36 @@ pub fn run(mut cli_args: Arguments) -> rootcause::Result<RslOutput> {
         }
     };
 
-    let skips = self::engine::fix_paths(&opts.paths, &opts.rules)?;
+    let reports = self::engine::process_paths(&opts.paths, &opts.rules, opts.mode)?;
 
-    Ok(RslOutput::new(skips))
+    Ok(RslOutput { reports })
+}
+
+#[derive(Clone, Copy, Default)]
+enum Mode {
+    #[default]
+    Write,
+    Report,
+}
+
+impl FromStr for Mode {
+    type Err = rootcause::Report;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value {
+            "write" => Ok(Self::Write),
+            "report" => Ok(Self::Report),
+            _ => Err(report!("unknown rsl mode")
+                .attach(format!("mode={value}"))
+                .attach("available_modes=write, report")),
+        }
+    }
 }
 
 struct RslOpts {
     paths: Vec<PathBuf>,
     rules: SelectedRules,
+    mode: Mode,
 }
 
 impl TryFrom<Vec<OsString>> for RslOpts {
@@ -65,6 +89,7 @@ impl TryFrom<Vec<OsString>> for RslOpts {
         }
 
         let mut cli_args = Arguments::from_vec(before_separator);
+        let mode = cli_args.opt_value_from_str("--mode")?.unwrap_or_default();
         let mut rule_ids = Vec::new();
 
         while let Some(rule_list) = cli_args.opt_value_from_str::<_, String>("--rules")? {
@@ -86,6 +111,7 @@ impl TryFrom<Vec<OsString>> for RslOpts {
         Ok(Self {
             paths: paths.into_iter().map(PathBuf::from).collect(),
             rules,
+            mode,
         })
     }
 }

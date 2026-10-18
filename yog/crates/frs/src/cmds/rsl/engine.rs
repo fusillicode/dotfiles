@@ -1,5 +1,7 @@
-//! Parse each rule's current snapshot, validate the result, then write each supplied file once.
+//! Write mode applies each rule once, then reports against the final immutable snapshot.
+//! Report mode only analyzes the supplied snapshot. Earlier plans and findings are never reused.
 
+use std::borrow::Cow;
 use std::collections::HashSet;
 use std::path::Path;
 use std::path::PathBuf;
@@ -7,8 +9,10 @@ use std::path::PathBuf;
 use rootcause::report;
 use syn::File;
 
+use super::Mode;
+use super::output::FileReport;
+use super::output::RuleFinding;
 use super::rules::SelectedRules;
-use super::source::SourceEditor;
 
 pub(super) struct FileContext<'ast> {
     pub(super) path: &'ast Path,
@@ -16,9 +20,13 @@ pub(super) struct FileContext<'ast> {
     pub(super) file: &'ast File,
 }
 
-pub(super) fn fix_paths(paths: &[PathBuf], rules: &SelectedRules) -> rootcause::Result<Vec<String>> {
+pub(super) fn process_paths(
+    paths: &[PathBuf],
+    rules: &SelectedRules,
+    mode: Mode,
+) -> rootcause::Result<Vec<FileReport>> {
     let mut visited = HashSet::new();
-    let mut skips = Vec::new();
+    let mut reports = Vec::new();
 
     for path in paths {
         let canonical = std::fs::canonicalize(path).map_err(|error| {
@@ -37,30 +45,36 @@ pub(super) fn fix_paths(paths: &[PathBuf], rules: &SelectedRules) -> rootcause::
                 .attach(format!("error={error}"))
         })?;
 
-        let (fixed, file_skips) = fix_source(path, &source, rules)?;
+        let fixed = match mode {
+            Mode::Write => Cow::Owned(rewrite_source(path, &source, rules)?),
+            Mode::Report => Cow::Borrowed(source.as_str()),
+        };
+        let findings = collect_findings(path, &fixed, rules)?;
 
-        if fixed != source {
+        if fixed.as_ref() != source {
             // A concurrent editor must not lose changes made after our snapshot.
             if std::fs::read_to_string(path).ok().as_deref() != Some(source.as_str()) {
                 return Err(report!("Rust source changed during fixing").attach(format!("path={}", path.display())));
             }
 
-            std::fs::write(path, fixed).map_err(|error| {
+            std::fs::write(path, fixed.as_bytes()).map_err(|error| {
                 report!("could not write Rust source")
                     .attach(format!("path={}", path.display()))
                     .attach(format!("error={error}"))
             })?;
         }
 
-        skips.extend(file_skips.into_iter().map(|skip| format!("{}: {skip}", path.display())));
+        reports.push(FileReport {
+            path: path.clone(),
+            findings,
+        });
     }
 
-    Ok(skips)
+    Ok(reports)
 }
 
-pub(super) fn fix_source(path: &Path, source: &str, rules: &SelectedRules) -> rootcause::Result<(String, Vec<String>)> {
+fn rewrite_source(path: &Path, source: &str, rules: &SelectedRules) -> rootcause::Result<String> {
     let mut current = source.to_owned();
-    let mut skips = Vec::new();
 
     for rule in rules.iter() {
         let file = parse_source(path, &current)?;
@@ -69,17 +83,35 @@ pub(super) fn fix_source(path: &Path, source: &str, rules: &SelectedRules) -> ro
             source: &current,
             file: &file,
         };
-        let mut editor = SourceEditor::new(&current, rule.id());
-
-        rule.fix(&ctx, &mut editor)?;
-        let (fixed, rule_skips) = editor.finish()?;
+        let plan = rule.analyze(&ctx)?;
+        let fixed = plan.apply_edits()?;
         parse_source(path, &fixed)?;
 
         current = fixed;
-        skips.extend(rule_skips);
     }
 
-    Ok((current, skips))
+    Ok(current)
+}
+
+fn collect_findings(path: &Path, source: &str, rules: &SelectedRules) -> rootcause::Result<Vec<RuleFinding>> {
+    let file = parse_source(path, source)?;
+    let ctx = FileContext {
+        path,
+        source,
+        file: &file,
+    };
+    let mut findings = Vec::new();
+
+    for rule in rules.iter() {
+        let plan = rule.analyze(&ctx)?;
+        findings.extend(plan.into_findings().into_iter().map(|finding| RuleFinding {
+            rule_id: rule.id(),
+            finding,
+        }));
+    }
+
+    findings.sort_by_key(|finding| (finding.finding.position.line, finding.finding.position.column));
+    Ok(findings)
 }
 
 fn parse_source(path: &Path, source: &str) -> rootcause::Result<File> {
