@@ -361,6 +361,36 @@ mod tests {
          Reason: An import leaves names unresolved, or this path depends on a conditional import.\n  \
          Help: Use explicit imports so the names available in this module can be checked.\n"
     )]
+    #[case::conditional_item(
+        "item-qualification",
+        r"
+            #[cfg(test)]
+            fn run(_: std::path::PathBuf) {}
+        ",
+        "<file>:3:23: skipped [item-qualification/conditional-code]: replace `std::path::PathBuf` with `PathBuf`\n  \
+         Reason: Conditional code may need different imports in different builds.\n  \
+         Help: Check the paths and imports in each supported configuration before changing them together.\n"
+    )]
+    #[case::trait_import(
+        "item-qualification",
+        r"
+            fn run<T: external::Inspect>() {}
+        ",
+        "<file>:2:23: skipped [item-qualification/trait-import]: replace `external::Inspect` with `Inspect`\n  \
+         Reason: Importing this trait could change how existing method calls are resolved.\n  \
+         Help: Keep the qualified trait path to preserve method lookup in this scope.\n"
+    )]
+    #[case::unknown_item_kind(
+        "item-qualification",
+        r"
+            fn run() {
+                external::Factory::make();
+            }
+        ",
+        "<file>:3:17: skipped [item-qualification/unknown-item-kind]: replace `external::Factory` with `Factory`\n  \
+         Reason: This associated path could refer to a trait or a type.\n  \
+         Help: Keep the qualified path unless the item is known to be a type or is already imported.\n"
+    )]
     #[case::exported_alias(
         "import-aliasing",
         r"

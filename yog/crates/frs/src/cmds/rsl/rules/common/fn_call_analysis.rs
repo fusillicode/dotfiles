@@ -195,18 +195,6 @@ pub(super) fn module_type_names(items: &[Item]) -> HashSet<String> {
     Bindings::declarations(items).types.into_keys().collect()
 }
 
-struct ConditionalAttributes {
-    found: bool,
-}
-
-impl<'ast> Visit<'ast> for ConditionalAttributes {
-    fn visit_attribute(&mut self, attribute: &'ast Attribute) {
-        // Keep a containing item's imports stable across all configurations,
-        // including cfg attributes on statements, arms, and expressions.
-        self.found |= attribute.path().is_ident("cfg") || attribute.path().is_ident("cfg_attr");
-    }
-}
-
 /// Module qualifiers use the type namespace; callable locals use the value namespace.
 /// Imports are reserved in every namespace until their definitions are known.
 /// Macro names are separate, so a local value named println does not shadow println!.
@@ -404,10 +392,8 @@ impl<'ast> FnCallVisitor<'ast, '_> {
 
 impl<'ast> Visit<'ast> for FnCallVisitor<'ast, '_> {
     fn visit_item(&mut self, item: &'ast Item) {
-        let mut conditions = ConditionalAttributes { found: false };
-        conditions.visit_item(item);
         let outer = self.conditional;
-        self.conditional |= conditions.found;
+        self.conditional |= super::contains_conditional_code(item);
         visit::visit_item(self, item);
         self.conditional = outer;
     }

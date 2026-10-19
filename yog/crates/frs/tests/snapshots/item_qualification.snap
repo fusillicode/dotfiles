@@ -248,3 +248,202 @@ pub mod primitive_associated_constants {
         i64::try_from(value).unwrap_or(i64::MAX)
     }
 }
+
+pub mod conditional_paths {
+    #[cfg(test)]
+    fn test_only(error: &std::io::Error) {
+        let _ = error.kind() == std::io::ErrorKind::NotFound;
+    }
+
+    #[cfg_attr(feature = "optional", cfg(unix))]
+    fn configured(_: std::time::Instant) {}
+
+    fn conditional_statement() {
+        #[cfg(unix)]
+        let _ = std::path::PathBuf::new();
+    }
+
+    fn conditional_arm() {
+        match () {
+            #[cfg(unix)]
+            () => {
+                let _ = std::net::Ipv4Addr::LOCALHOST;
+            }
+            _ => {}
+        }
+    }
+}
+
+pub mod conditional_reuse {
+    use std::time::Duration;
+    #[cfg(test)]
+    fn test_only(_: Duration) {}
+
+    fn always(_: Duration) {}
+}
+
+pub mod conditional_module {
+    #[cfg(test)]
+    mod tests {
+        use std::path::PathBuf;
+        fn run(_: PathBuf) {}
+    }
+}
+
+pub mod qualified_trait_imports {
+    struct Token;
+
+    impl bridge::Pushable for Token {
+        fn push(self, _: *mut ()) {}
+    }
+
+    fn run() {
+        let mut text = String::new();
+        text.push(':');
+        let mut chars = Vec::new();
+        chars.push(':');
+        bridge::Pushable::push(Token, std::ptr::null_mut());
+    }
+
+    mod bridge {
+        pub trait Pushable {
+            fn push(self, state: *mut ());
+        }
+
+        impl Pushable for String {
+            fn push(self, _: *mut ()) {}
+        }
+
+        impl<T> Pushable for Vec<T> {
+            fn push(self, _: *mut ()) {}
+        }
+    }
+}
+
+pub mod trait_bounds {
+    fn generic<T: external::Inspect>(value: T) {
+        external::Inspect::inspect(value);
+    }
+
+    fn object(_: &dyn external::Observe) {}
+    fn opaque(_: impl external::Produce) {}
+}
+
+pub mod qualified_trait_associated_items {
+    fn run<T>(value: T) -> <T as external::Inspect>::Output {
+        <T as external::Inspect>::inspect(value)
+    }
+}
+
+pub mod existing_trait_import {
+    use external::Inspect;
+
+    fn run<T: Inspect>(value: T) {
+        Inspect::inspect(value);
+    }
+}
+
+pub mod ambiguous_associated_function {
+    fn run() {
+        external::Factory::make();
+    }
+}
+
+pub mod known_associated_type {
+    use external::Factory;
+    fn run(_: Factory) {
+        Factory::make();
+    }
+}
+
+pub mod normalized_trait_import {
+    use self::bridge::Inspect;
+
+    fn run<T: Inspect>(value: T) {
+        Inspect::inspect(value);
+    }
+
+    mod bridge {
+        pub trait Inspect {
+            fn inspect(self);
+        }
+    }
+}
+
+pub mod aliased_trait_import {
+    use external::Inspect as InspectAlias;
+
+    fn run<T: InspectAlias>(value: T) {
+        InspectAlias::inspect(value);
+    }
+}
+
+pub mod aliased_trait_path {
+    use external as facade;
+
+    fn run<T: facade::Inspect>(value: T) {
+        external::Inspect::inspect(value);
+    }
+}
+
+pub mod normalized_conditional_reuse {
+    use domain::Value;
+    #[cfg(test)]
+    fn test_only(_: Value) {}
+
+    fn always(_: Value) {}
+
+    mod domain {
+        pub struct Value;
+    }
+}
+
+pub mod struct_literal_type_evidence {
+    use external::Data;
+    fn run() {
+        let _ = Data {};
+        Data::new();
+    }
+}
+
+pub mod struct_pattern_type_evidence {
+    use external::Container;
+    use external::Data;
+    fn run(value: Container) {
+        let Data {} = value.into();
+        Data::new();
+    }
+}
+
+pub mod conditional_trait_alias {
+    #[cfg(test)]
+    use external::Inspect as InspectAlias;
+
+    fn run<T: external::Inspect>(value: T) {
+        external::Inspect::inspect(value);
+    }
+}
+
+pub mod conditional_trait_import {
+    #[cfg(test)]
+    use external::Inspect;
+
+    fn run<T: external::Inspect>(value: T) {
+        external::Inspect::inspect(value);
+    }
+}
+
+pub mod qualified_trait_pattern {
+    fn run<T>(value: T) {
+        let <T as external::Inspect>::Output(_) = value;
+    }
+}
+
+pub mod tuple_struct_type_evidence {
+    use external::Container;
+    use external::Wrapper;
+    fn run(value: Container) {
+        let Wrapper(_) = value.into();
+        Wrapper::new();
+    }
+}
