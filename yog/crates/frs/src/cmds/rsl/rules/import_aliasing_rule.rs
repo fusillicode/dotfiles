@@ -173,6 +173,7 @@ fn analyze_scope(idx: &ModuleIdx<'_>, scope: &ModuleScope<'_>, plan: &mut RulePl
             original: &original,
             replacements: Vec::new(),
             opaque: false,
+            captures_existing_name: false,
         };
 
         for item in scope.items {
@@ -185,17 +186,23 @@ fn analyze_scope(idx: &ModuleIdx<'_>, scope: &ModuleScope<'_>, plan: &mut RulePl
                 original: &original,
                 replacements: Vec::new(),
                 opaque: false,
+                captures_existing_name: false,
             };
 
             for item in other.items {
                 references.visit_item(item);
             }
 
-            !references.replacements.is_empty() || references.opaque
+            !references.replacements.is_empty()
+                || references.opaque
+                || (references.captures_existing_name && imports_scope_through_globs(idx, other, &scope.path))
         });
 
-        let clash =
-            alias != original && (claimed.contains(&original) || local.contains(&original) || local.contains(&alias));
+        let clash = alias != original
+            && (claimed.contains(&original)
+                || local.contains(&original)
+                || local.contains(&alias)
+                || references.captures_existing_name);
         let exported = !matches!(import.vis, Visibility::Inherited);
         let reason = if exported && alias != original {
             Some(FixBlockReason::from(BlockReason::ExportedAlias))
@@ -244,6 +251,44 @@ fn analyze_scope(idx: &ModuleIdx<'_>, scope: &ModuleScope<'_>, plan: &mut RulePl
     Ok(())
 }
 
+fn imports_scope_through_globs(idx: &ModuleIdx<'_>, importer: &ModuleScope<'_>, source: &[String]) -> bool {
+    let mut pending = vec![importer.path.clone()];
+    let mut visited = HashSet::new();
+
+    while let Some(path) = pending.pop() {
+        if !visited.insert(path.clone()) {
+            continue;
+        }
+
+        let Some(scope) = idx.scopes.iter().find(|scope| scope.path == path) else {
+            continue;
+        };
+
+        // Include conditional glob imports: the new name could reach their users
+        // in another supported configuration too.
+        let globs: Vec<_> = scope
+            .items
+            .iter()
+            .filter_map(|item| {
+                let Item::Use(import) = item else {
+                    return None;
+                };
+
+                Some(import_resolution::use_bindings(&import.tree, &scope.path))
+            })
+            .flat_map(|bindings| bindings.glob_imports)
+            .collect();
+
+        if globs.iter().any(|glob| glob == source) {
+            return true;
+        }
+
+        pending.extend(globs);
+    }
+
+    false
+}
+
 struct ImportAlias<'ast> {
     import: &'ast ItemUse,
     rename: &'ast UseRename,
@@ -289,6 +334,7 @@ struct AliasReferences<'name> {
     original: &'name str,
     replacements: Vec<(Span, String)>,
     opaque: bool,
+    captures_existing_name: bool,
 }
 
 impl AliasReferences<'_> {
@@ -298,7 +344,10 @@ impl AliasReferences<'_> {
         while let Some(tokens) = pending.pop() {
             for token in tokens {
                 match token {
-                    TokenTree::Ident(name) => self.opaque |= name == self.alias,
+                    TokenTree::Ident(name) => {
+                        self.opaque |= name == self.alias;
+                        self.captures_existing_name |= name == self.original;
+                    }
                     TokenTree::Group(group) => pending.push(group.stream()),
                     TokenTree::Literal(literal) => {
                         if let Ok(string) = syn::parse2::<LitStr>(TokenTree::Literal(literal).into()) {
@@ -312,20 +361,27 @@ impl AliasReferences<'_> {
     }
 
     fn string_reference(&mut self, string: &LitStr) {
-        // Macros can interpret quoted text as Rust paths. Without knowing their
-        // grammar, keep aliases mentioned in that text rather than rewriting it.
+        // Macros can interpret quoted text as Rust paths. Keep aliases when their
+        // removal could change those paths, without assuming the macro's grammar.
         // Match conservatively, including within longer text, without assuming Rust syntax.
-        self.opaque |= string.value().contains(self.alias);
+        let text = string.value();
+        self.opaque |= text.contains(self.alias);
+        self.captures_existing_name |= text.contains(self.original);
     }
 }
 
 impl<'ast> Visit<'ast> for AliasReferences<'_> {
     fn visit_path(&mut self, path: &'ast Path) {
         if let Some(first) = path.segments.first()
-            && first.ident == self.alias
             && path.leading_colon.is_none()
         {
-            self.replacements.push((first.ident.span(), self.original.to_owned()));
+            if first.ident == self.alias {
+                self.replacements.push((first.ident.span(), self.original.to_owned()));
+            }
+
+            // Introducing the original name must not capture existing references,
+            // including names supplied implicitly by Rust's prelude.
+            self.captures_existing_name |= first.ident == self.original;
         }
 
         if path.segments.iter().skip(1).any(|segment| segment.ident == self.alias) {
@@ -372,6 +428,23 @@ impl<'ast> Visit<'ast> for AliasReferences<'_> {
             .any(|binding| binding.source_path.iter().any(|part| part == self.alias))
         {
             self.opaque = true;
+        }
+
+        if item.leading_colon.is_none() {
+            self.visit_use_tree(&item.tree);
+        }
+    }
+
+    fn visit_use_tree(&mut self, tree: &'ast UseTree) {
+        // Only import roots can be captured; include paths whose binding is `_`.
+        match tree {
+            UseTree::Path(path) => self.captures_existing_name |= path.ident == self.original,
+            UseTree::Group(_) => visit::visit_use_tree(self, tree),
+            UseTree::Name(name) => self.captures_existing_name |= name.ident == self.original,
+            UseTree::Rename(rename) => {
+                self.captures_existing_name |= rename.ident == self.original && rename.rename != self.alias;
+            }
+            UseTree::Glob(_) => {}
         }
     }
 

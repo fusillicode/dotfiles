@@ -125,7 +125,7 @@ impl<'ast> Declaration<'ast> {
     }
 }
 
-#[derive(PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Eq, Ord, PartialEq, PartialOrd)]
 pub(super) enum ModuleStructure {
     Module {
         name: String,
@@ -194,7 +194,7 @@ impl<'ast> Visit<'ast> for Declarations<'ast> {
     }
 }
 
-#[derive(PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Eq, Ord, PartialEq, PartialOrd)]
 pub(super) struct AttributePaths {
     alternatives: Vec<PathBuf>,
     unconditional: bool,

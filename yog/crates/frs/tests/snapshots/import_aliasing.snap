@@ -175,3 +175,114 @@ pub mod alias_in_ordinary_string {
         "OrdinaryPath is plain text here"
     }
 }
+
+pub mod prelude_type_capture {
+    use types::String as NvimString;
+
+    struct Command {
+        cmd: Option<String>,
+        raw: NvimString,
+    }
+
+    fn run(command: Command) {
+        let _ = command.cmd.as_deref();
+    }
+}
+
+pub mod prelude_constructor_capture {
+    use other::Vec as OtherVec;
+
+    fn run(_: OtherVec) {
+        let _ = Vec::new();
+    }
+}
+
+pub mod prelude_variant_capture {
+    use other::Some as OtherSome;
+
+    fn run(_: OtherSome) -> Option<u8> {
+        Some(1)
+    }
+}
+
+pub mod capture_in_import_path {
+    use other::Option as OtherOption;
+    use Option::Some;
+
+    fn run(_: OtherOption) {
+        let _ = Some(1);
+    }
+}
+
+pub mod capture_in_anonymous_import_path {
+    use other::std as OtherStd;
+    use std::fmt::Debug as _;
+
+    fn run(_: OtherStd::Item) {}
+}
+
+pub mod capture_in_macro {
+    use other::Result as OtherResult;
+
+    fn run(_: OtherResult) {
+        custom!({ Result::Ok(1) });
+    }
+}
+
+pub mod capture_in_quoted_attribute {
+    use other::Default as OtherDefault;
+
+    #[custom(path = "Default::default")]
+    fn run(_: OtherDefault) {}
+}
+
+pub mod qualified_names_do_not_conflict {
+    use types::String;
+
+    fn run(_: String) -> ::std::string::String {
+        std::string::String::new()
+    }
+}
+
+pub mod ordinary_strings_do_not_conflict {
+    use other::Vec;
+
+    fn run(_: Vec) -> &'static str {
+        "Vec is ordinary text"
+    }
+}
+
+pub mod bare_import_target_does_not_conflict {
+    use external;
+
+    fn run(_: external::Item) {}
+}
+
+pub mod capture_through_conditional_glob {
+    use types::String as GlobNvimString;
+
+    fn run(_: GlobNvimString) {}
+
+    mod child {
+        #[cfg(feature = "custom-strings")]
+        use super::*;
+
+        fn run(_: String) {}
+    }
+}
+
+pub mod capture_through_transitive_globs {
+    use types::String as TransitiveNvimString;
+
+    fn run(_: TransitiveNvimString) {}
+
+    mod child {
+        use super::*;
+
+        mod leaf {
+            use super::*;
+
+            fn run(_: String) {}
+        }
+    }
+}
