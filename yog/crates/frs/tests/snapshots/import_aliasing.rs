@@ -112,3 +112,62 @@ pub mod conditional_name_collision {
 
     fn run(_: CollisionBuffer) {}
 }
+
+pub mod alias_in_quoted_attribute {
+    use crate::serde_utils as utils;
+
+    #[derive(Deserialize)]
+    struct CommandArgs {
+        #[serde(deserialize_with = "utils::empty_string_is_none")]
+        args: Option<String>,
+    }
+}
+
+pub mod alias_in_raw_attribute {
+    use crate::serde_utils as raw_utils;
+
+    #[custom(nested(path = r#"raw_utils::deserialize"#))]
+    struct CommandArgs;
+}
+
+pub mod alias_in_escaped_attribute {
+    use crate::serde_utils as escaped_utils;
+
+    #[custom(path = "\u{65}scaped_utils::deserialize")]
+    struct CommandArgs;
+}
+
+pub mod alias_in_name_value_attribute {
+    use crate::serde_utils as attribute_utils;
+
+    #[custom = "attribute_utils::deserialize"]
+    struct CommandArgs;
+}
+
+pub mod alias_in_quoted_macro {
+    use crate::serde_utils as macro_utils;
+
+    custom!({ [(r#"macro_utils::deserialize"#)] });
+}
+
+pub mod alias_in_non_code_attribute_text {
+    use crate::serde_utils as text_utils;
+
+    #[custom(description = "use text_utils::deserialize({")]
+    struct CommandArgs;
+}
+
+pub mod unrelated_quoted_attribute {
+    use std::path::PathBuf as AttributePath;
+
+    #[custom(path = "other::deserialize")]
+    fn run(_: AttributePath) {}
+}
+
+pub mod alias_in_ordinary_string {
+    use std::path::PathBuf as OrdinaryPath;
+
+    fn run(_: OrdinaryPath) -> &'static str {
+        "OrdinaryPath is plain text here"
+    }
+}
