@@ -676,3 +676,87 @@ pub mod tests {
         fn helper() {}
     }
 }
+
+pub mod zz_macro_reexports {
+    pub mod plain {
+        #[macro_export]
+        macro_rules! rsl_reexported_plain {
+            () => { () };
+        }
+
+        pub use rsl_reexported_plain;
+
+        macro_rules! count {
+            () => { 0 };
+        }
+
+        pub(crate) use count;
+
+        fn run() {
+            let _ = count!();
+            rsl_reexported_plain!();
+        }
+    }
+
+    pub mod grouped {
+        macro_rules! first {
+            () => { 1 };
+        }
+
+        macro_rules! second {
+            () => { 2 };
+        }
+
+        pub(crate) use {first, second as selected};
+
+        fn run() {
+            let _ = first!();
+            let _ = selected!();
+        }
+    }
+
+    pub mod shadowed {
+        macro_rules! choose {
+            () => { 1 };
+        }
+
+        pub(crate) use choose as original;
+
+        macro_rules! choose {
+            () => { 2 };
+        }
+
+        pub(crate) use choose as replacement;
+
+        fn run() {
+            let _ = original!();
+            let _ = replacement!();
+        }
+    }
+
+    pub mod qualified {
+        #[macro_export]
+        macro_rules! rsl_reexported_qualified {
+            () => { () };
+        }
+
+        pub use crate::rsl_reexported_qualified as selected;
+        use ::std::fmt;
+
+        fn run(_: &dyn fmt::Debug) {
+            selected!();
+        }
+    }
+
+    pub mod nested_group {
+        macro_rules! choose {
+            () => { 1 };
+        }
+
+        pub(crate) use {{choose as selected}, std::fmt};
+
+        fn run(_: &dyn fmt::Debug) {
+            let _ = selected!();
+        }
+    }
+}
