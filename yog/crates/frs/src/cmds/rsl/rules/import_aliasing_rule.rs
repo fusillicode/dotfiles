@@ -5,12 +5,14 @@
 //!
 //! Keep the alias when removing it could cause a name conflict, change a name exposed to other code,
 //! or require changes that cannot be checked from this file. Imports named `_` stay unchanged.
+//! Also keep aliases mentioned in quoted text inside attributes or macros.
 
 use std::collections::HashSet;
 use std::ops::Range;
 
 use proc_macro2::Span;
 use proc_macro2::TokenStream;
+use proc_macro2::TokenTree;
 use syn::Attribute;
 use syn::Expr;
 use syn::FieldValue;
@@ -18,6 +20,8 @@ use syn::Ident;
 use syn::Item;
 use syn::ItemMod;
 use syn::ItemUse;
+use syn::Lit;
+use syn::LitStr;
 use syn::Macro;
 use syn::Meta;
 use syn::Path;
@@ -289,7 +293,29 @@ struct AliasReferences<'name> {
 
 impl AliasReferences<'_> {
     fn tokens(&mut self, tokens: TokenStream) {
-        self.opaque |= common::token_names(tokens).contains(self.alias);
+        let mut pending = vec![tokens];
+
+        while let Some(tokens) = pending.pop() {
+            for token in tokens {
+                match token {
+                    TokenTree::Ident(name) => self.opaque |= name == self.alias,
+                    TokenTree::Group(group) => pending.push(group.stream()),
+                    TokenTree::Literal(literal) => {
+                        if let Ok(string) = syn::parse2::<LitStr>(TokenTree::Literal(literal).into()) {
+                            self.string_reference(&string);
+                        }
+                    }
+                    TokenTree::Punct(_) => {}
+                }
+            }
+        }
+    }
+
+    fn string_reference(&mut self, string: &LitStr) {
+        // Macros can interpret quoted text as Rust paths. Without knowing their
+        // grammar, keep aliases mentioned in that text rather than rewriting it.
+        // Match conservatively, including within longer text, without assuming Rust syntax.
+        self.opaque |= string.value().contains(self.alias);
     }
 }
 
@@ -357,8 +383,18 @@ impl<'ast> Visit<'ast> for AliasReferences<'_> {
     fn visit_attribute(&mut self, attribute: &'ast Attribute) {
         self.visit_path(attribute.path());
 
-        if let Meta::List(meta) = &attribute.meta {
-            self.tokens(meta.tokens.clone());
+        match &attribute.meta {
+            Meta::List(meta) => self.tokens(meta.tokens.clone()),
+            Meta::NameValue(meta) => {
+                if let Expr::Lit(expression) = &meta.value
+                    && let Lit::Str(string) = &expression.lit
+                {
+                    self.string_reference(string);
+                }
+
+                self.visit_expr(&meta.value);
+            }
+            Meta::Path(_) => {}
         }
     }
 
