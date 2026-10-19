@@ -5,10 +5,13 @@ use std::path::Path;
 use std::path::PathBuf;
 
 use rootcause::prelude::ResultExt;
+use ytil_sys::dir;
 
 use crate::agent::Agent;
 use crate::agent::session::Session;
 use crate::agent::session::SessionKey;
+use crate::agent::session_loader;
+use crate::agent::session_parser::codex;
 
 /// Load Codex sessions from the local Codex session store.
 ///
@@ -16,8 +19,8 @@ use crate::agent::session::SessionKey;
 /// Returns an error when the Codex sessions directory cannot be read or a
 /// session file cannot be parsed.
 pub fn load_sessions() -> rootcause::Result<Vec<Session>> {
-    let root = ytil_sys::dir::build_home_path(Agent::Codex.sessions_root_path())?;
-    let session_paths = crate::agent::session_loader::find_session_paths(
+    let root = dir::build_home_path(Agent::Codex.sessions_root_path())?;
+    let session_paths = session_loader::find_session_paths(
         &root,
         |entry| entry.path().extension().is_some_and(|ext| ext == "jsonl"),
         |_| false,
@@ -31,16 +34,16 @@ pub fn load_sessions() -> rootcause::Result<Vec<Session>> {
 /// # Errors
 /// Returns an error when a matching Codex session file cannot be read or parsed.
 pub fn load_sessions_by_key(keys: &[SessionKey]) -> rootcause::Result<Vec<Session>> {
-    let root = ytil_sys::dir::build_home_path(Agent::Codex.sessions_root_path())?;
+    let root = dir::build_home_path(Agent::Codex.sessions_root_path())?;
     load_sessions_from_root_by_key(&root, keys)
 }
 
 fn load_sessions_from_root_by_key(root: &Path, keys: &[SessionKey]) -> rootcause::Result<Vec<Session>> {
-    let requested_ids = crate::agent::session_loader::requested_ids(keys, Agent::Codex);
+    let requested_ids = session_loader::requested_ids(keys, Agent::Codex);
     if requested_ids.is_empty() {
         return Ok(Vec::new());
     }
-    let session_paths = crate::agent::session_loader::find_session_paths(
+    let session_paths = session_loader::find_session_paths(
         root,
         |entry| codex_session_path_matches_requested_id(&entry.path(), &requested_ids),
         |_| false,
@@ -62,7 +65,7 @@ fn load_sessions_from_paths(
         let file = File::open(&session_path)
             .context("failed to open Codex session file")
             .attach_with(|| format!("path={}", session_path.display()))?;
-        let codex_session = crate::agent::session_parser::codex::parse_preview(BufReader::new(file), session_name)
+        let codex_session = codex::parse_preview(BufReader::new(file), session_name)
             .attach_with(|| format!("path={}", session_path.display()))?;
         if codex_session.is_subagent {
             continue;
@@ -71,10 +74,9 @@ fn load_sessions_from_paths(
         let last_prompt_file = File::open(&session_path)
             .context("failed to open Codex session for reverse prompt scan")
             .attach_with(|| format!("path={}", session_path.display()))?;
-        session.last_user_prompt = crate::agent::session_parser::codex::find_last_user_prompt(last_prompt_file)
+        session.last_user_prompt = codex::find_last_user_prompt(last_prompt_file)
             .attach_with(|| format!("path={}", session_path.display()))?;
-        session.updated_at =
-            crate::agent::session_loader::file_updated_at(&session_path)?.unwrap_or(session.created_at);
+        session.updated_at = session_loader::file_updated_at(&session_path)?.unwrap_or(session.created_at);
         if keep_session(&session) {
             sessions.push(session);
         }

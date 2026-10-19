@@ -4,25 +4,32 @@
 //! - `WezTerm`, status line parsing, or Git operations fail.
 
 use core::str::FromStr;
+use std::iter;
 use std::path::Component;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
 use std::sync::Arc;
+use std::thread;
 
 use rootcause::prelude::ResultExt;
 use rootcause::report;
 use url::Url;
 use ytil_editor::Editor;
+use ytil_git::branch;
+use ytil_git::repo;
 use ytil_hx::HxCursorPosition;
 use ytil_hx::HxStatusLine;
+use ytil_sys::cli;
 use ytil_sys::cli::Args;
+use ytil_sys::dir;
+use ytil_sys::file;
 use ytil_wezterm::WeztermPane;
 
 /// Copy GitHub URL (file/line/col) for the current Helix buffer to clipboard.
 #[ytil_sys::main]
 fn main() -> rootcause::Result<()> {
-    let args = ytil_sys::cli::get();
+    let args = cli::get();
     if args.has_help() {
         println!(include_str!("../help.txt"));
         return Ok(());
@@ -49,15 +56,12 @@ fn main() -> rootcause::Result<()> {
             .attach_with(|| format!("pane_id={} text={wezterm_pane_text:#?}", hx_pane.pane_id))?,
     )?;
 
-    let git_repo_root_path = Arc::new(ytil_git::repo::get_root(&ytil_git::repo::discover(
-        &hx_status_line.file_path,
-    )?));
+    let git_repo_root_path = Arc::new(repo::get_root(&repo::discover(&hx_status_line.file_path)?));
 
-    let get_git_current_branch =
-        std::thread::spawn(move || -> rootcause::Result<String> { ytil_git::branch::get_current() });
+    let get_git_current_branch = thread::spawn(move || -> rootcause::Result<String> { branch::get_current() });
 
     let git_repo_root_path_clone = git_repo_root_path.clone();
-    let get_github_repo_url = std::thread::spawn(move || -> rootcause::Result<Url> {
+    let get_github_repo_url = thread::spawn(move || -> rootcause::Result<Url> {
         match &ytil_gh::get_repo_urls(&git_repo_root_path_clone)?.as_slice() {
             &[] => Err(report!("missing GitHub repo URL").attach(format!("repo_path={git_repo_root_path_clone:#?}")))?,
             &[one] => Ok(one.clone()),
@@ -77,7 +81,7 @@ fn main() -> rootcause::Result<()> {
         &hx_status_line.position,
     )?;
 
-    ytil_sys::file::cp_to_system_clipboard(&mut github_link.as_str().as_bytes())?;
+    file::cp_to_system_clipboard(&mut github_link.as_str().as_bytes())?;
 
     Ok(())
 }
@@ -88,14 +92,14 @@ fn main() -> rootcause::Result<()> {
 /// - Expanding a home-relative path (starting with `~`) fails because the home directory cannot be determined.
 fn build_hx_cursor_absolute_file_path(hx_cursor_file_path: &Path, hx_pane: &WeztermPane) -> rootcause::Result<PathBuf> {
     if let Ok(hx_cursor_file_path) = hx_cursor_file_path.strip_prefix("~") {
-        return ytil_sys::dir::build_home_path(&[hx_cursor_file_path]);
+        return dir::build_home_path(&[hx_cursor_file_path]);
     }
 
     let mut components = hx_pane.cwd.components();
     components.next();
     components.next();
 
-    Ok(std::iter::once(Component::RootDir)
+    Ok(iter::once(Component::RootDir)
         .chain(components)
         .chain(hx_cursor_file_path.components())
         .collect())

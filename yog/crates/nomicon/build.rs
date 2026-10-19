@@ -1,5 +1,7 @@
 //! Build script for the `nomicon` binary.
 
+use std::env;
+use std::fs;
 use std::path::PathBuf;
 
 use lightningcss::stylesheet::ParserOptions;
@@ -12,14 +14,14 @@ const ASSETS_DIR: &str = "assets";
 fn main() -> rootcause::Result<()> {
     println!("cargo:rerun-if-changed=assets/style.css");
 
-    let manifest_dir = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR")?);
+    let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR")?);
     let css_raw_path = manifest_dir.join(ASSETS_DIR).join("style.css");
-    let css_raw = std::fs::read_to_string(&css_raw_path)?;
+    let css_raw = fs::read_to_string(&css_raw_path)?;
 
     let css_minified_path = manifest_dir.join(ASSETS_DIR).join("style.min.css");
     let css_minified = minify_css(&css_raw)?;
 
-    std::fs::write(&css_minified_path, css_minified)?;
+    fs::write(&css_minified_path, css_minified)?;
     Ok(())
 }
 

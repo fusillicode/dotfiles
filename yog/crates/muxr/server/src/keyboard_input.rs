@@ -158,8 +158,8 @@ impl TrackedProcessUserInteraction {
 
 pub fn pane_key_input_bytes(key: &ClientKey, keyboard_protocol: TerminalKeyboardProtocol) -> Option<Vec<u8>> {
     match keyboard_protocol {
-        TerminalKeyboardProtocol::Legacy => self::legacy_key_input_bytes(key),
-        TerminalKeyboardProtocol::KittyLevelOne => self::kitty_key_input_bytes(key),
+        TerminalKeyboardProtocol::Legacy => legacy_key_input_bytes(key),
+        TerminalKeyboardProtocol::KittyLevelOne => kitty_key_input_bytes(key),
     }
 }
 
@@ -183,7 +183,7 @@ fn legacy_key_input_bytes(key: &ClientKey) -> Option<Vec<u8>> {
         (ClientKeyCode::Char(character), _)
             if KittyKeyboardSequence::from_raw_bytes(&key.raw_bytes) == KittyKeyboardSequence::Kitty =>
         {
-            self::legacy_kitty_char_input_bytes(character, key.modifiers)
+            legacy_kitty_char_input_bytes(character, key.modifiers)
         }
         (ClientKeyCode::Backspace, ClientKeyModifiers::ALT)
             if KittyKeyboardSequence::from_raw_bytes(&key.raw_bytes) == KittyKeyboardSequence::Kitty =>
@@ -212,7 +212,7 @@ fn legacy_kitty_char_input_bytes(character: char, modifiers: ClientKeyModifiers)
         bytes.push(b'\x1b');
     }
     if modifiers.ctrl {
-        bytes.push(self::legacy_control_byte(character)?);
+        bytes.push(legacy_control_byte(character)?);
     } else {
         let mut buffer = [0; 4];
         bytes.extend(character.encode_utf8(&mut buffer).as_bytes());
@@ -241,8 +241,8 @@ fn kitty_key_input_bytes(key: &ClientKey) -> Option<Vec<u8>> {
         return Some(key.raw_bytes.clone());
     }
 
-    self::kitty_key_number(key.code)
-        .map(|key_number| self::serialize_kitty_key(key_number, key.modifiers))
+    kitty_key_number(key.code)
+        .map(|key_number| serialize_kitty_key(key_number, key.modifiers))
         .or_else(|| (!key.raw_bytes.is_empty()).then(|| key.raw_bytes.clone()))
 }
 
@@ -262,7 +262,7 @@ const fn kitty_key_number(code: ClientKeyCode) -> Option<u16> {
 }
 
 fn serialize_kitty_key(key_number: u16, modifiers: ClientKeyModifiers) -> Vec<u8> {
-    let modifier_number = self::kitty_modifier_number(modifiers);
+    let modifier_number = kitty_modifier_number(modifiers);
     if modifier_number == 1 {
         format!("\x1b[{key_number}u").into_bytes()
     } else {
@@ -302,12 +302,12 @@ impl KittyKeyboardSequence {
             return Self::Other;
         };
         let mut parts = body.split(|byte| *byte == b';');
-        if parts.next().and_then(self::parse_ascii_u16).is_none() {
+        if parts.next().and_then(crate::keyboard_input::parse_ascii_u16).is_none() {
             return Self::Other;
         }
         match (parts.next(), parts.next()) {
             (None, None) => Self::Kitty,
-            (Some(modifier), None) if self::parse_ascii_u16(modifier).is_some() => Self::Kitty,
+            (Some(modifier), None) if parse_ascii_u16(modifier).is_some() => Self::Kitty,
             (Some(_), None) | (None | Some(_), Some(_)) => Self::Other,
         }
     }
@@ -597,7 +597,7 @@ mod tests {
         #[case] tab_index: usize,
     ) {
         let input_mode = ServerInputMode::Normal;
-        let key = self::key(ClientKeyCode::Char(character), ClientKeyModifiers::SHIFT_ALT, &[]);
+        let key = key(ClientKeyCode::Char(character), ClientKeyModifiers::SHIFT_ALT, &[]);
 
         assert_that!(
             self::resolve_key(&MuxrConfig::new().unwrap().keybindings, input_mode, &key),
@@ -611,11 +611,7 @@ mod tests {
     #[test]
     fn test_resolve_key_when_ctrl_digit_arrives_returns_raw() {
         let input_mode = ServerInputMode::Normal;
-        let key = self::key(
-            ClientKeyCode::Char('1'),
-            self::modifiers(false, false, true),
-            b"\x1b[49;5u",
-        );
+        let key = key(ClientKeyCode::Char('1'), modifiers(false, false, true), b"\x1b[49;5u");
 
         assert_that!(
             self::resolve_key(&MuxrConfig::new().unwrap().keybindings, input_mode, &key),
@@ -699,11 +695,7 @@ mod tests {
     #[test]
     fn test_resolve_key_when_resize_mode_ctrl_digit_arrives_returns_raw() {
         let input_mode = ServerInputMode::Resize;
-        let key = self::key(
-            ClientKeyCode::Char('1'),
-            self::modifiers(false, false, true),
-            b"\x1b[49;5u",
-        );
+        let key = key(ClientKeyCode::Char('1'), modifiers(false, false, true), b"\x1b[49;5u");
 
         assert_that!(
             self::resolve_key(&MuxrConfig::new().unwrap().keybindings, input_mode, &key),

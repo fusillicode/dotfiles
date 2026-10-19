@@ -30,19 +30,19 @@ use syn::TypePath;
 use syn::visit;
 use syn::visit::Visit;
 
-use super::Rule;
-use super::common;
-use super::common::ImportEdits;
-use super::common::ImportError;
-use super::common::import_resolution;
-use super::common::module_idx::ModuleIdx;
-use super::common::module_idx::ModuleScope;
-use super::common::module_idx::ScopeInfo;
-use super::common::path_resolution;
 use crate::cmds::rsl::analysis::FixBlockReason;
 use crate::cmds::rsl::analysis::RuleChange;
 use crate::cmds::rsl::analysis::RulePlan;
 use crate::cmds::rsl::engine::FileContext;
+use crate::cmds::rsl::rules::Rule;
+use crate::cmds::rsl::rules::common;
+use crate::cmds::rsl::rules::common::ImportEdits;
+use crate::cmds::rsl::rules::common::ImportError;
+use crate::cmds::rsl::rules::common::import_resolution;
+use crate::cmds::rsl::rules::common::module_idx::ModuleIdx;
+use crate::cmds::rsl::rules::common::module_idx::ModuleScope;
+use crate::cmds::rsl::rules::common::module_idx::ScopeInfo;
+use crate::cmds::rsl::rules::common::path_resolution;
 use crate::cmds::rsl::source::SourceEditor;
 
 const KEEP_QUALIFIED_NAMES: &[&str] = &[

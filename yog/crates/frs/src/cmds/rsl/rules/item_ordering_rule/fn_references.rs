@@ -66,16 +66,14 @@ impl FnNameCandidateCollector {
                     if first.as_char() == ':' && second.as_char() == ':' =>
                 {
                     // Absolute paths are outside this local-name heuristic.
-                    remaining.len().saturating_sub(self::take_identifier_path(rest).1.len())
+                    remaining.len().saturating_sub(take_identifier_path(rest).1.len())
                 }
                 [TokenTree::Ident(_), ..] => {
-                    let (segments, rest) = self::take_identifier_path(remaining);
+                    let (segments, rest) = take_identifier_path(remaining);
                     let is_macro_invocation =
                         matches!(rest.first(), Some(TokenTree::Punct(punct)) if punct.as_char() == '!');
 
-                    if !is_macro_invocation
-                        && let Some(name) = self::match_local_fn_path(segments.into_iter(), self.scope)
-                    {
+                    if !is_macro_invocation && let Some(name) = match_local_fn_path(segments.into_iter(), self.scope) {
                         self.candidate_names.push(name);
                     }
 
@@ -96,7 +94,7 @@ impl FnNameCandidateCollector {
 impl<'ast> Visit<'ast> for FnNameCandidateCollector {
     fn visit_expr_call(&mut self, expression: &'ast ExprCall) {
         if let Expr::Path(path) = expression.func.as_ref()
-            && let Some(name) = self::local_called_fn_name(path, self.scope)
+            && let Some(name) = local_called_fn_name(path, self.scope)
         {
             self.candidate_names.push(name);
         }
@@ -149,7 +147,7 @@ fn local_called_fn_name(path: &ExprPath, scope: FnPathScope) -> Option<String> {
     if path.qself.is_some() || path.path.leading_colon.is_some() {
         return None;
     }
-    self::match_local_fn_path(path.path.segments.iter().map(|segment| &segment.ident), scope)
+    match_local_fn_path(path.path.segments.iter().map(|segment| &segment.ident), scope)
 }
 
 fn match_local_fn_path<'a>(mut segments: impl Iterator<Item = &'a Ident>, scope: FnPathScope) -> Option<String> {

@@ -3,6 +3,7 @@
 //! Exposes a dictionary with a `set` function applying base UI preferences (dark background, termguicolors)
 //! and custom highlight groups (diagnostics, statusline, general UI).
 use nvim_oxi::Dictionary;
+use nvim_oxi::api;
 use nvim_oxi::api::SuperIterator;
 use nvim_oxi::api::opts::GetHighlightOpts;
 use nvim_oxi::api::opts::GetHighlightOptsBuilder;
@@ -10,6 +11,8 @@ use nvim_oxi::api::opts::SetHighlightOpts;
 use nvim_oxi::api::types::GetHlInfos;
 use nvim_oxi::api::types::HighlightInfos;
 use rootcause::report;
+use ytil_noxi::common;
+use ytil_noxi::notify;
 
 const GLOBAL_BG: &str = "#001500";
 const GLOBAL_FG: &str = "#b3b3b3";
@@ -57,7 +60,7 @@ pub fn dict() -> Dictionary {
 /// Sets the desired Neovim colorscheme and custom highlight groups.
 pub fn set(colorscheme: Option<String>) {
     if let Some(cs) = colorscheme {
-        drop(ytil_noxi::common::exec_vim_cmd("colorscheme", Some(&[cs])));
+        drop(common::exec_vim_cmd("colorscheme", Some(&[cs])));
     }
 
     let opts = crate::vim_opts::global_scope();
@@ -148,8 +151,8 @@ fn get_overridden_hl_opts(
 
 /// Sets a highlight group in the specified namespace.
 fn set_hl(ns_id: u32, hl_name: &str, hl_opts: &HighlightOpts) {
-    if let Err(err) = nvim_oxi::api::set_hl(ns_id, hl_name, &hl_opts.to_set_highlight_opts()) {
-        ytil_noxi::notify::error(format!(
+    if let Err(err) = api::set_hl(ns_id, hl_name, &hl_opts.to_set_highlight_opts()) {
+        notify::error(format!(
             "error setting highlight opts | hl_name={hl_name:?} hl_opts={hl_opts:#?} error={err:#?}"
         ));
     }
@@ -196,9 +199,9 @@ fn get_hl(
     ns_id: u32,
     hl_opts: &GetHighlightOpts,
 ) -> rootcause::Result<GetHlInfos<impl SuperIterator<(nvim_oxi::String, HighlightInfos)>>> {
-    nvim_oxi::api::get_hl(ns_id, hl_opts)
+    api::get_hl(ns_id, hl_opts)
         .inspect_err(|err| {
-            ytil_noxi::notify::error(format!(
+            notify::error(format!(
                 "cannot get highlight infos | hl_opts={hl_opts:#?} error={err:#?}"
             ));
         })

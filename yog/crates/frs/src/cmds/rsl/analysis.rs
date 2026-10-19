@@ -4,8 +4,8 @@
 
 use proc_macro2::Span;
 
-use super::source::SourceEditor;
-use super::source::SourcePosition;
+use crate::cmds::rsl::source::SourceEditor;
+use crate::cmds::rsl::source::SourcePosition;
 
 /// The rule owns the data and description of its proposed change.
 pub(super) trait RuleChange {

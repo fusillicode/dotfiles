@@ -23,8 +23,8 @@ pub struct ServerLogLocator {
 
 pub fn cleanup_stale_session_files(paths: &SessionPaths) -> rootcause::Result<()> {
     // Structured rejections stop before cleanup; unusable attach failures may be stale incompatible servers.
-    self::remove_file_if_exists(&paths.socket)?;
-    self::remove_file_if_exists(&paths.pid)?;
+    remove_file_if_exists(&paths.socket)?;
+    remove_file_if_exists(&paths.pid)?;
     Ok(())
 }
 
@@ -41,7 +41,7 @@ pub fn spawn_server_process(
             .attach("run the muxr install/build step so muxr-server is installed next to muxr"));
     }
     let logs_dir = paths.logs_root()?;
-    let mut cmd = self::server_cmd(session, server_executable, external_layout);
+    let mut cmd = server_cmd(session, server_executable, external_layout);
 
     let child = cmd.spawn().context("failed to spawn muxr server")?;
     let pid = child.id();
@@ -92,7 +92,7 @@ mod tests {
     #[test]
     fn test_cleanup_stale_session_files_when_running_pid_has_missing_socket_removes_pid() -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
-        let (_, paths) = self::session_paths(tempdir.path(), "work")?;
+        let (_, paths) = session_paths(tempdir.path(), "work")?;
         fs::create_dir_all(&paths.root)?;
         fs::write(&paths.pid, std::process::id().to_string())?;
 
@@ -106,7 +106,7 @@ mod tests {
     #[test]
     fn test_cleanup_stale_session_files_when_socket_path_exists_removes_socket_path() -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
-        let (_, paths) = self::session_paths(tempdir.path(), "work")?;
+        let (_, paths) = session_paths(tempdir.path(), "work")?;
         fs::create_dir_all(&paths.root)?;
         let _listener = UnixListener::bind(&paths.socket)?;
 
@@ -150,7 +150,7 @@ mod tests {
         let session: SessionName = "work".parse()?;
         let tempdir = tempfile::tempdir()?;
         let missing_runner = tempdir.path().join("muxr-server");
-        let (_, paths) = self::session_paths(tempdir.path(), "work")?;
+        let (_, paths) = session_paths(tempdir.path(), "work")?;
 
         assert_that!(
             spawn_server_process(&session, &paths, &missing_runner, None).map(|_| ()),

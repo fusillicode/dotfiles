@@ -145,7 +145,7 @@ pub fn paste_borders(
     attention_panes: &[PaneId],
     border_mode: BorderRenderMode,
 ) -> rootcause::Result<()> {
-    self::paste_borders_in_rows(
+    paste_borders_in_rows(
         rows,
         PasteBordersConfig {
             active_pane,
@@ -164,7 +164,7 @@ pub fn paste_borders_in_rows(
     config: PasteBordersConfig<'_>,
     include_row: impl Fn(u16) -> bool,
 ) -> rootcause::Result<()> {
-    let border_cells = self::compose_border_cells(
+    let border_cells = compose_border_cells(
         config.borders,
         config.active_pane,
         config.attention_panes,
@@ -250,15 +250,9 @@ fn compose_border_cells(
                         .col()
                         .checked_add(offset)
                         .ok_or_else(|| report!("muxr horizontal pane border col overflowed"))?;
-                    let visual = self::border_visual_for_cell(
-                        border,
-                        border.row(),
-                        col,
-                        active_pane,
-                        attention_panes,
-                        border_mode,
-                    );
-                    self::add_border_cell(&mut cells, border.row(), col, border.axis(), visual);
+                    let visual =
+                        border_visual_for_cell(border, border.row(), col, active_pane, attention_panes, border_mode);
+                    add_border_cell(&mut cells, border.row(), col, border.axis(), visual);
                 }
             }
             PaneBorderAxis::Vertical => {
@@ -267,20 +261,14 @@ fn compose_border_cells(
                     .checked_add(border.len())
                     .ok_or_else(|| report!("muxr vertical pane border end overflowed"))?;
                 for row in border.row()..end_row {
-                    let visual = self::border_visual_for_cell(
-                        border,
-                        row,
-                        border.col(),
-                        active_pane,
-                        attention_panes,
-                        border_mode,
-                    );
-                    self::add_border_cell(&mut cells, row, border.col(), border.axis(), visual);
+                    let visual =
+                        border_visual_for_cell(border, row, border.col(), active_pane, attention_panes, border_mode);
+                    add_border_cell(&mut cells, row, border.col(), border.axis(), visual);
                 }
             }
         }
     }
-    self::add_adjacent_border_junctions(&mut cells);
+    add_adjacent_border_junctions(&mut cells);
     Ok(cells)
 }
 
@@ -314,14 +302,14 @@ fn add_adjacent_border_junctions(cells: &mut BTreeMap<(u16, u16), BorderCell>) {
                     .get(&(*row, left_col))
                     .is_some_and(|neighbor| neighbor.shape.vertical_state() == BorderAxisEdgeState::Present)
             {
-                self::merge_border_edge(cells, (*row, left_col), BorderCellEdge::Right, cell.visual);
+                merge_border_edge(cells, (*row, left_col), BorderCellEdge::Right, cell.visual);
             }
             if let Some(right_col) = col.checked_add(1)
                 && base_cells
                     .get(&(*row, right_col))
                     .is_some_and(|neighbor| neighbor.shape.vertical_state() == BorderAxisEdgeState::Present)
             {
-                self::merge_border_edge(cells, (*row, right_col), BorderCellEdge::Left, cell.visual);
+                merge_border_edge(cells, (*row, right_col), BorderCellEdge::Left, cell.visual);
             }
         }
         if cell.shape.vertical_state() == BorderAxisEdgeState::Present {
@@ -330,14 +318,14 @@ fn add_adjacent_border_junctions(cells: &mut BTreeMap<(u16, u16), BorderCell>) {
                     .get(&(up_row, *col))
                     .is_some_and(|neighbor| neighbor.shape.horizontal_state() == BorderAxisEdgeState::Present)
             {
-                self::merge_border_edge(cells, (up_row, *col), BorderCellEdge::Down, cell.visual);
+                merge_border_edge(cells, (up_row, *col), BorderCellEdge::Down, cell.visual);
             }
             if let Some(down_row) = row.checked_add(1)
                 && base_cells
                     .get(&(down_row, *col))
                     .is_some_and(|neighbor| neighbor.shape.horizontal_state() == BorderAxisEdgeState::Present)
             {
-                self::merge_border_edge(cells, (down_row, *col), BorderCellEdge::Up, cell.visual);
+                merge_border_edge(cells, (down_row, *col), BorderCellEdge::Up, cell.visual);
             }
         }
     }
@@ -630,10 +618,10 @@ impl BorderVisual {
 
     const fn style(self, styles: PaneBorderStyles, pane_attention: PaneAttentionConfig) -> RenderStyle {
         match self {
-            Self::Default => self::render_style(styles.default),
-            Self::Focused => self::render_style(styles.focused),
-            Self::Attention => self::render_style(pane_attention.border),
-            Self::Resize => self::render_style(styles.resize),
+            Self::Default => render_style(styles.default),
+            Self::Focused => render_style(styles.focused),
+            Self::Attention => render_style(pane_attention.border),
+            Self::Resize => render_style(styles.resize),
         }
     }
 
@@ -677,12 +665,12 @@ mod tests {
 
     impl NestedBorderFixture {
         fn borders(self) -> rootcause::Result<Vec<PaneBorder>> {
-            let vertical_left = self::pane_region(PaneId::new(1)?, 0, 0, 24, 40, 1);
-            let vertical_top_right = self::pane_region(PaneId::new(2)?, 0, 41, 12, 39, 2);
-            let vertical_bottom_right = self::pane_region(PaneId::new(3)?, 13, 41, 11, 39, 3);
-            let horizontal_top = self::pane_region(PaneId::new(1)?, 0, 0, 12, 80, 1);
-            let horizontal_bottom_left = self::pane_region(PaneId::new(2)?, 13, 0, 11, 40, 2);
-            let horizontal_bottom_right = self::pane_region(PaneId::new(3)?, 13, 41, 11, 39, 3);
+            let vertical_left = pane_region(PaneId::new(1)?, 0, 0, 24, 40, 1);
+            let vertical_top_right = pane_region(PaneId::new(2)?, 0, 41, 12, 39, 2);
+            let vertical_bottom_right = pane_region(PaneId::new(3)?, 13, 41, 11, 39, 3);
+            let horizontal_top = pane_region(PaneId::new(1)?, 0, 0, 12, 80, 1);
+            let horizontal_bottom_left = pane_region(PaneId::new(2)?, 13, 0, 11, 40, 2);
+            let horizontal_bottom_right = pane_region(PaneId::new(3)?, 13, 41, 11, 39, 3);
 
             match self {
                 Self::VerticalThenHorizontal => Ok(vec![
@@ -733,7 +721,7 @@ mod tests {
         #[case] cell_row: u16,
     ) -> rootcause::Result<()> {
         let active_pane = PaneId::new(1)?;
-        let active_region = self::pane_region(active_pane, 2, 2, 1, 1, 1);
+        let active_region = pane_region(active_pane, 2, 2, 1, 1, 1);
         let border = PaneBorder::with_adjacent_regions(
             axis,
             PanePosition {
@@ -770,7 +758,7 @@ mod tests {
         #[case] cell_row: u16,
     ) -> rootcause::Result<()> {
         let active_pane = PaneId::new(1)?;
-        let active_region = self::pane_region(active_pane, 2, 2, 1, 1, 1);
+        let active_region = pane_region(active_pane, 2, 2, 1, 1, 1);
         let border = PaneBorder::with_adjacent_regions(
             axis,
             PanePosition {
@@ -869,8 +857,8 @@ mod tests {
         let active_pane = PaneId::new(active_pane)?;
         let size = TerminalSize::new(80, 24)?;
         let borders = fixture.borders()?;
-        let mut rows = self::empty_render_rows(&size);
-        self::paste_borders(
+        let mut rows = empty_render_rows(&size);
+        crate::pane::borders::tests::paste_borders(
             &mut rows,
             MuxrConfig::new()?.pane_borders,
             MuxrConfig::new()?.pane_attention,
@@ -879,7 +867,12 @@ mod tests {
             &[],
             BorderRenderMode::Focus,
         )?;
-        let border_cells = self::compose_border_cells(&borders, Some(&active_pane), &[], BorderRenderMode::Focus)?;
+        let border_cells = crate::pane::borders::tests::compose_border_cells(
+            &borders,
+            Some(&active_pane),
+            &[],
+            BorderRenderMode::Focus,
+        )?;
 
         let (row, col, glyph) = expected_focused_cell;
         let cell = rows
@@ -896,7 +889,7 @@ mod tests {
 
     #[test]
     fn test_paste_borders_when_borders_are_rendered_uses_box_drawing_style() -> rootcause::Result<()> {
-        let mut rows = self::empty_render_rows(&TerminalSize::new(3, 3)?);
+        let mut rows = empty_render_rows(&TerminalSize::new(3, 3)?);
         let borders = vec![
             PaneBorder::with_adjacent_regions(PaneBorderAxis::Vertical, PanePosition { row: 0, col: 1 }, 3, &[], &[])?,
             PaneBorder::with_adjacent_regions(
@@ -908,7 +901,7 @@ mod tests {
             )?,
         ];
 
-        self::paste_borders(
+        crate::pane::borders::tests::paste_borders(
             &mut rows,
             MuxrConfig::new()?.pane_borders,
             MuxrConfig::new()?.pane_attention,
@@ -917,7 +910,8 @@ mod tests {
             &[],
             BorderRenderMode::Focus,
         )?;
-        let border_cells = self::compose_border_cells(&borders, None, &[], BorderRenderMode::Focus)?;
+        let border_cells =
+            crate::pane::borders::tests::compose_border_cells(&borders, None, &[], BorderRenderMode::Focus)?;
 
         let vertical_cell = rows
             .first()
@@ -949,9 +943,9 @@ mod tests {
         #[case] mode: BorderRenderMode,
         #[case] expected_visual: BorderVisual,
     ) -> rootcause::Result<()> {
-        let mut rows = self::empty_render_rows(&TerminalSize::new(3, 3)?);
+        let mut rows = empty_render_rows(&TerminalSize::new(3, 3)?);
         let active_pane = PaneId::new(1)?;
-        let active_region = self::pane_region(active_pane, 0, 0, 3, 1, 1);
+        let active_region = pane_region(active_pane, 0, 0, 3, 1, 1);
         let border = PaneBorder::with_adjacent_regions(
             PaneBorderAxis::Vertical,
             PanePosition { row: 0, col: 1 },
@@ -960,8 +954,13 @@ mod tests {
             &[],
         )?;
 
-        let border_cells = self::compose_border_cells(std::slice::from_ref(&border), Some(&active_pane), &[], mode)?;
-        self::paste_borders(
+        let border_cells = crate::pane::borders::tests::compose_border_cells(
+            std::slice::from_ref(&border),
+            Some(&active_pane),
+            &[],
+            mode,
+        )?;
+        crate::pane::borders::tests::paste_borders(
             &mut rows,
             MuxrConfig::new()?.pane_borders,
             MuxrConfig::new()?.pane_attention,
@@ -983,10 +982,10 @@ mod tests {
 
     #[test]
     fn test_paste_borders_when_border_cell_is_owned_by_attention_pane_uses_attention_style() -> rootcause::Result<()> {
-        let mut rows = self::empty_render_rows(&TerminalSize::new(3, 3)?);
+        let mut rows = empty_render_rows(&TerminalSize::new(3, 3)?);
         let active_pane = PaneId::new(1)?;
         let attention_pane = PaneId::new(2)?;
-        let attention_region = self::pane_region(attention_pane, 0, 0, 3, 1, 1);
+        let attention_region = pane_region(attention_pane, 0, 0, 3, 1, 1);
         let border = PaneBorder::with_adjacent_regions(
             PaneBorderAxis::Vertical,
             PanePosition { row: 0, col: 1 },
@@ -995,13 +994,13 @@ mod tests {
             &[],
         )?;
 
-        let border_cells = self::compose_border_cells(
+        let border_cells = crate::pane::borders::tests::compose_border_cells(
             std::slice::from_ref(&border),
             Some(&active_pane),
             std::slice::from_ref(&attention_pane),
             BorderRenderMode::Focus,
         )?;
-        self::paste_borders(
+        crate::pane::borders::tests::paste_borders(
             &mut rows,
             MuxrConfig::new()?.pane_borders,
             MuxrConfig::new()?.pane_attention,
@@ -1031,11 +1030,11 @@ mod tests {
         #[case] mode: BorderRenderMode,
         #[case] expected_visual: BorderVisual,
     ) -> rootcause::Result<()> {
-        let mut rows = self::empty_render_rows(&TerminalSize::new(3, 3)?);
+        let mut rows = empty_render_rows(&TerminalSize::new(3, 3)?);
         let active_pane = PaneId::new(1)?;
         let attention_pane = PaneId::new(2)?;
-        let active_region = self::pane_region(active_pane, 0, 0, 3, 1, 1);
-        let attention_region = self::pane_region(attention_pane, 0, 2, 3, 1, 1);
+        let active_region = pane_region(active_pane, 0, 0, 3, 1, 1);
+        let attention_region = pane_region(attention_pane, 0, 2, 3, 1, 1);
         let border = PaneBorder::with_adjacent_regions(
             PaneBorderAxis::Vertical,
             PanePosition { row: 0, col: 1 },
@@ -1044,13 +1043,13 @@ mod tests {
             std::slice::from_ref(&attention_region),
         )?;
 
-        let border_cells = self::compose_border_cells(
+        let border_cells = crate::pane::borders::tests::compose_border_cells(
             std::slice::from_ref(&border),
             Some(&active_pane),
             std::slice::from_ref(&attention_pane),
             mode,
         )?;
-        self::paste_borders(
+        crate::pane::borders::tests::paste_borders(
             &mut rows,
             MuxrConfig::new()?.pane_borders,
             MuxrConfig::new()?.pane_attention,
@@ -1077,9 +1076,9 @@ mod tests {
         #[case] mode: BorderRenderMode,
         #[case] expected_visual: BorderVisual,
     ) -> rootcause::Result<()> {
-        let mut rows = self::empty_render_rows(&TerminalSize::new(3, 3)?);
+        let mut rows = empty_render_rows(&TerminalSize::new(3, 3)?);
         let active_pane = PaneId::new(1)?;
-        let active_region = self::pane_region(active_pane, 0, 0, 3, 1, 1);
+        let active_region = pane_region(active_pane, 0, 0, 3, 1, 1);
         let border = PaneBorder::with_adjacent_regions(
             PaneBorderAxis::Vertical,
             PanePosition { row: 0, col: 1 },
@@ -1088,13 +1087,13 @@ mod tests {
             &[],
         )?;
 
-        let border_cells = self::compose_border_cells(
+        let border_cells = crate::pane::borders::tests::compose_border_cells(
             std::slice::from_ref(&border),
             Some(&active_pane),
             std::slice::from_ref(&active_pane),
             mode,
         )?;
-        self::paste_borders(
+        crate::pane::borders::tests::paste_borders(
             &mut rows,
             MuxrConfig::new()?.pane_borders,
             MuxrConfig::new()?.pane_attention,
@@ -1121,9 +1120,9 @@ mod tests {
         #[case] mode: BorderRenderMode,
         #[case] expected_visual: BorderVisual,
     ) -> rootcause::Result<()> {
-        let mut rows = self::empty_render_rows(&TerminalSize::new(3, 3)?);
+        let mut rows = empty_render_rows(&TerminalSize::new(3, 3)?);
         let active_pane = PaneId::new(1)?;
-        let active_region = self::pane_region(active_pane, 1, 0, 1, 3, 1);
+        let active_region = pane_region(active_pane, 1, 0, 1, 3, 1);
         let horizontal_border = PaneBorder::with_adjacent_regions(
             PaneBorderAxis::Horizontal,
             PanePosition { row: 0, col: 0 },
@@ -1136,8 +1135,8 @@ mod tests {
             PaneBorder::with_adjacent_regions(PaneBorderAxis::Vertical, PanePosition { row: 0, col: 0 }, 3, &[], &[])?,
             horizontal_border,
         ];
-        let border_cells = self::compose_border_cells(&borders, Some(&active_pane), &[], mode)?;
-        self::paste_borders(
+        let border_cells = crate::pane::borders::tests::compose_border_cells(&borders, Some(&active_pane), &[], mode)?;
+        crate::pane::borders::tests::paste_borders(
             &mut rows,
             MuxrConfig::new()?.pane_borders,
             MuxrConfig::new()?.pane_attention,
@@ -1164,11 +1163,11 @@ mod tests {
         #[case] mode: BorderRenderMode,
         #[case] expected_visual: BorderVisual,
     ) -> rootcause::Result<()> {
-        let mut rows = self::empty_render_rows(&TerminalSize::new(3, 3)?);
+        let mut rows = empty_render_rows(&TerminalSize::new(3, 3)?);
         let top_right_pane = PaneId::new(1)?;
         let active_pane = PaneId::new(2)?;
-        let top_right_region = self::pane_region(top_right_pane, 0, 2, 1, 1, 1);
-        let active_region = self::pane_region(active_pane, 2, 2, 1, 1, 2);
+        let top_right_region = pane_region(top_right_pane, 0, 2, 1, 1, 1);
+        let active_region = pane_region(active_pane, 2, 2, 1, 1, 2);
         let border = PaneBorder::with_adjacent_regions(
             PaneBorderAxis::Vertical,
             PanePosition { row: 0, col: 1 },
@@ -1177,8 +1176,13 @@ mod tests {
             &[top_right_region, active_region],
         )?;
 
-        let border_cells = self::compose_border_cells(std::slice::from_ref(&border), Some(&active_pane), &[], mode)?;
-        self::paste_borders(
+        let border_cells = crate::pane::borders::tests::compose_border_cells(
+            std::slice::from_ref(&border),
+            Some(&active_pane),
+            &[],
+            mode,
+        )?;
+        crate::pane::borders::tests::paste_borders(
             &mut rows,
             MuxrConfig::new()?.pane_borders,
             MuxrConfig::new()?.pane_attention,

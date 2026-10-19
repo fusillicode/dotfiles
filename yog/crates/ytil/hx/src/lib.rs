@@ -12,6 +12,7 @@ use fake::Faker;
 #[cfg(any(test, feature = "fake"))]
 use fake::RngExt;
 use nutype::nutype;
+use rootcause::Report;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
 
@@ -27,7 +28,7 @@ pub struct HxStatusLine {
 
 /// Parses a [`HxStatusLine`] from a Helix editor status line string.
 impl FromStr for HxStatusLine {
-    type Err = rootcause::Report;
+    type Err = Report;
 
     fn from_str(hx_status_line: &str) -> Result<Self, Self::Err> {
         let hx_status_line = hx_status_line.trim();
@@ -93,7 +94,7 @@ pub struct HxCursorPosition {
 
 /// Parses a [`HxCursorPosition`] from a string in the format "line:column".
 impl FromStr for HxCursorPosition {
-    type Err = rootcause::Report;
+    type Err = Report;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let (line, column) = s

@@ -8,6 +8,7 @@ use muxr_core::TerminalSize;
 use muxr_core::TrackedProcessState;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
+use tokio::sync::Notify;
 
 use crate::pane::layout::PaneRegion;
 use crate::pane::tracked_process::PaneTrackedProcessSnapshot;
@@ -74,7 +75,7 @@ impl PaneRuntimeMetadata {
         let mut fields = PaneSnapshotFields::default();
         for (pane_id, pane) in &self.panes {
             fields.set_terminal_title(*pane_id, pane.terminal_title.clone());
-            fields.set_cmd_label(*pane_id, self::runtime_cmd_label(pane));
+            fields.set_cmd_label(*pane_id, runtime_cmd_label(pane));
             fields.set_tracked_process_state(*pane_id, pane.tracked_process_state);
         }
         fields
@@ -82,7 +83,7 @@ impl PaneRuntimeMetadata {
 }
 
 pub struct PaneRuntimes {
-    pane_exit_notify: Arc<tokio::sync::Notify>,
+    pane_exit_notify: Arc<Notify>,
     panes: Vec<PaneRuntime>,
 }
 
@@ -91,7 +92,7 @@ impl PaneRuntimes {
         config: &ServerConfig,
         start_seed: &SessionStartSeed,
         size: &TerminalSize,
-        pane_exit_notify: Arc<tokio::sync::Notify>,
+        pane_exit_notify: Arc<Notify>,
     ) -> rootcause::Result<Self> {
         let mut panes = Vec::new();
         for pane in start_seed.layout.panes() {
@@ -357,7 +358,7 @@ fn runtime_cmd_label(pane: &PaneRuntimeMetadataEntry) -> Option<String> {
 
 #[cfg(test)]
 pub mod test_helpers {
-    use super::*;
+    use crate::pane::runtime::*;
 
     pub fn empty_runtimes() -> PaneRuntimes {
         PaneRuntimes {
@@ -418,7 +419,7 @@ mod tests {
             runtimes.startup_cmd_labels(),
             eq(vec![(pane_id, Some("echo seeded".to_owned()))])
         );
-        self::wait_for_runtime_snapshot_contains(&runtimes, pane_id, "seeded")?;
+        wait_for_runtime_snapshot_contains(&runtimes, pane_id, "seeded")?;
         assert_that!(runtimes.exited_panes()?, eq(Vec::new()));
         Ok(())
     }
@@ -487,7 +488,7 @@ mod tests {
             let snapshot = runtimes
                 .handle(pane_id)?
                 .pane_render_snapshot(crate::terminal::TerminalSnapshotScope::Full)?;
-            if self::snapshot_text(snapshot.terminal()).contains(needle) {
+            if snapshot_text(snapshot.terminal()).contains(needle) {
                 return Ok(());
             }
             if started_at.elapsed() > Duration::from_secs(2) {

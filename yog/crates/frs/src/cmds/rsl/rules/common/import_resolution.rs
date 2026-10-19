@@ -3,9 +3,10 @@ use syn::Item;
 use syn::UseTree;
 use syn::spanned::Spanned;
 
-use super::module_idx::ModuleIdx;
-use super::module_idx::ScopeInfo;
-use super::path_resolution::normalize_path;
+use crate::cmds::rsl::rules::common;
+use crate::cmds::rsl::rules::common::module_idx::ModuleIdx;
+use crate::cmds::rsl::rules::common::module_idx::ScopeInfo;
+use crate::cmds::rsl::rules::common::path_resolution;
 
 pub struct ImportBinding {
     pub span: Span,
@@ -41,7 +42,7 @@ pub fn use_bindings(tree: &UseTree, current_module: &[String]) -> UseBindings {
                         bindings.bindings.push(ImportBinding {
                             span: tree.span(),
                             name: binding.clone(),
-                            path: normalize_path(current_module, &prefix),
+                            path: path_resolution::normalize_path(current_module, &prefix),
                             source_path: prefix,
                         });
                     }
@@ -51,7 +52,7 @@ pub fn use_bindings(tree: &UseTree, current_module: &[String]) -> UseBindings {
                     bindings.bindings.push(ImportBinding {
                         span: tree.span(),
                         name: name.ident.to_string(),
-                        path: normalize_path(current_module, &path),
+                        path: path_resolution::normalize_path(current_module, &path),
                         source_path: path,
                     });
                 }
@@ -63,13 +64,15 @@ pub fn use_bindings(tree: &UseTree, current_module: &[String]) -> UseBindings {
                     bindings.bindings.push(ImportBinding {
                         span: tree.span(),
                         name: rename.rename.to_string(),
-                        path: normalize_path(current_module, &path),
+                        path: path_resolution::normalize_path(current_module, &path),
                         source_path: path,
                     });
                 }
             }
             UseTree::Glob(_) => {
-                bindings.glob_imports.push(normalize_path(current_module, &prefix));
+                bindings
+                    .glob_imports
+                    .push(path_resolution::normalize_path(current_module, &prefix));
                 bindings.unknown = true;
             }
         }
@@ -84,7 +87,7 @@ pub fn has_conditional_import(items: &[Item], name: &str) -> bool {
             return false;
         };
 
-        super::has_conditional_attributes(&import.attrs)
+        common::has_conditional_attributes(&import.attrs)
             && use_bindings(&import.tree, &[])
                 .bindings
                 .iter()
@@ -106,8 +109,8 @@ pub fn has_name_clash_parts(idx: &ModuleIdx<'_>, current_module: &[String], part
     let Some(target_module_parts) = parts.get(..parts.len().saturating_sub(1)) else {
         return true;
     };
-    let target_module = normalize_path(current_module, target_module_parts);
-    let target_path = normalize_path(current_module, parts);
+    let target_module = path_resolution::normalize_path(current_module, target_module_parts);
+    let target_path = path_resolution::normalize_path(current_module, parts);
 
     if target_module != current_module && scope.definitions.contains(name) {
         return true;
@@ -125,7 +128,7 @@ pub fn imported_binding<'idx>(
     name: &str,
 ) -> Option<&'idx ImportBinding> {
     let scope = idx.info.get(current_module)?;
-    if let Some(binding) = self::direct_imported_binding(scope, name) {
+    if let Some(binding) = direct_imported_binding(scope, name) {
         return Some(binding);
     }
 
@@ -135,7 +138,7 @@ pub fn imported_binding<'idx>(
             // TODO: Resolve explicit imports exported by modules outside this file.
             continue;
         };
-        let Some(binding) = self::direct_imported_binding(glob_scope, name) else {
+        let Some(binding) = direct_imported_binding(glob_scope, name) else {
             continue;
         };
         if candidate.is_some() {

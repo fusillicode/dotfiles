@@ -11,19 +11,15 @@ use interprocess::local_socket::ConnectOptions;
 use interprocess::local_socket::GenericFilePath;
 use interprocess::local_socket::ListenerOptions;
 use interprocess::local_socket::ToFsName as _;
-use interprocess::local_socket::tokio::Listener as LocalSocketListener;
-use interprocess::local_socket::tokio::RecvHalf as LocalSocketRecvHalf;
-use interprocess::local_socket::tokio::SendHalf as LocalSocketSendHalf;
-use interprocess::local_socket::tokio::Stream as LocalSocketStream;
+use interprocess::local_socket::tokio::Listener;
+use interprocess::local_socket::tokio::RecvHalf;
+use interprocess::local_socket::tokio::SendHalf;
+use interprocess::local_socket::tokio::Stream;
 use interprocess::local_socket::traits::tokio::Listener as _;
 use interprocess::local_socket::traits::tokio::Stream as _;
 use muxr_core::ClientRequest;
 use muxr_core::ServerEvent;
 use muxr_core::SocketPath;
-use muxr_core::decode_client_request;
-use muxr_core::decode_server_event;
-use muxr_core::encode_client_request;
-use muxr_core::encode_server_event;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
 use tokio::io::AsyncRead;
@@ -35,7 +31,7 @@ use tokio_util::codec::LengthDelimitedCodec;
 const FRAME_HEADER_LENGTH: usize = size_of::<u32>();
 const MAX_FRAME_LENGTH: usize = 8 * 1024 * 1024;
 
-type FrameReader = FramedRead<LocalSocketRecvHalf, LengthDelimitedCodec>;
+type FrameReader = FramedRead<RecvHalf, LengthDelimitedCodec>;
 type LocalFrameWriter = FrameWriter<LocalSocketWriter>;
 
 pub struct ClientConnection {
@@ -86,7 +82,7 @@ impl ClientConnection {
     }
 
     #[must_use]
-    fn from_stream(stream: LocalSocketStream) -> Self {
+    fn from_stream(stream: Stream) -> Self {
         let (writer, reader) = frame_socket(stream);
         Self {
             reader: ClientEventReader { reader },
@@ -155,7 +151,7 @@ impl ServerConnection {
     }
 
     #[must_use]
-    fn from_stream(stream: LocalSocketStream) -> Self {
+    fn from_stream(stream: Stream) -> Self {
         let (writer, reader) = frame_socket(stream);
         Self { reader, writer }
     }
@@ -190,7 +186,7 @@ impl ServerEventWriter {
 }
 
 pub struct ServerListener {
-    listener: LocalSocketListener,
+    listener: Listener,
 }
 
 impl ServerListener {
@@ -226,7 +222,7 @@ impl ServerListener {
     }
 }
 
-fn frame_socket(stream: LocalSocketStream) -> (LocalFrameWriter, FrameReader) {
+fn frame_socket(stream: Stream) -> (LocalFrameWriter, FrameReader) {
     let (reader, writer) = stream.split();
     (
         FrameWriter::new(LocalSocketWriter(writer)),
@@ -250,7 +246,7 @@ where
         return Ok(None);
     };
 
-    Ok(Some(decode_client_request(&frame)?))
+    Ok(Some(muxr_core::decode_client_request(&frame)?))
 }
 
 async fn recv_server_event_frame<T>(
@@ -263,7 +259,7 @@ where
         return Ok(None);
     };
 
-    Ok(Some(decode_server_event(&frame)?))
+    Ok(Some(muxr_core::decode_server_event(&frame)?))
 }
 
 async fn recv_frame<T>(reader: &mut FramedRead<T, LengthDelimitedCodec>) -> rootcause::Result<Option<Bytes>>
@@ -290,14 +286,14 @@ async fn send_client_request_frame<T>(writer: &mut FrameWriter<T>, request: &Cli
 where
     T: AsyncWrite + Send + Unpin,
 {
-    send_frame(writer, encode_client_request(request)?.into_bytes()).await
+    send_frame(writer, muxr_core::encode_client_request(request)?.into_bytes()).await
 }
 
 async fn send_server_event_frame<T>(writer: &mut FrameWriter<T>, event: &ServerEvent) -> rootcause::Result<()>
 where
     T: AsyncWrite + Send + Unpin,
 {
-    send_frame(writer, encode_server_event(event)?.into_bytes()).await
+    send_frame(writer, muxr_core::encode_server_event(event)?.into_bytes()).await
 }
 
 async fn send_frame<T>(writer: &mut FrameWriter<T>, frame: Bytes) -> rootcause::Result<()>
@@ -398,7 +394,7 @@ impl PendingFrame {
     }
 }
 
-struct LocalSocketWriter(LocalSocketSendHalf);
+struct LocalSocketWriter(SendHalf);
 
 impl AsyncWrite for LocalSocketWriter {
     fn poll_write(self: Pin<&mut Self>, cx: &mut Context<'_>, buffer: &[u8]) -> Poll<io::Result<usize>> {
@@ -412,18 +408,18 @@ impl AsyncWrite for LocalSocketWriter {
     ) -> Poll<io::Result<usize>> {
         match &mut self.get_mut().0 {
             #[cfg(windows)]
-            LocalSocketSendHalf::NamedPipe(writer) => Pin::new(writer).poll_write_vectored(cx, buffers),
+            SendHalf::NamedPipe(writer) => Pin::new(writer).poll_write_vectored(cx, buffers),
             #[cfg(unix)]
-            LocalSocketSendHalf::UdSocket(writer) => Pin::new(writer).poll_write_vectored(cx, buffers),
+            SendHalf::UdSocket(writer) => Pin::new(writer).poll_write_vectored(cx, buffers),
         }
     }
 
     fn is_write_vectored(&self) -> bool {
         match &self.0 {
             #[cfg(windows)]
-            LocalSocketSendHalf::NamedPipe(writer) => writer.is_write_vectored(),
+            SendHalf::NamedPipe(writer) => writer.is_write_vectored(),
             #[cfg(unix)]
-            LocalSocketSendHalf::UdSocket(writer) => writer.is_write_vectored(),
+            SendHalf::UdSocket(writer) => writer.is_write_vectored(),
         }
     }
 

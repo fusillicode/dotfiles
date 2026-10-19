@@ -4,6 +4,7 @@ use std::fmt::Formatter;
 #[cfg(unix)]
 use std::os::unix::process::CommandExt;
 use std::path::Path;
+use std::path::PathBuf;
 use std::process::Command;
 use std::process::Stdio;
 
@@ -17,8 +18,11 @@ use strum::IntoEnumIterator;
 use ytil_agents::agent::Agent;
 use ytil_agents::agent::session::Session;
 use ytil_agents::agent::session::SessionKey;
+use ytil_agents::agent::session_loader;
 use ytil_ext::path_ext::PathExt;
 use ytil_ext::string_ext::StringExt as _;
+
+use crate::cmds::sessions::delete;
 
 pub fn run(home_dir: &Path) -> rootcause::Result<()> {
     let sessions = load_sorted_sessions()?;
@@ -47,7 +51,7 @@ pub fn run(home_dir: &Path) -> rootcause::Result<()> {
 
     match op {
         Op::Resume => ytil_tui::require_single(&selected, "sessions").and_then(launch_session),
-        Op::Delete => super::delete::delete_selected_sessions(&selected, home_dir),
+        Op::Delete => delete::delete_selected_sessions(&selected, home_dir),
     }
 }
 
@@ -75,12 +79,12 @@ pub fn run_json(args: &[String], home_dir: &Path) -> rootcause::Result<()> {
 pub(super) struct RenderableSession {
     pub(super) session: Session,
     branch: Option<String>,
-    home_dir: std::path::PathBuf,
+    home_dir: PathBuf,
 }
 
 impl RenderableSession {
     #[cfg(test)]
-    pub(super) const fn for_test(session: Session, home_dir: std::path::PathBuf) -> Self {
+    pub(super) const fn for_test(session: Session, home_dir: PathBuf) -> Self {
         Self {
             session,
             branch: None,
@@ -89,7 +93,7 @@ impl RenderableSession {
     }
 
     fn from_sessions(sessions: Vec<Session>, home_dir: &Path) -> Vec<Self> {
-        let mut timestamps_by_workspace = HashMap::<std::path::PathBuf, Vec<(usize, Timestamp)>>::new();
+        let mut timestamps_by_workspace = HashMap::<PathBuf, Vec<(usize, Timestamp)>>::new();
         for (index, session) in sessions.iter().enumerate() {
             timestamps_by_workspace
                 .entry(session.workspace.clone())
@@ -236,13 +240,13 @@ fn parse_json_session_keys(args: &[String]) -> rootcause::Result<Vec<SessionKey>
 
 fn load_sorted_sessions() -> rootcause::Result<Vec<Session>> {
     let mut sessions = Vec::new();
-    sessions.extend(ytil_agents::agent::session_loader::load_sessions()?);
+    sessions.extend(session_loader::load_sessions()?);
     sort_sessions(&mut sessions);
     Ok(sessions)
 }
 
 fn load_sorted_sessions_by_key(keys: &[SessionKey]) -> rootcause::Result<Vec<Session>> {
-    let mut sessions = ytil_agents::agent::session_loader::load_sessions_by_key(keys)?;
+    let mut sessions = session_loader::load_sessions_by_key(keys)?;
     sort_sessions(&mut sessions);
     Ok(sessions)
 }
@@ -260,7 +264,7 @@ fn sort_sessions(sessions: &mut [Session]) {
 #[derive(Debug, Serialize)]
 struct JsonSession {
     agent: &'static str,
-    workspace: std::path::PathBuf,
+    workspace: PathBuf,
     session_id: String,
     summary: String,
     display: String,

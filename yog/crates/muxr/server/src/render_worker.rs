@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 use std::collections::VecDeque;
+use std::fmt::Formatter;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
@@ -12,9 +13,16 @@ use muxr_core::RenderUpdate;
 use muxr_core::ServerEvent;
 use muxr_core::TerminalSize;
 use muxr_transport::ServerEventWriter;
+use rootcause::Report;
 use tokio::sync::Mutex;
 use tokio::sync::Notify;
+use tokio::sync::oneshot;
+use tokio::sync::oneshot::Sender;
+use tokio::task::JoinHandle;
+use tokio::time;
+use tokio::time::Instant;
 
+use crate::client::lifecycle;
 use crate::event_writer::HeartbeatDelivery;
 use crate::event_writer::ServerEventSink;
 use crate::pane::layout::PaneLayout;
@@ -23,6 +31,7 @@ use crate::pane::render::PaneRenderLayout;
 use crate::pane::render::RenderComposer;
 use crate::pty::PtyHandle;
 use crate::render_state::ClientRenderDmg;
+use crate::session::delete;
 use crate::session::tracing::ClientEventSendFailure;
 use crate::terminal::TerminalSnapshotScope;
 
@@ -125,7 +134,7 @@ impl RenderInput {
 }
 
 impl std::fmt::Debug for RenderInput {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
         formatter
             .debug_struct("RenderInput")
             .field("active_pane", &self.active_pane)
@@ -246,7 +255,7 @@ impl RenderWorker {
                     if let Some(delivered) = delivered {
                         let delivery = write_result
                             .as_ref()
-                            .map(|()| tokio::time::Instant::now())
+                            .map(|()| Instant::now())
                             .map_err(|failure| failure.reason);
                         let _sent = delivered.send(delivery);
                     }
@@ -310,7 +319,7 @@ impl RenderWorker {
         event: &ServerEvent,
         write_timeout: Duration,
     ) -> Result<(), WorkerWriteFailure> {
-        match tokio::time::timeout(write_timeout, writer.send_event(event)).await {
+        match time::timeout(write_timeout, writer.send_event(event)).await {
             Ok(Ok(())) => Ok(()),
             Ok(Err(error)) => Err(WorkerWriteFailure {
                 message: error.to_string(),
@@ -408,7 +417,7 @@ impl ServerEventSink for RenderWorkerSender {
     }
 
     async fn send_heartbeat(&mut self) -> rootcause::Result<HeartbeatDelivery> {
-        let (delivered, delivery) = tokio::sync::oneshot::channel();
+        let (delivered, delivery) = oneshot::channel();
         let mut state = self.output.state.lock().await;
         self.ensure_open(&state)?;
         state.queue.push_heartbeat(delivered)?;
@@ -507,10 +516,7 @@ impl ServerOutputQueue {
         })
     }
 
-    fn push_heartbeat(
-        &mut self,
-        delivered: tokio::sync::oneshot::Sender<Result<tokio::time::Instant, ClientEventSendFailure>>,
-    ) -> rootcause::Result<()> {
+    fn push_heartbeat(&mut self, delivered: Sender<Result<Instant, ClientEventSendFailure>>) -> rootcause::Result<()> {
         self.push_mandatory_output(MandatoryOutput {
             event: ServerEvent::Ping,
             lifecycle: None,
@@ -561,7 +567,7 @@ pub enum QueueRender {
 
 struct AttachedRenderWorker {
     sender: RenderWorkerSender,
-    task: Option<tokio::task::JoinHandle<()>>,
+    task: Option<JoinHandle<()>>,
 }
 
 struct OutputShared {
@@ -585,7 +591,7 @@ enum ServerOutputCommand {
 struct MandatoryOutput {
     event: ServerEvent,
     lifecycle: Option<LifecycleEvent>,
-    delivered: Option<tokio::sync::oneshot::Sender<Result<tokio::time::Instant, ClientEventSendFailure>>>,
+    delivered: Option<Sender<Result<Instant, ClientEventSendFailure>>>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -597,8 +603,8 @@ enum LifecycleEvent {
 impl LifecycleEvent {
     fn record(self, reason: ClientEventSendFailure) {
         match self {
-            Self::Deleted => crate::session::delete::record_delete_ack_send_failure(Some(reason)),
-            Self::Detached => crate::client::lifecycle::record_detach_ack_send_failure(Some(reason)),
+            Self::Deleted => delete::record_delete_ack_send_failure(Some(reason)),
+            Self::Detached => lifecycle::record_detach_ack_send_failure(Some(reason)),
         }
     }
 }
@@ -621,7 +627,7 @@ impl WorkerCommandFailure {
         }
     }
 
-    fn from_local(error: &rootcause::Report) -> Self {
+    fn from_local(error: &Report) -> Self {
         Self {
             message: error.to_string(),
             reason: None,

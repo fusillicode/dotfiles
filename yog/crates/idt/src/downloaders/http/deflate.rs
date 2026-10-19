@@ -1,4 +1,6 @@
+use std::fs;
 use std::fs::File;
+use std::io;
 use std::io::BufReader;
 use std::io::Read;
 use std::path::Path;
@@ -75,7 +77,7 @@ impl HttpDeflateOption<'_> {
                     let mut dest = File::create(&dest_path)
                         .context("error creating dest file for zip entry")
                         .attach_with(|| format!("path={}", dest_path.display()))?;
-                    std::io::copy(&mut entry, &mut dest)
+                    io::copy(&mut entry, &mut dest)
                         .context("error extracting zip entry")
                         .attach_with(|| format!("path={}", tmp_file.display()))
                         .attach_with(|| format!("entry={dest_name}"))?;
@@ -93,7 +95,7 @@ impl HttpDeflateOption<'_> {
             }
             Self::WriteTo { dest_path } => {
                 // Use copy instead of rename to handle cross-filesystem moves (e.g. /tmp -> target).
-                std::fs::copy(tmp_file, dest_path)
+                fs::copy(tmp_file, dest_path)
                     .context("error copying tmp file to dest")
                     .attach_with(|| format!("src={}", tmp_file.display()))
                     .attach_with(|| format!("dest={}", dest_path.display()))?;

@@ -5,6 +5,7 @@
 
 use std::collections::HashMap;
 use std::io;
+use std::iter;
 use std::path::Path;
 use std::path::PathBuf;
 use std::rc::Rc;
@@ -12,14 +13,15 @@ use std::rc::Rc;
 use syn::File;
 use syn::Item;
 use syn::ItemMod;
+use syn::Macro;
 
-use super::SourceFile;
-use super::declarations::AttributePaths;
-use super::declarations::Declaration;
-use super::declarations::FileLayout;
-use super::declarations::ModuleDirectory;
-use super::declarations::ModuleFiles;
-use super::declarations::ModuleStructure;
+use crate::cmds::rsl::mod_resolution::SourceFile;
+use crate::cmds::rsl::mod_resolution::declarations::AttributePaths;
+use crate::cmds::rsl::mod_resolution::declarations::Declaration;
+use crate::cmds::rsl::mod_resolution::declarations::FileLayout;
+use crate::cmds::rsl::mod_resolution::declarations::ModuleDirectory;
+use crate::cmds::rsl::mod_resolution::declarations::ModuleFiles;
+use crate::cmds::rsl::mod_resolution::declarations::ModuleStructure;
 
 pub(super) struct DiscoveryOutput {
     pub(super) roots: Vec<ModuleResolution>,
@@ -137,7 +139,7 @@ fn resolve_file(
         file: path.clone(),
         inline_modules: Vec::new(),
     };
-    let ancestors: Vec<_> = ancestors.iter().cloned().chain(std::iter::once(path.clone())).collect();
+    let ancestors: Vec<_> = ancestors.iter().cloned().chain(iter::once(path.clone())).collect();
     let children = resolve_declarations(&description, &file.items, directory, sources, &ancestors)?;
 
     Ok(ModuleResolution::Module { description, children })
@@ -264,7 +266,7 @@ fn resolve_candidates(
 }
 
 fn resolve_include(
-    mac: &syn::Macro,
+    mac: &Macro,
     directory: &ModuleDirectory,
     sources: &mut SourceCache<impl FnMut(&Path) -> io::Result<SourceFile>>,
     ancestors: &[PathBuf],

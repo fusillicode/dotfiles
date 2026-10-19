@@ -3,8 +3,9 @@ use std::path::Path;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
 
-use super::DeletionPlan;
 use crate::agent::session::SessionKey;
+use crate::agent::session_deletion::DeletionPlan;
+use crate::agent::session_loader;
 
 pub(super) fn build_deletion_plan(
     root: &Path,
@@ -15,11 +16,8 @@ pub(super) fn build_deletion_plan(
         return plan_for_selected_path(root, key, selected_path);
     }
 
-    let session_paths = crate::agent::session_loader::find_session_paths(
-        root,
-        crate::agent::session_loader::cursor::is_session_file,
-        |_| false,
-    )?;
+    let session_paths =
+        session_loader::find_session_paths(root, crate::agent::session_loader::cursor::is_session_file, |_| false)?;
     let mut matches = Vec::new();
     for meta_path in session_paths {
         let Some(session_dir) = meta_path.parent() else {

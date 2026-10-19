@@ -1,5 +1,6 @@
 use std::collections::VecDeque;
 use std::ffi::OsStr;
+use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -21,18 +22,18 @@ pub struct RmFilesOutcome {
 /// - Directory traversal fails.
 /// - Removing a dead symlink fails.
 pub fn rm_dead_symlinks(dir: &str) -> rootcause::Result<()> {
-    for entry_res in std::fs::read_dir(dir)
+    for entry_res in fs::read_dir(dir)
         .context("error reading directory")
         .attach_with(|| format!("path={dir:?}"))?
     {
         let entry = entry_res.context("error getting entry")?;
         let path = entry.path();
 
-        let metadata = std::fs::symlink_metadata(&path)
+        let metadata = fs::symlink_metadata(&path)
             .context("error reading symlink metadata")
             .attach_with(|| format!("path={}", path.display()))?;
-        if metadata.file_type().is_symlink() && std::fs::metadata(&path).is_err() {
-            std::fs::remove_file(&path)
+        if metadata.file_type().is_symlink() && fs::metadata(&path).is_err() {
+            fs::remove_file(&path)
                 .context("error removing dead symlink")
                 .attach_with(|| format!("path={}", path.display()))?;
             println!("{} {}", "Deleted dead symlink".cyan().bold(), path.display());
@@ -47,7 +48,7 @@ pub fn rm_dead_symlinks(dir: &str) -> rootcause::Result<()> {
 /// - A filesystem operation (open/read/write/remove) fails.
 /// - An unexpected I/O failure (other than [`std::io::ErrorKind::NotFound`]) occurs.
 pub fn rm_f<P: AsRef<Path>>(path: P) -> std::io::Result<()> {
-    std::fs::remove_file(path).or_else(|err| {
+    fs::remove_file(path).or_else(|err| {
         if std::io::ErrorKind::NotFound == err.kind() {
             return Ok(());
         }
@@ -73,7 +74,7 @@ pub fn rm_matching_files<P: AsRef<Path>>(
             removed.push(path);
             return;
         }
-        if let Err(err) = std::fs::remove_file(&path) {
+        if let Err(err) = fs::remove_file(&path) {
             errors.push((Some(path), err));
             return;
         }
@@ -86,7 +87,7 @@ pub fn rm_matching_files<P: AsRef<Path>>(
         removed: &mut Vec<PathBuf>,
         errors: &mut Vec<(Option<PathBuf>, std::io::Error)>,
     ) {
-        match std::fs::read_link(&path) {
+        match fs::read_link(&path) {
             Ok(target) => rm_file(target, dry_run, removed, errors),
             Err(err) => errors.push((Some(path.clone()), err)),
         }
@@ -104,7 +105,7 @@ pub fn rm_matching_files<P: AsRef<Path>>(
         {
             return;
         }
-        match std::fs::read_dir(&path) {
+        match fs::read_dir(&path) {
             Ok(entries) => {
                 for entry in entries {
                     match entry {
@@ -130,7 +131,7 @@ pub fn rm_matching_files<P: AsRef<Path>>(
         if removed.contains(&current_path) {
             continue;
         }
-        match std::fs::symlink_metadata(&current_path) {
+        match fs::symlink_metadata(&current_path) {
             Ok(metadata) => {
                 let file_type = metadata.file_type();
                 if file_type.is_dir() {

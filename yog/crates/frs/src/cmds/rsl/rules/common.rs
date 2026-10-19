@@ -92,10 +92,6 @@ pub(super) fn conditional_code_reason() -> FixBlockReason {
     }
 }
 
-fn is_conditional_attribute(attribute: &Attribute) -> bool {
-    attribute.path().is_ident("cfg") || attribute.path().is_ident("cfg_attr")
-}
-
 struct ConditionalAttributes {
     found: bool,
 }
@@ -105,4 +101,8 @@ impl<'ast> Visit<'ast> for ConditionalAttributes {
         // Nested statements, arms, and expressions can also make a new module import conditional.
         self.found |= is_conditional_attribute(attribute);
     }
+}
+
+fn is_conditional_attribute(attribute: &Attribute) -> bool {
+    attribute.path().is_ident("cfg") || attribute.path().is_ident("cfg_attr")
 }

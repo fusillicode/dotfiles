@@ -4,6 +4,7 @@
 //! Missing required fields trigger user notifications and yield `None`.
 
 use serde::Deserialize;
+use ytil_noxi::notify;
 
 /// Formats a diagnostic into a human-readable string.
 #[expect(
@@ -12,12 +13,12 @@ use serde::Deserialize;
 )]
 pub fn format(diagnostic: Diagnostic) -> Option<String> {
     let Some(msg) = get_msg(&diagnostic).map(|s| s.trim_end_matches('.').to_string()) else {
-        ytil_noxi::notify::error(format!("error missing diagnostic message | diagnostic={diagnostic:#?}"));
+        notify::error(format!("error missing diagnostic message | diagnostic={diagnostic:#?}"));
         return None;
     };
 
     let Some(src) = get_src(&diagnostic).map(str::to_string) else {
-        ytil_noxi::notify::error(format!("error missing diagnostic source | diagnostic={diagnostic:#?}"));
+        notify::error(format!("error missing diagnostic source | diagnostic={diagnostic:#?}"));
         return None;
     };
 

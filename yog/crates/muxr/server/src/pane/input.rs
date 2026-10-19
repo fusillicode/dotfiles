@@ -31,7 +31,7 @@ impl PaneInputOutcome {
 }
 
 pub fn handle_client_input(bytes: &[u8], state: &mut ClientSessionState<'_>) -> rootcause::Result<PaneInputOutcome> {
-    self::handle_active_pane_bytes(
+    handle_active_pane_bytes(
         bytes,
         state,
         TrackedProcessUserInteraction::from(bytes),
@@ -42,7 +42,7 @@ pub fn handle_client_input(bytes: &[u8], state: &mut ClientSessionState<'_>) -> 
 
 pub fn handle_client_paste(bytes: &[u8], state: &mut ClientSessionState<'_>) -> rootcause::Result<PaneInputOutcome> {
     // Bracketed paste can contain newlines as data; only raw input newlines mean prompt submission.
-    self::handle_active_pane_bytes(
+    handle_active_pane_bytes(
         bytes,
         state,
         TrackedProcessUserInteraction::MayEcho,
@@ -52,7 +52,7 @@ pub fn handle_client_paste(bytes: &[u8], state: &mut ClientSessionState<'_>) -> 
 }
 
 pub fn handle_client_key(key: &ClientKey, state: &mut ClientSessionState<'_>) -> rootcause::Result<PaneInputOutcome> {
-    let (pane_id, handle) = self::active_pane_handle_with_id(state)?;
+    let (pane_id, handle) = active_pane_handle_with_id(state)?;
     let keyboard_protocol = handle.application_mode().keyboard_protocol;
     let Some(bytes) = crate::keyboard_input::pane_key_input_bytes(key, keyboard_protocol) else {
         return Ok(PaneInputOutcome::ignored());
@@ -98,7 +98,7 @@ fn handle_active_pane_bytes(
         return Ok(PaneInputOutcome::ignored());
     }
 
-    self::write_active_pane_user_input(state, interaction, render_priority, |handle| write(handle, bytes))
+    write_active_pane_user_input(state, interaction, render_priority, |handle| write(handle, bytes))
 }
 
 fn write_active_pane_user_input(
@@ -107,7 +107,7 @@ fn write_active_pane_user_input(
     render_priority: PaneInputRenderPriority,
     write: impl FnOnce(&PtyHandle) -> rootcause::Result<PtyViewportMove>,
 ) -> rootcause::Result<PaneInputOutcome> {
-    let (pane_id, handle) = self::active_pane_handle_with_id(state)?;
+    let (pane_id, handle) = active_pane_handle_with_id(state)?;
     state
         .pane_tracked_processes
         .capture_completion_before_input(pane_id, interaction, &handle);

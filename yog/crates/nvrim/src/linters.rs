@@ -2,6 +2,7 @@
 
 use nvim_oxi::Dictionary;
 use serde::Deserialize;
+use ytil_noxi::notify;
 
 use crate::diagnostics::DiagnosticSeverity;
 
@@ -21,20 +22,20 @@ pub fn dict() -> Dictionary {
 )]
 fn parser(maybe_output: Option<nvim_oxi::String>) -> Vec<Dictionary> {
     let Some(output) = &maybe_output else {
-        ytil_noxi::notify::warn(format!("sqruff output missing output={maybe_output:?}"));
+        notify::warn(format!("sqruff output missing output={maybe_output:?}"));
         return vec![];
     };
     let output = output.to_string_lossy();
 
     if output.trim().is_empty() {
-        ytil_noxi::notify::warn(format!("sqruff output is an empty string output={maybe_output:?}"));
+        notify::warn(format!("sqruff output is an empty string output={maybe_output:?}"));
         return vec![];
     }
 
     let parsed_output = match serde_json::from_str::<SqruffOutput>(&output) {
         Ok(parsed_output) => parsed_output,
         Err(err) => {
-            ytil_noxi::notify::error(format!(
+            notify::error(format!(
                 "error parsing sqruff output | output={output:?} error={err:#?}"
             ));
             return vec![];

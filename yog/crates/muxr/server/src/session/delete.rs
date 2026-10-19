@@ -11,6 +11,7 @@ use rootcause::prelude::ResultExt;
 use tokio::time;
 
 use crate::session::tracing::ClientEventSendFailure;
+use crate::session::tracing::ack;
 
 #[derive(Debug, Default)]
 pub struct DeleteSessions {
@@ -43,8 +44,8 @@ pub async fn handle_handshake_delete(
     client_write_timeout: Duration,
 ) -> rootcause::Result<()> {
     delete_sessions.request();
-    self::record_delete_ack_send_failure(
-        self::send_connection_event_failure(connection, &ServerEvent::Deleted, client_write_timeout).await,
+    record_delete_ack_send_failure(
+        send_connection_event_failure(connection, &ServerEvent::Deleted, client_write_timeout).await,
     );
     Ok(())
 }
@@ -55,7 +56,7 @@ pub async fn handle_client_delete(
     client_write_timeout: Duration,
 ) -> rootcause::Result<()> {
     delete_sessions.request();
-    self::record_delete_ack_send_failure(
+    record_delete_ack_send_failure(
         crate::event_writer::send_lifecycle_event_failure(event_writer, &ServerEvent::Deleted, client_write_timeout)
             .await,
     );
@@ -79,7 +80,7 @@ pub fn remove_session_files(paths: &SessionPaths) -> rootcause::Result<()> {
 
 pub fn record_delete_ack_send_failure(reason: Option<ClientEventSendFailure>) {
     if let Some(reason) = reason {
-        crate::session::tracing::ack::delete_failed(reason);
+        ack::delete_failed(reason);
     }
 }
 
@@ -111,7 +112,7 @@ mod tests {
         let tempdir = tempfile::tempdir()?;
         let session: SessionName = "work".parse()?;
         let timestamp = "20260611143012".parse()?;
-        let paths = self::test_paths(tempdir.path(), &session);
+        let paths = test_paths(tempdir.path(), &session);
         fs::create_dir_all(&paths.root).context("failed to create test session root")?;
         fs::create_dir_all(
             paths
@@ -140,7 +141,7 @@ mod tests {
         let log = crate::session::tracing::collect_test_log(&session, || {
             let span = tracing::info_span!("muxr_session", session = %session);
             let _guard = span.enter();
-            self::record_delete_ack_send_failure(Some(ClientEventSendFailure::Timeout));
+            crate::session::delete::tests::record_delete_ack_send_failure(Some(ClientEventSendFailure::Timeout));
             Ok(())
         })?;
         assert_that!(log, contains_substring("kind=\"delete_ack_send_failed\""));
@@ -155,7 +156,7 @@ mod tests {
         let log = crate::session::tracing::collect_test_log(&session, || {
             let span = tracing::info_span!("muxr_session", session = %session);
             let _guard = span.enter();
-            self::record_delete_ack_send_failure(None);
+            crate::session::delete::tests::record_delete_ack_send_failure(None);
             Ok(())
         })?;
 

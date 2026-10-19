@@ -1,5 +1,7 @@
+use std::env;
 use std::fs;
 use std::path::PathBuf;
+use std::process;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::SystemTime;
@@ -11,16 +13,24 @@ use muxr_core::SessionPaths;
 use muxr_core::TerminalSize;
 use muxr_transport::ServerConnection;
 use muxr_transport::ServerListener;
+use rootcause::Report;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
+use tokio::sync::Notify;
+use tokio::sync::mpsc;
+use tokio::sync::mpsc::Receiver;
+use tokio::sync::mpsc::Sender;
+use tokio::task::JoinHandle;
 
+use crate::client::tasks;
 use crate::pane::runtime::PaneRuntimeSetStatus;
 use crate::pty::ShellCmd;
+use crate::session::delete;
 use crate::session::delete::DeleteSessionRequest;
 use crate::session::delete::DeleteSessions;
+use crate::session::files;
 use crate::session::files::ServerFilesGuard;
 use crate::session::files::prepare_session_dirs;
-use crate::session::files::secure_socket_file;
 use crate::session::runtime::CLIENT_HANDSHAKE_CHANNEL_LIMIT;
 use crate::session::runtime::ReapResult;
 use crate::session::runtime::SessionClientHandshake;
@@ -28,6 +38,7 @@ use crate::session::runtime::SessionClientTaskMessage;
 use crate::session::runtime::SessionHandshakeOutcome;
 use crate::session::runtime::SessionRuntime;
 use crate::session::runtime::SessionRuntimeShutdownMessage;
+use crate::session::tracing::server;
 use crate::state::SessionLayout;
 use crate::state::SessionMetadata;
 
@@ -76,7 +87,7 @@ pub fn serve_session(session: &SessionName, external_layout: Option<PathBuf>) ->
             // non-blocking log writes flush for the full session without carrying the appender worker in CLI memory.
             let _session_tracing =
                 crate::session::tracing::SessionTracing::install_global(&config.paths, &config.session)?;
-            self::serve_session_traced(&config).await
+            serve_session_traced(&config).await
         })
 }
 
@@ -107,7 +118,7 @@ pub fn active_pane_session_metadata(
     Ok(SessionMetadata {
         cmd_label: config.shell_cmd.label(),
         cwd,
-        started_at: self::unix_timestamp_millis()?,
+        started_at: unix_timestamp_millis()?,
     })
 }
 
@@ -118,33 +129,33 @@ enum ConnectionAccepting {
 }
 
 struct SessionHandshakeContext<'a> {
-    client_task_sender: &'a tokio::sync::mpsc::Sender<SessionClientTaskMessage>,
-    client_task_finished_notify: &'a Arc<tokio::sync::Notify>,
+    client_task_sender: &'a Sender<SessionClientTaskMessage>,
+    client_task_finished_notify: &'a Arc<Notify>,
     config: &'a ServerConfig,
     delete_sessions: &'a Arc<DeleteSessions>,
 }
 
 #[tracing::instrument(name = "muxr_session", skip_all, fields(session = %config.session))]
 async fn serve_session_traced(config: &ServerConfig) -> rootcause::Result<()> {
-    crate::session::tracing::server::starting(&config.paths);
-    self::serve_prepared_async(config).await.inspect_err(|error| {
+    server::starting(&config.paths);
+    serve_prepared_async(config).await.inspect_err(|error| {
         // Fatal server errors are logged once at the session boundary after lower layers add context. Handled,
         // swallowed, or downgraded errors must log at their handling site because they never reach this boundary.
-        crate::session::tracing::server::error(error);
+        server::error(error);
     })
 }
 
 impl TryFrom<&ServerConfig> for SessionMetadata {
-    type Error = rootcause::Report;
+    type Error = Report;
 
     fn try_from(config: &ServerConfig) -> rootcause::Result<Self> {
         Ok(Self {
             cmd_label: config.shell_cmd.label(),
-            cwd: std::env::current_dir()
+            cwd: env::current_dir()
                 .context("failed to read muxr server cwd")?
                 .to_string_lossy()
                 .into_owned(),
-            started_at: self::unix_timestamp_millis()?,
+            started_at: unix_timestamp_millis()?,
         })
     }
 }
@@ -159,17 +170,17 @@ async fn serve_prepared_async(config: &ServerConfig) -> rootcause::Result<()> {
     let _files_guard = ServerFilesGuard {
         paths: config.paths.clone(),
     };
-    secure_socket_file(&config.paths.socket)?;
-    fs::write(&config.paths.pid, std::process::id().to_string()).context("failed to write muxr server pid")?;
+    files::secure_socket_file(&config.paths.socket)?;
+    fs::write(&config.paths.pid, process::id().to_string()).context("failed to write muxr server pid")?;
     let initial_size = TerminalSize::new(80, 24)?;
-    let pane_exit_notify = Arc::new(tokio::sync::Notify::new());
+    let pane_exit_notify = Arc::new(Notify::new());
     let mut runtime = SessionRuntime::spawn(config, &initial_size, Arc::clone(&pane_exit_notify))?;
     runtime.persist_metadata(&config.paths)?;
-    crate::session::tracing::server::ready(&config.paths);
+    server::ready(&config.paths);
     let delete_sessions = Arc::new(DeleteSessions::default());
-    let client_task_finished_notify = Arc::new(tokio::sync::Notify::new());
-    let (handshake_sender, mut handshake_receiver) = tokio::sync::mpsc::channel(CLIENT_HANDSHAKE_CHANNEL_LIMIT);
-    let (client_task_sender, mut client_task_receiver) = tokio::sync::mpsc::channel(1);
+    let client_task_finished_notify = Arc::new(Notify::new());
+    let (handshake_sender, mut handshake_receiver) = mpsc::channel(CLIENT_HANDSHAKE_CHANNEL_LIMIT);
+    let (client_task_sender, mut client_task_receiver) = mpsc::channel(1);
     let handshake_context = SessionHandshakeContext {
         client_task_sender: &client_task_sender,
         client_task_finished_notify: &client_task_finished_notify,
@@ -181,7 +192,7 @@ async fn serve_prepared_async(config: &ServerConfig) -> rootcause::Result<()> {
     let mut handles = Vec::new();
 
     let shutdown_message = loop {
-        self::drain_session_runtime_messages(
+        drain_session_runtime_messages(
             &mut runtime,
             &handshake_context,
             &mut client_task_receiver,
@@ -190,14 +201,14 @@ async fn serve_prepared_async(config: &ServerConfig) -> rootcause::Result<()> {
         )
         .await?;
 
-        if let Some(message) = self::runtime_shutdown_message(&mut runtime, config, &delete_sessions)? {
+        if let Some(message) = runtime_shutdown_message(&mut runtime, config, &delete_sessions)? {
             break message;
         }
 
-        crate::client::tasks::join_finished_client_tasks(&mut handles).await?;
+        tasks::join_finished_client_tasks(&mut handles).await?;
         // A handshake task can finish between the first drain and task join; drain again before honoring the
         // accepted-connection limit so the queued handshake can spawn its attached client.
-        self::drain_session_runtime_messages(
+        drain_session_runtime_messages(
             &mut runtime,
             &handshake_context,
             &mut client_task_receiver,
@@ -244,10 +255,10 @@ async fn serve_prepared_async(config: &ServerConfig) -> rootcause::Result<()> {
         }
     };
 
-    crate::session::tracing::server::shutdown(shutdown_message.as_str());
+    server::shutdown(shutdown_message.as_str());
     // Shutdown cancels only pre-attach handshakes; while the loop is live they still use bounded backpressure.
     handshake_receiver.close();
-    crate::client::tasks::join_client_tasks(handles).await?;
+    tasks::join_client_tasks(handles).await?;
     while let Ok(message) = client_task_receiver.try_recv() {
         runtime.handle_client_task_message(message);
     }
@@ -255,7 +266,7 @@ async fn serve_prepared_async(config: &ServerConfig) -> rootcause::Result<()> {
         || delete_sessions.request_state() == DeleteSessionRequest::Requested
     {
         drop(runtime);
-        crate::session::delete::remove_session_files(&config.paths)?;
+        delete::remove_session_files(&config.paths)?;
     }
     Ok(())
 }
@@ -280,16 +291,16 @@ fn runtime_shutdown_message(
 fn handle_accepted_connection(
     config: &ServerConfig,
     connection: ServerConnection,
-    handshake_sender: &tokio::sync::mpsc::Sender<SessionClientHandshake>,
-    client_task_finished_notify: &Arc<tokio::sync::Notify>,
+    handshake_sender: &Sender<SessionClientHandshake>,
+    client_task_finished_notify: &Arc<Notify>,
     accepted_connections: &mut usize,
     accepting_connections: &mut ConnectionAccepting,
-    handles: &mut Vec<tokio::task::JoinHandle<rootcause::Result<()>>>,
+    handles: &mut Vec<JoinHandle<rootcause::Result<()>>>,
 ) -> rootcause::Result<()> {
     *accepted_connections = accepted_connections
         .checked_add(1)
         .ok_or_else(|| report!("muxr accepted connection count overflowed"))?;
-    crate::client::tasks::spawn_client_handshake_task(
+    tasks::spawn_client_handshake_task(
         connection,
         handshake_sender,
         Arc::clone(client_task_finished_notify),
@@ -307,15 +318,15 @@ fn handle_accepted_connection(
 async fn drain_session_runtime_messages(
     runtime: &mut SessionRuntime,
     context: &SessionHandshakeContext<'_>,
-    client_task_receiver: &mut tokio::sync::mpsc::Receiver<SessionClientTaskMessage>,
-    handshake_receiver: &mut tokio::sync::mpsc::Receiver<SessionClientHandshake>,
-    handles: &mut Vec<tokio::task::JoinHandle<rootcause::Result<()>>>,
+    client_task_receiver: &mut Receiver<SessionClientTaskMessage>,
+    handshake_receiver: &mut Receiver<SessionClientHandshake>,
+    handles: &mut Vec<JoinHandle<rootcause::Result<()>>>,
 ) -> rootcause::Result<()> {
     while let Ok(message) = client_task_receiver.try_recv() {
         runtime.handle_client_task_message(message);
     }
     while let Ok(handshake) = handshake_receiver.try_recv() {
-        self::handle_session_handshake(runtime, context, handshake, handles).await?;
+        handle_session_handshake(runtime, context, handshake, handles).await?;
     }
     Ok(())
 }
@@ -324,7 +335,7 @@ async fn handle_session_handshake(
     runtime: &mut SessionRuntime,
     context: &SessionHandshakeContext<'_>,
     handshake: SessionClientHandshake,
-    handles: &mut Vec<tokio::task::JoinHandle<rootcause::Result<()>>>,
+    handles: &mut Vec<JoinHandle<rootcause::Result<()>>>,
 ) -> rootcause::Result<()> {
     let SessionClientHandshake {
         mut connection,
@@ -334,7 +345,7 @@ async fn handle_session_handshake(
         SessionHandshakeOutcome::AttachAccepted(attach_request) => {
             let client_session_task_runtime = runtime
                 .client_session_task_runtime(context.client_task_sender.clone(), Arc::clone(context.delete_sessions))?;
-            crate::client::tasks::spawn_client_session_task(
+            tasks::spawn_client_session_task(
                 context.config,
                 client_session_task_runtime,
                 connection,
@@ -344,7 +355,7 @@ async fn handle_session_handshake(
             );
         }
         SessionHandshakeOutcome::DeleteSessionRequested => {
-            crate::session::delete::handle_handshake_delete(
+            delete::handle_handshake_delete(
                 &mut connection,
                 context.delete_sessions.as_ref(),
                 context.config.client_write_timeout,
@@ -353,12 +364,9 @@ async fn handle_session_handshake(
         }
         SessionHandshakeOutcome::NoClient => {}
         SessionHandshakeOutcome::Respond(event) => {
-            let _sent = crate::client::tasks::send_connection_event_with_timeout(
-                &mut connection,
-                &event,
-                context.config.client_write_timeout,
-            )
-            .await?;
+            let _sent =
+                tasks::send_connection_event_with_timeout(&mut connection, &event, context.config.client_write_timeout)
+                    .await?;
         }
     }
     Ok(())
@@ -373,8 +381,8 @@ pub mod test_helpers {
     use muxr_core::SessionName;
     use muxr_core::SessionPaths;
 
-    use super::ServerConfig;
     use crate::pty::ShellCmd;
+    use crate::server::ServerConfig;
 
     const TEST_CLIENT_HEARTBEAT_INTERVAL: Duration = Duration::from_millis(100);
     const TEST_CLIENT_HEARTBEAT_TIMEOUT: Duration = Duration::from_millis(500);
@@ -406,7 +414,7 @@ pub mod test_helpers {
     }
 
     pub fn server_config(base: &Path, raw: &str) -> rootcause::Result<ServerConfig> {
-        let (session, paths) = self::session_paths(base, raw)?;
+        let (session, paths) = session_paths(base, raw)?;
         Ok(ServerConfig {
             client_heartbeat_interval: TEST_CLIENT_HEARTBEAT_INTERVAL,
             client_heartbeat_timeout: TEST_CLIENT_HEARTBEAT_TIMEOUT,
@@ -416,7 +424,7 @@ pub mod test_helpers {
             session,
             paths,
             max_accepted_connections: None,
-            shell_cmd: self::shell_cmd("/bin/sh"),
+            shell_cmd: shell_cmd("/bin/sh"),
         })
     }
 }
@@ -451,12 +459,12 @@ mod tests {
     use test_that::prelude::*;
     use tokio::io::AsyncWriteExt;
 
-    use super::test_helpers::server_config;
-    use super::test_helpers::session_paths;
-    use super::test_helpers::shell_cmd;
-    use super::test_helpers::shell_cmd_with_args;
     use super::*;
     use crate::pane::split::PaneSplitAxis;
+    use crate::server::test_helpers::server_config;
+    use crate::server::test_helpers::session_paths;
+    use crate::server::test_helpers::shell_cmd;
+    use crate::server::test_helpers::shell_cmd_with_args;
     use crate::session::files::PRIVATE_SOCKET_MODE;
 
     // The full muxr-server suite spawns real PTYs and OS threads; on a loaded machine, server startup or a coalesced
@@ -478,7 +486,7 @@ mod tests {
     #[test]
     fn test_serve_session_traced_when_started_adds_session_span_fields() -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
-        let mut config = self::server_config(tempdir.path(), "work")?;
+        let mut config = crate::server::tests::server_config(tempdir.path(), "work")?;
         config.max_accepted_connections = Some(0);
 
         let log = crate::session::tracing::collect_test_log(&config.session, || {
@@ -486,7 +494,7 @@ mod tests {
                 .enable_all()
                 .build()
                 .context("failed to build muxr server test runtime")?
-                .block_on(self::serve_session_traced(&config))?;
+                .block_on(crate::server::tests::serve_session_traced(&config))?;
             Ok(())
         })?;
 
@@ -497,70 +505,70 @@ mod tests {
 
     #[test]
     fn test_serve_when_started_creates_session_root_socket_and_pid() -> rootcause::Result<()> {
-        self::runtime()?.block_on(async {
+        runtime()?.block_on(async {
             let tempdir = tempfile::tempdir()?;
-            let (session, paths) = self::session_paths(tempdir.path(), "work")?;
-            self::make_public_session_dirs(&paths)?;
-            let handle = self::spawn_test_server(&session, &paths, 1);
+            let (session, paths) = crate::server::tests::session_paths(tempdir.path(), "work")?;
+            make_public_session_dirs(&paths)?;
+            let handle = spawn_test_server(&session, &paths, 1);
 
-            self::wait_for_socket(&paths.socket)?;
-            self::wait_for_path(&paths.layout)?;
+            wait_for_socket(&paths.socket)?;
+            wait_for_path(&paths.layout)?;
 
             assert_that!(paths.root.is_dir(), eq(true));
             assert_that!(paths.panes.is_dir(), eq(true));
             assert_that!(paths.layout.exists(), eq(true));
             assert_that!(paths.socket.exists(), eq(true));
             assert_that!(paths.pid.exists(), eq(true));
-            self::assert_session_state_is_private(&paths)?;
+            assert_session_state_is_private(&paths)?;
 
-            self::attach_and_detach(&session, &paths).await?;
-            self::join_server(handle)
+            attach_and_detach(&session, &paths).await?;
+            join_server(handle)
         })
     }
 
     #[test]
     fn test_serve_when_client_disconnects_accepts_future_attach() -> rootcause::Result<()> {
-        self::runtime()?.block_on(async {
+        runtime()?.block_on(async {
             let tempdir = tempfile::tempdir()?;
-            let (session, paths) = self::session_paths(tempdir.path(), "work")?;
-            let handle = self::spawn_test_server(&session, &paths, 2);
+            let (session, paths) = crate::server::tests::session_paths(tempdir.path(), "work")?;
+            let handle = spawn_test_server(&session, &paths, 2);
 
-            self::wait_for_socket(&paths.socket)?;
-            drop(self::open_attached_client(&session, &paths).await?);
+            wait_for_socket(&paths.socket)?;
+            drop(open_attached_client(&session, &paths).await?);
             tokio::time::sleep(Duration::from_millis(25)).await;
 
-            self::attach_and_detach(&session, &paths).await?;
+            attach_and_detach(&session, &paths).await?;
 
-            self::join_server(handle)
+            join_server(handle)
         })
     }
 
     #[test]
     fn test_serve_when_reattached_accepts_second_attach() -> rootcause::Result<()> {
-        self::runtime()?.block_on(async {
+        runtime()?.block_on(async {
             let tempdir = tempfile::tempdir()?;
-            let (session, paths) = self::session_paths(tempdir.path(), "work")?;
-            let handle = self::spawn_test_server(&session, &paths, 2);
+            let (session, paths) = crate::server::tests::session_paths(tempdir.path(), "work")?;
+            let handle = spawn_test_server(&session, &paths, 2);
 
-            self::wait_for_socket(&paths.socket)?;
+            wait_for_socket(&paths.socket)?;
 
-            self::attach_and_detach(&session, &paths).await?;
-            self::attach_and_detach(&session, &paths).await?;
+            attach_and_detach(&session, &paths).await?;
+            attach_and_detach(&session, &paths).await?;
 
-            self::join_server(handle)
+            join_server(handle)
         })
     }
 
     #[test]
     fn test_serve_when_attached_reports_current_layout_snapshot() -> rootcause::Result<()> {
-        self::runtime()?.block_on(async {
+        runtime()?.block_on(async {
             let tempdir = tempfile::tempdir()?;
-            let (session, paths) = self::session_paths(tempdir.path(), "work")?;
-            let handle = self::spawn_test_server(&session, &paths, 1);
+            let (session, paths) = crate::server::tests::session_paths(tempdir.path(), "work")?;
+            let handle = spawn_test_server(&session, &paths, 1);
 
-            self::wait_for_socket(&paths.socket)?;
-            let mut connection = self::connect_client(&paths).await?;
-            connection.send_request(&self::attach_request(&session)?).await?;
+            wait_for_socket(&paths.socket)?;
+            let mut connection = connect_client(&paths).await?;
+            connection.send_request(&attach_request(&session)?).await?;
             let Some(ServerEvent::Attached(attached)) = connection.recv_event().await? else {
                 return Err(report!("expected server attached response"));
             };
@@ -577,63 +585,63 @@ mod tests {
             assert_that!(pane.id.to_string(), eq("pane-1"));
 
             connection.send_request(&ClientRequest::Detach).await?;
-            self::read_connection_until_detached(&mut connection).await?;
-            self::join_server(handle)
+            read_connection_until_detached(&mut connection).await?;
+            join_server(handle)
         })
     }
 
     #[test]
     fn test_serve_when_second_client_attaches_rejects_it() -> rootcause::Result<()> {
-        self::runtime()?.block_on(async {
+        runtime()?.block_on(async {
             let tempdir = tempfile::tempdir()?;
-            let (session, paths) = self::session_paths(tempdir.path(), "work")?;
-            let handle = self::spawn_test_server(&session, &paths, 2);
+            let (session, paths) = crate::server::tests::session_paths(tempdir.path(), "work")?;
+            let handle = spawn_test_server(&session, &paths, 2);
 
-            self::wait_for_socket(&paths.socket)?;
-            let mut first_client = self::open_attached_client(&session, &paths).await?;
-            let mut second_client = self::connect_client(&paths).await?;
+            wait_for_socket(&paths.socket)?;
+            let mut first_client = open_attached_client(&session, &paths).await?;
+            let mut second_client = connect_client(&paths).await?;
 
-            second_client.send_request(&self::attach_request(&session)?).await?;
+            second_client.send_request(&attach_request(&session)?).await?;
             let Some(ServerEvent::Error(error)) = second_client.recv_event().await? else {
                 return Err(report!("expected second attach rejection"));
             };
 
             assert_that!(error, eq(ServerError::ClientAlreadyAttached));
             first_client.writer.send_request(&ClientRequest::Detach).await?;
-            self::join_server(handle)
+            join_server(handle)
         })
     }
 
     #[test]
     fn test_serve_when_client_never_sends_attach_request_does_not_occupy_attach_slot() -> rootcause::Result<()> {
-        self::runtime()?.block_on(async {
+        runtime()?.block_on(async {
             let tempdir = tempfile::tempdir()?;
-            let (session, paths) = self::session_paths(tempdir.path(), "work")?;
-            let handle = self::spawn_test_server(&session, &paths, 2);
+            let (session, paths) = crate::server::tests::session_paths(tempdir.path(), "work")?;
+            let handle = spawn_test_server(&session, &paths, 2);
 
-            self::wait_for_socket(&paths.socket)?;
-            let idle_client = self::connect_client(&paths).await?;
+            wait_for_socket(&paths.socket)?;
+            let idle_client = connect_client(&paths).await?;
 
-            self::attach_and_detach(&session, &paths).await?;
+            attach_and_detach(&session, &paths).await?;
 
             drop(idle_client);
-            self::join_server(handle)
+            join_server(handle)
         })
     }
 
     #[test]
     fn test_serve_when_pre_attach_handshake_errors_with_accepted_limit_joins_failed_task() -> rootcause::Result<()> {
-        self::runtime()?.block_on(async {
+        runtime()?.block_on(async {
             let tempdir = tempfile::tempdir()?;
-            let (session, paths) = self::session_paths(tempdir.path(), "work")?;
-            let handle = self::spawn_test_server_with_shell(
+            let (session, paths) = crate::server::tests::session_paths(tempdir.path(), "work")?;
+            let handle = spawn_test_server_with_shell(
                 &session,
                 &paths,
                 Some(1),
-                self::shell_cmd_with_args("/bin/sh", &["-c", "sleep 2; exit 0"]),
+                crate::server::tests::shell_cmd_with_args("/bin/sh", &["-c", "sleep 2; exit 0"]),
             );
 
-            self::wait_for_socket(&paths.socket)?;
+            wait_for_socket(&paths.socket)?;
             let mut stream = tokio::net::UnixStream::connect(&paths.socket)
                 .await
                 .context("failed to connect raw muxr test socket")?;
@@ -644,14 +652,14 @@ mod tests {
             let started_at = Instant::now();
             while !handle.is_finished() {
                 if started_at.elapsed() > Duration::from_millis(800) {
-                    let _cleanup_result = self::join_server_with_timeout(handle);
+                    let _cleanup_result = join_server_with_timeout(handle);
                     return Err(report!(
                         "timed out waiting for muxr invalid-handshake task join before shell exit"
                     ));
                 }
                 tokio::time::sleep(Duration::from_millis(10)).await;
             }
-            let result = self::join_server(handle);
+            let result = join_server(handle);
 
             assert_that!(result, err(anything()));
             assert_that!(paths.socket.exists(), eq(false));
@@ -662,14 +670,14 @@ mod tests {
 
     #[test]
     fn test_serve_when_attached_client_does_not_answer_heartbeat_releases_slot() -> rootcause::Result<()> {
-        self::runtime()?.block_on(async {
+        runtime()?.block_on(async {
             let tempdir = tempfile::tempdir()?;
-            let (session, paths) = self::session_paths(tempdir.path(), "work")?;
-            let handle = self::spawn_test_server(&session, &paths, 2);
+            let (session, paths) = crate::server::tests::session_paths(tempdir.path(), "work")?;
+            let handle = spawn_test_server(&session, &paths, 2);
 
-            self::wait_for_socket(&paths.socket)?;
-            let mut stuck_client = self::connect_client(&paths).await?;
-            stuck_client.send_request(&self::attach_request(&session)?).await?;
+            wait_for_socket(&paths.socket)?;
+            let mut stuck_client = connect_client(&paths).await?;
+            stuck_client.send_request(&attach_request(&session)?).await?;
             tokio::time::sleep(
                 TEST_CLIENT_HEARTBEAT_INTERVAL
                     + TEST_CLIENT_HEARTBEAT_TIMEOUT
@@ -678,45 +686,45 @@ mod tests {
             )
             .await;
 
-            let responsive_client = self::open_attached_client(&session, &paths).await?;
-            self::detach_client(responsive_client).await?;
+            let responsive_client = open_attached_client(&session, &paths).await?;
+            detach_client(responsive_client).await?;
 
             drop(stuck_client);
-            self::join_server(handle)
+            join_server(handle)
         })
     }
 
     #[test]
     fn test_serve_when_ping_is_first_request_returns_pong_without_claiming_slot() -> rootcause::Result<()> {
-        self::runtime()?.block_on(async {
+        runtime()?.block_on(async {
             let tempdir = tempfile::tempdir()?;
-            let (session, paths) = self::session_paths(tempdir.path(), "work")?;
-            let handle = self::spawn_test_server(&session, &paths, 2);
+            let (session, paths) = crate::server::tests::session_paths(tempdir.path(), "work")?;
+            let handle = spawn_test_server(&session, &paths, 2);
 
-            self::wait_for_socket(&paths.socket)?;
-            let mut probe = self::connect_client(&paths).await?;
+            wait_for_socket(&paths.socket)?;
+            let mut probe = connect_client(&paths).await?;
             probe.send_request(&ClientRequest::Ping).await?;
             assert_that!(probe.recv_event().await?, eq(Some(ServerEvent::Pong)));
 
-            self::attach_and_detach(&session, &paths).await?;
-            self::join_server(handle)
+            attach_and_detach(&session, &paths).await?;
+            join_server(handle)
         })
     }
 
     #[test]
     fn test_serve_when_delete_session_is_first_request_stops_server_and_removes_state() -> rootcause::Result<()> {
-        self::runtime()?.block_on(async {
+        runtime()?.block_on(async {
             let tempdir = tempfile::tempdir()?;
-            let (session, paths) = self::session_paths(tempdir.path(), "work")?;
-            let handle = self::spawn_test_server(&session, &paths, 2);
+            let (session, paths) = crate::server::tests::session_paths(tempdir.path(), "work")?;
+            let handle = spawn_test_server(&session, &paths, 2);
 
-            self::wait_for_socket(&paths.socket)?;
-            self::wait_for_path(&paths.layout)?;
-            let mut delete_client = self::connect_client(&paths).await?;
+            wait_for_socket(&paths.socket)?;
+            wait_for_path(&paths.layout)?;
+            let mut delete_client = connect_client(&paths).await?;
 
             delete_client.send_request(&ClientRequest::DeleteSession).await?;
             assert_that!(delete_client.recv_event().await?, eq(Some(ServerEvent::Deleted)));
-            self::join_server_with_timeout(handle)?;
+            join_server_with_timeout(handle)?;
 
             assert_that!(paths.root.exists(), eq(false));
             assert_that!(paths.socket.exists(), eq(false));
@@ -727,18 +735,19 @@ mod tests {
 
     #[test]
     fn test_serve_when_delete_session_arrives_while_client_is_attached_removes_state() -> rootcause::Result<()> {
-        self::runtime()?.block_on(async {
+        runtime()?.block_on(async {
             let tempdir = tempfile::tempdir()?;
-            let (session, paths) = self::session_paths(tempdir.path(), "work")?;
-            let handle = self::spawn_test_server_with_shell(&session, &paths, None, self::shell_cmd("/bin/cat"));
+            let (session, paths) = crate::server::tests::session_paths(tempdir.path(), "work")?;
+            let handle =
+                spawn_test_server_with_shell(&session, &paths, None, crate::server::tests::shell_cmd("/bin/cat"));
 
-            self::wait_for_socket(&paths.socket)?;
-            let _attached_client = self::open_attached_client(&session, &paths).await?;
-            let mut delete_client = self::connect_client(&paths).await?;
+            wait_for_socket(&paths.socket)?;
+            let _attached_client = open_attached_client(&session, &paths).await?;
+            let mut delete_client = connect_client(&paths).await?;
 
             delete_client.send_request(&ClientRequest::DeleteSession).await?;
             assert_that!(delete_client.recv_event().await?, eq(Some(ServerEvent::Deleted)));
-            self::join_server_with_timeout(handle)?;
+            join_server_with_timeout(handle)?;
 
             assert_that!(paths.root.exists(), eq(false));
             assert_that!(paths.socket.exists(), eq(false));
@@ -752,11 +761,11 @@ mod tests {
         let tempdir = tempfile::tempdir()?;
         let active_cwd = tempfile::tempdir()?;
         let active_cwd = active_cwd.path().to_string_lossy().into_owned();
-        let config = self::server_config(tempdir.path(), "work")?;
-        let mut layout = SessionLayout::initial(&config.session, self::metadata("sh", 1))?;
+        let config = crate::server::tests::server_config(tempdir.path(), "work")?;
+        let mut layout = SessionLayout::initial(&config.session, metadata("sh", 1))?;
         layout.sync_terminal_titles(&[(PaneId::new(1)?, Some(active_cwd.clone()))]);
 
-        let metadata = self::active_pane_session_metadata(&config, &layout)?;
+        let metadata = crate::server::tests::active_pane_session_metadata(&config, &layout)?;
 
         assert_that!(metadata.cwd, eq(active_cwd));
         Ok(())
@@ -767,13 +776,13 @@ mod tests {
         let tempdir = tempfile::tempdir()?;
         let active_cwd = tempfile::tempdir()?;
         let active_cwd = active_cwd.path().to_string_lossy().into_owned();
-        let config = self::server_config(tempdir.path(), "work")?;
-        let mut layout = SessionLayout::initial(&config.session, self::metadata("sh", 1))?;
+        let config = crate::server::tests::server_config(tempdir.path(), "work")?;
+        let mut layout = SessionLayout::initial(&config.session, metadata("sh", 1))?;
         layout.sync_terminal_titles(&[(PaneId::new(1)?, Some(active_cwd.clone()))]);
 
         let pane_id = layout.split_active_pane(
             config.user_config.layout,
-            self::active_pane_session_metadata(&config, &layout)?,
+            crate::server::tests::active_pane_session_metadata(&config, &layout)?,
             PaneSplitAxis::Vertical,
         )?;
 
@@ -789,11 +798,11 @@ mod tests {
         let tempdir = tempfile::tempdir()?;
         let active_cwd = tempfile::tempdir()?;
         let active_cwd = active_cwd.path().to_string_lossy().into_owned();
-        let config = self::server_config(tempdir.path(), "work")?;
-        let mut layout = SessionLayout::initial(&config.session, self::metadata("sh", 1))?;
+        let config = crate::server::tests::server_config(tempdir.path(), "work")?;
+        let mut layout = SessionLayout::initial(&config.session, metadata("sh", 1))?;
         layout.sync_terminal_titles(&[(PaneId::new(1)?, Some(active_cwd.clone()))]);
 
-        let pane_id = layout.create_tab(self::active_pane_session_metadata(&config, &layout)?)?;
+        let pane_id = layout.create_tab(crate::server::tests::active_pane_session_metadata(&config, &layout)?)?;
 
         let pane = layout
             .pane(pane_id)
@@ -804,13 +813,14 @@ mod tests {
 
     #[test]
     fn test_serve_when_key_request_arrives_writes_raw_bytes_and_stays_attached() -> rootcause::Result<()> {
-        self::runtime()?.block_on(async {
+        runtime()?.block_on(async {
             let tempdir = tempfile::tempdir()?;
-            let (session, paths) = self::session_paths(tempdir.path(), "work")?;
-            let handle = self::spawn_test_server_with_shell(&session, &paths, Some(1), self::shell_cmd("/bin/cat"));
+            let (session, paths) = crate::server::tests::session_paths(tempdir.path(), "work")?;
+            let handle =
+                spawn_test_server_with_shell(&session, &paths, Some(1), crate::server::tests::shell_cmd("/bin/cat"));
 
-            self::wait_for_socket(&paths.socket)?;
-            let mut client = self::open_attached_client(&session, &paths).await?;
+            wait_for_socket(&paths.socket)?;
+            let mut client = open_attached_client(&session, &paths).await?;
             client
                 .writer
                 .send_request(&ClientRequest::Key(ClientKey {
@@ -820,22 +830,22 @@ mod tests {
                 }))
                 .await?;
 
-            self::read_until_render_contains(&mut client, b"x").await?;
-            self::detach_client(client).await?;
-            self::join_server(handle)
+            read_until_render_contains(&mut client, b"x").await?;
+            detach_client(client).await?;
+            join_server(handle)
         })
     }
 
     #[test]
     fn test_serve_when_kitty_key_request_arrives_for_kitty_pane_writes_csi_u_bytes() -> rootcause::Result<()> {
-        self::runtime()?.block_on(async {
+        runtime()?.block_on(async {
             let tempdir = tempfile::tempdir()?;
-            let (session, paths) = self::session_paths(tempdir.path(), "work")?;
-            let handle = self::spawn_test_server_with_shell(
+            let (session, paths) = crate::server::tests::session_paths(tempdir.path(), "work")?;
+            let handle = spawn_test_server_with_shell(
                 &session,
                 &paths,
                 Some(1),
-                self::shell_cmd_with_args(
+                crate::server::tests::shell_cmd_with_args(
                     "/bin/sh",
                     &[
                         "-c",
@@ -847,9 +857,9 @@ mod tests {
                 ),
             );
 
-            self::wait_for_socket(&paths.socket)?;
-            let mut client = self::open_attached_client(&session, &paths).await?;
-            self::read_until_render_contains(&mut client, b"ready").await?;
+            wait_for_socket(&paths.socket)?;
+            let mut client = open_attached_client(&session, &paths).await?;
+            read_until_render_contains(&mut client, b"ready").await?;
             client
                 .writer
                 .send_request(&ClientRequest::Key(ClientKey {
@@ -859,39 +869,38 @@ mod tests {
                 }))
                 .await?;
 
-            self::read_until_render_contains_hex_bytes(&mut client, &["1b", "5b", "31", "33", "3b", "32", "75"])
-                .await?;
-            self::detach_client(client).await?;
-            self::join_server(handle)
+            read_until_render_contains_hex_bytes(&mut client, &["1b", "5b", "31", "33", "3b", "32", "75"]).await?;
+            detach_client(client).await?;
+            join_server(handle)
         })
     }
 
     #[test]
     fn test_serve_when_scrollback_editor_key_arrives_opens_dump_and_restores_layout() -> rootcause::Result<()> {
-        self::runtime()?.block_on(async {
+        runtime()?.block_on(async {
             let tempdir = tempfile::tempdir()?;
-            let (session, paths) = self::session_paths(tempdir.path(), "work")?;
+            let (session, paths) = crate::server::tests::session_paths(tempdir.path(), "work")?;
             let mut user_config = MuxrConfig::new()?;
             user_config.scrollback.editor = muxr_config::ScrollbackEditorConfig {
                 program: "/bin/sh",
                 args: &["-c", "cat \"$1\"; sleep 30", "muxr-test-scrollback-editor"],
             };
-            let handle = self::spawn_test_server_with_user_config(
+            let handle = spawn_test_server_with_user_config(
                 &session,
                 &paths,
                 Some(1),
-                self::shell_cmd("/bin/cat"),
+                crate::server::tests::shell_cmd("/bin/cat"),
                 user_config,
             );
 
-            self::wait_for_socket(&paths.socket)?;
-            let mut client = self::open_attached_client(&session, &paths).await?;
+            wait_for_socket(&paths.socket)?;
+            let mut client = open_attached_client(&session, &paths).await?;
             client
                 .writer
                 .send_request(&ClientRequest::Input(b"before-editor\n".to_vec()))
                 .await
                 .context("failed to send pre-editor input")?;
-            self::read_until_render_contains(&mut client, b"before-editor").await?;
+            read_until_render_contains(&mut client, b"before-editor").await?;
 
             client
                 .writer
@@ -902,13 +911,13 @@ mod tests {
                 }))
                 .await
                 .context("failed to send open scrollback editor key")?;
-            let editor_layout = self::read_until_layout(&mut client).await?;
+            let editor_layout = read_until_layout(&mut client).await?;
             let editor_tab = editor_layout
                 .tabs()
                 .first()
                 .ok_or_else(|| report!("expected scrollback editor tab"))?;
             assert_that!(editor_tab.active_pane().to_string(), eq("pane-2"));
-            self::read_until_render_contains(&mut client, b"before-editor").await?;
+            read_until_render_contains(&mut client, b"before-editor").await?;
 
             client
                 .writer
@@ -919,35 +928,35 @@ mod tests {
                 }))
                 .await
                 .context("failed to send close scrollback editor key")?;
-            let restored_layout = self::read_until_layout(&mut client).await?;
+            let restored_layout = read_until_layout(&mut client).await?;
             let restored_tab = restored_layout
                 .tabs()
                 .first()
                 .ok_or_else(|| report!("expected restored tab"))?;
             assert_that!(restored_tab.active_pane().to_string(), eq("pane-1"));
-            self::assert_layout_metadata_panes(&paths, &[1], 1)?;
+            assert_layout_metadata_panes(&paths, &[1], 1)?;
             assert_that!(paths.panes.join("2").exists(), eq(false));
 
             drop(client);
-            self::join_server_with_timeout(handle)
+            join_server_with_timeout(handle)
         })
     }
 
     #[test]
     fn test_serve_when_scrollback_editor_restores_sends_focus_events_to_reporting_pane() -> rootcause::Result<()> {
-        self::runtime()?.block_on(async {
+        runtime()?.block_on(async {
             let tempdir = tempfile::tempdir()?;
-            let (session, paths) = self::session_paths(tempdir.path(), "work")?;
+            let (session, paths) = crate::server::tests::session_paths(tempdir.path(), "work")?;
             let mut user_config = MuxrConfig::new()?;
             user_config.scrollback.editor = muxr_config::ScrollbackEditorConfig {
                 program: "/bin/sh",
                 args: &["-c", "cat \"$1\"; sleep 30", "muxr-test-scrollback-editor"],
             };
-            let handle = self::spawn_test_server_with_user_config(
+            let handle = spawn_test_server_with_user_config(
                 &session,
                 &paths,
                 Some(1),
-                self::shell_cmd_with_args(
+                crate::server::tests::shell_cmd_with_args(
                     "/bin/sh",
                     &[
                         "-c",
@@ -960,9 +969,9 @@ mod tests {
                 user_config,
             );
 
-            self::wait_for_socket(&paths.socket)?;
-            let mut client = self::open_attached_client(&session, &paths).await?;
-            self::read_until_render_contains(&mut client, b"ready").await?;
+            wait_for_socket(&paths.socket)?;
+            let mut client = open_attached_client(&session, &paths).await?;
+            read_until_render_contains(&mut client, b"ready").await?;
 
             client
                 .writer
@@ -972,7 +981,7 @@ mod tests {
                     raw_bytes: b"\x1bS".to_vec(),
                 }))
                 .await?;
-            let editor_layout = self::read_until_layout(&mut client).await?;
+            let editor_layout = read_until_layout(&mut client).await?;
             let editor_tab = editor_layout
                 .tabs()
                 .first()
@@ -987,24 +996,24 @@ mod tests {
                     raw_bytes: b"\x1bW".to_vec(),
                 }))
                 .await?;
-            let restored_layout = self::read_until_layout(&mut client).await?;
+            let restored_layout = read_until_layout(&mut client).await?;
             let restored_tab = restored_layout
                 .tabs()
                 .first()
                 .ok_or_else(|| report!("expected restored tab"))?;
             assert_that!(restored_tab.active_pane().to_string(), eq("pane-1"));
-            self::read_until_render_contains_hex_bytes(&mut client, &["1b", "5b", "4f", "1b", "5b", "49"]).await?;
+            read_until_render_contains_hex_bytes(&mut client, &["1b", "5b", "4f", "1b", "5b", "49"]).await?;
 
-            self::detach_client(client).await?;
-            self::join_server(handle)
+            detach_client(client).await?;
+            join_server(handle)
         })
     }
 
     #[test]
     fn test_serve_when_scrollback_editor_is_open_focus_pane_at_keeps_editor_active() -> rootcause::Result<()> {
-        self::runtime()?.block_on(async {
+        runtime()?.block_on(async {
             let tempdir = tempfile::tempdir()?;
-            let (session, paths) = self::session_paths(tempdir.path(), "work")?;
+            let (session, paths) = crate::server::tests::session_paths(tempdir.path(), "work")?;
             let mut user_config = MuxrConfig::new()?;
             user_config.scrollback.editor = muxr_config::ScrollbackEditorConfig {
                 program: "/bin/sh",
@@ -1014,16 +1023,16 @@ mod tests {
                     "muxr-test-scrollback-editor",
                 ],
             };
-            let handle = self::spawn_test_server_with_user_config(
+            let handle = spawn_test_server_with_user_config(
                 &session,
                 &paths,
                 Some(1),
-                self::shell_cmd("/bin/cat"),
+                crate::server::tests::shell_cmd("/bin/cat"),
                 user_config,
             );
 
-            self::wait_for_socket(&paths.socket)?;
-            let mut client = self::open_attached_client(&session, &paths).await?;
+            wait_for_socket(&paths.socket)?;
+            let mut client = open_attached_client(&session, &paths).await?;
             client
                 .writer
                 .send_request(&ClientRequest::Key(ClientKey {
@@ -1032,7 +1041,7 @@ mod tests {
                     raw_bytes: b"\x1bV".to_vec(),
                 }))
                 .await?;
-            let split_layout = self::read_until_layout(&mut client).await?;
+            let split_layout = read_until_layout(&mut client).await?;
             let split_tab = split_layout
                 .tabs()
                 .first()
@@ -1043,7 +1052,7 @@ mod tests {
                 .writer
                 .send_request(&ClientRequest::Input(b"before-editor\n".to_vec()))
                 .await?;
-            self::read_until_render_contains(&mut client, b"before-editor").await?;
+            read_until_render_contains(&mut client, b"before-editor").await?;
 
             client
                 .writer
@@ -1053,15 +1062,15 @@ mod tests {
                     raw_bytes: b"\x1bS".to_vec(),
                 }))
                 .await?;
-            let editor_layout = self::read_until_layout(&mut client).await?;
+            let editor_layout = read_until_layout(&mut client).await?;
             let editor_tab = editor_layout
                 .tabs()
                 .first()
                 .ok_or_else(|| report!("expected scrollback editor tab"))?;
             assert_that!(editor_tab.active_pane().to_string(), eq("pane-3"));
-            self::read_until_render_contains(&mut client, b"before-editor").await?;
+            read_until_render_contains(&mut client, b"before-editor").await?;
             let editor_regions =
-                self::read_until_pane_regions_matching(&mut client, "editor layout includes sibling pane", |regions| {
+                read_until_pane_regions_matching(&mut client, "editor layout includes sibling pane", |regions| {
                     if regions
                         .regions()
                         .iter()
@@ -1080,20 +1089,17 @@ mod tests {
 
             client
                 .writer
-                .send_request(&ClientRequest::FocusPaneAt(self::pane_position(
-                    &editor_regions,
-                    "pane-1",
-                )?))
+                .send_request(&ClientRequest::FocusPaneAt(pane_position(&editor_regions, "pane-1")?))
                 .await?;
             client
                 .writer
                 .send_request(&ClientRequest::Input(b"after-focus\n".to_vec()))
                 .await?;
-            self::read_until_render_contains(&mut client, b"editor:after-focus").await?;
+            read_until_render_contains(&mut client, b"editor:after-focus").await?;
 
             drop(client);
-            self::join_server_with_timeout(handle)?;
-            self::assert_layout_metadata_panes(&paths, &[1, 2], 2)?;
+            join_server_with_timeout(handle)?;
+            assert_layout_metadata_panes(&paths, &[1, 2], 2)?;
             assert_that!(paths.panes.join("3").exists(), eq(false));
             Ok(())
         })
@@ -1101,29 +1107,29 @@ mod tests {
 
     #[test]
     fn test_serve_when_scrollback_editor_process_exits_restores_original_pane() -> rootcause::Result<()> {
-        self::runtime()?.block_on(async {
+        runtime()?.block_on(async {
             let tempdir = tempfile::tempdir()?;
-            let (session, paths) = self::session_paths(tempdir.path(), "work")?;
+            let (session, paths) = crate::server::tests::session_paths(tempdir.path(), "work")?;
             let mut user_config = MuxrConfig::new()?;
             user_config.scrollback.editor = muxr_config::ScrollbackEditorConfig {
                 program: "/bin/sh",
                 args: &["-c", "cat \"$1\"; sleep 0.1; exit 7", "muxr-test-scrollback-editor"],
             };
-            let handle = self::spawn_test_server_with_user_config(
+            let handle = spawn_test_server_with_user_config(
                 &session,
                 &paths,
                 Some(1),
-                self::shell_cmd("/bin/cat"),
+                crate::server::tests::shell_cmd("/bin/cat"),
                 user_config,
             );
 
-            self::wait_for_socket(&paths.socket)?;
-            let mut client = self::open_attached_client(&session, &paths).await?;
+            wait_for_socket(&paths.socket)?;
+            let mut client = open_attached_client(&session, &paths).await?;
             client
                 .writer
                 .send_request(&ClientRequest::Input(b"before-editor\n".to_vec()))
                 .await?;
-            self::read_until_render_contains(&mut client, b"before-editor").await?;
+            read_until_render_contains(&mut client, b"before-editor").await?;
 
             client
                 .writer
@@ -1133,14 +1139,14 @@ mod tests {
                     raw_bytes: b"\x1bS".to_vec(),
                 }))
                 .await?;
-            let editor_layout = self::read_until_layout(&mut client).await?;
+            let editor_layout = read_until_layout(&mut client).await?;
             let editor_tab = editor_layout
                 .tabs()
                 .first()
                 .ok_or_else(|| report!("expected scrollback editor tab"))?;
             assert_that!(editor_tab.active_pane().to_string(), eq("pane-2"));
 
-            let restored_layout = self::read_until_layout(&mut client).await?;
+            let restored_layout = read_until_layout(&mut client).await?;
             let restored_tab = restored_layout
                 .tabs()
                 .first()
@@ -1159,30 +1165,31 @@ mod tests {
                 .writer
                 .send_request(&ClientRequest::Input(b"after-editor\n".to_vec()))
                 .await?;
-            self::read_until_render_contains(&mut client, b"after-editor").await?;
-            self::assert_layout_metadata_panes(&paths, &[1], 1)?;
+            read_until_render_contains(&mut client, b"after-editor").await?;
+            assert_layout_metadata_panes(&paths, &[1], 1)?;
             assert_that!(paths.panes.join("2").exists(), eq(false));
 
-            self::detach_client(client).await?;
-            self::join_server(handle)
+            detach_client(client).await?;
+            join_server(handle)
         })
     }
 
     #[test]
     fn test_serve_when_terminal_title_reports_cwd_persists_metadata() -> rootcause::Result<()> {
-        self::runtime()?.block_on(async {
+        runtime()?.block_on(async {
             let tempdir = tempfile::tempdir()?;
-            let (session, paths) = self::session_paths(tempdir.path(), "work")?;
-            let handle = self::spawn_test_server_with_shell(&session, &paths, Some(1), self::shell_cmd("/bin/cat"));
+            let (session, paths) = crate::server::tests::session_paths(tempdir.path(), "work")?;
+            let handle =
+                spawn_test_server_with_shell(&session, &paths, Some(1), crate::server::tests::shell_cmd("/bin/cat"));
 
-            self::wait_for_socket(&paths.socket)?;
-            let mut client = self::open_attached_client(&session, &paths).await?;
+            wait_for_socket(&paths.socket)?;
+            let mut client = open_attached_client(&session, &paths).await?;
             client
                 .writer
                 .send_request(&ClientRequest::Input(b"\x1b]2;~\x07\n".to_vec()))
                 .await?;
 
-            let layout = self::read_until_sidebar_layout(&mut client).await?;
+            let layout = read_until_sidebar_layout(&mut client).await?;
             let Some(tab) = layout.tabs().first() else {
                 return Err(report!("expected muxr test layout tab"));
             };
@@ -1199,20 +1206,21 @@ mod tests {
                 .ok_or_else(|| report!("expected persisted muxr pane"))?;
             assert_that!(pane.cwd, eq("~"));
 
-            self::detach_client(client).await?;
-            self::join_server(handle)
+            detach_client(client).await?;
+            join_server(handle)
         })
     }
 
     #[test]
     fn test_serve_when_create_tab_key_arrives_sends_layout_and_persists_metadata() -> rootcause::Result<()> {
-        self::runtime()?.block_on(async {
+        runtime()?.block_on(async {
             let tempdir = tempfile::tempdir()?;
-            let (session, paths) = self::session_paths(tempdir.path(), "work")?;
-            let handle = self::spawn_test_server_with_shell(&session, &paths, Some(1), self::shell_cmd("/bin/cat"));
+            let (session, paths) = crate::server::tests::session_paths(tempdir.path(), "work")?;
+            let handle =
+                spawn_test_server_with_shell(&session, &paths, Some(1), crate::server::tests::shell_cmd("/bin/cat"));
 
-            self::wait_for_socket(&paths.socket)?;
-            let mut client = self::open_attached_client(&session, &paths).await?;
+            wait_for_socket(&paths.socket)?;
+            let mut client = open_attached_client(&session, &paths).await?;
             client
                 .writer
                 .send_request(&ClientRequest::Key(ClientKey {
@@ -1222,29 +1230,29 @@ mod tests {
                 }))
                 .await?;
 
-            let layout = self::read_until_layout(&mut client).await?;
+            let layout = read_until_layout(&mut client).await?;
             assert_that!(layout.active_tab().to_string(), eq("tab-2"));
             assert_that!(
                 layout.tabs().iter().map(|tab| tab.id().to_string()).collect::<Vec<_>>(),
                 eq(vec!["tab-1", "tab-2"])
             );
-            self::assert_layout_metadata_tabs(&paths, &[1, 2], 2)?;
+            assert_layout_metadata_tabs(&paths, &[1, 2], 2)?;
 
-            self::detach_client(client).await?;
-            self::join_server(handle)
+            detach_client(client).await?;
+            join_server(handle)
         })
     }
 
     #[test]
     fn test_serve_when_tab_focus_changes_sends_focus_events_to_reporting_pane() -> rootcause::Result<()> {
-        self::runtime()?.block_on(async {
+        runtime()?.block_on(async {
             let tempdir = tempfile::tempdir()?;
-            let (session, paths) = self::session_paths(tempdir.path(), "work")?;
-            let handle = self::spawn_test_server_with_shell(
+            let (session, paths) = crate::server::tests::session_paths(tempdir.path(), "work")?;
+            let handle = spawn_test_server_with_shell(
                 &session,
                 &paths,
                 Some(1),
-                self::shell_cmd_with_args(
+                crate::server::tests::shell_cmd_with_args(
                     "/bin/sh",
                     &[
                         "-c",
@@ -1253,9 +1261,9 @@ mod tests {
                 ),
             );
 
-            self::wait_for_socket(&paths.socket)?;
-            let mut client = self::open_attached_client(&session, &paths).await?;
-            self::read_until_render_contains(&mut client, b"ready").await?;
+            wait_for_socket(&paths.socket)?;
+            let mut client = open_attached_client(&session, &paths).await?;
+            read_until_render_contains(&mut client, b"ready").await?;
             client
                 .writer
                 .send_request(&ClientRequest::Key(ClientKey {
@@ -1264,7 +1272,7 @@ mod tests {
                     raw_bytes: b"\x1bE".to_vec(),
                 }))
                 .await?;
-            let created_layout = self::read_until_layout(&mut client).await?;
+            let created_layout = read_until_layout(&mut client).await?;
             assert_that!(created_layout.active_tab().to_string(), eq("tab-2"));
 
             client
@@ -1275,34 +1283,35 @@ mod tests {
                     raw_bytes: b"\x1bP".to_vec(),
                 }))
                 .await?;
-            let focused_layout = self::read_until_layout(&mut client).await?;
+            let focused_layout = read_until_layout(&mut client).await?;
             assert_that!(focused_layout.active_tab().to_string(), eq("tab-1"));
-            self::read_until_render_contains_hex_bytes(
+            read_until_render_contains_hex_bytes(
                 &mut client,
                 &["1b", "5b", "4f", "1b", "5b", "49"],
             )
             .await?;
 
-            self::detach_client(client).await?;
-            self::join_server(handle)
+            detach_client(client).await?;
+            join_server(handle)
         })
     }
 
     #[test]
     fn test_serve_when_layout_metadata_exists_restores_tab_order_on_attach() -> rootcause::Result<()> {
-        self::runtime()?.block_on(async {
+        runtime()?.block_on(async {
             let tempdir = tempfile::tempdir()?;
-            let config = self::server_config(tempdir.path(), "work")?;
+            let config = crate::server::tests::server_config(tempdir.path(), "work")?;
             fs::create_dir_all(&config.paths.root)?;
-            let mut layout = SessionLayout::initial(&config.session, self::metadata("sh", 1))?;
-            layout.create_tab(self::metadata("sh", 2))?;
+            let mut layout = SessionLayout::initial(&config.session, metadata("sh", 1))?;
+            layout.create_tab(metadata("sh", 2))?;
             crate::state::persisted::write_metadata(&config.paths, &layout)?;
             let paths = config.paths.clone();
             let session = config.session.clone();
-            let handle = self::spawn_test_server_with_shell(&session, &paths, Some(1), self::shell_cmd("/bin/cat"));
+            let handle =
+                spawn_test_server_with_shell(&session, &paths, Some(1), crate::server::tests::shell_cmd("/bin/cat"));
 
-            self::wait_for_socket(&paths.socket)?;
-            let client = self::open_attached_client(&session, &paths).await?;
+            wait_for_socket(&paths.socket)?;
+            let client = open_attached_client(&session, &paths).await?;
             assert_that!(client.layout.active_tab().to_string(), eq("tab-2"));
             assert_that!(
                 client
@@ -1313,20 +1322,21 @@ mod tests {
                     .collect::<Vec<_>>(),
                 eq(vec!["tab-1", "tab-2"])
             );
-            self::detach_client(client).await?;
-            self::join_server(handle)
+            detach_client(client).await?;
+            join_server(handle)
         })
     }
 
     #[test]
     fn test_serve_when_split_pane_key_arrives_sends_layout_and_routes_input_to_new_pane() -> rootcause::Result<()> {
-        self::runtime()?.block_on(async {
+        runtime()?.block_on(async {
             let tempdir = tempfile::tempdir()?;
-            let (session, paths) = self::session_paths(tempdir.path(), "work")?;
-            let handle = self::spawn_test_server_with_shell(&session, &paths, Some(1), self::shell_cmd("/bin/cat"));
+            let (session, paths) = crate::server::tests::session_paths(tempdir.path(), "work")?;
+            let handle =
+                spawn_test_server_with_shell(&session, &paths, Some(1), crate::server::tests::shell_cmd("/bin/cat"));
 
-            self::wait_for_socket(&paths.socket)?;
-            let mut client = self::open_attached_client(&session, &paths).await?;
+            wait_for_socket(&paths.socket)?;
+            let mut client = open_attached_client(&session, &paths).await?;
             client
                 .writer
                 .send_request(&ClientRequest::Key(ClientKey {
@@ -1336,7 +1346,7 @@ mod tests {
                 }))
                 .await?;
 
-            let layout = self::read_until_layout(&mut client).await?;
+            let layout = read_until_layout(&mut client).await?;
             let tab = layout
                 .tabs()
                 .first()
@@ -1351,23 +1361,24 @@ mod tests {
                 .writer
                 .send_request(&ClientRequest::Input(b"new-pane\n".to_vec()))
                 .await?;
-            self::read_until_render_contains(&mut client, b"new-pane").await?;
-            self::assert_layout_metadata_panes(&paths, &[1, 2], 2)?;
+            read_until_render_contains(&mut client, b"new-pane").await?;
+            assert_layout_metadata_panes(&paths, &[1, 2], 2)?;
 
-            self::detach_client(client).await?;
-            self::join_server(handle)
+            detach_client(client).await?;
+            join_server(handle)
         })
     }
 
     #[test]
     fn test_serve_when_attached_non_final_pane_exits_reaps_pane_and_keeps_client_attached() -> rootcause::Result<()> {
-        self::runtime()?.block_on(async {
+        runtime()?.block_on(async {
             let tempdir = tempfile::tempdir()?;
-            let (session, paths) = self::session_paths(tempdir.path(), "work")?;
-            let handle = self::spawn_test_server_with_shell(&session, &paths, Some(1), self::shell_cmd("/bin/sh"));
+            let (session, paths) = crate::server::tests::session_paths(tempdir.path(), "work")?;
+            let handle =
+                spawn_test_server_with_shell(&session, &paths, Some(1), crate::server::tests::shell_cmd("/bin/sh"));
 
-            self::wait_for_socket(&paths.socket)?;
-            let mut client = self::open_attached_client(&session, &paths).await?;
+            wait_for_socket(&paths.socket)?;
+            let mut client = open_attached_client(&session, &paths).await?;
             client
                 .writer
                 .send_request(&ClientRequest::Key(ClientKey {
@@ -1376,14 +1387,14 @@ mod tests {
                     raw_bytes: b"\x1bV".to_vec(),
                 }))
                 .await?;
-            drop(self::read_until_layout(&mut client).await?);
+            drop(read_until_layout(&mut client).await?);
 
             client
                 .writer
                 .send_request(&ClientRequest::Input(b"exit 7\n".to_vec()))
                 .await?;
 
-            let layout = self::read_until_layout(&mut client).await?;
+            let layout = read_until_layout(&mut client).await?;
             let tab = layout
                 .tabs()
                 .first()
@@ -1398,19 +1409,19 @@ mod tests {
                 .writer
                 .send_request(&ClientRequest::Input(b"printf survivor\\n\n".to_vec()))
                 .await?;
-            self::read_until_render_contains(&mut client, b"survivor").await?;
-            self::assert_layout_metadata_panes(&paths, &[1], 1)?;
+            read_until_render_contains(&mut client, b"survivor").await?;
+            assert_layout_metadata_panes(&paths, &[1], 1)?;
 
-            self::detach_client(client).await?;
-            self::join_server(handle)
+            detach_client(client).await?;
+            join_server(handle)
         })
     }
 
     #[test]
     fn test_serve_when_inactive_tab_pane_exits_reaps_hidden_pane_and_keeps_client_attached() -> rootcause::Result<()> {
-        self::runtime()?.block_on(async {
+        runtime()?.block_on(async {
             let tempdir = tempfile::tempdir()?;
-            let (session, paths) = self::session_paths(tempdir.path(), "work")?;
+            let (session, paths) = crate::server::tests::session_paths(tempdir.path(), "work")?;
             let first_cwd = tempdir.path().join("pane-1-cwd");
             let second_cwd = tempdir.path().join("pane-2-cwd");
             let trigger_path = tempdir.path().join("exit-pane-1");
@@ -1448,11 +1459,11 @@ mod tests {
                     exec cat; \
                 fi; \
                 exit 99";
-            let handle = self::spawn_test_server_with_shell(
+            let handle = spawn_test_server_with_shell(
                 &session,
                 &paths,
                 Some(1),
-                self::shell_cmd_with_args(
+                crate::server::tests::shell_cmd_with_args(
                     "/bin/sh",
                     &[
                         "-c",
@@ -1465,12 +1476,12 @@ mod tests {
                 ),
             );
 
-            self::wait_for_socket(&paths.socket)?;
-            let mut client = self::open_attached_client(&session, &paths).await?;
+            wait_for_socket(&paths.socket)?;
+            let mut client = open_attached_client(&session, &paths).await?;
             assert_that!(client.layout.active_tab().to_string(), eq("tab-2"));
 
             fs::write(&trigger_path, b"exit")?;
-            let layout = self::read_until_layout(&mut client).await?;
+            let layout = read_until_layout(&mut client).await?;
             assert_that!(layout.active_tab().to_string(), eq("tab-2"));
             assert_that!(
                 layout.tabs().iter().map(|tab| tab.id().to_string()).collect::<Vec<_>>(),
@@ -1490,20 +1501,20 @@ mod tests {
                 .writer
                 .send_request(&ClientRequest::Input(b"survivor\n".to_vec()))
                 .await?;
-            self::read_until_render_contains(&mut client, b"survivor").await?;
-            self::assert_layout_metadata_tabs(&paths, &[2], 2)?;
-            self::assert_layout_metadata_panes(&paths, &[2], 2)?;
+            read_until_render_contains(&mut client, b"survivor").await?;
+            assert_layout_metadata_tabs(&paths, &[2], 2)?;
+            assert_layout_metadata_panes(&paths, &[2], 2)?;
 
-            self::detach_client(client).await?;
-            self::join_server(handle)
+            detach_client(client).await?;
+            join_server(handle)
         })
     }
 
     #[test]
     fn test_serve_when_detached_inactive_tab_pane_exits_reaps_hidden_pane_before_attach() -> rootcause::Result<()> {
-        self::runtime()?.block_on(async {
+        runtime()?.block_on(async {
             let tempdir = tempfile::tempdir()?;
-            let (session, paths) = self::session_paths(tempdir.path(), "work")?;
+            let (session, paths) = crate::server::tests::session_paths(tempdir.path(), "work")?;
             let first_cwd = tempdir.path().join("pane-1-cwd");
             let second_cwd = tempdir.path().join("pane-2-cwd");
             let trigger_path = tempdir.path().join("exit-pane-1");
@@ -1541,11 +1552,11 @@ mod tests {
                     exec cat; \
                 fi; \
                 exit 99";
-            let handle = self::spawn_test_server_with_shell(
+            let handle = spawn_test_server_with_shell(
                 &session,
                 &paths,
                 Some(1),
-                self::shell_cmd_with_args(
+                crate::server::tests::shell_cmd_with_args(
                     "/bin/sh",
                     &[
                         "-c",
@@ -1558,7 +1569,7 @@ mod tests {
                 ),
             );
 
-            self::wait_for_socket(&paths.socket)?;
+            wait_for_socket(&paths.socket)?;
             fs::write(&trigger_path, b"exit")?;
             let started_at = Instant::now();
             loop {
@@ -1576,7 +1587,7 @@ mod tests {
                             .ok_or_else(|| report!("muxr test layout tab id is missing"))
                     })
                     .collect::<rootcause::Result<Vec<_>>>()?;
-                let actual_panes = self::json_pane_tree_pane_ids(&layout["tabs"][0]["pane_tree"])?;
+                let actual_panes = json_pane_tree_pane_ids(&layout["tabs"][0]["pane_tree"])?;
                 if layout["active_tab"].as_u64() == Some(2)
                     && layout["tabs"][0]["active_pane"].as_u64() == Some(2)
                     && actual_tabs == vec![2]
@@ -1590,22 +1601,23 @@ mod tests {
                 tokio::time::sleep(Duration::from_millis(10)).await;
             }
 
-            let client = self::open_attached_client(&session, &paths).await?;
+            let client = open_attached_client(&session, &paths).await?;
             assert_that!(client.layout.active_tab().to_string(), eq("tab-2"));
-            self::detach_client(client).await?;
-            self::join_server(handle)
+            detach_client(client).await?;
+            join_server(handle)
         })
     }
 
     #[test]
     fn test_serve_when_no_button_mouse_motion_arrives_does_not_focus_hovered_pane() -> rootcause::Result<()> {
-        self::runtime()?.block_on(async {
+        runtime()?.block_on(async {
             let tempdir = tempfile::tempdir()?;
-            let (session, paths) = self::session_paths(tempdir.path(), "work")?;
-            let handle = self::spawn_test_server_with_shell(&session, &paths, Some(1), self::shell_cmd("/bin/cat"));
+            let (session, paths) = crate::server::tests::session_paths(tempdir.path(), "work")?;
+            let handle =
+                spawn_test_server_with_shell(&session, &paths, Some(1), crate::server::tests::shell_cmd("/bin/cat"));
 
-            self::wait_for_socket(&paths.socket)?;
-            let mut client = self::open_attached_client(&session, &paths).await?;
+            wait_for_socket(&paths.socket)?;
+            let mut client = open_attached_client(&session, &paths).await?;
             client
                 .writer
                 .send_request(&ClientRequest::Key(ClientKey {
@@ -1614,7 +1626,7 @@ mod tests {
                     raw_bytes: b"\x1bV".to_vec(),
                 }))
                 .await?;
-            drop(self::read_until_layout(&mut client).await?);
+            drop(read_until_layout(&mut client).await?);
 
             client
                 .writer
@@ -1629,24 +1641,24 @@ mod tests {
                 .send_request(&ClientRequest::Input(b"still-pane-2\n".to_vec()))
                 .await?;
 
-            self::read_until_render_contains(&mut client, b"still-pane-2").await?;
-            self::assert_layout_metadata_panes(&paths, &[1, 2], 2)?;
-            self::detach_client(client).await?;
-            self::join_server(handle)
+            read_until_render_contains(&mut client, b"still-pane-2").await?;
+            assert_layout_metadata_panes(&paths, &[1, 2], 2)?;
+            detach_client(client).await?;
+            join_server(handle)
         })
     }
 
     #[test]
     fn test_serve_when_wheel_over_inactive_plain_pane_scrolls_pointed_history_without_focus_change()
     -> rootcause::Result<()> {
-        self::runtime()?.block_on(async {
+        runtime()?.block_on(async {
             let tempdir = tempfile::tempdir()?;
-            let (session, paths) = self::session_paths(tempdir.path(), "work")?;
-            let handle = self::spawn_test_server_with_shell(
+            let (session, paths) = crate::server::tests::session_paths(tempdir.path(), "work")?;
+            let handle = spawn_test_server_with_shell(
                 &session,
                 &paths,
                 Some(1),
-                self::shell_cmd_with_args(
+                crate::server::tests::shell_cmd_with_args(
                     "/bin/sh",
                     &[
                         "-c",
@@ -1655,9 +1667,9 @@ mod tests {
                 ),
             );
 
-            self::wait_for_socket(&paths.socket)?;
-            let mut client = self::open_attached_client(&session, &paths).await?;
-            self::read_until_render_contains(&mut client, b"line-79").await?;
+            wait_for_socket(&paths.socket)?;
+            let mut client = open_attached_client(&session, &paths).await?;
+            read_until_render_contains(&mut client, b"line-79").await?;
             client
                 .writer
                 .send_request(&ClientRequest::Key(ClientKey {
@@ -1666,32 +1678,32 @@ mod tests {
                     raw_bytes: b"\x1bV".to_vec(),
                 }))
                 .await?;
-            let layout = self::read_until_layout(&mut client).await?;
+            let layout = read_until_layout(&mut client).await?;
             let tab = layout
                 .tabs()
                 .first()
                 .ok_or_else(|| report!("expected tab after split"))?;
             assert_that!(tab.active_pane().to_string(), eq("pane-2"));
-            self::read_until_render_contains(&mut client, b"line-79").await?;
+            read_until_render_contains(&mut client, b"line-79").await?;
             let ready_regions =
-                self::read_until_pane_regions_matching(&mut client, "both panes have scrollback", |regions| {
-                    self::both_panes_have_scrollback(regions)
+                read_until_pane_regions_matching(&mut client, "both panes have scrollback", |regions| {
+                    both_panes_have_scrollback(regions)
                 })
                 .await?;
-            let pane_1_position = self::pane_position(&ready_regions, "pane-1")?;
-            let pane_2_position = self::pane_position(&ready_regions, "pane-2")?;
+            let pane_1_position = pane_position(&ready_regions, "pane-1")?;
+            let pane_2_position = pane_position(&ready_regions, "pane-2")?;
 
             // Mouse-wheel history scroll has no protocol ack. Bottom both panes through the acknowledged line-scroll
             // path, then force a rendered baseline so stale setup metadata cannot satisfy the wheel assertion. The
             // follow-up down-scroll still proves only the pointed pane's scrollback moved.
-            self::scroll_pane_line_until_noop(
+            scroll_pane_line_until_noop(
                 &mut client,
                 pane_1_position,
                 PaneScrollDirection::Down,
                 "pane-1 bottomed before wheel",
             )
             .await?;
-            self::scroll_pane_line_until_noop(
+            scroll_pane_line_until_noop(
                 &mut client,
                 pane_2_position,
                 PaneScrollDirection::Down,
@@ -1699,16 +1711,16 @@ mod tests {
             )
             .await?;
             client.writer.send_request(&ClientRequest::RenderResync).await?;
-            drop(self::read_until_layout(&mut client).await?);
+            drop(read_until_layout(&mut client).await?);
             let bottom_regions =
-                self::read_next_pane_regions_matching(&mut client, "both panes rendered at bottom before wheel", |regions| {
-                    self::pane_region(regions, "pane-1")?;
-                    self::pane_region(regions, "pane-2")?;
+                read_next_pane_regions_matching(&mut client, "both panes rendered at bottom before wheel", |regions| {
+                    pane_region(regions, "pane-1")?;
+                    pane_region(regions, "pane-2")?;
                     Ok(PaneRegionsMatch::Matched)
                 })
                 .await?;
-            let pane_1_before_wheel = self::pane_region(&bottom_regions, "pane-1")?.visible_top_row();
-            let pane_2_before_wheel = self::pane_region(&bottom_regions, "pane-2")?.visible_top_row();
+            let pane_1_before_wheel = pane_region(&bottom_regions, "pane-1")?.visible_top_row();
+            let pane_2_before_wheel = pane_region(&bottom_regions, "pane-2")?.visible_top_row();
 
             client
                 .writer
@@ -1719,35 +1731,36 @@ mod tests {
                 }))
                 .await?;
 
-            self::read_next_pane_regions_matching(
+            read_next_pane_regions_matching(
                 &mut client,
                 &format!(
                     "wheel render moved only the pointed pane; expected pane-1<{pane_1_before_wheel}, pane-2={pane_2_before_wheel}"
                 ),
                 |regions| {
-                    self::pointed_pane_wheel_moved_only(regions, pane_1_before_wheel, pane_2_before_wheel)
+                    pointed_pane_wheel_moved_only(regions, pane_1_before_wheel, pane_2_before_wheel)
                 },
             )
             .await?;
 
             assert_that!(self::scroll_pane_line(&mut client, pane_1_position, PaneScrollDirection::Down).await?, eq(PaneScrollLineStep::Moved));
             assert_that!(self::scroll_pane_line(&mut client, pane_2_position, PaneScrollDirection::Down).await?, eq(PaneScrollLineStep::Noop));
-            self::assert_layout_metadata_panes(&paths, &[1, 2], 2)?;
+            assert_layout_metadata_panes(&paths, &[1, 2], 2)?;
 
-            self::detach_client(client).await?;
-            self::join_server(handle)
+            detach_client(client).await?;
+            join_server(handle)
         })
     }
 
     #[test]
     fn test_serve_when_selection_line_scroll_cannot_move_sends_noop_scroll_result() -> rootcause::Result<()> {
-        self::runtime()?.block_on(async {
+        runtime()?.block_on(async {
             let tempdir = tempfile::tempdir()?;
-            let (session, paths) = self::session_paths(tempdir.path(), "work")?;
-            let handle = self::spawn_test_server_with_shell(&session, &paths, Some(1), self::shell_cmd("/bin/cat"));
+            let (session, paths) = crate::server::tests::session_paths(tempdir.path(), "work")?;
+            let handle =
+                spawn_test_server_with_shell(&session, &paths, Some(1), crate::server::tests::shell_cmd("/bin/cat"));
 
-            self::wait_for_socket(&paths.socket)?;
-            let mut client = self::open_attached_client(&session, &paths).await?;
+            wait_for_socket(&paths.socket)?;
+            let mut client = open_attached_client(&session, &paths).await?;
             let position = ClientMousePosition { row: 0, col: 0 };
             client
                 .writer
@@ -1765,21 +1778,21 @@ mod tests {
                     muxr_core::PaneScrollLineMove::Unchanged,
                 ))
             );
-            self::detach_client(client).await?;
-            self::join_server(handle)
+            detach_client(client).await?;
+            join_server(handle)
         })
     }
 
     #[test]
     fn test_serve_when_wheel_over_app_mouse_pane_forwards_mouse_bytes_to_pty() -> rootcause::Result<()> {
-        self::runtime()?.block_on(async {
+        runtime()?.block_on(async {
             let tempdir = tempfile::tempdir()?;
-            let (session, paths) = self::session_paths(tempdir.path(), "work")?;
-            let handle = self::spawn_test_server_with_shell(
+            let (session, paths) = crate::server::tests::session_paths(tempdir.path(), "work")?;
+            let handle = spawn_test_server_with_shell(
                 &session,
                 &paths,
                 Some(1),
-                self::shell_cmd_with_args(
+                crate::server::tests::shell_cmd_with_args(
                     "/bin/sh",
                     &[
                         "-c",
@@ -1791,11 +1804,11 @@ mod tests {
                 ),
             );
 
-            self::wait_for_socket(&paths.socket)?;
-            let mut client = self::open_attached_client(&session, &paths).await?;
-            self::read_until_render_contains(&mut client, b"ready").await?;
-            let regions = self::read_until_pane_regions_matching(&mut client, "app mouse mode enabled", |regions| {
-                if self::pane_region(regions, "pane-1")?.mouse_mode() == muxr_core::PaneMouseMode::ButtonMotion {
+            wait_for_socket(&paths.socket)?;
+            let mut client = open_attached_client(&session, &paths).await?;
+            read_until_render_contains(&mut client, b"ready").await?;
+            let regions = read_until_pane_regions_matching(&mut client, "app mouse mode enabled", |regions| {
+                if pane_region(regions, "pane-1")?.mouse_mode() == muxr_core::PaneMouseMode::ButtonMotion {
                     Ok(PaneRegionsMatch::Matched)
                 } else {
                     Ok(PaneRegionsMatch::Waiting)
@@ -1808,31 +1821,31 @@ mod tests {
                 .send_request(&ClientRequest::Mouse(ClientMouseEvent {
                     button: 64,
                     phase: muxr_core::ClientMouseEventPhase::Press,
-                    position: self::pane_position(&regions, "pane-1")?,
+                    position: pane_position(&regions, "pane-1")?,
                 }))
                 .await?;
 
-            self::read_until_render_contains_hex_bytes(
+            read_until_render_contains_hex_bytes(
                 &mut client,
                 &["1b", "5b", "3c", "36", "34", "3b", "31", "3b", "31", "4d"],
             )
             .await?;
-            self::detach_client(client).await?;
-            self::join_server(handle)
+            detach_client(client).await?;
+            join_server(handle)
         })
     }
 
     #[test]
     fn test_serve_when_wheel_over_alternate_screen_without_mouse_protocol_sends_faux_scroll_input()
     -> rootcause::Result<()> {
-        self::runtime()?.block_on(async {
+        runtime()?.block_on(async {
             let tempdir = tempfile::tempdir()?;
-            let (session, paths) = self::session_paths(tempdir.path(), "work")?;
-            let handle = self::spawn_test_server_with_shell(
+            let (session, paths) = crate::server::tests::session_paths(tempdir.path(), "work")?;
+            let handle = spawn_test_server_with_shell(
                 &session,
                 &paths,
                 Some(1),
-                self::shell_cmd_with_args(
+                crate::server::tests::shell_cmd_with_args(
                     "/bin/sh",
                     &[
                         "-c",
@@ -1844,38 +1857,36 @@ mod tests {
                 ),
             );
 
-            self::wait_for_socket(&paths.socket)?;
-            let mut client = self::open_attached_client(&session, &paths).await?;
-            self::read_until_render_contains(&mut client, b"ready").await?;
+            wait_for_socket(&paths.socket)?;
+            let mut client = open_attached_client(&session, &paths).await?;
+            read_until_render_contains(&mut client, b"ready").await?;
 
             client
                 .writer
                 .send_request(&ClientRequest::Mouse(ClientMouseEvent {
                     button: 64,
                     phase: muxr_core::ClientMouseEventPhase::Press,
-                    position: self::pane_position(&client.pane_regions, "pane-1")?,
+                    position: pane_position(&client.pane_regions, "pane-1")?,
                 }))
                 .await?;
 
-            self::read_until_render_contains_hex_bytes(
-                &mut client,
-                &["1b", "5b", "41", "1b", "5b", "41", "1b", "5b", "41"],
-            )
-            .await?;
-            self::detach_client(client).await?;
-            self::join_server(handle)
+            read_until_render_contains_hex_bytes(&mut client, &["1b", "5b", "41", "1b", "5b", "41", "1b", "5b", "41"])
+                .await?;
+            detach_client(client).await?;
+            join_server(handle)
         })
     }
 
     #[test]
     fn test_serve_when_close_pane_key_arrives_removes_active_pane_and_keeps_remaining_pty() -> rootcause::Result<()> {
-        self::runtime()?.block_on(async {
+        runtime()?.block_on(async {
             let tempdir = tempfile::tempdir()?;
-            let (session, paths) = self::session_paths(tempdir.path(), "work")?;
-            let handle = self::spawn_test_server_with_shell(&session, &paths, Some(1), self::shell_cmd("/bin/cat"));
+            let (session, paths) = crate::server::tests::session_paths(tempdir.path(), "work")?;
+            let handle =
+                spawn_test_server_with_shell(&session, &paths, Some(1), crate::server::tests::shell_cmd("/bin/cat"));
 
-            self::wait_for_socket(&paths.socket)?;
-            let mut client = self::open_attached_client(&session, &paths).await?;
+            wait_for_socket(&paths.socket)?;
+            let mut client = open_attached_client(&session, &paths).await?;
             client
                 .writer
                 .send_request(&ClientRequest::Key(ClientKey {
@@ -1884,7 +1895,7 @@ mod tests {
                     raw_bytes: b"\x1bV".to_vec(),
                 }))
                 .await?;
-            drop(self::read_until_layout(&mut client).await?);
+            drop(read_until_layout(&mut client).await?);
 
             client
                 .writer
@@ -1895,7 +1906,7 @@ mod tests {
                 }))
                 .await?;
 
-            let layout = self::read_until_layout(&mut client).await?;
+            let layout = read_until_layout(&mut client).await?;
             let tab = layout
                 .tabs()
                 .first()
@@ -1910,23 +1921,24 @@ mod tests {
                 .writer
                 .send_request(&ClientRequest::Input(b"remaining\n".to_vec()))
                 .await?;
-            self::read_until_render_contains(&mut client, b"remaining").await?;
-            self::assert_layout_metadata_panes(&paths, &[1], 1)?;
+            read_until_render_contains(&mut client, b"remaining").await?;
+            assert_layout_metadata_panes(&paths, &[1], 1)?;
 
-            self::detach_client(client).await?;
-            self::join_server(handle)
+            detach_client(client).await?;
+            join_server(handle)
         })
     }
 
     #[test]
     fn test_serve_when_final_pane_is_closed_persists_and_exits() -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
-        let (session, paths) = self::session_paths(tempdir.path(), "work")?;
-        let handle = self::spawn_test_server_with_shell(&session, &paths, Some(1), self::shell_cmd("/bin/cat"));
+        let (session, paths) = crate::server::tests::session_paths(tempdir.path(), "work")?;
+        let handle =
+            spawn_test_server_with_shell(&session, &paths, Some(1), crate::server::tests::shell_cmd("/bin/cat"));
 
-        self::runtime()?.block_on(async {
-            self::wait_for_socket(&paths.socket)?;
-            let mut client = self::open_attached_client(&session, &paths).await?;
+        runtime()?.block_on(async {
+            wait_for_socket(&paths.socket)?;
+            let mut client = open_attached_client(&session, &paths).await?;
             client
                 .writer
                 .send_request(&ClientRequest::Key(ClientKey {
@@ -1935,28 +1947,29 @@ mod tests {
                     raw_bytes: b"\x1bW".to_vec(),
                 }))
                 .await?;
-            self::read_client_until_detached(&mut client).await?;
+            read_client_until_detached(&mut client).await?;
             drop(client);
             Ok::<(), rootcause::Report>(())
         })?;
 
-        self::join_server_with_timeout(handle)?;
+        join_server_with_timeout(handle)?;
         assert_that!(paths.socket.exists(), eq(false));
         assert_that!(paths.pid.exists(), eq(false));
-        self::assert_final_closed_layout_metadata(&paths)?;
+        assert_final_closed_layout_metadata(&paths)?;
         Ok(())
     }
 
     #[test]
     fn test_serve_resize_mode_sequence_resizes_and_escape_exits_mode() -> rootcause::Result<()> {
-        self::runtime()?.block_on(async {
+        runtime()?.block_on(async {
             let tempdir = tempfile::tempdir()?;
-            let (session, paths) = self::session_paths(tempdir.path(), "work")?;
-            let handle = self::spawn_test_server_with_shell(&session, &paths, Some(1), self::shell_cmd("/bin/cat"));
+            let (session, paths) = crate::server::tests::session_paths(tempdir.path(), "work")?;
+            let handle =
+                spawn_test_server_with_shell(&session, &paths, Some(1), crate::server::tests::shell_cmd("/bin/cat"));
             let size = TerminalSize::new(80, 24)?;
 
-            self::wait_for_socket(&paths.socket)?;
-            let mut client = self::open_attached_client(&session, &paths).await?;
+            wait_for_socket(&paths.socket)?;
+            let mut client = open_attached_client(&session, &paths).await?;
             client
                 .writer
                 .send_request(&ClientRequest::Key(ClientKey {
@@ -1965,10 +1978,10 @@ mod tests {
                     raw_bytes: b"\x1bV".to_vec(),
                 }))
                 .await?;
-            drop(self::read_until_layout(&mut client).await?);
+            drop(read_until_layout(&mut client).await?);
             let before_resize = crate::state::persisted::load_metadata(&paths, &session)?
                 .ok_or_else(|| report!("expected muxr layout metadata to load before resize"))?;
-            let before_regions = self::layout_active_tab_pane_regions(&before_resize, &size)?;
+            let before_regions = layout_active_tab_pane_regions(&before_resize, &size)?;
             assert_that!(
                 before_regions.iter().map(|(id, ..)| id.as_str()).collect::<Vec<_>>(),
                 eq(vec!["pane-1", "pane-2"])
@@ -1981,7 +1994,7 @@ mod tests {
                     raw_bytes: b"\x1bR".to_vec(),
                 }))
                 .await?;
-            drop(self::read_until_layout(&mut client).await?);
+            drop(read_until_layout(&mut client).await?);
             client
                 .writer
                 .send_request(&ClientRequest::Key(ClientKey {
@@ -1991,7 +2004,7 @@ mod tests {
                 }))
                 .await?;
 
-            let layout = self::read_until_layout(&mut client).await?;
+            let layout = read_until_layout(&mut client).await?;
             let tab = layout
                 .tabs()
                 .first()
@@ -2003,7 +2016,7 @@ mod tests {
             );
             let persisted = crate::state::persisted::load_metadata(&paths, &session)?
                 .ok_or_else(|| report!("expected muxr layout metadata to load"))?;
-            let after_regions = self::layout_active_tab_pane_regions(&persisted, &size)?;
+            let after_regions = layout_active_tab_pane_regions(&persisted, &size)?;
             assert_that!(
                 after_regions.iter().map(|(id, ..)| id.as_str()).collect::<Vec<_>>(),
                 eq(vec!["pane-1", "pane-2"])
@@ -2036,54 +2049,57 @@ mod tests {
                     raw_bytes: b"x\n".to_vec(),
                 }))
                 .await?;
-            self::read_until_render_contains(&mut client, b"x").await?;
-            self::detach_client(client).await?;
-            self::join_server(handle)
+            read_until_render_contains(&mut client, b"x").await?;
+            detach_client(client).await?;
+            join_server(handle)
         })
     }
 
     #[test]
     fn test_serve_when_shell_outputs_while_detached_replays_output_on_reattach() -> rootcause::Result<()> {
-        self::runtime()?.block_on(async {
+        runtime()?.block_on(async {
             let tempdir = tempfile::tempdir()?;
-            let (session, paths) = self::session_paths(tempdir.path(), "work")?;
-            let handle = self::spawn_test_server_with_shell(
+            let (session, paths) = crate::server::tests::session_paths(tempdir.path(), "work")?;
+            let handle = spawn_test_server_with_shell(
                 &session,
                 &paths,
                 Some(2),
-                self::shell_cmd_with_args("/bin/sh", &["-c", "printf first; sleep 1; printf second; sleep 30"]),
+                crate::server::tests::shell_cmd_with_args(
+                    "/bin/sh",
+                    &["-c", "printf first; sleep 1; printf second; sleep 30"],
+                ),
             );
 
-            self::wait_for_socket(&paths.socket)?;
-            let mut first_client = self::open_attached_client(&session, &paths).await?;
-            self::read_until_render_contains(&mut first_client, b"first").await?;
-            self::detach_client(first_client).await?;
+            wait_for_socket(&paths.socket)?;
+            let mut first_client = open_attached_client(&session, &paths).await?;
+            read_until_render_contains(&mut first_client, b"first").await?;
+            detach_client(first_client).await?;
 
             tokio::time::sleep(Duration::from_millis(1200)).await;
 
-            let mut second_client = self::open_attached_client(&session, &paths).await?;
-            self::read_until_render_contains(&mut second_client, b"second").await?;
-            self::detach_client(second_client).await?;
+            let mut second_client = open_attached_client(&session, &paths).await?;
+            read_until_render_contains(&mut second_client, b"second").await?;
+            detach_client(second_client).await?;
 
-            self::join_server(handle)
+            join_server(handle)
         })
     }
 
     #[test]
     fn test_serve_when_client_floods_input_still_sends_output() -> rootcause::Result<()> {
-        self::runtime()?.block_on(async {
+        runtime()?.block_on(async {
             let tempdir = tempfile::tempdir()?;
-            let (session, paths) = self::session_paths(tempdir.path(), "work")?;
-            let handle = self::spawn_test_server_with_shell(
+            let (session, paths) = crate::server::tests::session_paths(tempdir.path(), "work")?;
+            let handle = spawn_test_server_with_shell(
                 &session,
                 &paths,
                 Some(1),
-                self::shell_cmd_with_args("/bin/sh", &["-c", "sleep 0.1; printf ready; sleep 30"]),
+                crate::server::tests::shell_cmd_with_args("/bin/sh", &["-c", "sleep 0.1; printf ready; sleep 30"]),
             );
 
-            self::wait_for_socket(&paths.socket)?;
-            let mut connection = self::connect_client(&paths).await?;
-            connection.send_request(&self::attach_request(&session)?).await?;
+            wait_for_socket(&paths.socket)?;
+            let mut connection = connect_client(&paths).await?;
+            connection.send_request(&attach_request(&session)?).await?;
             let Some(ServerEvent::Attached(_)) = connection.recv_event().await? else {
                 return Err(report!("expected server attached response"));
             };
@@ -2096,11 +2112,11 @@ mod tests {
                 }
             });
 
-            let read_result = self::read_reader_until_render_contains(&mut reader, b"ready").await;
+            let read_result = read_reader_until_render_contains(&mut reader, b"ready").await;
             drop(reader);
             flood_handle.abort();
             drop(flood_handle.await);
-            let join_result = self::join_server_with_timeout(handle);
+            let join_result = join_server_with_timeout(handle);
 
             read_result?;
             join_result
@@ -2109,16 +2125,16 @@ mod tests {
 
     #[test]
     fn test_serve_when_shell_floods_output_still_detaches() -> rootcause::Result<()> {
-        self::runtime()?.block_on(async {
+        runtime()?.block_on(async {
             let tempdir = tempfile::tempdir()?;
-            let (session, paths) = self::session_paths(tempdir.path(), "work")?;
-            let handle = self::spawn_test_server_with_shell(
+            let (session, paths) = crate::server::tests::session_paths(tempdir.path(), "work")?;
+            let handle = spawn_test_server_with_shell(
                 &session,
                 &paths,
                 Some(1),
                 // Keep the flood bounded so parallel test runs do not starve the detach path; the payload is still
                 // large enough to leave PTY output queued while detach is requested.
-                self::shell_cmd_with_args(
+                crate::server::tests::shell_cmd_with_args(
                     "/bin/sh",
                     &[
                         "-c",
@@ -2127,53 +2143,53 @@ mod tests {
                 ),
             );
 
-            self::wait_for_socket(&paths.socket)?;
-            let mut connection = self::connect_client(&paths).await?;
-            connection.send_request(&self::attach_request(&session)?).await?;
+            wait_for_socket(&paths.socket)?;
+            let mut connection = connect_client(&paths).await?;
+            connection.send_request(&attach_request(&session)?).await?;
             let Some(ServerEvent::Attached(_)) = connection.recv_event().await? else {
                 return Err(report!("expected server attached response"));
             };
-            self::read_connection_until_render_contains(&mut connection, b"x").await?;
+            read_connection_until_render_contains(&mut connection, b"x").await?;
             connection.send_request(&ClientRequest::Detach).await?;
-            self::read_connection_until_detached(&mut connection).await?;
+            read_connection_until_detached(&mut connection).await?;
 
-            self::join_server(handle)
+            join_server(handle)
         })
     }
 
     #[test]
     fn test_serve_when_shell_exits_removes_socket_and_pid() -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
-        let (session, paths) = self::session_paths(tempdir.path(), "work")?;
-        let handle = self::spawn_test_server_with_shell(
+        let (session, paths) = crate::server::tests::session_paths(tempdir.path(), "work")?;
+        let handle = spawn_test_server_with_shell(
             &session,
             &paths,
             None,
-            self::shell_cmd_with_args("/bin/sh", &["-c", "printf done"]),
+            crate::server::tests::shell_cmd_with_args("/bin/sh", &["-c", "printf done"]),
         );
 
-        self::join_server_with_timeout(handle)?;
+        join_server_with_timeout(handle)?;
 
         assert_that!(paths.socket.exists(), eq(false));
         assert_that!(paths.pid.exists(), eq(false));
-        self::assert_final_layout_metadata(&paths, 0, "succeeded")?;
+        assert_final_layout_metadata(&paths, 0, "succeeded")?;
         Ok(())
     }
 
     #[test]
     fn test_serve_when_attached_shell_exits_removes_socket_and_pid() -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
-        let (session, paths) = self::session_paths(tempdir.path(), "work")?;
-        let handle = self::spawn_test_server_with_shell(
+        let (session, paths) = crate::server::tests::session_paths(tempdir.path(), "work")?;
+        let handle = spawn_test_server_with_shell(
             &session,
             &paths,
             Some(1),
-            self::shell_cmd_with_args("/bin/sh", &["-c", "sleep 0.5; exit 7"]),
+            crate::server::tests::shell_cmd_with_args("/bin/sh", &["-c", "sleep 0.5; exit 7"]),
         );
 
-        self::runtime()?.block_on(async {
-            self::wait_for_socket(&paths.socket)?;
-            let mut client = self::open_attached_client(&session, &paths).await?;
+        runtime()?.block_on(async {
+            wait_for_socket(&paths.socket)?;
+            let mut client = open_attached_client(&session, &paths).await?;
             let started_at = Instant::now();
             loop {
                 if started_at.elapsed() > SERVER_READY_TIMEOUT {
@@ -2205,34 +2221,34 @@ mod tests {
             Ok::<(), rootcause::Report>(())
         })?;
 
-        self::join_server_with_timeout(handle)?;
+        join_server_with_timeout(handle)?;
         assert_that!(paths.socket.exists(), eq(false));
         assert_that!(paths.pid.exists(), eq(false));
-        self::assert_final_layout_metadata(&paths, 7, "failed")?;
+        assert_final_layout_metadata(&paths, 7, "failed")?;
         Ok(())
     }
 
     #[test]
     fn test_serve_when_shell_exits_with_error_persists_exit_status() -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
-        let (session, paths) = self::session_paths(tempdir.path(), "work")?;
-        let handle = self::spawn_test_server_with_shell(
+        let (session, paths) = crate::server::tests::session_paths(tempdir.path(), "work")?;
+        let handle = spawn_test_server_with_shell(
             &session,
             &paths,
             None,
-            self::shell_cmd_with_args("/bin/sh", &["-c", "exit 7"]),
+            crate::server::tests::shell_cmd_with_args("/bin/sh", &["-c", "exit 7"]),
         );
 
-        self::join_server_with_timeout(handle)?;
+        join_server_with_timeout(handle)?;
 
-        self::assert_final_layout_metadata(&paths, 7, "failed")?;
+        assert_final_layout_metadata(&paths, 7, "failed")?;
         Ok(())
     }
 
     #[test]
     fn test_serve_when_startup_fails_after_bind_removes_socket_and_pid() -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
-        let (session, paths) = self::session_paths(tempdir.path(), "work")?;
+        let (session, paths) = crate::server::tests::session_paths(tempdir.path(), "work")?;
 
         let config = ServerConfig {
             client_heartbeat_interval: TEST_CLIENT_HEARTBEAT_INTERVAL,
@@ -2243,13 +2259,13 @@ mod tests {
             session,
             paths: paths.clone(),
             max_accepted_connections: None,
-            shell_cmd: self::shell_cmd("/bin/muxr-missing-shell"),
+            shell_cmd: crate::server::tests::shell_cmd("/bin/muxr-missing-shell"),
         };
         let result = tokio::runtime::Runtime::new()
             .context("failed to build muxr tokio runtime")?
             .block_on(async {
                 prepare_session_dirs(&config.paths)?;
-                self::serve_prepared_async(&config).await
+                crate::server::tests::serve_prepared_async(&config).await
             });
 
         assert_that!(result, err(anything()));
@@ -2275,11 +2291,11 @@ mod tests {
         paths: &SessionPaths,
         max_accepted_connections: usize,
     ) -> thread::JoinHandle<rootcause::Result<()>> {
-        self::spawn_test_server_with_shell(
+        spawn_test_server_with_shell(
             session,
             paths,
             Some(max_accepted_connections),
-            self::shell_cmd_with_args("/bin/sh", &["-c", "sleep 30"]),
+            crate::server::tests::shell_cmd_with_args("/bin/sh", &["-c", "sleep 30"]),
         )
     }
 
@@ -2289,7 +2305,7 @@ mod tests {
         max_accepted_connections: Option<usize>,
         shell_cmd: ShellCmd,
     ) -> thread::JoinHandle<rootcause::Result<()>> {
-        self::spawn_test_server_with_user_config(
+        spawn_test_server_with_user_config(
             session,
             paths,
             max_accepted_connections,
@@ -2324,16 +2340,16 @@ mod tests {
                     .context("failed to build muxr tokio runtime")?
                     .block_on(async {
                         prepare_session_dirs(&config.paths)?;
-                        self::serve_prepared_async(&config).await
+                        crate::server::tests::serve_prepared_async(&config).await
                     })
             }
         })
     }
 
     async fn attach_and_detach(session: &SessionName, paths: &SessionPaths) -> rootcause::Result<()> {
-        let client = self::open_attached_client(session, paths).await?;
+        let client = open_attached_client(session, paths).await?;
 
-        self::detach_client(client).await?;
+        detach_client(client).await?;
         Ok(())
     }
 
@@ -2341,9 +2357,9 @@ mod tests {
         session: &SessionName,
         paths: &SessionPaths,
     ) -> rootcause::Result<AttachedTestClient> {
-        let mut connection = self::connect_client(paths).await?;
+        let mut connection = connect_client(paths).await?;
 
-        connection.send_request(&self::attach_request(session)?).await?;
+        connection.send_request(&attach_request(session)?).await?;
         let event = connection.recv_event().await?;
         let Some(ServerEvent::Attached(attached)) = event else {
             return Err(report!("expected server attached response").attach(format!("{event:?}")));
@@ -2379,7 +2395,7 @@ mod tests {
 
     async fn detach_client(mut client: AttachedTestClient) -> rootcause::Result<()> {
         client.writer.send_request(&ClientRequest::Detach).await?;
-        self::read_client_until_detached(&mut client).await
+        read_client_until_detached(&mut client).await
     }
 
     async fn read_client_until_detached(client: &mut AttachedTestClient) -> rootcause::Result<()> {
@@ -2412,7 +2428,7 @@ mod tests {
             thread::sleep(Duration::from_millis(10));
         }
 
-        self::join_server(handle)
+        join_server(handle)
     }
 
     fn join_server(handle: thread::JoinHandle<rootcause::Result<()>>) -> rootcause::Result<()> {
@@ -2449,7 +2465,7 @@ mod tests {
     }
 
     fn make_public_session_dirs(paths: &SessionPaths) -> rootcause::Result<()> {
-        let state_root = self::state_root(paths)?;
+        let state_root = state_root(paths)?;
         fs::create_dir_all(state_root).context("failed to create public muxr test dir")?;
         fs::set_permissions(state_root, fs::Permissions::from_mode(0o755))
             .context("failed to set public muxr test dir permissions")?;
@@ -2457,14 +2473,14 @@ mod tests {
     }
 
     fn assert_session_state_is_private(paths: &SessionPaths) -> rootcause::Result<()> {
-        self::assert_mode(self::state_root(paths)?, crate::session::files::PRIVATE_DIR_MODE)?;
-        self::assert_mode(&paths.socket, PRIVATE_SOCKET_MODE)?;
+        assert_mode(state_root(paths)?, crate::session::files::PRIVATE_DIR_MODE)?;
+        assert_mode(&paths.socket, PRIVATE_SOCKET_MODE)?;
         Ok(())
     }
 
     fn state_root(paths: &SessionPaths) -> rootcause::Result<&Path> {
-        let socket_root = self::parent_path(&paths.socket, "socket root")?;
-        self::parent_path(socket_root, "state root")
+        let socket_root = parent_path(&paths.socket, "socket root")?;
+        parent_path(socket_root, "state root")
     }
 
     fn parent_path<'a>(path: &'a Path, label: &str) -> rootcause::Result<&'a Path> {
@@ -2484,7 +2500,7 @@ mod tests {
     }
 
     fn wait_for_socket(path: &Path) -> rootcause::Result<()> {
-        self::wait_for_path(path)
+        wait_for_path(path)
     }
 
     fn wait_for_path(path: &Path) -> rootcause::Result<()> {
@@ -2505,7 +2521,7 @@ mod tests {
     fn attach_request(session: &SessionName) -> rootcause::Result<ClientRequest> {
         Ok(ClientRequest::Attach(AttachRequest {
             session: session.clone(),
-            terminal_size: self::terminal_size()?,
+            terminal_size: terminal_size()?,
         }))
     }
 
@@ -2556,7 +2572,7 @@ mod tests {
         if condition(&client.pane_regions)? == PaneRegionsMatch::Matched {
             return Ok(client.pane_regions.clone());
         }
-        self::read_next_pane_regions_matching(client, description, condition).await
+        read_next_pane_regions_matching(client, description, condition).await
     }
 
     async fn read_next_pane_regions_matching(
@@ -2621,7 +2637,7 @@ mod tests {
                 return Err(report!("timed out preparing muxr scroll state").attach(description.to_owned()));
             }
 
-            let scrolled = self::scroll_pane_line(client, position, direction).await?;
+            let scrolled = scroll_pane_line(client, position, direction).await?;
             if scrolled == PaneScrollLineStep::Noop {
                 return Ok(());
             }
@@ -2637,7 +2653,7 @@ mod tests {
             .writer
             .send_request(&ClientRequest::ScrollPaneLineAt { position, direction })
             .await?;
-        let (actual_position, actual_direction, movement) = self::read_until_scroll_pane_line_result(client).await?;
+        let (actual_position, actual_direction, movement) = read_until_scroll_pane_line_result(client).await?;
         assert_that!((actual_position, actual_direction), eq((position, direction)));
         if matches!(movement, muxr_core::PaneScrollLineMove::Moved) {
             Ok(PaneScrollLineStep::Moved)
@@ -2686,8 +2702,8 @@ mod tests {
 
     fn both_panes_have_scrollback(regions: &PaneRegionsSnapshot) -> rootcause::Result<PaneRegionsMatch> {
         Ok(
-            if self::pane_region(regions, "pane-1")?.visible_top_row() > 0
-                && self::pane_region(regions, "pane-2")?.visible_top_row() > 0
+            if pane_region(regions, "pane-1")?.visible_top_row() > 0
+                && pane_region(regions, "pane-2")?.visible_top_row() > 0
             {
                 PaneRegionsMatch::Matched
             } else {
@@ -2702,8 +2718,8 @@ mod tests {
         pane_2_before_wheel: u64,
     ) -> rootcause::Result<PaneRegionsMatch> {
         Ok(
-            if self::pane_region(regions, "pane-1")?.visible_top_row() < pane_1_before_wheel
-                && self::pane_region(regions, "pane-2")?.visible_top_row() == pane_2_before_wheel
+            if pane_region(regions, "pane-1")?.visible_top_row() < pane_1_before_wheel
+                && pane_region(regions, "pane-2")?.visible_top_row() == pane_2_before_wheel
             {
                 PaneRegionsMatch::Matched
             } else {
@@ -2767,7 +2783,7 @@ mod tests {
                 ServerEvent::Layout(layout) => client.layout = layout,
                 ServerEvent::PaneRegions(regions) => client.pane_regions = regions,
                 ServerEvent::Render(update) => {
-                    rendered.push_str(&self::render_update_text(&update));
+                    rendered.push_str(&render_update_text(&update));
                     if rendered.contains(needle.as_ref()) {
                         return Ok(());
                     }
@@ -2808,7 +2824,7 @@ mod tests {
                 ServerEvent::Layout(layout) => client.layout = layout,
                 ServerEvent::PaneRegions(regions) => client.pane_regions = regions,
                 ServerEvent::Render(update) => {
-                    rendered.push_str(&self::render_update_text(&update));
+                    rendered.push_str(&render_update_text(&update));
                     let tokens = rendered.split_whitespace().collect::<Vec<_>>();
                     if tokens.windows(expected.len()).any(|window| window == expected) {
                         return Ok(());
@@ -2846,7 +2862,7 @@ mod tests {
 
             match event {
                 ServerEvent::Render(update) => {
-                    rendered.push_str(&self::render_update_text(&update));
+                    rendered.push_str(&render_update_text(&update));
                     if rendered.contains(needle.as_ref()) {
                         return Ok(());
                     }
@@ -2882,7 +2898,7 @@ mod tests {
 
             match tokio::time::timeout(Duration::from_millis(50), connection.recv_event()).await {
                 Ok(Ok(Some(ServerEvent::Render(update)))) => {
-                    rendered.push_str(&self::render_update_text(&update));
+                    rendered.push_str(&render_update_text(&update));
                     if rendered.contains(needle.as_ref()) {
                         return Ok(());
                     }
@@ -2945,8 +2961,8 @@ mod tests {
 
     fn render_update_text(update: &RenderUpdate) -> String {
         match update {
-            RenderUpdate::Baseline(baseline) => self::render_rows_text(baseline.rows()),
-            RenderUpdate::Diff(diff) => self::render_rows_text(diff.rows()),
+            RenderUpdate::Baseline(baseline) => render_rows_text(baseline.rows()),
+            RenderUpdate::Diff(diff) => render_rows_text(diff.rows()),
         }
     }
 
@@ -2965,7 +2981,7 @@ mod tests {
     }
 
     fn pane_position(regions: &PaneRegionsSnapshot, pane_id: &str) -> rootcause::Result<ClientMousePosition> {
-        let region = self::pane_region(regions, pane_id)?;
+        let region = pane_region(regions, pane_id)?;
         Ok(ClientMousePosition {
             row: region.row(),
             col: region.col(),
@@ -3029,7 +3045,7 @@ mod tests {
         let layout: serde_json::Value =
             serde_json::from_slice(&fs::read(&paths.layout).context("failed to read muxr test layout metadata")?)
                 .context("failed to parse muxr test layout metadata")?;
-        let actual_panes = self::json_pane_tree_pane_ids(&layout["tabs"][0]["pane_tree"])?;
+        let actual_panes = json_pane_tree_pane_ids(&layout["tabs"][0]["pane_tree"])?;
 
         assert_that!(layout["tabs"][0]["active_pane"].as_u64(), eq(Some(expected_active)));
         assert_that!(actual_panes, eq(expected_panes.to_vec()));
@@ -3053,7 +3069,7 @@ mod tests {
 
     fn json_pane_tree_pane_ids(node: &serde_json::Value) -> rootcause::Result<Vec<u64>> {
         let mut ids = Vec::new();
-        self::collect_json_pane_tree_pane_ids(node, &mut ids)?;
+        collect_json_pane_tree_pane_ids(node, &mut ids)?;
         Ok(ids)
     }
 
@@ -3067,8 +3083,8 @@ mod tests {
                 Ok(())
             }
             Some("split") => {
-                self::collect_json_pane_tree_pane_ids(&node["first"], ids)?;
-                self::collect_json_pane_tree_pane_ids(&node["second"], ids)
+                collect_json_pane_tree_pane_ids(&node["first"], ids)?;
+                collect_json_pane_tree_pane_ids(&node["second"], ids)
             }
             Some(kind) => {
                 Err(report!("muxr test layout metadata pane tree kind is invalid").attach(format!("kind={kind}")))

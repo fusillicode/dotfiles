@@ -2,6 +2,7 @@
 
 use nvim_oxi::Array;
 use nvim_oxi::Object;
+use nvim_oxi::api;
 use nvim_oxi::conversion::FromObject;
 use nvim_oxi::lua::Poppable;
 use nvim_oxi::lua::ffi::State;
@@ -19,7 +20,7 @@ pub struct JumpEntry {
 /// Retrieves the current jumplist from Neovim.
 pub fn get() -> Option<Vec<JumpEntry>> {
     Some(
-        nvim_oxi::api::call_function::<_, JumpList>("getjumplist", Array::new())
+        api::call_function::<_, JumpList>("getjumplist", Array::new())
             .inspect_err(|err| crate::notify::error(format!("error getting jumplist | error={err:?}")))
             .ok()?
             .0,

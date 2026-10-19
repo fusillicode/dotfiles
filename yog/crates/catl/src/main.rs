@@ -4,16 +4,18 @@
 //! - Metadata retrieval or command execution fails.
 #![feature(exit_status_error)]
 
+use std::fs;
 use std::process::Command;
 
 use rootcause::prelude::ResultExt;
 use rootcause::report;
+use ytil_sys::cli;
 use ytil_sys::cli::Args;
 
 /// Display file contents or long‑list directories.
 #[ytil_sys::main]
 fn main() -> rootcause::Result<()> {
-    let args = ytil_sys::cli::get();
+    let args = cli::get();
 
     if args.has_help() {
         println!(include_str!("../help.txt"));
@@ -28,7 +30,7 @@ fn main() -> rootcause::Result<()> {
         })
         .attach_with(|| format!("args={args:#?}"))?;
 
-    let metadata = std::fs::metadata(path)?;
+    let metadata = fs::metadata(path)?;
 
     if metadata.is_dir() {
         return Ok(Command::new("ls")

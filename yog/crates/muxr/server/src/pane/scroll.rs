@@ -28,14 +28,14 @@ pub fn handle_scroll_pane_line_client_request(
 ) -> rootcause::Result<PaneScrollLineRequestOutcome> {
     let pane_id = crate::screen_render::visible_pane_id_at_position(state, position)?;
     let movement = if let Some(pane_id) = pane_id {
-        match self::scroll_pane(pane_id, direction, PaneScrollAmount::Line, state.runtimes)? {
+        match scroll_pane(pane_id, direction, PaneScrollAmount::Line, state.runtimes)? {
             crate::terminal::TerminalScrollMove::Moved => PaneScrollLineMove::Moved,
             crate::terminal::TerminalScrollMove::Unchanged => PaneScrollLineMove::Unchanged,
         }
     } else {
         PaneScrollLineMove::Unchanged
     };
-    Ok(self::scroll_pane_line_result(position, direction, movement, pane_id))
+    Ok(scroll_pane_line_result(position, direction, movement, pane_id))
 }
 
 pub fn handle_scroll_pane_wheel_client_request(
@@ -48,7 +48,7 @@ pub fn handle_scroll_pane_wheel_client_request(
             render_signal: PaneRenderSignal::Unchanged,
         });
     };
-    if self::scroll_pane(pane_id, direction, PaneScrollAmount::Wheel, state.runtimes)?
+    if scroll_pane(pane_id, direction, PaneScrollAmount::Wheel, state.runtimes)?
         != crate::terminal::TerminalScrollMove::Moved
     {
         return Ok(PaneScrollWheelRequestOutcome {
@@ -64,7 +64,7 @@ pub fn handle_scroll_pane_wheel_client_request(
 }
 
 pub fn faux_scroll_input_bytes(direction: PaneScrollDirection, cursor_key_mode: TerminalCursorKeyMode) -> Vec<u8> {
-    let sequence = self::faux_scroll_sequence(direction, cursor_key_mode);
+    let sequence = faux_scroll_sequence(direction, cursor_key_mode);
     let mut bytes = Vec::with_capacity(sequence.len().saturating_mul(FAUX_SCROLL_LINES_PER_WHEEL_EVENT));
     for _ in 0..FAUX_SCROLL_LINES_PER_WHEEL_EVENT {
         bytes.extend_from_slice(sequence);

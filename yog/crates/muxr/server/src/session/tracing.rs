@@ -1,4 +1,7 @@
+use std::panic;
 use std::path::PathBuf;
+use std::process;
+use std::sync::Once;
 
 use muxr_core::SERVER_LOG_TIMESTAMP_FORMAT;
 use muxr_core::ServerLogTimestamp;
@@ -6,7 +9,9 @@ use muxr_core::SessionName;
 use muxr_core::SessionPaths;
 use rootcause::prelude::ResultExt;
 use tracing::Dispatch;
+use tracing::dispatcher;
 use tracing_appender::non_blocking::WorkerGuard;
+use tracing_appender::rolling;
 
 pub struct SessionTracing {
     _guard: WorkerGuard,
@@ -15,10 +20,10 @@ pub struct SessionTracing {
 
 impl SessionTracing {
     pub fn install_global(paths: &SessionPaths, session: &SessionName) -> rootcause::Result<Self> {
-        let log_timestamp = self::current_server_log_timestamp()?;
-        let (session_tracing, dispatch) = Self::new(paths, session, &log_timestamp, std::process::id())?;
-        tracing::dispatcher::set_global_default(dispatch).context("failed to install muxr server tracing")?;
-        self::install_panic_hook();
+        let log_timestamp = current_server_log_timestamp()?;
+        let (session_tracing, dispatch) = Self::new(paths, session, &log_timestamp, process::id())?;
+        dispatcher::set_global_default(dispatch).context("failed to install muxr server tracing")?;
+        install_panic_hook();
         tracing::info!(
             session = %session,
             log_path = %session_tracing.log_path.display(),
@@ -34,7 +39,7 @@ impl SessionTracing {
         pid: u32,
     ) -> rootcause::Result<(Self, Dispatch)> {
         let log_path = paths.server_log_path(session, log_timestamp, pid)?;
-        let file_appender = tracing_appender::rolling::never(
+        let file_appender = rolling::never(
             paths.logs_root()?,
             log_path
                 .file_name()
@@ -98,12 +103,12 @@ pub fn collect_test_log(
 }
 
 fn install_panic_hook() {
-    static PANIC_HOOK: std::sync::Once = std::sync::Once::new();
+    static PANIC_HOOK: Once = Once::new();
     PANIC_HOOK.call_once(|| {
-        let previous_hook = std::panic::take_hook();
+        let previous_hook = panic::take_hook();
         // Panic hooks are process-global. Install once so muxr records tracing-panic fields and then delegates to the
         // previously installed hook's behavior.
-        std::panic::set_hook(Box::new(move |panic_info| {
+        panic::set_hook(Box::new(move |panic_info| {
             tracing_panic::panic_hook(panic_info);
             previous_hook(panic_info);
         }));
@@ -118,7 +123,7 @@ fn current_server_log_timestamp() -> rootcause::Result<ServerLogTimestamp> {
 }
 
 pub mod ack {
-    use super::ClientEventSendFailure;
+    use crate::session::tracing::ClientEventSendFailure;
 
     pub fn delete_failed(reason: ClientEventSendFailure) {
         tracing::warn!(
@@ -199,8 +204,9 @@ pub mod scrollback {
     use std::path::Path;
 
     use muxr_core::PaneId;
+    use rootcause::Report;
 
-    pub fn restore_failed(error: &rootcause::Report) {
+    pub fn restore_failed(error: &Report) {
         tracing::warn!(
             kind = "scrollback_editor_restore_failed",
             event = "restore_after_client_error",
@@ -238,6 +244,7 @@ pub mod server {
     use std::path::Path;
 
     use muxr_core::SessionPaths;
+    use rootcause::Report;
 
     pub fn starting(paths: &SessionPaths) {
         tracing::info!(
@@ -261,7 +268,7 @@ pub mod server {
         tracing::info!(kind = "server_shutdown", reason = reason, "muxr server shutdown");
     }
 
-    pub fn error(error: &rootcause::Report) {
+    pub fn error(error: &Report) {
         tracing::error!(
             kind = "server_error",
             error = %error,

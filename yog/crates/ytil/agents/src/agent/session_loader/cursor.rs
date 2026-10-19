@@ -9,6 +9,8 @@ use ytil_sys::dir;
 use crate::agent::Agent;
 use crate::agent::session::Session;
 use crate::agent::session::SessionKey;
+use crate::agent::session_loader;
+use crate::agent::session_parser::cursor;
 
 /// Load Cursor agent sessions from local Cursor chat metadata.
 ///
@@ -18,7 +20,7 @@ use crate::agent::session::SessionKey;
 /// Returns an error when the Cursor session store cannot be enumerated.
 pub fn load_sessions() -> rootcause::Result<Vec<Session>> {
     let chats_root = dir::build_home_path(Agent::Cursor.sessions_root_path())?;
-    let session_paths = crate::agent::session_loader::find_session_paths(&chats_root, is_session_file, |_| false)?;
+    let session_paths = session_loader::find_session_paths(&chats_root, is_session_file, |_| false)?;
 
     Ok(load_sessions_from_paths(&session_paths, None))
 }
@@ -30,12 +32,12 @@ pub fn load_sessions() -> rootcause::Result<Vec<Session>> {
 /// # Errors
 /// Returns an error when the Cursor session store cannot be enumerated.
 pub fn load_sessions_by_key(keys: &[SessionKey]) -> rootcause::Result<Vec<Session>> {
-    let requested_ids = crate::agent::session_loader::requested_ids(keys, Agent::Cursor);
+    let requested_ids = session_loader::requested_ids(keys, Agent::Cursor);
     if requested_ids.is_empty() {
         return Ok(Vec::new());
     }
     let chats_root = dir::build_home_path(Agent::Cursor.sessions_root_path())?;
-    let session_paths = crate::agent::session_loader::find_session_paths(&chats_root, is_session_file, |_| false)?;
+    let session_paths = session_loader::find_session_paths(&chats_root, is_session_file, |_| false)?;
 
     Ok(load_sessions_from_paths(&session_paths, Some(&requested_ids)))
 }
@@ -61,15 +63,13 @@ fn load_session_from_meta_json(meta_path: &Path, requested_ids: Option<&HashSet<
     }
 
     let json = fs::read_to_string(meta_path).ok()?;
-    let mut cursor_session =
-        crate::agent::session_parser::cursor::parse_chat_meta(&json, session_id.to_owned()).ok()?;
+    let mut cursor_session = cursor::parse_chat_meta(&json, session_id.to_owned()).ok()?;
     if !cursor_session.has_conversation || !cursor_session.workspace.is_dir() {
         return None;
     }
 
     let prompts = read_prompt_history(&session_dir);
-    cursor_session.search_text =
-        crate::agent::session_parser::cursor::build_search_text_from_prompts(&cursor_session.name, &prompts);
+    cursor_session.search_text = cursor::build_search_text_from_prompts(&cursor_session.name, &prompts);
     let mut session = cursor_session.into_session(session_dir);
     // Cursor writes `prompt_history.json` newest-first.
     session.last_user_prompt = prompts.iter().find(|prompt| !prompt.trim().is_empty()).cloned();

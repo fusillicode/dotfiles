@@ -2,6 +2,10 @@
 //! of changed hunks, and presents a selection UI to jump to specific diff locations in buffers.
 
 use nvim_oxi::Dictionary;
+use ytil_git::diff;
+use ytil_noxi::buffer;
+use ytil_noxi::notify;
+use ytil_noxi::vim_ui_select;
 use ytil_noxi::vim_ui_select::QuickfixConfig;
 
 /// [`Dictionary`] of git diff helpers.
@@ -16,27 +20,27 @@ pub fn dict() -> Dictionary {
 /// Fetches git diff output, parses paths and line numbers of changed hunks, displays them in a Neovim selection UI, and
 /// on selection opens the buffer at the specified line.
 fn get_hunks(only_current_buffer: Option<bool>) {
-    let current_buffer_path = ytil_noxi::buffer::get_absolute_path(
+    let current_buffer_path = buffer::get_absolute_path(
         only_current_buffer
             .is_some_and(std::convert::identity)
             .then(nvim_oxi::api::get_current_buf)
             .as_ref(),
     );
 
-    let Ok(raw_output) = ytil_git::diff::get_raw(current_buffer_path.as_deref()).inspect_err(|err| {
-        ytil_noxi::notify::error(format!("error getting git diff raw output | error={err:#?}"));
+    let Ok(raw_output) = diff::get_raw(current_buffer_path.as_deref()).inspect_err(|err| {
+        notify::error(format!("error getting git diff raw output | error={err:#?}"));
     }) else {
         return;
     };
 
-    let Ok(hunks) = ytil_git::diff::get_hunks(&raw_output)
+    let Ok(hunks) = diff::get_hunks(&raw_output)
         .map(|x| {
             x.into_iter()
                 .map(|(path, lnum)| (path.to_owned(), lnum))
                 .collect::<Vec<_>>()
         })
         .inspect_err(|err| {
-            ytil_noxi::notify::error(format!("error getting git diff hunks | error={err:#?}"));
+            notify::error(format!("error getting git diff hunks | error={err:#?}"));
         })
     else {
         return;
@@ -45,7 +49,7 @@ fn get_hunks(only_current_buffer: Option<bool>) {
     let mut all_items = vec![];
     for (path, lnum) in &hunks {
         let Ok(lnum) = i64::try_from(*lnum) else {
-            ytil_noxi::notify::error(format!("error converting hunk lnum to i64 | lnum={lnum}"));
+            notify::error(format!("error converting hunk lnum to i64 | lnum={lnum}"));
             return;
         };
         all_items.push((path.clone(), lnum));
@@ -64,20 +68,20 @@ fn get_hunks(only_current_buffer: Option<bool>) {
             let Some((path, lnum)) = hunks.get(choice_idx) else {
                 return;
             };
-            drop(ytil_noxi::buffer::open(path, Some(*lnum), None).inspect_err(|err| {
-                ytil_noxi::notify::error(format!(
+            drop(buffer::open(path, Some(*lnum), None).inspect_err(|err| {
+                notify::error(format!(
                     "error opening buffer | path={path:?} lnum={lnum} error={err:#?}"
                 ));
             }));
         }
     };
 
-    if let Err(err) = ytil_noxi::vim_ui_select::open(
+    if let Err(err) = vim_ui_select::open(
         displayable_hunks,
         &[("prompt", "Git diff hunks ")],
         callback,
         Some(quickfix),
     ) {
-        ytil_noxi::notify::error(format!("error opening selected path | error={err:#?}"));
+        notify::error(format!("error opening selected path | error={err:#?}"));
     }
 }

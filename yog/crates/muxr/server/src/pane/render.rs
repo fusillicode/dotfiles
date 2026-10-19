@@ -1,5 +1,8 @@
 use std::collections::BTreeMap;
+use std::iter::Peekable;
+use std::mem;
 use std::sync::Arc;
+use std::vec::IntoIter;
 
 use muxr_config::PaneAttentionConfig;
 use muxr_config::PaneBorderStyles;
@@ -18,9 +21,12 @@ use rootcause::prelude::ResultExt;
 use rootcause::report;
 use smallvec::SmallVec;
 
+use crate::pane::attention;
+use crate::pane::borders;
 use crate::pane::borders::BorderRenderMode;
 use crate::pane::layout::PaneLayout;
 use crate::pane::layout::PaneRegion;
+use crate::pane::url_links;
 use crate::pty::PtyRenderSnapshot;
 use crate::render_state::ClientRenderDmg;
 use crate::terminal::TerminalSnapshot;
@@ -218,7 +224,7 @@ impl RenderComposer {
                 frame.attention_panes.clone(),
                 Arc::clone(&frame.pane_layout),
                 frame.pane_render,
-                std::mem::take(&mut frame.pane_snapshots),
+                mem::take(&mut frame.pane_snapshots),
                 frame.size.clone(),
             )
         };
@@ -300,7 +306,7 @@ impl RenderComposer {
                 visual_role.style(pane_render.pane_dim, pane_render.pane_attention),
             )?;
         }
-        crate::pane::borders::paste_borders(
+        borders::paste_borders(
             &mut rows,
             pane_render.border_styles,
             pane_render.pane_attention,
@@ -513,19 +519,19 @@ fn refresh_pane_rows_with(
             .terminal()
             .rows()
             .iter()
-            .map(muxr_core::RenderRowSpan::row)
+            .map(RenderRowSpan::row)
             .collect::<Vec<_>>();
         let pane_snapshot = frame
             .pane_snapshots
             .get_mut(pane_id)
             .ok_or_else(|| report!("muxr partial composer is missing a cached pane snapshot"))?;
-        let mut affected_pane_rows = crate::pane::url_links::expand_visible_url_rows(
+        let mut affected_pane_rows = url_links::expand_visible_url_rows(
             pane_snapshot.terminal().rows(),
             pane_snapshot.terminal().row_wraps(),
             &changed_rows,
         );
         let applied_rows = pane_snapshot.apply_update(update)?;
-        affected_pane_rows.extend(crate::pane::url_links::expand_visible_url_rows(
+        affected_pane_rows.extend(url_links::expand_visible_url_rows(
             pane_snapshot.terminal().rows(),
             pane_snapshot.terminal().row_wraps(),
             &applied_rows,
@@ -546,7 +552,7 @@ fn refresh_pane_rows_with(
         let mut scratch = frame.scratch_rows.pop().unwrap_or_default();
         scratch.clear();
         scratch.resize(cells.len(), blank.clone());
-        std::mem::swap(cells, &mut scratch);
+        mem::swap(cells, &mut scratch);
         previous_rows.push((row, scratch));
     }
     let previous = PartialFrameBefore {
@@ -574,7 +580,7 @@ fn refresh_pane_rows_with(
             Some(&selected_rows),
         )?;
     }
-    crate::pane::borders::paste_borders_in_rows(
+    borders::paste_borders_in_rows(
         &mut frame.rows,
         crate::pane::borders::PasteBordersConfig {
             active_pane: Some(&frame.active_pane),
@@ -687,9 +693,9 @@ fn paste_snapshot_rows(
     }
 
     let url_links = if let Some(selected_rows) = selected_rows {
-        crate::pane::url_links::detect_visible_url_links_for_rows(snapshot.rows(), snapshot.row_wraps(), selected_rows)?
+        url_links::detect_visible_url_links_for_rows(snapshot.rows(), snapshot.row_wraps(), selected_rows)?
     } else {
-        crate::pane::url_links::detect_visible_url_links(snapshot.rows(), snapshot.row_wraps())?
+        url_links::detect_visible_url_links(snapshot.rows(), snapshot.row_wraps())?
     };
     let mut url_links = url_links.into_iter().peekable();
     if let Some(selected_rows) = selected_rows {
@@ -699,12 +705,12 @@ fn paste_snapshot_rows(
                 .rows()
                 .get(span_index)
                 .ok_or_else(|| report!("muxr selected pane row is outside its cached snapshot"))?;
-            self::paste_snapshot_row(rows, region, span, span_index, visual_style, &mut url_links)?;
+            paste_snapshot_row(rows, region, span, span_index, visual_style, &mut url_links)?;
         }
         return Ok(());
     }
     for (span_index, span) in snapshot.rows().iter().enumerate() {
-        self::paste_snapshot_row(rows, region, span, span_index, visual_style, &mut url_links)?;
+        paste_snapshot_row(rows, region, span, span_index, visual_style, &mut url_links)?;
     }
     Ok(())
 }
@@ -715,7 +721,7 @@ fn paste_snapshot_row(
     span: &RenderRowSpan,
     span_index: usize,
     visual_style: PaneVisualStyle,
-    url_links: &mut std::iter::Peekable<std::vec::IntoIter<crate::pane::url_links::PaneUrlLink>>,
+    url_links: &mut Peekable<IntoIter<crate::pane::url_links::PaneUrlLink>>,
 ) -> rootcause::Result<()> {
     while url_links.peek().is_some_and(|link| link.row() < span_index) {
         let _skipped = url_links.next();
@@ -745,7 +751,7 @@ fn paste_snapshot_row(
     for (cell_index, (target, cell)) in target_row.iter_mut().skip(col).zip(span.cells().iter()).enumerate() {
         let mut cell = cell
             .clone()
-            .with_style(self::pane_visual_render_style(cell.style(), visual_style));
+            .with_style(pane_visual_render_style(cell.style(), visual_style));
         if url_links
             .peek()
             .is_some_and(|link| link.row() == span_index && link.cell() == cell_index)
@@ -765,7 +771,7 @@ fn pane_visual_render_style(mut style: RenderStyle, visual_style: PaneVisualStyl
         style = crate::pane::dim::apply_dim_style(style, pane_dim);
     }
     if let Some(bg_tint) = visual_style.attention_bg_tint {
-        style = crate::pane::attention::apply_attention_tint(style, bg_tint);
+        style = attention::apply_attention_tint(style, bg_tint);
     }
     style
 }
@@ -899,7 +905,7 @@ mod tests {
             fg: RenderColor::Indexed(7),
         };
 
-        let updated = self::pane_visual_render_style(
+        let updated = crate::pane::render::tests::pane_visual_render_style(
             style,
             PaneVisualStyle {
                 attention_bg_tint: None,
@@ -918,7 +924,7 @@ mod tests {
             fg: RenderColor::Indexed(7),
         };
 
-        let updated = self::pane_visual_render_style(
+        let updated = crate::pane::render::tests::pane_visual_render_style(
             style,
             PaneVisualStyle {
                 attention_bg_tint: Some(RenderColor::Rgb { r: 80, g: 0, b: 0 }),
@@ -980,8 +986,7 @@ mod tests {
 
     #[test]
     fn test_paste_snapshot_when_osc8_label_is_url_preserves_explicit_target() -> rootcause::Result<()> {
-        let row =
-            self::paste_terminal_row(b"\x1b]8;;https://redirect.example/id\x1b\\https://docs.example\x1b]8;;\x1b\\")?;
+        let row = paste_terminal_row(b"\x1b]8;;https://redirect.example/id\x1b\\https://docs.example\x1b]8;;\x1b\\")?;
 
         let linked_cells = row.iter().filter(|cell| cell.hyperlink().is_some()).collect::<Vec<_>>();
         assert_that!(
@@ -999,8 +1004,7 @@ mod tests {
 
     #[test]
     fn test_paste_snapshot_when_osc8_overlaps_url_does_not_auto_link_remainder() -> rootcause::Result<()> {
-        let row =
-            self::paste_terminal_row(b"\x1b]8;;https://redirect.example/id\x1b\\https\x1b]8;;\x1b\\://docs.example")?;
+        let row = paste_terminal_row(b"\x1b]8;;https://redirect.example/id\x1b\\https\x1b]8;;\x1b\\://docs.example")?;
 
         let linked_cells = row.iter().filter(|cell| cell.hyperlink().is_some()).collect::<Vec<_>>();
         assert_that!(

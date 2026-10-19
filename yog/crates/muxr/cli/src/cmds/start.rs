@@ -1,3 +1,4 @@
+use std::env;
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -8,14 +9,10 @@ use rootcause::report;
 const SERVER_EXECUTABLE: &str = "muxr-server";
 
 pub fn run(session: &SessionName, external_layout: Option<PathBuf>) -> rootcause::Result<()> {
-    let current_exe = std::env::current_exe().context("failed to resolve muxr executable")?;
+    let current_exe = env::current_exe().context("failed to resolve muxr executable")?;
     let server_executable = server_executable_next_to(&current_exe)?;
     let external_layout = match external_layout {
-        Some(path) if path.is_relative() => Some(
-            std::env::current_dir()
-                .context("failed to resolve muxr cwd")?
-                .join(path),
-        ),
+        Some(path) if path.is_relative() => Some(env::current_dir().context("failed to resolve muxr cwd")?.join(path)),
         Some(path) => Some(path),
         None => None,
     };

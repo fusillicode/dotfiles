@@ -4,18 +4,22 @@
 //! - Argument parsing, pane discovery, or command execution fails.
 
 use core::str::FromStr;
+use std::env;
+use std::iter;
 
 use rootcause::prelude::ResultExt;
 use rootcause::report;
 use ytil_editor::Editor;
 use ytil_editor::FileToOpen;
+use ytil_sys::cli;
 use ytil_sys::cli::Args;
+use ytil_sys::dir;
 
 /// Open files (optionally at line:col) in existing Nvim / Helix pane.
 #[ytil_sys::main]
 fn main() -> rootcause::Result<()> {
     let enriched_path_env = get_enriched_path_env()?;
-    let args = ytil_sys::cli::get();
+    let args = cli::get();
 
     if args.has_help() {
         println!(include_str!("../help.txt"));
@@ -60,7 +64,7 @@ fn main() -> rootcause::Result<()> {
                 ytil_wezterm::activate_pane_cmd(editor_pane_id),
             ),
         ])
-        .envs(std::iter::once(enriched_path_env.by_ref()))
+        .envs(iter::once(enriched_path_env.by_ref()))
         .spawn()?;
 
     Ok(())
@@ -87,9 +91,9 @@ impl Env {
 /// - A required environment variable is missing or invalid Unicode.
 fn get_enriched_path_env() -> rootcause::Result<Env> {
     let enriched_path = [
-        &std::env::var("PATH").unwrap_or_else(|_| String::new()),
+        &env::var("PATH").unwrap_or_else(|_| String::new()),
         "/opt/homebrew/bin",
-        &ytil_sys::dir::build_home_path(&[".local", "bin"])?.to_string_lossy(),
+        &dir::build_home_path(&[".local", "bin"])?.to_string_lossy(),
     ]
     .join(":");
 

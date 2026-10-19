@@ -1,3 +1,5 @@
+use ci::CmdKind;
+use rootcause::Report;
 use rootcause::report;
 use ytil_sys::cli::Args;
 
@@ -47,7 +49,7 @@ impl Help {
 #[derive(Debug, Eq, PartialEq)]
 pub enum Cmd {
     Help(Help),
-    Ci(ci::CmdKind),
+    Ci(CmdKind),
     Local(Vec<String>),
 }
 
@@ -60,7 +62,7 @@ impl Cmd {
 }
 
 impl TryFrom<Vec<String>> for Cmd {
-    type Error = rootcause::Report;
+    type Error = Report;
 
     fn try_from(args: Vec<String>) -> Result<Self, Self::Error> {
         if args.has_help() {

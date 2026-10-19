@@ -7,6 +7,7 @@ use std::thread::JoinHandle;
 
 use owo_colors::OwoColorize;
 pub use pico_args;
+use rootcause::Report;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
 use ytil_cmd::CmdExt;
@@ -31,7 +32,7 @@ pub fn run(f: impl FnOnce() -> rootcause::Result<()>) {
 ///
 /// # Errors
 /// - Task panicked or returned an error.
-pub fn join<T>(join_handle: JoinHandle<rootcause::Result<T>>) -> Result<T, rootcause::Report> {
+pub fn join<T>(join_handle: JoinHandle<rootcause::Result<T>>) -> Result<T, Report> {
     join_handle
         .join()
         .map_err(|err| report!("error joining handle").attach(format!("error={err:#?}")))?
@@ -78,7 +79,7 @@ impl SysInfo {
 }
 
 impl FromStr for SysInfo {
-    type Err = rootcause::Report;
+    type Err = Report;
 
     fn from_str(output: &str) -> Result<Self, Self::Err> {
         let mut os_arch = output.split_ascii_whitespace();
@@ -105,7 +106,7 @@ pub enum Os {
 }
 
 impl FromStr for Os {
-    type Err = rootcause::Report;
+    type Err = Report;
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         match value.to_lowercase().as_str() {
@@ -124,7 +125,7 @@ pub enum Arch {
 }
 
 impl FromStr for Arch {
-    type Err = rootcause::Report;
+    type Err = Report;
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         match value.to_lowercase().as_str() {

@@ -199,7 +199,7 @@ mod tests {
 
     #[test]
     fn test_snapshot_with_runtime_metadata_when_title_is_cwd_updates_snapshot_cwd() -> rootcause::Result<()> {
-        let snapshot = self::pane()?.snapshot_with_runtime_metadata(Some("~"), None, TrackedProcessState::None);
+        let snapshot = pane()?.snapshot_with_runtime_metadata(Some("~"), None, TrackedProcessState::None);
 
         assert_that!(snapshot.cwd, eq("~"));
         assert_that!(snapshot.cmd_label, eq(None));
@@ -211,8 +211,8 @@ mod tests {
         let tree = PaneTree::Split {
             axis: PaneSplitAxis::Vertical,
             first_ratio: PaneSplitRatio::new(500)?,
-            first: Box::new(PaneTree::Pane(self::pane_with_id(1)?)),
-            second: Box::new(PaneTree::Pane(self::pane_with_id(2)?)),
+            first: Box::new(PaneTree::Pane(pane_with_id(1)?)),
+            second: Box::new(PaneTree::Pane(pane_with_id(2)?)),
         };
 
         assert_that!(
@@ -230,10 +230,10 @@ mod tests {
             first: Box::new(PaneTree::Split {
                 axis: PaneSplitAxis::Vertical,
                 first_ratio: PaneSplitRatio::new(500)?,
-                first: Box::new(PaneTree::Pane(self::pane_with_id(1)?)),
-                second: Box::new(PaneTree::Pane(self::pane_with_id(2)?)),
+                first: Box::new(PaneTree::Pane(pane_with_id(1)?)),
+                second: Box::new(PaneTree::Pane(pane_with_id(2)?)),
             }),
-            second: Box::new(PaneTree::Pane(self::pane_with_id(3)?)),
+            second: Box::new(PaneTree::Pane(pane_with_id(3)?)),
         };
 
         assert_that!(
@@ -248,12 +248,12 @@ mod tests {
         let tree = PaneTree::Split {
             axis: PaneSplitAxis::Vertical,
             first_ratio: PaneSplitRatio::new(500)?,
-            first: Box::new(PaneTree::Pane(self::pane_with_id(1)?)),
+            first: Box::new(PaneTree::Pane(pane_with_id(1)?)),
             second: Box::new(PaneTree::Split {
                 axis: PaneSplitAxis::Horizontal,
                 first_ratio: PaneSplitRatio::new(500)?,
-                first: Box::new(PaneTree::Pane(self::pane_with_id(2)?)),
-                second: Box::new(PaneTree::Pane(self::pane_with_id(3)?)),
+                first: Box::new(PaneTree::Pane(pane_with_id(2)?)),
+                second: Box::new(PaneTree::Pane(pane_with_id(3)?)),
             }),
         };
 
@@ -263,8 +263,7 @@ mod tests {
 
     #[test]
     fn test_snapshot_with_runtime_metadata_when_title_is_cmd_keeps_pane_cwd() -> rootcause::Result<()> {
-        let snapshot =
-            self::pane()?.snapshot_with_runtime_metadata(Some("cargo test"), None, TrackedProcessState::None);
+        let snapshot = pane()?.snapshot_with_runtime_metadata(Some("cargo test"), None, TrackedProcessState::None);
 
         assert_that!(snapshot.cwd, eq("/old/project"));
         assert_that!(snapshot.cmd_label, eq(Some("cargo test".to_owned())));
@@ -279,7 +278,7 @@ mod tests {
     fn test_snapshot_with_runtime_metadata_when_runtime_tracked_process_state_varies_projects_state(
         #[case] tracked_process_state: TrackedProcessState,
     ) -> rootcause::Result<()> {
-        let snapshot = self::pane()?.snapshot_with_runtime_metadata(Some("dotfiles"), None, tracked_process_state);
+        let snapshot = pane()?.snapshot_with_runtime_metadata(Some("dotfiles"), None, tracked_process_state);
 
         assert_that!(snapshot.tracked_process_state, eq(tracked_process_state));
         assert_that!(snapshot.cmd_label, eq(Some("dotfiles".to_owned())));
@@ -290,7 +289,7 @@ mod tests {
     fn test_snapshot_with_runtime_metadata_when_runtime_cmd_is_present_overrides_terminal_title()
     -> rootcause::Result<()> {
         let snapshot =
-            self::pane()?.snapshot_with_runtime_metadata(Some("dotfiles"), Some("codex"), TrackedProcessState::None);
+            pane()?.snapshot_with_runtime_metadata(Some("dotfiles"), Some("codex"), TrackedProcessState::None);
 
         assert_that!(snapshot.cmd_label, eq(Some("codex".to_owned())));
         Ok(())
@@ -298,7 +297,7 @@ mod tests {
 
     #[test]
     fn test_sync_terminal_title_when_title_is_cwd_updates_pane_cwd() -> rootcause::Result<()> {
-        let mut pane = self::pane()?;
+        let mut pane = pane()?;
 
         assert_that!(pane.sync_terminal_title(Some("~")), eq(PaneMetadataSync::Changed));
 
@@ -308,7 +307,7 @@ mod tests {
 
     #[test]
     fn test_sync_terminal_title_when_title_is_same_cwd_returns_false() -> rootcause::Result<()> {
-        let mut pane = self::pane()?;
+        let mut pane = pane()?;
 
         assert_that!(
             pane.sync_terminal_title(Some("/old/project")),
@@ -321,7 +320,7 @@ mod tests {
 
     #[test]
     fn test_sync_terminal_title_when_title_is_cmd_returns_false() -> rootcause::Result<()> {
-        let mut pane = self::pane()?;
+        let mut pane = pane()?;
 
         assert_that!(
             pane.sync_terminal_title(Some("cargo test")),
@@ -333,7 +332,7 @@ mod tests {
     }
 
     fn pane_with_id(id: u32) -> rootcause::Result<Pane> {
-        let mut pane = self::pane()?;
+        let mut pane = pane()?;
         pane.id = PaneId::new(id)?;
         Ok(pane)
     }

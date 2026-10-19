@@ -1,7 +1,12 @@
 use nvim_oxi::Dictionary;
+use nvim_oxi::api;
 use nvim_oxi::api::Buffer;
 use serde::Deserialize;
+use ytil_noxi::buffer;
+use ytil_noxi::common;
+use ytil_noxi::mru_buffers;
 use ytil_noxi::mru_buffers::BufferKind;
+use ytil_noxi::window;
 
 /// [`Dictionary`] of Rust tests utilities.
 pub fn dict() -> Dictionary {
@@ -46,33 +51,33 @@ pub fn compute_width(perc: i32) -> Option<i32> {
 
 fn focus_vsplit((split_kind, width_perc): (SplitKind, i32)) -> Option<()> {
     // Single MRU fetch - source of truth for all terminal buffer lookups.
-    let mru_bufs = ytil_noxi::mru_buffers::get().unwrap_or_default();
+    let mru_bufs = mru_buffers::get().unwrap_or_default();
     let term_bufs: Vec<Buffer> = mru_bufs.iter().filter(|b| b.is_term()).map(Buffer::from).collect();
 
-    let current_buf = nvim_oxi::api::get_current_buf();
+    let current_buf = api::get_current_buf();
 
     let is_term = split_kind.is_term();
 
     // If current buffer IS terminal OR file buffer (based on the supplied `term` value).
     if (is_term && term_bufs.contains(&current_buf)) || (!is_term && !term_bufs.contains(&current_buf)) {
-        ytil_noxi::common::exec_vim_script("only", None)?;
+        common::exec_vim_script("only", None)?;
         return Some(());
     }
 
     // Prioritize fzf-lua floating windows over underlying splits.
-    if !is_term && let Some(float_win) = ytil_noxi::window::find_focusable_float(&["fzf"]) {
-        ytil_noxi::window::set_current(&float_win)?;
+    if !is_term && let Some(float_win) = window::find_focusable_float(&["fzf"]) {
+        window::set_current(&float_win)?;
         return Some(());
     }
 
     // If there is a VISIBLE terminal OR file buffer (based on the supplied `term` value).
     // Floating windows (e.g. fidget notifications) are excluded so they don't capture focus.
-    if let Some(win) = nvim_oxi::api::list_wins().find(|win| {
-        !ytil_noxi::window::is_floating(win)
-            && ytil_noxi::window::get_buffer(win)
+    if let Some(win) = api::list_wins().find(|win| {
+        !window::is_floating(win)
+            && window::get_buffer(win)
                 .is_some_and(|buf| (is_term && term_bufs.contains(&buf)) || (!is_term && !term_bufs.contains(&buf)))
     }) {
-        ytil_noxi::window::set_current(&win)?;
+        window::set_current(&win)?;
         return Some(());
     }
 
@@ -84,7 +89,7 @@ fn focus_vsplit((split_kind, width_perc): (SplitKind, i32)) -> Option<()> {
         .iter()
         .find(|b| (is_term && b.is_term()) || (!is_term && matches!(b.kind, BufferKind::Path | BufferKind::NoName)))
     {
-        ytil_noxi::common::exec_vim_script(
+        common::exec_vim_script(
             &format!("{leftabove}vsplit | vertical resize {width} | buffer {}", mru_buf.id),
             None,
         );
@@ -92,7 +97,7 @@ fn focus_vsplit((split_kind, width_perc): (SplitKind, i32)) -> Option<()> {
     }
 
     // If there is NO terminal buffer OR file buffer at all (based on the supplied `term` value).
-    ytil_noxi::common::exec_vim_script(
+    common::exec_vim_script(
         &format!("{leftabove}vsplit | vertical resize {width} | {split_new_cmd}"),
         None,
     );
@@ -103,17 +108,17 @@ fn focus_vsplit((split_kind, width_perc): (SplitKind, i32)) -> Option<()> {
 fn toggle_alternate_buffer(_: ()) -> Option<()> {
     // Single MRU fetch: "ls t" returns listed buffers in most-recently-used order.
     // The first entry is the current buffer, so skip it and find the first file buffer.
-    let mru_bufs = ytil_noxi::mru_buffers::get().unwrap_or_default();
+    let mru_bufs = mru_buffers::get().unwrap_or_default();
 
     if let Some(target) = mru_bufs.iter().skip(1).find(|b| matches!(b.kind, BufferKind::Path)) {
-        ytil_noxi::buffer::set_current(&Buffer::from(target))?;
+        buffer::set_current(&Buffer::from(target))?;
     }
 
     Some(())
 }
 
 fn smart_close_buffer(force_close: Option<bool>) -> Option<()> {
-    let mru_buffers = ytil_noxi::mru_buffers::get()?;
+    let mru_buffers = mru_buffers::get()?;
 
     let Some(current_buffer) = mru_buffers.first() else {
         return Some(());
@@ -134,14 +139,14 @@ fn smart_close_buffer(force_close: Option<bool>) -> Option<()> {
             {
                 Buffer::from(mru_buffer.id)
             } else {
-                ytil_noxi::buffer::create()?
+                buffer::create()?
             };
 
-            ytil_noxi::buffer::set_current(&new_current_buffer)?;
+            buffer::set_current(&new_current_buffer)?;
         }
     }
 
-    ytil_noxi::common::exec_vim_script(&format!("bd{force} {}", current_buffer.id), Option::default())?;
+    common::exec_vim_script(&format!("bd{force} {}", current_buffer.id), Option::default())?;
 
     Some(())
 }

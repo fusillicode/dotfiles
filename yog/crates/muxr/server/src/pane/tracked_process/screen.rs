@@ -30,7 +30,7 @@ pub(super) fn observe<'a>(
         let Some(line) = span.next() else {
             continue;
         };
-        if self::matches_cancellation(patterns, line, span) {
+        if matches_cancellation(patterns, line, span) {
             return ScreenObservation::Cancelled;
         }
         let status = patterns.normalize_line(line);
@@ -87,7 +87,7 @@ fn matches_cancellation<'a>(
     // ambiguous search to the same 12-row window and reuse one buffer; completion strings remain unchanged.
     let rows: Vec<_> = iter::once(line).chain(continuations).take(SCREEN_TAIL_ROWS).collect();
     let mut candidate = status.to_owned();
-    self::matches_continuations(patterns, &mut candidate, &rows)
+    matches_continuations(patterns, &mut candidate, &rows)
 }
 
 fn matches_continuations(patterns: &ScreenObservationConfig, candidate: &mut String, rows: &[&str]) -> bool {
@@ -101,8 +101,7 @@ fn matches_continuations(patterns: &ScreenObservationConfig, candidate: &mut Str
     let original_length = candidate.len();
     candidate.push(' ');
     candidate.push_str(continuation);
-    let spaced_match =
-        patterns.matches_cancelled(candidate) || self::matches_continuations(patterns, candidate, remaining);
+    let spaced_match = patterns.matches_cancelled(candidate) || matches_continuations(patterns, candidate, remaining);
     candidate.truncate(original_length);
     if spaced_match {
         return true;
@@ -112,8 +111,7 @@ fn matches_continuations(patterns: &ScreenObservationConfig, candidate: &mut Str
         return false;
     }
     candidate.push_str(continuation);
-    let adjacent_match =
-        patterns.matches_cancelled(candidate) || self::matches_continuations(patterns, candidate, remaining);
+    let adjacent_match = patterns.matches_cancelled(candidate) || matches_continuations(patterns, candidate, remaining);
     candidate.truncate(original_length);
     adjacent_match
 }

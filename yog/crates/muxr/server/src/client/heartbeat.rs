@@ -1,5 +1,8 @@
 use std::time::Duration;
 
+use tokio::sync::oneshot::Receiver;
+use tokio::time::Instant;
+
 use crate::event_writer::HeartbeatDelivery;
 use crate::event_writer::ServerEventSink;
 use crate::render_state::ClientSessionFlow;
@@ -22,7 +25,7 @@ impl HeartbeatStatus for HeartbeatTracker {
         self.phase = HeartbeatPhase::Idle;
     }
 
-    fn response_started_at(&self) -> Option<tokio::time::Instant> {
+    fn response_started_at(&self) -> Option<Instant> {
         match self.phase {
             HeartbeatPhase::AwaitingPong(started_at) => Some(started_at),
             HeartbeatPhase::Idle | HeartbeatPhase::Queued(_) => None,
@@ -54,19 +57,19 @@ impl HeartbeatStatus for HeartbeatTracker {
 
 pub trait HeartbeatStatus {
     fn acknowledge(&mut self);
-    fn response_started_at(&self) -> Option<tokio::time::Instant>;
+    fn response_started_at(&self) -> Option<Instant>;
     fn is_idle(&self) -> bool;
     fn track(&mut self, delivery: HeartbeatDelivery);
     fn sync_delivery(&mut self) -> ClientSessionFlow;
 }
 
 #[cfg(test)]
-impl HeartbeatStatus for Option<tokio::time::Instant> {
+impl HeartbeatStatus for Option<Instant> {
     fn acknowledge(&mut self) {
         *self = None;
     }
 
-    fn response_started_at(&self) -> Option<tokio::time::Instant> {
+    fn response_started_at(&self) -> Option<Instant> {
         *self
     }
 
@@ -76,7 +79,7 @@ impl HeartbeatStatus for Option<tokio::time::Instant> {
 
     fn track(&mut self, delivery: HeartbeatDelivery) {
         drop(delivery);
-        *self = Some(tokio::time::Instant::now());
+        *self = Some(Instant::now());
     }
 
     fn sync_delivery(&mut self) -> ClientSessionFlow {
@@ -102,8 +105,8 @@ pub async fn send_if_idle(
 
 enum HeartbeatPhase {
     Idle,
-    Queued(tokio::sync::oneshot::Receiver<Result<tokio::time::Instant, ClientEventSendFailure>>),
-    AwaitingPong(tokio::time::Instant),
+    Queued(Receiver<Result<Instant, ClientEventSendFailure>>),
+    AwaitingPong(Instant),
 }
 
 #[cfg(test)]

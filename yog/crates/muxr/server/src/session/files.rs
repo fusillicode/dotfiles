@@ -6,6 +6,8 @@ use muxr_core::SessionPaths;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
 
+use crate::session::tracing::server;
+
 pub const PRIVATE_DIR_MODE: u32 = 0o700;
 pub const PRIVATE_SOCKET_MODE: u32 = 0o600;
 
@@ -15,8 +17,8 @@ pub struct ServerFilesGuard {
 
 impl Drop for ServerFilesGuard {
     fn drop(&mut self) {
-        self::remove_server_file("remove_socket", &self.paths.socket);
-        self::remove_server_file("remove_pid", &self.paths.pid);
+        remove_server_file("remove_socket", &self.paths.socket);
+        remove_server_file("remove_pid", &self.paths.pid);
     }
 }
 
@@ -26,8 +28,8 @@ pub fn prepare_session_dirs(paths: &SessionPaths) -> rootcause::Result<()> {
         .parent()
         .ok_or_else(|| report!("muxr session root has no parent"))?;
     let logs_root = paths.logs_root()?;
-    let socket_root = self::socket_root(paths)?;
-    let state_root = self::state_root(paths)?;
+    let socket_root = socket_root(paths)?;
+    let state_root = state_root(paths)?;
 
     fs::create_dir_all(state_root).context("failed to create muxr state root")?;
     fs::set_permissions(state_root, fs::Permissions::from_mode(PRIVATE_DIR_MODE))
@@ -60,12 +62,12 @@ fn remove_server_file(event: &str, path: &Path) {
         Ok(()) => {}
         // Cleanup can race with explicit delete or partial startup rollback; only other errors leave stale state.
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-        Err(error) => crate::session::tracing::server::file_cleanup_failed(event, path, &error),
+        Err(error) => server::file_cleanup_failed(event, path, &error),
     }
 }
 
 fn state_root(paths: &SessionPaths) -> rootcause::Result<&Path> {
-    self::socket_root(paths)?
+    socket_root(paths)?
         .parent()
         .ok_or_else(|| report!("muxr socket root has no parent"))
 }
@@ -90,7 +92,7 @@ mod tests {
         let tempdir = tempfile::tempdir()?;
         let session = SessionName::default_name()?;
         let paths = SessionPaths::from_sessions_root_path(&tempdir.path().join("sessions"), &session)?;
-        let state_root = self::state_root(&paths)?;
+        let state_root = crate::session::files::tests::state_root(&paths)?;
         fs::create_dir_all(state_root).context("failed to create test state root")?;
         fs::set_permissions(state_root, fs::Permissions::from_mode(0o755))
             .context("failed to make test state root public")?;
@@ -110,7 +112,7 @@ mod tests {
         let session = SessionName::default_name()?;
 
         let log = crate::session::tracing::collect_test_log(&session, || {
-            self::remove_server_file("remove_socket", &tempdir.path().join("missing.sock"));
+            crate::session::files::tests::remove_server_file("remove_socket", &tempdir.path().join("missing.sock"));
             Ok(())
         })?;
 

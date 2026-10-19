@@ -3,10 +3,13 @@ use std::collections::HashSet;
 use std::collections::VecDeque;
 
 use proc_macro2::LineColumn;
+use syn::File;
 use syn::Item;
 use syn::spanned::Spanned;
 
-use super::import_resolution::ImportBinding;
+use crate::cmds::rsl::rules::common;
+use crate::cmds::rsl::rules::common::import_resolution;
+use crate::cmds::rsl::rules::common::import_resolution::ImportBinding;
 
 pub struct ModuleScope<'ast> {
     pub path: Vec<String>,
@@ -29,7 +32,7 @@ pub struct ModuleIdx<'ast> {
     pub modules: HashSet<Vec<String>>,
 }
 
-pub fn module_idx(file: &syn::File) -> ModuleIdx<'_> {
+pub fn module_idx(file: &File) -> ModuleIdx<'_> {
     let mut idx = ModuleIdx {
         scopes: Vec::new(),
         info: HashMap::new(),
@@ -46,7 +49,7 @@ pub fn module_idx(file: &syn::File) -> ModuleIdx<'_> {
         let mut info = ScopeInfo::default();
 
         for item in items {
-            if let Some(name) = self::item_name(item) {
+            if let Some(name) = item_name(item) {
                 info.definitions.insert(name);
             }
 
@@ -75,12 +78,12 @@ pub fn module_idx(file: &syn::File) -> ModuleIdx<'_> {
                     continue;
                 }
 
-                let bindings = super::import_resolution::use_bindings(&item_use.tree, &path);
+                let bindings = import_resolution::use_bindings(&item_use.tree, &path);
                 info.unknown_imports |= bindings.unknown;
 
                 // A conditional explicit import reserves its written name, but
                 // cannot provide a binding that rewrites rely on in every build.
-                if super::has_conditional_attributes(&item_use.attrs) {
+                if common::has_conditional_attributes(&item_use.attrs) {
                     info.definitions
                         .extend(bindings.bindings.into_iter().map(|binding| binding.name));
                 } else {

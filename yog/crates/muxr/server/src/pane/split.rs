@@ -12,6 +12,7 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use crate::client::session::ClientSessionState;
+use crate::pane::fullscreen;
 use crate::pane::runtime::PaneRuntimes;
 use crate::server::ServerConfig;
 use crate::state::Pane;
@@ -21,6 +22,7 @@ use crate::state::PaneTree;
 use crate::state::SessionLayout;
 use crate::state::SessionMetadata;
 use crate::state::Tab;
+use crate::state::persisted;
 
 const SPLIT_RATIO_SCALE: u16 = 1000;
 const SPLIT_RATIO_HALF_SCALE: u16 = 500;
@@ -194,8 +196,8 @@ pub fn handle_split_pane_cmd_client(
     state: &mut ClientSessionState<'_>,
 ) -> rootcause::Result<PaneSplitClientOutcome> {
     let previous_pane = state.layout.active_pane_id()?;
-    crate::pane::fullscreen::clear_active_tab_for_layout_mutation(state);
-    let new_pane_id = self::handle_split_pane_cmd(
+    fullscreen::clear_active_tab_for_layout_mutation(state);
+    let new_pane_id = handle_split_pane_cmd(
         split_axis,
         state.config,
         state.layout,
@@ -227,7 +229,7 @@ fn handle_split_pane_cmd(
         runtimes,
         terminal_size,
     )?;
-    crate::state::persisted::write_metadata(&config.paths, layout)?;
+    persisted::write_metadata(&config.paths, layout)?;
     Ok(pane_id)
 }
 

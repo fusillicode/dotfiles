@@ -3,8 +3,12 @@
 use std::path::Path;
 use std::path::PathBuf;
 
+use syn::Block;
 use syn::Item;
+use syn::ItemMacro;
 use syn::ItemMod;
+use syn::LitStr;
+use syn::Macro;
 use syn::Meta;
 use syn::Token;
 use syn::punctuated::Punctuated;
@@ -55,16 +59,8 @@ impl ModuleDirectory {
         directories
     }
 
-    fn inline_directory(&self, directory: PathBuf) -> Self {
-        Self {
-            children: directory.clone(),
-            attributes: directory,
-            source: self.source.clone(),
-        }
-    }
-
-    pub(super) fn include(&self, mac: &syn::Macro) -> Option<PathBuf> {
-        let path = mac.parse_body::<syn::LitStr>().ok()?;
+    pub(super) fn include(&self, mac: &Macro) -> Option<PathBuf> {
+        let path = mac.parse_body::<LitStr>().ok()?;
 
         Some(self.source.join(path.value()))
     }
@@ -92,6 +88,14 @@ impl ModuleDirectory {
 
         files
     }
+
+    fn inline_directory(&self, directory: PathBuf) -> Self {
+        Self {
+            children: directory.clone(),
+            attributes: directory,
+            source: self.source.clone(),
+        }
+    }
 }
 
 pub(super) struct ModuleFiles {
@@ -107,7 +111,7 @@ pub(super) enum FileLayout {
 
 pub(super) enum Declaration<'ast> {
     Module { item: &'ast ItemMod, local: bool },
-    Include(&'ast syn::Macro),
+    Include(&'ast Macro),
 }
 
 impl<'ast> Declaration<'ast> {
@@ -154,43 +158,6 @@ impl ModuleStructure {
         structure.sort();
 
         structure
-    }
-}
-
-struct Declarations<'ast> {
-    modules: Vec<Declaration<'ast>>,
-    local: bool,
-}
-
-impl<'ast> Visit<'ast> for Declarations<'ast> {
-    fn visit_item_mod(&mut self, module: &'ast ItemMod) {
-        self.modules.push(Declaration::Module {
-            item: module,
-            local: self.local,
-        });
-    }
-
-    fn visit_macro(&mut self, mac: &'ast syn::Macro) {
-        if mac.path.is_ident("include") {
-            self.modules.push(Declaration::Include(mac));
-        }
-    }
-
-    fn visit_item_macro(&mut self, item: &'ast syn::ItemMacro) {
-        if item.ident.is_some() {
-            return;
-        }
-
-        self.visit_macro(&item.mac);
-    }
-
-    fn visit_block(&mut self, block: &'ast syn::Block) {
-        let previous = self.local;
-        self.local = true;
-
-        visit::visit_block(self, block);
-
-        self.local = previous;
     }
 }
 
@@ -243,5 +210,42 @@ impl AttributePaths {
                 }
             }
         }
+    }
+}
+
+struct Declarations<'ast> {
+    modules: Vec<Declaration<'ast>>,
+    local: bool,
+}
+
+impl<'ast> Visit<'ast> for Declarations<'ast> {
+    fn visit_item_mod(&mut self, module: &'ast ItemMod) {
+        self.modules.push(Declaration::Module {
+            item: module,
+            local: self.local,
+        });
+    }
+
+    fn visit_macro(&mut self, mac: &'ast Macro) {
+        if mac.path.is_ident("include") {
+            self.modules.push(Declaration::Include(mac));
+        }
+    }
+
+    fn visit_item_macro(&mut self, item: &'ast ItemMacro) {
+        if item.ident.is_some() {
+            return;
+        }
+
+        self.visit_macro(&item.mac);
+    }
+
+    fn visit_block(&mut self, block: &'ast Block) {
+        let previous = self.local;
+        self.local = true;
+
+        visit::visit_block(self, block);
+
+        self.local = previous;
     }
 }

@@ -3,9 +3,11 @@
 //! Thin wrappers around `zellij` subcommands for session management, pane control, focus,
 //! and text injection.
 
+use std::env;
 use std::process::Command;
 
 use rootcause::prelude::ResultExt;
+use ytil_cmd::CmdError;
 use ytil_cmd::CmdExt;
 
 const BIN: &str = "zellij";
@@ -32,7 +34,7 @@ impl Direction {
 
 /// Returns `true` when the process is running inside a Zellij session.
 pub fn is_active() -> bool {
-    std::env::var_os("ZELLIJ").is_some()
+    env::var_os("ZELLIJ").is_some()
 }
 
 /// Returns all running Zellij sessions as `(name, display)` pairs.
@@ -47,7 +49,7 @@ pub fn list_sessions() -> rootcause::Result<Vec<Session>> {
     cmd.args(["list-sessions"]);
     let output = cmd
         .output()
-        .map_err(|source| ytil_cmd::CmdError::Io {
+        .map_err(|source| CmdError::Io {
             cmd: ytil_cmd::Cmd::from(&cmd),
             source,
         })
@@ -288,17 +290,17 @@ pub fn resize_increase(direction: Direction, times: u32) -> rootcause::Result<()
 /// the terminal directly (preserving ANSI colors, TTY detection, and interactivity).
 ///
 /// Because stdio is inherited rather than captured, `stderr` and `stdout` in the
-/// returned [`CmdError::CmdFailure`](ytil_cmd::CmdError::CmdFailure) are always
+/// returned [`CmdError::CmdFailure`] are always
 /// empty — the user already saw whatever the child printed.
-fn run_interactive(cmd: &mut Command) -> Result<(), Box<ytil_cmd::CmdError>> {
+fn run_interactive(cmd: &mut Command) -> Result<(), Box<CmdError>> {
     let status = cmd.status().map_err(|source| {
-        Box::new(ytil_cmd::CmdError::Io {
+        Box::new(CmdError::Io {
             cmd: ytil_cmd::Cmd::from(&*cmd),
             source,
         })
     })?;
     if !status.success() {
-        return Err(Box::new(ytil_cmd::CmdError::CmdFailure {
+        return Err(Box::new(CmdError::CmdFailure {
             cmd: ytil_cmd::Cmd::from(&*cmd),
             stderr: String::new(),
             stdout: String::new(),

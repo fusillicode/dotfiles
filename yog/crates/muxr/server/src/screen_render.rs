@@ -28,6 +28,7 @@ use crate::render_worker::RenderInput;
 use crate::render_worker::RenderWorker;
 use crate::server::ServerConfig;
 use crate::state::SessionLayout;
+use crate::state::persisted;
 
 pub fn resize_panes_to_layout(
     layout: &SessionLayout,
@@ -47,7 +48,7 @@ pub fn initial_client_render(
     terminal_size: &TerminalSize,
 ) -> rootcause::Result<(LayoutSnapshot, RenderWorker)> {
     let mut render_worker = RenderWorker::default();
-    let (layout_snapshot, _pane_regions, _initial_render) = self::initial_client_render_input(
+    let (layout_snapshot, _pane_regions, _initial_render) = crate::screen_render::initial_client_render_input(
         config,
         layout,
         runtimes,
@@ -67,9 +68,9 @@ pub fn initial_client_render_input(
     render_worker: &mut RenderWorker,
 ) -> rootcause::Result<(LayoutSnapshot, PaneRegionsSnapshot, RenderInput)> {
     let tracked_processes = pane_tracked_processes.snapshot(layout);
-    let layout_snapshot = self::layout_snapshot_and_persist(&config.paths, layout, runtimes, &tracked_processes)?;
+    let layout_snapshot = layout_snapshot_and_persist(&config.paths, layout, runtimes, &tracked_processes)?;
     let pane_layout = PaneFullscreen::default().pane_layout(layout, terminal_size)?;
-    let input = self::render_input(
+    let input = render_input(
         render_worker,
         PaneRenderConfig {
             border_styles: config.user_config.pane_borders,
@@ -81,7 +82,7 @@ pub fn initial_client_render_input(
         pane_layout,
         runtimes,
         terminal_size.clone(),
-        self::attention_pane_ids(layout, pane_tracked_processes),
+        attention_pane_ids(layout, pane_tracked_processes),
         ClientRenderDmg::Full,
         true,
     )?;
@@ -93,17 +94,17 @@ pub fn visible_pane_id_at_position(
     state: &ClientSessionState<'_>,
     position: ClientMousePosition,
 ) -> rootcause::Result<Option<PaneId>> {
-    Ok(self::visible_pane_region_at_position(state, position)?.map(|region| region.id))
+    Ok(visible_pane_region_at_position(state, position)?.map(|region| region.id))
 }
 
 pub fn visible_pane_region_snapshot_at_position(
     state: &ClientSessionState<'_>,
     position: ClientMousePosition,
 ) -> rootcause::Result<Option<PaneRegionSnapshot>> {
-    let Some(region) = self::visible_pane_region_at_position(state, position)? else {
+    let Some(region) = visible_pane_region_at_position(state, position)? else {
         return Ok(None);
     };
-    Ok(Some(self::pane_region_snapshot(&region, state.runtimes)?))
+    Ok(Some(pane_region_snapshot(&region, state.runtimes)?))
 }
 
 pub fn pane_ids_visible_render_dmg(
@@ -133,7 +134,7 @@ pub async fn flush_render_diff(
         return Ok(ClientSessionFlow::Continue);
     }
 
-    let input = self::render_input(
+    let input = render_input(
         state.render_worker,
         PaneRenderConfig {
             border_styles: state.config.user_config.pane_borders,
@@ -142,10 +143,10 @@ pub async fn flush_render_diff(
             pane_dim: state.config.user_config.pane_dim,
         },
         state.layout.active_pane_id()?,
-        self::visible_pane_layout(state)?,
+        visible_pane_layout(state)?,
         state.runtimes,
         state.terminal_size.clone(),
-        self::attention_pane_ids(state.layout, &state.pane_tracked_processes),
+        attention_pane_ids(state.layout, &state.pane_tracked_processes),
         render_dmg.clone(),
         false,
     )?;
@@ -166,7 +167,7 @@ pub async fn flush_cmd_label_layout(
     state: &mut ClientSessionState<'_>,
     title_changes: Vec<(PaneId, Option<String>)>,
 ) -> rootcause::Result<ClientSessionFlow> {
-    let runtime_metadata = self::runtime_pane_metadata(state);
+    let runtime_metadata = runtime_pane_metadata(state);
     let changes = {
         let mut last_layout_snapshot = state.last_layout_snapshot.clone();
         let mut metadata_sync = crate::state::PaneMetadataSync::Unchanged;
@@ -184,15 +185,14 @@ pub async fn flush_cmd_label_layout(
             changes.push(layout_snapshot);
         }
         if metadata_sync == crate::state::PaneMetadataSync::Changed && state.scrollback_editor.is_none() {
-            crate::state::persisted::write_metadata(&state.config.paths, state.layout)?;
+            persisted::write_metadata(&state.config.paths, state.layout)?;
         }
         changes
     };
 
     for layout_snapshot in changes {
         // Terminal-title changes affect only sidebar metadata; avoid rebuilding the pane frame for cmd/cwd churn.
-        if self::send_sidebar_layout_if_changed(event_writer, state, layout_snapshot).await?
-            == ClientSessionFlow::Disconnect
+        if send_sidebar_layout_if_changed(event_writer, state, layout_snapshot).await? == ClientSessionFlow::Disconnect
         {
             return Ok(ClientSessionFlow::Disconnect);
         }
@@ -221,9 +221,8 @@ pub async fn handle_cmd_handoff_sample(
     timers.sync_tracked_process_quiet_deadline_for_layout(&state.pane_tracked_processes, state.layout)?;
     if changes.state_change() == TrackedProcessStateChange::Changed {
         let pane_surface_dirty =
-            self::pane_ids_visible_render_dmg(state.layout, &state.pane_fullscreen, &state.terminal_size, &pane_ids)?;
-        return self::flush_tracked_process_runtime_layout(timers, event_writer, state, render_dmg, pane_surface_dirty)
-            .await;
+            pane_ids_visible_render_dmg(state.layout, &state.pane_fullscreen, &state.terminal_size, &pane_ids)?;
+        return flush_tracked_process_runtime_layout(timers, event_writer, state, render_dmg, pane_surface_dirty).await;
     }
     Ok(ClientSessionFlow::Continue)
 }
@@ -251,9 +250,8 @@ pub async fn handle_output_activity_sample(
     timers.sync_tracked_process_quiet_deadline_for_layout(&state.pane_tracked_processes, state.layout)?;
     if changes.state_change() == TrackedProcessStateChange::Changed {
         let pane_surface_dirty =
-            self::pane_ids_visible_render_dmg(state.layout, &state.pane_fullscreen, &state.terminal_size, &pane_ids)?;
-        return self::flush_tracked_process_runtime_layout(timers, event_writer, state, render_dmg, pane_surface_dirty)
-            .await;
+            pane_ids_visible_render_dmg(state.layout, &state.pane_fullscreen, &state.terminal_size, &pane_ids)?;
+        return flush_tracked_process_runtime_layout(timers, event_writer, state, render_dmg, pane_surface_dirty).await;
     }
     Ok(ClientSessionFlow::Continue)
 }
@@ -265,13 +263,13 @@ pub async fn flush_tracked_process_runtime_layout(
     render_dmg: &mut ClientRenderDmg,
     pane_surface_dirty: ClientRenderDmg,
 ) -> rootcause::Result<ClientSessionFlow> {
-    let runtime_metadata = self::runtime_pane_metadata(state);
+    let runtime_metadata = runtime_pane_metadata(state);
     let layout_snapshot = state
         .layout
         .snapshot_with_runtime_metadata(&runtime_metadata.pane_snapshot_fields())?;
     render_dmg.include_dmg(pane_surface_dirty);
     timers.sync_render_deadline(render_dmg)?;
-    self::send_sidebar_layout_if_changed(event_writer, state, layout_snapshot).await
+    send_sidebar_layout_if_changed(event_writer, state, layout_snapshot).await
 }
 
 pub async fn flush_pane_attention(
@@ -295,24 +293,24 @@ pub async fn flush_pane_attention(
         }
         TrackedProcessAttention::Seen | TrackedProcessAttention::Unchanged => ClientRenderDmg::Clean,
         TrackedProcessAttention::Unseen { pane_ids } => {
-            self::pane_ids_visible_render_dmg(state.layout, &state.pane_fullscreen, &state.terminal_size, &pane_ids)?
+            pane_ids_visible_render_dmg(state.layout, &state.pane_fullscreen, &state.terminal_size, &pane_ids)?
         }
     };
     render_dmg.include_dmg(pane_surface_dirty);
     timers.sync_render_deadline(render_dmg)?;
-    let runtime_metadata = self::runtime_pane_metadata(state);
+    let runtime_metadata = runtime_pane_metadata(state);
     let layout_snapshot = state
         .layout
         .snapshot_with_runtime_metadata(&runtime_metadata.pane_snapshot_fields())?;
 
-    self::send_sidebar_layout_if_changed(event_writer, state, layout_snapshot).await
+    send_sidebar_layout_if_changed(event_writer, state, layout_snapshot).await
 }
 
 pub async fn send_layout_and_baseline(
     event_writer: &mut impl crate::event_writer::ServerEventSink,
     state: &mut ClientSessionState<'_>,
 ) -> rootcause::Result<ClientSessionFlow> {
-    self::send_layout_and_render(event_writer, state, LayoutRenderMode::Baseline).await
+    send_layout_and_render(event_writer, state, LayoutRenderMode::Baseline).await
 }
 
 /// Send changed layout metadata followed by a full comparison against the last client frame.
@@ -320,16 +318,16 @@ pub async fn send_layout_and_render_diff(
     event_writer: &mut impl crate::event_writer::ServerEventSink,
     state: &mut ClientSessionState<'_>,
 ) -> rootcause::Result<ClientSessionFlow> {
-    self::send_layout_and_render(event_writer, state, LayoutRenderMode::Diff).await
+    send_layout_and_render(event_writer, state, LayoutRenderMode::Diff).await
 }
 
 pub async fn resize_panes_and_render(
     event_writer: &mut impl crate::event_writer::ServerEventSink,
     state: &mut ClientSessionState<'_>,
 ) -> rootcause::Result<ClientSessionFlow> {
-    let pane_layout = self::visible_pane_layout(state)?;
+    let pane_layout = visible_pane_layout(state)?;
     state.runtimes.resize_panes(pane_layout.regions())?;
-    self::send_layout_and_baseline(event_writer, state).await
+    send_layout_and_baseline(event_writer, state).await
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -356,7 +354,7 @@ fn layout_snapshot_and_persist(
     runtimes: &PaneRuntimes,
     tracked_processes: &PaneTrackedProcessSnapshot,
 ) -> rootcause::Result<LayoutSnapshot> {
-    self::layout_snapshot_and_maybe_persist(paths, layout, runtimes, tracked_processes, LayoutPersistence::Persist)
+    layout_snapshot_and_maybe_persist(paths, layout, runtimes, tracked_processes, LayoutPersistence::Persist)
 }
 
 fn layout_snapshot_and_maybe_persist(
@@ -368,7 +366,7 @@ fn layout_snapshot_and_maybe_persist(
 ) -> rootcause::Result<LayoutSnapshot> {
     let synced = runtimes.sync_layout_terminal_titles(layout);
     if persistence == LayoutPersistence::Persist && synced.metadata_sync() == crate::state::PaneMetadataSync::Changed {
-        crate::state::persisted::write_metadata(paths, layout)?;
+        persisted::write_metadata(paths, layout)?;
     }
     let runtime_metadata = PaneRuntimeMetadata::from_sources(
         synced.titles().to_vec(),
@@ -432,7 +430,7 @@ fn visible_pane_region_at_position(
     state: &ClientSessionState<'_>,
     position: ClientMousePosition,
 ) -> rootcause::Result<Option<PaneRegion>> {
-    Ok(self::visible_pane_layout(state)?
+    Ok(visible_pane_layout(state)?
         .regions()
         .iter()
         .find(|region| region.containment(position.into()) == crate::pane::layout::PaneAreaContainment::Inside)
@@ -483,7 +481,7 @@ async fn send_layout_and_render(
 ) -> rootcause::Result<ClientSessionFlow> {
     let (layout_snapshot, render_input) = {
         let tracked_processes = state.pane_tracked_processes.snapshot(state.layout);
-        let layout_snapshot = self::layout_snapshot_and_maybe_persist(
+        let layout_snapshot = layout_snapshot_and_maybe_persist(
             &state.config.paths,
             state.layout,
             state.runtimes,
@@ -494,7 +492,7 @@ async fn send_layout_and_render(
                 LayoutPersistence::SnapshotOnly
             },
         )?;
-        let render_input = self::render_input(
+        let render_input = render_input(
             state.render_worker,
             PaneRenderConfig {
                 border_styles: state.config.user_config.pane_borders,
@@ -503,10 +501,10 @@ async fn send_layout_and_render(
                 pane_dim: state.config.user_config.pane_dim,
             },
             state.layout.active_pane_id()?,
-            self::visible_pane_layout(state)?,
+            visible_pane_layout(state)?,
             state.runtimes,
             state.terminal_size.clone(),
-            self::attention_pane_ids(state.layout, &state.pane_tracked_processes),
+            attention_pane_ids(state.layout, &state.pane_tracked_processes),
             ClientRenderDmg::Full,
             mode.forces_baseline(),
         )?;
@@ -560,8 +558,8 @@ mod tests {
     #[test]
     fn test_layout_snapshot_and_persist_when_runtime_cmd_exists_sets_snapshot_cmd() -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
-        let (session, paths) = self::session_paths(tempdir.path(), "work")?;
-        let mut layout = SessionLayout::initial(&session, self::metadata("zsh", 1))?;
+        let (session, paths) = session_paths(tempdir.path(), "work")?;
+        let mut layout = SessionLayout::initial(&session, metadata("zsh", 1))?;
         let runtimes = pane_runtime_test_helpers::empty_runtimes();
         let pane_id = PaneId::new(1)?;
         let mut tracked_processes = PaneTrackedProcesses::default();
@@ -583,7 +581,12 @@ mod tests {
         );
 
         let tracked_snapshot = tracked_processes.snapshot(&layout);
-        let snapshot = self::layout_snapshot_and_persist(&paths, &mut layout, &runtimes, &tracked_snapshot)?;
+        let snapshot = crate::screen_render::tests::layout_snapshot_and_persist(
+            &paths,
+            &mut layout,
+            &runtimes,
+            &tracked_snapshot,
+        )?;
 
         let pane = snapshot
             .tabs()
@@ -600,12 +603,8 @@ mod tests {
         let mut config = server_test_helpers::server_config(tempdir.path(), "work")?;
         config.shell_cmd = server_test_helpers::shell_cmd_with_args("/bin/sh", &["-c", "printf dirty; sleep 30"]);
         let terminal_size = TerminalSize::new(80, 24)?;
-        let mut layout = SessionLayout::initial(&config.session, self::metadata("sh", 1))?;
-        layout.split_active_pane(
-            config.user_config.layout,
-            self::metadata("sh", 2),
-            PaneSplitAxis::Vertical,
-        )?;
+        let mut layout = SessionLayout::initial(&config.session, metadata("sh", 1))?;
+        layout.split_active_pane(config.user_config.layout, metadata("sh", 2), PaneSplitAxis::Vertical)?;
         let runtimes = PaneRuntimes::spawn_for_start_seed(
             &config,
             &SessionStartSeed {
@@ -617,11 +616,11 @@ mod tests {
         )?;
         let inactive_pane = PaneId::new(1)?;
         let active_pane = PaneId::new(2)?;
-        self::wait_for_runtime_snapshot_contains(&runtimes, inactive_pane, "dirty")?;
-        self::wait_for_runtime_snapshot_contains(&runtimes, active_pane, "dirty")?;
+        wait_for_runtime_snapshot_contains(&runtimes, inactive_pane, "dirty")?;
+        wait_for_runtime_snapshot_contains(&runtimes, active_pane, "dirty")?;
 
-        self::resize_panes_to_layout(&layout, &runtimes, &terminal_size)?;
-        drop(self::initial_client_render(
+        crate::screen_render::tests::resize_panes_to_layout(&layout, &runtimes, &terminal_size)?;
+        drop(crate::screen_render::tests::initial_client_render(
             &config,
             &mut layout,
             &runtimes,
@@ -636,9 +635,9 @@ mod tests {
     #[test]
     fn test_pane_ids_include_visible_when_pane_is_in_inactive_tab_returns_false() -> rootcause::Result<()> {
         let session = SessionName::default_name()?;
-        let mut layout = SessionLayout::initial(&session, self::metadata("sh", 1))?;
+        let mut layout = SessionLayout::initial(&session, metadata("sh", 1))?;
         let inactive_pane = PaneId::new(1)?;
-        let active_pane = layout.create_tab(self::metadata("sh", 2))?;
+        let active_pane = layout.create_tab(metadata("sh", 2))?;
         let fullscreen = PaneFullscreen::default();
         let terminal_size = TerminalSize::new(80, 24)?;
 

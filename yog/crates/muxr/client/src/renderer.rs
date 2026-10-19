@@ -259,7 +259,7 @@ impl ClientRenderer {
 
         if let Some(capture) = self.mouse_capture.as_ref() {
             let event = ClientMouseEvent {
-                position: self::clamp_mouse_position_to_region(event.position, &capture.region),
+                position: crate::renderer::clamp_mouse_position_to_region(event.position, &capture.region),
                 ..event
             };
             if event.phase == ClientMouseEventPhase::Release {
@@ -515,7 +515,7 @@ struct MouseCapture {
 
 impl MouseCapture {
     fn retain_for_regions(self, regions: &PaneRegionsSnapshot) -> Option<Self> {
-        self::region_for_pane_id(regions, *self.region.id())
+        region_for_pane_id(regions, *self.region.id())
             .cloned()
             .map(|region| Self { region })
     }
@@ -538,12 +538,8 @@ fn region_for_pane_id(regions: &PaneRegionsSnapshot, pane_id: PaneId) -> Option<
 
 fn clamp_mouse_position_to_region(position: ClientMousePosition, region: &PaneRegionSnapshot) -> ClientMousePosition {
     ClientMousePosition {
-        row: position
-            .row
-            .clamp(region.row(), self::last_region_row_saturating(region)),
-        col: position
-            .col
-            .clamp(region.col(), self::last_region_col_saturating(region)),
+        row: position.row.clamp(region.row(), last_region_row_saturating(region)),
+        col: position.col.clamp(region.col(), last_region_col_saturating(region)),
     }
 }
 
@@ -573,7 +569,7 @@ impl From<ClientMouseEvent> for MouseCaptureStart {
 
 #[cfg(test)]
 pub mod test_helpers {
-    use super::*;
+    use crate::renderer::*;
 
     pub fn selected_text(renderer: &ClientRenderer) -> Option<String> {
         renderer.selection.selected_text()
@@ -614,7 +610,7 @@ mod tests {
             .to_str()
             .ok_or_else(|| report!("temporary test directory is not UTF-8"))?;
 
-        let request = self::file_open_request_for_text(cwd, "README")?;
+        let request = file_open_request_for_text(cwd, "README")?;
 
         assert_that!(
             request,
@@ -641,7 +637,7 @@ mod tests {
             .to_str()
             .ok_or_else(|| report!("temporary test directory is not UTF-8"))?;
 
-        let request = self::file_open_request_for_text(cwd, "src")?;
+        let request = file_open_request_for_text(cwd, "src")?;
 
         assert_that!(
             request,
@@ -1302,7 +1298,7 @@ mod tests {
     }
 
     fn pane_regions_snapshot() -> rootcause::Result<PaneRegionsSnapshot> {
-        self::pane_regions_snapshot_with_visible_top_row(0)
+        pane_regions_snapshot_with_visible_top_row(0)
     }
 
     fn pane_regions_snapshot_with_visible_top_row(visible_top_row: u64) -> rootcause::Result<PaneRegionsSnapshot> {

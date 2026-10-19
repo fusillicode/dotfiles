@@ -10,12 +10,14 @@ use rootcause::prelude::ResultExt;
 use rootcause::report;
 use ytil_editor::Editor;
 use ytil_hx::HxStatusLine;
+use ytil_sys::cli;
 use ytil_sys::cli::Args;
+use ytil_sys::file;
 
 /// Copy current Helix file path with line number to clipboard.
 #[ytil_sys::main]
 fn main() -> rootcause::Result<()> {
-    let args = ytil_sys::cli::get();
+    let args = cli::get();
     if args.has_help() {
         println!(include_str!("../help.txt"));
         return Ok(());
@@ -43,7 +45,7 @@ fn main() -> rootcause::Result<()> {
 
     let hx_status_line = HxStatusLine::from_str(hx_status_line_str)?;
 
-    ytil_sys::file::cp_to_system_clipboard(&mut format_hx_status_line(&hx_status_line)?.as_bytes())?;
+    file::cp_to_system_clipboard(&mut format_hx_status_line(&hx_status_line)?.as_bytes())?;
 
     Ok(())
 }

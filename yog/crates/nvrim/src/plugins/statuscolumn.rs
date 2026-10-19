@@ -127,7 +127,7 @@ impl Display for SignHlGroup {
     }
 }
 
-impl<'de> serde::Deserialize<'de> for SignHlGroup {
+impl<'de> Deserialize<'de> for SignHlGroup {
     /// Deserializes a highlight group string into a typed [`SignHlGroup`].
     ///
     /// # Errors

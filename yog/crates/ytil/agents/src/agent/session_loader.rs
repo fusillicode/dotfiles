@@ -1,7 +1,9 @@
 use std::collections::HashSet;
+use std::fs::DirEntry;
 use std::path::Path;
 use std::path::PathBuf;
 
+use jiff::Timestamp;
 use rootcause::prelude::ResultExt;
 
 use crate::agent::Agent;
@@ -38,8 +40,8 @@ pub fn load_sessions_by_key(keys: &[SessionKey]) -> rootcause::Result<Vec<Sessio
 
 pub(crate) fn find_session_paths(
     root: &Path,
-    matching_file_fn: impl Fn(&std::fs::DirEntry) -> bool,
-    skip_dir_fn: impl Fn(&std::fs::DirEntry) -> bool,
+    matching_file_fn: impl Fn(&DirEntry) -> bool,
+    skip_dir_fn: impl Fn(&DirEntry) -> bool,
 ) -> rootcause::Result<Vec<PathBuf>> {
     if !root.exists() {
         return Ok(Vec::new());
@@ -55,14 +57,14 @@ fn requested_ids(keys: &[SessionKey], agent: Agent) -> HashSet<&str> {
         .collect()
 }
 
-fn file_updated_at(path: &Path) -> rootcause::Result<Option<jiff::Timestamp>> {
+fn file_updated_at(path: &Path) -> rootcause::Result<Option<Timestamp>> {
     let modified = std::fs::metadata(path)
         .context("failed to read session metadata")
         .attach_with(|| format!("path={}", path.display()))?
         .modified()
         .context("failed to read session modified time")
         .attach_with(|| format!("path={}", path.display()))?;
-    Ok(Some(jiff::Timestamp::try_from(modified)?))
+    Ok(Some(Timestamp::try_from(modified)?))
 }
 
 #[cfg(test)]

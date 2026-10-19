@@ -7,6 +7,7 @@ use core::str::FromStr;
 use std::path::Path;
 
 use nutype::nutype;
+use rootcause::Report;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
 use ytil_wezterm::WeztermPane;
@@ -43,7 +44,7 @@ impl Editor {
 
 /// Parses an [`Editor`] from a string representation.
 impl FromStr for Editor {
-    type Err = rootcause::Report;
+    type Err = Report;
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         match value {
@@ -75,7 +76,7 @@ pub struct FileToOpen {
 
 /// Attempts to create a [`FileToOpen`] from a file path, pane ID, and list of panes.
 impl TryFrom<(&str, i64, &[WeztermPane])> for FileToOpen {
-    type Error = rootcause::Report;
+    type Error = Report;
 
     fn try_from((file_to_open, pane_id, panes): (&str, i64, &[WeztermPane])) -> Result<Self, Self::Error> {
         if Path::new(file_to_open).is_absolute() {
@@ -104,7 +105,7 @@ impl TryFrom<(&str, i64, &[WeztermPane])> for FileToOpen {
 
 /// Parses a [`FileToOpen`] from a string in the format "path:line:column".
 impl FromStr for FileToOpen {
-    type Err = rootcause::Report;
+    type Err = Report;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut parts = s.split(':');

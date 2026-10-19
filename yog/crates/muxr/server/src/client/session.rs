@@ -5,6 +5,7 @@ use std::time::Instant;
 
 use kanal::Receiver;
 use kanal::Sender;
+use muxr_core::AttachAccepted;
 use muxr_core::AttachRequest;
 use muxr_core::LayoutSnapshot;
 use muxr_core::PaneId;
@@ -14,10 +15,11 @@ use muxr_transport::ServerConnection;
 use muxr_transport::ServerRequestReader;
 use rootcause::report;
 use tokio::sync::mpsc::error::TryRecvError;
+use tokio::task::JoinHandle;
 
-use super::quiet::QuietTurn;
 use crate::client::heartbeat::HeartbeatStatus;
 use crate::client::heartbeat::HeartbeatTracker;
+use crate::client::quiet::QuietTurn;
 use crate::client::timers::ClientTimers;
 use crate::client::timers::QuietDeadline;
 use crate::keyboard_input::ServerInputMode;
@@ -75,7 +77,7 @@ impl ClientSessionState<'_> {
             PaneTreeRightPane::Pane(right_pane_id) => self.pane_nvim_state(right_pane_id),
             PaneTreeRightPane::Missing => NvimState::Unknown,
         };
-        Ok(self::open_file_pane_route_for_right_pane(right_pane, nvim_state))
+        Ok(open_file_pane_route_for_right_pane(right_pane, nvim_state))
     }
 
     pub(crate) fn focus_pane_for_open_file(
@@ -93,7 +95,7 @@ impl ClientSessionState<'_> {
             self.config.user_config.as_ref(),
             self.layout,
             self.runtimes,
-            std::time::Instant::now(),
+            Instant::now(),
         )?;
         timers.sync_tracked_process_quiet_deadline_for_layout(&self.pane_tracked_processes, self.layout)?;
         Ok(())
@@ -128,7 +130,7 @@ pub fn attach_pane_sink_to_state(state: &mut ClientSessionState<'_>, pane_id: Pa
         || Arc::new(AtomicBool::new(false)),
         |sink| Arc::clone(&sink.output_wakeup_pending),
     );
-    state.sink_guards.push(self::attach_pane_sink(
+    state.sink_guards.push(attach_pane_sink(
         state.runtimes,
         state.pty_event_sender,
         pane_id,
@@ -143,7 +145,7 @@ pub fn remove_pane_from_client_state(
     pane_id: PaneId,
 ) -> rootcause::Result<()> {
     state.sink_guards.retain(|sink| sink.pane_id != pane_id);
-    self::remove_live_pane_tracking(state, timers, pane_id)
+    remove_live_pane_tracking(state, timers, pane_id)
 }
 
 pub async fn handle_client(
@@ -156,7 +158,7 @@ pub async fn handle_client(
 ) -> rootcause::Result<ClientSessionCompletion> {
     crate::screen_render::resize_panes_to_layout(layout, runtimes, &attach_request.terminal_size)?;
     let (pty_event_sender, pty_event_receiver) = kanal::bounded(PANE_OUTPUT_EVENT_CHANNEL_LIMIT);
-    let mut sink_guards = self::attach_pane_sinks(runtimes, &pty_event_sender)?;
+    let mut sink_guards = attach_pane_sinks(runtimes, &pty_event_sender)?;
     let (mut request_reader, event_writer) = connection.split();
     let mut pane_tracked_processes = PaneTrackedProcesses::default();
     pane_tracked_processes.observe_all_runtime_pane_cmds(
@@ -178,7 +180,7 @@ pub async fn handle_client(
     let last_layout_snapshot = layout_snapshot.clone();
     if crate::event_writer::send_event_with_timeout(
         &mut event_writer,
-        &ServerEvent::Attached(muxr_core::AttachAccepted {
+        &ServerEvent::Attached(AttachAccepted {
             layout: layout_snapshot,
             pane_regions,
         }),
@@ -207,7 +209,7 @@ pub async fn handle_client(
         });
     }
 
-    let (mut async_pty_receiver, bridge_handle) = self::spawn_pty_event_bridge(pty_event_receiver);
+    let (mut async_pty_receiver, bridge_handle) = spawn_pty_event_bridge(pty_event_receiver);
     let mut client_state = ClientSessionState {
         pane_tracked_processes,
         config,
@@ -223,7 +225,7 @@ pub async fn handle_client(
         sink_guards: &mut sink_guards,
         terminal_size: attach_request.terminal_size,
     };
-    let result = self::run_client_session(
+    let result = run_client_session(
         &mut request_reader,
         &mut event_writer,
         &mut client_state,
@@ -234,7 +236,7 @@ pub async fn handle_client(
     if let Ok(outcome) = &restore_result
         && let Some(editor_pane_id) = outcome.editor_pane_id
     {
-        self::remove_pane_client_resources(&mut client_state, editor_pane_id);
+        remove_pane_client_resources(&mut client_state, editor_pane_id);
     }
     drop(client_state);
 
@@ -276,7 +278,7 @@ pub async fn handle_reaped_panes(
     let previous_pane_before_restore = state.layout.active_pane_id()?;
     let restored_editor = crate::scrollback_editor::restore_before_reap_if_needed(state)?;
     if let Some(editor_pane_id) = restored_editor.editor_pane_id {
-        self::remove_pane_from_client_state(state, timers, editor_pane_id)?;
+        remove_pane_from_client_state(state, timers, editor_pane_id)?;
     }
     let previous_pane_before_reap = state.layout.active_pane_id()?;
     match crate::session::runtime::reap_exited_panes(state.config, state.layout, state.runtimes)? {
@@ -286,7 +288,7 @@ pub async fn handle_reaped_panes(
                 return Ok(ReapedPanes::Unchanged);
             }
             crate::pane::focus::write_active_pane_focus_events(previous_pane_before_restore, state)?;
-            self::acknowledge_active_tracked_process(state)?;
+            acknowledge_active_tracked_process(state)?;
             match crate::screen_render::send_layout_and_baseline(event_writer, state).await? {
                 ClientSessionFlow::Continue => Ok(ReapedPanes::LayoutChanged),
                 ClientSessionFlow::Disconnect => Ok(ReapedPanes::Stop),
@@ -294,7 +296,7 @@ pub async fn handle_reaped_panes(
         }
         ReapResult::Removed { pane_ids } => {
             for pane_id in &pane_ids {
-                self::remove_live_pane_tracking(state, timers, *pane_id)?;
+                remove_live_pane_tracking(state, timers, *pane_id)?;
             }
             // Keep the common single-pane reap allocation-free. Batched reaps build membership once so cleanup does
             // not become sink_guards * removed_panes work.
@@ -313,7 +315,7 @@ pub async fn handle_reaped_panes(
                     previous_pane_before_reap
                 };
             crate::pane::focus::write_active_pane_focus_events(previous_pane, state)?;
-            self::acknowledge_active_tracked_process(state)?;
+            acknowledge_active_tracked_process(state)?;
             match crate::screen_render::resize_panes_and_render(event_writer, state).await? {
                 ClientSessionFlow::Continue => Ok(ReapedPanes::LayoutChanged),
                 ClientSessionFlow::Disconnect => Ok(ReapedPanes::Stop),
@@ -399,15 +401,12 @@ fn remove_live_pane_tracking(
 
 fn spawn_pty_event_bridge(
     pty_event_receiver: Receiver<PtyEvent>,
-) -> (
-    tokio::sync::mpsc::Receiver<SessionPaneOutputMessage>,
-    tokio::task::JoinHandle<()>,
-) {
+) -> (tokio::sync::mpsc::Receiver<SessionPaneOutputMessage>, JoinHandle<()>) {
     let (async_pty_sender, async_pty_receiver) = tokio::sync::mpsc::channel(PANE_OUTPUT_EVENT_CHANNEL_LIMIT);
     // kanal 0.1.1 documents async receives as unsuitable for `tokio::select!` cancellation. Keep this bridge so the
     // client loop can select PTY output against requests and timers without risking a lost output wakeup.
     let bridge_handle =
-        tokio::task::spawn_blocking(move || self::forward_pty_events_to_async(&pty_event_receiver, &async_pty_sender));
+        tokio::task::spawn_blocking(move || forward_pty_events_to_async(&pty_event_receiver, &async_pty_sender));
     (async_pty_receiver, bridge_handle)
 }
 
@@ -436,7 +435,7 @@ async fn run_client_session(
     state: &mut ClientSessionState<'_>,
     pty_event_receiver: &mut tokio::sync::mpsc::Receiver<SessionPaneOutputMessage>,
 ) -> rootcause::Result<()> {
-    self::run_client_session_loop(
+    run_client_session_loop(
         request_reader,
         event_writer,
         state,
@@ -454,8 +453,14 @@ async fn run_test_client_session(
     pty_event_receiver: &mut tokio::sync::mpsc::Receiver<SessionPaneOutputMessage>,
     select_bias: ClientSessionSelectBias,
 ) -> rootcause::Result<()> {
-    let result =
-        self::run_client_session_loop(request_reader, event_writer, state, pty_event_receiver, select_bias).await;
+    let result = crate::client::session::run_client_session_loop(
+        request_reader,
+        event_writer,
+        state,
+        pty_event_receiver,
+        select_bias,
+    )
+    .await;
     state.render_worker.shutdown().await?;
     result
 }
@@ -494,7 +499,7 @@ async fn run_client_session_loop(
         let ready_quiet = quiet_turn.take_ready(timers.tracked_process_quiet_deadline());
         let mut skip_quiet_this_turn = false;
         if ready_quiet == QuietTurn::DrainBeforeClear {
-            match self::drain_queued_output_before_quiet(
+            match drain_queued_output_before_quiet(
                 pty_event_receiver,
                 event_writer,
                 state,
@@ -519,7 +524,7 @@ async fn run_client_session_loop(
             && ready_quiet == QuietTurn::DrainBeforeClear
             && timers.tracked_process_quiet_deadline() == crate::client::timers::QuietDeadline::Elapsed
         {
-            if self::handle_session_runtime_timer_message(
+            if handle_session_runtime_timer_message(
                 SessionRuntimeTimerMessage::TrackedProcessQuietDeadlineReached,
                 event_writer,
                 state,

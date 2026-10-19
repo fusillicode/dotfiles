@@ -1,6 +1,10 @@
 use std::num::NonZeroU16;
 
 use nutype::nutype;
+use rkyv::Archived;
+use rkyv::Place;
+use rkyv::Resolver;
+use rkyv::primitive::ArchivedNonZeroU16;
 use rootcause::report;
 use serde::Deserialize;
 use serde::Serialize;
@@ -46,10 +50,10 @@ impl TerminalSize {
 pub(super) struct TerminalDimension(u16);
 
 impl rkyv::Archive for TerminalDimension {
-    type Archived = rkyv::Archived<NonZeroU16>;
-    type Resolver = rkyv::Resolver<NonZeroU16>;
+    type Archived = Archived<NonZeroU16>;
+    type Resolver = Resolver<NonZeroU16>;
 
-    fn resolve(&self, resolver: Self::Resolver, out: rkyv::Place<Self::Archived>) {
+    fn resolve(&self, resolver: Self::Resolver, out: Place<Self::Archived>) {
         rkyv::Archive::resolve(&NonZeroU16::from(*self), resolver, out);
     }
 }
@@ -71,13 +75,13 @@ impl From<TerminalDimension> for NonZeroU16 {
     }
 }
 
-impl<D> rkyv::Deserialize<TerminalDimension, D> for rkyv::primitive::ArchivedNonZeroU16
+impl<D> rkyv::Deserialize<TerminalDimension, D> for ArchivedNonZeroU16
 where
     D: rkyv::rancor::Fallible + ?Sized,
     D::Error: rkyv::rancor::Source,
 {
     fn deserialize(&self, _deserializer: &mut D) -> Result<TerminalDimension, D::Error> {
-        TerminalDimension::try_new(self.to_native().get()).map_err(super::rkyv_deserialize_error::<D::Error>)
+        TerminalDimension::try_new(self.to_native().get()).map_err(crate::protocol::rkyv_deserialize_error::<D::Error>)
     }
 }
 

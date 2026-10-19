@@ -4,11 +4,12 @@ use std::ffi::OsString;
 use std::path::PathBuf;
 use std::str::FromStr;
 
+use rootcause::Report;
 use rootcause::report;
 use ytil_sys::pico_args::Arguments;
 
-pub use self::output::RslOutput;
-use self::rules::SelectedRules;
+pub use crate::cmds::rsl::output::RslOutput;
+use crate::cmds::rsl::rules::SelectedRules;
 
 mod analysis;
 mod ast;
@@ -40,7 +41,7 @@ pub fn run(mut cli_args: Arguments) -> rootcause::Result<RslOutput> {
         }
     };
 
-    let reports = self::engine::process_paths(&opts.paths, &opts.rules, opts.mode)?;
+    let reports = crate::cmds::rsl::engine::process_paths(&opts.paths, &opts.rules, opts.mode)?;
 
     Ok(RslOutput { reports })
 }
@@ -53,7 +54,7 @@ enum Mode {
 }
 
 impl FromStr for Mode {
-    type Err = rootcause::Report;
+    type Err = Report;
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         match value {
@@ -73,7 +74,7 @@ struct RslOpts {
 }
 
 impl TryFrom<Vec<OsString>> for RslOpts {
-    type Error = rootcause::Report;
+    type Error = Report;
 
     fn try_from(raw: Vec<OsString>) -> Result<Self, Self::Error> {
         let mut before_separator = Vec::new();

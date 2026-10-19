@@ -15,6 +15,7 @@ use muxr_core::ClientMouseEvent;
 use muxr_core::PaneMouseMode;
 use muxr_core::PaneRegionSnapshot;
 use muxr_core::PaneScrollDirection;
+use muxr_core::RowWrap;
 use muxr_core::TerminalSize;
 #[cfg(test)]
 use parking_lot::Condvar;
@@ -23,16 +24,19 @@ use portable_pty::Child;
 use portable_pty::ChildKiller;
 use portable_pty::MasterPty;
 use portable_pty::PtySize;
-use portable_pty::native_pty_system;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
+use thread::JoinHandle;
+use tokio::sync::Notify;
+use tracing::dispatcher;
 
-use super::cmd::ShellCmd;
-use super::event::PtyEvent;
-use super::event::PtyExitStatus;
-use super::writer;
-use super::writer::PtyWriter;
+use crate::pty::cmd::ShellCmd;
+use crate::pty::event::PtyEvent;
+use crate::pty::event::PtyExitStatus;
+use crate::pty::writer;
+use crate::pty::writer::PtyWriter;
 use crate::render_state::OutputFreshness;
+use crate::session::tracing::pty;
 use crate::terminal::TerminalApplicationMode;
 use crate::terminal::TerminalCursorKeyMode;
 use crate::terminal::TerminalFocusEvent;
@@ -50,10 +54,10 @@ type PtyChild = Box<dyn Child + Send + Sync>;
 type SharedPtyChild = Arc<Mutex<Option<PtyChild>>>;
 
 pub struct PtySession {
-    child_wait_handle: Option<thread::JoinHandle<()>>,
+    child_wait_handle: Option<JoinHandle<()>>,
     handle: PtyHandle,
-    reader_handle: Option<thread::JoinHandle<()>>,
-    writer_handle: Option<thread::JoinHandle<()>>,
+    reader_handle: Option<JoinHandle<()>>,
+    writer_handle: Option<JoinHandle<()>>,
 }
 
 impl PtySession {
@@ -62,11 +66,11 @@ impl PtySession {
         cwd: &str,
         size: &TerminalSize,
         scrollback: ScrollbackConfig,
-        pane_exit_notify: Arc<tokio::sync::Notify>,
+        pane_exit_notify: Arc<Notify>,
     ) -> rootcause::Result<Self> {
         let state = Arc::new(PtyState::new(size, scrollback, pane_exit_notify));
 
-        let pty_pair = native_pty_system()
+        let pty_pair = portable_pty::native_pty_system()
             .openpty(pty_size(size))
             .map_err(|error| report!("failed to open muxr shell pty").attach(format!("error={error:#}")))?;
 
@@ -92,7 +96,7 @@ impl PtySession {
         let (writer, writer_handle) = match writer::spawn(writer) {
             Ok(writer_parts) => writer_parts,
             Err(error) => {
-                self::kill_and_wait_child(child.as_mut());
+                kill_and_wait_child(child.as_mut());
                 return Err(error);
             }
         };
@@ -128,13 +132,13 @@ impl PtySession {
 impl Drop for PtySession {
     fn drop(&mut self) {
         if !self.handle.state.exited.load(Ordering::Acquire) {
-            self::kill_child(&self.handle.child_killer);
+            kill_child(&self.handle.child_killer);
         }
 
         if let Some(child_wait_handle) = self.child_wait_handle.take()
             && child_wait_handle.join().is_err()
         {
-            crate::session::tracing::pty::shutdown_failed("join_child_wait", "child wait thread panicked");
+            pty::shutdown_failed("join_child_wait", "child wait thread panicked");
         }
 
         let writer_shutdown = self
@@ -142,21 +146,21 @@ impl Drop for PtySession {
             .writer
             .shutdown()
             .inspect_err(|error| {
-                crate::session::tracing::pty::shutdown_failed("queue_writer_shutdown", error);
+                pty::shutdown_failed("queue_writer_shutdown", error);
             })
             .is_ok();
 
         if let Some(reader_handle) = self.reader_handle.take()
             && reader_handle.join().is_err()
         {
-            crate::session::tracing::pty::shutdown_failed("join_reader", "reader thread panicked");
+            pty::shutdown_failed("join_reader", "reader thread panicked");
         }
 
         if writer_shutdown
             && let Some(writer_handle) = self.writer_handle.take()
             && writer_handle.join().is_err()
         {
-            crate::session::tracing::pty::shutdown_failed("join_writer", "writer thread panicked");
+            pty::shutdown_failed("join_writer", "writer thread panicked");
         }
     }
 }
@@ -303,7 +307,7 @@ impl PtyHandle {
         self.state.terminal.lock().visible_top_row()
     }
 
-    pub fn visible_row_wraps(&self) -> Vec<muxr_core::RowWrap> {
+    pub fn visible_row_wraps(&self) -> Vec<RowWrap> {
         self.state.terminal.lock().visible_row_wraps()
     }
 
@@ -393,17 +397,17 @@ impl PtyHandle {
 /// Pane render data captured under one terminal-state lock.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PtyRenderMetadata {
-    mouse_mode: muxr_core::PaneMouseMode,
-    visible_row_wraps: Vec<muxr_core::RowWrap>,
+    mouse_mode: PaneMouseMode,
+    visible_row_wraps: Vec<RowWrap>,
     visible_top_row: u64,
 }
 
 impl PtyRenderMetadata {
-    pub const fn mouse_mode(&self) -> muxr_core::PaneMouseMode {
+    pub const fn mouse_mode(&self) -> PaneMouseMode {
         self.mouse_mode
     }
 
-    pub fn visible_row_wraps(&self) -> &[muxr_core::RowWrap] {
+    pub fn visible_row_wraps(&self) -> &[RowWrap] {
         &self.visible_row_wraps
     }
 
@@ -495,7 +499,7 @@ struct PtyState {
     active_sink: Mutex<Option<ActivePtySink>>,
     exited: AtomicBool,
     exit_status: Mutex<Option<PtyExitStatus>>,
-    pane_exit_notify: Arc<tokio::sync::Notify>,
+    pane_exit_notify: Arc<Notify>,
     #[cfg(test)]
     output_waiter: (Mutex<u64>, Condvar),
     screen_dirty: AtomicBool,
@@ -504,7 +508,7 @@ struct PtyState {
 }
 
 impl PtyState {
-    fn new(size: &TerminalSize, scrollback: ScrollbackConfig, pane_exit_notify: Arc<tokio::sync::Notify>) -> Self {
+    fn new(size: &TerminalSize, scrollback: ScrollbackConfig, pane_exit_notify: Arc<Notify>) -> Self {
         Self {
             active_sink: Mutex::new(None),
             exited: AtomicBool::new(false),
@@ -578,7 +582,7 @@ impl PtyState {
                 .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
                 .is_ok()
             {
-                match self::try_send_pty_event(&sink.sender, PtyEvent::OutputReady)? {
+                match crate::pty::session::try_send_pty_event(&sink.sender, PtyEvent::OutputReady)? {
                     PtyEventSendOutcome::Sent => {}
                     PtyEventSendOutcome::Full(PtyEvent::OutputReady) => {
                         // The receiver has no queued wakeup to consume; let later output retry once capacity opens.
@@ -645,7 +649,7 @@ impl PtyState {
             return Ok(());
         }
 
-        match self::try_send_pty_event(&sink.sender, PtyEvent::OutputReady)? {
+        match crate::pty::session::try_send_pty_event(&sink.sender, PtyEvent::OutputReady)? {
             PtyEventSendOutcome::Sent => {}
             PtyEventSendOutcome::Full(PtyEvent::OutputReady) => {
                 sink.output_wakeup_pending.store(false, Ordering::Release);
@@ -676,7 +680,7 @@ impl PtyState {
 
         let mut active_sink = self.active_sink.lock();
         if let Some(sink) = active_sink.as_ref() {
-            match self::try_send_pty_event(&sink.sender, PtyEvent::Exited)? {
+            match crate::pty::session::try_send_pty_event(&sink.sender, PtyEvent::Exited)? {
                 PtyEventSendOutcome::Sent => {}
                 PtyEventSendOutcome::Full(_) => {
                     crate::session::tracing::pty::exit_wakeup_not_queued("channel_full");
@@ -706,9 +710,9 @@ fn try_send_pty_event(sender: &Sender<PtyEvent>, event: PtyEvent) -> rootcause::
     let mut pending = Some(event);
     match sender.try_send_option(&mut pending) {
         Ok(true) => Ok(PtyEventSendOutcome::Sent),
-        Ok(false) => Ok(PtyEventSendOutcome::Full(self::pending_pty_event(pending)?)),
+        Ok(false) => Ok(PtyEventSendOutcome::Full(pending_pty_event(pending)?)),
         Err(SendError::Closed | SendError::ReceiveClosed) => {
-            Ok(PtyEventSendOutcome::Disconnected(self::pending_pty_event(pending)?))
+            Ok(PtyEventSendOutcome::Disconnected(pending_pty_event(pending)?))
         }
     }
 }
@@ -730,16 +734,16 @@ fn spawn_reader_thread(
     mut reader: Box<dyn Read + Send>,
     state: Arc<PtyState>,
     writer: PtyWriter,
-) -> rootcause::Result<thread::JoinHandle<()>> {
+) -> rootcause::Result<JoinHandle<()>> {
     // Raw OS threads do not inherit thread-local tracing state, so carry both the dispatcher and span explicitly.
     let span = tracing::Span::current();
-    let dispatch = tracing::dispatcher::get_default(Clone::clone);
+    let dispatch = dispatcher::get_default(Clone::clone);
     Ok(thread::Builder::new()
         .name("muxr-pty-reader".to_owned())
         .spawn(move || {
-            tracing::dispatcher::with_default(&dispatch, || {
+            dispatcher::with_default(&dispatch, || {
                 let _guard = span.enter();
-                self::run_reader_loop(&mut *reader, state.as_ref(), &writer);
+                run_reader_loop(&mut *reader, state.as_ref(), &writer);
             });
         })
         .context("failed to spawn muxr pty reader thread")?)
@@ -747,7 +751,7 @@ fn spawn_reader_thread(
 
 fn kill_child(child_killer: &Mutex<Box<dyn ChildKiller + Send + Sync>>) {
     let _ = child_killer.lock().kill().inspect_err(|error| {
-        crate::session::tracing::pty::shutdown_failed("kill_child", error);
+        pty::shutdown_failed("kill_child", error);
     });
 }
 
@@ -755,21 +759,21 @@ fn kill_and_wait_child(child: &mut dyn Child) -> Option<PtyExitStatus> {
     // Early setup failures can happen before the child wait thread owns the child, so cleanup must reap the killed
     // process here instead of relying on the normal wait-thread path.
     let _ = child.kill().inspect_err(|error| {
-        crate::session::tracing::pty::shutdown_failed("kill_child", error);
+        pty::shutdown_failed("kill_child", error);
     });
     match child.wait() {
         Ok(exit_status) => Some(PtyExitStatus::from(&exit_status)),
         Err(error) => {
-            crate::session::tracing::pty::shutdown_failed("wait_child_after_kill", &error);
+            pty::shutdown_failed("wait_child_after_kill", &error);
             None
         }
     }
 }
 
-fn spawn_child_wait_thread(child: PtyChild, state: &Arc<PtyState>) -> rootcause::Result<thread::JoinHandle<()>> {
+fn spawn_child_wait_thread(child: PtyChild, state: &Arc<PtyState>) -> rootcause::Result<JoinHandle<()>> {
     // Raw OS threads do not inherit thread-local tracing state, so carry both the dispatcher and span explicitly.
     let span = tracing::Span::current();
-    let dispatch = tracing::dispatcher::get_default(Clone::clone);
+    let dispatch = dispatcher::get_default(Clone::clone);
 
     // Keep the child recoverable until the wait thread is successfully spawned. Exactly one side takes it: the wait
     // thread on success, or the spawn-error cleanup path before any reaper exists.
@@ -780,9 +784,9 @@ fn spawn_child_wait_thread(child: PtyChild, state: &Arc<PtyState>) -> rootcause:
     match thread::Builder::new()
         .name("muxr-pty-child-wait".to_owned())
         .spawn(move || {
-            tracing::dispatcher::with_default(&dispatch, || {
+            dispatcher::with_default(&dispatch, || {
                 let _guard = span.enter();
-                let Some(mut child) = self::take_child_wait_handle(&thread_child) else {
+                let Some(mut child) = take_child_wait_handle(&thread_child) else {
                     return;
                 };
 
@@ -791,22 +795,22 @@ fn spawn_child_wait_thread(child: PtyChild, state: &Arc<PtyState>) -> rootcause:
                         let _ = thread_state
                             .mark_exited(PtyExitStatus::from(&exit_status))
                             .inspect_err(|error| {
-                                crate::session::tracing::pty::shutdown_failed("mark_exited", error);
+                                pty::shutdown_failed("mark_exited", error);
                             });
                     }
                     Err(error) => {
-                        crate::session::tracing::pty::shutdown_failed("wait_child", &error);
+                        pty::shutdown_failed("wait_child", &error);
                     }
                 }
             });
         }) {
         Ok(handle) => Ok(handle),
         Err(error) => {
-            if let Some(mut child) = self::take_child_wait_handle(&child)
-                && let Some(exit_status) = self::kill_and_wait_child(child.as_mut())
+            if let Some(mut child) = take_child_wait_handle(&child)
+                && let Some(exit_status) = kill_and_wait_child(child.as_mut())
             {
                 let _ = state.mark_exited(exit_status).inspect_err(|error| {
-                    crate::session::tracing::pty::shutdown_failed("mark_exited", error);
+                    pty::shutdown_failed("mark_exited", error);
                 });
             }
             Err(report!("failed to spawn muxr pty child wait thread").attach(format!("error={error:#}")))
@@ -839,14 +843,14 @@ fn run_reader_loop(reader: &mut dyn Read, state: &PtyState, writer: &PtyWriter) 
                 let terminal_replies = match state.append_output(bytes) {
                     Ok(terminal_replies) => terminal_replies,
                     Err(error) => {
-                        crate::session::tracing::pty::reader_stopped_after_error("append_output", &error);
+                        pty::reader_stopped_after_error("append_output", &error);
                         break;
                     }
                 };
                 if writer
                     .write_terminal_replies(terminal_replies.as_ref())
                     .inspect_err(|error| {
-                        crate::session::tracing::pty::reader_stopped_after_error("write_terminal_replies", error);
+                        pty::reader_stopped_after_error("write_terminal_replies", error);
                     })
                     .is_err()
                 {
@@ -865,8 +869,8 @@ mod tests {
     use muxr_core::SessionName;
     use test_that::prelude::*;
 
-    use super::super::event::PtyExitResult;
     use super::*;
+    use crate::pty::event::PtyExitResult;
 
     #[derive(Debug)]
     struct RecordingChild {
@@ -939,7 +943,8 @@ mod tests {
         let events = Arc::new(Mutex::new(Vec::new()));
         let mut child = RecordingChild::new(Arc::clone(&events), 7);
 
-        let exit_status = self::kill_and_wait_child(&mut child).ok_or_else(|| report!("expected child exit status"))?;
+        let exit_status = crate::pty::session::tests::kill_and_wait_child(&mut child)
+            .ok_or_else(|| report!("expected child exit status"))?;
 
         assert_that!(*events.lock(), eq(vec!["kill", "wait"]));
         assert_that!(
@@ -957,8 +962,10 @@ mod tests {
     fn test_spawn_child_wait_thread_when_child_exits_marks_exit_status() -> rootcause::Result<()> {
         let events = Arc::new(Mutex::new(Vec::new()));
         let state = Arc::new(pty_state(&terminal_size()?));
-        let child_wait_handle =
-            self::spawn_child_wait_thread(Box::new(RecordingChild::new(Arc::clone(&events), 7)), &state)?;
+        let child_wait_handle = crate::pty::session::tests::spawn_child_wait_thread(
+            Box::new(RecordingChild::new(Arc::clone(&events), 7)),
+            &state,
+        )?;
 
         child_wait_handle
             .join()
@@ -980,7 +987,7 @@ mod tests {
     #[test]
     fn test_spawn_reader_thread_when_pty_reaches_eof_does_not_mark_child_exited() -> rootcause::Result<()> {
         let state = Arc::new(pty_state(&terminal_size()?));
-        let (writer, writer_handle) = writer::spawn(self::sink_pty_writer())?;
+        let (writer, writer_handle) = writer::spawn(sink_pty_writer())?;
         let reader_handle = spawn_reader_thread(
             Box::new(std::io::Cursor::new(Vec::new())),
             Arc::clone(&state),
@@ -1106,11 +1113,11 @@ mod tests {
     #[test]
     fn test_attach_sink_when_output_arrives_after_attach_delivers_live_event() -> rootcause::Result<()> {
         let state = Arc::new(pty_state(&terminal_size()?));
-        self::assert_replies_eq(&(state.append_output(b"before")?), &[]);
+        assert_replies_eq(&(state.append_output(b"before")?), &[]);
         let (sender, receiver) = kanal::bounded(1);
 
         let _guard = state.attach_sink(sender);
-        self::assert_replies_eq(&(state.append_output(b"after")?), &[]);
+        assert_replies_eq(&(state.append_output(b"after")?), &[]);
 
         assert_that!(receiver.recv(), ok(eq(PtyEvent::OutputReady)));
         Ok(())
@@ -1128,7 +1135,7 @@ mod tests {
         });
         drop(receiver);
 
-        self::assert_replies_eq(&(state.append_output(b"lost client")?), &[]);
+        assert_replies_eq(&(state.append_output(b"lost client")?), &[]);
 
         assert_that!(state.active_sink.lock().as_ref().map(|_| ()), none());
         assert_that!(output_current.load(Ordering::Acquire), eq(false));
@@ -1138,9 +1145,9 @@ mod tests {
     #[test]
     fn test_attach_sink_when_output_arrived_before_attach_clears_screen_dirty() -> rootcause::Result<()> {
         let state = Arc::new(pty_state(&terminal_size()?));
-        self::assert_replies_eq(&(state.append_output(b"before")?), &[]);
+        assert_replies_eq(&(state.append_output(b"before")?), &[]);
         assert_that!(state.take_screen_dirty(), eq(PtyScreenDmg::Dirty));
-        self::assert_replies_eq(&(state.append_output(b"before again")?), &[]);
+        assert_replies_eq(&(state.append_output(b"before again")?), &[]);
         let (sender, _receiver) = kanal::bounded(1);
 
         let _guard = state.attach_sink(sender);
@@ -1155,8 +1162,8 @@ mod tests {
         let (sender, receiver) = kanal::bounded(2);
         let _guard = state.attach_sink(sender);
 
-        self::assert_replies_eq(&(state.append_output(b"\x1b]2;~\x07")?), &[]);
-        self::assert_replies_eq(&(state.append_output(b"\x1b]2;work\x07")?), &[]);
+        assert_replies_eq(&(state.append_output(b"\x1b]2;~\x07")?), &[]);
+        assert_replies_eq(&(state.append_output(b"\x1b]2;work\x07")?), &[]);
         assert_that!(
             state
                 .active_sink
@@ -1182,8 +1189,8 @@ mod tests {
         let (sender, receiver) = kanal::bounded(2);
         let _guard = state.attach_sink(sender);
 
-        self::assert_replies_eq(&(state.append_output(b"first")?), &[]);
-        self::assert_replies_eq(&(state.append_output(b"second")?), &[]);
+        assert_replies_eq(&(state.append_output(b"first")?), &[]);
+        assert_replies_eq(&(state.append_output(b"second")?), &[]);
         assert_that!(
             state
                 .active_sink
@@ -1193,7 +1200,7 @@ mod tests {
             eq(true)
         );
         state.acknowledge_output_wakeup();
-        self::assert_replies_eq(&(state.append_output(b"third")?), &[]);
+        assert_replies_eq(&(state.append_output(b"third")?), &[]);
 
         assert_that!(receiver.recv(), ok(eq(PtyEvent::OutputReady)));
         assert_that!(receiver.recv(), ok(eq(PtyEvent::OutputReady)));
@@ -1210,8 +1217,8 @@ mod tests {
         let _first_guard = first.attach_sink_with_output_wakeup(sender.clone(), Arc::clone(&output_wakeup_pending));
         let _second_guard = second.attach_sink_with_output_wakeup(sender, Arc::clone(&output_wakeup_pending));
 
-        self::assert_replies_eq(&(first.append_output(b"first pane")?), &[]);
-        self::assert_replies_eq(&(second.append_output(b"second pane")?), &[]);
+        assert_replies_eq(&(first.append_output(b"first pane")?), &[]);
+        assert_replies_eq(&(second.append_output(b"second pane")?), &[]);
 
         assert_that!(receiver.recv(), ok(eq(PtyEvent::OutputReady)));
         assert_that!(receiver.try_recv(), ok(none()));
@@ -1232,7 +1239,7 @@ mod tests {
             sender,
         });
 
-        self::assert_replies_eq(&(state.append_output(b"first")?), &[]);
+        assert_replies_eq(&(state.append_output(b"first")?), &[]);
         assert_that!(
             state
                 .active_sink
@@ -1254,9 +1261,9 @@ mod tests {
         let (sender, receiver) = kanal::bounded(2);
         let _guard = state.attach_sink(sender);
 
-        self::assert_replies_eq(&(state.append_output(b"before acknowledgement")?), &[]);
+        assert_replies_eq(&(state.append_output(b"before acknowledgement")?), &[]);
         state.acknowledge_output_wakeup();
-        self::assert_replies_eq(&(state.append_output(b"after acknowledgement")?), &[]);
+        assert_replies_eq(&(state.append_output(b"after acknowledgement")?), &[]);
 
         assert_that!(state.take_screen_dirty(), eq(PtyScreenDmg::Dirty));
         assert_that!(receiver.recv(), ok(eq(PtyEvent::OutputReady)));
@@ -1268,7 +1275,7 @@ mod tests {
     fn test_append_output_when_visible_output_arrives_marks_screen_dirty_until_taken() -> rootcause::Result<()> {
         let state = pty_state(&terminal_size()?);
 
-        self::assert_replies_eq(&(state.append_output(b"visible")?), &[]);
+        assert_replies_eq(&(state.append_output(b"visible")?), &[]);
 
         assert_that!(state.take_screen_dirty(), eq(PtyScreenDmg::Dirty));
         assert_that!(state.take_screen_dirty(), eq(PtyScreenDmg::Clean));
@@ -1279,7 +1286,7 @@ mod tests {
     fn test_append_output_when_only_mouse_mode_changes_marks_render_dirty() -> rootcause::Result<()> {
         let state = pty_state(&terminal_size()?);
 
-        self::assert_replies_eq(&(state.append_output(b"\x1b[?1002h\x1b[?1006h")?), &[]);
+        assert_replies_eq(&(state.append_output(b"\x1b[?1002h\x1b[?1006h")?), &[]);
 
         assert_that!(state.take_screen_dirty(), eq(PtyScreenDmg::Dirty));
         Ok(())
@@ -1296,8 +1303,8 @@ mod tests {
             sender,
         });
 
-        self::assert_replies_eq(&(state.append_output(b"first")?), &[]);
-        self::assert_replies_eq(&(state.append_output(b"second")?), &[]);
+        assert_replies_eq(&(state.append_output(b"first")?), &[]);
+        assert_replies_eq(&(state.append_output(b"second")?), &[]);
 
         assert_that!(state.active_sink.lock().as_ref().map(|_| ()), some(eq(())));
         assert_that!(output_current.load(Ordering::Acquire), eq(true));
@@ -1318,8 +1325,8 @@ mod tests {
             sender,
         });
 
-        self::assert_replies_eq(&(state.append_output(b"first")?), &[]);
-        self::assert_replies_eq(&(state.append_output(b"\x1b]2;cargo test\x07\x1b]2;~\x07")?), &[]);
+        assert_replies_eq(&(state.append_output(b"first")?), &[]);
+        assert_replies_eq(&(state.append_output(b"\x1b]2;cargo test\x07\x1b]2;~\x07")?), &[]);
 
         assert_that!(
             state.take_title_changes(),
@@ -1337,8 +1344,8 @@ mod tests {
         let log = crate::session::tracing::collect_test_log(&session, || {
             let span = tracing::info_span!("muxr_session", session = %session);
             let _guard = span.enter();
-            let (writer, writer_handle) = writer::spawn(self::failing_pty_writer())?;
-            let reader_handle = self::spawn_reader_thread(
+            let (writer, writer_handle) = writer::spawn(failing_pty_writer())?;
+            let reader_handle = crate::pty::session::tests::spawn_reader_thread(
                 Box::new(std::io::Cursor::new(b"\x1b[6n".to_vec())),
                 Arc::clone(&state),
                 writer.clone(),

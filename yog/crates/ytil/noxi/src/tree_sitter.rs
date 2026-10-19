@@ -1,3 +1,4 @@
+use std::fs;
 use std::ops::Deref;
 use std::path::Path;
 
@@ -6,6 +7,7 @@ use rootcause::report;
 use tree_sitter::Node;
 use tree_sitter::Parser;
 use tree_sitter::Point;
+use tree_sitter_rust::LANGUAGE;
 
 use crate::buffer::CursorPosition;
 
@@ -60,13 +62,13 @@ fn get_enclosing_fn_name_of_position_internal(file_path: &Path, position: Point)
         Err(report!("invalid file extension"))
             .attach_with(|| format!("path={} expected_ext=\"rs\"", file_path.display()))?;
     }
-    let src = std::fs::read(file_path)
+    let src = fs::read(file_path)
         .context("error reading file")
         .attach_with(|| format!("path={}", file_path.display()))?;
 
     let mut parser = Parser::new();
     parser
-        .set_language(&tree_sitter_rust::LANGUAGE.into())
+        .set_language(&LANGUAGE.into())
         .context("error setting parser language")?;
 
     let src_tree = parser

@@ -16,9 +16,9 @@ use std::path::PathBuf;
 
 use syn::File;
 
-use self::declarations::ModuleStructure;
-use self::discovery::ModulePlacement;
-use self::discovery::ModuleResolution;
+use crate::cmds::rsl::mod_resolution::declarations::ModuleStructure;
+use crate::cmds::rsl::mod_resolution::discovery::ModulePlacement;
+use crate::cmds::rsl::mod_resolution::discovery::ModuleResolution;
 
 mod declarations;
 mod discovery;
@@ -175,22 +175,6 @@ struct ModuleParent {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn discover(files: &[(&str, &str)], roots: &[&str]) -> ModuleGraph {
-        let roots: Vec<_> = roots.iter().map(PathBuf::from).collect();
-        ModuleGraph::discover(&roots, |path| {
-            let text = files
-                .iter()
-                .find(|(name, _)| Path::new(name) == path)
-                .map(|(_, text)| (*text).to_owned())
-                .ok_or_else(|| io::Error::from(io::ErrorKind::NotFound))?;
-            Ok(SourceFile {
-                path: path.to_owned(),
-                text,
-            })
-        })
-        .unwrap()
-    }
 
     #[test]
     fn test_module_graph_when_sources_have_aliases_reuses_canonical_snapshots_and_preserves_occurrences() {
@@ -692,5 +676,21 @@ mod tests {
         .unwrap();
 
         assert!(!graph.matches_structure(Path::new("/src/lib.rs"), &renamed));
+    }
+
+    fn discover(files: &[(&str, &str)], roots: &[&str]) -> ModuleGraph {
+        let roots: Vec<_> = roots.iter().map(PathBuf::from).collect();
+        ModuleGraph::discover(&roots, |path| {
+            let text = files
+                .iter()
+                .find(|(name, _)| Path::new(name) == path)
+                .map(|(_, text)| (*text).to_owned())
+                .ok_or_else(|| io::Error::from(io::ErrorKind::NotFound))?;
+            Ok(SourceFile {
+                path: path.to_owned(),
+                text,
+            })
+        })
+        .unwrap()
     }
 }

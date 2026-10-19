@@ -1,5 +1,6 @@
 use std::collections::VecDeque;
 use std::fs::DirEntry;
+use std::io;
 #[cfg(not(target_arch = "wasm32"))]
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
@@ -94,7 +95,7 @@ pub fn ln_sf<P: AsRef<Path>>(target: &P, link: &P) -> rootcause::Result<()> {
 /// - A filesystem operation (open/read/write/remove) fails.
 /// - Creating an individual symlink fails.
 /// - Traversing `target_dir` fails.
-pub fn ln_sf_files_in_dir<P: AsRef<std::path::Path>>(target_dir: P, link_dir: P) -> rootcause::Result<()> {
+pub fn ln_sf_files_in_dir<P: AsRef<Path>>(target_dir: P, link_dir: P) -> rootcause::Result<()> {
     for target in std::fs::read_dir(&target_dir)
         .context("error reading directory")
         .attach_with(|| format!("path={}", target_dir.as_ref().display()))?
@@ -128,7 +129,7 @@ pub fn cp_to_system_clipboard(content: &mut &[u8]) -> rootcause::Result<()> {
         .context("error spawning cmd")
         .attach_with(|| format!("cmd={cmd:?}"))?;
 
-    std::io::copy(
+    io::copy(
         content,
         pbcopy_child
             .stdin

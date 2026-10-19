@@ -5,12 +5,12 @@ use muxr_config::ScreenObservationConfig;
 use muxr_config::TrackedProcess;
 use muxr_core::TrackedProcessState;
 
-use super::TrackedProcessChanges;
-use super::TrackedProcessStateChange;
-use super::TrackedProcessUserInteraction;
-use super::screen;
-use super::screen::BusyStart;
-use super::screen::ScreenObservation;
+use crate::pane::tracked_process::TrackedProcessChanges;
+use crate::pane::tracked_process::TrackedProcessStateChange;
+use crate::pane::tracked_process::TrackedProcessUserInteraction;
+use crate::pane::tracked_process::screen;
+use crate::pane::tracked_process::screen::BusyStart;
+use crate::pane::tracked_process::screen::ScreenObservation;
 
 #[cfg(test)]
 mod tests;

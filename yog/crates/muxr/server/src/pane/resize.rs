@@ -2,12 +2,14 @@ use muxr_config::LayoutConfig;
 use muxr_core::PaneId;
 
 use crate::client::session::ClientSessionState;
+use crate::pane::fullscreen;
 use crate::pane::split::PaneSplitAxis;
 use crate::pane::split::PaneSplitResize;
 use crate::server::ServerConfig;
 use crate::state::PaneTree;
 use crate::state::SessionLayout;
 use crate::state::Tab;
+use crate::state::persisted;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PaneResizeDirection {
@@ -114,7 +116,7 @@ pub fn handle_resize_pane_cmd_client(
     direction: PaneResizeDirection,
     state: &mut ClientSessionState<'_>,
 ) -> rootcause::Result<PaneResizeClientOutcome> {
-    if self::handle_resize_pane_cmd(direction, state.config, state.layout)? != PaneResizeChange::Changed {
+    if handle_resize_pane_cmd(direction, state.config, state.layout)? != PaneResizeChange::Changed {
         return Ok(PaneResizeClientOutcome::Unchanged);
     }
     Ok(PaneResizeClientOutcome::Render {
@@ -123,7 +125,7 @@ pub fn handle_resize_pane_cmd_client(
 }
 
 pub fn handle_enter_resize_mode_cmd_client(state: &mut ClientSessionState<'_>) -> PaneResizeClientOutcome {
-    crate::pane::fullscreen::clear_active_tab_for_layout_mutation(state);
+    fullscreen::clear_active_tab_for_layout_mutation(state);
     PaneResizeClientOutcome::Render {
         render: PaneResizeRender::ResizePanesAndRender,
     }
@@ -142,7 +144,7 @@ fn handle_resize_pane_cmd(
 ) -> rootcause::Result<PaneResizeChange> {
     let resize_change = layout.resize_active_pane(config.user_config.layout, direction)?;
     if resize_change == PaneResizeChange::Changed {
-        crate::state::persisted::write_metadata(&config.paths, layout)?;
+        persisted::write_metadata(&config.paths, layout)?;
     }
     Ok(resize_change)
 }

@@ -3,15 +3,17 @@
 use owo_colors::OwoColorize;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
+use ytil_gh::pr;
+use ytil_tui::git_branch;
 
 /// Prompt for a branch and create a pull request for it.
 pub fn run() -> rootcause::Result<()> {
-    let Some(branch) = ytil_tui::git_branch::select()? else {
+    let Some(branch) = git_branch::select()? else {
         return Ok(());
     };
 
     let title = pr_title_from_branch_name(branch.name_no_origin())?;
-    let pr_url = ytil_gh::pr::create(&title)?;
+    let pr_url = pr::create(&title)?;
     println!("{} title={title:?} pr_url={pr_url:?}", "PR created".green().bold());
 
     Ok(())

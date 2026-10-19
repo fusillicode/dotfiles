@@ -119,7 +119,7 @@ impl RioInputFilter {
             self.state = InputFilterState::Escape;
             return;
         }
-        if self::is_string_cancel(byte) {
+        if is_string_cancel(byte) {
             self.flush_pending();
             self.state = InputFilterState::Ground;
             return;
@@ -144,7 +144,7 @@ impl RioInputFilter {
             self.pending.clear();
             self.pending.push(ESCAPE);
             self.state = InputFilterState::Escape;
-        } else if self::is_string_cancel(byte) || (0x40..=0x7e).contains(&byte) {
+        } else if is_string_cancel(byte) || (0x40..=0x7e).contains(&byte) {
             self.state = InputFilterState::Ground;
         }
     }
@@ -167,14 +167,14 @@ impl RioInputFilter {
         let parameters = parameters.split(|byte| *byte == b';').collect::<SmallVec<[&[u8]; 8]>>();
         if !parameters
             .iter()
-            .any(|parameter| self::is_unsupported_private_mode_parameter(parameter))
+            .any(|parameter| is_unsupported_private_mode_parameter(parameter))
         {
             return false;
         }
 
         let mut kept = parameters
             .into_iter()
-            .filter(|parameter| !self::is_unsupported_private_mode_parameter(parameter))
+            .filter(|parameter| !is_unsupported_private_mode_parameter(parameter))
             .peekable();
         if kept.peek().is_none() {
             return true;
@@ -191,13 +191,13 @@ impl RioInputFilter {
     }
 
     fn process_dcs_header(&mut self, byte: u8) {
-        if self::is_string_cancel(byte) {
+        if is_string_cancel(byte) {
             self.pending.push(byte);
             self.flush_pending();
             self.state = InputFilterState::Ground;
             return;
         }
-        if self::is_dcs_header_ignored(byte) {
+        if is_dcs_header_ignored(byte) {
             return;
         }
 
@@ -277,8 +277,8 @@ impl RioInputFilter {
     fn process_osc_prefix(&mut self, byte: u8) {
         self.pending.push(byte);
         if matches!(byte, b';' | ESCAPE)
-            || self::is_string_cancel(byte)
-            || self::is_bell_terminator(byte, StringTerminator::BellOrStringTerminator)
+            || is_string_cancel(byte)
+            || is_bell_terminator(byte, StringTerminator::BellOrStringTerminator)
         {
             if self.osc_command_handling() == OscCommandHandling::Passthrough {
                 self.begin_buffered_osc(byte);
@@ -310,10 +310,10 @@ impl RioInputFilter {
     }
 
     fn begin_buffered_osc(&mut self, last_byte: u8) {
-        if self::is_string_cancel(last_byte) {
+        if is_string_cancel(last_byte) {
             self.pending.clear();
             self.state = InputFilterState::Ground;
-        } else if self::is_bell_terminator(last_byte, StringTerminator::BellOrStringTerminator) {
+        } else if is_bell_terminator(last_byte, StringTerminator::BellOrStringTerminator) {
             self.flush_pending();
             self.state = InputFilterState::Ground;
         } else if last_byte == ESCAPE {
@@ -328,12 +328,12 @@ impl RioInputFilter {
     }
 
     fn process_buffered_osc(&mut self, byte: u8, remaining: usize) {
-        if self::is_string_cancel(byte) {
+        if is_string_cancel(byte) {
             self.pending.clear();
             self.state = InputFilterState::Ground;
             return;
         }
-        if self::is_bell_terminator(byte, StringTerminator::BellOrStringTerminator) {
+        if is_bell_terminator(byte, StringTerminator::BellOrStringTerminator) {
             self.pending.push(byte);
             self.flush_pending();
             self.state = InputFilterState::Ground;
@@ -374,7 +374,7 @@ impl RioInputFilter {
 
     fn begin_discard(&mut self, last_byte: u8, terminator: StringTerminator) {
         self.pending.clear();
-        if self::is_string_cancel(last_byte) || self::is_bell_terminator(last_byte, terminator) {
+        if is_string_cancel(last_byte) || is_bell_terminator(last_byte, terminator) {
             self.state = InputFilterState::Ground;
         } else if last_byte == ESCAPE {
             self.pending.push(ESCAPE);
@@ -385,7 +385,7 @@ impl RioInputFilter {
     }
 
     fn process_discard_string(&mut self, byte: u8, terminator: StringTerminator) {
-        if self::is_string_cancel(byte) || self::is_bell_terminator(byte, terminator) {
+        if is_string_cancel(byte) || is_bell_terminator(byte, terminator) {
             self.state = InputFilterState::Ground;
         } else if byte == ESCAPE {
             self.pending.clear();
@@ -413,7 +413,7 @@ impl RioInputFilter {
             return;
         }
 
-        if self::is_string_cancel(byte) || self::is_bell_terminator(byte, terminator) {
+        if is_string_cancel(byte) || is_bell_terminator(byte, terminator) {
             self.output.push(byte);
             self.state = InputFilterState::Ground;
             return;
@@ -468,7 +468,7 @@ impl RioInputFilter {
         }
 
         self.flush_pending();
-        self.state = if self::is_string_cancel(last_byte) || self::is_bell_terminator(last_byte, terminator) {
+        self.state = if is_string_cancel(last_byte) || is_bell_terminator(last_byte, terminator) {
             InputFilterState::Ground
         } else {
             InputFilterState::PassthroughString { limit, terminator }

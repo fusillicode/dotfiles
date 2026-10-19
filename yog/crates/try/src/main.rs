@@ -7,17 +7,20 @@
 use core::str::FromStr;
 use std::process::Command;
 use std::process::ExitStatusError;
+use std::thread;
 use std::time::Duration;
 use std::time::Instant;
 
+use rootcause::Report;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
+use ytil_sys::cli;
 use ytil_sys::cli::Args;
 
 /// Re-run a command until success (ok) or failure (ko) with cooldown.
 #[ytil_sys::main]
 fn main() -> rootcause::Result<()> {
-    let args = ytil_sys::cli::get();
+    let args = cli::get();
 
     if args.has_help() {
         println!(include_str!("../help.txt"));
@@ -68,7 +71,7 @@ fn main() -> rootcause::Result<()> {
         if exit_cond.should_break(output.status.exit_ok()) {
             break;
         }
-        std::thread::sleep(cooldown);
+        thread::sleep(cooldown);
     }
 
     let tries_count = u32::try_from(tries.len())
@@ -103,7 +106,7 @@ impl ExitCond {
 
 /// Parses [`ExitCond`] from string.
 impl FromStr for ExitCond {
-    type Err = rootcause::Report;
+    type Err = Report;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(match s {

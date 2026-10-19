@@ -1,6 +1,7 @@
 use std::path::Path;
 use std::path::PathBuf;
 
+use rootcause::Report;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
 
@@ -53,7 +54,7 @@ pub enum DeletionOutcome {
     },
     Failed {
         key: SessionKey,
-        error: rootcause::Report,
+        error: Report,
     },
 }
 

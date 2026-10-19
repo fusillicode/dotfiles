@@ -7,15 +7,15 @@ use muxr_config::TrackedProcess;
 use muxr_core::PaneId;
 use muxr_core::TrackedProcessState;
 
-use self::lifecycle::PaneTrackedProcessLifecycle;
-use self::lifecycle::TrackedProcessAttentionNeed;
-use self::lifecycle::TrackedProcessPaneFocus;
-use self::screen::ScreenObservation;
 use crate::pane::cmd::FgCmd;
 use crate::pane::cmd::PaneCmdObservation;
 use crate::pane::cmd::PaneCmdSnapshot;
 use crate::pane::cmd::ProcessGroupLookupError;
 use crate::pane::runtime::PaneRuntimes;
+use crate::pane::tracked_process::lifecycle::PaneTrackedProcessLifecycle;
+use crate::pane::tracked_process::lifecycle::TrackedProcessAttentionNeed;
+use crate::pane::tracked_process::lifecycle::TrackedProcessPaneFocus;
+use crate::pane::tracked_process::screen::ScreenObservation;
 use crate::pty::PtyHandle;
 use crate::state::SessionLayout;
 use crate::terminal::TerminalTextTail;
@@ -217,7 +217,7 @@ impl PaneTrackedProcesses {
     ) -> TrackedProcessChanges {
         if self.apply_cmd_observation(
             pane_id,
-            self::tracked_process_observation_from_pane_cmd(config, observation),
+            crate::pane::tracked_process::tracked_process_observation_from_pane_cmd(config, observation),
             now,
         ) == TrackedProcessStateChange::Changed
         {
@@ -235,7 +235,8 @@ impl PaneTrackedProcesses {
         observation: &PaneCmdObservation,
         now: Instant,
     ) -> TrackedProcessChanges {
-        let cmd_observation = self::tracked_process_observation_from_pane_cmd(config, observation);
+        let cmd_observation =
+            crate::pane::tracked_process::tracked_process_observation_from_pane_cmd(config, observation);
         let tracked = matches!(cmd_observation, TrackedProcessCmdObservation::Tracked(_));
         let state_change = self.apply_cmd_observation(pane_id, cmd_observation, now);
         let activity_changes = if tracked {
@@ -418,8 +419,11 @@ impl PaneTrackedProcesses {
             layout,
             now,
             |pane_id| {
-                let observation = self::runtime_pane_cmd_observation(runtimes, pane_id)?;
-                Ok(self::tracked_process_observation_from_pane_cmd(config, &observation))
+                let observation = crate::pane::tracked_process::runtime_pane_cmd_observation(runtimes, pane_id)?;
+                Ok(crate::pane::tracked_process::tracked_process_observation_from_pane_cmd(
+                    config,
+                    &observation,
+                ))
             },
             |pane_id| Ok(runtimes.handle(pane_id)?.live_tail_text(screen::SCREEN_TAIL_ROWS)),
         )
@@ -548,7 +552,7 @@ impl PaneTrackedProcesses {
         pane_id: PaneId,
         now: Instant,
     ) -> rootcause::Result<TrackedProcessChanges> {
-        let observation = self::runtime_pane_cmd_observation(runtimes, pane_id)?;
+        let observation = crate::pane::tracked_process::runtime_pane_cmd_observation(runtimes, pane_id)?;
         let mut changes = self.observe_pane_cmd(config, pane_id, &observation, now);
         if changes.state_change() == TrackedProcessStateChange::Changed {
             // Discovery can follow the last dirty frame, including on attach or focus. Seed from the current screen.
@@ -659,7 +663,7 @@ fn tracked_process_observation_from_pane_cmd<'a>(
     observation: &PaneCmdObservation,
 ) -> TrackedProcessCmdObservation<'a> {
     match observation {
-        PaneCmdObservation::FgCmd(fg_cmd) => self::tracked_process_from_fg_cmd(config, fg_cmd),
+        PaneCmdObservation::FgCmd(fg_cmd) => tracked_process_from_fg_cmd(config, fg_cmd),
         PaneCmdObservation::Shell => TrackedProcessCmdObservation::TrustedUntracked,
         PaneCmdObservation::Unknown { .. } => TrackedProcessCmdObservation::Unknown,
     }

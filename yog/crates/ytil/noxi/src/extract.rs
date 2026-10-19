@@ -1,6 +1,7 @@
 //! Primitive extraction trait implementations for Nvim `Object` kinds.
 
 use nvim_oxi::Dictionary;
+use nvim_oxi::Integer;
 use nvim_oxi::Object;
 use nvim_oxi::ObjectKind;
 use rootcause::prelude::ResultExt;
@@ -30,7 +31,7 @@ impl OxiExtract for nvim_oxi::String {
 }
 
 /// Implementation for extracting [`i64`] values from Nvim objects.
-impl OxiExtract for nvim_oxi::Integer {
+impl OxiExtract for Integer {
     type Out = Self;
 
     /// Extract from dict.

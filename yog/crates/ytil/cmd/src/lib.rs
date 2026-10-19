@@ -8,6 +8,7 @@
 
 #![feature(error_generic_member_access, exit_status_error)]
 
+use core::str::Utf8Error;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::path::Path;
@@ -16,6 +17,7 @@ use std::process::Command;
 use std::process::ExitStatus;
 use std::process::Output;
 use std::process::Stdio;
+use std::string::FromUtf8Error;
 
 use rootcause::prelude::ResultExt;
 
@@ -78,7 +80,7 @@ pub enum CmdError {
         cmd: Cmd,
         #[backtrace]
         /// UTF-8 error.
-        source: core::str::Utf8Error,
+        source: Utf8Error,
     },
     /// Owned stderr bytes not valid UTF-8.
     #[error("{source} {cmd}")]
@@ -87,7 +89,7 @@ pub enum CmdError {
         cmd: Cmd,
         #[backtrace]
         /// Conversion error.
-        source: std::string::FromUtf8Error,
+        source: FromUtf8Error,
     },
 }
 

@@ -17,14 +17,14 @@ use syn::Visibility;
 use syn::visit;
 use syn::visit::Visit;
 
-use super::Rule;
-use super::common;
 use crate::cmds::rsl::analysis::FixBlockReason;
 use crate::cmds::rsl::analysis::RuleChange;
 use crate::cmds::rsl::analysis::RulePlan;
 use crate::cmds::rsl::ast;
 use crate::cmds::rsl::engine::FileContext;
 use crate::cmds::rsl::mod_resolution::ResolutionError;
+use crate::cmds::rsl::rules::Rule;
+use crate::cmds::rsl::rules::common;
 use crate::cmds::rsl::source::SourceEditor;
 
 pub(super) struct PathAnchoringRule;

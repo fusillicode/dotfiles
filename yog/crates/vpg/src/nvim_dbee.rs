@@ -1,3 +1,4 @@
+use std::fs;
 use std::fs::OpenOptions;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
@@ -18,8 +19,8 @@ pub fn save_new_nvim_dbee_conns_file(updated_pg_pass_entry: &PgpassEntry, conns_
 
     let mut tmp_path = PathBuf::from(conns_path);
     tmp_path.set_file_name("conns.json.tmp");
-    std::fs::write(&tmp_path, serde_json::to_string(&conns)?)?;
-    std::fs::rename(&tmp_path, conns_path)?;
+    fs::write(&tmp_path, serde_json::to_string(&conns)?)?;
+    fs::rename(&tmp_path, conns_path)?;
 
     let file = OpenOptions::new().read(true).open(conns_path)?;
     let mut permissions = file.metadata()?.permissions();
@@ -42,7 +43,7 @@ fn get_updated_conns(updated_pg_pass_entry: &PgpassEntry, conns_path: &Path) -> 
         return Ok(vec![updated_conn]);
     }
 
-    let conns_file_content = std::fs::read_to_string(conns_path)?;
+    let conns_file_content = fs::read_to_string(conns_path)?;
     // Returns just the updated conn if the conns file exists but it's empty.
     if conns_file_content.is_empty() {
         return Ok(vec![updated_conn]);

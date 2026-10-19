@@ -13,6 +13,7 @@ use crate::state::PaneTree;
 use crate::state::SessionLayout;
 use crate::state::SessionMetadata;
 use crate::state::Tab;
+use crate::state::persisted;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct TabCreateClientOutcome {
@@ -54,7 +55,7 @@ impl SessionLayout {
 
 pub fn handle_create_tab_cmd_client(state: &mut ClientSessionState<'_>) -> rootcause::Result<TabCreateClientOutcome> {
     let previous_pane = state.layout.active_pane_id()?;
-    let new_pane_id = self::handle_create_tab_cmd(state.config, state.layout, state.runtimes, &state.terminal_size)?;
+    let new_pane_id = handle_create_tab_cmd(state.config, state.layout, state.runtimes, &state.terminal_size)?;
     Ok(TabCreateClientOutcome {
         new_pane_id,
         previous_pane,
@@ -67,8 +68,8 @@ fn handle_create_tab_cmd(
     runtimes: &mut PaneRuntimes,
     terminal_size: &TerminalSize,
 ) -> rootcause::Result<PaneId> {
-    let pane_id = self::handle_create_tab(layout, config, runtimes, terminal_size)?;
-    crate::state::persisted::write_metadata(&config.paths, layout)?;
+    let pane_id = handle_create_tab(layout, config, runtimes, terminal_size)?;
+    persisted::write_metadata(&config.paths, layout)?;
     Ok(pane_id)
 }
 
@@ -111,7 +112,12 @@ mod tests {
         let mut layout = initial_layout.clone();
         let mut runtimes = pane_runtime_test_helpers::empty_runtimes();
 
-        let create_result = self::handle_create_tab(&mut layout, &config, &mut runtimes, &TerminalSize::new(80, 24)?);
+        let create_result = crate::tab::create::tests::handle_create_tab(
+            &mut layout,
+            &config,
+            &mut runtimes,
+            &TerminalSize::new(80, 24)?,
+        );
         assert_that!(create_result, err(anything()));
 
         assert_that!(layout, eq(initial_layout));

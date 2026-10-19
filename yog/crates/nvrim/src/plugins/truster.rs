@@ -7,8 +7,13 @@
 use std::path::Path;
 
 use nvim_oxi::Dictionary;
+use nvim_oxi::api;
 use serde::Deserialize;
+use ytil_git::repo;
+use ytil_noxi::buffer;
 use ytil_noxi::buffer::BufferExt;
+use ytil_noxi::notify;
+use ytil_noxi::tree_sitter;
 
 /// [`Dictionary`] of Rust tests utilities.
 pub fn dict() -> Dictionary {
@@ -26,13 +31,13 @@ enum TargetTerminal {
 ytil_noxi::impl_nvim_deserializable!(TargetTerminal);
 
 fn run_test(target_terminal: TargetTerminal) -> Option<()> {
-    let file_path = ytil_noxi::buffer::get_absolute_path(Some(&nvim_oxi::api::get_current_buf()))?;
+    let file_path = buffer::get_absolute_path(Some(&api::get_current_buf()))?;
 
-    let test_name = ytil_noxi::tree_sitter::get_enclosing_fn_name_of_position(&file_path)?;
+    let test_name = tree_sitter::get_enclosing_fn_name_of_position(&file_path)?;
 
     let test_runner = get_test_runner_for_path(&file_path)
         .inspect_err(|err| {
-            ytil_noxi::notify::error(format!(
+            notify::error(format!(
                 "error getting test runner | path={} error={err:#?}",
                 file_path.display()
             ));
@@ -47,24 +52,24 @@ fn run_test(target_terminal: TargetTerminal) -> Option<()> {
 
 fn run_test_in_wezterm(test_runner: &str, test_name: &str) -> Option<()> {
     let cur_pane_id = ytil_wezterm::get_current_pane_id()
-        .inspect_err(|err| ytil_noxi::notify::error(format!("error getting current WezTerm pane id | error={err:#?}")))
+        .inspect_err(|err| notify::error(format!("error getting current WezTerm pane id | error={err:#?}")))
         .ok()?;
 
     let wez_panes = ytil_wezterm::get_all_panes(&[])
         .inspect_err(|err| {
-            ytil_noxi::notify::error(format!("error getting WezTerm panes | error={err:#?}"));
+            notify::error(format!("error getting WezTerm panes | error={err:#?}"));
         })
         .ok()?;
 
     let Some(cur_pane) = wez_panes.iter().find(|p| p.pane_id == cur_pane_id) else {
-        ytil_noxi::notify::error(format!(
+        notify::error(format!(
             "error WezTerm pane not found | pane_id={cur_pane_id:#?} panes={wez_panes:#?}"
         ));
         return None;
     };
 
     let Some(test_runner_pane) = wez_panes.iter().find(|p| p.is_sibling_terminal_pane_of(cur_pane)) else {
-        ytil_noxi::notify::error(format!(
+        notify::error(format!(
             "error finding sibling pane to run test | current_pane={cur_pane:#?} panes={wez_panes:#?} test={test_name}"
         ));
         return None;
@@ -79,7 +84,7 @@ fn run_test_in_wezterm(test_runner: &str, test_name: &str) -> Option<()> {
         .args(["-c", &format!("{send_text_to_pane_cmd} && {submit_pane_cmd}")])
         .spawn()
         .inspect_err(|err| {
-            ytil_noxi::notify::error(format!(
+            notify::error(format!(
                 "error executing test run cmd | cmd={test_run_cmd:#?} pane={test_runner_pane:#?} error={err:#?}"
             ));
         })
@@ -89,8 +94,8 @@ fn run_test_in_wezterm(test_runner: &str, test_name: &str) -> Option<()> {
 }
 
 fn run_test_in_nvim_term(test_runner: &str, test_name: &str) -> Option<()> {
-    let Some(terminal_buffer) = nvim_oxi::api::list_bufs().find(BufferExt::is_terminal) else {
-        ytil_noxi::notify::error(format!(
+    let Some(terminal_buffer) = api::list_bufs().find(BufferExt::is_terminal) else {
+        notify::error(format!(
             "error no terminal buffer found | test_runner={test_runner:?} test_name={test_name:?}",
         ));
         return None;
@@ -115,7 +120,7 @@ fn run_test_in_nvim_term(test_runner: &str, test_name: &str) -> Option<()> {
 /// - A filesystem operation (open/read/write/remove) fails.
 /// - The path is not inside a Git repository.
 fn get_test_runner_for_path(path: &Path) -> rootcause::Result<&'static str> {
-    let git_repo_root = ytil_git::repo::get_root(&ytil_git::repo::discover(path)?);
+    let git_repo_root = repo::get_root(&repo::discover(path)?);
 
     if git_repo_root.join("Makefile.toml").exists() {
         return Ok("cargo make test");

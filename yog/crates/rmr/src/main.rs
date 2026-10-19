@@ -5,17 +5,20 @@
 //! # Errors
 //! - I/O errors from file/directory removal.
 
+use std::fs;
 use std::fs::Metadata;
 use std::path::Path;
+use std::process;
 
 use owo_colors::OwoColorize;
 use rootcause::bail;
 use rootcause::report;
+use ytil_sys::cli;
 use ytil_sys::cli::Args;
 
 /// Remove files or directories passed as CLI args (recursive for dirs).
 fn main() {
-    let files = ytil_sys::cli::get();
+    let files = cli::get();
 
     if files.has_help() {
         println!(include_str!("../help.txt"));
@@ -34,7 +37,7 @@ fn main() {
     }
 
     if any_errors {
-        std::process::exit(1);
+        process::exit(1);
     }
 }
 
@@ -57,7 +60,7 @@ fn process(file: &str) -> rootcause::Result<()> {
 
     let ft = metadata.file_type();
     if ft.is_file() || ft.is_symlink() {
-        std::fs::remove_file(path).inspect_err(|err| {
+        fs::remove_file(path).inspect_err(|err| {
             eprintln!(
                 "Cannot delete file={} error={}",
                 path.display(),
@@ -67,7 +70,7 @@ fn process(file: &str) -> rootcause::Result<()> {
         return Ok(());
     }
     if ft.is_dir() {
-        std::fs::remove_dir_all(path).inspect_err(|err| {
+        fs::remove_dir_all(path).inspect_err(|err| {
             eprintln!(
                 "Cannot delete dir={} error={}",
                 path.display(),

@@ -3,8 +3,8 @@
 use std::path::Path;
 use std::path::PathBuf;
 
-use super::analysis::Finding;
-use super::analysis::FixStatus;
+use crate::cmds::rsl::analysis::Finding;
+use crate::cmds::rsl::analysis::FixStatus;
 
 #[derive(Default)]
 pub struct RslOutput {

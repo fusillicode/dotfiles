@@ -20,12 +20,15 @@ use syn::spanned::Spanned;
 use syn::visit;
 use syn::visit::Visit;
 
-use super::fn_call_analysis;
-use super::fn_call_analysis::CallAnalysis;
-use super::module_idx::ModuleScope;
-use super::module_idx::ScopeInfo;
 use crate::cmds::rsl::analysis::FixBlockReason;
 use crate::cmds::rsl::engine::FileContext;
+use crate::cmds::rsl::rules::common;
+use crate::cmds::rsl::rules::common::fn_call_analysis;
+use crate::cmds::rsl::rules::common::fn_call_analysis::CallAnalysis;
+use crate::cmds::rsl::rules::common::import_resolution;
+use crate::cmds::rsl::rules::common::module_idx;
+use crate::cmds::rsl::rules::common::module_idx::ModuleScope;
+use crate::cmds::rsl::rules::common::module_idx::ScopeInfo;
 use crate::cmds::rsl::source;
 use crate::cmds::rsl::source::SourceEditor;
 
@@ -165,7 +168,7 @@ impl ImportEdits {
         if self.bindings.get(name).is_some_and(|existing| existing == path) {
             return Ok(());
         }
-        if super::module_idx::has_external_modules(scope.items) {
+        if module_idx::has_external_modules(scope.items) {
             return Err(ImportError::ExternalModuleReferences);
         }
         if self.capture_names.contains(name) {
@@ -249,7 +252,7 @@ impl<'ast> Visit<'ast> for LocalNames {
                 .map(|segment| segment.ident.to_string()),
         );
         if let Meta::List(meta) = &attribute.meta {
-            self.names.extend(super::token_names(meta.tokens.clone()));
+            self.names.extend(common::token_names(meta.tokens.clone()));
         }
     }
 
@@ -274,12 +277,12 @@ impl<'ast> Visit<'ast> for LocalNames {
                 continue;
             };
 
-            if let Some(name) = super::module_idx::item_name(item) {
+            if let Some(name) = module_idx::item_name(item) {
                 self.names.insert(name);
             }
 
             if let Item::Use(item_use) = item {
-                let bindings = super::import_resolution::use_bindings(&item_use.tree, &[]);
+                let bindings = import_resolution::use_bindings(&item_use.tree, &[]);
                 self.unknown |= bindings.unknown;
                 self.names
                     .extend(bindings.bindings.into_iter().map(|binding| binding.name));
@@ -301,7 +304,7 @@ impl<'ast> Visit<'ast> for LocalNames {
         {
             self.names.insert(root.ident.to_string());
         }
-        self.names.extend(super::token_names(mac.tokens.clone()));
+        self.names.extend(common::token_names(mac.tokens.clone()));
     }
 
     fn visit_item_macro(&mut self, item: &'ast ItemMacro) {

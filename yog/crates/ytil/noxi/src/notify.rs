@@ -2,9 +2,11 @@
 
 use std::fmt::Debug;
 
+use nvim_oxi::api;
 pub use nvim_oxi::api::opts;
 use nvim_oxi::api::opts::EchoOpts;
 pub use nvim_oxi::api::types;
+use rootcause::Report;
 
 /// Types that can be converted to a notification message for Nvim.
 ///
@@ -20,7 +22,7 @@ impl<T: Notifiable + ?Sized> Notifiable for &T {
     }
 }
 
-impl Notifiable for rootcause::Report {
+impl Notifiable for Report {
     fn to_msg(&self) -> impl AsRef<str> {
         self.to_string()
     }
@@ -53,5 +55,5 @@ pub fn warn<N: Notifiable>(notifiable: N) {
 }
 
 fn echo(msg: &str, highlight: &str) -> Result<(), nvim_oxi::api::Error> {
-    nvim_oxi::api::echo([(msg, Some(highlight))], true, &EchoOpts::default()).map(drop)
+    api::echo([(msg, Some(highlight))], true, &EchoOpts::default()).map(drop)
 }

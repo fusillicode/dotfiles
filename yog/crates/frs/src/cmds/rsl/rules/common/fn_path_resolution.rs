@@ -1,12 +1,11 @@
-use super::import_resolution::imported_binding;
-use super::module_idx::ModuleIdx;
-use super::module_idx::ScopeInfo;
-use super::module_idx::is_local_module_path;
-use super::path_resolution::is_associated_fn_path;
-use super::path_resolution::is_non_fn_call_path;
-use super::path_resolution::normalize_path;
-use super::path_resolution::path_parts;
+use syn::Path;
+
 use crate::cmds::rsl::engine::FileContext;
+use crate::cmds::rsl::rules::common::import_resolution;
+use crate::cmds::rsl::rules::common::module_idx;
+use crate::cmds::rsl::rules::common::module_idx::ModuleIdx;
+use crate::cmds::rsl::rules::common::module_idx::ScopeInfo;
+use crate::cmds::rsl::rules::common::path_resolution;
 
 pub struct FnCallSuggestion {
     pub expected_path: String,
@@ -33,11 +32,11 @@ pub fn expected_fn_path(
     ctx: &FileContext<'_>,
     idx: &ModuleIdx<'_>,
     current_module: &[String],
-    path: &syn::Path,
+    path: &Path,
 ) -> Option<FnCallSuggestion> {
-    let parts = path_parts(path)?;
+    let parts = path_resolution::path_parts(path)?;
 
-    if is_non_fn_call_path(&parts) || is_associated_fn_path(&parts) {
+    if path_resolution::is_non_fn_call_path(&parts) || path_resolution::is_associated_fn_path(&parts) {
         return None;
     }
 
@@ -69,7 +68,7 @@ pub fn expected_fn_path(
         .get(qualified.len().saturating_sub(2)..)
         .map(|parts| parts.join("::"))?;
     let fn_idx = parts.len().saturating_sub(1);
-    let target_module = normalize_path(current_module, parts.get(..fn_idx).unwrap_or_default());
+    let target_module = path_resolution::normalize_path(current_module, parts.get(..fn_idx).unwrap_or_default());
 
     Some(FnCallSuggestion {
         expected_path,
@@ -104,7 +103,7 @@ fn is_same_module_fn(ctx: &FileContext<'_>, idx: &ModuleIdx<'_>, current_module:
 }
 
 fn imported_fn_path(idx: &ModuleIdx<'_>, current_module: &[String], name: &str) -> Option<FnCallSuggestion> {
-    let binding = imported_binding(idx, current_module, name)?;
+    let binding = import_resolution::imported_binding(idx, current_module, name)?;
     let source_path = &binding.path;
     let source_module = binding.source_path.get(..binding.source_path.len().saturating_sub(1))?;
 
@@ -194,8 +193,8 @@ fn fn_path_tail(parts: &[String]) -> &[String] {
     parts.get(first..).unwrap_or_default()
 }
 
-fn local_fn(idx: &ModuleIdx<'_>, current_module: &[String], path: &syn::Path) -> Option<(Vec<String>, String)> {
-    let parts = path_parts(path)?;
+fn local_fn(idx: &ModuleIdx<'_>, current_module: &[String], path: &Path) -> Option<(Vec<String>, String)> {
+    let parts = path_resolution::path_parts(path)?;
     let name = parts.last()?.clone();
     let last_item = parts.len().saturating_sub(1);
     let mut module_path = current_module.to_vec();
@@ -218,7 +217,7 @@ fn local_fn(idx: &ModuleIdx<'_>, current_module: &[String], path: &syn::Path) ->
     }
     module_path.extend(parts.get(first_item..last_item)?.iter().cloned());
 
-    if !is_local_module_path(idx, &module_path) {
+    if !module_idx::is_local_module_path(idx, &module_path) {
         return None;
     }
 

@@ -3,6 +3,7 @@
 //! Query panes (`wezterm cli list`) and generate shell‑safe strings for actions. Helpers locate sibling
 //! panes in the same tab by title and derive absolute working directories from file URIs.
 
+use std::env;
 use std::path::PathBuf;
 use std::process::Command;
 
@@ -34,7 +35,7 @@ pub fn activate_pane_cmd(pane_id: i64) -> String {
 /// - `WEZTERM_PANE` cannot be parsed as an integer.
 /// - `WEZTERM_PANE` is unset.
 pub fn get_current_pane_id() -> rootcause::Result<i64> {
-    let value = std::env::var("WEZTERM_PANE").context("error missing WEZTERM_PANE environment variable")?;
+    let value = env::var("WEZTERM_PANE").context("error missing WEZTERM_PANE environment variable")?;
     Ok(value
         .parse()
         .context("error parsing WEZTERM_PANE value as i64")

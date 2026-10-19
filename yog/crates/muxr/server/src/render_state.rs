@@ -1,3 +1,5 @@
+use std::mem;
+
 use muxr_core::PaneId;
 use smallvec::SmallVec;
 
@@ -40,13 +42,13 @@ impl ClientRenderDmg {
             (Self::Full, _) | (_, Self::Clean) => {}
             (slot, Self::Full) => *slot = Self::Full,
             (Self::Clean, dmg) => *self = dmg,
-            (Self::Panes(current), Self::Panes(incoming)) => self::extend_unique(current, incoming),
+            (Self::Panes(current), Self::Panes(incoming)) => extend_unique(current, incoming),
             (Self::Panes(current), Self::RegionChanged(incoming)) => {
-                self::extend_unique(current, incoming);
-                *self = Self::RegionChanged(std::mem::take(current));
+                extend_unique(current, incoming);
+                *self = Self::RegionChanged(mem::take(current));
             }
             (Self::RegionChanged(current), Self::Panes(incoming) | Self::RegionChanged(incoming)) => {
-                self::extend_unique(current, incoming);
+                extend_unique(current, incoming);
             }
         }
     }

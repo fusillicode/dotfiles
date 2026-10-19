@@ -1,7 +1,13 @@
 //! Shared syntax classification helpers for the rsl rules.
 
+use proc_macro2::TokenStream;
 use proc_macro2::TokenTree;
 use syn::Item;
+use syn::ItemImpl;
+use syn::ItemMacro;
+use syn::ItemMod;
+use syn::Path;
+use syn::Visibility;
 
 #[derive(Clone, Copy, Debug, strum::Display, Eq, PartialEq)]
 #[strum(serialize_all = "snake_case")]
@@ -74,11 +80,11 @@ pub enum VisibilityClass {
     Private,
 }
 
-impl From<&syn::Visibility> for VisibilityClass {
-    fn from(visibility: &syn::Visibility) -> Self {
+impl From<&Visibility> for VisibilityClass {
+    fn from(visibility: &Visibility) -> Self {
         match visibility {
-            syn::Visibility::Public(_) => Self::Public,
-            syn::Visibility::Restricted(restricted) => {
+            Visibility::Public(_) => Self::Public,
+            Visibility::Restricted(restricted) => {
                 if restricted.path.is_ident("crate") {
                     Self::Crate
                 } else if restricted.path.is_ident("self") {
@@ -87,7 +93,7 @@ impl From<&syn::Visibility> for VisibilityClass {
                     Self::Restricted
                 }
             }
-            syn::Visibility::Inherited => Self::Private,
+            Visibility::Inherited => Self::Private,
         }
     }
 }
@@ -114,7 +120,7 @@ pub fn type_definition_name(item: &Item) -> Option<String> {
     }
 }
 
-pub fn impl_target_name(item_impl: &syn::ItemImpl) -> Option<String> {
+pub fn impl_target_name(item_impl: &ItemImpl) -> Option<String> {
     let syn::Type::Path(type_path) = item_impl.self_ty.as_ref() else {
         return None;
     };
@@ -147,7 +153,7 @@ pub fn item_visibility(item: &Item) -> Option<VisibilityClass> {
 
 pub fn item_label(item: &Item, kind: ItemKind) -> String {
     if let Item::Impl(item) = item {
-        let target = self::impl_target_name(item).unwrap_or_else(|| "type".to_owned());
+        let target = impl_target_name(item).unwrap_or_else(|| "type".to_owned());
         return item.trait_.as_ref().map_or_else(
             || format!("impl {target}"),
             |(path, _)| {
@@ -185,7 +191,7 @@ pub fn classify_item(item: &Item) -> Option<ItemKind> {
         Item::Use(_) => ItemKind::Use,
         Item::ForeignMod(_) => ItemKind::ForeignMod,
         Item::Mod(_) => ItemKind::Mod,
-        Item::Macro(item_macro) if self::is_global_asm(item_macro) => ItemKind::GlobalAsm,
+        Item::Macro(item_macro) if is_global_asm(item_macro) => ItemKind::GlobalAsm,
         Item::Const(_) => ItemKind::Const,
         Item::Static(_) => ItemKind::Static,
         Item::Type(_) => ItemKind::TypeAlias,
@@ -197,25 +203,25 @@ pub fn classify_item(item: &Item) -> Option<ItemKind> {
         Item::TraitAlias(_) => ItemKind::TraitAlias,
         Item::Impl(_) => ItemKind::Impl,
         Item::Fn(_) => ItemKind::Fn,
-        Item::Verbatim(tokens) if self::is_explicit_macro(tokens) => ItemKind::Macro,
+        Item::Verbatim(tokens) if is_explicit_macro(tokens) => ItemKind::Macro,
         Item::Macro(_) | Item::Verbatim(_) | _ => return None,
     };
 
     Some(kind)
 }
 
-pub(super) fn is_test_module_declaration(module: &syn::ItemMod) -> bool {
+pub(super) fn is_test_module_declaration(module: &ItemMod) -> bool {
     module.ident == "tests"
         && module.attrs.iter().any(|attribute| {
             let syn::Meta::List(meta) = &attribute.meta else {
                 return false;
             };
             meta.path.is_ident("cfg")
-                && syn::parse2::<syn::Path>(meta.tokens.clone()).is_ok_and(|path| path.is_ident("test"))
+                && syn::parse2::<Path>(meta.tokens.clone()).is_ok_and(|path| path.is_ident("test"))
         })
 }
 
-fn is_global_asm(item: &syn::ItemMacro) -> bool {
+fn is_global_asm(item: &ItemMacro) -> bool {
     item.mac
         .path
         .segments
@@ -223,7 +229,7 @@ fn is_global_asm(item: &syn::ItemMacro) -> bool {
         .is_some_and(|segment| segment.ident == "global_asm")
 }
 
-fn is_explicit_macro(tokens: &proc_macro2::TokenStream) -> bool {
+fn is_explicit_macro(tokens: &TokenStream) -> bool {
     let mut tokens = tokens.clone().into_iter().peekable();
     loop {
         let Some(token) = tokens.next() else {

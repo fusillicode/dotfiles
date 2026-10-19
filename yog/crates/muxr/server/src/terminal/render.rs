@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::ops::Range;
 
 use muxr_config::ScrollbackDumpStyle;
 use muxr_core::RenderCell;
@@ -12,7 +13,7 @@ use muxr_core::RenderStyle;
 use muxr_core::RenderTextStyle;
 use muxr_core::RowWrap;
 use muxr_core::TerminalSize;
-use rio_vt::ansi::CursorShape as RioCursorShape;
+use rio_vt::ansi::CursorShape;
 use rio_vt::config::colors::AnsiColor;
 use rio_vt::config::colors::NamedColor;
 use rio_vt::crosswords::Crosswords;
@@ -31,10 +32,10 @@ use rio_vt::event::EventListener;
 use rootcause::prelude::ResultExt;
 use smallvec::SmallVec;
 
-use super::CursorShapeSource;
-use super::TerminalSnapshot;
-use super::TerminalSnapshotScope;
-use super::TerminalTextTail;
+use crate::terminal::CursorShapeSource;
+use crate::terminal::TerminalSnapshot;
+use crate::terminal::TerminalSnapshotScope;
+use crate::terminal::TerminalTextTail;
 
 const RENDER_CELL_TEXT_INLINE_BYTES: usize = 24;
 
@@ -131,7 +132,7 @@ pub(super) fn live_tail_text<U: EventListener>(terminal: &Crosswords<U>, row_lim
 
 pub(super) fn scrollback_grid_dump<U: EventListener>(
     terminal: &Crosswords<U>,
-    lines: std::ops::Range<i32>,
+    lines: Range<i32>,
     style: ScrollbackDumpStyle,
 ) -> Vec<u8> {
     let mut dump = Vec::new();
@@ -298,17 +299,17 @@ fn render_named_color(color: NamedColor) -> RenderColor {
         .map_or(RenderColor::Default, RenderColor::Indexed)
 }
 
-const fn render_cursor_shape(shape: RioCursorShape, blinking: bool, source: CursorShapeSource) -> RenderCursorShape {
+const fn render_cursor_shape(shape: CursorShape, blinking: bool, source: CursorShapeSource) -> RenderCursorShape {
     match source {
         CursorShapeSource::Default => RenderCursorShape::Default,
         CursorShapeSource::Explicit => match (shape, blinking) {
-            (RioCursorShape::Beam, false) => RenderCursorShape::SteadyBar,
-            (RioCursorShape::Beam, true) => RenderCursorShape::BlinkingBar,
-            (RioCursorShape::Block, false) => RenderCursorShape::SteadyBlock,
-            (RioCursorShape::Block, true) => RenderCursorShape::BlinkingBlock,
-            (RioCursorShape::Underline, false) => RenderCursorShape::SteadyUnderline,
-            (RioCursorShape::Underline, true) => RenderCursorShape::BlinkingUnderline,
-            (RioCursorShape::Hidden, _) => RenderCursorShape::Default,
+            (CursorShape::Beam, false) => RenderCursorShape::SteadyBar,
+            (CursorShape::Beam, true) => RenderCursorShape::BlinkingBar,
+            (CursorShape::Block, false) => RenderCursorShape::SteadyBlock,
+            (CursorShape::Block, true) => RenderCursorShape::BlinkingBlock,
+            (CursorShape::Underline, false) => RenderCursorShape::SteadyUnderline,
+            (CursorShape::Underline, true) => RenderCursorShape::BlinkingUnderline,
+            (CursorShape::Hidden, _) => RenderCursorShape::Default,
         },
     }
 }

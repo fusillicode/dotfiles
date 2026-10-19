@@ -5,6 +5,7 @@ use std::ops::Range;
 use nvim_oxi::Array;
 use nvim_oxi::Dictionary;
 use nvim_oxi::Object;
+use nvim_oxi::api;
 use nvim_oxi::api::Buffer;
 use nvim_oxi::api::SuperIterator;
 use nvim_oxi::api::opts::GetTextOpts;
@@ -90,7 +91,7 @@ pub fn get(_: ()) -> Option<Selection> {
         })
         .ok()?;
 
-    get_selection(&mut bounds, nvim_oxi::api::get_mode().mode == "V")
+    get_selection(&mut bounds, api::get_mode().mode == "V")
 }
 
 /// Return an owned [`Selection`] for the persisted Visual marks.
@@ -384,7 +385,7 @@ fn get_selection(bounds: &mut SelectionBounds, is_linewise: bool) -> Option<Sele
 }
 
 fn last_visual_mode() -> Option<String> {
-    nvim_oxi::api::call_function::<_, String>("visualmode", Array::new())
+    api::call_function::<_, String>("visualmode", Array::new())
         .inspect_err(|err| {
             crate::notify::error(format!("error getting last visual mode | error={err:#?}"));
         })
@@ -465,14 +466,12 @@ struct RawPos(i32, i64, i64, i64);
 /// - Calling `getpos()` fails.
 /// - Deserializing the returned tuple into [`Pos`] fails.
 fn get_pos(mark: &str) -> rootcause::Result<Pos> {
-    Ok(
-        nvim_oxi::api::call_function::<_, Pos>("getpos", Array::from_iter([mark]))
-            .inspect_err(|err| {
-                crate::notify::error(format!("error getting pos | mark={mark:?} error={err:#?}"));
-            })
-            .context("error getting position")
-            .attach_with(|| format!("mark={mark:?}"))?,
-    )
+    Ok(api::call_function::<_, Pos>("getpos", Array::from_iter([mark]))
+        .inspect_err(|err| {
+            crate::notify::error(format!("error getting pos | mark={mark:?} error={err:#?}"));
+        })
+        .context("error getting position")
+        .attach_with(|| format!("mark={mark:?}"))?)
 }
 
 #[cfg(test)]

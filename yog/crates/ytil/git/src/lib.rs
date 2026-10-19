@@ -10,6 +10,7 @@ pub use git2::Repository;
 use git2::Status;
 use git2::StatusEntry;
 use git2::StatusOptions;
+use rootcause::Report;
 use rootcause::prelude::ResultExt;
 pub use ytil_cmd::CmdError;
 use ytil_cmd::CmdExt;
@@ -156,7 +157,7 @@ impl GitStatusEntry {
 }
 
 impl TryFrom<(Arc<PathBuf>, &StatusEntry<'_>)> for GitStatusEntry {
-    type Error = rootcause::Report;
+    type Error = Report;
 
     fn try_from((repo_root, value): (Arc<PathBuf>, &StatusEntry<'_>)) -> Result<Self, Self::Error> {
         let status = value.status();

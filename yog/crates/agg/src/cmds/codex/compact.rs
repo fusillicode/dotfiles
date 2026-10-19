@@ -1,3 +1,4 @@
+use std::env;
 use std::io::ErrorKind;
 use std::path::Path;
 use std::path::PathBuf;
@@ -8,6 +9,7 @@ use rootcause::prelude::ResultExt;
 use rootcause::report;
 use rusqlite::Connection;
 use rusqlite::OpenFlags;
+use ytil_sys::dir;
 
 const DATABASE_FILE_NAME: &str = "logs_2.sqlite";
 const SQLITE_BUSY_TIMEOUT: Duration = Duration::from_secs(3);
@@ -50,12 +52,9 @@ pub fn run() -> rootcause::Result<()> {
 }
 
 fn database_path() -> rootcause::Result<PathBuf> {
-    let codex_home = std::env::var_os("CODEX_HOME")
+    let codex_home = env::var_os("CODEX_HOME")
         .filter(|value| !value.is_empty())
-        .map_or_else(
-            || ytil_sys::dir::build_home_path(&[".codex"]),
-            |value| Ok(PathBuf::from(value)),
-        )?;
+        .map_or_else(|| dir::build_home_path(&[".codex"]), |value| Ok(PathBuf::from(value)))?;
     let database_path = codex_home.join(DATABASE_FILE_NAME);
     let metadata = database_path.metadata().map_err(|error| {
         if error.kind() == ErrorKind::NotFound {

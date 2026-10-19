@@ -1,6 +1,7 @@
 //! Exposes a dictionary with a `create_scratch_file` function for selecting and copying scratch files from the attempts
 //! directory.
 
+use std::fs;
 use std::fs::DirEntry;
 use std::fs::ReadDir;
 use std::path::Path;
@@ -9,6 +10,10 @@ use std::path::PathBuf;
 use jiff::Zoned;
 use nvim_oxi::Dictionary;
 use rootcause::report;
+use ytil_noxi::buffer;
+use ytil_noxi::notify;
+use ytil_noxi::vim_ui_select;
+use ytil_sys::dir;
 
 const SCRATCHES_PATH_PARTS: &[&str] = &["crates", "nvrim", "src", "plugins", "attempt"];
 
@@ -104,7 +109,7 @@ fn create_scratch_file(_: ()) {
         .filter_map(|entry| {
             Scratch::from(entry)?
                 .inspect_err(|err| {
-                    ytil_noxi::notify::error(format!("error building Scratch struct | error={err:#?}"));
+                    notify::error(format!("error building Scratch struct | error={err:#?}"));
                 })
                 .ok()
         })
@@ -112,8 +117,8 @@ fn create_scratch_file(_: ()) {
 
     let dest_dir = Path::new("/tmp").join("attempt.rs");
 
-    if let Err(err) = std::fs::create_dir_all(&dest_dir) {
-        ytil_noxi::notify::error(format!(
+    if let Err(err) = fs::create_dir_all(&dest_dir) {
+        notify::error(format!(
             "cannot create dest dir | dest_dir={} error={err:#?}",
             dest_dir.display()
         ));
@@ -127,25 +132,25 @@ fn create_scratch_file(_: ()) {
                 return;
             };
             let dest = scratch.dest_file_path(&dest_dir, &Zoned::now());
-            if let Err(err) = std::fs::copy(&scratch.path, &dest) {
-                ytil_noxi::notify::error(format!(
+            if let Err(err) = fs::copy(&scratch.path, &dest) {
+                notify::error(format!(
                     "cannot copy file | from={} to={} error={err:#?}",
                     scratch.path.display(),
                     dest.display()
                 ));
                 return;
             }
-            drop(ytil_noxi::buffer::open(&dest, None, None));
+            drop(buffer::open(&dest, None, None));
         }
     };
 
-    if let Err(err) = ytil_noxi::vim_ui_select::open(
+    if let Err(err) = vim_ui_select::open(
         scratches.iter().map(|scratch| scratch.display_name.as_str()),
         &[("prompt", "Create scratch file ")],
         callback,
         None,
     ) {
-        ytil_noxi::notify::error(format!("error creating scratch file | error={err:#?}"));
+        notify::error(format!("error creating scratch file | error={err:#?}"));
     }
 }
 
@@ -154,14 +159,14 @@ fn create_scratch_file(_: ()) {
 /// # Errors
 /// Returns an error if the workspace root cannot be determined or the directory cannot be read.
 fn get_scratches_dir_content() -> rootcause::Result<ReadDir> {
-    ytil_sys::dir::get_workspace_root()
-        .map(|workspace_root| ytil_sys::dir::build_path(workspace_root, SCRATCHES_PATH_PARTS))
+    dir::get_workspace_root()
+        .map(|workspace_root| dir::build_path(workspace_root, SCRATCHES_PATH_PARTS))
         .inspect_err(|err| {
-            ytil_noxi::notify::error(format!("error getting workspace root | error={err:#?}"));
+            notify::error(format!("error getting workspace root | error={err:#?}"));
         })
-        .and_then(|dir| std::fs::read_dir(dir).map_err(From::from))
+        .and_then(|dir| fs::read_dir(dir).map_err(From::from))
         .inspect_err(|err| {
-            ytil_noxi::notify::error(format!("error reading attempt files dir | error={err:#?}"));
+            notify::error(format!("error reading attempt files dir | error={err:#?}"));
         })
 }
 

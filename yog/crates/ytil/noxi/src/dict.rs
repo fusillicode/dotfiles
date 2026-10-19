@@ -2,6 +2,7 @@
 
 use nvim_oxi::Dictionary;
 use nvim_oxi::ObjectKind;
+use rootcause::Report;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
 
@@ -82,7 +83,7 @@ impl DictionaryExt for Dictionary {
 }
 
 /// Creates an error for missing value in [`Dictionary`].
-fn no_value_matching(query: &[&str], dict: &Dictionary) -> rootcause::Report {
+fn no_value_matching(query: &[&str], dict: &Dictionary) -> Report {
     report!("missing dict value").attach(format!("query={query:#?} dict={dict:#?}"))
 }
 

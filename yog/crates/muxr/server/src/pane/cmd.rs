@@ -29,8 +29,8 @@ impl PaneProcess {
     }
 
     fn cmd(&self) -> Option<PaneCmd> {
-        let executable = self::process_executable(self.path.as_deref())
-            .or_else(|| self::process_executable(self.name.as_deref()))?;
+        let executable =
+            process_executable(self.path.as_deref()).or_else(|| process_executable(self.name.as_deref()))?;
         Some(PaneCmd {
             executable: executable.to_owned(),
             path: self.path.clone(),
@@ -202,7 +202,7 @@ struct FgProcessGroup {
 
 impl FgProcessGroup {
     fn commands(&self) -> Result<Vec<PaneCmd>, ProcessGroupLookupError> {
-        self::process_group_members(self.pid).map(|members| {
+        process_group_members(self.pid).map(|members| {
             members
                 .into_iter()
                 .filter(|member| self.shell_pid != Some(member.pid))
@@ -239,7 +239,7 @@ mod tests {
     fn test_observe_pane_cmd_when_fg_leader_is_shell_returns_shell() {
         let observation = PaneCmdObservation::from(&PaneCmdSnapshot {
             fg_process_group: Some(9322),
-            fg_process_group_leader: Some(self::process(9322, "zsh")),
+            fg_process_group_leader: Some(process(9322, "zsh")),
             shell_pid: Some(9322),
         });
 
@@ -250,7 +250,7 @@ mod tests {
     fn test_observe_pane_cmd_when_fg_leader_has_path_returns_fg_cmd() {
         let observation = PaneCmdObservation::from(&PaneCmdSnapshot {
             fg_process_group: Some(9400),
-            fg_process_group_leader: Some(self::process_with_path(
+            fg_process_group_leader: Some(process_with_path(
                 9400,
                 "demo-aarch64-apple-darwin",
                 "/opt/homebrew/Caskroom/demo/0.137.0/demo-aarch64-apple-darwin",
@@ -291,7 +291,7 @@ mod tests {
     #[test]
     fn test_observe_pane_cmd_when_fg_group_has_child_command_returns_group_cmd() {
         let observation = PaneCmdObservation::FgCmd(FgCmd::from_test_group(
-            Some(self::cmd(17869, "agg")),
+            Some(cmd(17869, "agg")),
             Ok(vec![self::cmd(17989, "codex")]),
         ));
 
@@ -312,7 +312,7 @@ mod tests {
     #[test]
     fn test_nvim_state_when_process_group_lookup_fails_returns_unknown() {
         let observation = PaneCmdObservation::FgCmd(FgCmd::from_test_group(
-            Some(self::cmd(17869, "shell-wrapper")),
+            Some(cmd(17869, "shell-wrapper")),
             Err(ProcessGroupLookupError::Failed),
         ));
 
@@ -323,7 +323,7 @@ mod tests {
     fn test_observe_pane_cmd_when_cmd_exits_and_shell_is_fg_returns_shell() {
         let observation = PaneCmdObservation::from(&PaneCmdSnapshot {
             fg_process_group: Some(9322),
-            fg_process_group_leader: Some(self::process(9322, "zsh")),
+            fg_process_group_leader: Some(process(9322, "zsh")),
             shell_pid: Some(9322),
         });
 
@@ -334,7 +334,7 @@ mod tests {
     fn test_observe_pane_cmd_when_fg_is_untracked_returns_cmd() {
         let observation = PaneCmdObservation::from(&PaneCmdSnapshot {
             fg_process_group: Some(4242),
-            fg_process_group_leader: Some(self::process(4242, "nvim")),
+            fg_process_group_leader: Some(process(4242, "nvim")),
             shell_pid: Some(9322),
         });
 

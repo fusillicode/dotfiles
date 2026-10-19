@@ -9,6 +9,7 @@ use std::collections::HashMap;
 use std::ffi::c_int;
 
 use nvim_oxi::Object;
+use nvim_oxi::api;
 use nvim_oxi::api::Buffer;
 use nvim_oxi::api::Window;
 use nvim_oxi::conversion::ToObject;
@@ -18,9 +19,13 @@ use rootcause::prelude::ResultExt;
 use rootcause::report;
 use serde::Serialize;
 use url::Url;
+use ytil_noxi::buffer;
 use ytil_noxi::buffer::BufferExt;
 use ytil_noxi::buffer::CursorPosition;
+use ytil_noxi::notify;
+use ytil_sys::file;
 use ytil_sys::file::FileCmdOutput;
+use ytil_sys::lsof;
 use ytil_sys::lsof::ProcessFilter;
 
 /// Retrieve and classify the non-whitespace token under the cursor in the current window.
@@ -29,7 +34,7 @@ use ytil_sys::lsof::ProcessFilter;
 /// or if the cursor is on whitespace. On errors a notification is emitted to Nvim.
 /// On success returns a classified [`TokenUnderCursor`].
 pub fn get(_: ()) -> Option<TokenUnderCursor> {
-    let current_buffer = nvim_oxi::api::get_current_buf();
+    let current_buffer = api::get_current_buf();
     let cursor_pos = CursorPosition::get_current()?;
 
     let token_under_cursor = if current_buffer.is_terminal() {
@@ -39,12 +44,12 @@ pub fn get(_: ()) -> Option<TokenUnderCursor> {
     }
     .as_deref()
     .map(TokenUnderCursor::classify)?
-    .inspect_err(|err| ytil_noxi::notify::error(format!("error classifying word under cursor | error={err:?}")))
+    .inspect_err(|err| notify::error(format!("error classifying word under cursor | error={err:?}")))
     .ok()?;
 
     let token_under_cursor = token_under_cursor
         .refine_word(&current_buffer)
-        .inspect_err(|err| ytil_noxi::notify::error(format!("error refining word under cursor | error={err:?}")))
+        .inspect_err(|err| notify::error(format!("error refining word under cursor | error={err:?}")))
         .ok()?;
 
     Some(token_under_cursor)
@@ -141,7 +146,7 @@ impl TokenUnderCursor {
         if let Self::MaybeTextFile { value, lnum, col } = self {
             let pid = buffer.get_pid()?;
 
-            let mut lsof_res = ytil_sys::lsof::lsof(&ProcessFilter::Pid(&pid))?;
+            let mut lsof_res = lsof::lsof(&ProcessFilter::Pid(&pid))?;
 
             let Some(process_desc) = lsof_res.get_mut(0) else {
                 return Err(report!("error no process found for pid")).attach_with(|| format!("pid={pid:?}"));
@@ -203,14 +208,14 @@ fn get_token_under_cursor_in_terminal_buffer(buffer: &Buffer, cursor_pos: &Curso
                 .context("error converting window width to usize")
                 .attach_with(|| format!("width={x}"))
         })
-        .inspect_err(|err| ytil_noxi::notify::error(format!("{err}")))
+        .inspect_err(|err| notify::error(format!("{err}")))
         .ok()?
         .saturating_sub(1);
 
     // Pre-allocate with reasonable capacity for typical token lengths
     let mut out = Vec::with_capacity(128);
     let mut word_end_idx = 0;
-    for (idx, current_char) in ytil_noxi::buffer::get_current_line()?.char_indices() {
+    for (idx, current_char) in buffer::get_current_line()?.char_indices() {
         word_end_idx = idx;
         if idx < cursor_pos.col {
             if current_char.is_ascii_whitespace() {
@@ -276,7 +281,7 @@ fn get_token_under_cursor_in_terminal_buffer(buffer: &Buffer, cursor_pos: &Curso
 }
 
 fn get_token_under_cursor_in_normal_buffer(cursor_pos: &CursorPosition) -> Option<String> {
-    let current_line = ytil_noxi::buffer::get_current_line()?;
+    let current_line = buffer::get_current_line()?;
     get_word_at_index(&current_line, cursor_pos.col).map(ToOwned::to_owned)
 }
 
@@ -287,7 +292,7 @@ fn exec_file_cmd_cached(path: &str) -> rootcause::Result<FileCmdOutput> {
         if let Some(cached) = cache.borrow().get(path).cloned() {
             return Ok(cached);
         }
-        let result = ytil_sys::file::exec_file_cmd(path)?;
+        let result = file::exec_file_cmd(path)?;
         cache.borrow_mut().insert(path.to_owned(), result.clone());
         Ok(result)
     })

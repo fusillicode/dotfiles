@@ -6,6 +6,7 @@ use std::time::Duration;
 use std::time::SystemTime;
 
 use crossterm::style::Stylize;
+use fmt::Formatter;
 use jiff::Zoned;
 use muxr_core::ClientRequest;
 use muxr_core::ServerEvent;
@@ -25,7 +26,7 @@ pub enum SessionState {
 }
 
 impl fmt::Display for SessionState {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             Self::Live => f.write_str("live"),
             Self::Stopped => f.write_str("stopped"),
@@ -71,7 +72,7 @@ impl ListedSession {
 }
 
 impl fmt::Display for ListedSession {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(
             f,
             "{} [{}] {}",
@@ -88,7 +89,7 @@ impl fmt::Display for ListedSession {
 /// - `HOME` is unavailable.
 /// - The session root cannot be read for reasons other than being absent.
 pub fn list_sessions() -> rootcause::Result<Vec<ListedSession>> {
-    self::list_sessions_from_root(&SessionPaths::sessions_root_from_home()?)
+    list_sessions_from_root(&SessionPaths::sessions_root_from_home()?)
 }
 
 pub fn session_state(paths: &SessionPaths) -> rootcause::Result<SessionState> {
@@ -101,7 +102,7 @@ pub fn session_state(paths: &SessionPaths) -> rootcause::Result<SessionState> {
 
     tokio::runtime::Runtime::new()
         .context("failed to build muxr tokio runtime")?
-        .block_on(self::session_state_async(paths))
+        .block_on(session_state_async(paths))
 }
 
 /// Probe a muxr session socket without starting a nested Tokio runtime.
@@ -163,7 +164,7 @@ fn list_sessions_from_root(root: &Path) -> rootcause::Result<Vec<ListedSession>>
         sessions.push(ListedSession {
             created_at,
             name,
-            state: self::session_state(&paths)?,
+            state: session_state(&paths)?,
         });
     }
 
@@ -207,7 +208,7 @@ mod tests {
         fs::create_dir(root.path().join("bad name")).context("failed to create invalid session")?;
         fs::write(root.path().join("file"), b"ignored").context("failed to create ignored file")?;
 
-        let sessions = self::list_sessions_from_root(root.path())?;
+        let sessions = crate::session::list::tests::list_sessions_from_root(root.path())?;
 
         let rendered = sessions.iter().map(ToString::to_string).collect::<Vec<_>>();
         let expected = sessions

@@ -1,3 +1,5 @@
+use std::ops::Range;
+
 use muxr_core::RenderHyperlink;
 use muxr_core::RenderRowSpan;
 use muxr_core::RowWrap;
@@ -48,23 +50,23 @@ pub fn detect_visible_url_links(rows: &[RenderRowSpan], row_wraps: &[RowWrap]) -
             if LinkCellState::at(&linked_cells, position) == LinkCellState::Linked {
                 continue;
             }
-            let Some(candidate) = self::url_candidate_at(rows, row_wraps, position) else {
+            let Some(candidate) = url_candidate_at(rows, row_wraps, position) else {
                 continue;
             };
-            let Some(uri) = self::valid_url_prefix(&candidate) else {
+            let Some(uri) = valid_url_prefix(&candidate) else {
                 continue;
             };
             if candidate
                 .positions
                 .iter()
                 .take(uri.len())
-                .any(|position| self::cell_has_explicit_hyperlink(rows, *position))
+                .any(|position| cell_has_explicit_hyperlink(rows, *position))
             {
                 continue;
             }
             let hyperlink = RenderHyperlink::new(uri.clone())?;
             for position in candidate.positions.into_iter().take(uri.len()) {
-                self::mark_cell_linked(&mut linked_cells, position)?;
+                mark_cell_linked(&mut linked_cells, position)?;
                 links.push(PaneUrlLink {
                     hyperlink: hyperlink.clone(),
                     position,
@@ -81,7 +83,7 @@ pub fn detect_visible_url_links_for_rows(
     row_wraps: &[RowWrap],
     selected_rows: &[u16],
 ) -> rootcause::Result<Vec<PaneUrlLink>> {
-    let selected_rows = self::expand_visible_url_rows(rows, row_wraps, selected_rows);
+    let selected_rows = expand_visible_url_rows(rows, row_wraps, selected_rows);
     let mut links = Vec::new();
     let mut next = 0;
     while let Some(start) = selected_rows.get(next).copied() {
@@ -100,7 +102,7 @@ pub fn detect_visible_url_links_for_rows(
         let range_wraps = row_wraps
             .get(start..end)
             .ok_or_else(|| report!("muxr pane URL dependency wraps are outside the visible snapshot"))?;
-        for link in self::detect_visible_url_links(range_rows, range_wraps)? {
+        for link in detect_visible_url_links(range_rows, range_wraps)? {
             links.push(link.offset_row(start)?);
         }
         next = end_index;
@@ -128,15 +130,15 @@ pub fn expand_visible_url_rows(rows: &[RenderRowSpan], row_wraps: &[RowWrap], ch
         return selected;
     };
     for (row, row_changed) in changed_rows {
-        if self::rows_share_url_candidate(rows, row_wraps, row.saturating_sub(1)) {
+        if rows_share_url_candidate(rows, row_wraps, row.saturating_sub(1)) {
             component_changed |= row_changed;
             continue;
         }
-        self::append_changed_component(&mut selected, component_start..row, component_changed);
+        append_changed_component(&mut selected, component_start..row, component_changed);
         component_start = row;
         component_changed = row_changed;
     }
-    self::append_changed_component(&mut selected, component_start..rows.len(), component_changed);
+    append_changed_component(&mut selected, component_start..rows.len(), component_changed);
     selected
 }
 
@@ -159,7 +161,7 @@ struct CellPosition {
     row: usize,
 }
 
-fn append_changed_component(selected: &mut Vec<u16>, rows: std::ops::Range<usize>, changed: bool) {
+fn append_changed_component(selected: &mut Vec<u16>, rows: Range<usize>, changed: bool) {
     if changed {
         selected.extend(rows.filter_map(|row| u16::try_from(row).ok()));
     }
@@ -188,7 +190,7 @@ fn rows_share_url_candidate(rows: &[RenderRowSpan], row_wraps: &[RowWrap], upper
         return false;
     };
     UrlChar::from_char(
-        self::cell_ascii_char(
+        cell_ascii_char(
             rows,
             CellPosition {
                 row: upper_row,
@@ -198,7 +200,7 @@ fn rows_share_url_candidate(rows: &[RenderRowSpan], row_wraps: &[RowWrap], upper
         .unwrap_or(' '),
     ) == UrlChar::Url
         && UrlChar::from_char(
-            self::cell_ascii_char(
+            cell_ascii_char(
                 rows,
                 CellPosition {
                     row: lower_row,
@@ -238,7 +240,7 @@ fn mark_cell_linked(linked_cells: &mut [Vec<LinkCellState>], position: CellPosit
 }
 
 fn url_candidate_at(rows: &[RenderRowSpan], row_wraps: &[RowWrap], position: CellPosition) -> Option<UrlCandidate> {
-    let scheme_len = self::scheme_len_at(rows, row_wraps, position)?;
+    let scheme_len = scheme_len_at(rows, row_wraps, position)?;
     let mut positions = Vec::new();
     let mut text = String::new();
     let mut current = Some(position);
@@ -246,7 +248,7 @@ fn url_candidate_at(rows: &[RenderRowSpan], row_wraps: &[RowWrap], position: Cel
         let Some(position) = current else {
             break UrlCandidateEnd::VisibleEdge;
         };
-        let Some(ch) = self::cell_ascii_char(rows, position) else {
+        let Some(ch) = cell_ascii_char(rows, position) else {
             break UrlCandidateEnd::Delimiter;
         };
         if UrlChar::from_char(ch) == UrlChar::Delimiter {
@@ -254,7 +256,7 @@ fn url_candidate_at(rows: &[RenderRowSpan], row_wraps: &[RowWrap], position: Cel
         }
         positions.push(position);
         text.push(ch);
-        current = self::next_position(rows, row_wraps, position);
+        current = next_position(rows, row_wraps, position);
     };
 
     if text.len() <= scheme_len {
@@ -284,17 +286,17 @@ impl UrlSchemeMatch {
             let Some(position) = current else {
                 return Self::Missing;
             };
-            if self::cell_ascii_char(rows, position) != Some(expected) {
+            if cell_ascii_char(rows, position) != Some(expected) {
                 return Self::Missing;
             }
-            current = self::next_position(rows, row_wraps, position);
+            current = next_position(rows, row_wraps, position);
         }
         Self::Matched
     }
 }
 
 fn valid_url_prefix(candidate: &UrlCandidate) -> Option<String> {
-    let trimmed = self::trim_url_candidate(&candidate.text);
+    let trimmed = trim_url_candidate(&candidate.text);
     let url = Url::parse(trimmed).ok()?;
     if !matches!(url.scheme(), "http" | "https") {
         return None;
@@ -487,31 +489,31 @@ mod tests {
     #[case::explicit_port_at_edge("http://grafana:3000")]
     #[case::balanced_parentheses("https://example.com/a_(b)")]
     fn test_link_visible_urls_when_plain_url_is_visible_links_url_cells(#[case] uri: &str) -> rootcause::Result<()> {
-        let rows = self::rows(&[&format!("go {uri}")])?;
+        let rows = rows(&[&format!("go {uri}")])?;
 
-        let links = self::detect_visible_url_links(&rows, &self::soft_wraps(&rows))?;
+        let links = crate::pane::url_links::tests::detect_visible_url_links(&rows, &soft_wraps(&rows))?;
 
-        self::assert_linked_text(&rows, &links, uri, uri);
+        assert_linked_text(&rows, &links, uri, uri);
         Ok(())
     }
 
     #[test]
     fn test_link_visible_urls_when_single_label_host_has_delimiter_links_url() -> rootcause::Result<()> {
-        let rows = self::rows(&["go http://grafana now"])?;
+        let rows = rows(&["go http://grafana now"])?;
 
-        let links = self::detect_visible_url_links(&rows, &self::soft_wraps(&rows))?;
+        let links = crate::pane::url_links::tests::detect_visible_url_links(&rows, &soft_wraps(&rows))?;
 
-        self::assert_linked_text(&rows, &links, "http://grafana", "http://grafana");
+        assert_linked_text(&rows, &links, "http://grafana", "http://grafana");
         Ok(())
     }
 
     #[test]
     fn test_link_visible_urls_when_single_label_host_has_explicit_path_at_edge_links_url() -> rootcause::Result<()> {
-        let rows = self::rows(&["http://grafana/"])?;
+        let rows = rows(&["http://grafana/"])?;
 
-        let links = self::detect_visible_url_links(&rows, &self::soft_wraps(&rows))?;
+        let links = crate::pane::url_links::tests::detect_visible_url_links(&rows, &soft_wraps(&rows))?;
 
-        self::assert_linked_text(&rows, &links, "http://grafana/", "http://grafana/");
+        assert_linked_text(&rows, &links, "http://grafana/", "http://grafana/");
         Ok(())
     }
 
@@ -527,11 +529,11 @@ mod tests {
         #[case] text: &str,
         #[case] uri: &str,
     ) -> rootcause::Result<()> {
-        let rows = self::rows(&[text])?;
+        let rows = rows(&[text])?;
 
-        let links = self::detect_visible_url_links(&rows, &self::soft_wraps(&rows))?;
+        let links = crate::pane::url_links::tests::detect_visible_url_links(&rows, &soft_wraps(&rows))?;
 
-        self::assert_linked_text(&rows, &links, uri, uri);
+        assert_linked_text(&rows, &links, uri, uri);
         let uri_start = text.find(uri).context("muxr test URI is missing from text")?;
         let uri_end = uri_start
             .checked_add(uri.len())
@@ -548,11 +550,11 @@ mod tests {
 
     #[test]
     fn test_link_visible_urls_when_url_wraps_at_row_edge_links_full_url() -> rootcause::Result<()> {
-        let rows = self::rows(&["https://exam", "ple.com tail"])?;
+        let rows = rows(&["https://exam", "ple.com tail"])?;
 
-        let links = self::detect_visible_url_links(&rows, &self::soft_wraps(&rows))?;
+        let links = crate::pane::url_links::tests::detect_visible_url_links(&rows, &soft_wraps(&rows))?;
 
-        self::assert_linked_text(&rows, &links, "https://example.com", "https://example.com");
+        assert_linked_text(&rows, &links, "https://example.com", "https://example.com");
         assert_that!(
             links.iter().all(|link| !(link.row() == 1 && link.cell() == 7)),
             eq(true)
@@ -563,9 +565,9 @@ mod tests {
     #[test]
     fn test_expand_visible_url_rows_when_changed_row_touches_wrapped_candidate_includes_connected_rows()
     -> rootcause::Result<()> {
-        let rows = self::rows(&["https://exam", "ple.com tail ", "separate"])?;
+        let rows = rows(&["https://exam", "ple.com tail ", "separate"])?;
 
-        let expanded = self::expand_visible_url_rows(&rows, &self::soft_wraps(&rows), &[1]);
+        let expanded = crate::pane::url_links::tests::expand_visible_url_rows(&rows, &soft_wraps(&rows), &[1]);
 
         assert_that!(expanded, eq(vec![0, 1]));
         Ok(())
@@ -574,10 +576,10 @@ mod tests {
     #[test]
     fn test_expand_visible_url_rows_when_hard_lines_have_url_characters_keeps_changed_row_only() -> rootcause::Result<()>
     {
-        let rows = self::rows(&["first", "second", "third"])?;
+        let rows = rows(&["first", "second", "third"])?;
         let row_wraps = vec![RowWrap::EndsBeforeSoftWrap; rows.len()];
 
-        let expanded = self::expand_visible_url_rows(&rows, &row_wraps, &[1]);
+        let expanded = crate::pane::url_links::tests::expand_visible_url_rows(&rows, &row_wraps, &[1]);
 
         assert_that!(expanded, eq(vec![1]));
         Ok(())
@@ -586,11 +588,11 @@ mod tests {
     #[test]
     fn test_detect_visible_url_links_for_rows_when_unrelated_rows_exist_scans_only_dependency_rows()
     -> rootcause::Result<()> {
-        let rows = self::rows(&["https://exam", "ple.com tail ", "https://other.example"])?;
+        let rows = rows(&["https://exam", "ple.com tail ", "https://other.example"])?;
 
-        let links = self::detect_visible_url_links_for_rows(&rows, &self::soft_wraps(&rows), &[1])?;
+        let links = crate::pane::url_links::tests::detect_visible_url_links_for_rows(&rows, &soft_wraps(&rows), &[1])?;
 
-        self::assert_linked_text(&rows, &links, "https://example.com", "https://example.com");
+        assert_linked_text(&rows, &links, "https://example.com", "https://example.com");
         assert_that!(links.iter().all(|link| link.row() < 2), eq(true));
         Ok(())
     }
@@ -601,9 +603,9 @@ mod tests {
     #[case::too_short_pane_edge_fragment("https://exam")]
     #[case::unsupported_scheme("ftp://example.com")]
     fn test_link_visible_urls_when_candidate_is_invalid_does_not_link(#[case] text: &str) -> rootcause::Result<()> {
-        let rows = self::rows(&[text])?;
+        let rows = rows(&[text])?;
 
-        let links = self::detect_visible_url_links(&rows, &self::soft_wraps(&rows))?;
+        let links = crate::pane::url_links::tests::detect_visible_url_links(&rows, &soft_wraps(&rows))?;
 
         assert_that!(links, is_empty());
         Ok(())
@@ -612,10 +614,12 @@ mod tests {
     #[test]
     fn test_link_visible_urls_when_pane_fragments_are_linked_separately_does_not_cross_pane_boundary()
     -> rootcause::Result<()> {
-        let left_rows = self::rows(&["https://exam"])?;
-        let right_rows = self::rows(&["ple.com"])?;
-        let left_pane_links = self::detect_visible_url_links(&left_rows, &self::soft_wraps(&left_rows))?;
-        let right_pane_links = self::detect_visible_url_links(&right_rows, &self::soft_wraps(&right_rows))?;
+        let left_rows = rows(&["https://exam"])?;
+        let right_rows = rows(&["ple.com"])?;
+        let left_pane_links =
+            crate::pane::url_links::tests::detect_visible_url_links(&left_rows, &soft_wraps(&left_rows))?;
+        let right_pane_links =
+            crate::pane::url_links::tests::detect_visible_url_links(&right_rows, &soft_wraps(&right_rows))?;
 
         assert_that!(left_pane_links, is_empty());
         assert_that!(right_pane_links, is_empty());
@@ -652,7 +656,7 @@ mod tests {
             .enumerate()
             .map(|(row, line)| {
                 let row = u16::try_from(row).context("muxr test row overflowed")?;
-                RenderRowSpan::new(row, 0, line.chars().map(self::cell).collect())
+                RenderRowSpan::new(row, 0, line.chars().map(crate::pane::url_links::tests::cell).collect())
             })
             .collect()
     }

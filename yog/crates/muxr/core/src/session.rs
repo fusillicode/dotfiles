@@ -5,6 +5,9 @@ use std::path::PathBuf;
 use std::str::FromStr;
 
 use nutype::nutype;
+use rkyv::Place;
+use rkyv::string::ArchivedString;
+use rkyv::string::StringResolver;
 use rootcause::report;
 use serde::Deserialize;
 use serde::Serialize;
@@ -115,11 +118,11 @@ impl FromStr for SessionName {
 }
 
 impl rkyv::Archive for SessionName {
-    type Archived = rkyv::string::ArchivedString;
-    type Resolver = rkyv::string::StringResolver;
+    type Archived = ArchivedString;
+    type Resolver = StringResolver;
 
-    fn resolve(&self, resolver: Self::Resolver, out: rkyv::Place<Self::Archived>) {
-        rkyv::string::ArchivedString::resolve_from_str(self.as_ref(), resolver, out);
+    fn resolve(&self, resolver: Self::Resolver, out: Place<Self::Archived>) {
+        ArchivedString::resolve_from_str(self.as_ref(), resolver, out);
     }
 }
 
@@ -130,11 +133,11 @@ where
     str: rkyv::SerializeUnsized<S>,
 {
     fn serialize(&self, serializer: &mut S) -> Result<Self::Resolver, S::Error> {
-        rkyv::string::ArchivedString::serialize_from_str(self.as_ref(), serializer)
+        ArchivedString::serialize_from_str(self.as_ref(), serializer)
     }
 }
 
-impl<D> rkyv::Deserialize<SessionName, D> for rkyv::string::ArchivedString
+impl<D> rkyv::Deserialize<SessionName, D> for ArchivedString
 where
     D: rkyv::rancor::Fallible + ?Sized,
     D::Error: rkyv::rancor::Source,
@@ -212,9 +215,7 @@ impl SessionPaths {
         timestamp: &ServerLogTimestamp,
         pid: u32,
     ) -> rootcause::Result<PathBuf> {
-        Ok(self
-            .logs_root()?
-            .join(self::server_log_file_name(session, timestamp, pid)))
+        Ok(self.logs_root()?.join(server_log_file_name(session, timestamp, pid)))
     }
 
     /// Return the pid-scoped server log filename pattern used in client startup failure hints.
@@ -237,9 +238,9 @@ impl SessionPaths {
                     .iter()
                     .fold(PathBuf::new(), |path, part| path.join(part)),
             )
-            .join(self::socket_file_name(session));
+            .join(socket_file_name(session));
 
-        self::validate_socket_path(&socket)?;
+        validate_socket_path(&socket)?;
         Ok(Self {
             socket,
             pid: root.join("server.pid"),

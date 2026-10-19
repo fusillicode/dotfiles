@@ -8,6 +8,8 @@ use muxr_core::ServerEvent;
 use muxr_core::SessionPaths;
 use muxr_core::TerminalSize;
 use muxr_transport::ServerConnection;
+use tokio::sync::Notify;
+use tokio::sync::mpsc::Sender;
 use tokio::sync::mpsc::error::TrySendError;
 
 use crate::pane::close::PaneExitOutcome;
@@ -17,8 +19,10 @@ use crate::pty::PtyEvent;
 use crate::server::ServerConfig;
 use crate::session::delete::DeleteSessions;
 use crate::session::start_seed::SessionStartSeed;
+use crate::session::tracing::client;
 use crate::state::SessionLayout;
 use crate::state::SessionMetadata;
+use crate::state::persisted;
 
 /// High-volume PTY output is bounded and coalesced: a full queue keeps one pending output-ready marker instead of
 /// enqueueing every frame. Session runtime routing must preserve that behavior while keeping PTY state single-owned.
@@ -131,7 +135,7 @@ pub struct SessionRuntimeState {
 }
 
 pub struct ClientSessionTaskRuntime {
-    completion_sender: tokio::sync::mpsc::Sender<SessionClientTaskMessage>,
+    completion_sender: Sender<SessionClientTaskMessage>,
     delete_sessions: Arc<DeleteSessions>,
     state: SessionRuntimeState,
 }
@@ -161,7 +165,7 @@ impl ClientSessionTaskRuntime {
             // recovery path.
             Ok(()) | Err(TrySendError::Closed(_)) => {}
             Err(TrySendError::Full(_)) => {
-                crate::session::tracing::client::state_handoff_failed("channel_full");
+                client::state_handoff_failed("channel_full");
             }
         }
         match result {
@@ -179,7 +183,7 @@ impl SessionRuntime {
     pub fn spawn(
         config: &ServerConfig,
         initial_size: &TerminalSize,
-        pane_exit_notify: Arc<tokio::sync::Notify>,
+        pane_exit_notify: Arc<Notify>,
     ) -> rootcause::Result<Self> {
         let metadata = SessionMetadata::try_from(config)?;
         let start_seed = SessionStartSeed::load(config, metadata)?;
@@ -193,7 +197,7 @@ impl SessionRuntime {
     }
 
     pub fn persist_metadata(&self, paths: &SessionPaths) -> rootcause::Result<()> {
-        crate::state::persisted::write_metadata(paths, &self.state_ref()?.layout)
+        persisted::write_metadata(paths, &self.state_ref()?.layout)
     }
 
     pub fn handle_handshake_message(
@@ -222,7 +226,7 @@ impl SessionRuntime {
 
     pub fn client_session_task_runtime(
         &mut self,
-        completion_sender: tokio::sync::mpsc::Sender<SessionClientTaskMessage>,
+        completion_sender: Sender<SessionClientTaskMessage>,
         delete_sessions: Arc<DeleteSessions>,
     ) -> rootcause::Result<ClientSessionTaskRuntime> {
         Ok(ClientSessionTaskRuntime {
@@ -236,7 +240,7 @@ impl SessionRuntime {
         let Some(state) = &mut self.state else {
             return Ok(ReapResult::NoExitedPanes);
         };
-        self::reap_exited_panes(config, &mut state.layout, &mut state.pane_runtimes)
+        reap_exited_panes(config, &mut state.layout, &mut state.pane_runtimes)
     }
 
     pub fn pane_runtime_set_status(&self) -> PaneRuntimeSetStatus {
@@ -295,7 +299,7 @@ pub fn reap_exited_panes(
         }
         removed_panes.push(*pane_id);
     }
-    crate::state::persisted::write_metadata(&config.paths, layout)?;
+    persisted::write_metadata(&config.paths, layout)?;
     for pane_id in &removed_panes {
         runtimes.remove(*pane_id);
     }
@@ -348,7 +352,7 @@ mod tests {
                 )?;
                 let (completion_sender, _completion_receiver) = tokio::sync::mpsc::channel(1);
                 let blocked_state = SessionRuntimeState {
-                    layout: SessionLayout::initial(&config.session, self::metadata("sh", 1))?,
+                    layout: SessionLayout::initial(&config.session, metadata("sh", 1))?,
                     pane_runtimes: pane_runtime_test_helpers::empty_runtimes(),
                 };
                 completion_sender
@@ -364,7 +368,7 @@ mod tests {
                 let client_session = task_runtime.run_client_session(&config, server_connection, attach_request);
                 let detached_client = async {
                     client_connection.send_request(&ClientRequest::Detach).await?;
-                    self::read_connection_until_detached(&mut client_connection).await
+                    read_connection_until_detached(&mut client_connection).await
                 };
                 let (client_session_result, detached_client_result) = tokio::join!(client_session, detached_client);
                 client_session_result?;

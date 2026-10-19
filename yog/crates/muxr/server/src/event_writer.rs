@@ -83,7 +83,7 @@ pub async fn send_event_with_timeout(
     event: &ServerEvent,
     client_write_timeout: Duration,
 ) -> rootcause::Result<ClientEventSendOutcome> {
-    Ok(self::send_event_failure(writer, event, client_write_timeout)
+    Ok(send_event_failure(writer, event, client_write_timeout)
         .await
         .map_or(ClientEventSendOutcome::Sent, ClientEventSendOutcome::Failed))
 }

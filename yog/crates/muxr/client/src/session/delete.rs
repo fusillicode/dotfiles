@@ -1,6 +1,7 @@
 use std::fs;
 use std::io;
 use std::path::Path;
+use std::thread;
 use std::time::Duration;
 use std::time::Instant;
 
@@ -11,10 +12,11 @@ use muxr_core::SessionPaths;
 use muxr_transport::ClientConnection;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
+use tokio::time;
 
+use crate::session::list;
 use crate::session::list::SESSION_PROBE_TIMEOUT;
 use crate::session::list::SessionState;
-use crate::session::list::session_state;
 
 // Live delete can race with one bounded server write to an attached client; keep the cleanup wait above that path.
 const SESSION_DELETE_TIMEOUT: Duration = Duration::from_secs(5);
@@ -37,30 +39,30 @@ pub enum SessionDeleteOutcome {
 /// - The session files cannot be removed.
 pub fn delete_session(session: &SessionName) -> rootcause::Result<SessionDeleteOutcome> {
     let paths = SessionPaths::from_home(session)?;
-    self::delete_session_paths(&paths)
+    delete_session_paths(&paths)
 }
 
 fn delete_session_paths(paths: &SessionPaths) -> rootcause::Result<SessionDeleteOutcome> {
     // A reachable server gets a protocol delete so pane processes close before state files disappear.
-    match session_state(paths)? {
-        SessionState::Live => match self::delete_live_session(paths) {
+    match list::session_state(paths)? {
+        SessionState::Live => match delete_live_session(paths) {
             Ok(()) => Ok(SessionDeleteOutcome::LiveDeleted),
             Err(error) => {
                 // The live probe and delete request are separate socket operations; a server can exit between them.
                 // Once the selected server is no longer reachable, deletion becomes local stopped-session cleanup.
-                if session_state(paths)? == SessionState::Live {
+                if list::session_state(paths)? == SessionState::Live {
                     return Err(error);
                 }
-                self::remove_session_files(paths)?;
+                remove_session_files(paths)?;
                 Ok(SessionDeleteOutcome::LiveVanishedForced)
             }
         },
         SessionState::Stopped => {
-            self::remove_session_files(paths)?;
+            remove_session_files(paths)?;
             Ok(SessionDeleteOutcome::StoppedRemoved)
         }
         SessionState::Unknown => {
-            self::remove_session_files(paths)?;
+            remove_session_files(paths)?;
             Ok(SessionDeleteOutcome::UnknownForced)
         }
     }
@@ -69,17 +71,17 @@ fn delete_session_paths(paths: &SessionPaths) -> rootcause::Result<SessionDelete
 fn delete_live_session(paths: &SessionPaths) -> rootcause::Result<()> {
     tokio::runtime::Runtime::new()
         .context("failed to build muxr tokio runtime")?
-        .block_on(self::delete_live_session_async(paths))?;
-    self::wait_for_session_files_removed(paths)
+        .block_on(delete_live_session_async(paths))?;
+    wait_for_session_files_removed(paths)
 }
 
 async fn delete_live_session_async(paths: &SessionPaths) -> rootcause::Result<()> {
-    let mut connection = tokio::time::timeout(SESSION_PROBE_TIMEOUT, ClientConnection::connect(&paths.socket))
+    let mut connection = time::timeout(SESSION_PROBE_TIMEOUT, ClientConnection::connect(&paths.socket))
         .await
         .map_err(|_| report!("timed out connecting live muxr session"))?
         .context("failed to connect live muxr session")?;
 
-    tokio::time::timeout(
+    time::timeout(
         SESSION_PROBE_TIMEOUT,
         connection.send_request(&ClientRequest::DeleteSession),
     )
@@ -87,7 +89,7 @@ async fn delete_live_session_async(paths: &SessionPaths) -> rootcause::Result<()
     .map_err(|_| report!("timed out sending muxr delete request"))?
     .context("failed to send muxr delete request")?;
 
-    match tokio::time::timeout(SESSION_DELETE_TIMEOUT, connection.recv_event())
+    match time::timeout(SESSION_DELETE_TIMEOUT, connection.recv_event())
         .await
         .map_err(|_| report!("timed out waiting for muxr delete response"))?
         .context("failed to read muxr delete response")?
@@ -114,13 +116,13 @@ fn wait_for_session_files_removed(paths: &SessionPaths) -> rootcause::Result<()>
                 .attach(format!("socket={}", paths.socket.display())));
         }
 
-        std::thread::sleep(SESSION_DELETE_POLL_INTERVAL);
+        thread::sleep(SESSION_DELETE_POLL_INTERVAL);
     }
 }
 
 fn remove_session_files(paths: &SessionPaths) -> rootcause::Result<()> {
-    self::remove_dir_if_exists(&paths.root)?;
-    self::remove_file_if_exists(&paths.socket)
+    remove_dir_if_exists(&paths.root)?;
+    remove_file_if_exists(&paths.socket)
 }
 
 fn remove_dir_if_exists(path: &Path) -> rootcause::Result<()> {
@@ -151,10 +153,10 @@ mod tests {
     fn test_delete_session_paths_when_session_is_stopped_removes_root() -> rootcause::Result<()> {
         let root = tempfile::tempdir().context("failed to create muxr delete test root")?;
         let session: SessionName = "dead".parse()?;
-        let paths = self::test_paths(root.path(), &session);
+        let paths = test_paths(root.path(), &session);
         fs::create_dir_all(&paths.root).context("failed to create session root")?;
 
-        let outcome = self::delete_session_paths(&paths)?;
+        let outcome = crate::session::delete::tests::delete_session_paths(&paths)?;
 
         assert_that!(outcome, eq(SessionDeleteOutcome::StoppedRemoved));
         assert_that!(paths.root.exists(), eq(false));
@@ -166,13 +168,13 @@ mod tests {
         let root = tempfile::tempdir().context("failed to create muxr delete test root")?;
         let session: SessionName = "dead".parse()?;
         let timestamp = "20260611143012".parse()?;
-        let paths = self::test_paths(root.path(), &session);
+        let paths = test_paths(root.path(), &session);
         fs::create_dir_all(&paths.root).context("failed to create session root")?;
         fs::create_dir_all(paths.logs_root()?).context("failed to create logs root")?;
         let log_path = paths.server_log_path(&session, &timestamp, 12345)?;
         fs::write(&log_path, b"log").context("failed to create session log")?;
 
-        let outcome = self::delete_session_paths(&paths)?;
+        let outcome = crate::session::delete::tests::delete_session_paths(&paths)?;
 
         assert_that!(outcome, eq(SessionDeleteOutcome::StoppedRemoved));
         assert_that!(paths.root.exists(), eq(false));
@@ -184,13 +186,13 @@ mod tests {
     fn test_delete_session_paths_when_session_is_unknown_force_removes_root_and_socket() -> rootcause::Result<()> {
         let root = tempfile::tempdir().context("failed to create muxr delete test root")?;
         let session: SessionName = "dead".parse()?;
-        let paths = self::test_paths(root.path(), &session);
+        let paths = test_paths(root.path(), &session);
         fs::create_dir_all(&paths.root).context("failed to create session root")?;
         let socket_parent = paths.socket.parent().ok_or_else(|| report!("expected socket parent"))?;
         fs::create_dir_all(socket_parent).context("failed to create socket parent")?;
         fs::write(&paths.socket, b"stale").context("failed to create stale socket")?;
 
-        let outcome = self::delete_session_paths(&paths)?;
+        let outcome = crate::session::delete::tests::delete_session_paths(&paths)?;
 
         assert_that!(outcome, eq(SessionDeleteOutcome::UnknownForced));
         assert_that!(paths.root.exists(), eq(false));
@@ -202,11 +204,11 @@ mod tests {
     fn test_delete_session_paths_when_pid_exists_without_socket_force_removes_root() -> rootcause::Result<()> {
         let root = tempfile::tempdir().context("failed to create muxr delete test root")?;
         let session: SessionName = "dead".parse()?;
-        let paths = self::test_paths(root.path(), &session);
+        let paths = test_paths(root.path(), &session);
         fs::create_dir_all(&paths.root).context("failed to create session root")?;
         fs::write(&paths.pid, b"123").context("failed to create stale pid")?;
 
-        let outcome = self::delete_session_paths(&paths)?;
+        let outcome = crate::session::delete::tests::delete_session_paths(&paths)?;
 
         assert_that!(outcome, eq(SessionDeleteOutcome::UnknownForced));
         assert_that!(paths.root.exists(), eq(false));
@@ -217,7 +219,7 @@ mod tests {
     fn test_delete_session_paths_when_live_session_vanishes_force_removes_files() -> rootcause::Result<()> {
         let root = tempfile::tempdir().context("failed to create muxr delete test root")?;
         let session: SessionName = "vanished".parse()?;
-        let paths = self::test_paths(root.path(), &session);
+        let paths = test_paths(root.path(), &session);
         fs::create_dir_all(&paths.root).context("failed to create session root")?;
         let socket_parent = paths.socket.parent().ok_or_else(|| report!("expected socket parent"))?;
         fs::create_dir_all(socket_parent).context("failed to create socket parent")?;
@@ -234,7 +236,7 @@ mod tests {
                     })?;
                     let mut connection = listener.accept().await?;
                     drop(listener);
-                    self::remove_file_if_exists(&socket)?;
+                    crate::session::delete::tests::remove_file_if_exists(&socket)?;
                     assert_that!(connection.recv_request().await?, eq(Some(ClientRequest::Ping)));
                     connection.send_event(&ServerEvent::Pong).await
                 })
@@ -243,7 +245,7 @@ mod tests {
             .recv_timeout(SESSION_PROBE_TIMEOUT)
             .map_err(|error| report!("timed out waiting for fake muxr server").attach(format!("{error}")))?;
 
-        let outcome = self::delete_session_paths(&paths)?;
+        let outcome = crate::session::delete::tests::delete_session_paths(&paths)?;
 
         server
             .join()

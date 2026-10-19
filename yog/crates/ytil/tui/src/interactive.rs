@@ -6,6 +6,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use rootcause::report;
+use skim::CaseMatching;
 use skim::MatchEngine;
 use skim::MatchEngineFactory;
 use skim::MatchRange;
@@ -15,8 +16,10 @@ use skim::SkimItem;
 use skim::SkimItemReceiver;
 use skim::SkimOutput;
 use skim::options::SkimOptions;
+use skim::prelude;
 use skim::prelude::SkimItemReader;
 use skim::prelude::SkimItemReaderOption;
+use tokio::task;
 
 use crate::preview;
 use crate::preview::IndexedSkimItem;
@@ -209,7 +212,7 @@ where
         .collect::<Option<Vec<_>>>()
         .ok_or_else(|| report!("missing ANSI display item while building skim rows"))?;
 
-    let (tx_items, rx_items) = skim::prelude::unbounded();
+    let (tx_items, rx_items) = prelude::unbounded();
     tx_items
         .send(skim_items)
         .map_err(|e| report!("failed to queue skim items").attach(e.to_string()))?;
@@ -254,7 +257,7 @@ impl SearchCorpusEngineFactory {
 }
 
 impl MatchEngineFactory for SearchCorpusEngineFactory {
-    fn create_engine_with_case(&self, query: &str, case: skim::CaseMatching) -> Box<dyn MatchEngine> {
+    fn create_engine_with_case(&self, query: &str, case: CaseMatching) -> Box<dyn MatchEngine> {
         Box::new(SearchCorpusEngine {
             inner: self.inner.create_engine_with_case(query, case),
         })
@@ -315,8 +318,8 @@ fn run_skim_with_matcher(options: SkimOptions, source: SkimItemReceiver) -> root
         .rank_builder(rank_builder)
         .build();
 
-    let mut skim = skim::Skim::init(options, Some(source))
-        .map_err(|e| report!("skim failed to initialize").attach(e.to_string()))?;
+    let mut skim =
+        Skim::init(options, Some(source)).map_err(|e| report!("skim failed to initialize").attach(e.to_string()))?;
     skim.app_mut().matcher = matcher;
     skim.start();
 
@@ -331,8 +334,7 @@ fn run_skim_with_matcher(options: SkimOptions, source: SkimItemReceiver) -> root
         };
 
         if let Ok(handle) = tokio::runtime::Handle::try_current() {
-            tokio::task::block_in_place(|| handle.block_on(task))
-                .map_err(|e| report!("skim failed to run").attach(e))?;
+            task::block_in_place(|| handle.block_on(task)).map_err(|e| report!("skim failed to run").attach(e))?;
         } else {
             tokio::runtime::Runtime::new()
                 .map_err(|e| report!("failed to create tokio runtime").attach(e.to_string()))?
@@ -434,7 +436,7 @@ mod tests {
 
     #[rstest]
     fn test_select_options_when_preview_is_requested_configures_a_preview_pane() {
-        let options = super::select_options(true, true);
+        let options = crate::interactive::select_options(true, true);
 
         assert_that!(options.preview.as_deref(), eq(Some("")));
         assert_that!(options.preview_window.direction, eq(skim::tui::Direction::Right));
@@ -451,7 +453,7 @@ mod tests {
 
     #[test]
     fn test_clip_match_range_char_indices_hides_hidden_only_match() {
-        let item = super::preview::IndexedSkimItem {
+        let item = crate::interactive::preview::IndexedSkimItem {
             output: "3".to_owned(),
             display_item: Arc::new("visible value next".to_owned()),
             visible_text: "visible value next".to_owned(),

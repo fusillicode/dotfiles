@@ -1,8 +1,8 @@
-use super::*;
+use crate::terminal::tests::*;
 
 #[test]
 fn test_terminal_state_candidate_line_spans_when_wraps_mix_skips_overlapping_suffixes() -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&TerminalSize::new(10, 4)?);
+    let mut terminal = crate::terminal::tests::snapshot::terminal_state(&TerminalSize::new(10, 4)?);
     let _output = terminal.process(b"abcdefghijk\r\nlast");
     let tail = terminal.live_tail_text(12);
     let spans: Vec<Vec<_>> = tail
@@ -23,7 +23,7 @@ fn test_terminal_state_candidate_line_spans_when_wraps_mix_skips_overlapping_suf
 
 #[test]
 fn test_terminal_state_candidate_line_spans_when_rows_are_short_retains_right_edge_padding() -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&TerminalSize::new(4, 3)?);
+    let mut terminal = crate::terminal::tests::snapshot::terminal_state(&TerminalSize::new(4, 3)?);
     let _output = terminal.process(b"full\r\nend");
     let tail = terminal.live_tail_text(12);
     let spans: Vec<Vec<_>> = tail.candidate_line_spans().map(Iterator::collect).collect();
@@ -36,7 +36,7 @@ fn test_terminal_state_candidate_line_spans_when_rows_are_short_retains_right_ed
 
 #[test]
 fn test_terminal_state_live_tail_when_scrolled_reads_live_rows_without_changing_viewport() -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&TerminalSize::new(80, 3)?);
+    let mut terminal = crate::terminal::tests::snapshot::terminal_state(&TerminalSize::new(80, 3)?);
     let _output = terminal.process("old\r\none\r\ntwo\r\nWorking (6m 35s • ctrl+x to interrupt)".as_bytes());
     test_that::assert_that!(terminal.scroll(PaneScrollDirection::Up), eq(TerminalScrollMove::Moved));
     let before = terminal.render_snapshot(TerminalSnapshotScope::Full)?;
@@ -50,7 +50,7 @@ fn test_terminal_state_live_tail_when_scrolled_reads_live_rows_without_changing_
 
 #[test]
 fn test_terminal_state_live_tail_when_wrapped_joins_status_and_preserves_damage() -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&TerminalSize::new(20, 2)?);
+    let mut terminal = crate::terminal::tests::snapshot::terminal_state(&TerminalSize::new(20, 2)?);
     let _baseline = terminal.render_snapshot(TerminalSnapshotScope::Full)?;
     let _output = terminal.process("\x1b[32mWorking (6m 35s • ctrl+x to interrupt)\x1b[0m".as_bytes());
     test_that::assert_that!(
@@ -69,7 +69,7 @@ fn test_terminal_state_live_tail_when_wrapped_joins_status_and_preserves_damage(
 
 #[test]
 fn test_terminal_state_live_tail_when_window_is_bounded_excludes_older_rows() -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&TerminalSize::new(80, 13)?);
+    let mut terminal = crate::terminal::tests::snapshot::terminal_state(&TerminalSize::new(80, 13)?);
     let _output = terminal.process("Working (1s • esc to interrupt)\r\n".as_bytes());
     test_that::assert_that!(
         terminal.live_tail_text(12).candidate_lines().collect::<Vec<_>>(),
@@ -84,7 +84,7 @@ fn test_terminal_state_live_tail_when_window_is_bounded_excludes_older_rows() ->
 
 #[test]
 fn test_terminal_state_live_tail_when_alternate_screen_is_active_reads_active_grid() -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&TerminalSize::new(80, 1)?);
+    let mut terminal = crate::terminal::tests::snapshot::terminal_state(&TerminalSize::new(80, 1)?);
     let _output = terminal.process("Worked for 1s • 11:37\x1b[?1049h\x1b[HWorking (1s • esc to interrupt)".as_bytes());
     test_that::assert_that!(
         terminal.live_tail_text(12).candidate_lines().collect::<Vec<_>>(),
@@ -95,7 +95,7 @@ fn test_terminal_state_live_tail_when_alternate_screen_is_active_reads_active_gr
 
 #[test]
 fn test_terminal_state_when_completion_is_repainted_reports_damage_without_screen_changes() -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&TerminalSize::new(80, 3)?);
+    let mut terminal = crate::terminal::tests::snapshot::terminal_state(&TerminalSize::new(80, 3)?);
     let repaint = "\x1b[2;1H  Worked for 16m 15s • 14:18";
     let _initial_output = terminal.process(repaint.as_bytes());
     let before = terminal.render_snapshot(TerminalSnapshotScope::Full)?;
@@ -114,10 +114,10 @@ fn test_terminal_state_when_completion_is_repainted_reports_damage_without_scree
 
 #[test]
 fn test_terminal_state_snapshot_when_output_processed_contains_screen() -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&terminal_size()?);
+    let mut terminal = crate::terminal::tests::snapshot::terminal_state(&terminal_size()?);
 
     let outcome = terminal.process(b"hi");
-    self::assert_replies_eq(&outcome.into_replies(), &[]);
+    crate::terminal::tests::snapshot::assert_replies_eq(&outcome.into_replies(), &[]);
     let snapshot = terminal.render_snapshot(TerminalSnapshotScope::Full)?;
     let Some(row) = snapshot.rows().first() else {
         return Err(report!("expected first render row"));
@@ -130,7 +130,7 @@ fn test_terminal_state_snapshot_when_output_processed_contains_screen() -> rootc
 
 #[test]
 fn test_terminal_state_snapshot_when_osc8_span_is_rendered_shares_uri_allocation() -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&TerminalSize::new(8, 1)?);
+    let mut terminal = crate::terminal::tests::snapshot::terminal_state(&TerminalSize::new(8, 1)?);
     let _outcome = terminal.process(b"\x1b]8;;https://example.com\x07click\x1b]8;;\x07");
     let snapshot = terminal.render_snapshot(TerminalSnapshotScope::Full)?;
     let Some(row) = snapshot.rows().first() else {
@@ -150,10 +150,11 @@ fn test_terminal_state_snapshot_when_osc8_span_is_rendered_shares_uri_allocation
 
 #[test]
 fn test_terminal_state_snapshot_when_output_contains_horizontal_tab_expands_it_to_spaces() -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&TerminalSize::new(16, 1)?);
+    let mut terminal = crate::terminal::tests::snapshot::terminal_state(&TerminalSize::new(16, 1)?);
 
     let _outcome = terminal.process(b"\tmodified");
-    let rendered = self::snapshot_text(&terminal.render_snapshot(TerminalSnapshotScope::Full)?);
+    let rendered =
+        crate::terminal::tests::snapshot::snapshot_text(&terminal.render_snapshot(TerminalSnapshotScope::Full)?);
 
     test_that::assert_that!(rendered, starts_with("        modified"));
     Ok(())
@@ -162,10 +163,11 @@ fn test_terminal_state_snapshot_when_output_contains_horizontal_tab_expands_it_t
 #[test]
 fn test_terminal_state_snapshot_when_orphan_combining_mark_precedes_horizontal_tab_keeps_alacritty_cell_width()
 -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&TerminalSize::new(16, 1)?);
+    let mut terminal = crate::terminal::tests::snapshot::terminal_state(&TerminalSize::new(16, 1)?);
 
     let _outcome = terminal.process("\u{301}\tmodified".as_bytes());
-    let rendered = self::snapshot_text(&terminal.render_snapshot(TerminalSnapshotScope::Full)?);
+    let rendered =
+        crate::terminal::tests::snapshot::snapshot_text(&terminal.render_snapshot(TerminalSnapshotScope::Full)?);
 
     test_that::assert_that!(rendered, not(contains_substring("\t")));
     test_that::assert_that!(rendered, starts_with(" \u{301}       modified"));
@@ -175,7 +177,7 @@ fn test_terminal_state_snapshot_when_orphan_combining_mark_precedes_horizontal_t
 #[test]
 fn test_terminal_state_snapshot_when_zwj_emoji_uses_alacritty_cell_width_keeps_following_text_at_column_four()
 -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&TerminalSize::new(8, 1)?);
+    let mut terminal = crate::terminal::tests::snapshot::terminal_state(&TerminalSize::new(8, 1)?);
 
     let _outcome = terminal.process("\x1b[?2027h🥨‍🍙X".as_bytes());
     let snapshot = terminal.render_snapshot(TerminalSnapshotScope::Full)?;
@@ -211,7 +213,7 @@ fn test_terminal_state_snapshot_when_zwj_emoji_uses_alacritty_cell_width_keeps_f
 #[test]
 fn test_terminal_state_snapshot_when_variation_selector_uses_alacritty_cell_width_keeps_following_text_at_column_one()
 -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&TerminalSize::new(8, 1)?);
+    let mut terminal = crate::terminal::tests::snapshot::terminal_state(&TerminalSize::new(8, 1)?);
 
     let _outcome = terminal.process("❤️X".as_bytes());
     let snapshot = terminal.render_snapshot(TerminalSnapshotScope::Full)?;
@@ -233,9 +235,9 @@ fn test_terminal_state_snapshot_when_variation_selector_uses_alacritty_cell_widt
 
 #[test]
 fn test_terminal_state_snapshot_when_cursor_shape_is_set_returns_shape() -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&terminal_size()?);
+    let mut terminal = crate::terminal::tests::snapshot::terminal_state(&terminal_size()?);
 
-    self::assert_replies_eq(&terminal.process(b"\x1b[6 q").into_replies(), &[]);
+    crate::terminal::tests::snapshot::assert_replies_eq(&terminal.process(b"\x1b[6 q").into_replies(), &[]);
 
     test_that::assert_that!(
         terminal.render_snapshot(TerminalSnapshotScope::Full)?.cursor().shape,
@@ -246,7 +248,7 @@ fn test_terminal_state_snapshot_when_cursor_shape_is_set_returns_shape() -> root
 
 #[test]
 fn test_terminal_state_snapshot_when_steady_block_is_explicit_returns_explicit_shape() -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&terminal_size()?);
+    let mut terminal = crate::terminal::tests::snapshot::terminal_state(&terminal_size()?);
 
     let _outcome = terminal.process(b"\x1b[2 q");
 
@@ -259,7 +261,7 @@ fn test_terminal_state_snapshot_when_steady_block_is_explicit_returns_explicit_s
 
 #[test]
 fn test_terminal_state_snapshot_when_osc_50_sets_initial_block_returns_explicit_shape() -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&terminal_size()?);
+    let mut terminal = crate::terminal::tests::snapshot::terminal_state(&terminal_size()?);
 
     let outcome = terminal.process(b"\x1b]50;CursorShape=0\x07");
 
@@ -273,7 +275,7 @@ fn test_terminal_state_snapshot_when_osc_50_sets_initial_block_returns_explicit_
 
 #[test]
 fn test_terminal_state_snapshot_when_osc_50_changes_beam_to_block_returns_explicit_block() -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&terminal_size()?);
+    let mut terminal = crate::terminal::tests::snapshot::terminal_state(&terminal_size()?);
     let _beam = terminal.process(b"\x1b]50;CursorShape=1\x07");
     test_that::assert_that!(
         terminal.render_snapshot(TerminalSnapshotScope::Full)?.cursor().shape,
@@ -292,7 +294,7 @@ fn test_terminal_state_snapshot_when_osc_50_changes_beam_to_block_returns_explic
 
 #[test]
 fn test_terminal_state_snapshot_when_osc_50_sequence_is_split_returns_explicit_shape() -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&terminal_size()?);
+    let mut terminal = crate::terminal::tests::snapshot::terminal_state(&terminal_size()?);
 
     let first = terminal.process(b"\x1b]50;Cursor");
     let second = terminal.process(b"Shape=0\x1b\\");
@@ -308,7 +310,7 @@ fn test_terminal_state_snapshot_when_osc_50_sequence_is_split_returns_explicit_s
 
 #[test]
 fn test_terminal_state_snapshot_when_cursor_shape_sequence_is_split_returns_shape() -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&terminal_size()?);
+    let mut terminal = crate::terminal::tests::snapshot::terminal_state(&terminal_size()?);
 
     let _first = terminal.process(b"\x1b[2 ");
     let second = terminal.process(b"q");
@@ -323,9 +325,9 @@ fn test_terminal_state_snapshot_when_cursor_shape_sequence_is_split_returns_shap
 
 #[test]
 fn test_terminal_state_snapshot_when_terminal_resets_clears_cursor_shape() -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&terminal_size()?);
+    let mut terminal = crate::terminal::tests::snapshot::terminal_state(&terminal_size()?);
 
-    self::assert_replies_eq(&terminal.process(b"\x1b[6 q\x1bc").into_replies(), &[]);
+    crate::terminal::tests::snapshot::assert_replies_eq(&terminal.process(b"\x1b[6 q\x1bc").into_replies(), &[]);
 
     test_that::assert_that!(
         terminal.render_snapshot(TerminalSnapshotScope::Full)?.cursor().shape,
@@ -336,7 +338,7 @@ fn test_terminal_state_snapshot_when_terminal_resets_clears_cursor_shape() -> ro
 
 #[test]
 fn test_terminal_state_snapshot_when_viewport_is_scrolled_hides_live_cursor() -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&TerminalSize::new(8, 2)?);
+    let mut terminal = crate::terminal::tests::snapshot::terminal_state(&TerminalSize::new(8, 2)?);
     let _output = terminal.process(b"one\r\ntwo\r\nthree");
 
     test_that::assert_that!(
@@ -365,7 +367,7 @@ fn test_terminal_state_snapshot_when_viewport_is_scrolled_hides_live_cursor() ->
 #[test]
 fn test_terminal_state_snapshot_when_scrolled_after_narrowing_resize_fits_history_to_current_width()
 -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&TerminalSize::new(8, 2)?);
+    let mut terminal = crate::terminal::tests::snapshot::terminal_state(&TerminalSize::new(8, 2)?);
     let _ = terminal.process(b"one\r\ntwo\r\nthree");
     test_that::assert_that!(terminal.scroll(PaneScrollDirection::Up), eq(TerminalScrollMove::Moved));
 
@@ -390,7 +392,7 @@ fn test_terminal_state_snapshot_when_scrolled_after_narrowing_resize_fits_histor
 
 #[test]
 fn test_terminal_state_render_snapshot_when_one_row_changes_returns_only_that_row() -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&terminal_size()?);
+    let mut terminal = crate::terminal::tests::snapshot::terminal_state(&terminal_size()?);
     let baseline = terminal.render_snapshot(TerminalSnapshotScope::Full)?;
     test_that::assert_that!(baseline.rows().len(), eq(usize::from(terminal_size()?.rows())));
 
@@ -408,7 +410,7 @@ fn test_terminal_state_render_snapshot_when_one_row_changes_returns_only_that_ro
 fn test_terminal_state_render_snapshot_when_live_partial_region_scrolls_returns_only_region_rows()
 -> rootcause::Result<()> {
     let size = TerminalSize::new(8, 4)?;
-    let mut terminal = self::terminal_state(&size);
+    let mut terminal = crate::terminal::tests::snapshot::terminal_state(&size);
     let _setup = terminal.process(b"\x1b[1;1Hone\x1b[2;1Htwo\x1b[3;1Hfixed-a\x1b[4;1Hfixed-b\x1b[1;2r");
     let mut cached = terminal.render_snapshot(TerminalSnapshotScope::Full)?;
 
@@ -426,7 +428,7 @@ fn test_terminal_state_render_snapshot_when_live_partial_region_scrolls_returns_
 
 #[test]
 fn test_terminal_state_render_snapshot_when_only_cursor_moves_returns_no_rows() -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&terminal_size()?);
+    let mut terminal = crate::terminal::tests::snapshot::terminal_state(&terminal_size()?);
     let _baseline = terminal.render_snapshot(TerminalSnapshotScope::Full)?;
 
     let _outcome = terminal.process(b"\x1b[2;2H");
@@ -441,7 +443,7 @@ fn test_terminal_state_render_snapshot_when_only_cursor_moves_returns_no_rows() 
 #[test]
 fn test_terminal_state_render_snapshot_when_viewport_moves_returns_all_rows() -> rootcause::Result<()> {
     let size = terminal_size()?;
-    let mut terminal = self::terminal_state(&size);
+    let mut terminal = crate::terminal::tests::snapshot::terminal_state(&size);
     let _outcome = terminal.process(b"one\r\ntwo\r\nthree\r\nfour\r\nfive");
     let _baseline = terminal.render_snapshot(TerminalSnapshotScope::Full)?;
 
@@ -484,7 +486,7 @@ fn test_terminal_state_render_snapshot_when_scrolled_history_is_evicted_returns_
 
 #[test]
 fn test_terminal_state_render_snapshot_when_resized_returns_all_rows() -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&terminal_size()?);
+    let mut terminal = crate::terminal::tests::snapshot::terminal_state(&terminal_size()?);
     let _baseline = terminal.render_snapshot(TerminalSnapshotScope::Full)?;
     let resized = TerminalSize::new(10, 5)?;
 
