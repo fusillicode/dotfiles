@@ -180,14 +180,7 @@ fn collect_rewrites(
         }
 
         if call.conditional {
-            plan.record_blocked(
-                &change,
-                FixBlockReason {
-                    code: "conditional-code",
-                    message: "Conditional code may need different imports in different builds.".to_owned(),
-                    help: "Check the calls and imports in each supported configuration before changing them together.",
-                },
-            );
+            plan.record_blocked(&change, common::conditional_code_reason());
             continue;
         }
         let target = match common::ensure_no_comments(&plan.edits, change.span)

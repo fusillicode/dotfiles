@@ -22,6 +22,8 @@ use proc_macro2::Span;
 use proc_macro2::TokenStream;
 use proc_macro2::TokenTree;
 use syn::Attribute;
+use syn::Item;
+use syn::visit::Visit;
 
 use crate::cmds::rsl::analysis::FixBlockReason;
 use crate::cmds::rsl::source::SourceEditor;
@@ -35,9 +37,13 @@ pub(super) mod module_idx;
 pub(super) mod path_resolution;
 
 pub(super) fn has_conditional_attributes(attributes: &[Attribute]) -> bool {
-    attributes
-        .iter()
-        .any(|attribute| attribute.path().is_ident("cfg") || attribute.path().is_ident("cfg_attr"))
+    attributes.iter().any(is_conditional_attribute)
+}
+
+pub(super) fn contains_conditional_code(item: &Item) -> bool {
+    let mut conditions = ConditionalAttributes { found: false };
+    conditions.visit_item(item);
+    conditions.found
 }
 
 pub(super) fn token_names(tokens: TokenStream) -> HashSet<String> {
@@ -75,5 +81,28 @@ pub(super) fn comments_reason() -> FixBlockReason {
         code: "comments",
         message: "The change could remove comments inside the affected code.".to_owned(),
         help: "Move or preserve the comments before making this change manually.",
+    }
+}
+
+pub(super) fn conditional_code_reason() -> FixBlockReason {
+    FixBlockReason {
+        code: "conditional-code",
+        message: "Conditional code may need different imports in different builds.".to_owned(),
+        help: "Check the paths and imports in each supported configuration before changing them together.",
+    }
+}
+
+fn is_conditional_attribute(attribute: &Attribute) -> bool {
+    attribute.path().is_ident("cfg") || attribute.path().is_ident("cfg_attr")
+}
+
+struct ConditionalAttributes {
+    found: bool,
+}
+
+impl<'ast> Visit<'ast> for ConditionalAttributes {
+    fn visit_attribute(&mut self, attribute: &'ast Attribute) {
+        // Nested statements, arms, and expressions can also make a new module import conditional.
+        self.found |= is_conditional_attribute(attribute);
     }
 }
