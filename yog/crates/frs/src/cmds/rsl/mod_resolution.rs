@@ -148,7 +148,7 @@ impl ModuleGraph {
     }
 }
 
-#[cfg_attr(test, derive(Debug, PartialEq, Eq))]
+#[cfg_attr(test, derive(Debug, Eq, PartialEq))]
 pub(super) enum ResolutionError {
     UnknownModule,
     ConflictingContexts,

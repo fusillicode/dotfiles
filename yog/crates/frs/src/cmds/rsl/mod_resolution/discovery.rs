@@ -55,7 +55,7 @@ pub(super) fn resolve_roots(
     Ok(DiscoveryOutput { roots, structures })
 }
 
-#[cfg_attr(test, derive(Debug, PartialEq, Eq))]
+#[cfg_attr(test, derive(Debug, Eq, PartialEq))]
 pub(super) enum ModuleResolution {
     Module {
         description: ModuleDescription,
@@ -67,7 +67,7 @@ pub(super) enum ModuleResolution {
 }
 
 #[derive(Clone)]
-#[cfg_attr(test, derive(Debug, PartialEq, Eq))]
+#[cfg_attr(test, derive(Debug, Eq, PartialEq))]
 pub(super) struct ModuleDescription {
     pub(super) placement: ModulePlacement,
     pub(super) file: PathBuf,
@@ -90,7 +90,7 @@ impl ModuleDescription {
 }
 
 #[derive(Clone)]
-#[cfg_attr(test, derive(Debug, PartialEq, Eq))]
+#[cfg_attr(test, derive(Debug, Eq, PartialEq))]
 pub(super) enum ModulePlacement {
     CrateRoot,
     Declared { name: String, addressable: bool },
