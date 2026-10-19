@@ -11,9 +11,11 @@ use syn::Attribute;
 use syn::ImplItem;
 use syn::Item;
 use syn::ItemMod;
+use syn::ItemUse;
 use syn::Macro;
 use syn::Meta;
 use syn::Token;
+use syn::UseTree;
 use syn::punctuated::Punctuated;
 use syn::visit;
 use syn::visit::Visit;
@@ -161,6 +163,26 @@ struct PossibleMacroConsumer {
 }
 
 impl<'ast> Visit<'ast> for PossibleMacroConsumer {
+    fn visit_item_use(&mut self, item: &'ast ItemUse) {
+        for attribute in &item.attrs {
+            self.visit_attribute(attribute);
+        }
+
+        if item.leading_colon.is_none() {
+            self.visit_use_tree(&item.tree);
+        }
+    }
+
+    fn visit_use_tree(&mut self, tree: &'ast UseTree) {
+        match tree {
+            // Bare imports can re-export a textual macro binding. Preserve their
+            // position relative to definitions, including definitions that shadow earlier ones.
+            UseTree::Name(_) | UseTree::Rename(_) => self.found = true,
+            UseTree::Group(_) => visit::visit_use_tree(self, tree),
+            UseTree::Path(_) | UseTree::Glob(_) => {}
+        }
+    }
+
     fn visit_macro(&mut self, _: &'ast Macro) {
         self.found = true;
     }
