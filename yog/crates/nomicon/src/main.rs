@@ -9,6 +9,7 @@
 //! - UTF-8 conversion or metadata parsing fails.
 #![feature(exit_status_error)]
 
+use std::fs::DirEntry;
 use std::io::ErrorKind::NotFound;
 use std::path::Path;
 use std::path::PathBuf;
@@ -51,8 +52,8 @@ fn main() -> rootcause::Result<()> {
 
     let cargo_tomls = ytil_sys::file::find_matching_recursively_in_dir(
         &workspace_root,
-        |entry: &std::fs::DirEntry| entry.path().file_name().is_some_and(|f| f == "Cargo.toml"),
-        |entry: &std::fs::DirEntry| {
+        |entry: &DirEntry| entry.path().file_name().is_some_and(|f| f == "Cargo.toml"),
+        |entry: &DirEntry| {
             let dir_name = entry.file_name();
             let dir_name = dir_name.to_string_lossy();
             dir_name.starts_with('.') || dir_name == "target" || dir_name == "node_modules"

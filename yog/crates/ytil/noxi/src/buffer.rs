@@ -6,6 +6,7 @@ use std::path::Path;
 use std::path::PathBuf;
 
 use nvim_oxi::Array;
+use nvim_oxi::api;
 use nvim_oxi::api::Buffer;
 use nvim_oxi::api::SuperIterator;
 use nvim_oxi::api::Window;
@@ -177,7 +178,7 @@ impl BufferExt for Buffer {
     fn get_buf_type(&self) -> Option<String> {
         // Buffer clone is cheap (just an i32 handle copy)
         let opts = OptionOptsBuilder::default().buf(self.clone()).build();
-        nvim_oxi::api::get_option_value::<String>("buftype", &opts)
+        api::get_option_value::<String>("buftype", &opts)
             .inspect_err(|err| {
                 crate::notify::error(format!(
                     "error getting buftype of buffer | buffer={self:#?} error={err:?}"
@@ -188,7 +189,7 @@ impl BufferExt for Buffer {
 
     fn get_channel(&self) -> Option<u32> {
         let opts = OptionOptsBuilder::default().buf(self.clone()).build();
-        nvim_oxi::api::get_option_value::<u32>("channel", &opts)
+        api::get_option_value::<u32>("channel", &opts)
             .inspect_err(|err| {
                 crate::notify::error(format!(
                     "error getting channel of buffer | buffer={self:#?} error={err:?}"
@@ -216,7 +217,7 @@ impl BufferExt for Buffer {
             return Ok(pid.to_owned());
         }
 
-        let pid = nvim_oxi::api::call_function::<_, i32>("getpid", Array::new())
+        let pid = api::call_function::<_, i32>("getpid", Array::new())
             .context("error getting pid of buffer")
             .attach_with(|| format!("buffer={self:#?}"))?;
 
@@ -256,14 +257,14 @@ impl CursorPosition {
 
 /// Creates a new listed buffer.
 pub fn create() -> Option<Buffer> {
-    nvim_oxi::api::create_buf(true, false)
+    api::create_buf(true, false)
         .inspect_err(|err| crate::notify::error(format!("error creating buffer | error={err:?}")))
         .ok()
 }
 
 /// Retrieves the alternate buffer or creates a new one if none exists.
 pub fn get_alternate_or_new() -> Option<Buffer> {
-    let alt_buf_id = nvim_oxi::api::call_function::<_, i32>("bufnr", ("#",))
+    let alt_buf_id = api::call_function::<_, i32>("bufnr", ("#",))
         .inspect(|err| {
             crate::notify::error(format!("error getting alternate buffer | error={err:?}"));
         })
@@ -277,7 +278,7 @@ pub fn get_alternate_or_new() -> Option<Buffer> {
 
 /// Sets the specified buffer as the current buffer.
 pub fn set_current(buf: &Buffer) -> Option<()> {
-    nvim_oxi::api::set_current_buf(buf)
+    api::set_current_buf(buf)
         .inspect_err(|err| {
             crate::notify::error(format!("error setting current buffer | buffer={buf:?} error={err:?}"));
         })
@@ -317,7 +318,7 @@ where
 
 /// Retrieves the relative path of the buffer from the current working directory.
 pub fn get_relative_path_to_cwd(current_buffer: &Buffer) -> Option<PathBuf> {
-    let cwd = nvim_oxi::api::call_function::<_, String>("getcwd", Array::new())
+    let cwd = api::call_function::<_, String>("getcwd", Array::new())
         .inspect_err(|err| {
             crate::notify::error(format!("error getting cwd | error={err:#?}"));
         })
@@ -350,7 +351,7 @@ pub fn get_absolute_path(buffer: Option<&Buffer>) -> Option<PathBuf> {
 }
 
 pub fn get_current_line() -> Option<String> {
-    nvim_oxi::api::get_current_line()
+    api::get_current_line()
         .inspect_err(|err| crate::notify::error(format!("error getting current line | error={err}")))
         .ok()
 }

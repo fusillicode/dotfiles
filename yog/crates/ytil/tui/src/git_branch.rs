@@ -6,6 +6,7 @@ use std::path::Path;
 use owo_colors::OwoColorize;
 use rootcause::prelude::ResultExt;
 use ytil_git::branch::Branch;
+use ytil_git::repo;
 
 /// Prompts the user to select a branch from all available branches.
 ///
@@ -18,7 +19,7 @@ use ytil_git::branch::Branch;
 /// - If [`ytil_git::branch::get_all_no_redundant`] fails.
 /// - If [`crate::minimal_select`] fails.
 pub fn select() -> rootcause::Result<Option<Branch>> {
-    let repo = ytil_git::repo::discover(Path::new(".")).context("error discovering repo for branch selection")?;
+    let repo = repo::discover(Path::new(".")).context("error discovering repo for branch selection")?;
     let branches = prioritize_branches(
         ytil_git::branch::get_all_no_redundant(&repo)?,
         ytil_git::branch::get_previous(&repo).as_deref(),

@@ -3,6 +3,7 @@
 //! # Errors
 //! - Git operations, GitHub API calls, or user interaction fails.
 
+use std::io;
 use std::io::Write;
 
 use owo_colors::OwoColorize;
@@ -10,12 +11,15 @@ use rootcause::prelude::ResultExt;
 use rootcause::report;
 use url::Url;
 use ytil_git::CmdError;
+use ytil_git::branch;
+use ytil_sys::cli;
 use ytil_sys::cli::Args;
+use ytil_tui::git_branch;
 
 /// Switch, create, and derive Git branches (including from GitHub PR URLs).
 #[ytil_sys::main]
 fn main() -> rootcause::Result<()> {
-    let args = ytil_sys::cli::get();
+    let args = cli::get();
     if args.has_help() {
         println!(include_str!("../help.txt"));
         return Ok(());
@@ -25,7 +29,7 @@ fn main() -> rootcause::Result<()> {
     match args.split_first() {
         None => autocomplete_git_branches_and_switch(),
         // Assumption: cannot create a branch with a name that starts with -
-        Some((hd, _)) if *hd == "-" => ytil_git::branch::switch(hd)
+        Some((hd, _)) if *hd == "-" => branch::switch(hd)
             .inspect(|()| report_branch_switch(hd))
             .map_err(From::from),
         Some((hd, tail)) if *hd == "-b" => create_branch_and_switch(&build_branch_name(tail)?),
@@ -48,12 +52,12 @@ fn main() -> rootcause::Result<()> {
 /// - UI rendering via [`ytil_tui::minimal_select`] fails.
 /// - Branch switching via [`ytil_git::branch::switch`] fails.
 fn autocomplete_git_branches_and_switch() -> rootcause::Result<()> {
-    let Some(branch) = ytil_tui::git_branch::select()? else {
+    let Some(branch) = git_branch::select()? else {
         return Ok(());
     };
 
     let branch_name_no_origin = branch.name_no_origin();
-    ytil_git::branch::switch(branch_name_no_origin).inspect(|()| report_branch_switch(branch_name_no_origin))?;
+    branch::switch(branch_name_no_origin).inspect(|()| report_branch_switch(branch_name_no_origin))?;
 
     Ok(())
 }
@@ -76,7 +80,7 @@ fn handle_single_input_argument(arg: &str) -> rootcause::Result<()> {
         arg.to_string()
     };
 
-    match ytil_git::branch::switch(&branch_name).map_err(|e| *e) {
+    match branch::switch(&branch_name).map_err(|e| *e) {
         Err(CmdError::CmdFailure { stderr, .. }) if stderr.contains("invalid reference: ") => {
             create_branch_and_switch(&branch_name)
         }
@@ -99,14 +103,14 @@ fn create_branch_and_switch(branch_name: &str) -> rootcause::Result<()> {
     if !should_create_new_branch(branch_name)? {
         return Ok(());
     }
-    if let Err(err) = ytil_git::branch::create_from_default_branch(branch_name, None) {
+    if let Err(err) = branch::create_from_default_branch(branch_name, None) {
         if err.to_string().contains("already exists") {
-            ytil_git::branch::switch(branch_name).inspect(|()| report_branch_exists(branch_name))?;
+            branch::switch(branch_name).inspect(|()| report_branch_exists(branch_name))?;
             return Ok(());
         }
         return Err(err);
     }
-    ytil_git::branch::switch(branch_name).inspect(|()| report_branch_new(branch_name))?;
+    branch::switch(branch_name).inspect(|()| report_branch_new(branch_name))?;
     Ok(())
 }
 
@@ -121,18 +125,18 @@ fn create_branch_and_switch(branch_name: &str) -> rootcause::Result<()> {
 /// - Current branch discovery via [`ytil_git::branch::get_current`] fails.
 /// - Reading user confirmation input fails.
 fn should_create_new_branch(branch_name: &str) -> rootcause::Result<bool> {
-    let default_branch = ytil_git::branch::get_default()?;
+    let default_branch = branch::get_default()?;
     if default_branch == branch_name {
         return Ok(true);
     }
-    let curr_branch = ytil_git::branch::get_current()?;
+    let curr_branch = branch::get_current()?;
     if default_branch == curr_branch {
         return Ok(true);
     }
     ask_branching_from_not_default(branch_name, &curr_branch);
-    std::io::stdout().flush()?;
+    io::stdout().flush()?;
     let mut input = String::new();
-    std::io::stdin().read_line(&mut input)?;
+    io::stdin().read_line(&mut input)?;
     if !input.trim().is_empty() {
         report_branch_not_created(branch_name);
         return Ok(false);

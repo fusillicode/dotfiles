@@ -1,3 +1,4 @@
+use muxr_core::PaneId;
 use muxr_core::RenderColor;
 use muxr_core::RenderStyle;
 use rootcause::report;
@@ -38,7 +39,7 @@ impl SessionLayout {
         Ok(pane.acknowledge_attention())
     }
 
-    pub fn attention_pane_ids(&self) -> Vec<muxr_core::PaneId> {
+    pub fn attention_pane_ids(&self) -> Vec<PaneId> {
         // Attention is intentionally explicit. Raw PTY output is too broad because startup,
         // splits, and shell prompts would otherwise paint unfocused panes as needing attention.
         self.panes()
@@ -101,7 +102,7 @@ mod tests {
 
     #[test]
     fn test_attention_pane_ids_when_pane_needs_generic_attention_returns_pane() -> rootcause::Result<()> {
-        let mut layout = self::layout()?;
+        let mut layout = layout()?;
         let pane_id = PaneId::new(1)?;
         let Some(pane) = layout.pane_mut(pane_id) else {
             return Err(report!("expected pane"));
@@ -114,7 +115,7 @@ mod tests {
 
     #[test]
     fn test_focus_pane_direction_when_target_needs_generic_attention_clears_attention() -> rootcause::Result<()> {
-        let mut layout = self::layout()?;
+        let mut layout = layout()?;
         let pane_id = PaneId::new(1)?;
         let Some(pane) = layout.pane_mut(pane_id) else {
             return Err(report!("expected pane"));
@@ -163,12 +164,8 @@ mod tests {
 
     fn layout() -> rootcause::Result<SessionLayout> {
         let session: SessionName = "work".parse()?;
-        let mut layout = SessionLayout::initial(&session, self::metadata("sh", 1))?;
-        layout.split_active_pane(
-            MuxrConfig::new()?.layout,
-            self::metadata("sh", 2),
-            PaneSplitAxis::Vertical,
-        )?;
+        let mut layout = SessionLayout::initial(&session, metadata("sh", 1))?;
+        layout.split_active_pane(MuxrConfig::new()?.layout, metadata("sh", 2), PaneSplitAxis::Vertical)?;
         Ok(layout)
     }
 

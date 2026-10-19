@@ -2,14 +2,19 @@ use std::collections::BTreeSet;
 use std::fmt;
 use std::num::NonZeroU32;
 
+use fmt::Formatter;
 use nutype::nutype;
+use rkyv::Archived;
+use rkyv::Place;
+use rkyv::Resolver;
+use rkyv::primitive::ArchivedNonZeroU32;
 use rootcause::report;
 use serde::Deserialize;
 use serde::Serialize;
 
-use super::ClientMousePosition;
-use super::TrackedProcessState;
-use super::terminal::TerminalDimension;
+use crate::protocol::ClientMousePosition;
+use crate::protocol::TrackedProcessState;
+use crate::protocol::terminal::TerminalDimension;
 
 #[nutype(
     const_fn,
@@ -47,16 +52,16 @@ impl TabId {
 }
 
 impl fmt::Display for TabId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "tab-{}", self.get())
     }
 }
 
 impl rkyv::Archive for TabId {
-    type Archived = rkyv::Archived<NonZeroU32>;
-    type Resolver = rkyv::Resolver<NonZeroU32>;
+    type Archived = Archived<NonZeroU32>;
+    type Resolver = Resolver<NonZeroU32>;
 
-    fn resolve(&self, resolver: Self::Resolver, out: rkyv::Place<Self::Archived>) {
+    fn resolve(&self, resolver: Self::Resolver, out: Place<Self::Archived>) {
         rkyv::Archive::resolve(&NonZeroU32::from(*self), resolver, out);
     }
 }
@@ -78,13 +83,13 @@ impl From<TabId> for NonZeroU32 {
     }
 }
 
-impl<D> rkyv::Deserialize<TabId, D> for rkyv::primitive::ArchivedNonZeroU32
+impl<D> rkyv::Deserialize<TabId, D> for ArchivedNonZeroU32
 where
     D: rkyv::rancor::Fallible + ?Sized,
     D::Error: rkyv::rancor::Source,
 {
     fn deserialize(&self, _deserializer: &mut D) -> Result<TabId, D::Error> {
-        TabId::try_new(self.to_native().get()).map_err(super::rkyv_deserialize_error::<D::Error>)
+        TabId::try_new(self.to_native().get()).map_err(crate::protocol::rkyv_deserialize_error::<D::Error>)
     }
 }
 
@@ -124,16 +129,16 @@ impl PaneId {
 }
 
 impl fmt::Display for PaneId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "pane-{}", self.get())
     }
 }
 
 impl rkyv::Archive for PaneId {
-    type Archived = rkyv::Archived<NonZeroU32>;
-    type Resolver = rkyv::Resolver<NonZeroU32>;
+    type Archived = Archived<NonZeroU32>;
+    type Resolver = Resolver<NonZeroU32>;
 
-    fn resolve(&self, resolver: Self::Resolver, out: rkyv::Place<Self::Archived>) {
+    fn resolve(&self, resolver: Self::Resolver, out: Place<Self::Archived>) {
         rkyv::Archive::resolve(&NonZeroU32::from(*self), resolver, out);
     }
 }
@@ -155,13 +160,13 @@ impl From<PaneId> for NonZeroU32 {
     }
 }
 
-impl<D> rkyv::Deserialize<PaneId, D> for rkyv::primitive::ArchivedNonZeroU32
+impl<D> rkyv::Deserialize<PaneId, D> for ArchivedNonZeroU32
 where
     D: rkyv::rancor::Fallible + ?Sized,
     D::Error: rkyv::rancor::Source,
 {
     fn deserialize(&self, _deserializer: &mut D) -> Result<PaneId, D::Error> {
-        PaneId::try_new(self.to_native().get()).map_err(super::rkyv_deserialize_error::<D::Error>)
+        PaneId::try_new(self.to_native().get()).map_err(crate::protocol::rkyv_deserialize_error::<D::Error>)
     }
 }
 
@@ -237,7 +242,7 @@ where
     fn deserialize(&self, deserializer: &mut D) -> Result<LayoutSnapshot, D::Error> {
         let active_tab = rkyv::Deserialize::<TabId, D>::deserialize(&self.active_tab, deserializer)?;
         let tabs = rkyv::Deserialize::<Vec<TabSnapshot>, D>::deserialize(&self.tabs, deserializer)?;
-        LayoutSnapshot::new(active_tab, tabs).map_err(super::rkyv_deserialize_error::<D::Error>)
+        LayoutSnapshot::new(active_tab, tabs).map_err(crate::protocol::rkyv_deserialize_error::<D::Error>)
     }
 }
 
@@ -329,7 +334,7 @@ where
         let id = rkyv::Deserialize::<TabId, D>::deserialize(&self.id, deserializer)?;
         let panes = rkyv::Deserialize::<Vec<PaneSnapshot>, D>::deserialize(&self.panes, deserializer)?;
         let title = rkyv::Deserialize::<String, D>::deserialize(&self.title, deserializer)?;
-        TabSnapshot::new(id, title, active_pane, panes).map_err(super::rkyv_deserialize_error::<D::Error>)
+        TabSnapshot::new(id, title, active_pane, panes).map_err(crate::protocol::rkyv_deserialize_error::<D::Error>)
     }
 }
 
@@ -550,7 +555,7 @@ where
         let wrapped_rows = rkyv::Deserialize::<Vec<RowWrap>, D>::deserialize(&self.wrapped_rows, deserializer)?;
         PaneRegionSnapshot::new(id, col, row, cols, rows, mouse_mode, visible_top_row)
             .and_then(|region| region.with_wrapped_rows(wrapped_rows))
-            .map_err(super::rkyv_deserialize_error::<D::Error>)
+            .map_err(crate::protocol::rkyv_deserialize_error::<D::Error>)
     }
 }
 
@@ -616,13 +621,13 @@ where
 {
     fn deserialize(&self, deserializer: &mut D) -> Result<PaneRegionsSnapshot, D::Error> {
         let regions = rkyv::Deserialize::<Vec<PaneRegionSnapshot>, D>::deserialize(&self.regions, deserializer)?;
-        PaneRegionsSnapshot::new(regions).map_err(super::rkyv_deserialize_error::<D::Error>)
+        PaneRegionsSnapshot::new(regions).map_err(crate::protocol::rkyv_deserialize_error::<D::Error>)
     }
 }
 
 #[cfg(test)]
 pub mod test_helpers {
-    use super::*;
+    use crate::protocol::pane_layout::*;
 
     pub const fn raw_layout_snapshot(active_tab: TabId, tabs: Vec<TabSnapshot>) -> LayoutSnapshot {
         LayoutSnapshot { active_tab, tabs }
@@ -669,7 +674,7 @@ mod tests {
 
     #[test]
     fn test_layout_snapshot_single_pane_when_built_returns_stable_layout() -> rootcause::Result<()> {
-        let layout = self::layout_snapshot()?;
+        let layout = layout_snapshot()?;
 
         assert_that!(layout.active_tab().get(), eq(1));
         assert_that!(layout.tabs().len(), eq(1));

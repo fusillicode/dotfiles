@@ -2,16 +2,20 @@
 
 use std::fmt;
 
+use fmt::Formatter;
+use muxr_client::SessionDeleteOutcome;
 use muxr_core::SessionName;
 use owo_colors::OwoColorize;
 use rootcause::report;
 use strum::EnumIter;
 use strum::IntoEnumIterator;
 
+use crate::cmds::start;
+
 pub fn run() -> rootcause::Result<()> {
     let sessions = muxr_client::list_sessions()?;
     if sessions.is_empty() {
-        super::start::run(&SessionName::default_name()?, None)?;
+        start::run(&SessionName::default_name()?, None)?;
         return Ok(());
     }
 
@@ -34,7 +38,7 @@ pub fn run() -> rootcause::Result<()> {
         .iter()
         .map(|session| session.name().clone())
         .collect::<Vec<_>>();
-    self::execute_session_action(action, &sessions)
+    execute_session_action(action, &sessions)
 }
 
 #[derive(Clone, Copy, Debug, EnumIter, Eq, PartialEq)]
@@ -44,7 +48,7 @@ enum SessionAction {
 }
 
 impl fmt::Display for SessionAction {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             Self::Attach => write!(f, "{}", "Attach".green().bold()),
             Self::Delete => write!(f, "{}", "Delete".red().bold()),
@@ -56,15 +60,15 @@ fn execute_session_action(action: SessionAction, selected: &[SessionName]) -> ro
     match action {
         SessionAction::Attach => {
             let session = ytil_tui::require_single(selected, "sessions")?;
-            super::start::run(session, None)
+            start::run(session, None)
         }
-        SessionAction::Delete => self::delete_selected_sessions(selected, muxr_client::delete_session),
+        SessionAction::Delete => delete_selected_sessions(selected, muxr_client::delete_session),
     }
 }
 
 fn delete_selected_sessions<F>(selected: &[SessionName], mut delete_session: F) -> rootcause::Result<()>
 where
-    F: FnMut(&SessionName) -> rootcause::Result<muxr_client::SessionDeleteOutcome>,
+    F: FnMut(&SessionName) -> rootcause::Result<SessionDeleteOutcome>,
 {
     let mut failures = Vec::new();
 
@@ -86,19 +90,19 @@ where
     }
 }
 
-fn delete_session_message(session: &SessionName, outcome: muxr_client::SessionDeleteOutcome) -> String {
+fn delete_session_message(session: &SessionName, outcome: SessionDeleteOutcome) -> String {
     let deleted = format!("{}", "Deleted".red().bold());
     match outcome {
-        muxr_client::SessionDeleteOutcome::LiveDeleted => {
+        SessionDeleteOutcome::LiveDeleted => {
             format!("{deleted} {session}; stopped live server and removed state")
         }
-        muxr_client::SessionDeleteOutcome::LiveVanishedForced => {
+        SessionDeleteOutcome::LiveVanishedForced => {
             format!("{deleted} {session}; live server vanished, force-removed selected session files")
         }
-        muxr_client::SessionDeleteOutcome::StoppedRemoved => {
+        SessionDeleteOutcome::StoppedRemoved => {
             format!("{deleted} {session}; removed stopped session state")
         }
-        muxr_client::SessionDeleteOutcome::UnknownForced => {
+        SessionDeleteOutcome::UnknownForced => {
             format!("{deleted} {session}; force-removed unknown session files")
         }
     }

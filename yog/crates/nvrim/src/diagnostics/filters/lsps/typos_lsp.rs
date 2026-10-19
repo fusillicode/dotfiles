@@ -6,6 +6,7 @@ use std::collections::HashSet;
 use std::sync::LazyLock;
 
 use lit2::set;
+use nvim_oxi::Dictionary;
 
 use crate::diagnostics::filters::BufferWithPath;
 use crate::diagnostics::filters::DiagnosticsFilter;
@@ -98,7 +99,7 @@ impl LspFilter for TyposLspFilter<'_> {
 }
 
 impl DiagnosticsFilter for TyposLspFilter<'_> {
-    fn skip_diagnostic(&self, buf: &BufferWithPath, lsp_diag: &nvim_oxi::Dictionary) -> rootcause::Result<bool> {
+    fn skip_diagnostic(&self, buf: &BufferWithPath, lsp_diag: &Dictionary) -> rootcause::Result<bool> {
         let diag_msg = match self.get_diag_msg_or_skip(&buf.path, lsp_diag)? {
             GetDiagMsgOutput::Msg(diag_msg) => diag_msg,
             GetDiagMsgOutput::Skip => return Ok(false),

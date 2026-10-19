@@ -25,7 +25,7 @@ impl ServerRunnerArgs {
         let Some((session, rest)) = args.split_first() else {
             return Err(report!("missing muxr server session"));
         };
-        let session = self::parse_session_arg(session)?;
+        let session = parse_session_arg(session)?;
         let mut external_layout = None;
         let mut rest = rest.iter();
 

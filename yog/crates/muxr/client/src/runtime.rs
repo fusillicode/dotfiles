@@ -1,5 +1,9 @@
+use std::io;
 use std::io::Read;
+use std::mem;
 use std::path::Path;
+use std::slice;
+use std::sync::mpsc::SyncSender;
 use std::thread;
 use std::time::Duration;
 
@@ -12,17 +16,23 @@ use muxr_core::ClientKeyCode;
 use muxr_core::ClientKeyModifiers;
 use muxr_core::ClientMouseEvent;
 use muxr_core::ClientRequest;
+use muxr_core::RenderUpdate;
 use muxr_core::ServerEvent;
 use muxr_core::SessionName;
 use muxr_core::TerminalSize;
 use muxr_transport::ClientRequestWriter;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
+use thread::JoinHandle;
+use tokio::sync::mpsc::Receiver;
+use tokio::sync::mpsc::Sender;
+use tokio::time;
 
 use crate::copy_selection::SelectionEdgeScrollRequest;
 use crate::input::DecodedInput;
 use crate::input::InputDecoder;
 use crate::input::InputIdleTimeout;
+use crate::pane::mouse;
 use crate::renderer::ClientPresentationSnapshot;
 use crate::renderer::ClientRenderOutcome;
 use crate::renderer::ClientRenderer;
@@ -67,7 +77,7 @@ pub fn start(session: &SessionName, server_executable: &Path, external_layout: O
             let attached_session =
                 crate::session::attach::open_session(session, pane_size.clone(), server_executable, external_layout)
                     .await?;
-            self::run_interactive(&muxr_config, attached_session, pane_size).await
+            run_interactive(&muxr_config, attached_session, pane_size).await
         })
 }
 
@@ -78,10 +88,7 @@ pub enum DroppableSendOutcome {
     Sent,
 }
 
-pub fn send_droppable_request(
-    input_sender: &tokio::sync::mpsc::Sender<ClientRequest>,
-    request: ClientRequest,
-) -> DroppableSendOutcome {
+pub fn send_droppable_request(input_sender: &Sender<ClientRequest>, request: ClientRequest) -> DroppableSendOutcome {
     match input_sender.try_send(request) {
         Ok(()) => DroppableSendOutcome::Sent,
         Err(tokio::sync::mpsc::error::TrySendError::Full(request)) => {
@@ -96,12 +103,12 @@ pub fn send_droppable_request(
 }
 
 pub fn send_edge_scroll_request(
-    input_sender: &tokio::sync::mpsc::Sender<ClientRequest>,
+    input_sender: &Sender<ClientRequest>,
     renderer: &mut ClientRenderer,
     request: SelectionEdgeScrollRequest,
 ) -> ClientInputSend {
     let (pending, request) = request.into_parts();
-    match self::send_droppable_request(input_sender, request) {
+    match send_droppable_request(input_sender, request) {
         DroppableSendOutcome::Sent => {
             // One queued edge-scroll request must be paired with one moved viewport and its render before another
             // request is queued; otherwise coalesced renders can skip selected content rows.
@@ -130,7 +137,7 @@ enum ClientInputAction {
 #[derive(Debug)]
 enum ClientInputCmd {
     Action(ClientInputAction),
-    Barrier(std::sync::mpsc::SyncSender<()>),
+    Barrier(SyncSender<()>),
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -206,16 +213,16 @@ async fn run_interactive(
 
     let (input_request_sender, input_receiver) = tokio::sync::mpsc::channel(INPUT_REQUEST_CHANNEL_LIMIT);
 
-    let stdin_handle = self::spawn_stdin_forwarder(
+    let stdin_handle = spawn_stdin_forwarder(
         muxr_config.keybindings.clone(),
         input_cmd_sender,
         input_request_sender.clone(),
     );
-    let resize_handle = self::spawn_resize_forwarder(control_sender.clone(), muxr_config.tab_bar.width, initial_size);
+    let resize_handle = spawn_resize_forwarder(control_sender.clone(), muxr_config.tab_bar.width, initial_size);
 
     let writer = attached_session.writer;
     let writer_handle =
-        tokio::spawn(async move { self::forward_client_requests(writer, control_receiver, input_receiver).await });
+        tokio::spawn(async move { forward_client_requests(writer, control_receiver, input_receiver).await });
     let (stdout_sender, _stdout_worker, mut stdout_failure_receiver, mut stdout_completion_receiver) =
         StdoutWorker::spawn();
 
@@ -226,7 +233,7 @@ async fn run_interactive(
     let edge_scroll_tick_start = tokio::time::Instant::now()
         .checked_add(SELECTION_EDGE_SCROLL_INTERVAL)
         .ok_or_else(|| report!("muxr selection edge scroll interval overflowed"))?;
-    let mut edge_scroll_tick = tokio::time::interval_at(edge_scroll_tick_start, SELECTION_EDGE_SCROLL_INTERVAL);
+    let mut edge_scroll_tick = time::interval_at(edge_scroll_tick_start, SELECTION_EDGE_SCROLL_INTERVAL);
     edge_scroll_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
     let mut input_cmd_receiver_state = InputCmdReceiverState::Open;
@@ -298,7 +305,7 @@ async fn run_interactive(
 
 async fn handle_server_event(
     event: ServerEvent,
-    control_sender: &tokio::sync::mpsc::Sender<ClientRequest>,
+    control_sender: &Sender<ClientRequest>,
     renderer: &mut ClientRenderer,
     render_coordinator: &mut RenderCoordinator,
     stdout_sender: &StdoutSender,
@@ -329,7 +336,7 @@ async fn handle_server_event(
             Ok(InteractiveFlow::Continue)
         }
         ServerEvent::Render(update) => {
-            self::handle_render_event(update, control_sender, renderer, render_coordinator, stdout_sender).await
+            handle_render_event(update, control_sender, renderer, render_coordinator, stdout_sender).await
         }
         ServerEvent::ScrollPaneLineResult {
             position,
@@ -344,8 +351,8 @@ async fn handle_server_event(
 }
 
 async fn handle_render_event(
-    update: muxr_core::RenderUpdate,
-    control_sender: &tokio::sync::mpsc::Sender<ClientRequest>,
+    update: RenderUpdate,
+    control_sender: &Sender<ClientRequest>,
     renderer: &mut ClientRenderer,
     render_coordinator: &mut RenderCoordinator,
     stdout_sender: &StdoutSender,
@@ -366,7 +373,7 @@ async fn handle_render_event(
 async fn handle_client_input_action(
     action: ClientInputAction,
     muxr_config: &MuxrConfig,
-    input_sender: &tokio::sync::mpsc::Sender<ClientRequest>,
+    input_sender: &Sender<ClientRequest>,
     renderer: &mut ClientRenderer,
 ) -> rootcause::Result<ClientInputSend> {
     match action {
@@ -383,25 +390,25 @@ async fn handle_client_input_action(
             Ok(ClientInputSend::Accepted)
         }
         ClientInputAction::Mouse(event) => {
-            crate::pane::mouse::handle_mouse_input_action(muxr_config, event, input_sender, renderer).await
+            mouse::handle_mouse_input_action(muxr_config, event, input_sender, renderer).await
         }
     }
 }
 
 fn send_selection_edge_scroll_request(
-    input_sender: &tokio::sync::mpsc::Sender<ClientRequest>,
+    input_sender: &Sender<ClientRequest>,
     renderer: &mut ClientRenderer,
 ) -> ClientInputSend {
     let Some(request) = renderer.selection_edge_scroll_request() else {
         return ClientInputSend::Accepted;
     };
-    self::send_edge_scroll_request(input_sender, renderer, request)
+    send_edge_scroll_request(input_sender, renderer, request)
 }
 
 async fn forward_client_requests(
     mut writer: ClientRequestWriter,
-    mut control_receiver: tokio::sync::mpsc::Receiver<ClientRequest>,
-    mut input_receiver: tokio::sync::mpsc::Receiver<ClientRequest>,
+    mut control_receiver: Receiver<ClientRequest>,
+    mut input_receiver: Receiver<ClientRequest>,
 ) -> rootcause::Result<()> {
     let mut control_closed = false;
     let mut input_closed = false;
@@ -437,12 +444,12 @@ async fn forward_client_requests(
 
 fn spawn_stdin_forwarder(
     keybindings: KeybindingsConfig,
-    cmd_sender: tokio::sync::mpsc::Sender<ClientInputCmd>,
-    request_sender: tokio::sync::mpsc::Sender<ClientRequest>,
-) -> thread::JoinHandle<()> {
+    cmd_sender: Sender<ClientInputCmd>,
+    request_sender: Sender<ClientRequest>,
+) -> JoinHandle<()> {
     thread::spawn(move || {
         let (read_sender, read_receiver) = std::sync::mpsc::channel();
-        drop(self::spawn_stdin_reader(read_sender));
+        drop(spawn_stdin_reader(read_sender));
         let mut decoder = InputDecoder::with_keybindings(keybindings.clone());
 
         loop {
@@ -452,7 +459,7 @@ fn spawn_stdin_forwarder(
                 match read_receiver.recv_timeout(AMBIGUOUS_INPUT_TIMEOUT) {
                     Ok(read) => read,
                     Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
-                        if self::send_decoded_input_with_ordering(
+                        if send_decoded_input_with_ordering(
                             &keybindings,
                             &cmd_sender,
                             &request_sender,
@@ -472,7 +479,7 @@ fn spawn_stdin_forwarder(
 
             match read {
                 StdinRead::Bytes(bytes) => {
-                    if self::send_decoded_input_with_ordering(
+                    if send_decoded_input_with_ordering(
                         &keybindings,
                         &cmd_sender,
                         &request_sender,
@@ -484,7 +491,7 @@ fn spawn_stdin_forwarder(
                     }
                 }
                 StdinRead::Eof => {
-                    if self::send_decoded_input_with_ordering(
+                    if send_decoded_input_with_ordering(
                         &keybindings,
                         &cmd_sender,
                         &request_sender,
@@ -503,9 +510,9 @@ fn spawn_stdin_forwarder(
     })
 }
 
-fn spawn_stdin_reader(sender: std::sync::mpsc::Sender<StdinRead>) -> thread::JoinHandle<()> {
+fn spawn_stdin_reader(sender: std::sync::mpsc::Sender<StdinRead>) -> JoinHandle<()> {
     thread::spawn(move || {
-        let mut stdin = std::io::stdin();
+        let mut stdin = io::stdin();
         let mut buffer = [0; STDIN_BUFFER_SIZE];
 
         loop {
@@ -530,12 +537,12 @@ fn spawn_stdin_reader(sender: std::sync::mpsc::Sender<StdinRead>) -> thread::Joi
 
 #[cfg(test)]
 fn send_decoded_input(
-    cmd_sender: &tokio::sync::mpsc::Sender<ClientInputCmd>,
-    request_sender: &tokio::sync::mpsc::Sender<ClientRequest>,
+    cmd_sender: &Sender<ClientInputCmd>,
+    request_sender: &Sender<ClientRequest>,
     decoded: Vec<DecodedInput>,
 ) -> ClientInputSend {
     let keybindings = MuxrConfig::new().unwrap().keybindings;
-    self::send_decoded_input_with_ordering(
+    crate::runtime::send_decoded_input_with_ordering(
         &keybindings,
         cmd_sender,
         request_sender,
@@ -546,8 +553,8 @@ fn send_decoded_input(
 
 fn send_decoded_input_with_ordering(
     keybindings: &KeybindingsConfig,
-    cmd_sender: &tokio::sync::mpsc::Sender<ClientInputCmd>,
-    request_sender: &tokio::sync::mpsc::Sender<ClientRequest>,
+    cmd_sender: &Sender<ClientInputCmd>,
+    request_sender: &Sender<ClientRequest>,
     decoded: Vec<DecodedInput>,
     local_action_completion: LocalActionCompletion,
 ) -> ClientInputSend {
@@ -555,7 +562,7 @@ fn send_decoded_input_with_ordering(
     let mut pending_input = Vec::new();
 
     for decoded in decoded {
-        if self::send_decoded_event(
+        if send_decoded_event(
             keybindings,
             cmd_sender,
             request_sender,
@@ -569,7 +576,7 @@ fn send_decoded_input_with_ordering(
         }
     }
 
-    self::send_pending_input(
+    send_pending_input(
         cmd_sender,
         request_sender,
         &mut pending_input,
@@ -580,8 +587,8 @@ fn send_decoded_input_with_ordering(
 
 fn send_decoded_event(
     keybindings: &KeybindingsConfig,
-    cmd_sender: &tokio::sync::mpsc::Sender<ClientInputCmd>,
-    request_sender: &tokio::sync::mpsc::Sender<ClientRequest>,
+    cmd_sender: &Sender<ClientInputCmd>,
+    request_sender: &Sender<ClientRequest>,
     decoded: DecodedInput,
     pending_input: &mut Vec<u8>,
     local_action_completion: LocalActionCompletion,
@@ -590,7 +597,7 @@ fn send_decoded_event(
     match decoded {
         DecodedInput::Input(bytes) => pending_input.extend(bytes),
         DecodedInput::Key(key) => {
-            return self::send_key_input(
+            return send_key_input(
                 keybindings,
                 cmd_sender,
                 request_sender,
@@ -601,7 +608,7 @@ fn send_decoded_event(
             );
         }
         DecodedInput::Mouse(event) => {
-            return self::send_mouse_input(
+            return send_mouse_input(
                 cmd_sender,
                 event,
                 pending_input,
@@ -611,7 +618,7 @@ fn send_decoded_event(
             );
         }
         DecodedInput::Paste(bytes) => {
-            return self::send_paste_input(
+            return send_paste_input(
                 cmd_sender,
                 request_sender,
                 bytes,
@@ -626,15 +633,15 @@ fn send_decoded_event(
 
 fn send_key_input(
     keybindings: &KeybindingsConfig,
-    cmd_sender: &tokio::sync::mpsc::Sender<ClientInputCmd>,
-    request_sender: &tokio::sync::mpsc::Sender<ClientRequest>,
+    cmd_sender: &Sender<ClientInputCmd>,
+    request_sender: &Sender<ClientRequest>,
     key: ClientKey,
     pending_input: &mut Vec<u8>,
     local_action_completion: LocalActionCompletion,
     selection_reset_sent: &mut bool,
 ) -> ClientInputSend {
     if let Some(action) = keybindings.resolve_local(&key) {
-        if self::send_pending_input(
+        if send_pending_input(
             cmd_sender,
             request_sender,
             pending_input,
@@ -648,13 +655,13 @@ fn send_key_input(
             LocalKeybindingAction::CopySelection => ClientInputAction::CopySelection,
             LocalKeybindingAction::CopySelectionInline => ClientInputAction::CopySelectionInline,
         };
-        return self::send_input_action(cmd_sender, action, local_action_completion);
+        return send_input_action(cmd_sender, action, local_action_completion);
     }
-    if let Some(byte) = self::plain_input_byte(keybindings, &key) {
+    if let Some(byte) = plain_input_byte(keybindings, &key) {
         pending_input.push(byte);
         return ClientInputSend::Accepted;
     }
-    if self::send_pending_input(
+    if send_pending_input(
         cmd_sender,
         request_sender,
         pending_input,
@@ -664,7 +671,7 @@ fn send_key_input(
     {
         return ClientInputSend::Closed;
     }
-    if self::clear_selection_before_input(cmd_sender, local_action_completion, selection_reset_sent)
+    if clear_selection_before_input(cmd_sender, local_action_completion, selection_reset_sent)
         == ClientInputSend::Closed
     {
         return ClientInputSend::Closed;
@@ -676,14 +683,14 @@ fn send_key_input(
 }
 
 fn send_mouse_input(
-    cmd_sender: &tokio::sync::mpsc::Sender<ClientInputCmd>,
+    cmd_sender: &Sender<ClientInputCmd>,
     event: ClientMouseEvent,
     pending_input: &mut Vec<u8>,
-    request_sender: &tokio::sync::mpsc::Sender<ClientRequest>,
+    request_sender: &Sender<ClientRequest>,
     local_action_completion: LocalActionCompletion,
     selection_reset_sent: &mut bool,
 ) -> ClientInputSend {
-    if self::send_pending_input(
+    if send_pending_input(
         cmd_sender,
         request_sender,
         pending_input,
@@ -696,21 +703,21 @@ fn send_mouse_input(
     *selection_reset_sent = false;
     let action = ClientInputAction::Mouse(event);
     if crate::pane::mouse::MouseEventDrop::from(event) == crate::pane::mouse::MouseEventDrop::Droppable {
-        self::send_droppable_input_action(cmd_sender, action, local_action_completion)
+        send_droppable_input_action(cmd_sender, action, local_action_completion)
     } else {
-        self::send_input_action(cmd_sender, action, local_action_completion)
+        send_input_action(cmd_sender, action, local_action_completion)
     }
 }
 
 fn send_paste_input(
-    cmd_sender: &tokio::sync::mpsc::Sender<ClientInputCmd>,
-    request_sender: &tokio::sync::mpsc::Sender<ClientRequest>,
+    cmd_sender: &Sender<ClientInputCmd>,
+    request_sender: &Sender<ClientRequest>,
     bytes: Vec<u8>,
     pending_input: &mut Vec<u8>,
     local_action_completion: LocalActionCompletion,
     selection_reset_sent: &mut bool,
 ) -> ClientInputSend {
-    if self::send_pending_input(
+    if send_pending_input(
         cmd_sender,
         request_sender,
         pending_input,
@@ -720,7 +727,7 @@ fn send_paste_input(
     {
         return ClientInputSend::Closed;
     }
-    if self::clear_selection_before_input(cmd_sender, local_action_completion, selection_reset_sent)
+    if clear_selection_before_input(cmd_sender, local_action_completion, selection_reset_sent)
         == ClientInputSend::Closed
     {
         return ClientInputSend::Closed;
@@ -732,8 +739,8 @@ fn send_paste_input(
 }
 
 fn send_pending_input(
-    cmd_sender: &tokio::sync::mpsc::Sender<ClientInputCmd>,
-    request_sender: &tokio::sync::mpsc::Sender<ClientRequest>,
+    cmd_sender: &Sender<ClientInputCmd>,
+    request_sender: &Sender<ClientRequest>,
     pending_input: &mut Vec<u8>,
     local_action_completion: LocalActionCompletion,
     selection_reset_sent: &mut bool,
@@ -742,13 +749,13 @@ fn send_pending_input(
         return ClientInputSend::Accepted;
     }
 
-    if self::clear_selection_before_input(cmd_sender, local_action_completion, selection_reset_sent)
+    if clear_selection_before_input(cmd_sender, local_action_completion, selection_reset_sent)
         == ClientInputSend::Closed
     {
         return ClientInputSend::Closed;
     }
     if request_sender
-        .blocking_send(ClientRequest::Input(std::mem::take(pending_input)))
+        .blocking_send(ClientRequest::Input(mem::take(pending_input)))
         .is_err()
     {
         return ClientInputSend::Closed;
@@ -773,11 +780,11 @@ fn plain_input_byte(keybindings: &KeybindingsConfig, key: &ClientKey) -> Option<
         return None;
     }
     let byte = u8::try_from(u32::from(character)).ok()?;
-    (key.raw_bytes.as_slice() == std::slice::from_ref(&byte)).then_some(byte)
+    (key.raw_bytes.as_slice() == slice::from_ref(&byte)).then_some(byte)
 }
 
 fn clear_selection_before_input(
-    cmd_sender: &tokio::sync::mpsc::Sender<ClientInputCmd>,
+    cmd_sender: &Sender<ClientInputCmd>,
     local_action_completion: LocalActionCompletion,
     selection_reset_sent: &mut bool,
 ) -> ClientInputSend {
@@ -785,7 +792,7 @@ fn clear_selection_before_input(
         return ClientInputSend::Accepted;
     }
 
-    let result = self::send_input_action(cmd_sender, ClientInputAction::ClearSelection, local_action_completion);
+    let result = send_input_action(cmd_sender, ClientInputAction::ClearSelection, local_action_completion);
     if result == ClientInputSend::Accepted {
         *selection_reset_sent = true;
     }
@@ -793,13 +800,13 @@ fn clear_selection_before_input(
 }
 
 fn send_droppable_input_action(
-    cmd_sender: &tokio::sync::mpsc::Sender<ClientInputCmd>,
+    cmd_sender: &Sender<ClientInputCmd>,
     action: ClientInputAction,
     local_action_completion: LocalActionCompletion,
 ) -> ClientInputSend {
     match cmd_sender.try_send(ClientInputCmd::Action(action)) {
         Ok(()) => match local_action_completion {
-            LocalActionCompletion::Wait => self::send_input_action_barrier(cmd_sender),
+            LocalActionCompletion::Wait => crate::runtime::send_input_action_barrier(cmd_sender),
             #[cfg(test)]
             LocalActionCompletion::Skip => ClientInputSend::Accepted,
         },
@@ -815,7 +822,7 @@ fn send_droppable_input_action(
 }
 
 fn send_input_action(
-    cmd_sender: &tokio::sync::mpsc::Sender<ClientInputCmd>,
+    cmd_sender: &Sender<ClientInputCmd>,
     action: ClientInputAction,
     local_action_completion: LocalActionCompletion,
 ) -> ClientInputSend {
@@ -823,13 +830,13 @@ fn send_input_action(
         return ClientInputSend::Closed;
     }
     match local_action_completion {
-        LocalActionCompletion::Wait => self::send_input_action_barrier(cmd_sender),
+        LocalActionCompletion::Wait => crate::runtime::send_input_action_barrier(cmd_sender),
         #[cfg(test)]
         LocalActionCompletion::Skip => ClientInputSend::Accepted,
     }
 }
 
-fn send_input_action_barrier(cmd_sender: &tokio::sync::mpsc::Sender<ClientInputCmd>) -> ClientInputSend {
+fn send_input_action_barrier(cmd_sender: &Sender<ClientInputCmd>) -> ClientInputSend {
     let (completed_sender, completed_receiver) = std::sync::mpsc::sync_channel(0);
     if cmd_sender
         .blocking_send(ClientInputCmd::Barrier(completed_sender))
@@ -844,10 +851,10 @@ fn send_input_action_barrier(cmd_sender: &tokio::sync::mpsc::Sender<ClientInputC
 }
 
 fn spawn_resize_forwarder(
-    sender: tokio::sync::mpsc::Sender<ClientRequest>,
+    sender: Sender<ClientRequest>,
     tab_bar_width: u16,
     initial_size: TerminalSize,
-) -> thread::JoinHandle<()> {
+) -> JoinHandle<()> {
     thread::spawn(move || {
         let mut last_size = initial_size;
 
@@ -965,9 +972,9 @@ mod tests {
 
     #[test]
     fn test_forward_client_requests_when_input_queue_is_ready_sends_control_first() -> rootcause::Result<()> {
-        self::runtime()?.block_on(async {
+        runtime()?.block_on(async {
             let tempdir = tempfile::tempdir()?;
-            let (_, paths) = self::session_paths(tempdir.path(), "work")?;
+            let (_, paths) = session_paths(tempdir.path(), "work")?;
             fs::create_dir_all(&paths.root)?;
             let listener = ServerListener::bind(&paths.socket)?;
             let server_handle = tokio::spawn(async move {
@@ -986,7 +993,11 @@ mod tests {
             assert_that!(input_sender.try_send(ClientRequest::Input(vec![b'b'])), err(anything()));
             assert_that!(control_sender.try_send(ClientRequest::Pong), ok(eq(())));
 
-            let writer_handle = tokio::spawn(self::forward_client_requests(writer, control_receiver, input_receiver));
+            let writer_handle = tokio::spawn(crate::runtime::tests::forward_client_requests(
+                writer,
+                control_receiver,
+                input_receiver,
+            ));
             let first_request = server_handle
                 .await
                 .map_err(|error| report!("muxr forward test socket task panicked").attach(format!("{error}")))??;
@@ -1004,9 +1015,9 @@ mod tests {
     #[test]
     fn test_forward_client_requests_when_stdin_requests_are_mixed_sends_input_queue_in_order() -> rootcause::Result<()>
     {
-        self::runtime()?.block_on(async {
+        runtime()?.block_on(async {
             let tempdir = tempfile::tempdir()?;
-            let (_, paths) = self::session_paths(tempdir.path(), "work")?;
+            let (_, paths) = session_paths(tempdir.path(), "work")?;
             fs::create_dir_all(&paths.root)?;
             let listener = ServerListener::bind(&paths.socket)?;
             let server_handle = tokio::spawn(async move {
@@ -1036,7 +1047,11 @@ mod tests {
             drop(control_sender);
             drop(input_sender);
 
-            let writer_handle = tokio::spawn(self::forward_client_requests(writer, control_receiver, input_receiver));
+            let writer_handle = tokio::spawn(crate::runtime::tests::forward_client_requests(
+                writer,
+                control_receiver,
+                input_receiver,
+            ));
             let requests = server_handle.await.map_err(|error| {
                 report!("muxr forward order test socket task panicked").attach(format!("{error}"))
             })??;
@@ -1059,9 +1074,9 @@ mod tests {
     #[test]
     fn test_forward_client_requests_when_stdin_detach_follows_input_sends_input_before_detach() -> rootcause::Result<()>
     {
-        self::runtime()?.block_on(async {
+        runtime()?.block_on(async {
             let tempdir = tempfile::tempdir()?;
-            let (_, paths) = self::session_paths(tempdir.path(), "work")?;
+            let (_, paths) = session_paths(tempdir.path(), "work")?;
             fs::create_dir_all(&paths.root)?;
             let listener = ServerListener::bind(&paths.socket)?;
             let server_handle = tokio::spawn(async move {
@@ -1088,7 +1103,11 @@ mod tests {
             drop(control_sender);
             drop(input_sender);
 
-            let writer_handle = tokio::spawn(self::forward_client_requests(writer, control_receiver, input_receiver));
+            let writer_handle = tokio::spawn(crate::runtime::tests::forward_client_requests(
+                writer,
+                control_receiver,
+                input_receiver,
+            ));
             let requests = server_handle
                 .await
                 .map_err(|error| report!("muxr forward EOF test socket task panicked").attach(format!("{error}")))??;
@@ -1556,7 +1575,7 @@ mod tests {
     }
 
     fn pane_regions_snapshot() -> rootcause::Result<PaneRegionsSnapshot> {
-        self::pane_regions_snapshot_with_visible_top_row(0)
+        pane_regions_snapshot_with_visible_top_row(0)
     }
 
     fn pane_regions_snapshot_with_visible_top_row(visible_top_row: u64) -> rootcause::Result<PaneRegionsSnapshot> {

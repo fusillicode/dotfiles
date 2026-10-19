@@ -8,9 +8,16 @@ use std::fmt::Write;
 use std::path::Path;
 
 use nvim_oxi::Dictionary;
+use nvim_oxi::api;
+use ytil_git::remote;
 use ytil_git::remote::GitProvider;
+use ytil_git::repo;
+use ytil_noxi::buffer;
+use ytil_noxi::notify;
+use ytil_noxi::visual_selection;
 use ytil_noxi::visual_selection::Bound;
 use ytil_noxi::visual_selection::Selection;
+use ytil_sys::file;
 
 /// [`Dictionary`] with GitHub link generation helpers.
 pub fn dict() -> Dictionary {
@@ -21,29 +28,29 @@ pub fn dict() -> Dictionary {
 
 /// Generates a GitHub permalink for the current visual selection and copies it to the clipboard.
 fn get_link((link_type, open): (String, Option<bool>)) -> Option<()> {
-    let selection = ytil_noxi::visual_selection::get(())?;
+    let selection = visual_selection::get(())?;
 
-    let repo = ytil_git::repo::discover(Path::new("."))
+    let repo = repo::discover(Path::new("."))
         .inspect_err(|err| {
-            ytil_noxi::notify::error(err);
+            notify::error(err);
         })
         .ok()?;
 
-    let cur_buf = nvim_oxi::api::get_current_buf();
-    let abs_buf_path = ytil_noxi::buffer::get_absolute_path(Some(&cur_buf))
+    let cur_buf = api::get_current_buf();
+    let abs_buf_path = buffer::get_absolute_path(Some(&cur_buf))
         .ok_or_else(|| {
-            ytil_noxi::notify::error(format!(
+            notify::error(format!(
                 "error getting absolute path for current_buffer | current_buffer={cur_buf:?}"
             ));
         })
         .ok()?;
-    let current_buffer_path = ytil_git::repo::get_relative_path_to_repo(&abs_buf_path, &repo)
-        .inspect_err(|err| ytil_noxi::notify::error(err))
+    let current_buffer_path = repo::get_relative_path_to_repo(&abs_buf_path, &repo)
+        .inspect_err(|err| notify::error(err))
         .ok()?;
 
-    let repo_urls = ytil_git::remote::get_https_urls(&repo)
+    let repo_urls = remote::get_https_urls(&repo)
         .inspect_err(|err| {
-            ytil_noxi::notify::error(format!("error discovering git repo | error={err:#?}"));
+            notify::error(format!("error discovering git repo | error={err:#?}"));
         })
         .ok()?;
 
@@ -52,19 +59,19 @@ fn get_link((link_type, open): (String, Option<bool>)) -> Option<()> {
 
     let current_commit_hash = ytil_git::get_current_commit_hash(&repo)
         .inspect_err(|err| {
-            ytil_noxi::notify::error(format!("error getting current repo commit hash | error={err:#?}"));
+            notify::error(format!("error getting current repo commit hash | error={err:#?}"));
         })
         .ok()?;
 
     let git_provider = GitProvider::get(&repo_url)
         .inspect_err(|err| {
-            ytil_noxi::notify::error(format!(
+            notify::error(format!(
                 "error getting git provider for url | url={repo_url:#?} error={err:?}"
             ));
         })
         .inspect(|gp| {
             if gp.is_none() {
-                ytil_noxi::notify::error(format!("error no git provider found for url | url={repo_url:#?}"));
+                notify::error(format!("error no git provider found for url | url={repo_url:#?}"));
             }
         })
         .ok()??;
@@ -89,13 +96,13 @@ fn get_link((link_type, open): (String, Option<bool>)) -> Option<()> {
     if open.is_some_and(std::convert::identity) {
         ytil_sys::open(&repo_url)
             .inspect_err(|err| {
-                ytil_noxi::notify::error(format!("error opening file URL | repo_url={repo_url:?} error={err:#?}"));
+                notify::error(format!("error opening file URL | repo_url={repo_url:?} error={err:#?}"));
             })
             .ok()?;
     } else {
-        ytil_sys::file::cp_to_system_clipboard(&mut repo_url.as_bytes())
+        file::cp_to_system_clipboard(&mut repo_url.as_bytes())
             .inspect_err(|err| {
-                ytil_noxi::notify::error(format!(
+                notify::error(format!(
                     "error copying content to system clipboard | content={repo_url:?} error={err:#?}"
                 ));
             })

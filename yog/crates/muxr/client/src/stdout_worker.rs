@@ -1,4 +1,5 @@
 use std::collections::VecDeque;
+use std::io;
 use std::io::Write;
 use std::sync::Arc;
 use std::sync::Condvar;
@@ -7,23 +8,24 @@ use std::sync::MutexGuard;
 use std::thread;
 
 use rootcause::report;
+use thread::JoinHandle;
+use tokio::sync::mpsc::UnboundedReceiver;
+use tokio::sync::mpsc::UnboundedSender;
+use tokio::sync::oneshot;
+use tokio::sync::oneshot::Receiver;
+use tokio::sync::oneshot::Sender;
 
 const QUEUED_TRANSACTION_BYTE_LIMIT: usize = 4 * 1024 * 1024;
 
 /// A single stdout owner that reports each successful render flush.
 pub struct StdoutWorker {
     shared: Arc<Shared>,
-    handle: Option<thread::JoinHandle<()>>,
+    handle: Option<JoinHandle<()>>,
 }
 
 impl StdoutWorker {
-    pub fn spawn() -> (
-        StdoutSender,
-        Self,
-        tokio::sync::oneshot::Receiver<String>,
-        tokio::sync::mpsc::UnboundedReceiver<()>,
-    ) {
-        let (failure_sender, failure_receiver) = tokio::sync::oneshot::channel();
+    pub fn spawn() -> (StdoutSender, Self, Receiver<String>, UnboundedReceiver<()>) {
+        let (failure_sender, failure_receiver) = oneshot::channel();
         let (completed_sender, completed_receiver) = tokio::sync::mpsc::unbounded_channel();
         let shared = Arc::new(Shared {
             completed: completed_sender,
@@ -37,7 +39,7 @@ impl StdoutWorker {
         });
         let worker_shared = Arc::clone(&shared);
         let handle = thread::spawn(move || {
-            let mut stdout = std::io::stdout();
+            let mut stdout = io::stdout();
             run(&worker_shared, &mut stdout, failure_sender);
         });
         (
@@ -56,7 +58,7 @@ impl StdoutWorker {
 
 impl Drop for StdoutWorker {
     fn drop(&mut self) {
-        if let Ok(mut state) = self::lock_state(&self.shared) {
+        if let Ok(mut state) = lock_state(&self.shared) {
             state.closed = true;
             drop(state);
             self.shared.wake.notify_all();
@@ -77,9 +79,9 @@ impl StdoutSender {
         if transaction.is_empty() {
             return Ok(());
         }
-        let mut state = self::lock_state(&self.shared)?;
+        let mut state = lock_state(&self.shared)?;
         ensure_open(&state)?;
-        self::reserve_queued_bytes(&state, transaction.len())?;
+        reserve_queued_bytes(&state, transaction.len())?;
         state.queued_bytes = state
             .queued_bytes
             .checked_add(transaction.len())
@@ -92,7 +94,7 @@ impl StdoutSender {
 }
 
 struct Shared {
-    completed: tokio::sync::mpsc::UnboundedSender<()>,
+    completed: UnboundedSender<()>,
     state: Mutex<State>,
     wake: Condvar,
 }
@@ -144,10 +146,10 @@ fn lock_state(shared: &Shared) -> rootcause::Result<MutexGuard<'_, State>> {
         .map_err(|_| report!("muxr stdout worker state poisoned"))
 }
 
-fn run(shared: &Shared, stdout: &mut impl Write, failure_sender: tokio::sync::oneshot::Sender<String>) {
+fn run(shared: &Shared, stdout: &mut impl Write, failure_sender: Sender<String>) {
     loop {
         let cmd = {
-            let Ok(mut state) = self::lock_state(shared) else {
+            let Ok(mut state) = lock_state(shared) else {
                 return;
             };
             while !state.closed && state.output.is_empty() {
@@ -170,7 +172,7 @@ fn run(shared: &Shared, stdout: &mut impl Write, failure_sender: tokio::sync::on
         };
         let OutputCmd::Render(transaction) = cmd;
         if let Err(error) = stdout.write_all(&transaction).and_then(|()| stdout.flush()) {
-            if let Ok(mut state) = self::lock_state(shared) {
+            if let Ok(mut state) = lock_state(shared) {
                 state.failed = Some(error.to_string());
                 state.closed = true;
                 drop(state);

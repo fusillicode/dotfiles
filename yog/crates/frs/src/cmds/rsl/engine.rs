@@ -3,20 +3,21 @@
 
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 
 use rootcause::report;
 use syn::File;
 
-use super::Mode;
-use super::crate_roots;
-use super::mod_resolution::ModuleGraph;
-use super::mod_resolution::SourceFile;
-use super::output::FileReport;
-use super::output::RuleFinding;
-use super::rules::Rule;
-use super::rules::SelectedRules;
+use crate::cmds::rsl::Mode;
+use crate::cmds::rsl::crate_roots;
+use crate::cmds::rsl::mod_resolution::ModuleGraph;
+use crate::cmds::rsl::mod_resolution::SourceFile;
+use crate::cmds::rsl::output::FileReport;
+use crate::cmds::rsl::output::RuleFinding;
+use crate::cmds::rsl::rules::Rule;
+use crate::cmds::rsl::rules::SelectedRules;
 
 pub(super) struct FileContext<'ast> {
     pub(super) path: &'ast Path,
@@ -79,13 +80,13 @@ pub(super) fn process_paths(
 
     for file in changed {
         // Verify the supplied path still names the source that was analyzed.
-        if std::fs::canonicalize(&file.path).ok().as_ref() != Some(&file.canonical) {
+        if fs::canonicalize(&file.path).ok().as_ref() != Some(&file.canonical) {
             return Err(
                 report!("Rust source path changed during fixing").attach(format!("path={}", file.path.display()))
             );
         }
 
-        std::fs::write(&file.canonical, file.source.as_bytes()).map_err(|error| {
+        fs::write(&file.canonical, file.source.as_bytes()).map_err(|error| {
             report!("could not write Rust source")
                 .attach(format!("path={}", file.path.display()))
                 .attach(error)
@@ -117,7 +118,7 @@ impl ProjectContext {
         for path in paths {
             sources.insert(
                 path.clone(),
-                std::fs::read_to_string(path).map_err(|error| {
+                fs::read_to_string(path).map_err(|error| {
                     report!("could not read Rust source")
                         .attach(format!("path={}", path.display()))
                         .attach(error)
@@ -135,7 +136,7 @@ impl ProjectContext {
 
         let mut original_sources = sources.clone();
         for manifest in discovery.manifests {
-            let text = std::fs::read_to_string(&manifest)
+            let text = fs::read_to_string(&manifest)
                 .map_err(|error| report!("could not read Cargo manifest").attach(error))?;
             original_sources.insert(manifest, text);
         }
@@ -168,7 +169,7 @@ impl ProjectContext {
 
     fn ensure_unchanged(&self) -> rootcause::Result<()> {
         for (path, original) in &self.original_sources {
-            if std::fs::read_to_string(path).ok().as_deref() != Some(original.as_str()) {
+            if fs::read_to_string(path).ok().as_deref() != Some(original.as_str()) {
                 return Err(report!("Rust project changed during fixing").attach(format!("path={}", path.display())));
             }
         }
@@ -194,7 +195,7 @@ fn discover_modules(
     missing: &mut HashSet<PathBuf>,
 ) -> rootcause::Result<ModuleGraph> {
     ModuleGraph::discover(roots, |path| {
-        let canonical = std::fs::canonicalize(path).inspect_err(|error| {
+        let canonical = fs::canonicalize(path).inspect_err(|error| {
             if error.kind() == std::io::ErrorKind::NotFound {
                 missing.insert(path.to_owned());
             }
@@ -203,7 +204,7 @@ fn discover_modules(
         let text = if let Some(source) = sources.get(&canonical) {
             source.clone()
         } else {
-            let source = std::fs::read_to_string(&canonical)?;
+            let source = fs::read_to_string(&canonical)?;
             sources.insert(canonical.clone(), source.clone());
             source
         };
@@ -280,37 +281,6 @@ fn parse_source(path: &Path, source: &str) -> rootcause::Result<File> {
 mod tests {
     use super::*;
 
-    fn project() -> (tempfile::TempDir, PathBuf, ProjectContext) {
-        let directory = tempfile::tempdir().unwrap();
-        std::fs::write(
-            directory.path().join("Cargo.toml"),
-            r#"
-            [package]
-            name = "module-project-fixture"
-            version = "0.1.0"
-            edition = "2024"
-            [lib]
-            path = "lib.rs"
-            [workspace]
-        "#,
-        )
-        .unwrap();
-        let root = directory.path().join("lib.rs");
-        std::fs::write(
-            &root,
-            r"
-            mod child;
-        ",
-        )
-        .unwrap();
-        std::fs::write(directory.path().join("child.rs"), "").unwrap();
-        let root = std::fs::canonicalize(root).unwrap();
-        let rules = SelectedRules::try_from(vec!["path-anchoring".to_owned()]).unwrap();
-        let project = ProjectContext::load(std::slice::from_ref(&root), &rules).unwrap();
-
-        (directory, root, project)
-    }
-
     #[test]
     fn test_project_context_when_module_declarations_change_rebuilds_ancestry() {
         let (_directory, root, mut project) = project();
@@ -348,5 +318,36 @@ mod tests {
             diagnostic.contains(&format!("path={}", changed.display())),
             "{diagnostic}"
         );
+    }
+
+    fn project() -> (tempfile::TempDir, PathBuf, ProjectContext) {
+        let directory = tempfile::tempdir().unwrap();
+        std::fs::write(
+            directory.path().join("Cargo.toml"),
+            r#"
+            [package]
+            name = "module-project-fixture"
+            version = "0.1.0"
+            edition = "2024"
+            [lib]
+            path = "lib.rs"
+            [workspace]
+        "#,
+        )
+        .unwrap();
+        let root = directory.path().join("lib.rs");
+        std::fs::write(
+            &root,
+            r"
+            mod child;
+        ",
+        )
+        .unwrap();
+        std::fs::write(directory.path().join("child.rs"), "").unwrap();
+        let root = std::fs::canonicalize(root).unwrap();
+        let rules = SelectedRules::try_from(vec!["path-anchoring".to_owned()]).unwrap();
+        let project = ProjectContext::load(std::slice::from_ref(&root), &rules).unwrap();
+
+        (directory, root, project)
     }
 }

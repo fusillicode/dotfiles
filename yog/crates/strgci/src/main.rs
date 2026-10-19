@@ -3,11 +3,14 @@
 //! # Errors
 //! - Repository discovery or HEAD resolution fails.
 
+use std::io;
 use std::io::Write;
 use std::path::Path;
 
 use jiff::Timestamp;
 use rootcause::prelude::ResultExt;
+use ytil_git::repo;
+use ytil_sys::cli;
 use ytil_sys::cli::Args;
 
 /// Maximum number of characters shown for the commit subject before truncating with `…`.
@@ -18,13 +21,13 @@ const SHORT_HASH_LEN: usize = 7;
 
 #[ytil_sys::main]
 fn main() -> rootcause::Result<()> {
-    let args = ytil_sys::cli::get();
+    let args = cli::get();
     if args.has_help() {
         println!(include_str!("../help.txt"));
         return Ok(());
     }
 
-    let repo = ytil_git::repo::discover(Path::new("."))?;
+    let repo = repo::discover(Path::new("."))?;
     let head = repo.head().context("error resolving HEAD")?;
     let commit = head.peel_to_commit().context("error peeling HEAD to commit")?;
 
@@ -35,7 +38,7 @@ fn main() -> rootcause::Result<()> {
     let commit_seconds_delta = u64::try_from(Timestamp::now().as_second().saturating_sub(commit_epoch).max(0))
         .context("negative time delta after clamp")?;
 
-    let out = std::io::stdout();
+    let out = io::stdout();
     let mut out = out.lock();
     write!(out, "{short_hash} ")?;
     write_commit_relative_time(&mut out, commit_seconds_delta)?;

@@ -9,6 +9,7 @@ use crate::pane::runtime::PaneRuntimes;
 use crate::pane::tracked_process::PaneTrackedProcesses;
 use crate::server::ServerConfig;
 use crate::state::SessionLayout;
+use crate::state::persisted;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TabFocusClientOutcome {
@@ -92,7 +93,7 @@ pub fn handle_focus_tab_client_request(
         return Ok(TabFocusClientOutcome::Unchanged);
     }
     let previous_pane = state.layout.active_pane_id()?;
-    if self::handle_focus_tab_request_with_tracked_process_ack(
+    if handle_focus_tab_request_with_tracked_process_ack(
         tab_id,
         state.config,
         state.layout,
@@ -114,7 +115,7 @@ pub fn handle_focus_tab_at_index_cmd_client(
         return Ok(TabFocusClientOutcome::Unchanged);
     }
     let previous_pane = state.layout.active_pane_id()?;
-    if self::handle_focus_tab_at_index_request_with_tracked_process_ack(
+    if handle_focus_tab_at_index_request_with_tracked_process_ack(
         tab_index,
         state.config,
         state.layout,
@@ -132,7 +133,7 @@ pub fn handle_focus_previous_tab_cmd_client(
     state: &mut ClientSessionState<'_>,
 ) -> rootcause::Result<TabFocusClientOutcome> {
     let previous_pane = state.layout.active_pane_id()?;
-    self::handle_focus_previous_tab_cmd_with_tracked_process_ack(
+    handle_focus_previous_tab_cmd_with_tracked_process_ack(
         state.config,
         state.layout,
         state.runtimes,
@@ -146,7 +147,7 @@ pub fn handle_focus_next_tab_cmd_client(
     state: &mut ClientSessionState<'_>,
 ) -> rootcause::Result<TabFocusClientOutcome> {
     let previous_pane = state.layout.active_pane_id()?;
-    self::handle_focus_next_tab_cmd_with_tracked_process_ack(
+    handle_focus_next_tab_cmd_with_tracked_process_ack(
         state.config,
         state.layout,
         state.runtimes,
@@ -165,14 +166,7 @@ fn handle_focus_tab_request_with_tracked_process_ack(
     now: Instant,
 ) -> rootcause::Result<TabFocusChange> {
     let tab_focus = layout.focus_tab(tab_id)?;
-    self::handle_tab_focus_change_with_tracked_process_ack(
-        tab_focus,
-        config,
-        layout,
-        runtimes,
-        pane_tracked_processes,
-        now,
-    )
+    handle_tab_focus_change_with_tracked_process_ack(tab_focus, config, layout, runtimes, pane_tracked_processes, now)
 }
 
 fn handle_focus_tab_at_index_request_with_tracked_process_ack(
@@ -184,14 +178,7 @@ fn handle_focus_tab_at_index_request_with_tracked_process_ack(
     now: Instant,
 ) -> rootcause::Result<TabFocusChange> {
     let tab_focus = layout.focus_tab_at(tab_index)?;
-    self::handle_tab_focus_change_with_tracked_process_ack(
-        tab_focus,
-        config,
-        layout,
-        runtimes,
-        pane_tracked_processes,
-        now,
-    )
+    handle_tab_focus_change_with_tracked_process_ack(tab_focus, config, layout, runtimes, pane_tracked_processes, now)
 }
 
 fn handle_tab_focus_change_with_tracked_process_ack(
@@ -203,7 +190,7 @@ fn handle_tab_focus_change_with_tracked_process_ack(
     now: Instant,
 ) -> rootcause::Result<TabFocusChange> {
     if tab_focus == TabFocusChange::Changed {
-        crate::state::persisted::write_metadata(&config.paths, layout)?;
+        persisted::write_metadata(&config.paths, layout)?;
         let _acknowledged = pane_tracked_processes.acknowledge_active_pane_attention(
             config.user_config.as_ref(),
             layout,
@@ -221,7 +208,7 @@ fn handle_focus_previous_tab_cmd_with_tracked_process_ack(
     pane_tracked_processes: &mut PaneTrackedProcesses,
     now: Instant,
 ) -> rootcause::Result<()> {
-    self::handle_focus_previous_tab_cmd(config, layout)?;
+    handle_focus_previous_tab_cmd(config, layout)?;
     let _acknowledged =
         pane_tracked_processes.acknowledge_active_pane_attention(config.user_config.as_ref(), layout, runtimes, now)?;
     Ok(())
@@ -229,7 +216,7 @@ fn handle_focus_previous_tab_cmd_with_tracked_process_ack(
 
 fn handle_focus_previous_tab_cmd(config: &ServerConfig, layout: &mut SessionLayout) -> rootcause::Result<()> {
     if layout.focus_previous_tab()? == TabFocusChange::Changed {
-        crate::state::persisted::write_metadata(&config.paths, layout)?;
+        persisted::write_metadata(&config.paths, layout)?;
     }
     Ok(())
 }
@@ -241,7 +228,7 @@ fn handle_focus_next_tab_cmd_with_tracked_process_ack(
     pane_tracked_processes: &mut PaneTrackedProcesses,
     now: Instant,
 ) -> rootcause::Result<()> {
-    self::handle_focus_next_tab_cmd(config, layout)?;
+    handle_focus_next_tab_cmd(config, layout)?;
     let _acknowledged =
         pane_tracked_processes.acknowledge_active_pane_attention(config.user_config.as_ref(), layout, runtimes, now)?;
     Ok(())
@@ -249,7 +236,7 @@ fn handle_focus_next_tab_cmd_with_tracked_process_ack(
 
 fn handle_focus_next_tab_cmd(config: &ServerConfig, layout: &mut SessionLayout) -> rootcause::Result<()> {
     if layout.focus_next_tab()? == TabFocusChange::Changed {
-        crate::state::persisted::write_metadata(&config.paths, layout)?;
+        persisted::write_metadata(&config.paths, layout)?;
     }
     Ok(())
 }
@@ -270,7 +257,7 @@ mod tests {
 
     #[test]
     fn test_focus_tab_when_tab_exists_updates_active_tab() -> rootcause::Result<()> {
-        let mut layout = self::layout()?;
+        let mut layout = layout()?;
 
         assert_that!(layout.focus_tab(TabId::new(2)?)?, eq(TabFocusChange::Changed));
 
@@ -280,7 +267,7 @@ mod tests {
 
     #[test]
     fn test_focus_tab_when_tab_is_missing_keeps_active_tab() -> rootcause::Result<()> {
-        let mut layout = self::layout()?;
+        let mut layout = layout()?;
 
         assert_that!(layout.focus_tab(TabId::new(3)?)?, eq(TabFocusChange::Unchanged));
 
@@ -306,7 +293,7 @@ mod tests {
 
     #[test]
     fn test_focus_tab_at_when_index_is_missing_keeps_active_tab() -> rootcause::Result<()> {
-        let mut layout = self::layout()?;
+        let mut layout = layout()?;
 
         assert_that!(layout.focus_tab_at(2)?, eq(TabFocusChange::Unchanged));
         assert_that!(layout.active_tab.get(), eq(1));

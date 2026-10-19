@@ -10,10 +10,11 @@ use import_aliasing_rule::ImportAliasingRule;
 use item_ordering_rule::ItemOrderingRule;
 use item_qualification_rule::ItemQualificationRule;
 use path_anchoring_rule::PathAnchoringRule;
+use rootcause::Report;
 use rootcause::report;
 
-use super::analysis::RulePlan;
-use super::engine::FileContext;
+use crate::cmds::rsl::analysis::RulePlan;
+use crate::cmds::rsl::engine::FileContext;
 
 mod call_qualification_rule;
 mod common;
@@ -50,7 +51,7 @@ impl SelectedRules {
 }
 
 impl TryFrom<Vec<String>> for SelectedRules {
-    type Error = rootcause::Report;
+    type Error = Report;
 
     fn try_from(ids: Vec<String>) -> Result<Self, Self::Error> {
         for id in &ids {

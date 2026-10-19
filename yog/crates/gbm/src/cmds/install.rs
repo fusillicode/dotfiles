@@ -1,10 +1,12 @@
+use std::env;
+use std::fs;
 use std::path::Path;
 
 use owo_colors::OwoColorize;
 use rootcause::prelude::ResultExt;
 
 pub fn run() -> rootcause::Result<()> {
-    let zshrc = std::env::var("HOME")
+    let zshrc = env::var("HOME")
         .context("error missing HOME environment variable")
         .map(|home| Path::new(&home).join(".zshrc"))?;
 
@@ -15,11 +17,14 @@ pub fn run() -> rootcause::Result<()> {
 }
 
 fn install_zsh_wrapper_at(path: &Path) -> rootcause::Result<bool> {
-    let content = std::fs::read_to_string(path)
+    let content = fs::read_to_string(path)
         .context("error reading zshrc")
         .attach_with(|| format!("path={}", path.display()))?;
 
-    if content.lines().any(|line| line.trim() == super::ZSHRC_INSTALL_LINE) {
+    if content
+        .lines()
+        .any(|line| line.trim() == crate::cmds::ZSHRC_INSTALL_LINE)
+    {
         return Ok(false);
     }
 
@@ -27,10 +32,10 @@ fn install_zsh_wrapper_at(path: &Path) -> rootcause::Result<bool> {
     if !updated.is_empty() && !updated.ends_with('\n') {
         updated.push('\n');
     }
-    updated.push_str(super::ZSHRC_INSTALL_LINE);
+    updated.push_str(crate::cmds::ZSHRC_INSTALL_LINE);
     updated.push('\n');
 
-    std::fs::write(path, updated)
+    fs::write(path, updated)
         .context("error installing zshrc")
         .attach_with(|| format!("path={}", path.display()))?;
 

@@ -10,9 +10,10 @@ use syn::Visibility;
 use syn::punctuated::Iter;
 use syn::spanned::Spanned;
 
-use super::import_resolution;
 use crate::cmds::rsl::analysis::RulePlan;
 use crate::cmds::rsl::engine::FileContext;
+use crate::cmds::rsl::rules::common;
+use crate::cmds::rsl::rules::common::import_resolution;
 use crate::cmds::rsl::source::SourceEditor;
 
 pub(in crate::cmds::rsl::rules) fn removable_imports(
@@ -28,7 +29,7 @@ pub(in crate::cmds::rsl::rules) fn removable_imports(
             };
             let text = ctx.source.get(editor.span_range(import.span())).unwrap_or_default();
             (matches!(import.vis, Visibility::Inherited)
-                && !super::has_conditional_attributes(&import.attrs)
+                && !common::has_conditional_attributes(&import.attrs)
                 && !text.contains("//")
                 && !text.contains("/*"))
             .then(|| import_resolution::use_bindings(&import.tree, &[]).bindings)

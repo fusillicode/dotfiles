@@ -1,3 +1,4 @@
+use std::env;
 use std::path::Path;
 
 /// A terminal title classified for the tab bar.
@@ -12,7 +13,7 @@ pub struct TerminalTitle {
 impl TerminalTitle {
     /// Classify an OSC terminal title as either cwd metadata or cmd-label text.
     pub fn classify(title: Option<&str>, cwd: &str) -> Self {
-        let home = std::env::var("HOME").ok();
+        let home = env::var("HOME").ok();
         Self::classify_with_home(title, cwd, home.as_deref())
     }
 
@@ -23,7 +24,7 @@ impl TerminalTitle {
                 cwd: None,
             };
         };
-        let title_cwd = self::cwd_from_title(title, cwd, home);
+        let title_cwd = cwd_from_title(title, cwd, home);
         if ShellTitle::from_title(title) == ShellTitle::Shell
             || title_cwd.is_some()
             || IgnoredTitle::from_title(title) == IgnoredTitle::Ignored
@@ -37,7 +38,7 @@ impl TerminalTitle {
         // Shell title hooks can report the exact input line for startup commands. Normalize path-like command words so
         // `/Users/me/bin/demo process start` does not consume the whole fixed-width tab-bar command row.
         Self {
-            cmd_label: Some(self::cmd_title_label(title)),
+            cmd_label: Some(cmd_title_label(title)),
             cwd: None,
         }
     }
@@ -70,10 +71,10 @@ fn cwd_from_title(title: &str, cwd: &str, home: Option<&str>) -> Option<String> 
     if title == "~" {
         return Some(title.to_owned());
     }
-    if let Some(cwd) = self::cwd_from_matching_basename(title, cwd) {
+    if let Some(cwd) = cwd_from_matching_basename(title, cwd) {
         return Some(cwd);
     }
-    if self::home_abbreviated_dir_title(title, home).is_some() || self::absolute_dir_title(title).is_some() {
+    if home_abbreviated_dir_title(title, home).is_some() || absolute_dir_title(title).is_some() {
         return Some(title.to_owned());
     }
     None

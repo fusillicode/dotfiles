@@ -1,3 +1,4 @@
+use syn::Path;
 use syn::PathArguments;
 
 // Named primitive types cannot serve as module roots in generated imports.
@@ -10,7 +11,7 @@ const PRIMITIVE_TYPE_NAMES: &[&str] = &[
     "u8", "u16", "u32", "u64", "u128", "usize", // Unsigned integers.
 ];
 
-pub fn path_parts(path: &syn::Path) -> Option<Vec<String>> {
+pub fn path_parts(path: &Path) -> Option<Vec<String>> {
     if path.leading_colon.is_some() || path.segments.is_empty() {
         return None;
     }
@@ -76,8 +77,8 @@ pub fn normalize_path(current_module: &[String], parts: &[String]) -> Vec<String
     normalized
 }
 
-pub fn path_label(path: &syn::Path) -> String {
-    self::path_parts(path).map_or_else(|| "qualified path".to_owned(), |parts| parts.join("::"))
+pub fn path_label(path: &Path) -> String {
+    path_parts(path).map_or_else(|| "qualified path".to_owned(), |parts| parts.join("::"))
 }
 
 fn has_primitive_type_root(parts: &[String]) -> bool {

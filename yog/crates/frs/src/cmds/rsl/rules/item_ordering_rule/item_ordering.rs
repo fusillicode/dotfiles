@@ -1,10 +1,13 @@
 //! Atomic blocks and precedence relationships, with stable source-order ties.
 
 use std::borrow::Cow;
+use std::cmp::Reverse;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::VecDeque;
+use std::iter;
+use std::mem;
 
 use proc_macro2::TokenStream;
 use syn::Attribute;
@@ -20,17 +23,17 @@ use syn::punctuated::Punctuated;
 use syn::visit;
 use syn::visit::Visit;
 
-use super::ItemAst;
-use super::ItemOrder;
-use super::ItemOrderingConstraint;
-use super::ItemOrderingConstraintKind;
-use super::OrderingItem;
-use super::OrderingSection;
-use super::ast;
-use super::fn_references;
-use super::fn_references::FnPathScope;
 use crate::cmds::rsl::ast::ItemGroup;
 use crate::cmds::rsl::ast::VisibilityClass;
+use crate::cmds::rsl::rules::item_ordering_rule::ItemAst;
+use crate::cmds::rsl::rules::item_ordering_rule::ItemOrder;
+use crate::cmds::rsl::rules::item_ordering_rule::ItemOrderingConstraint;
+use crate::cmds::rsl::rules::item_ordering_rule::ItemOrderingConstraintKind;
+use crate::cmds::rsl::rules::item_ordering_rule::OrderingItem;
+use crate::cmds::rsl::rules::item_ordering_rule::OrderingSection;
+use crate::cmds::rsl::rules::item_ordering_rule::ast;
+use crate::cmds::rsl::rules::item_ordering_rule::fn_references;
+use crate::cmds::rsl::rules::item_ordering_rule::fn_references::FnPathScope;
 
 pub(super) fn compute_required_item_order(items: &[OrderingItem<'_>]) -> Result<ItemOrder, String> {
     let mut blocks = AtomicItemBlocks {
@@ -70,7 +73,7 @@ pub(super) fn compute_required_item_order(items: &[OrderingItem<'_>]) -> Result<
         }
     };
 
-    let constraints: Vec<_> = std::mem::take(&mut blocks.constraints)
+    let constraints: Vec<_> = mem::take(&mut blocks.constraints)
         .into_iter()
         .chain(precedence_graph.constraints)
         .collect();
@@ -489,7 +492,7 @@ fn merge_type_impl_blocks(items: &[OrderingItem<'_>], blocks: &mut AtomicItemBlo
     impl_indices_by_declaration.sort_by_key(|(selected_declaration_index, _)| *selected_declaration_index);
 
     for (selected_declaration_index, (inherent_impl_indices, trait_impl_indices)) in impl_indices_by_declaration {
-        let members = std::iter::once(selected_declaration_index)
+        let members = iter::once(selected_declaration_index)
             .chain(inherent_impl_indices)
             .chain(trait_impl_indices)
             .collect();
@@ -695,7 +698,7 @@ fn add_section_group_visibility_constraints(
     // Prefer normal placement of later item groups before displacing an earlier group around macros.
     let mut ranked_blocks: Vec<_> = blocks.members.iter().enumerate().collect();
     ranked_blocks.sort_by_key(|(_, members)| {
-        std::cmp::Reverse(
+        Reverse(
             members
                 .first()
                 .and_then(|&index| items.get(index))

@@ -8,8 +8,10 @@ use std::path::PathBuf;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
 
-use super::DeletionPlan;
 use crate::agent::session::SessionKey;
+use crate::agent::session_deletion::DeletionPlan;
+use crate::agent::session_loader;
+use crate::agent::session_parser::codex;
 use crate::agent::session_parser::codex::CodexSessionMetadata;
 
 pub(super) fn build_deletion_plan(
@@ -24,7 +26,7 @@ pub(super) fn build_deletion_plan(
     let selected_path = selected_path
         .map(|path| canonicalize_selected_path(&root, path))
         .transpose()?;
-    let session_paths = crate::agent::session_loader::find_session_paths(
+    let session_paths = session_loader::find_session_paths(
         &root,
         |entry| entry.path().extension().is_some_and(|ext| ext == "jsonl"),
         |_| false,
@@ -75,7 +77,7 @@ fn scan_deletion_sessions(
         let metadata = File::open(&session_path)
             .map(BufReader::new)
             .map_err(rootcause::Report::from)
-            .and_then(|file| crate::agent::session_parser::codex::parse_metadata_for_deletion(file, session_name));
+            .and_then(|file| codex::parse_metadata_for_deletion(file, session_name));
         let Ok(metadata) = metadata else {
             skipped_paths.push(session_path);
             continue;

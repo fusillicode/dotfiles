@@ -500,7 +500,7 @@ fn render_cursor(
 }
 
 fn queue_cursor_shape(stdout: &mut impl Write, shape: RenderCursorShape) -> rootcause::Result<()> {
-    queue_bytes(stdout, self::cursor_shape_sequence(shape))
+    queue_bytes(stdout, cursor_shape_sequence(shape))
 }
 
 const fn cursor_shape_sequence(shape: RenderCursorShape) -> &'static [u8] {
@@ -901,7 +901,7 @@ mod tests {
     #[test]
     fn test_terminal_update_encoder_when_linked_cell_is_selected_preserves_osc8() -> rootcause::Result<()> {
         let uri = "https://example.com/selected";
-        let (selection, _) = self::selection_range_and_style()?;
+        let (selection, _) = selection_range_and_style()?;
         let mut frame_buffer = FrameBuffer::default();
         let ApplyOutcome::Applied(changes) =
             frame_buffer.apply(RenderUpdate::Baseline(linked_render_baseline(uri)?))?
@@ -931,7 +931,7 @@ mod tests {
 
     #[test]
     fn test_selection_visual_when_cell_is_selected_marks_only_selected_cells() -> rootcause::Result<()> {
-        let (selection, unselected_style) = self::selection_range_and_style()?;
+        let (selection, unselected_style) = selection_range_and_style()?;
         let selection_bg = MuxrConfig::new()?.selection.bg;
 
         assert_that!(
@@ -1084,7 +1084,7 @@ mod tests {
     }
 
     fn render_baseline() -> rootcause::Result<muxr_core::RenderBaseline> {
-        self::render_baseline_with_cursor_shape(RenderCursorShape::Default)
+        render_baseline_with_cursor_shape(RenderCursorShape::Default)
     }
 
     fn render_baseline_with_cursor_shape(shape: RenderCursorShape) -> rootcause::Result<muxr_core::RenderBaseline> {

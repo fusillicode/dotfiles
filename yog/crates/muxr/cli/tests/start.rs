@@ -25,7 +25,7 @@ static SERVER_BUILD: OnceLock<()> = OnceLock::new();
 static SERVER_BUILD_LOCK: Mutex<()> = Mutex::new(());
 
 fn run_muxr<const N: usize>(home: &Path, args: [&str; N]) -> rootcause::Result<Output> {
-    self::ensure_server_binary()?;
+    ensure_server_binary()?;
     let child = Command::new(env!("CARGO_BIN_EXE_muxr"))
         .args(args)
         .env("HOME", home)
@@ -41,7 +41,7 @@ fn run_muxr<const N: usize>(home: &Path, args: [&str; N]) -> rootcause::Result<O
 }
 
 fn run_muxr_with_stdin<const N: usize>(home: &Path, args: [&str; N], input: &[u8]) -> rootcause::Result<Output> {
-    self::ensure_server_binary()?;
+    ensure_server_binary()?;
     let mut child = Command::new(env!("CARGO_BIN_EXE_muxr"))
         .args(args)
         .env("HOME", home)
@@ -71,7 +71,7 @@ fn ensure_server_binary() -> rootcause::Result<()> {
         .lock()
         .map_err(|_| report!("muxr server build lock poisoned"))?;
     if SERVER_BUILD.get().is_none() {
-        self::build_server_binary()?;
+        build_server_binary()?;
         SERVER_BUILD
             .set(())
             .map_err(|()| report!("muxr server build cache was already initialized"))?;

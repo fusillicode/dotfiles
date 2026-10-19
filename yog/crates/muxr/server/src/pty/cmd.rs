@@ -75,10 +75,10 @@ impl ShellCmd {
 
     #[must_use]
     pub fn shell_input_line(&self) -> String {
-        let mut line = self::shell_quote(&self.program.as_ref().to_string_lossy());
+        let mut line = shell_quote(&self.program.as_ref().to_string_lossy());
         for arg in &self.args {
             line.push(' ');
-            line.push_str(&self::shell_quote(arg));
+            line.push_str(&shell_quote(arg));
         }
         line.push('\n');
         line
@@ -86,7 +86,7 @@ impl ShellCmd {
 
     pub fn cmd_builder(&self, cwd: &str) -> rootcause::Result<CommandBuilder> {
         let mut cmd = CommandBuilder::new(self.program.as_ref().as_os_str());
-        cmd.cwd(self::resolved_cwd(cwd)?);
+        cmd.cwd(resolved_cwd(cwd)?);
         for arg in &self.args {
             cmd.arg(arg);
         }

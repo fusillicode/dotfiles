@@ -1,25 +1,28 @@
 //! macOS quarantine extended-attribute cleanup for repositories.
 
+use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
 use std::thread;
 
+use rootcause::Report;
 use rootcause::report;
+use thread::JoinHandle;
 
-use super::WorkerCount;
+use crate::cmds::repo::fix::WorkerCount;
 
 /// The result of cleaning one repo's quarantine metadata.
 pub struct RepoCleanup {
     /// Repo that was inspected.
     pub repo: PathBuf,
     /// Cleanup failures encountered while inspecting the repo.
-    pub failures: Vec<rootcause::Report>,
+    pub failures: Vec<Report>,
 }
 
 /// Removes quarantine metadata from every repo while skipping nested repos and symbolic links.
 pub fn clean(repos: &[PathBuf], jobs: WorkerCount) -> Vec<RepoCleanup> {
-    repos.iter().map(|repo| self::clean_repo(repo, repos, jobs)).collect()
+    repos.iter().map(|repo| clean_repo(repo, repos, jobs)).collect()
 }
 
 fn clean_repo(repo: &Path, repos: &[PathBuf], jobs: WorkerCount) -> RepoCleanup {
@@ -27,9 +30,9 @@ fn clean_repo(repo: &Path, repos: &[PathBuf], jobs: WorkerCount) -> RepoCleanup 
     let mut workers = std::collections::VecDeque::new();
     workers.push_back(thread::spawn({
         let repo = repo.to_path_buf();
-        move || self::clean_path(&repo)
+        move || clean_path(&repo)
     }));
-    let mut directories = match std::fs::read_dir(repo) {
+    let mut directories = match fs::read_dir(repo) {
         Ok(entries) => vec![(repo.to_path_buf(), entries)],
         Err(error) => {
             failures.push(
@@ -72,7 +75,7 @@ fn clean_repo(repo: &Path, repos: &[PathBuf], jobs: WorkerCount) -> RepoCleanup 
         }
 
         let child_entries = if file_type.is_dir() {
-            match std::fs::read_dir(&path) {
+            match fs::read_dir(&path) {
                 Ok(entries) => Some(entries),
                 Err(error) => {
                     failures.push(
@@ -87,18 +90,18 @@ fn clean_repo(repo: &Path, repos: &[PathBuf], jobs: WorkerCount) -> RepoCleanup 
         };
         if workers.len() >= jobs.into_inner()
             && let Some(worker) = workers.pop_front()
-            && let Some(failure) = self::collect_cleanup(worker)
+            && let Some(failure) = collect_cleanup(worker)
         {
             failures.push(failure);
         }
         if let Some(entries) = child_entries {
             directories.push((path.clone(), entries));
         }
-        workers.push_back(thread::spawn(move || self::clean_path(&path)));
+        workers.push_back(thread::spawn(move || clean_path(&path)));
     }
 
     for worker in workers {
-        if let Some(failure) = self::collect_cleanup(worker) {
+        if let Some(failure) = collect_cleanup(worker) {
             failures.push(failure);
         }
     }
@@ -138,7 +141,7 @@ fn clean_path(path: &Path) -> rootcause::Result<()> {
     Err(report!("could not remove quarantine metadata").attach(format!("path={}", path.display())))
 }
 
-fn collect_cleanup(cleanup: thread::JoinHandle<rootcause::Result<()>>) -> Option<rootcause::Report> {
+fn collect_cleanup(cleanup: JoinHandle<rootcause::Result<()>>) -> Option<Report> {
     match cleanup.join() {
         Ok(Ok(())) => None,
         Ok(Err(failure)) => Some(failure),

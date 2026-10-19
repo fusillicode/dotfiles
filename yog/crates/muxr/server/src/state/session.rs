@@ -169,7 +169,7 @@ impl SessionLayout {
     /// Visit pane ids in layout order.
     pub fn for_each_pane_id(&self, mut visit: impl FnMut(PaneId)) {
         for tab in &self.entries {
-            self::for_each_pane_tree_id(&tab.pane_tree, &mut visit);
+            for_each_pane_tree_id(&tab.pane_tree, &mut visit);
         }
     }
 
@@ -230,11 +230,11 @@ impl SessionLayout {
     }
 
     pub fn next_tab_number(&self) -> rootcause::Result<u32> {
-        self::next_number(self.entries.iter().map(|tab| tab.id.get()), "tab")
+        next_number(self.entries.iter().map(|tab| tab.id.get()), "tab")
     }
 
     pub fn next_pane_number(&self) -> rootcause::Result<u32> {
-        self::next_number(self.entries.iter().flat_map(Tab::pane_ids).map(PaneId::get), "pane")
+        next_number(self.entries.iter().flat_map(Tab::pane_ids).map(PaneId::get), "pane")
     }
 }
 
@@ -273,8 +273,8 @@ fn for_each_pane_tree_id(tree: &PaneTree, visit: &mut impl FnMut(PaneId)) {
     match tree {
         PaneTree::Pane(pane) => visit(pane.id),
         PaneTree::Split { first, second, .. } => {
-            self::for_each_pane_tree_id(first, visit);
-            self::for_each_pane_tree_id(second, visit);
+            for_each_pane_tree_id(first, visit);
+            for_each_pane_tree_id(second, visit);
         }
     }
 }
@@ -283,9 +283,9 @@ fn for_each_pane_tree_id(tree: &PaneTree, visit: &mut impl FnMut(PaneId)) {
 pub mod test_helpers {
     use muxr_core::TerminalSize;
 
-    use super::*;
     use crate::pane::borders::PaneBorderAxis;
     use crate::pane::split::PaneSplitRatio;
+    use crate::state::session::*;
 
     const BALANCED_TEST_SPLIT_RATIO: u16 = 500;
 
@@ -307,7 +307,7 @@ pub mod test_helpers {
     pub fn force_balanced_test_split_ratio(layout: &mut SessionLayout) -> rootcause::Result<()> {
         let ratio = PaneSplitRatio::new(BALANCED_TEST_SPLIT_RATIO)?;
         for tab in &mut layout.entries {
-            self::force_balanced_pane_tree_split_ratio(&mut tab.pane_tree, ratio);
+            force_balanced_pane_tree_split_ratio(&mut tab.pane_tree, ratio);
         }
         Ok(())
     }
@@ -373,8 +373,8 @@ pub mod test_helpers {
                 ..
             } => {
                 *first_ratio = ratio;
-                self::force_balanced_pane_tree_split_ratio(first, ratio);
-                self::force_balanced_pane_tree_split_ratio(second, ratio);
+                force_balanced_pane_tree_split_ratio(first, ratio);
+                force_balanced_pane_tree_split_ratio(second, ratio);
             }
         }
     }

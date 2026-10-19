@@ -5,6 +5,10 @@ use muxr_core::AttachRequest;
 use muxr_core::ServerEvent;
 use muxr_transport::ServerConnection;
 use rootcause::report;
+use tokio::sync::Notify;
+use tokio::sync::mpsc::Sender;
+use tokio::task::JoinHandle;
+use tokio::time;
 
 use crate::server::ServerConfig;
 use crate::session::runtime::ClientSessionTaskRuntime;
@@ -15,15 +19,15 @@ const CLIENT_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(2);
 
 pub fn spawn_client_handshake_task(
     connection: ServerConnection,
-    handshake_sender: &tokio::sync::mpsc::Sender<SessionClientHandshake>,
-    task_finished_notify: Arc<tokio::sync::Notify>,
-    handles: &mut Vec<tokio::task::JoinHandle<rootcause::Result<()>>>,
+    handshake_sender: &Sender<SessionClientHandshake>,
+    task_finished_notify: Arc<Notify>,
+    handles: &mut Vec<JoinHandle<rootcause::Result<()>>>,
 ) {
     let handshake_sender = handshake_sender.clone();
     handles.push(tokio::spawn(async move {
         let _task_finished = TaskFinishedNotify(task_finished_notify);
         let mut connection = connection;
-        let message = self::read_client_handshake(&mut connection).await?;
+        let message = read_client_handshake(&mut connection).await?;
         if handshake_sender
             .send(SessionClientHandshake { connection, message })
             .await
@@ -40,8 +44,8 @@ pub fn spawn_client_session_task(
     runtime: ClientSessionTaskRuntime,
     connection: ServerConnection,
     attach_request: AttachRequest,
-    task_finished_notify: Arc<tokio::sync::Notify>,
-    handles: &mut Vec<tokio::task::JoinHandle<rootcause::Result<()>>>,
+    task_finished_notify: Arc<Notify>,
+    handles: &mut Vec<JoinHandle<rootcause::Result<()>>>,
 ) {
     let config = config.clone();
     handles.push(tokio::spawn(async move {
@@ -50,10 +54,10 @@ pub fn spawn_client_session_task(
     }));
 }
 
-pub async fn join_client_tasks(handles: Vec<tokio::task::JoinHandle<rootcause::Result<()>>>) -> rootcause::Result<()> {
+pub async fn join_client_tasks(handles: Vec<JoinHandle<rootcause::Result<()>>>) -> rootcause::Result<()> {
     let mut first_error = None;
     for handle in handles {
-        if let Err(error) = self::join_client_task(handle).await
+        if let Err(error) = join_client_task(handle).await
             && first_error.is_none()
         {
             first_error = Some(error);
@@ -62,14 +66,12 @@ pub async fn join_client_tasks(handles: Vec<tokio::task::JoinHandle<rootcause::R
     first_error.map_or(Ok(()), Err)
 }
 
-pub async fn join_finished_client_tasks(
-    handles: &mut Vec<tokio::task::JoinHandle<rootcause::Result<()>>>,
-) -> rootcause::Result<()> {
+pub async fn join_finished_client_tasks(handles: &mut Vec<JoinHandle<rootcause::Result<()>>>) -> rootcause::Result<()> {
     let mut pending_handles = Vec::new();
     let mut first_error = None;
     for handle in handles.drain(..) {
         if handle.is_finished() {
-            if let Err(error) = self::join_client_task(handle).await
+            if let Err(error) = join_client_task(handle).await
                 && first_error.is_none()
             {
                 first_error = Some(error);
@@ -91,7 +93,7 @@ pub async fn send_connection_event_with_timeout(
     event: &ServerEvent,
     client_write_timeout: Duration,
 ) -> rootcause::Result<ConnectionEventSend> {
-    match tokio::time::timeout(client_write_timeout, connection.send_event(event)).await {
+    match time::timeout(client_write_timeout, connection.send_event(event)).await {
         Ok(Ok(())) => Ok(ConnectionEventSend::Sent),
         Ok(Err(_)) | Err(_) => Ok(ConnectionEventSend::Failed),
     }
@@ -105,7 +107,7 @@ pub enum ConnectionEventSend {
 
 // Client task completion must wake the server even if the task returns an error or panics; otherwise task joins would
 // rely on the old lifecycle poll.
-struct TaskFinishedNotify(Arc<tokio::sync::Notify>);
+struct TaskFinishedNotify(Arc<Notify>);
 
 impl Drop for TaskFinishedNotify {
     fn drop(&mut self) {
@@ -114,14 +116,14 @@ impl Drop for TaskFinishedNotify {
 }
 
 async fn read_client_handshake(connection: &mut ServerConnection) -> rootcause::Result<SessionHandshakeMessage> {
-    match tokio::time::timeout(CLIENT_HANDSHAKE_TIMEOUT, connection.recv_request()).await {
+    match time::timeout(CLIENT_HANDSHAKE_TIMEOUT, connection.recv_request()).await {
         Ok(Ok(request)) => Ok(SessionHandshakeMessage::from_first_request(request)),
         Ok(Err(error)) => Err(error),
         Err(_elapsed) => Ok(SessionHandshakeMessage::ClientDisconnected),
     }
 }
 
-async fn join_client_task(handle: tokio::task::JoinHandle<rootcause::Result<()>>) -> rootcause::Result<()> {
+async fn join_client_task(handle: JoinHandle<rootcause::Result<()>>) -> rootcause::Result<()> {
     handle
         .await
         .unwrap_or_else(|error| Err(report!("muxr server client task panicked").attach(format!("{error}"))))

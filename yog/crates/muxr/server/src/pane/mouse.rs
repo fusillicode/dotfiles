@@ -2,6 +2,7 @@ use std::time::Instant;
 
 use muxr_core::ClientMouseEvent;
 use muxr_core::ClientMouseEventPhase;
+use muxr_core::ClientMousePosition;
 use muxr_core::PaneRegionContainment;
 use muxr_core::PaneRegionSnapshot;
 use muxr_core::PaneScrollDirection;
@@ -9,6 +10,7 @@ use rootcause::report;
 
 use crate::client::session::ClientSessionState;
 use crate::pane::focus::PaneFocusClientOutcome;
+use crate::pane::scroll;
 use crate::pane::tracked_process::TrackedProcessClientChange;
 use crate::pane::tracked_process::TrackedProcessUserInteraction;
 use crate::pty::PtyMouseWrite;
@@ -109,8 +111,7 @@ pub fn handle_mouse_event_client_request(
             })
         }
         PaneMouseAction::ScrollHistory { direction } => {
-            let outcome =
-                crate::pane::scroll::handle_scroll_pane_wheel_client_request(event.position, direction, state)?;
+            let outcome = scroll::handle_scroll_pane_wheel_client_request(event.position, direction, state)?;
             Ok(PaneMouseClientOutcome {
                 focus: PaneFocusClientOutcome::Unchanged,
                 render_signal: outcome.render_signal,
@@ -135,7 +136,7 @@ pub fn encode_pty_mouse_event(
         return Ok(None);
     }
 
-    let Some((row, col)) = self::pane_local_mouse_position(event.position, region) else {
+    let Some((row, col)) = pane_local_mouse_position(event.position, region) else {
         return Ok(None);
     };
     let row = row.checked_add(1).ok_or_else(|| report!("muxr mouse row overflowed"))?;
@@ -144,9 +145,9 @@ pub fn encode_pty_mouse_event(
         .ok_or_else(|| report!("muxr mouse column overflowed"))?;
 
     match protocol.encoding {
-        TerminalMouseProtocolEncoding::Sgr => Ok(Some(self::sgr_mouse_event_bytes(event, row, col))),
-        TerminalMouseProtocolEncoding::Default => Ok(self::default_mouse_event_bytes(event, row, col)),
-        TerminalMouseProtocolEncoding::Utf8 => Ok(self::utf8_mouse_event_bytes(event, row, col)),
+        TerminalMouseProtocolEncoding::Sgr => Ok(Some(sgr_mouse_event_bytes(event, row, col))),
+        TerminalMouseProtocolEncoding::Default => Ok(default_mouse_event_bytes(event, row, col)),
+        TerminalMouseProtocolEncoding::Utf8 => Ok(utf8_mouse_event_bytes(event, row, col)),
     }
 }
 
@@ -173,7 +174,7 @@ impl PaneMouseAction {
     fn from_event(event: ClientMouseEvent, mode: TerminalApplicationMode) -> Self {
         let focus = PaneMouseFocus::from(event);
 
-        if let Some(direction) = self::wheel_direction(event) {
+        if let Some(direction) = wheel_direction(event) {
             if let Some(protocol) = mode.mouse_protocol
                 && protocol.event_report(event) == TerminalMouseEventReport::Report
             {
@@ -233,10 +234,7 @@ const fn wheel_direction(event: ClientMouseEvent) -> Option<PaneScrollDirection>
     }
 }
 
-fn pane_local_mouse_position(
-    position: muxr_core::ClientMousePosition,
-    region: &PaneRegionSnapshot,
-) -> Option<(u16, u16)> {
+fn pane_local_mouse_position(position: ClientMousePosition, region: &PaneRegionSnapshot) -> Option<(u16, u16)> {
     if region.containment(position.row, position.col) == PaneRegionContainment::Outside {
         return None;
     }
@@ -274,9 +272,9 @@ fn utf8_mouse_event_bytes(event: ClientMouseEvent, row: u16, col: u16) -> Option
         event.button
     };
     let mut bytes = b"\x1b[M".to_vec();
-    self::push_utf8_mouse_value(&mut bytes, button.checked_add(32)?)?;
-    self::push_utf8_mouse_value(&mut bytes, col.checked_add(32)?)?;
-    self::push_utf8_mouse_value(&mut bytes, row.checked_add(32)?)?;
+    push_utf8_mouse_value(&mut bytes, button.checked_add(32)?)?;
+    push_utf8_mouse_value(&mut bytes, col.checked_add(32)?)?;
+    push_utf8_mouse_value(&mut bytes, row.checked_add(32)?)?;
     Some(bytes)
 }
 
@@ -419,12 +417,12 @@ mod tests {
     #[case::wheel_up(64)]
     #[case::wheel_down(65)]
     fn test_resolve_pane_mouse_action_when_wheel_is_reported_forwards_to_pty(#[case] button: u16) {
-        let event = self::mouse_press(button);
+        let event = mouse_press(button);
         let protocol = TerminalMouseProtocol {
             encoding: TerminalMouseProtocolEncoding::Sgr,
             mode: TerminalMouseProtocolMode::Press,
         };
-        let mode = self::application_mode(
+        let mode = application_mode(
             TerminalScreenMode::Normal,
             TerminalCursorKeyMode::Normal,
             Some(protocol),
@@ -446,7 +444,7 @@ mod tests {
         #[case] button: u16,
         #[case] direction: PaneScrollDirection,
     ) {
-        let event = self::mouse_press(button);
+        let event = mouse_press(button);
 
         assert_that!(
             PaneMouseAction::from_event(
@@ -467,7 +465,7 @@ mod tests {
         #[case] button: u16,
         #[case] direction: PaneScrollDirection,
     ) {
-        let event = self::mouse_press(button);
+        let event = mouse_press(button);
 
         assert_that!(
             PaneMouseAction::from_event(
@@ -480,12 +478,12 @@ mod tests {
 
     #[test]
     fn test_resolve_pane_mouse_action_when_click_is_reported_forwards_to_pty_and_focuses() {
-        let event = self::mouse_press(0);
+        let event = mouse_press(0);
         let protocol = TerminalMouseProtocol {
             encoding: TerminalMouseProtocolEncoding::Sgr,
             mode: TerminalMouseProtocolMode::Press,
         };
-        let mode = self::application_mode(
+        let mode = application_mode(
             TerminalScreenMode::Normal,
             TerminalCursorKeyMode::Normal,
             Some(protocol),
@@ -502,7 +500,7 @@ mod tests {
 
     #[test]
     fn test_resolve_pane_mouse_action_when_click_is_not_reported_focuses_pane() {
-        let event = self::mouse_press(0);
+        let event = mouse_press(0);
 
         assert_that!(
             PaneMouseAction::from_event(
@@ -515,7 +513,7 @@ mod tests {
 
     #[test]
     fn test_resolve_pane_mouse_action_when_motion_is_not_reported_has_no_action() {
-        let event = self::mouse_press(32);
+        let event = mouse_press(32);
 
         assert_that!(
             PaneMouseAction::from_event(
@@ -528,12 +526,12 @@ mod tests {
 
     #[test]
     fn test_resolve_pane_mouse_action_when_button_motion_is_reported_forwards_motion() {
-        let event = self::mouse_press(32);
+        let event = mouse_press(32);
         let protocol = TerminalMouseProtocol {
             encoding: TerminalMouseProtocolEncoding::Sgr,
             mode: TerminalMouseProtocolMode::ButtonMotion,
         };
-        let mode = self::application_mode(
+        let mode = application_mode(
             TerminalScreenMode::Normal,
             TerminalCursorKeyMode::Normal,
             Some(protocol),

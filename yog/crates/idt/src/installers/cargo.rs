@@ -1,13 +1,19 @@
+use std::env;
+use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
 
 use rootcause::bail;
 use rootcause::prelude::ResultExt;
+use toml::Value;
+use ytil_sys::dir;
+use ytil_sys::file;
+use ytil_sys::rustup;
 use ytil_sys::rustup::RequestedRustToolchain;
 
+use crate::installers;
 use crate::installers::Installer;
-use crate::installers::run_health_check;
 
 /// Install a declared Cargo or Git tool from Cargo's configured install root.
 ///
@@ -59,7 +65,7 @@ impl<'a> Cargo<'a> {
     fn install_command(&self) -> rootcause::Result<Command> {
         let mut command = ytil_cmd::silent_cmd("cargo");
         if let Some(requested_toolchain) = &self.requested_toolchain {
-            let toolchain = ytil_sys::rustup::find_latest_installed_rust_toolchain(requested_toolchain)?;
+            let toolchain = rustup::find_latest_installed_rust_toolchain(requested_toolchain)?;
             command.arg(format!("+{toolchain}"));
         }
         command.args(["install", "--force"]).args(self.install_args);
@@ -107,15 +113,15 @@ impl Installer for Cargo<'_> {
             .join(self.bin_name())
             .canonicalize()
             .context("could not resolve Cargo-installed binary")?;
-        ytil_sys::file::ln_sf(&cargo_binary, &self.bin_dir.join(self.bin_name()))?;
-        ytil_sys::file::chmod_x(cargo_binary)?;
+        file::ln_sf(&cargo_binary, &self.bin_dir.join(self.bin_name()))?;
+        file::chmod_x(cargo_binary)?;
 
         Ok(())
     }
 
     fn health_check(&self) -> Option<rootcause::Result<String>> {
         let command = self.health_check_command();
-        Some(run_health_check(command))
+        Some(installers::run_health_check(command))
     }
 }
 
@@ -134,7 +140,7 @@ enum HealthCheck {
 
 /// Resolve Cargo's install-root precedence without scanning installed packages or invoking Cargo.
 fn cargo_install_root() -> rootcause::Result<PathBuf> {
-    if let Some(install_root) = std::env::var_os("CARGO_INSTALL_ROOT") {
+    if let Some(install_root) = env::var_os("CARGO_INSTALL_ROOT") {
         return Ok(PathBuf::from(install_root));
     }
 
@@ -147,11 +153,11 @@ fn cargo_install_root() -> rootcause::Result<PathBuf> {
 }
 
 fn cargo_home() -> rootcause::Result<PathBuf> {
-    if let Some(cargo_home) = std::env::var_os("CARGO_HOME") {
+    if let Some(cargo_home) = env::var_os("CARGO_HOME") {
         return Ok(PathBuf::from(cargo_home));
     }
 
-    ytil_sys::dir::build_home_path(&[".cargo"])
+    dir::build_home_path(&[".cargo"])
 }
 
 /// Read `[install].root` from Cargo's standard home configuration file.
@@ -160,15 +166,15 @@ fn cargo_config_install_root(cargo_home: &Path) -> rootcause::Result<Option<Path
     if !config_path.is_file() {
         return Ok(None);
     }
-    let config = std::fs::read_to_string(&config_path)
+    let config = fs::read_to_string(&config_path)
         .context("could not read Cargo configuration")
         .attach_with(|| format!("config={}", config_path.display()))?;
-    let config: toml::Value = toml::from_str(&config)
+    let config: Value = toml::from_str(&config)
         .context("could not parse Cargo configuration")
         .attach_with(|| format!("config={}", config_path.display()))?;
     let Some(install_root) = config
         .get("install")
-        .and_then(toml::Value::as_table)
+        .and_then(Value::as_table)
         .and_then(|install| install.get("root"))
     else {
         return Ok(None);

@@ -29,7 +29,6 @@ use syn::ItemMod;
 use syn::Meta;
 use syn::spanned::Spanned;
 
-use super::Rule;
 use crate::cmds::rsl::analysis::FixBlockReason;
 use crate::cmds::rsl::analysis::RuleChange;
 use crate::cmds::rsl::analysis::RulePlan;
@@ -38,6 +37,7 @@ use crate::cmds::rsl::ast::ItemGroup;
 use crate::cmds::rsl::ast::ItemKind;
 use crate::cmds::rsl::ast::VisibilityClass;
 use crate::cmds::rsl::engine::FileContext;
+use crate::cmds::rsl::rules::Rule;
 use crate::cmds::rsl::source::SourceEditor;
 use crate::cmds::rsl::source::SourceRange;
 use crate::cmds::rsl::source::item_ranges_with_attached_comments;
@@ -545,7 +545,7 @@ fn reorder_scope(items: &[OrderingItem<'_>], order: &[usize], editor: &mut Sourc
 
 #[cfg(test)]
 mod test {
-    use super::*;
+    use crate::cmds::rsl::rules::item_ordering_rule::*;
 
     #[rstest::rstest]
     #[case(vec![0, 1], Vec::new(), Ok(()))]

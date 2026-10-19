@@ -4,7 +4,9 @@
 //! source‑specific sets, related info deduper). Ordering is significant for short‑circuit behavior.
 
 use nvim_oxi::Dictionary;
+use nvim_oxi::Integer;
 use nvim_oxi::api::Buffer;
+use rootcause::Report;
 use rootcause::bail;
 use ytil_noxi::buffer::BufferExt;
 use ytil_noxi::dict::DictionaryExt;
@@ -32,7 +34,7 @@ impl BufferWithPath {
 }
 
 impl TryFrom<Buffer> for BufferWithPath {
-    type Error = rootcause::Report;
+    type Error = Report;
 
     fn try_from(value: Buffer) -> Result<Self, Self::Error> {
         let path = value.get_name().map(|s| s.to_string_lossy().into_owned())?;
@@ -114,7 +116,7 @@ impl DiagnosticLocation {
 }
 
 impl TryFrom<&Dictionary> for DiagnosticLocation {
-    type Error = rootcause::Report;
+    type Error = Report;
 
     /// Attempts to convert an Nvim dictionary into a `DiagnosticLocation`.
     ///
@@ -124,16 +126,16 @@ impl TryFrom<&Dictionary> for DiagnosticLocation {
     /// - If start position is after end position (inconsistent boundaries).
     fn try_from(value: &Dictionary) -> Result<Self, Self::Error> {
         let lnum = value
-            .get_t::<nvim_oxi::Integer>("lnum")
+            .get_t::<Integer>("lnum")
             .and_then(|n| usize::try_from(n).map_err(From::from))?;
         let col = value
-            .get_t::<nvim_oxi::Integer>("col")
+            .get_t::<Integer>("col")
             .and_then(|n| usize::try_from(n).map_err(From::from))?;
         let end_col = value
-            .get_t::<nvim_oxi::Integer>("end_col")
+            .get_t::<Integer>("end_col")
             .and_then(|n| usize::try_from(n).map_err(From::from))?;
         let end_lnum = value
-            .get_t::<nvim_oxi::Integer>("end_lnum")
+            .get_t::<Integer>("end_lnum")
             .and_then(|n| usize::try_from(n).map_err(From::from))?;
 
         if lnum > end_lnum {

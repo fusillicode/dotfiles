@@ -1,5 +1,6 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
+use std::fs;
 use std::fs::File;
 use std::fs::OpenOptions;
 use std::io::Write;
@@ -7,6 +8,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::path::PathBuf;
 
+use rootcause::Report;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
 
@@ -132,7 +134,7 @@ impl ConnectionParams {
 }
 
 impl TryFrom<(usize, &str)> for ConnectionParams {
-    type Error = rootcause::Report;
+    type Error = Report;
 
     fn try_from(idx_line @ (idx, line): (usize, &str)) -> Result<Self, Self::Error> {
         // Use splitn to avoid Vec allocation; pgpass format is exactly 5 colon-separated fields
@@ -185,7 +187,7 @@ pub fn save_new_pgpass_file(
         writeln!(tmp_file, "{file_line}")?;
     }
 
-    std::fs::rename(&tmp_path, pgpass_path)?;
+    fs::rename(&tmp_path, pgpass_path)?;
 
     let file = OpenOptions::new().read(true).open(pgpass_path)?;
     let mut permissions = file.metadata()?.permissions();

@@ -39,13 +39,13 @@ pub fn queue(
     queue_cmd(stdout, Hide)?;
     queue_cmd(stdout, SavePosition)?;
 
-    let tabs = self::sidebar_tabs(layout);
+    let tabs = sidebar_tabs(layout);
     let mut row = 0;
     for tab in &tabs {
         if row >= rows {
             break;
         }
-        self::queue_sidebar_row(
+        queue_sidebar_row(
             stdout,
             config,
             row,
@@ -58,7 +58,7 @@ pub fn queue(
         if row >= rows {
             break;
         }
-        self::queue_sidebar_row(
+        queue_sidebar_row(
             stdout,
             config,
             row,
@@ -72,12 +72,12 @@ pub fn queue(
             break;
         }
         // Keep each tab entry a stable three-row block with a spacer row.
-        self::queue_sidebar_row(stdout, config, row, tab.state, TrackedProcessState::None, "")?;
+        queue_sidebar_row(stdout, config, row, tab.state, TrackedProcessState::None, "")?;
         row = row.saturating_add(1);
     }
 
     while row < rows {
-        self::queue_sidebar_row(
+        queue_sidebar_row(
             stdout,
             config,
             row,
@@ -137,20 +137,20 @@ fn queue_sidebar_row(
         }),
     )?;
     queue_cmd(stdout, Print("\u{258e}"))?;
-    self::queue_sidebar_text_style(stdout, config, state)?;
+    queue_sidebar_text_style(stdout, config, state)?;
     // Keep normal labels flush after the rail; marker rows prefix the dot and one space.
-    let marker_width = if self::tracked_process_state_dot_color(config, tracked_process_state).is_some() {
+    let marker_width = if tracked_process_state_dot_color(config, tracked_process_state).is_some() {
         2
     } else {
         0
     };
     // Alacritty advances its grid per codepoint using `unicode-width`, so a Rust character
     // count is not a terminal width. Use the same cell contract for truncation and padding.
-    let label = self::take_terminal_cells(text, content_width.saturating_sub(marker_width));
-    let used_width = self::terminal_cell_width(&label).saturating_add(marker_width);
-    self::queue_tracked_process_state_marker(stdout, config, state, tracked_process_state)?;
+    let label = take_terminal_cells(text, content_width.saturating_sub(marker_width));
+    let used_width = terminal_cell_width(&label).saturating_add(marker_width);
+    queue_tracked_process_state_marker(stdout, config, state, tracked_process_state)?;
     queue_cmd(stdout, Print(&label))?;
-    self::queue_sidebar_text_style(stdout, config, state)?;
+    queue_sidebar_text_style(stdout, config, state)?;
     let trailing_width = content_width.saturating_sub(used_width);
     if trailing_width > 0 {
         queue_cmd(stdout, Print(pad("", trailing_width)))?;
@@ -198,14 +198,14 @@ fn queue_tracked_process_state_marker(
     state: TabBarItemState,
     tracked_process_state: TrackedProcessState,
 ) -> rootcause::Result<()> {
-    let Some(color) = self::tracked_process_state_dot_color(config, tracked_process_state) else {
+    let Some(color) = tracked_process_state_dot_color(config, tracked_process_state) else {
         return Ok(());
     };
 
     queue_cmd(stdout, SetAttribute(Attribute::Bold))?;
     queue_cmd(stdout, SetForegroundColor(crate::frame_buffer::crossterm_color(color)))?;
     queue_cmd(stdout, Print("\u{2022}"))?;
-    self::queue_sidebar_text_style(stdout, config, state)?;
+    queue_sidebar_text_style(stdout, config, state)?;
     queue_cmd(stdout, Print(" "))?;
     Ok(())
 }
@@ -223,7 +223,7 @@ const fn tracked_process_state_dot_color(
 
 fn sidebar_tabs(layout: &LayoutSnapshot) -> Vec<SidebarTab> {
     let home = env::var("HOME").ok();
-    self::sidebar_tabs_with_home(layout, home.as_deref())
+    sidebar_tabs_with_home(layout, home.as_deref())
 }
 
 fn sidebar_tabs_with_home(layout: &LayoutSnapshot, home: Option<&str>) -> Vec<SidebarTab> {
@@ -236,12 +236,12 @@ fn sidebar_tabs_with_home(layout: &LayoutSnapshot, home: Option<&str>) -> Vec<Si
             } else {
                 TabBarItemState::Inactive
             };
-            let display_pane = self::display_pane(tab, state);
+            let display_pane = display_pane(tab, state);
             SidebarTab {
                 state,
                 tracked_process_state: display_pane.map(|pane| pane.tracked_process_state).unwrap_or_default(),
-                cmd_label: self::cmd_label(display_pane),
-                path_label: self::path_label(tab, display_pane, home),
+                cmd_label: cmd_label(display_pane),
+                path_label: path_label(tab, display_pane, home),
             }
         })
         .collect()
@@ -249,10 +249,10 @@ fn sidebar_tabs_with_home(layout: &LayoutSnapshot, home: Option<&str>) -> Vec<Si
 
 fn display_pane(tab: &TabSnapshot, state: TabBarItemState) -> Option<&PaneSnapshot> {
     if state == TabBarItemState::Active && tab.panes().len() > 1 {
-        return self::unfocused_unseen_tracked_process_pane(tab).or_else(|| self::active_pane(tab));
+        return unfocused_unseen_tracked_process_pane(tab).or_else(|| active_pane(tab));
     }
 
-    self::inactive_tab_display_pane(tab)
+    inactive_tab_display_pane(tab)
 }
 
 fn unfocused_unseen_tracked_process_pane(tab: &TabSnapshot) -> Option<&PaneSnapshot> {
@@ -264,10 +264,10 @@ fn unfocused_unseen_tracked_process_pane(tab: &TabSnapshot) -> Option<&PaneSnaps
 fn inactive_tab_display_pane(tab: &TabSnapshot) -> Option<&PaneSnapshot> {
     // Inactive tabs need one representative pane: attention/running state wins, while
     // idle tracked processes still keep their label and no dot. Ties use focus recency.
-    self::focused_pane_with_tracked_process_state(tab, TrackedProcessState::Unseen)
-        .or_else(|| self::focused_pane_with_tracked_process_state(tab, TrackedProcessState::Busy))
-        .or_else(|| self::focused_pane_with_tracked_process_state(tab, TrackedProcessState::Seen))
-        .or_else(|| self::active_pane(tab))
+    focused_pane_with_tracked_process_state(tab, TrackedProcessState::Unseen)
+        .or_else(|| focused_pane_with_tracked_process_state(tab, TrackedProcessState::Busy))
+        .or_else(|| focused_pane_with_tracked_process_state(tab, TrackedProcessState::Seen))
+        .or_else(|| active_pane(tab))
 }
 
 fn focused_pane_with_tracked_process_state(
@@ -292,7 +292,7 @@ fn path_label(tab: &TabSnapshot, pane: Option<&PaneSnapshot>, home: Option<&str>
     if cwd.is_empty() {
         tab.title().to_owned()
     } else {
-        self::short_cwd_with_home(cwd, home)
+        short_cwd_with_home(cwd, home)
     }
 }
 
@@ -306,7 +306,7 @@ fn short_cwd_with_home(cwd: &str, home: Option<&str>) -> String {
         return String::new();
     }
 
-    let (prefix, rest) = self::strip_home_or_root(cwd, home);
+    let (prefix, rest) = strip_home_or_root(cwd, home);
     let components = rest
         .split('/')
         .filter(|component| !component.is_empty())
@@ -322,7 +322,7 @@ fn short_cwd_with_home(cwd: &str, home: Option<&str>) -> String {
         } else {
             component.chars().next().map_or_else(String::new, |ch| ch.to_string())
         };
-        self::push_path_segment(&mut out, &segment);
+        push_path_segment(&mut out, &segment);
     }
     out
 }
@@ -347,8 +347,8 @@ fn push_path_segment(out: &mut String, segment: &str) {
 }
 
 fn pad(text: &str, width: usize) -> String {
-    let mut out = self::take_terminal_cells(text, width);
-    let used_width = self::terminal_cell_width(&out);
+    let mut out = take_terminal_cells(text, width);
+    let used_width = terminal_cell_width(&out);
     for _ in used_width..width {
         out.push(' ');
     }
@@ -409,7 +409,7 @@ mod tests {
 
     #[test]
     fn test_sidebar_tabs_when_second_tab_is_active_uses_active_pane_cwd() -> rootcause::Result<()> {
-        let layout = self::layout_snapshot(
+        let layout = layout_snapshot(
             2,
             vec![
                 self::tab_snapshot(
@@ -459,7 +459,7 @@ mod tests {
 
     #[test]
     fn test_sidebar_tabs_when_inactive_tab_has_unseen_tracked_process_pane_uses_unseen_pane() -> rootcause::Result<()> {
-        let layout = self::layout_snapshot(
+        let layout = layout_snapshot(
             1,
             vec![
                 self::tab_snapshot(
@@ -538,14 +538,13 @@ mod tests {
         #[case] expected_path_label: &str,
         #[case] expected_cmd_label: &str,
     ) -> rootcause::Result<()> {
-        let mut older_tracked_process_pane =
-            self::pane_snapshot(4, first_cwd, Some(first_cmd_label), tracked_process_state)?;
+        let mut older_tracked_process_pane = pane_snapshot(4, first_cwd, Some(first_cmd_label), tracked_process_state)?;
         older_tracked_process_pane.focus_seq = 10;
         let mut recent_tracked_process_pane =
-            self::pane_snapshot(3, second_cwd, Some(second_cmd_label), tracked_process_state)?;
+            pane_snapshot(3, second_cwd, Some(second_cmd_label), tracked_process_state)?;
         recent_tracked_process_pane.focus_seq = 20;
 
-        let layout = self::layout_snapshot(
+        let layout = layout_snapshot(
             1,
             vec![
                 self::tab_snapshot(
@@ -584,7 +583,7 @@ mod tests {
     #[test]
     fn test_sidebar_tabs_when_inactive_tab_has_seen_tracked_process_uses_tracked_process_pane_without_dot_state()
     -> rootcause::Result<()> {
-        let layout = self::layout_snapshot(
+        let layout = layout_snapshot(
             1,
             vec![
                 self::tab_snapshot(
@@ -622,7 +621,7 @@ mod tests {
     #[test]
     fn test_sidebar_tabs_when_active_tab_has_unfocused_unseen_tracked_process_uses_tracked_process_pane()
     -> rootcause::Result<()> {
-        let layout = self::layout_snapshot(
+        let layout = layout_snapshot(
             1,
             vec![self::tab_snapshot(
                 1,
@@ -690,7 +689,7 @@ mod tests {
             "/t/👩‍🌾",
         )?;
 
-        let visible = self::strip_ansi(&output.rendered_string()?);
+        let visible = strip_ansi(&output.rendered_string()?);
         assert_that!(visible, starts_with("\u{258e}/t/👩‍🌾"));
         let Some((before_separator, _)) = visible.split_once(SEPARATOR) else {
             return Err(report!("expected tab-bar separator"));
@@ -705,7 +704,7 @@ mod tests {
 
     #[test]
     fn test_queue_when_layout_is_rendered_writes_sidebar_without_flushing() -> rootcause::Result<()> {
-        let layout = self::layout_snapshot(
+        let layout = layout_snapshot(
             1,
             vec![self::tab_snapshot(
                 1,
@@ -734,7 +733,7 @@ mod tests {
 
     #[test]
     fn test_queue_when_seen_tracked_process_is_rendered_shows_label_without_marker() -> rootcause::Result<()> {
-        let layout = self::layout_snapshot(
+        let layout = layout_snapshot(
             1,
             vec![self::tab_snapshot(
                 1,
@@ -752,7 +751,7 @@ mod tests {
 
         queue(&mut output, MuxrConfig::new()?.tab_bar, &layout, 2)?;
 
-        let visible = self::strip_ansi(&output.rendered_string()?);
+        let visible = strip_ansi(&output.rendered_string()?);
         assert_that!(visible, contains_substring("\u{258e}cx"));
         assert_that!(visible, not(contains_substring("\u{2022} cx")));
         Ok(())
@@ -761,7 +760,7 @@ mod tests {
     #[test]
     fn test_queue_when_tracked_process_marker_is_rendered_keeps_labels_flush_and_spaces_marker() -> rootcause::Result<()>
     {
-        let layout = self::layout_snapshot(
+        let layout = layout_snapshot(
             1,
             vec![self::tab_snapshot(
                 1,
@@ -779,7 +778,7 @@ mod tests {
 
         queue(&mut output, MuxrConfig::new()?.tab_bar, &layout, 2)?;
 
-        let visible = self::strip_ansi(&output.rendered_string()?);
+        let visible = strip_ansi(&output.rendered_string()?);
         assert_that!(visible, contains_substring("\u{258e}project"));
         assert_that!(visible, contains_substring("\u{258e}\u{2022} cx"));
         assert_that!(visible, not(contains_substring("\u{258e} project")));
@@ -790,7 +789,7 @@ mod tests {
 
     #[test]
     fn test_queue_when_tab_is_rendered_adds_spacer_row_after_cmd_row() -> rootcause::Result<()> {
-        let layout = self::layout_snapshot(
+        let layout = layout_snapshot(
             1,
             vec![self::tab_snapshot(
                 1,
@@ -808,7 +807,7 @@ mod tests {
 
         queue(&mut output, MuxrConfig::new()?.tab_bar, &layout, 3)?;
 
-        let visible = self::strip_ansi(&output.rendered_string()?);
+        let visible = strip_ansi(&output.rendered_string()?);
         let rows = visible.split(SEPARATOR).collect::<Vec<_>>();
         assert_that!(rows.len(), eq(4));
         assert_that!(rows[0], starts_with("\u{258e}project"));
@@ -829,7 +828,7 @@ mod tests {
         #[case] row: u16,
         #[case] expected: Option<u32>,
     ) -> rootcause::Result<()> {
-        let layout = self::layout_snapshot(
+        let layout = layout_snapshot(
             1,
             vec![
                 self::tab_snapshot(

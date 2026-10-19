@@ -15,6 +15,10 @@ use rootcause::prelude::ResultExt;
 use rootcause::report;
 use strum::EnumIter;
 use strum::IntoEnumIterator;
+use ytil_noxi::buffer;
+use ytil_noxi::notify;
+use ytil_noxi::vim_ui_select;
+use ytil_noxi::visual_selection;
 
 /// Namespaced dictionary of general conversion helpers.
 ///
@@ -46,7 +50,7 @@ pub fn dict() -> Dictionary {
 /// # Notes
 /// Currently supports single-line selections; multiline could be added later.
 fn convert_selection(_: ()) {
-    let Some(selection) = ytil_noxi::visual_selection::get(()) else {
+    let Some(selection) = visual_selection::get(()) else {
         return;
     };
 
@@ -61,7 +65,7 @@ fn convert_selection(_: ()) {
                     // supported at some point.
                     .convert(&selection.lines().to_vec().join("\n"))
                     .inspect_err(|err| {
-                        ytil_noxi::notify::error(format!(
+                        notify::error(format!(
                             "error setting lines of buffer | start={:#?} end={:#?} error={err:#?}",
                             selection.start(),
                             selection.end()
@@ -70,12 +74,12 @@ fn convert_selection(_: ()) {
             else {
                 return;
             };
-            ytil_noxi::buffer::replace_text_and_notify_if_error(&selection, vec![transformed_line]);
+            buffer::replace_text_and_notify_if_error(&selection, vec![transformed_line]);
         }
     };
 
-    if let Err(err) = ytil_noxi::vim_ui_select::open(opts, &[("prompt", "Select conversion ")], callback, None) {
-        ytil_noxi::notify::error(format!("error converting selection | error={err:#?}"));
+    if let Err(err) = vim_ui_select::open(opts, &[("prompt", "Select conversion ")], callback, None) {
+        notify::error(format!("error converting selection | error={err:#?}"));
     }
 }
 

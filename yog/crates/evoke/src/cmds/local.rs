@@ -1,8 +1,12 @@
+use std::env;
+use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
 
 use owo_colors::OwoColorize;
+use ytil_sys::dir;
+use ytil_sys::file;
 
 /// List of binaries that should be copied after building.
 /// NOTE: if a new binary is added this list must be updated!
@@ -37,14 +41,14 @@ const NVIM_LIBS_DEFAULT_PATH: &[&str] = &[".config", "nvim", "lua"];
 pub fn run(args: &mut Vec<String>) -> rootcause::Result<()> {
     let is_debug = drop_element(args, "--debug");
     let bins_path = args.first().cloned().map_or_else(
-        || ytil_sys::dir::build_home_path(BINS_DEFAULT_PATH),
+        || dir::build_home_path(BINS_DEFAULT_PATH),
         |supplied_bins_path| Ok(PathBuf::from(supplied_bins_path)),
     )?;
-    std::fs::create_dir_all(&bins_path)?;
+    fs::create_dir_all(&bins_path)?;
 
     let cargo_target_path = args.get(1).cloned().map_or_else(
         || {
-            std::env::var("CARGO_MANIFEST_DIR").map(|cargo_manifest_dir| {
+            env::var("CARGO_MANIFEST_DIR").map(|cargo_manifest_dir| {
                 let mut x = PathBuf::from(cargo_manifest_dir);
                 remove_last_n_dirs(&mut x, 2);
                 x.join("target")
@@ -53,7 +57,7 @@ pub fn run(args: &mut Vec<String>) -> rootcause::Result<()> {
         |x| Ok(PathBuf::from(x)),
     )?;
     let nvim_libs_path = args.get(2).cloned().map_or_else(
-        || ytil_sys::dir::build_home_path(NVIM_LIBS_DEFAULT_PATH),
+        || dir::build_home_path(NVIM_LIBS_DEFAULT_PATH),
         |supplied_nvim_libs_path| Ok(PathBuf::from(supplied_nvim_libs_path)),
     )?;
 
@@ -123,7 +127,7 @@ where
 /// - [`ytil_sys::file::atomic_cp`] fails to copy.
 /// - The final rename or write cannot be performed.
 fn cp(from: &Path, to: &Path) -> rootcause::Result<()> {
-    ytil_sys::file::atomic_cp(from, to)?;
+    file::atomic_cp(from, to)?;
     println!("{} {} to {}", "Copied".green().bold(), from.display(), to.display());
     Ok(())
 }

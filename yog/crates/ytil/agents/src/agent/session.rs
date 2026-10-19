@@ -1,3 +1,4 @@
+use std::env;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::path::PathBuf;
@@ -5,6 +6,7 @@ use std::str::FromStr;
 
 use jiff::Timestamp;
 use nutype::nutype;
+use rootcause::Report;
 use rootcause::option_ext::OptionExt;
 use rootcause::report;
 
@@ -44,7 +46,7 @@ impl Display for SessionKey {
 }
 
 impl FromStr for SessionKey {
-    type Err = rootcause::Report;
+    type Err = Report;
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         let Some((agent, id)) = value.split_once(':') else {
@@ -110,7 +112,7 @@ impl Session {
             Agent::Claude => Ok(("claude", vec!["--resume".into(), self.id.clone()])),
             Agent::Codex => Ok((
                 "codex",
-                self.build_codex_resume_args(workspace, std::env::var_os("ZELLIJ").is_some()),
+                self.build_codex_resume_args(workspace, env::var_os("ZELLIJ").is_some()),
             )),
             Agent::Cursor => Ok((
                 "cursor-agent",

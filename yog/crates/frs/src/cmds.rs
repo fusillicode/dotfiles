@@ -1,5 +1,6 @@
 use std::ffi::OsString;
 
+use rootcause::Report;
 use rootcause::report;
 use ytil_sys::pico_args::Arguments;
 
@@ -50,7 +51,7 @@ impl Cmd {
 }
 
 impl TryFrom<Arguments> for Cmd {
-    type Error = rootcause::Report;
+    type Error = Report;
 
     fn try_from(mut args: Arguments) -> Result<Self, Self::Error> {
         let Some(command) = args.subcommand()? else {

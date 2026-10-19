@@ -1,3 +1,4 @@
+use rootcause::Report;
 use rootcause::report;
 use ytil_sys::cli::Args;
 
@@ -66,7 +67,7 @@ impl Cmd {
 }
 
 impl TryFrom<Vec<String>> for Cmd {
-    type Error = rootcause::Report;
+    type Error = Report;
 
     fn try_from(args: Vec<String>) -> Result<Self, Self::Error> {
         if args.has_help() {

@@ -8,9 +8,13 @@ use std::path::PathBuf;
 use nvim_oxi::Array;
 use nvim_oxi::Dictionary;
 use nvim_oxi::Object;
+use nvim_oxi::api;
 use nvim_oxi::api::Buffer;
 use serde::Deserialize;
 use strum::IntoEnumIterator;
+use ytil_git::diff::FileDiffStats;
+use ytil_git::repo;
+use ytil_noxi::buffer;
 use ytil_noxi::buffer::BufferExt;
 use ytil_noxi::buffer::CursorPosition;
 
@@ -73,7 +77,7 @@ struct GitLineStats {
 
 impl GitLineStats {
     /// Adds one file's Git statistics to this aggregate.
-    const fn add_file(&mut self, file_stats: &ytil_git::diff::FileDiffStats) {
+    const fn add_file(&mut self, file_stats: &FileDiffStats) {
         self.added = self.added.saturating_add(file_stats.added);
         self.removed = self.removed.saturating_add(file_stats.removed);
     }
@@ -118,7 +122,7 @@ impl GitStats {
     /// Aggregates repository statistics and selects the active buffer's statistics when present.
     fn from_file_stats<I>(file_stats: I, current_buffer_path: Option<&Path>) -> Self
     where
-        I: IntoIterator<Item = ytil_git::diff::FileDiffStats>,
+        I: IntoIterator<Item = FileDiffStats>,
     {
         let mut stats = Self::default();
         for file_stats in file_stats {
@@ -268,14 +272,14 @@ fn invalidate_git_stats(_: ()) {
 
 /// Retrieves Neovim's current working directory for Git discovery without a named buffer.
 fn get_current_working_directory() -> Option<PathBuf> {
-    nvim_oxi::api::call_function::<_, String>("getcwd", Array::new())
+    api::call_function::<_, String>("getcwd", Array::new())
         .ok()
         .map(PathBuf::from)
 }
 
 /// Draws the status line with diagnostic and Git change information.
 fn draw(diagnostics: Vec<Diagnostic>) -> String {
-    let current_buffer = nvim_oxi::api::get_current_buf();
+    let current_buffer = api::get_current_buf();
     let current_buffer_nr = current_buffer.handle();
 
     // Return `%#Normal#` instead of empty string in case of terminal buffers
@@ -295,7 +299,7 @@ fn draw(diagnostics: Vec<Diagnostic>) -> String {
             return path.clone();
         }
         drop(cached);
-        let path = ytil_noxi::buffer::get_relative_path_to_cwd(&current_buffer).map(|x| x.display().to_string());
+        let path = buffer::get_relative_path_to_cwd(&current_buffer).map(|x| x.display().to_string());
         *cache.borrow_mut() = Some((current_buffer_nr, path.clone()));
         path
     });
@@ -322,7 +326,7 @@ fn draw(diagnostics: Vec<Diagnostic>) -> String {
 
 /// Retrieves Git statistics for the active buffer, or the current working directory when unnamed.
 fn get_git_stats(current_buffer: &Buffer, current_buffer_nr: i32) -> GitStats {
-    let current_buffer_path = ytil_noxi::buffer::get_absolute_path(Some(current_buffer));
+    let current_buffer_path = buffer::get_absolute_path(Some(current_buffer));
     let Some(discovery_path) = current_buffer_path.clone().or_else(get_current_working_directory) else {
         return GitStats::default();
     };
@@ -338,10 +342,10 @@ fn get_git_stats(current_buffer: &Buffer, current_buffer_nr: i32) -> GitStats {
         return cached_stats;
     }
 
-    let Ok(repo) = ytil_git::repo::discover(&discovery_path) else {
+    let Ok(repo) = repo::discover(&discovery_path) else {
         return GitStats::default();
     };
-    let repo_root = ytil_git::repo::get_root(&repo);
+    let repo_root = repo::get_root(&repo);
     let Ok(relative_buffer_path) = current_buffer_path
         .as_deref()
         .map(|path| path.strip_prefix(&repo_root).map(Path::to_path_buf))

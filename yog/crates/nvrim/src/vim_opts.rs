@@ -9,11 +9,13 @@ use std::fmt::Debug;
 use std::fmt::Write;
 
 use nvim_oxi::Dictionary;
+use nvim_oxi::api;
 use nvim_oxi::api::opts::OptionOpts;
 use nvim_oxi::api::opts::OptionOptsBuilder;
 use nvim_oxi::api::opts::OptionScope;
 use nvim_oxi::conversion::FromObject;
 use nvim_oxi::conversion::ToObject;
+use ytil_noxi::notify;
 
 /// [`Dictionary`] of `vim.opts` helpers.
 pub fn dict() -> Dictionary {
@@ -26,8 +28,8 @@ pub fn dict() -> Dictionary {
 ///
 /// Errors are notified to Nvim via [`ytil_noxi::notify::error`].
 pub fn set<Opt: ToObject + Debug + Copy>(name: &str, value: Opt, opts: &OptionOpts) {
-    if let Err(err) = nvim_oxi::api::set_option_value(name, value, opts) {
-        ytil_noxi::notify::error(format!(
+    if let Err(err) = api::set_option_value(name, value, opts) {
+        notify::error(format!(
             "error setting option | name={name:?} value={value:#?} opts={opts:#?} error={err:#?}"
         ));
     }
@@ -37,10 +39,10 @@ pub fn set<Opt: ToObject + Debug + Copy>(name: &str, value: Opt, opts: &OptionOp
 ///
 /// Errors are notified to Nvim via [`ytil_noxi::notify::error`].
 pub fn get<Opt: FromObject + Debug>(name: &str, opts: &OptionOpts) -> Option<Opt> {
-    match nvim_oxi::api::get_option_value(name, opts) {
+    match api::get_option_value(name, opts) {
         Ok(value) => Some(value),
         Err(err) => {
-            ytil_noxi::notify::error(format!(
+            notify::error(format!(
                 "error getting option | name={name:?} opts={opts:#?} error={err:#?}"
             ));
             None
@@ -55,8 +57,8 @@ pub fn get<Opt: FromObject + Debug>(name: &str, opts: &OptionOpts) -> Option<Opt
 ///
 /// Errors are notified to Nvim via `ytil_noxi::notify::error`.
 pub fn append(name: &str, value: &str, opts: &OptionOpts) {
-    let Ok(mut cur_value) = nvim_oxi::api::get_option_value::<String>(name, opts).inspect_err(|err| {
-        ytil_noxi::notify::error(format!(
+    let Ok(mut cur_value) = api::get_option_value::<String>(name, opts).inspect_err(|err| {
+        notify::error(format!(
             "error getting option current value | name={name:?} opts={opts:#?} value_to_append={value:#?} error={err:#?}"
         ));
     }) else {
@@ -65,7 +67,7 @@ pub fn append(name: &str, value: &str, opts: &OptionOpts) {
     // This shenanigan with `comma` and `write!` is to avoid additional allocations
     let comma = if cur_value.is_empty() { "" } else { "," };
     if let Err(err) = write!(cur_value, "{comma}{value}") {
-        ytil_noxi::notify::error(format!(
+        notify::error(format!(
             "error appending option value | name={name:?} cur_value={cur_value} append_value={value} opts={opts:#?} error={err:#?}"
         ));
     }

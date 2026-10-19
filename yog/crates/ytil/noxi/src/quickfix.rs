@@ -3,6 +3,7 @@
 use std::fmt::Debug;
 
 use nvim_oxi::Array;
+use nvim_oxi::api;
 use nvim_oxi::api::opts::CmdOpts;
 use nvim_oxi::api::types::CmdInfosBuilder;
 use rootcause::prelude::ResultExt;
@@ -26,9 +27,9 @@ pub fn open<'a>(entries: impl IntoIterator<Item = (&'a str, i64)> + Debug) -> ro
         return Ok(());
     }
 
-    nvim_oxi::api::call_function::<_, i64>("setqflist", (Array::from_iter(qflist),))
+    api::call_function::<_, i64>("setqflist", (Array::from_iter(qflist),))
         .context("error executing setqflist function")?;
-    nvim_oxi::api::cmd(&CmdInfosBuilder::default().cmd("copen").build(), &CmdOpts::default())
+    api::cmd(&CmdInfosBuilder::default().cmd("copen").build(), &CmdOpts::default())
         .context("error executing copen cmd")?;
 
     Ok(())

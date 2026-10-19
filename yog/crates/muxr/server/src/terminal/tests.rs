@@ -7,7 +7,7 @@ use muxr_core::RenderCursorShape;
 use rootcause::report;
 use test_that::prelude::*;
 
-use super::*;
+use crate::terminal::*;
 
 mod scrollback;
 
@@ -36,25 +36,25 @@ fn test_terminal_state_process_when_terminal_report_requested_returns_reply(
     #[case] bytes: &[u8],
     #[case] expected: &[u8],
 ) -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&terminal_size()?);
+    let mut terminal = terminal_state(&terminal_size()?);
 
-    self::assert_replies_eq(&terminal.process(bytes).into_replies(), &[expected.to_vec()]);
+    assert_replies_eq(&terminal.process(bytes).into_replies(), &[expected.to_vec()]);
     Ok(())
 }
 
 #[test]
 fn test_terminal_state_process_when_cursor_report_requested_returns_current_cursor() -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&terminal_size()?);
+    let mut terminal = terminal_state(&terminal_size()?);
 
-    self::assert_replies_eq(&terminal.process(b"\x1b[2;3H").into_replies(), &[]);
+    assert_replies_eq(&terminal.process(b"\x1b[2;3H").into_replies(), &[]);
 
-    self::assert_replies_eq(&terminal.process(b"\x1b[6n").into_replies(), &[b"\x1b[2;3R".to_vec()]);
+    assert_replies_eq(&terminal.process(b"\x1b[6n").into_replies(), &[b"\x1b[2;3R".to_vec()]);
     Ok(())
 }
 
 #[test]
 fn test_terminal_state_process_when_only_cursor_shape_changes_marks_screen_dirty() -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&terminal_size()?);
+    let mut terminal = terminal_state(&terminal_size()?);
 
     let outcome = terminal.process(b"\x1b[6 q");
 
@@ -68,7 +68,7 @@ fn test_terminal_state_process_when_only_cursor_shape_changes_marks_screen_dirty
 fn test_terminal_state_process_when_only_render_metadata_changes_marks_render_dirty(
     #[case] bytes: &[u8],
 ) -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&terminal_size()?);
+    let mut terminal = terminal_state(&terminal_size()?);
 
     let outcome = terminal.process(bytes);
 
@@ -78,7 +78,7 @@ fn test_terminal_state_process_when_only_render_metadata_changes_marks_render_di
 
 #[test]
 fn test_terminal_state_process_when_utf8_contains_c1_byte_preserves_text_and_screen_mode() -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&terminal_size()?);
+    let mut terminal = terminal_state(&terminal_size()?);
 
     let _outcome = terminal.process("ś?47h".as_bytes());
 
@@ -92,7 +92,7 @@ fn test_terminal_state_process_when_utf8_contains_c1_byte_preserves_text_and_scr
 
 #[test]
 fn test_terminal_state_process_when_utf8_c1_byte_is_split_preserves_text_and_screen_mode() -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&terminal_size()?);
+    let mut terminal = terminal_state(&terminal_size()?);
 
     let _first = terminal.process(b"\xc5");
     let _second = terminal.process(b"\x9b?47h");
@@ -107,11 +107,11 @@ fn test_terminal_state_process_when_utf8_c1_byte_is_split_preserves_text_and_scr
 
 #[test]
 fn test_terminal_state_process_when_report_sequence_is_split_returns_one_reply() -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&terminal_size()?);
+    let mut terminal = terminal_state(&terminal_size()?);
 
-    self::assert_replies_eq(&terminal.process(b"\x1b[").into_replies(), &[]);
+    assert_replies_eq(&terminal.process(b"\x1b[").into_replies(), &[]);
 
-    self::assert_replies_eq(&terminal.process(b"6n").into_replies(), &[b"\x1b[1;1R".to_vec()]);
+    assert_replies_eq(&terminal.process(b"6n").into_replies(), &[b"\x1b[1;1R".to_vec()]);
     Ok(())
 }
 
@@ -119,9 +119,9 @@ fn test_terminal_state_process_when_report_sequence_is_split_returns_one_reply()
 #[case::osc_zero(b"\x1b]0;cargo test\x07")]
 #[case::osc_two(b"\x1b]2;cargo test\x07")]
 fn test_terminal_state_title_when_window_title_is_set_returns_title(#[case] bytes: &[u8]) -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&terminal_size()?);
+    let mut terminal = terminal_state(&terminal_size()?);
 
-    self::assert_replies_eq(&terminal.process(bytes).into_replies(), &[]);
+    assert_replies_eq(&terminal.process(bytes).into_replies(), &[]);
 
     test_that::assert_that!(terminal.title(), eq(Some("cargo test".to_owned())));
     Ok(())
@@ -129,9 +129,9 @@ fn test_terminal_state_title_when_window_title_is_set_returns_title(#[case] byte
 
 #[test]
 fn test_terminal_state_take_title_changes_when_window_title_changes_returns_once() -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&terminal_size()?);
+    let mut terminal = terminal_state(&terminal_size()?);
 
-    self::assert_replies_eq(&terminal.process(b"\x1b]2;cargo test\x07").into_replies(), &[]);
+    assert_replies_eq(&terminal.process(b"\x1b]2;cargo test\x07").into_replies(), &[]);
 
     test_that::assert_that!(terminal.take_title_changes(), eq(vec![Some("cargo test".to_owned())]));
     test_that::assert_that!(terminal.take_title_changes(), eq(Vec::<Option<String>>::new()));
@@ -140,11 +140,11 @@ fn test_terminal_state_take_title_changes_when_window_title_changes_returns_once
 
 #[test]
 fn test_terminal_state_take_title_changes_when_window_title_repeats_returns_empty() -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&terminal_size()?);
+    let mut terminal = terminal_state(&terminal_size()?);
 
-    self::assert_replies_eq(&terminal.process(b"\x1b]2;cargo test\x07").into_replies(), &[]);
+    assert_replies_eq(&terminal.process(b"\x1b]2;cargo test\x07").into_replies(), &[]);
     test_that::assert_that!(terminal.take_title_changes(), eq(vec![Some("cargo test".to_owned())]));
-    self::assert_replies_eq(&terminal.process(b"\x1b]2;cargo test\x07").into_replies(), &[]);
+    assert_replies_eq(&terminal.process(b"\x1b]2;cargo test\x07").into_replies(), &[]);
 
     test_that::assert_that!(terminal.take_title_changes(), eq(Vec::<Option<String>>::new()));
     Ok(())
@@ -152,9 +152,9 @@ fn test_terminal_state_take_title_changes_when_window_title_repeats_returns_empt
 
 #[test]
 fn test_terminal_state_take_title_changes_when_titles_change_in_one_chunk_preserves_order() -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&terminal_size()?);
+    let mut terminal = terminal_state(&terminal_size()?);
 
-    self::assert_replies_eq(&terminal.process(b"\x1b]2;gst\x07\x1b]2;~\x07").into_replies(), &[]);
+    assert_replies_eq(&terminal.process(b"\x1b]2;gst\x07\x1b]2;~\x07").into_replies(), &[]);
 
     test_that::assert_that!(
         terminal.take_title_changes(),
@@ -165,10 +165,10 @@ fn test_terminal_state_take_title_changes_when_titles_change_in_one_chunk_preser
 
 #[test]
 fn test_terminal_state_title_when_window_title_sequence_is_split_returns_title() -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&terminal_size()?);
+    let mut terminal = terminal_state(&terminal_size()?);
 
-    self::assert_replies_eq(&terminal.process(b"\x1b]2;").into_replies(), &[]);
-    self::assert_replies_eq(&terminal.process(b"gst\x07").into_replies(), &[]);
+    assert_replies_eq(&terminal.process(b"\x1b]2;").into_replies(), &[]);
+    assert_replies_eq(&terminal.process(b"gst\x07").into_replies(), &[]);
 
     test_that::assert_that!(terminal.title(), eq(Some("gst".to_owned())));
     Ok(())
@@ -180,7 +180,7 @@ fn test_terminal_state_title_when_window_title_sequence_is_split_returns_title()
 fn test_terminal_state_title_when_split_window_title_is_canceled_remains_unchanged(
     #[case] cancel: u8,
 ) -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&terminal_size()?);
+    let mut terminal = terminal_state(&terminal_size()?);
     let _ = terminal.process(b"\x1b]2;before\x07");
     let _changes = terminal.take_title_changes();
 
@@ -194,7 +194,7 @@ fn test_terminal_state_title_when_split_window_title_is_canceled_remains_unchang
 
 #[test]
 fn test_terminal_state_title_when_window_title_is_empty_returns_none() -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&terminal_size()?);
+    let mut terminal = terminal_state(&terminal_size()?);
 
     let _ = terminal.process(b"\x1b]2;cargo test\x07");
     let _ = terminal.process(b"\x1b]2;  \x07");
@@ -210,26 +210,26 @@ fn test_terminal_state_title_when_window_title_is_empty_returns_none() -> rootca
 fn test_terminal_state_process_when_only_title_changes_keeps_screen_clean(
     #[case] bytes: &[u8],
 ) -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&terminal_size()?);
+    let mut terminal = terminal_state(&terminal_size()?);
 
     let outcome = terminal.process(bytes);
 
     test_that::assert_that!(outcome.screen_dmg(), eq(TerminalScreenDmg::Clean));
-    self::assert_replies_eq(&outcome.into_replies(), &[]);
+    assert_replies_eq(&outcome.into_replies(), &[]);
     Ok(())
 }
 
 #[test]
 fn test_terminal_state_process_when_title_sequence_is_split_keeps_screen_clean() -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&terminal_size()?);
+    let mut terminal = terminal_state(&terminal_size()?);
 
     let first = terminal.process(b"\x1b]2;");
     let second = terminal.process(b"gst\x07");
 
     test_that::assert_that!(first.screen_dmg(), eq(TerminalScreenDmg::Clean));
-    self::assert_replies_eq(&first.into_replies(), &[]);
+    assert_replies_eq(&first.into_replies(), &[]);
     test_that::assert_that!(second.screen_dmg(), eq(TerminalScreenDmg::Clean));
-    self::assert_replies_eq(&second.into_replies(), &[]);
+    assert_replies_eq(&second.into_replies(), &[]);
     test_that::assert_that!(terminal.title(), eq(Some("gst".to_owned())));
     Ok(())
 }
@@ -241,7 +241,7 @@ fn test_terminal_state_process_when_title_sequence_is_split_keeps_screen_clean()
 fn test_terminal_state_process_when_output_is_not_title_only_marks_screen_dirty(
     #[case] bytes: &[u8],
 ) -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&terminal_size()?);
+    let mut terminal = terminal_state(&terminal_size()?);
 
     test_that::assert_that!(terminal.process(bytes).screen_dmg(), eq(TerminalScreenDmg::Dirty));
     Ok(())
@@ -249,7 +249,7 @@ fn test_terminal_state_process_when_output_is_not_title_only_marks_screen_dirty(
 
 #[test]
 fn test_terminal_state_bracketed_paste_when_mode_is_enabled_returns_true() -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&terminal_size()?);
+    let mut terminal = terminal_state(&terminal_size()?);
 
     let _ = terminal.process(b"\x1b[?2004h");
 
@@ -259,7 +259,7 @@ fn test_terminal_state_bracketed_paste_when_mode_is_enabled_returns_true() -> ro
 
 #[test]
 fn test_terminal_state_mouse_protocol_when_sgr_button_motion_is_enabled_returns_protocol() -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&terminal_size()?);
+    let mut terminal = terminal_state(&terminal_size()?);
 
     let _ = terminal.process(b"\x1b[?1002h\x1b[?1006h");
 
@@ -290,7 +290,7 @@ fn test_terminal_state_application_mode_when_alternate_screen_changes_returns_st
     #[case] bytes: &[u8],
     #[case] expected: TerminalScreenMode,
 ) -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&terminal_size()?);
+    let mut terminal = terminal_state(&terminal_size()?);
 
     let _ = terminal.process(bytes);
 
@@ -310,7 +310,7 @@ fn test_terminal_state_application_mode_when_alternate_screen_changes_returns_st
 #[test]
 fn test_terminal_state_application_mode_when_legacy_alternate_screen_sequence_is_split_returns_state()
 -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&terminal_size()?);
+    let mut terminal = terminal_state(&terminal_size()?);
 
     let _ = terminal.process(b"\x1b[?4");
     test_that::assert_that!(terminal.application_mode().screen_mode, eq(TerminalScreenMode::Normal));
@@ -332,7 +332,7 @@ fn test_terminal_state_application_mode_when_legacy_alternate_screen_sequence_is
 fn test_terminal_state_application_mode_when_csi_control_is_embedded_keeps_parsing_legacy_alternate_screen(
     #[case] control: &[u8],
 ) -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&terminal_size()?);
+    let mut terminal = terminal_state(&terminal_size()?);
     let mut sequence = b"\x1b[?4".to_vec();
     sequence.extend_from_slice(control);
     sequence.extend_from_slice(b"7h");
@@ -349,7 +349,7 @@ fn test_terminal_state_application_mode_when_csi_control_is_embedded_keeps_parsi
 #[test]
 fn test_terminal_state_application_mode_when_csi_control_precedes_chunk_boundary_keeps_parsing_legacy_alternate_screen()
 -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&terminal_size()?);
+    let mut terminal = terminal_state(&terminal_size()?);
 
     let _first = terminal.process(b"\x1b[?4\x07");
     let _second = terminal.process(b"7h");
@@ -364,7 +364,7 @@ fn test_terminal_state_application_mode_when_csi_control_precedes_chunk_boundary
 #[test]
 fn test_terminal_state_application_mode_when_legacy_alternate_screen_is_grouped_returns_state() -> rootcause::Result<()>
 {
-    let mut terminal = self::terminal_state(&terminal_size()?);
+    let mut terminal = terminal_state(&terminal_size()?);
 
     let _enabled = terminal.process(b"\x1b[?1;47h");
     test_that::assert_that!(
@@ -388,7 +388,7 @@ fn test_terminal_state_application_mode_when_legacy_alternate_screen_is_grouped_
 #[test]
 fn test_terminal_state_process_when_legacy_alternate_screen_wraps_content_keeps_grids_separate() -> rootcause::Result<()>
 {
-    let mut terminal = self::terminal_state(&TerminalSize::new(16, 2)?);
+    let mut terminal = terminal_state(&TerminalSize::new(16, 2)?);
 
     let _ = terminal.process(b"normal\x1b[?47halt");
 
@@ -416,7 +416,7 @@ fn test_terminal_state_process_when_legacy_alternate_screen_wraps_content_keeps_
 
 #[test]
 fn test_terminal_state_process_when_legacy_alternate_screen_is_reentered_preserves_contents() -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&TerminalSize::new(16, 2)?);
+    let mut terminal = terminal_state(&TerminalSize::new(16, 2)?);
 
     let _ = terminal.process(b"normal\x1b[?47halt\x1b[?47l\x1b[?47h");
 
@@ -434,7 +434,7 @@ fn test_terminal_state_process_when_legacy_alternate_screen_is_reentered_preserv
 #[test]
 fn test_terminal_state_process_when_reset_precedes_legacy_alternate_reentry_does_not_restore_stale_contents()
 -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&TerminalSize::new(16, 2)?);
+    let mut terminal = terminal_state(&TerminalSize::new(16, 2)?);
     let _setup = terminal.process(b"normal\x1b[?47hlegacy\x1b[?47l");
 
     let _reset_and_reenter = terminal.process(b"\x1bc\x1b[?47h");
@@ -449,7 +449,7 @@ fn test_terminal_state_process_when_reset_precedes_legacy_alternate_reentry_does
 #[test]
 fn test_terminal_state_process_when_native_alternate_cycle_is_buffered_does_not_restore_older_legacy_contents()
 -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&TerminalSize::new(16, 2)?);
+    let mut terminal = terminal_state(&TerminalSize::new(16, 2)?);
     let _legacy = terminal.process(b"normal\x1b[?47hlegacy\x1b[?47l");
 
     let _native_cycle = terminal.process(b"\x1b[?1049hnative\x1b[?1049l");
@@ -464,7 +464,7 @@ fn test_terminal_state_process_when_native_alternate_cycle_is_buffered_does_not_
 
 #[test]
 fn test_terminal_state_process_when_c1_legacy_alternate_screen_is_used_keeps_grids_separate() -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&TerminalSize::new(16, 2)?);
+    let mut terminal = terminal_state(&TerminalSize::new(16, 2)?);
 
     let _alternate = terminal.process(b"normal\x9b?47halt");
 
@@ -482,7 +482,7 @@ fn test_terminal_state_process_when_c1_legacy_alternate_screen_is_used_keeps_gri
 #[test]
 fn test_terminal_state_process_when_c1_native_alternate_cycle_is_buffered_does_not_restore_older_legacy_contents()
 -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&TerminalSize::new(16, 2)?);
+    let mut terminal = terminal_state(&TerminalSize::new(16, 2)?);
     let _legacy = terminal.process(b"normal\x1b[?47hlegacy\x1b[?47l");
 
     let _native_cycle = terminal.process(b"\x9b?1049hnative\x9b?1049l");
@@ -502,7 +502,7 @@ fn test_terminal_state_application_mode_when_application_cursor_changes_returns_
     #[case] bytes: &[u8],
     #[case] expected: TerminalCursorKeyMode,
 ) -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&terminal_size()?);
+    let mut terminal = terminal_state(&terminal_size()?);
 
     let _ = terminal.process(bytes);
 
@@ -529,7 +529,7 @@ fn test_terminal_state_application_mode_when_focus_reporting_changes_returns_sta
     #[case] bytes: &[u8],
     #[case] expected: TerminalFocusReporting,
 ) -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&terminal_size()?);
+    let mut terminal = terminal_state(&terminal_size()?);
 
     let _ = terminal.process(bytes);
 
@@ -564,7 +564,7 @@ fn test_terminal_state_application_mode_when_keyboard_protocol_changes_returns_s
     #[case] bytes: &[u8],
     #[case] expected: TerminalKeyboardProtocol,
 ) -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&terminal_size()?);
+    let mut terminal = terminal_state(&terminal_size()?);
 
     let _ = terminal.process(bytes);
 
@@ -574,20 +574,20 @@ fn test_terminal_state_application_mode_when_keyboard_protocol_changes_returns_s
 
 #[test]
 fn test_terminal_state_process_when_keyboard_protocol_is_queried_returns_status() -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&terminal_size()?);
+    let mut terminal = terminal_state(&terminal_size()?);
 
-    self::assert_replies_eq(&terminal.process(b"\x1b[?u").into_replies(), &[b"\x1b[?0u".to_vec()]);
+    assert_replies_eq(&terminal.process(b"\x1b[?u").into_replies(), &[b"\x1b[?0u".to_vec()]);
     let _ = terminal.process(b"\x1b[>1u");
-    self::assert_replies_eq(&terminal.process(b"\x1b[?u").into_replies(), &[b"\x1b[?1u".to_vec()]);
+    assert_replies_eq(&terminal.process(b"\x1b[?u").into_replies(), &[b"\x1b[?1u".to_vec()]);
     let _ = terminal.process(b"\x1b[<u");
-    self::assert_replies_eq(&terminal.process(b"\x1b[?u").into_replies(), &[b"\x1b[?0u".to_vec()]);
+    assert_replies_eq(&terminal.process(b"\x1b[?u").into_replies(), &[b"\x1b[?0u".to_vec()]);
     Ok(())
 }
 
 #[test]
 fn test_terminal_state_application_mode_when_terminal_reset_sequence_is_split_clears_focus_reporting()
 -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&terminal_size()?);
+    let mut terminal = terminal_state(&terminal_size()?);
 
     let _ = terminal.process(b"\x1b[?1004h\x1b");
     let _ = terminal.process(b"c");
@@ -601,7 +601,7 @@ fn test_terminal_state_application_mode_when_terminal_reset_sequence_is_split_cl
 
 #[test]
 fn test_terminal_state_application_mode_when_mouse_protocol_is_enabled_returns_protocol() -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&terminal_size()?);
+    let mut terminal = terminal_state(&terminal_size()?);
 
     let _ = terminal.process(b"\x1b[?1002h\x1b[?1006h");
 
@@ -627,17 +627,17 @@ fn test_terminal_state_application_mode_when_mouse_protocol_is_enabled_returns_p
 fn test_terminal_state_process_when_report_is_unsupported_returns_no_reply(
     #[case] bytes: &[u8],
 ) -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&terminal_size()?);
+    let mut terminal = terminal_state(&terminal_size()?);
 
-    self::assert_replies_eq(&terminal.process(bytes).into_replies(), &[]);
+    assert_replies_eq(&terminal.process(bytes).into_replies(), &[]);
     Ok(())
 }
 
 #[test]
 fn test_terminal_state_process_when_multi_param_status_report_requested_returns_rio_reply() -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&terminal_size()?);
+    let mut terminal = terminal_state(&terminal_size()?);
 
-    self::assert_replies_eq(&terminal.process(b"\x1b[5;6n").into_replies(), &[b"\x1b[0n".to_vec()]);
+    assert_replies_eq(&terminal.process(b"\x1b[5;6n").into_replies(), &[b"\x1b[0n".to_vec()]);
     Ok(())
 }
 

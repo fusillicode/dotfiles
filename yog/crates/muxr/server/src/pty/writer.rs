@@ -14,7 +14,10 @@ use rootcause::markers::Cloneable;
 use rootcause::markers::Dynamic;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
+use thread::JoinHandle;
+use tracing::dispatcher;
 
+use crate::session::tracing::pty;
 use crate::terminal::TerminalFocusEvent;
 use crate::terminal::TerminalFocusReporting;
 
@@ -39,7 +42,7 @@ impl PtyWriter {
         write_context: &'static str,
         flush_context: &'static str,
     ) -> rootcause::Result<()> {
-        self::queue_pty_write(self, bytes, write_context, flush_context)
+        queue_pty_write(self, bytes, write_context, flush_context)
     }
 
     pub fn write_focus_event(
@@ -73,7 +76,7 @@ impl PtyWriter {
         for reply in replies {
             bytes.extend_from_slice(reply);
         }
-        self::queue_pty_write(
+        queue_pty_write(
             self,
             &bytes,
             "failed to write muxr terminal reply to shell pty",
@@ -84,7 +87,7 @@ impl PtyWriter {
 
     pub fn shutdown(&self) -> rootcause::Result<()> {
         self.state.close();
-        match self::try_send_pty_write_request(&self.sender, PtyWriteRequest::Shutdown)? {
+        match try_send_pty_write_request(&self.sender, PtyWriteRequest::Shutdown)? {
             PtyWriteSendOutcome::Sent | PtyWriteSendOutcome::Full(PtyWriteRequest::Shutdown) => Ok(()),
             PtyWriteSendOutcome::Disconnected(PtyWriteRequest::Shutdown) => {
                 Err(self.state.stopped_report("reason=pty writer channel disconnected"))
@@ -112,7 +115,7 @@ impl PtyWriter {
                     continue;
                 }
             }
-            match self::try_send_pty_write_request(&self.sender, PtyWriteRequest::Write(write))? {
+            match try_send_pty_write_request(&self.sender, PtyWriteRequest::Write(write))? {
                 PtyWriteSendOutcome::Sent => {
                     drop(queue_guard);
                     return Ok(());
@@ -138,7 +141,7 @@ impl PtyWriter {
     }
 }
 
-pub fn spawn(mut writer: Box<dyn Write + Send>) -> rootcause::Result<(PtyWriter, thread::JoinHandle<()>)> {
+pub fn spawn(mut writer: Box<dyn Write + Send>) -> rootcause::Result<(PtyWriter, JoinHandle<()>)> {
     let (sender, receiver) = kanal::bounded(PTY_WRITE_QUEUE_LIMIT);
     let state = Arc::new(PtyWriteState::new());
     let queue = PtyWriter {
@@ -147,13 +150,13 @@ pub fn spawn(mut writer: Box<dyn Write + Send>) -> rootcause::Result<(PtyWriter,
     };
     // Raw OS threads do not inherit thread-local tracing state, so carry both the dispatcher and span explicitly.
     let span = tracing::Span::current();
-    let dispatch = tracing::dispatcher::get_default(Clone::clone);
+    let dispatch = dispatcher::get_default(Clone::clone);
     let writer_handle = thread::Builder::new()
         .name("muxr-pty-writer".to_owned())
         .spawn(move || {
-            tracing::dispatcher::with_default(&dispatch, || {
+            dispatcher::with_default(&dispatch, || {
                 let _guard = span.enter();
-                self::run_writer_loop(&mut *writer, &receiver, state.as_ref());
+                run_writer_loop(&mut *writer, &receiver, state.as_ref());
             });
         })
         .context("failed to spawn muxr pty writer thread")?;
@@ -277,10 +280,10 @@ impl PtyWriteState {
 
     const fn release_reserved_write_bytes(queue: &mut PtyWriteQueueState, write_len: usize) {
         queue.queued_bytes = queue.queued_bytes.saturating_sub(write_len);
-        self::advance_queue_progress(queue);
+        advance_queue_progress(queue);
     }
 
-    fn stopped_report(&self, reason: &'static str) -> rootcause::Report {
+    fn stopped_report(&self, reason: &'static str) -> Report {
         let mut report = report!("muxr pty writer stopped").attach(reason);
         let queue = self.queue.lock();
         if let PtyWriterStatus::Failed(error) = &queue.status {
@@ -302,7 +305,7 @@ impl PtyWriteState {
     }
 
     fn notify_queue_progress(&self) {
-        self::advance_queue_progress(&mut self.queue.lock());
+        advance_queue_progress(&mut self.queue.lock());
         self.queue_progress.notify_all();
     }
 }
@@ -384,13 +387,13 @@ fn run_writer_loop(writer: &mut dyn Write, receiver: &Receiver<PtyWriteRequest>,
             PtyWriteRequest::Write(write) => {
                 let mut batch_bytes = write.bytes.len();
                 batch.push(write);
-                let drain_outcome = self::drain_pending_writes(receiver, &mut batch, &mut batch_bytes);
-                let write_result = self::write_pty_batch(writer, &batch);
+                let drain_outcome = drain_pending_writes(receiver, &mut batch, &mut batch_bytes);
+                let write_result = write_pty_batch(writer, &batch);
                 state.release_queued_bytes(batch_bytes);
                 if let Err(error) = write_result {
                     let error = error.into_cloneable();
                     state.record_error(error.clone());
-                    crate::session::tracing::pty::writer_stopped_after_error("write_batch", &error);
+                    pty::writer_stopped_after_error("write_batch", &error);
                     break;
                 }
                 batch.clear();
@@ -456,10 +459,10 @@ fn try_send_pty_write_request(
     let mut pending = Some(request);
     match sender.try_send_option(&mut pending) {
         Ok(true) => Ok(PtyWriteSendOutcome::Sent),
-        Ok(false) => Ok(PtyWriteSendOutcome::Full(self::pending_pty_write_request(pending)?)),
-        Err(SendError::Closed | SendError::ReceiveClosed) => Ok(PtyWriteSendOutcome::Disconnected(
-            self::pending_pty_write_request(pending)?,
-        )),
+        Ok(false) => Ok(PtyWriteSendOutcome::Full(pending_pty_write_request(pending)?)),
+        Err(SendError::Closed | SendError::ReceiveClosed) => {
+            Ok(PtyWriteSendOutcome::Disconnected(pending_pty_write_request(pending)?))
+        }
     }
 }
 
@@ -480,11 +483,11 @@ mod tests {
 
     #[test]
     fn test_write_terminal_replies_when_replies_exist_batches_in_order() -> rootcause::Result<()> {
-        let (queue, receiver) = self::queued_pty_writer();
+        let (queue, receiver) = queued_pty_writer();
         let written = Arc::new(Mutex::new(Vec::new()));
 
         queue.write_terminal_replies(&[b"one".to_vec(), b"two".to_vec()])?;
-        self::drain_queued_writes(&queue, &receiver, self::capturing_pty_writer(Arc::clone(&written)))?;
+        drain_queued_writes(&queue, &receiver, capturing_pty_writer(Arc::clone(&written)))?;
 
         assert_that!(self::captured_pty_bytes(written.as_ref()), eq(b"onetwo".to_vec()));
         Ok(())
@@ -492,7 +495,7 @@ mod tests {
 
     #[test]
     fn test_run_writer_loop_when_multiple_writes_are_pending_batches_in_order() -> rootcause::Result<()> {
-        let (queue, receiver) = self::queued_pty_writer();
+        let (queue, receiver) = queued_pty_writer();
         let written = Arc::new(Mutex::new(Vec::new()));
         let flushes = Arc::new(Mutex::new(0_usize));
 
@@ -506,7 +509,7 @@ mod tests {
             "failed to write test two",
             "failed to flush test two",
         ))?;
-        self::drain_queued_writes(
+        drain_queued_writes(
             &queue,
             &receiver,
             Box::new(FlushCountingWriter {
@@ -522,21 +525,22 @@ mod tests {
 
     #[test]
     fn test_pty_writer_when_limit_reached_applies_backpressure() -> rootcause::Result<()> {
-        let (queue, _receiver) = self::queued_pty_writer_with_limit(1);
+        let (queue, _receiver) = queued_pty_writer_with_limit(1);
         queue.enqueue(PtyWrite::new(
             b"one".to_vec(),
             "failed to write first bounded test payload",
             "failed to flush first bounded test payload",
         ))?;
 
-        let PtyWriteSendOutcome::Full(PtyWriteRequest::Write(returned_write)) = self::try_send_pty_write_request(
-            &queue.sender,
-            PtyWriteRequest::Write(PtyWrite::new(
-                b"two".to_vec(),
-                "failed to write second bounded test payload",
-                "failed to flush second bounded test payload",
-            )),
-        )?
+        let PtyWriteSendOutcome::Full(PtyWriteRequest::Write(returned_write)) =
+            crate::pty::writer::tests::try_send_pty_write_request(
+                &queue.sender,
+                PtyWriteRequest::Write(PtyWrite::new(
+                    b"two".to_vec(),
+                    "failed to write second bounded test payload",
+                    "failed to flush second bounded test payload",
+                )),
+            )?
         else {
             return Err(report!("expected muxr pty writer backpressure to return pending write"));
         };
@@ -547,7 +551,7 @@ mod tests {
 
     #[test]
     fn test_pty_writer_when_receiver_is_dropped_releases_reserved_bytes() -> rootcause::Result<()> {
-        let (queue, receiver) = self::queued_pty_writer();
+        let (queue, receiver) = queued_pty_writer();
         drop(receiver);
 
         let error = queue
@@ -566,7 +570,7 @@ mod tests {
 
     #[test]
     fn test_pty_writer_shutdown_when_receiver_is_dropped_reports_disconnected() {
-        let (queue, receiver) = self::queued_pty_writer();
+        let (queue, receiver) = queued_pty_writer();
         drop(receiver);
 
         assert_that!(
@@ -578,7 +582,7 @@ mod tests {
 
     #[test]
     fn test_pty_writer_when_byte_limit_reached_applies_backpressure_until_written() -> rootcause::Result<()> {
-        let (queue, receiver) = self::queued_pty_writer_with_limits(4, 3);
+        let (queue, receiver) = queued_pty_writer_with_limits(4, 3);
         let written = Arc::new(Mutex::new(Vec::new()));
         queue.enqueue(PtyWrite::new(
             b"abc".to_vec(),
@@ -613,8 +617,8 @@ mod tests {
         let writer_handle = thread::spawn({
             let written = Arc::clone(&written);
             move || {
-                self::run_writer_loop(
-                    &mut *self::capturing_pty_writer(written),
+                crate::pty::writer::tests::run_writer_loop(
+                    &mut *capturing_pty_writer(written),
                     &receiver,
                     writer_queue.state.as_ref(),
                 );
@@ -641,7 +645,7 @@ mod tests {
 
     #[test]
     fn test_pty_writer_when_shutdown_races_full_queue_unblocks_waiting_enqueue() -> rootcause::Result<()> {
-        let (queue, _receiver) = self::queued_pty_writer_with_limit(1);
+        let (queue, _receiver) = queued_pty_writer_with_limit(1);
         queue.enqueue(PtyWrite::new(
             b"queued".to_vec(),
             "failed to write queued shutdown-race test payload",
@@ -702,7 +706,7 @@ mod tests {
 
     #[test]
     fn test_pty_writer_write_bytes_when_payload_exceeds_message_limit_chunks_in_order() -> rootcause::Result<()> {
-        let (queue, receiver) = self::queued_pty_writer_with_limits(4, PTY_WRITE_MAX_MESSAGE_BYTES.saturating_add(1));
+        let (queue, receiver) = queued_pty_writer_with_limits(4, PTY_WRITE_MAX_MESSAGE_BYTES.saturating_add(1));
         let written = Arc::new(Mutex::new(Vec::new()));
         let mut payload = vec![b'a'; PTY_WRITE_MAX_MESSAGE_BYTES];
         payload.push(b'b');
@@ -712,7 +716,7 @@ mod tests {
             "failed to write chunked test payload",
             "failed to flush chunked test payload",
         )?;
-        self::drain_queued_writes(&queue, &receiver, self::capturing_pty_writer(Arc::clone(&written)))?;
+        drain_queued_writes(&queue, &receiver, capturing_pty_writer(Arc::clone(&written)))?;
 
         assert_that!(self::captured_pty_bytes(written.as_ref()), eq(payload));
         Ok(())
@@ -720,7 +724,7 @@ mod tests {
 
     #[test]
     fn test_run_writer_loop_when_closed_with_full_queue_drains_accepted_write() -> rootcause::Result<()> {
-        let (queue, receiver) = self::queued_pty_writer_with_limit(1);
+        let (queue, receiver) = queued_pty_writer_with_limit(1);
         let written = Arc::new(Mutex::new(Vec::new()));
         queue.enqueue(PtyWrite::new(
             b"accepted".to_vec(),
@@ -729,8 +733,8 @@ mod tests {
         ))?;
 
         queue.shutdown()?;
-        self::run_writer_loop(
-            &mut *self::capturing_pty_writer(Arc::clone(&written)),
+        crate::pty::writer::tests::run_writer_loop(
+            &mut *capturing_pty_writer(Arc::clone(&written)),
             &receiver,
             queue.state.as_ref(),
         );
@@ -741,7 +745,7 @@ mod tests {
 
     #[test]
     fn test_run_writer_loop_when_message_batch_limit_is_reached_flushes_in_chunks() -> rootcause::Result<()> {
-        let (queue, receiver) = self::queued_pty_writer();
+        let (queue, receiver) = queued_pty_writer();
         let written = Arc::new(Mutex::new(Vec::new()));
         let flushes = Arc::new(Mutex::new(0_usize));
 
@@ -752,7 +756,7 @@ mod tests {
                 "failed to flush batch-limit test payload",
             ))?;
         }
-        self::drain_queued_writes(
+        drain_queued_writes(
             &queue,
             &receiver,
             Box::new(FlushCountingWriter {
@@ -771,7 +775,7 @@ mod tests {
 
     #[test]
     fn test_run_writer_loop_when_byte_batch_limit_is_reached_flushes_in_chunks() -> rootcause::Result<()> {
-        let (queue, receiver) = self::queued_pty_writer();
+        let (queue, receiver) = queued_pty_writer();
         let written = Arc::new(Mutex::new(Vec::new()));
         let flushes = Arc::new(Mutex::new(0_usize));
         let chunk_len = PTY_WRITE_BATCH_MAX_BYTES / 2;
@@ -788,7 +792,7 @@ mod tests {
             "failed to write trailing byte-limit test payload",
             "failed to flush trailing byte-limit test payload",
         ))?;
-        self::drain_queued_writes(
+        drain_queued_writes(
             &queue,
             &receiver,
             Box::new(FlushCountingWriter {
@@ -797,7 +801,7 @@ mod tests {
             }),
         )?;
 
-        let written = self::captured_pty_bytes(written.as_ref());
+        let written = captured_pty_bytes(written.as_ref());
         assert_that!(written.len(), eq(PTY_WRITE_BATCH_MAX_BYTES + 1));
         assert_that!(written.first(), eq(Some(&b'a')));
         assert_that!(written.last(), eq(Some(&b'c')));
@@ -807,14 +811,14 @@ mod tests {
 
     #[test]
     fn test_run_writer_loop_when_write_fails_stores_error_for_later_enqueue() -> rootcause::Result<()> {
-        let (queue, receiver) = self::queued_pty_writer();
+        let (queue, receiver) = queued_pty_writer();
         queue.enqueue(PtyWrite::new(
             b"first".to_vec(),
             "failed to write first test payload",
             "failed to flush first test payload",
         ))?;
 
-        self::run_writer_loop(&mut *self::failing_pty_writer(), &receiver, queue.state.as_ref());
+        crate::pty::writer::tests::run_writer_loop(&mut *failing_pty_writer(), &receiver, queue.state.as_ref());
         let error = queue
             .enqueue(PtyWrite::new(
                 b"second".to_vec(),
@@ -830,14 +834,14 @@ mod tests {
 
     #[test]
     fn test_pty_writer_shutdown_after_write_failure_preserves_error_for_later_enqueue() -> rootcause::Result<()> {
-        let (queue, receiver) = self::queued_pty_writer();
+        let (queue, receiver) = queued_pty_writer();
         queue.enqueue(PtyWrite::new(
             b"first".to_vec(),
             "failed to write first shutdown-after-error test payload",
             "failed to flush first shutdown-after-error test payload",
         ))?;
 
-        self::run_writer_loop(&mut *self::failing_pty_writer(), &receiver, queue.state.as_ref());
+        crate::pty::writer::tests::run_writer_loop(&mut *failing_pty_writer(), &receiver, queue.state.as_ref());
         queue.shutdown()?;
         let error = queue
             .enqueue(PtyWrite::new(
@@ -855,14 +859,14 @@ mod tests {
     #[test]
     fn test_run_writer_loop_when_terminal_reply_write_fails_warns() -> rootcause::Result<()> {
         let session = SessionName::default_name()?;
-        let (queue, receiver) = self::queued_pty_writer();
+        let (queue, receiver) = queued_pty_writer();
         queue.write_terminal_replies(&[b"\x1b[1;1R".to_vec()])?;
         queue.shutdown()?;
 
         let log = crate::session::tracing::collect_test_log(&session, || {
             let span = tracing::info_span!("muxr_session", session = %session);
             let _guard = span.enter();
-            self::run_writer_loop(&mut *self::failing_pty_writer(), &receiver, queue.state.as_ref());
+            crate::pty::writer::tests::run_writer_loop(&mut *failing_pty_writer(), &receiver, queue.state.as_ref());
             Ok(())
         })?;
 
@@ -875,11 +879,11 @@ mod tests {
 
     #[test]
     fn test_write_focus_event_when_focus_reporting_is_disabled_skips_write() -> rootcause::Result<()> {
-        let (queue, receiver) = self::queued_pty_writer();
+        let (queue, receiver) = queued_pty_writer();
         let written = Arc::new(Mutex::new(Vec::new()));
 
         queue.write_focus_event(TerminalFocusReporting::Disabled, TerminalFocusEvent::Lost)?;
-        self::drain_queued_writes(&queue, &receiver, self::capturing_pty_writer(Arc::clone(&written)))?;
+        drain_queued_writes(&queue, &receiver, capturing_pty_writer(Arc::clone(&written)))?;
 
         assert_that!(self::captured_pty_bytes(written.as_ref()), eq(Vec::<u8>::new()));
         Ok(())
@@ -892,11 +896,11 @@ mod tests {
         #[case] event: TerminalFocusEvent,
         #[case] expected: &[u8],
     ) -> rootcause::Result<()> {
-        let (queue, receiver) = self::queued_pty_writer();
+        let (queue, receiver) = queued_pty_writer();
         let written = Arc::new(Mutex::new(Vec::new()));
 
         queue.write_focus_event(TerminalFocusReporting::Enabled, event)?;
-        self::drain_queued_writes(&queue, &receiver, self::capturing_pty_writer(Arc::clone(&written)))?;
+        drain_queued_writes(&queue, &receiver, capturing_pty_writer(Arc::clone(&written)))?;
 
         assert_that!(self::captured_pty_bytes(written.as_ref()), eq(expected.to_vec()));
         Ok(())
@@ -955,11 +959,11 @@ mod tests {
     }
 
     fn queued_pty_writer() -> (PtyWriter, Receiver<PtyWriteRequest>) {
-        self::queued_pty_writer_with_limit(PTY_WRITE_QUEUE_LIMIT)
+        queued_pty_writer_with_limit(PTY_WRITE_QUEUE_LIMIT)
     }
 
     fn queued_pty_writer_with_limit(limit: usize) -> (PtyWriter, Receiver<PtyWriteRequest>) {
-        self::queued_pty_writer_with_limits(limit, PTY_WRITE_QUEUE_BYTE_LIMIT)
+        queued_pty_writer_with_limits(limit, PTY_WRITE_QUEUE_BYTE_LIMIT)
     }
 
     fn queued_pty_writer_with_limits(
@@ -982,7 +986,7 @@ mod tests {
         mut writer: Box<dyn Write + Send>,
     ) -> rootcause::Result<()> {
         queue.shutdown()?;
-        self::run_writer_loop(&mut *writer, receiver, queue.state.as_ref());
+        crate::pty::writer::tests::run_writer_loop(&mut *writer, receiver, queue.state.as_ref());
         Ok(())
     }
 

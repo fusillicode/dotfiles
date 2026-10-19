@@ -3,6 +3,7 @@ use muxr_core::ClientMouseEvent;
 use muxr_core::ClientMouseEventPhase;
 use muxr_core::ClientMousePosition;
 use muxr_core::ClientRequest;
+use tokio::sync::mpsc::Sender;
 
 use crate::copy_selection::SelectionInput;
 use crate::pane::focus::LocalMouseAction;
@@ -14,7 +15,7 @@ use crate::runtime::DroppableSendOutcome;
 pub async fn handle_mouse_input_action(
     muxr_config: &MuxrConfig,
     event: ClientMouseEvent,
-    input_sender: &tokio::sync::mpsc::Sender<ClientRequest>,
+    input_sender: &Sender<ClientRequest>,
     renderer: &mut ClientRenderer,
 ) -> rootcause::Result<ClientInputSend> {
     if matches!(self::alt_left_click_phase(event), Some(AltLeftClickPhase::Release))
@@ -146,7 +147,7 @@ const fn alt_left_click_phase(event: ClientMouseEvent) -> Option<AltLeftClickPha
 }
 
 async fn send_mouse_request(
-    input_sender: &tokio::sync::mpsc::Sender<ClientRequest>,
+    input_sender: &Sender<ClientRequest>,
     event: ClientMouseEvent,
 ) -> rootcause::Result<ClientInputSend> {
     if MouseEventDrop::from(event) == MouseEventDrop::Droppable {
@@ -203,12 +204,12 @@ mod tests {
 
     #[test]
     fn test_handle_mouse_input_action_when_plain_mouse_click_arrives_focuses_pane() -> rootcause::Result<()> {
-        self::runtime()?.block_on(async {
+        runtime()?.block_on(async {
             let config = MuxrConfig::new()?;
             let (input_sender, mut input_receiver) = tokio::sync::mpsc::channel(1);
             let mut renderer = ClientRenderer::with_synchronized_output(
-                self::layout_snapshot()?,
-                self::pane_regions_snapshot()?,
+                layout_snapshot()?,
+                pane_regions_snapshot()?,
                 SynchronizedOutput::Csi,
             );
             assert_that!(
@@ -240,15 +241,15 @@ mod tests {
     #[test]
     fn test_handle_mouse_input_action_when_alt_click_hits_file_path_sends_one_open_file_request()
     -> rootcause::Result<()> {
-        self::runtime()?.block_on(async {
+        runtime()?.block_on(async {
             let config = MuxrConfig::new()?;
             let (input_sender, mut input_receiver) = tokio::sync::mpsc::channel(2);
             let mut renderer = ClientRenderer::with_synchronized_output(
-                self::layout_snapshot()?,
-                self::file_link_pane_regions_snapshot()?,
+                layout_snapshot()?,
+                file_link_pane_regions_snapshot()?,
                 SynchronizedOutput::Csi,
             );
-            renderer.apply_render_logical(muxr_core::RenderUpdate::Baseline(self::file_link_render_baseline()?))?;
+            renderer.apply_render_logical(muxr_core::RenderUpdate::Baseline(file_link_render_baseline()?))?;
             assert_that!(
                 handle_mouse_input_action(
                     &config,
@@ -315,12 +316,12 @@ mod tests {
 
     #[test]
     fn test_handle_mouse_input_action_when_tab_sidebar_is_clicked_focuses_tab() -> rootcause::Result<()> {
-        self::runtime()?.block_on(async {
+        runtime()?.block_on(async {
             let config = MuxrConfig::new()?;
             let (input_sender, mut input_receiver) = tokio::sync::mpsc::channel(1);
             let mut renderer = ClientRenderer::with_synchronized_output(
-                self::two_tab_layout()?,
-                self::pane_regions_snapshot()?,
+                two_tab_layout()?,
+                pane_regions_snapshot()?,
                 SynchronizedOutput::Csi,
             );
             assert_that!(
@@ -349,15 +350,15 @@ mod tests {
     #[test]
     fn test_handle_mouse_input_action_when_selection_release_is_on_tab_sidebar_finalizes_selection()
     -> rootcause::Result<()> {
-        self::runtime()?.block_on(async {
+        runtime()?.block_on(async {
             let config = MuxrConfig::new()?;
             let (input_sender, mut input_receiver) = tokio::sync::mpsc::channel(1);
             let mut renderer = ClientRenderer::with_synchronized_output(
-                self::layout_snapshot()?,
-                self::pane_regions_snapshot()?,
+                layout_snapshot()?,
+                pane_regions_snapshot()?,
                 SynchronizedOutput::Csi,
             );
-            renderer.apply_render_logical(muxr_core::RenderUpdate::Baseline(self::render_baseline()?))?;
+            renderer.apply_render_logical(muxr_core::RenderUpdate::Baseline(render_baseline()?))?;
             assert_that!(
                 handle_mouse_input_action(
                     &config,
@@ -405,15 +406,15 @@ mod tests {
     #[test]
     fn test_handle_mouse_input_action_when_selection_drag_moves_into_tab_sidebar_clamps_to_left_edge()
     -> rootcause::Result<()> {
-        self::runtime()?.block_on(async {
+        runtime()?.block_on(async {
             let config = MuxrConfig::new()?;
             let (input_sender, mut input_receiver) = tokio::sync::mpsc::channel(2);
             let mut renderer = ClientRenderer::with_synchronized_output(
-                self::layout_snapshot()?,
-                self::pane_regions_snapshot()?,
+                layout_snapshot()?,
+                pane_regions_snapshot()?,
                 SynchronizedOutput::Csi,
             );
-            renderer.apply_render_logical(muxr_core::RenderUpdate::Baseline(self::render_baseline()?))?;
+            renderer.apply_render_logical(muxr_core::RenderUpdate::Baseline(render_baseline()?))?;
             assert_that!(
                 handle_mouse_input_action(
                     &config,
@@ -464,12 +465,12 @@ mod tests {
 
     #[test]
     fn test_handle_mouse_input_action_when_pane_tracks_mouse_forwards_mouse_to_server() -> rootcause::Result<()> {
-        self::runtime()?.block_on(async {
+        runtime()?.block_on(async {
             let config = MuxrConfig::new()?;
             let (input_sender, mut input_receiver) = tokio::sync::mpsc::channel(1);
             let mut renderer = ClientRenderer::with_synchronized_output(
-                self::layout_snapshot()?,
-                self::mouse_tracking_pane_regions_snapshot()?,
+                layout_snapshot()?,
+                mouse_tracking_pane_regions_snapshot()?,
                 SynchronizedOutput::Csi,
             );
             assert_that!(
@@ -504,12 +505,12 @@ mod tests {
 
     #[test]
     fn test_handle_mouse_input_action_when_pane_receives_wheel_forwards_mouse_to_server() -> rootcause::Result<()> {
-        self::runtime()?.block_on(async {
+        runtime()?.block_on(async {
             let config = MuxrConfig::new()?;
             let (input_sender, mut input_receiver) = tokio::sync::mpsc::channel(1);
             let mut renderer = ClientRenderer::with_synchronized_output(
-                self::layout_snapshot()?,
-                self::pane_regions_snapshot()?,
+                layout_snapshot()?,
+                pane_regions_snapshot()?,
                 SynchronizedOutput::Csi,
             );
             let event = ClientMouseEvent {
@@ -540,13 +541,13 @@ mod tests {
     #[test]
     fn test_handle_mouse_input_action_when_pane_wheel_request_queue_is_full_waits_for_queue_space()
     -> rootcause::Result<()> {
-        self::runtime()?.block_on(async {
+        runtime()?.block_on(async {
             let config = MuxrConfig::new()?;
             let (input_sender, mut input_receiver) = tokio::sync::mpsc::channel(1);
             assert_that!(input_sender.try_send(ClientRequest::Pong), ok(eq(())));
             let mut renderer = ClientRenderer::with_synchronized_output(
-                self::layout_snapshot()?,
-                self::pane_regions_snapshot()?,
+                layout_snapshot()?,
+                pane_regions_snapshot()?,
                 SynchronizedOutput::Csi,
             );
             let event = ClientMouseEvent {
@@ -580,12 +581,12 @@ mod tests {
     #[test]
     fn test_handle_mouse_input_action_when_tracking_drag_crosses_pane_routes_to_pressed_pane() -> rootcause::Result<()>
     {
-        self::runtime()?.block_on(async {
+        runtime()?.block_on(async {
             let config = MuxrConfig::new()?;
             let (input_sender, mut input_receiver) = tokio::sync::mpsc::channel(4);
             let mut renderer = ClientRenderer::with_synchronized_output(
-                self::layout_snapshot()?,
-                self::split_mouse_tracking_pane_regions_snapshot()?,
+                layout_snapshot()?,
+                split_mouse_tracking_pane_regions_snapshot()?,
                 SynchronizedOutput::Csi,
             );
             let events = [

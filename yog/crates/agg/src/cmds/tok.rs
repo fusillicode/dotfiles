@@ -1,7 +1,10 @@
 use std::ffi::OsString;
+use std::fs;
+use std::io;
 use std::io::Read;
 use std::path::PathBuf;
 
+use rootcause::Report;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
 use ytil_sys::pico_args::Arguments;
@@ -15,7 +18,7 @@ pub struct Opts {
 }
 
 impl TryFrom<Vec<OsString>> for Opts {
-    type Error = rootcause::Report;
+    type Error = Report;
 
     fn try_from(raw: Vec<OsString>) -> Result<Self, Self::Error> {
         let mut args = Arguments::from_vec(raw);
@@ -55,11 +58,11 @@ pub enum Input {
 impl Input {
     fn read_to_string(&self) -> rootcause::Result<String> {
         match self {
-            Self::File(path) => Ok(std::fs::read_to_string(path)
+            Self::File(path) => Ok(fs::read_to_string(path)
                 .attach_with(|| format!("cannot read token input file | path={}", path.display()))?),
             Self::Stdin => {
                 let mut text = String::new();
-                std::io::stdin()
+                io::stdin()
                     .read_to_string(&mut text)
                     .context("cannot read token input from stdin")?;
                 Ok(text)

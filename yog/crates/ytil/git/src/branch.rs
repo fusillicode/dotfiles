@@ -9,9 +9,11 @@ use std::process::Command;
 
 use git2::BranchType;
 use git2::Cred;
+use git2::Reflog;
 use git2::RemoteCallbacks;
 use git2::Repository;
 use jiff::Timestamp;
+use rootcause::Report;
 use rootcause::bail;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
@@ -429,10 +431,10 @@ impl Branch {
 /// - Resolving the branch tip commit fails.
 /// - Committer email is not valid UTF-8.
 /// - Converting the committer timestamp into a [`Timestamp`] fails.
-impl<'a> TryFrom<(git2::Branch<'a>, git2::BranchType)> for Branch {
-    type Error = rootcause::Report;
+impl<'a> TryFrom<(git2::Branch<'a>, BranchType)> for Branch {
+    type Error = Report;
 
-    fn try_from((raw_branch, branch_type): (git2::Branch<'a>, git2::BranchType)) -> Result<Self, Self::Error> {
+    fn try_from((raw_branch, branch_type): (git2::Branch<'a>, BranchType)) -> Result<Self, Self::Error> {
         let branch_name = raw_branch
             .name()?
             .ok_or_else(|| report!("error invalid branch name UTF-8"))
@@ -448,12 +450,12 @@ impl<'a> TryFrom<(git2::Branch<'a>, git2::BranchType)> for Branch {
             .attach_with(|| format!("seconds={}", committer.when().seconds()))?;
 
         Ok(match branch_type {
-            git2::BranchType::Local => Self::Local {
+            BranchType::Local => Self::Local {
                 name: branch_name.to_string(),
                 committer_email,
                 committer_date_time,
             },
-            git2::BranchType::Remote => Self::Remote {
+            BranchType::Remote => Self::Remote {
                 name: branch_name.to_string(),
                 committer_email,
                 committer_date_time,
@@ -462,7 +464,7 @@ impl<'a> TryFrom<(git2::Branch<'a>, git2::BranchType)> for Branch {
     }
 }
 
-fn reflog_entries(reflog: &git2::Reflog) -> Vec<(i64, String)> {
+fn reflog_entries(reflog: &Reflog) -> Vec<(i64, String)> {
     reflog
         .iter()
         .filter_map(|entry| {

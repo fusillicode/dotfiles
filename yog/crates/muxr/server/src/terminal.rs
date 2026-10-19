@@ -17,10 +17,10 @@ use rio_vt::event::TerminalDamage;
 use rootcause::prelude::ResultExt;
 use smallvec::SmallVec;
 
-use self::control::ControlParser;
-use self::control::CursorControl;
-use self::rio::RioInputFilter;
-use self::rio::RioTerminal;
+use crate::terminal::control::ControlParser;
+use crate::terminal::control::CursorControl;
+use crate::terminal::rio::RioInputFilter;
+use crate::terminal::rio::RioTerminal;
 
 mod control;
 mod render;
@@ -218,7 +218,7 @@ impl TerminalState {
 
         let cursor_changed = terminal_control.cursor != CursorControl::Unchanged
             || cursor_values_changed
-            || events.cursor_change == self::rio::CursorChange::Changed;
+            || events.cursor_change == crate::terminal::rio::CursorChange::Changed;
 
         let metadata_changed = cursor_visibility_before != terminal.cursor().is_visible()
             || mouse_protocol_before != self.mouse_protocol();

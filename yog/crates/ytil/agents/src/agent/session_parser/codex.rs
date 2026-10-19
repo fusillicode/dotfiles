@@ -9,6 +9,7 @@ use rootcause::option_ext::OptionExt;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
 use serde::Deserialize;
+use serde_json::Value;
 
 use crate::agent::Agent;
 use crate::agent::session::SearchTextBuilder;
@@ -325,7 +326,7 @@ struct CodexSessionMetaPayload {
     parent_thread_id: Option<String>,
     cwd: String,
     timestamp: Timestamp,
-    source: Option<serde_json::Value>,
+    source: Option<Value>,
 }
 
 impl CodexSessionMetaPayload {
@@ -416,7 +417,7 @@ enum CodexMessageContentPart {
     #[serde(rename = "output_text")]
     OutputText { text: String },
     #[serde(rename = "input_text")]
-    InputText { text: serde_json::Value },
+    InputText { text: Value },
     #[serde(other)]
     Other,
 }

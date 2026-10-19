@@ -10,7 +10,7 @@ use std::process;
 use muxr_core::ServerRunnerArgs;
 
 fn main() {
-    if let Err(error) = self::run() {
+    if let Err(error) = run() {
         eprintln!("{error:?}");
         process::exit(1);
     }

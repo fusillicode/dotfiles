@@ -5,6 +5,7 @@
 
 use std::fmt::Display;
 use std::fmt::Formatter;
+use std::fs;
 use std::ops::Deref;
 use std::path::Path;
 
@@ -14,6 +15,8 @@ use strum::IntoEnumIterator;
 use ytil_git::GitStatusEntry;
 use ytil_git::IndexState;
 use ytil_git::WorktreeState;
+use ytil_git::repo;
+use ytil_sys::cli;
 use ytil_sys::cli::Args;
 
 /// Newtype wrapper adding colored [`Display`] for a [`ytil_git::GitStatusEntry`].
@@ -75,7 +78,7 @@ impl Display for Op {
 /// - Opening repository via [`ytil_git::repo::discover`] or adding paths to index via [`ytil_git::add_to_index`] fails.
 #[ytil_sys::main]
 fn main() -> rootcause::Result<()> {
-    let args = ytil_sys::cli::get();
+    let args = cli::get();
     if args.has_help() {
         println!(include_str!("../help.txt"));
         return Ok(());
@@ -124,9 +127,9 @@ fn restore_entries(entries: &[&GitStatusEntry], branch: Option<&str>) -> rootcau
     for new_entry in &new_entries {
         let absolute_path = new_entry.absolute_path();
         if absolute_path.is_file() || absolute_path.is_symlink() {
-            std::fs::remove_file(&absolute_path)?;
+            fs::remove_file(&absolute_path)?;
         } else if absolute_path.is_dir() {
-            std::fs::remove_dir_all(&absolute_path)?;
+            fs::remove_dir_all(&absolute_path)?;
         }
         println!("{} {}", "Discarded".red().bold(), new_entry.path.display());
         if new_entry.is_new_in_index() {
@@ -174,7 +177,7 @@ fn restore_entries(entries: &[&GitStatusEntry], branch: Option<&str>) -> rootcau
 /// - Opening the repository via [`ytil_git::repo::discover`] fails.
 /// - Adding any path to the index via [`ytil_git::add_to_index`] fails.
 fn add_entries(entries: &[&GitStatusEntry]) -> rootcause::Result<()> {
-    let mut repo = ytil_git::repo::discover(Path::new("."))?;
+    let mut repo = repo::discover(Path::new("."))?;
     ytil_git::add_to_index(&mut repo, entries.iter().map(|entry| entry.path.as_path()))?;
     for entry in entries {
         println!("{} {}", "Added".green().bold(), entry.path.display());

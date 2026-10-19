@@ -4,6 +4,8 @@ use std::fmt::Debug;
 use std::fmt::Display;
 use std::rc::Rc;
 
+use mlua::Function;
+use mlua::Lua;
 use nvim_oxi::mlua;
 use nvim_oxi::mlua::IntoLua;
 use nvim_oxi::mlua::ObjectLike;
@@ -47,7 +49,7 @@ where
 
     let vim_ui_select = lua
         .globals()
-        .get_path::<mlua::Function>("vim.ui.select")
+        .get_path::<Function>("vim.ui.select")
         .map_err(|err| report!("cannot fetch vim.ui.select function from Lua globals").attach(err.to_string()))?;
 
     let opts_table = lua.create_table_from(opts.clone()).map_err(|err| {
@@ -59,22 +61,20 @@ where
     let quickfix = maybe_quickfix.map(Rc::new);
 
     let vim_ui_select_callback = lua
-        .create_function(
-            move |_: &mlua::Lua, (selected_value, idx): (Option<String>, Option<usize>)| {
-                if let Some(quickfix) = &quickfix
-                    && selected_value.is_some_and(|x| x == quickfix.trigger_value)
-                {
-                    if let Err(err) = crate::quickfix::open(quickfix.all_items.iter().map(|(s, i)| (s.as_str(), *i))) {
-                        crate::notify::error(format!("error opening quickfix: {err:#}"));
-                    }
-                    return Ok(());
+        .create_function(move |_: &Lua, (selected_value, idx): (Option<String>, Option<usize>)| {
+            if let Some(quickfix) = &quickfix
+                && selected_value.is_some_and(|x| x == quickfix.trigger_value)
+            {
+                if let Err(err) = crate::quickfix::open(quickfix.all_items.iter().map(|(s, i)| (s.as_str(), *i))) {
+                    crate::notify::error(format!("error opening quickfix: {err:#}"));
                 }
-                if let Some(idx) = idx {
-                    callback(idx.saturating_sub(1));
-                }
-                Ok(())
-            },
-        )
+                return Ok(());
+            }
+            if let Some(idx) = idx {
+                callback(idx.saturating_sub(1));
+            }
+            Ok(())
+        })
         .map_err(|err| {
             report!("cannot create vim.ui.select callback")
                 .attach(format!("choices={choices:#?} opts={opts_table:#?}"))

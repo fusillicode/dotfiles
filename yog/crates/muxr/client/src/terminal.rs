@@ -118,7 +118,7 @@ pub fn current_terminal_size() -> rootcause::Result<TerminalSize> {
         Err(error) => {
             // Headless callers cannot be queried by crossterm; explicit COLUMNS/LINES is the only fallback, so
             // missing terminal size still fails instead of silently guessing.
-            if let Some(size) = self::terminal_size_from_env()? {
+            if let Some(size) = terminal_size_from_env()? {
                 return Ok(size);
             }
             Err(error).context("failed to read muxr terminal size")?

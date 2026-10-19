@@ -13,8 +13,8 @@ use rio_vt::event::RioEvent;
 use rio_vt::event::WindowId;
 use rio_vt::performer::handler::Processor;
 
-pub(super) use self::input_filter::RioInputFilter;
-use super::control::AlternateScreenControl;
+use crate::terminal::control::AlternateScreenControl;
+pub(super) use crate::terminal::rio::input_filter::RioInputFilter;
 
 mod input_filter;
 

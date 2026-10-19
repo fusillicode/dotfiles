@@ -376,12 +376,12 @@ mod tests {
             &PaneTree::Split {
                 axis: PaneSplitAxis::Vertical,
                 first_ratio: PaneSplitRatio::new(500)?,
-                first: Box::new(PaneTree::Pane(self::pane(1, 1)?)),
+                first: Box::new(PaneTree::Pane(pane(1, 1)?)),
                 second: Box::new(PaneTree::Split {
                     axis: PaneSplitAxis::Horizontal,
                     first_ratio: PaneSplitRatio::new(500)?,
-                    first: Box::new(PaneTree::Pane(self::pane(2, 2)?)),
-                    second: Box::new(PaneTree::Pane(self::pane(3, 3)?)),
+                    first: Box::new(PaneTree::Pane(pane(2, 2)?)),
+                    second: Box::new(PaneTree::Pane(pane(3, 3)?)),
                 }),
             },
             &TerminalSize::new(80, 24)?,
@@ -430,12 +430,12 @@ mod tests {
             &PaneTree::Split {
                 axis: PaneSplitAxis::Vertical,
                 first_ratio: PaneSplitRatio::new(500)?,
-                first: Box::new(PaneTree::Pane(self::pane(1, 1)?)),
+                first: Box::new(PaneTree::Pane(pane(1, 1)?)),
                 second: Box::new(PaneTree::Split {
                     axis: PaneSplitAxis::Horizontal,
                     first_ratio: PaneSplitRatio::new(500)?,
-                    first: Box::new(PaneTree::Pane(self::pane(2, 2)?)),
-                    second: Box::new(PaneTree::Pane(self::pane(3, 3)?)),
+                    first: Box::new(PaneTree::Pane(pane(2, 2)?)),
+                    second: Box::new(PaneTree::Pane(pane(3, 3)?)),
                 }),
             },
             &TerminalSize::new(5, 1)?,
@@ -472,8 +472,8 @@ mod tests {
             &PaneTree::Split {
                 axis: PaneSplitAxis::Vertical,
                 first_ratio: PaneSplitRatio::new(500)?,
-                first: Box::new(PaneTree::Pane(self::pane(1, 1)?)),
-                second: Box::new(PaneTree::Pane(self::pane(2, 2)?)),
+                first: Box::new(PaneTree::Pane(pane(1, 1)?)),
+                second: Box::new(PaneTree::Pane(pane(2, 2)?)),
             },
             &TerminalSize::new(2, 4)?,
         )?;
@@ -500,8 +500,8 @@ mod tests {
             &PaneTree::Split {
                 axis: PaneSplitAxis::Vertical,
                 first_ratio: PaneSplitRatio::new(500)?,
-                first: Box::new(PaneTree::Pane(self::pane(1, 3)?)),
-                second: Box::new(PaneTree::Pane(self::pane(2, 2)?)),
+                first: Box::new(PaneTree::Pane(pane(1, 3)?)),
+                second: Box::new(PaneTree::Pane(pane(2, 2)?)),
             },
             &TerminalSize::new(2, 4)?,
         )?;

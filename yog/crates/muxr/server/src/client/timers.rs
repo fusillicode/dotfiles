@@ -1,12 +1,16 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::collections::btree_map::Entry;
+use std::mem;
 use std::pin::Pin;
 use std::time::Duration;
 use std::time::Instant;
 
 use muxr_core::PaneId;
 use rootcause::report;
+use tokio::time;
+use tokio::time::Interval;
+use tokio::time::Sleep;
 
 use crate::pane::tracked_process::PaneTrackedProcesses;
 use crate::render_state::ClientRenderDmg;
@@ -22,17 +26,17 @@ const SLEEP_DISABLED_FOR: Duration = Duration::from_hours(24);
 const TRACKED_PROCESS_QUIET_SETTLE_DELAY: Duration = Duration::from_millis(10);
 
 pub struct ClientTimers {
-    pub cmd_handoff_sample: Pin<Box<tokio::time::Sleep>>,
+    pub cmd_handoff_sample: Pin<Box<Sleep>>,
     cmd_handoff_sample_panes: BTreeSet<PaneId>,
-    pub(crate) output_activity_sample: Pin<Box<tokio::time::Sleep>>,
+    pub(crate) output_activity_sample: Pin<Box<Sleep>>,
     output_activity_sample_panes: BTreeMap<PaneId, tokio::time::Instant>,
     interactive_render_until: Option<tokio::time::Instant>,
     last_render_at: Option<tokio::time::Instant>,
     render_deadline: Option<tokio::time::Instant>,
-    pub render_sleep: Pin<Box<tokio::time::Sleep>>,
+    pub render_sleep: Pin<Box<Sleep>>,
     tracked_process_quiet_deadline: Option<Instant>,
-    pub tracked_process_quiet_sleep: Pin<Box<tokio::time::Sleep>>,
-    pub heartbeat: tokio::time::Interval,
+    pub tracked_process_quiet_sleep: Pin<Box<Sleep>>,
+    pub heartbeat: Interval,
 }
 
 impl ClientTimers {
@@ -42,17 +46,17 @@ impl ClientTimers {
             .ok_or_else(|| report!("muxr heartbeat interval overflowed"))?;
 
         Ok(Self {
-            cmd_handoff_sample: Box::pin(tokio::time::sleep_until(self::disabled_sleep_deadline()?)),
+            cmd_handoff_sample: Box::pin(time::sleep_until(disabled_sleep_deadline()?)),
             cmd_handoff_sample_panes: BTreeSet::new(),
-            output_activity_sample: Box::pin(tokio::time::sleep_until(self::disabled_sleep_deadline()?)),
+            output_activity_sample: Box::pin(time::sleep_until(disabled_sleep_deadline()?)),
             output_activity_sample_panes: BTreeMap::new(),
             interactive_render_until: None,
             last_render_at: None,
             render_deadline: None,
-            render_sleep: Box::pin(tokio::time::sleep_until(self::disabled_sleep_deadline()?)),
+            render_sleep: Box::pin(time::sleep_until(disabled_sleep_deadline()?)),
             tracked_process_quiet_deadline: None,
-            tracked_process_quiet_sleep: Box::pin(tokio::time::sleep_until(self::disabled_sleep_deadline()?)),
-            heartbeat: tokio::time::interval_at(heartbeat_start, config.client_heartbeat_interval),
+            tracked_process_quiet_sleep: Box::pin(time::sleep_until(disabled_sleep_deadline()?)),
+            heartbeat: time::interval_at(heartbeat_start, config.client_heartbeat_interval),
         })
     }
 
@@ -68,16 +72,16 @@ impl ClientTimers {
     pub fn remove_cmd_handoff_sample_pane(&mut self, pane_id: PaneId) -> rootcause::Result<()> {
         self.cmd_handoff_sample_panes.remove(&pane_id);
         if self.cmd_handoff_sample_panes.is_empty() {
-            self.cmd_handoff_sample.as_mut().reset(self::disabled_sleep_deadline()?);
+            self.cmd_handoff_sample.as_mut().reset(disabled_sleep_deadline()?);
         }
         Ok(())
     }
 
     pub fn take_cmd_handoff_sample_panes(&mut self) -> rootcause::Result<Vec<PaneId>> {
-        let pane_ids = std::mem::take(&mut self.cmd_handoff_sample_panes).into_iter().collect();
+        let pane_ids = mem::take(&mut self.cmd_handoff_sample_panes).into_iter().collect();
         // `tokio::time::Sleep` stays ready after it fires. Disable the one-shot immediately after consuming it so
         // the attached-client select loop cannot hot-spin and starve PTY rendering after a prompt submit.
-        self.cmd_handoff_sample.as_mut().reset(self::disabled_sleep_deadline()?);
+        self.cmd_handoff_sample.as_mut().reset(disabled_sleep_deadline()?);
         Ok(pane_ids)
     }
 
@@ -122,7 +126,7 @@ impl ClientTimers {
 
     pub fn disable_render_sleep(&mut self) -> rootcause::Result<()> {
         self.render_deadline = None;
-        self.render_sleep.as_mut().reset(self::disabled_sleep_deadline()?);
+        self.render_sleep.as_mut().reset(disabled_sleep_deadline()?);
         Ok(())
     }
 
@@ -140,7 +144,7 @@ impl ClientTimers {
         self.tracked_process_quiet_deadline = None;
         self.tracked_process_quiet_sleep
             .as_mut()
-            .reset(self::disabled_sleep_deadline()?);
+            .reset(disabled_sleep_deadline()?);
         Ok(())
     }
 
@@ -243,7 +247,7 @@ impl ClientTimers {
         }
 
         self.tracked_process_quiet_deadline = deadline;
-        let deadline = deadline.map_or_else(self::disabled_sleep_deadline, |deadline| {
+        let deadline = deadline.map_or_else(crate::client::timers::disabled_sleep_deadline, |deadline| {
             // Socket/PTY readiness can lag one poll behind an already-ready sleep. Fire the one-shot slightly after the
             // logical quiet deadline so boundary input/output gets a normal select turn before we clear Busy.
             let deadline = deadline
@@ -259,7 +263,7 @@ impl ClientTimers {
         let deadline = self.output_activity_sample_panes.values().copied().min();
         self.output_activity_sample
             .as_mut()
-            .reset(deadline.map_or_else(self::disabled_sleep_deadline, Ok)?);
+            .reset(deadline.map_or_else(crate::client::timers::disabled_sleep_deadline, Ok)?);
         Ok(())
     }
 }
@@ -570,7 +574,7 @@ mod tests {
         let tempdir = tempfile::tempdir()?;
         let config = crate::server::test_helpers::server_config(tempdir.path(), "work")?;
         let mut timers = ClientTimers::new(&config)?;
-        let mut layout = self::layout(&config)?;
+        let mut layout = layout(&config)?;
         let pane_id = PaneId::new(1)?;
         let other_pane_id = PaneId::new(2)?;
         layout.active_tab_mut()?.focus_pane(pane_id)?;
@@ -579,14 +583,14 @@ mod tests {
         pane_tracked_processes.observe_pane_cmd(
             config.user_config.as_ref(),
             pane_id,
-            &self::fg_tracked_process("claude"),
+            &fg_tracked_process("claude"),
             then,
         );
         pane_tracked_processes.record_user_interaction(
             &layout,
             pane_id,
             crate::pane::tracked_process::TrackedProcessUserInteraction::MayEcho,
-            self::instant_after(then, Duration::from_secs(2))?,
+            instant_after(then, Duration::from_secs(2))?,
         )?;
 
         timers.sync_tracked_process_quiet_deadline_for_layout(&pane_tracked_processes, &layout)?;
@@ -603,7 +607,7 @@ mod tests {
         );
         let focused_deadline = timers.tracked_process_quiet_sleep.deadline();
 
-        layout.remove_exited_pane(pane_id, 0, self::successful_exit_status())?;
+        layout.remove_exited_pane(pane_id, 0, successful_exit_status())?;
         assert_that!(layout.active_pane_id()?, eq(other_pane_id));
         timers.sync_tracked_process_quiet_deadline_for_layout(&pane_tracked_processes, &layout)?;
 
@@ -633,10 +637,10 @@ mod tests {
     }
 
     fn layout(config: &crate::server::ServerConfig) -> rootcause::Result<SessionLayout> {
-        let mut layout = SessionLayout::initial(&config.session, self::metadata("sh", 1))?;
+        let mut layout = SessionLayout::initial(&config.session, metadata("sh", 1))?;
         layout.split_active_pane(
             config.user_config.layout,
-            self::metadata("sh", 2),
+            metadata("sh", 2),
             crate::pane::split::PaneSplitAxis::Vertical,
         )?;
         Ok(layout)
@@ -673,7 +677,7 @@ mod tests {
         let delay = logical_delay
             .checked_add(TRACKED_PROCESS_QUIET_SETTLE_DELAY)
             .ok_or_else(|| rootcause::report!("test quiet settle delay overflowed"))?;
-        Ok(tokio::time::Instant::from_std(self::instant_after(instant, delay)?))
+        Ok(tokio::time::Instant::from_std(instant_after(instant, delay)?))
     }
 
     fn instant_after(instant: Instant, duration: Duration) -> rootcause::Result<Instant> {

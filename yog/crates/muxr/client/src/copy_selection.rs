@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
+use std::time::Duration;
 use std::time::Instant;
 
 use muxr_core::ClientMousePosition;
@@ -14,10 +15,11 @@ use muxr_core::RenderCellWidth;
 use muxr_core::RowWrap;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
+use ytil_sys::file;
 
 use crate::frame_buffer::FrameBuffer;
 
-const DOUBLE_CLICK_THRESHOLD: std::time::Duration = std::time::Duration::from_millis(400);
+const DOUBLE_CLICK_THRESHOLD: Duration = Duration::from_millis(400);
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SelectionInput {
@@ -62,7 +64,7 @@ impl SelectionClickTracker {
         frame_buffer: &FrameBuffer,
         now: Instant,
     ) -> SelectionClickOutcome {
-        let Some(target) = self::click_target(position, regions, frame_buffer) else {
+        let Some(target) = click_target(position, regions, frame_buffer) else {
             self.reset();
             return SelectionClickOutcome::Single;
         };
@@ -116,7 +118,7 @@ impl SelectionEdgeScrollState {
         self.drag = self
             .drag
             .take()
-            .and_then(|drag| self::matching_region(regions, drag.pane_id).map(|_| drag));
+            .and_then(|drag| matching_region(regions, drag.pane_id).map(|_| drag));
         self.update_pending(regions);
     }
 
@@ -144,16 +146,16 @@ impl SelectionEdgeScrollState {
 
     pub fn drag_position(&self, regions: &PaneRegionsSnapshot) -> Option<ClientMousePosition> {
         let drag = self.drag.as_ref()?;
-        let region = self::matching_region(regions, drag.pane_id)?;
+        let region = matching_region(regions, drag.pane_id)?;
         Some(ClientMousePosition {
-            row: self::selection_edge_row(&region, drag.direction),
-            col: drag.col.clamp(region.col(), self::last_region_col_saturating(&region)),
+            row: selection_edge_row(&region, drag.direction),
+            col: drag.col.clamp(region.col(), last_region_col_saturating(&region)),
         })
     }
 
     pub fn scroll_request(&self, regions: &PaneRegionsSnapshot) -> Option<SelectionEdgeScrollRequest> {
         let drag = self.drag.clone()?;
-        let region = self::matching_region(regions, drag.pane_id)?;
+        let region = matching_region(regions, drag.pane_id)?;
         let position = self.drag_position(regions)?;
         self.scroll_request_for(drag.direction, drag.pane_id, region.visible_top_row(), position)
     }
@@ -220,9 +222,9 @@ impl SelectionEdgeScrollState {
             return None;
         };
         let (direction, row) = if let Some(direction) = forced_direction {
-            (direction, self::selection_edge_row(region, direction))
-        } else if let Some(direction) = self::selection_edge_direction(position, region, trigger) {
-            (direction, self::selection_edge_row(region, direction))
+            (direction, selection_edge_row(region, direction))
+        } else if let Some(direction) = selection_edge_direction(position, region, trigger) {
+            (direction, selection_edge_row(region, direction))
         } else {
             self.drag = None;
             self.pending = SelectionEdgeScrollPendingState::Idle;
@@ -235,9 +237,7 @@ impl SelectionEdgeScrollState {
         {
             self.pending = SelectionEdgeScrollPendingState::Idle;
         }
-        let col = position
-            .col
-            .clamp(region.col(), self::last_region_col_saturating(region));
+        let col = position.col.clamp(region.col(), last_region_col_saturating(region));
         let pane_id = *region.id();
         self.drag = Some(SelectionEdgeDrag {
             col,
@@ -277,7 +277,7 @@ impl SelectionEdgeScrollState {
         let Some(pending) = self.pending.pending().cloned() else {
             return;
         };
-        let Some(region) = self::matching_region(regions, pending.pane_id) else {
+        let Some(region) = matching_region(regions, pending.pane_id) else {
             self.pending = SelectionEdgeScrollPendingState::Idle;
             return;
         };
@@ -348,14 +348,14 @@ impl SelectionState {
     pub fn clear_if_regions_changed(&mut self, regions: &PaneRegionsSnapshot) -> SelectionChange {
         let previous = self.selected.clone();
         self.drag = self.drag.take().and_then(|drag| {
-            self::matching_region(regions, *drag.region.id()).map(|region| SelectionDrag {
+            matching_region(regions, *drag.region.id()).map(|region| SelectionDrag {
                 anchor: drag.anchor,
-                raw_anchor: self::clamp_to_region(drag.raw_anchor, &region),
+                raw_anchor: clamp_to_region(drag.raw_anchor, &region),
                 region,
             })
         });
         self.selected = self.selected.take().and_then(|selected| {
-            self::matching_region(regions, *selected.region.id()).map(|region| selected.with_region(region))
+            matching_region(regions, *selected.region.id()).map(|region| selected.with_region(region))
         });
         if self.selected.is_none() {
             self.cached_rows.clear();
@@ -368,14 +368,14 @@ impl SelectionState {
     pub fn selected_text(&self) -> Option<String> {
         self.selected
             .as_ref()
-            .and_then(|selection| self::selected_text(&self.cached_rows, selection))
+            .and_then(|selection| selected_text(&self.cached_rows, selection))
             .filter(|text| !text.is_empty())
     }
 
     pub fn selected_inline_text(&self) -> Option<String> {
         self.selected
             .as_ref()
-            .and_then(|selection| self::selected_inline_text(&self.cached_rows, selection))
+            .and_then(|selection| selected_inline_text(&self.cached_rows, selection))
             .filter(|text| !text.is_empty())
     }
 
@@ -387,7 +387,7 @@ impl SelectionState {
     ) -> rootcause::Result<SelectionChange> {
         let previous = self.selected.clone();
         self.drag = None;
-        self.set_selected(self::word_selection_at(position, regions, frame_buffer), frame_buffer)?;
+        self.set_selected(word_selection_at(position, regions, frame_buffer), frame_buffer)?;
         Ok(SelectionChange::between(self.selected.as_ref(), previous.as_ref()))
     }
 
@@ -417,10 +417,8 @@ impl SelectionState {
             return;
         };
         let region = region.clone();
-        let raw_anchor = self::clamp_to_region(position, &region);
-        let Some(anchor) =
-            self::content_position(self::selectable_position(raw_anchor, &region, frame_buffer), &region)
-        else {
+        let raw_anchor = clamp_to_region(position, &region);
+        let Some(anchor) = content_position(selectable_position(raw_anchor, &region, frame_buffer), &region) else {
             self.clear();
             return;
         };
@@ -437,11 +435,9 @@ impl SelectionState {
         let Some(drag) = &self.drag else {
             return Ok(());
         };
-        let raw_focus = self::clamp_to_region(position, &drag.region);
-        let Some(focus) = self::content_position(
-            self::selectable_position(raw_focus, &drag.region, frame_buffer),
-            &drag.region,
-        ) else {
+        let raw_focus = clamp_to_region(position, &drag.region);
+        let Some(focus) = content_position(selectable_position(raw_focus, &drag.region, frame_buffer), &drag.region)
+        else {
             self.set_selected(None, frame_buffer)?;
             return Ok(());
         };
@@ -459,11 +455,9 @@ impl SelectionState {
         let Some(drag) = self.drag.take() else {
             return Ok(());
         };
-        let raw_focus = self::clamp_to_region(position, &drag.region);
-        let Some(focus) = self::content_position(
-            self::selectable_position(raw_focus, &drag.region, frame_buffer),
-            &drag.region,
-        ) else {
+        let raw_focus = clamp_to_region(position, &drag.region);
+        let Some(focus) = content_position(selectable_position(raw_focus, &drag.region, frame_buffer), &drag.region)
+        else {
             self.set_selected(None, frame_buffer)?;
             return Ok(());
         };
@@ -489,7 +483,7 @@ impl SelectionState {
 
         self.retain_cached_rows();
         if let Some(selection) = self.selected.as_ref() {
-            self::cache_visible_selected_rows(&mut self.cached_rows, frame_buffer, selection)?;
+            cache_visible_selected_rows(&mut self.cached_rows, frame_buffer, selection)?;
         }
         Ok(())
     }
@@ -517,7 +511,7 @@ impl SelectionRange {
         if self.region.containment(row, col) == PaneRegionContainment::Outside {
             return false;
         }
-        let Some(position) = self::content_position(ClientMousePosition { row, col }, &self.region) else {
+        let Some(position) = content_position(ClientMousePosition { row, col }, &self.region) else {
             return false;
         };
 
@@ -550,8 +544,8 @@ impl SelectionRange {
         }
 
         Some((
-            self::visible_row_for_content_row(&self.region, start)?,
-            self::visible_row_for_content_row(&self.region, end)?,
+            visible_row_for_content_row(&self.region, start)?,
+            visible_row_for_content_row(&self.region, end)?,
         ))
     }
 
@@ -559,8 +553,8 @@ impl SelectionRange {
     pub fn bounds_positions(&self) -> Option<(ClientMousePosition, ClientMousePosition)> {
         let bounds = self.bounds();
         Some((
-            self::visible_position(&self.region, bounds.start)?,
-            self::visible_position(&self.region, bounds.end)?,
+            visible_position(&self.region, bounds.start)?,
+            visible_position(&self.region, bounds.end)?,
         ))
     }
 
@@ -600,7 +594,7 @@ impl SelectionRange {
 
 pub fn copy_to_clipboard(text: &str) -> rootcause::Result<()> {
     let mut bytes = text.as_bytes();
-    Ok(ytil_sys::file::cp_to_system_clipboard(&mut bytes).context("failed to copy muxr selection to clipboard")?)
+    Ok(file::cp_to_system_clipboard(&mut bytes).context("failed to copy muxr selection to clipboard")?)
 }
 
 pub fn changed_selection_rows(previous: Option<&SelectionRange>, next: Option<&SelectionRange>) -> Vec<u16> {
@@ -639,7 +633,7 @@ impl ClickTarget {
                 }
             }
             Self::Word { end, pane_id, start } => {
-                if self::matching_region(regions, *pane_id).is_some_and(|region| {
+                if matching_region(regions, *pane_id).is_some_and(|region| {
                     region.containment(start.row, start.col) == PaneRegionContainment::Inside
                         && region.containment(end.row, end.col) == PaneRegionContainment::Inside
                 }) {
@@ -803,7 +797,7 @@ fn selected_inline_text(cached_rows: &BTreeMap<u64, CachedSelectionRow>, selecti
         } else {
             selection.region.cols().saturating_sub(1)
         };
-        let selected_row = self::selected_row_text(cached_row.cells(), start_col, end_col, cached_row.row_wrap());
+        let selected_row = selected_row_text(cached_row.cells(), start_col, end_col, cached_row.row_wrap());
         let row_wrap = selected_row.row_wrap();
         let line = selected_row.text().trim();
         if line.is_empty() {
@@ -829,22 +823,22 @@ fn word_selection_at(
     frame_buffer: &FrameBuffer,
 ) -> Option<SelectionRange> {
     let region = regions.pane_at(position)?.clone();
-    let position = self::clamp_to_region(position, &region);
+    let position = clamp_to_region(position, &region);
     if WordCell::at(frame_buffer, position.row, position.col, &region) == WordCell::No {
         return None;
     }
 
-    let start_col = self::word_start_col(frame_buffer, position.row, position.col, &region);
-    let end_col = self::word_end_col(frame_buffer, position.row, position.col, &region);
+    let start_col = word_start_col(frame_buffer, position.row, position.col, &region);
+    let end_col = word_end_col(frame_buffer, position.row, position.col, &region);
     Some(SelectionRange {
-        anchor: self::content_position(
+        anchor: content_position(
             ClientMousePosition {
                 row: position.row,
                 col: start_col,
             },
             &region,
         )?,
-        focus: self::content_position(
+        focus: content_position(
             ClientMousePosition {
                 row: position.row,
                 col: end_col,
@@ -861,7 +855,7 @@ fn click_target(
     frame_buffer: &FrameBuffer,
 ) -> Option<ClickTarget> {
     let region = regions.pane_at(position)?;
-    if let Some(selection) = self::word_selection_at(position, regions, frame_buffer)
+    if let Some(selection) = word_selection_at(position, regions, frame_buffer)
         && let Some((start, end)) = selection.bounds_positions()
     {
         return Some(ClickTarget::Word {
@@ -896,7 +890,7 @@ fn selected_text(cached_rows: &BTreeMap<u64, CachedSelectionRow>, selection: &Se
         } else {
             selection.region.cols().saturating_sub(1)
         };
-        lines.push(self::selected_row_text(cached_row.cells(), start_col, end_col, cached_row.row_wrap()).into_text());
+        lines.push(selected_row_text(cached_row.cells(), start_col, end_col, cached_row.row_wrap()).into_text());
     }
     Some(lines.join("\n"))
 }
@@ -916,13 +910,13 @@ fn cache_visible_selected_rows(
     }
 
     for content_row in start..=end {
-        let Some(visible_row) = self::visible_row_for_content_row(&selection.region, content_row) else {
+        let Some(visible_row) = visible_row_for_content_row(&selection.region, content_row) else {
             continue;
         };
         cached_rows.insert(
             content_row,
             CachedSelectionRow::new(
-                self::cached_row_cells(frame_buffer, visible_row, &selection.region)?,
+                cached_row_cells(frame_buffer, visible_row, &selection.region)?,
                 selection.region.content_row_wrap(content_row),
             ),
         );
@@ -999,7 +993,7 @@ fn word_start_col(frame_buffer: &FrameBuffer, row: u16, col: u16, region: &PaneR
 
 fn word_end_col(frame_buffer: &FrameBuffer, row: u16, col: u16, region: &PaneRegionSnapshot) -> u16 {
     let mut end_col = col;
-    let last_col = self::last_region_col_saturating(region);
+    let last_col = last_region_col_saturating(region);
     while end_col < last_col {
         let next_col = end_col.saturating_add(1);
         if WordCell::at(frame_buffer, row, next_col, region) == WordCell::No {
@@ -1089,7 +1083,7 @@ fn visible_position(region: &PaneRegionSnapshot, position: SelectionContentPosit
     if position.col >= region.cols() {
         return None;
     }
-    let row = self::visible_row_for_content_row(region, position.row)?;
+    let row = visible_row_for_content_row(region, position.row)?;
     Some(ClientMousePosition {
         row,
         col: region.col().checked_add(position.col)?,
@@ -1110,7 +1104,7 @@ fn selectable_position(
     region: &PaneRegionSnapshot,
     frame_buffer: &FrameBuffer,
 ) -> ClientMousePosition {
-    let position = self::clamp_to_region(position, region);
+    let position = clamp_to_region(position, region);
     let Some(cell) = frame_buffer.cell(position.row, position.col) else {
         return position;
     };
@@ -1139,19 +1133,15 @@ fn selectable_position(
 
 fn clamp_to_region(position: ClientMousePosition, region: &PaneRegionSnapshot) -> ClientMousePosition {
     ClientMousePosition {
-        row: position
-            .row
-            .clamp(region.row(), self::last_region_row_saturating(region)),
-        col: position
-            .col
-            .clamp(region.col(), self::last_region_col_saturating(region)),
+        row: position.row.clamp(region.row(), last_region_row_saturating(region)),
+        col: position.col.clamp(region.col(), last_region_col_saturating(region)),
     }
 }
 
 const fn selection_edge_row(region: &PaneRegionSnapshot, direction: PaneScrollDirection) -> u16 {
     match direction {
         PaneScrollDirection::Up => region.row(),
-        PaneScrollDirection::Down => self::last_region_row_saturating(region),
+        PaneScrollDirection::Down => last_region_row_saturating(region),
     }
 }
 
@@ -1162,11 +1152,11 @@ const fn selection_edge_direction(
 ) -> Option<PaneScrollDirection> {
     match trigger {
         SelectionEdgeScrollTrigger::EdgeRow if position.row <= region.row() => Some(PaneScrollDirection::Up),
-        SelectionEdgeScrollTrigger::EdgeRow if position.row >= self::last_region_row_saturating(region) => {
+        SelectionEdgeScrollTrigger::EdgeRow if position.row >= last_region_row_saturating(region) => {
             Some(PaneScrollDirection::Down)
         }
         SelectionEdgeScrollTrigger::OutsideOnly if position.row < region.row() => Some(PaneScrollDirection::Up),
-        SelectionEdgeScrollTrigger::OutsideOnly if position.row > self::last_region_row_saturating(region) => {
+        SelectionEdgeScrollTrigger::OutsideOnly if position.row > last_region_row_saturating(region) => {
             Some(PaneScrollDirection::Down)
         }
         SelectionEdgeScrollTrigger::EdgeRow | SelectionEdgeScrollTrigger::OutsideOnly => None,
@@ -1185,7 +1175,7 @@ const fn last_region_row_saturating(region: &PaneRegionSnapshot) -> u16 {
 pub mod test_helpers {
     use muxr_core::ClientRequest;
 
-    use super::SelectionEdgeScrollRequest;
+    use crate::copy_selection::SelectionEdgeScrollRequest;
 
     pub const fn edge_scroll_request(request: &SelectionEdgeScrollRequest) -> &ClientRequest {
         &request.request
@@ -1632,7 +1622,7 @@ mod tests {
     }
 
     fn two_row_pane_regions(cols: u16) -> rootcause::Result<PaneRegionsSnapshot> {
-        self::two_row_pane_regions_with_wraps(cols, [RowWrap::EndsBeforeSoftWrap, RowWrap::EndsBeforeSoftWrap])
+        two_row_pane_regions_with_wraps(cols, [RowWrap::EndsBeforeSoftWrap, RowWrap::EndsBeforeSoftWrap])
     }
 
     fn two_row_pane_regions_with_wraps(
@@ -1708,7 +1698,7 @@ mod tests {
     }
 
     fn two_row_render_baseline(cols: u16, first: &str, second: &str) -> rootcause::Result<RenderBaseline> {
-        self::two_row_render_baseline_cells(
+        two_row_render_baseline_cells(
             cols,
             padded_render_cells(cols, first),
             padded_render_cells(cols, second),

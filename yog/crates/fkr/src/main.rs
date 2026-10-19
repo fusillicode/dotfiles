@@ -5,12 +5,14 @@
 //! - Writing the generated value to the clipboard fails.
 
 use fkr::FkrOption;
+use ytil_sys::cli;
 use ytil_sys::cli::Args;
+use ytil_sys::file;
 
 /// Entry point for the fake data generator CLI.
 #[ytil_sys::main]
 fn main() -> rootcause::Result<()> {
-    let args = ytil_sys::cli::get();
+    let args = cli::get();
     if args.has_help() {
         println!(include_str!("../help.txt"));
         return Ok(());
@@ -24,7 +26,7 @@ fn main() -> rootcause::Result<()> {
     println!("{generated_value}");
 
     if args.first().is_some_and(|arg| arg == "cp") {
-        ytil_sys::file::cp_to_system_clipboard(&mut generated_value.as_bytes())?;
+        file::cp_to_system_clipboard(&mut generated_value.as_bytes())?;
     }
 
     Ok(())

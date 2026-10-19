@@ -1,4 +1,5 @@
 use std::process::Command;
+use std::str;
 
 use rootcause::prelude::ResultExt;
 use rootcause::report;
@@ -43,7 +44,7 @@ pub fn log_into_vault_if_required() -> rootcause::Result<()> {
     if token_lookup.status.success() {
         return Ok(());
     }
-    let stderr = std::str::from_utf8(&token_lookup.stderr)
+    let stderr = str::from_utf8(&token_lookup.stderr)
         .context("error invalid utf-8 stderr")
         .attach_with(|| format!("cmd=\"vault token lookup\" stderr={:?}", token_lookup.stderr))?
         .trim();
@@ -55,7 +56,7 @@ pub fn log_into_vault_if_required() -> rootcause::Result<()> {
         .args(["login", "-method=oidc", "-path=okta", "--no-print"])
         .output()?;
     if !login.status.success() {
-        let stderr = std::str::from_utf8(&login.stderr)
+        let stderr = str::from_utf8(&login.stderr)
             .context("error invalid utf-8 stderr")
             .attach_with(|| format!("cmd=\"vault login\" stderr={:?}", login.stderr))?
             .trim();

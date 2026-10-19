@@ -1,3 +1,5 @@
+use std::mem;
+
 use muxr_config::KeybindingMode;
 use muxr_config::KeybindingsConfig;
 use muxr_core::ClientKey;
@@ -48,7 +50,7 @@ impl InputDecoder {
             self.push_byte(*byte, &mut input, &mut decoded);
         }
 
-        self::push_input(&mut decoded, &mut input);
+        crate::input::push_input(&mut decoded, &mut input);
         decoded
     }
 
@@ -57,9 +59,9 @@ impl InputDecoder {
         let mut decoded = Vec::new();
         let mut input = Vec::new();
 
-        self::finalize_pending_input(self, &mut input, &mut decoded);
+        crate::input::finalize_pending_input(self, &mut input, &mut decoded);
 
-        self::push_input(&mut decoded, &mut input);
+        crate::input::push_input(&mut decoded, &mut input);
         decoded
     }
 
@@ -85,8 +87,8 @@ impl InputDecoder {
             PendingInput::None => {
                 if byte == ESC {
                     self.pending = PendingInput::EscapeSequence(vec![ESC]);
-                } else if let Some(key) = self::key_for_plain_byte(byte) {
-                    self::push_key(decoded, input, key);
+                } else if let Some(key) = crate::input::key_for_plain_byte(byte) {
+                    crate::input::push_key(decoded, input, key);
                 } else {
                     input.push(byte);
                 }
@@ -96,7 +98,7 @@ impl InputDecoder {
                 if bytes.len() == 2
                     && let Some(kind) = ControlStringKind::from_prefix(byte)
                 {
-                    self.pending = if self::key_for_escaped_byte(byte, &self.keybindings).is_some() {
+                    self.pending = if crate::input::key_for_escaped_byte(byte, &self.keybindings).is_some() {
                         PendingInput::AmbiguousControlString(bytes)
                     } else {
                         PendingInput::ControlString { bytes, kind }
@@ -104,10 +106,10 @@ impl InputDecoder {
                 } else if PendingEscapeStatus::from(bytes.as_slice()) == PendingEscapeStatus::Incomplete {
                     self.pending = PendingInput::EscapeSequence(bytes);
                 } else if bytes == BRACKETED_PASTE_START {
-                    self::push_input(decoded, input);
+                    crate::input::push_input(decoded, input);
                     self.pending = PendingInput::Paste(Vec::new());
                 } else {
-                    self::finish_escape_sequence(bytes, &self.keybindings, input, decoded);
+                    crate::input::finish_escape_sequence(bytes, &self.keybindings, input, decoded);
                 }
             }
             PendingInput::AmbiguousControlString(mut bytes) => {
@@ -115,10 +117,10 @@ impl InputDecoder {
                 if let Some(&prefix) = bytes.get(1)
                     && let Some(kind) = ControlStringKind::from_prefix(prefix)
                 {
-                    match self::control_string_status(&bytes, kind) {
+                    match crate::input::control_string_status(&bytes, kind) {
                         ControlStringStatus::Complete => input.extend(bytes),
                         ControlStringStatus::Incomplete if bytes.len() >= MAX_PENDING_CONTROL_STRING_BYTES => {
-                            self::flush_control_string(bytes, input, decoded);
+                            crate::input::flush_control_string(bytes, input, decoded);
                             self.pending = PendingInput::ControlString {
                                 bytes: Vec::new(),
                                 kind,
@@ -134,10 +136,10 @@ impl InputDecoder {
             }
             PendingInput::ControlString { mut bytes, kind } => {
                 bytes.push(byte);
-                match self::control_string_status(&bytes, kind) {
+                match crate::input::control_string_status(&bytes, kind) {
                     ControlStringStatus::Complete => input.extend(bytes),
                     ControlStringStatus::Incomplete if bytes.len() >= MAX_PENDING_CONTROL_STRING_BYTES => {
-                        self::flush_control_string(bytes, input, decoded);
+                        crate::input::flush_control_string(bytes, input, decoded);
                         self.pending = PendingInput::ControlString {
                             bytes: Vec::new(),
                             kind,
@@ -230,7 +232,7 @@ impl SgrMouseEvent {
         } else {
             ClientMouseEventPhase::Press
         };
-        let Some((button, position)) = self::sgr_mouse_button_and_position(bytes) else {
+        let Some((button, position)) = sgr_mouse_button_and_position(bytes) else {
             return Some(Self::Ignored);
         };
         Some(Self::Event(ClientMouseEvent {
@@ -249,7 +251,7 @@ enum KittyKeyModifiers {
 
 impl KittyKeyModifiers {
     fn from_raw(raw: &[u8]) -> Option<Self> {
-        let flags = self::parse_mouse_number(raw)?.checked_sub(1)?;
+        let flags = parse_mouse_number(raw)?.checked_sub(1)?;
         if flags & !0b111 != 0 {
             return Some(Self::Unsupported);
         }
@@ -263,18 +265,14 @@ impl KittyKeyModifiers {
 
 fn finalize_pending_input(decoder: &mut InputDecoder, input: &mut Vec<u8>, events: &mut Vec<DecodedInput>) {
     loop {
-        match std::mem::take(&mut decoder.pending) {
+        match mem::take(&mut decoder.pending) {
             PendingInput::None => return,
             PendingInput::EscapeSequence(bytes) if bytes.as_slice() == [ESC] => {
-                self::push_key(
-                    events,
-                    input,
-                    self::key(ClientKeyCode::Esc, ClientKeyModifiers::NONE, &bytes),
-                );
+                push_key(events, input, key(ClientKeyCode::Esc, ClientKeyModifiers::NONE, &bytes));
                 return;
             }
             PendingInput::AmbiguousControlString(bytes) => {
-                self::finish_ambiguous_control_string(decoder, bytes, input, events);
+                finish_ambiguous_control_string(decoder, bytes, input, events);
             }
             PendingInput::EscapeSequence(bytes) | PendingInput::ControlString { bytes, .. } => {
                 input.extend(bytes);
@@ -303,12 +301,12 @@ fn finish_ambiguous_control_string(
         input.extend(bytes);
         return;
     };
-    let Some(key) = self::key_for_escaped_byte(byte, &decoder.keybindings) else {
+    let Some(key) = key_for_escaped_byte(byte, &decoder.keybindings) else {
         input.extend(bytes);
         return;
     };
 
-    self::push_key(events, input, key);
+    push_key(events, input, key);
     for byte in rest {
         decoder.push_byte(*byte, input, events);
     }
@@ -321,19 +319,19 @@ fn finish_escape_sequence(
     decoded: &mut Vec<DecodedInput>,
 ) {
     if let [ESC, byte] = bytes.as_slice()
-        && let Some(key) = self::key_for_escaped_byte(*byte, keybindings)
+        && let Some(key) = key_for_escaped_byte(*byte, keybindings)
     {
-        self::push_key(decoded, input, key);
+        push_key(decoded, input, key);
         return;
     }
 
-    if let Some(key) = self::key_for_csi_sequence(&bytes) {
-        self::push_key(decoded, input, key);
+    if let Some(key) = key_for_csi_sequence(&bytes) {
+        push_key(decoded, input, key);
         return;
     }
 
     if let Some(event) = SgrMouseEvent::from_bytes(&bytes) {
-        self::push_input(decoded, input);
+        push_input(decoded, input);
         match event {
             SgrMouseEvent::Ignored => {}
             SgrMouseEvent::Event(event) => decoded.push(DecodedInput::Mouse(event)),
@@ -346,14 +344,14 @@ fn finish_escape_sequence(
 
 fn key_for_plain_byte(byte: u8) -> Option<ClientKey> {
     (byte.is_ascii() && !byte.is_ascii_control())
-        .then(|| self::key(ClientKeyCode::Char(char::from(byte)), ClientKeyModifiers::NONE, &[byte]))
+        .then(|| key(ClientKeyCode::Char(char::from(byte)), ClientKeyModifiers::NONE, &[byte]))
 }
 
 fn key_for_escaped_byte(byte: u8, keybindings: &KeybindingsConfig) -> Option<ClientKey> {
     let (code, modifiers) = match byte {
         CTRL_N => (ClientKeyCode::Char('n'), ClientKeyModifiers::CTRL_ALT),
         CTRL_P => (ClientKeyCode::Char('p'), ClientKeyModifiers::CTRL_ALT),
-        _ => match self::legacy_alt_character(byte)? {
+        _ => match legacy_alt_character(byte)? {
             LegacyAltCharacter::Shifted(character) => (ClientKeyCode::Char(character), ClientKeyModifiers::SHIFT_ALT),
             LegacyAltCharacter::Unshifted(character) => (ClientKeyCode::Char(character), ClientKeyModifiers::ALT),
         },
@@ -363,7 +361,7 @@ fn key_for_escaped_byte(byte: u8, keybindings: &KeybindingsConfig) -> Option<Cli
         return None;
     }
 
-    let key = self::key(code, modifiers, &[ESC, byte]);
+    let key = key(code, modifiers, &[ESC, byte]);
     (keybindings.resolve_local(&key).is_some()
         || keybindings.resolve(KeybindingMode::Normal, &key).is_some()
         || keybindings.resolve(KeybindingMode::Resize, &key).is_some())
@@ -379,7 +377,7 @@ fn control_string_status(bytes: &[u8], kind: ControlStringKind) -> ControlString
 }
 
 fn flush_control_string(bytes: Vec<u8>, input: &mut Vec<u8>, decoded: &mut Vec<DecodedInput>) {
-    self::push_input(decoded, input);
+    push_input(decoded, input);
     decoded.push(DecodedInput::Input(bytes));
 }
 
@@ -423,7 +421,7 @@ fn legacy_alt_character(byte: u8) -> Option<LegacyAltCharacter> {
 }
 
 fn key_for_csi_sequence(bytes: &[u8]) -> Option<ClientKey> {
-    if let Some(key) = self::key_for_kitty_keyboard_sequence(bytes) {
+    if let Some(key) = key_for_kitty_keyboard_sequence(bytes) {
         return Some(key);
     }
 
@@ -432,10 +430,10 @@ fn key_for_csi_sequence(bytes: &[u8]) -> Option<ClientKey> {
     };
 
     match byte {
-        b'A' => Some(self::key(ClientKeyCode::Up, ClientKeyModifiers::NONE, bytes)),
-        b'B' => Some(self::key(ClientKeyCode::Down, ClientKeyModifiers::NONE, bytes)),
-        b'C' => Some(self::key(ClientKeyCode::Right, ClientKeyModifiers::NONE, bytes)),
-        b'D' => Some(self::key(ClientKeyCode::Left, ClientKeyModifiers::NONE, bytes)),
+        b'A' => Some(key(ClientKeyCode::Up, ClientKeyModifiers::NONE, bytes)),
+        b'B' => Some(key(ClientKeyCode::Down, ClientKeyModifiers::NONE, bytes)),
+        b'C' => Some(key(ClientKeyCode::Right, ClientKeyModifiers::NONE, bytes)),
+        b'D' => Some(key(ClientKeyCode::Left, ClientKeyModifiers::NONE, bytes)),
         _ => None,
     }
 }
@@ -448,7 +446,7 @@ fn key_for_kitty_keyboard_sequence(bytes: &[u8]) -> Option<ClientKey> {
     let body_end = bytes.len().checked_sub(1)?;
     let body = bytes.get(2..body_end)?;
     let mut parts = body.split(|byte| *byte == b';');
-    let key_number = parts.next().and_then(self::parse_mouse_number)?;
+    let key_number = parts.next().and_then(crate::input::parse_mouse_number)?;
     let modifiers = match parts.next() {
         Some(raw) => KittyKeyModifiers::from_raw(raw)?,
         None => KittyKeyModifiers::Supported(ClientKeyModifiers::NONE),
@@ -459,7 +457,7 @@ fn key_for_kitty_keyboard_sequence(bytes: &[u8]) -> Option<ClientKey> {
     let KittyKeyModifiers::Supported(modifiers) = modifiers else {
         // The wire type cannot represent kitty's higher modifier bits. Preserve the raw sequence as an unknown key so
         // muxr shortcuts do not accidentally fire after dropping unsupported bits.
-        return Some(self::key(ClientKeyCode::Unknown, ClientKeyModifiers::NONE, bytes));
+        return Some(key(ClientKeyCode::Unknown, ClientKeyModifiers::NONE, bytes));
     };
 
     let code = match key_number {
@@ -467,11 +465,11 @@ fn key_for_kitty_keyboard_sequence(bytes: &[u8]) -> Option<ClientKey> {
         13 => ClientKeyCode::Enter,
         27 => ClientKeyCode::Esc,
         127 => ClientKeyCode::Backspace,
-        32..=126 => ClientKeyCode::Char(self::kitty_ascii_character(key_number, modifiers)?),
+        32..=126 => ClientKeyCode::Char(kitty_ascii_character(key_number, modifiers)?),
         _ => ClientKeyCode::Unknown,
     };
 
-    Some(self::key(code, modifiers, bytes))
+    Some(key(code, modifiers, bytes))
 }
 
 fn kitty_ascii_character(key_number: u16, modifiers: ClientKeyModifiers) -> Option<char> {
@@ -489,14 +487,14 @@ fn sgr_mouse_button_and_position(bytes: &[u8]) -> Option<(u16, ClientMousePositi
     let body_end = bytes.len().checked_sub(1)?;
     let body = bytes.get(3..body_end)?;
     let mut parts = body.split(|byte| *byte == b';');
-    let button = parts.next().and_then(self::parse_mouse_number)?;
+    let button = parts.next().and_then(crate::input::parse_mouse_number)?;
     let col = parts
         .next()
-        .and_then(self::parse_mouse_number)
+        .and_then(crate::input::parse_mouse_number)
         .and_then(|col| col.checked_sub(1))?;
     let row = parts
         .next()
-        .and_then(self::parse_mouse_number)
+        .and_then(crate::input::parse_mouse_number)
         .and_then(|row| row.checked_sub(1))?;
     if parts.next().is_some() {
         return None;
@@ -522,7 +520,7 @@ fn parse_mouse_number(raw: &[u8]) -> Option<u16> {
 }
 
 fn push_key(decoded: &mut Vec<DecodedInput>, input: &mut Vec<u8>, key: ClientKey) {
-    self::push_input(decoded, input);
+    push_input(decoded, input);
     decoded.push(DecodedInput::Key(key));
 }
 
@@ -552,7 +550,7 @@ fn push_input(decoded: &mut Vec<DecodedInput>, input: &mut Vec<u8>) {
         return;
     }
 
-    decoded.push(DecodedInput::Input(std::mem::take(input)));
+    decoded.push(DecodedInput::Input(mem::take(input)));
 }
 
 fn key(code: ClientKeyCode, modifiers: ClientKeyModifiers, raw_bytes: &[u8]) -> ClientKey {

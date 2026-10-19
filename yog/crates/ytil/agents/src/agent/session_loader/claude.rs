@@ -1,12 +1,16 @@
 use std::collections::HashSet;
+use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 
 use rootcause::prelude::ResultExt;
+use ytil_sys::dir;
 
 use crate::agent::Agent;
 use crate::agent::session::Session;
 use crate::agent::session::SessionKey;
+use crate::agent::session_loader;
+use crate::agent::session_parser::claude;
 
 /// Load Claude sessions from the local Claude project store.
 ///
@@ -14,9 +18,9 @@ use crate::agent::session::SessionKey;
 /// Returns an error when the Claude sessions directory cannot be read or a
 /// session file cannot be parsed.
 pub fn load_sessions() -> rootcause::Result<Vec<Session>> {
-    let root = ytil_sys::dir::build_home_path(Agent::Claude.sessions_root_path())?;
+    let root = dir::build_home_path(Agent::Claude.sessions_root_path())?;
     let session_paths =
-        crate::agent::session_loader::find_session_paths(&root, |entry| claude_session_path(&entry.path()), |_| false)?;
+        session_loader::find_session_paths(&root, |entry| claude_session_path(&entry.path()), |_| false)?;
 
     load_sessions_from_paths(session_paths, |_| true)
 }
@@ -26,16 +30,16 @@ pub fn load_sessions() -> rootcause::Result<Vec<Session>> {
 /// # Errors
 /// Returns an error when a matching Claude session file cannot be read or parsed.
 pub fn load_sessions_by_key(keys: &[SessionKey]) -> rootcause::Result<Vec<Session>> {
-    let root = ytil_sys::dir::build_home_path(Agent::Claude.sessions_root_path())?;
+    let root = dir::build_home_path(Agent::Claude.sessions_root_path())?;
     load_sessions_from_root_by_key(&root, keys)
 }
 
 fn load_sessions_from_root_by_key(root: &Path, keys: &[SessionKey]) -> rootcause::Result<Vec<Session>> {
-    let requested_ids = crate::agent::session_loader::requested_ids(keys, Agent::Claude);
+    let requested_ids = session_loader::requested_ids(keys, Agent::Claude);
     if requested_ids.is_empty() {
         return Ok(Vec::new());
     }
-    let session_paths = crate::agent::session_loader::find_session_paths(
+    let session_paths = session_loader::find_session_paths(
         root,
         |entry| claude_session_path_matches_requested_id(&entry.path(), &requested_ids),
         |_| false,
@@ -50,11 +54,10 @@ fn load_sessions_from_paths(
 ) -> rootcause::Result<Vec<Session>> {
     let mut sessions = Vec::new();
     for session_path in session_paths {
-        let content = std::fs::read_to_string(&session_path)
+        let content = fs::read_to_string(&session_path)
             .context("failed to read Claude session file")
             .attach_with(|| format!("path={}", session_path.display()))?;
-        let claude_session = crate::agent::session_parser::claude::parse(&content)
-            .attach_with(|| format!("path={}", session_path.display()))?;
+        let claude_session = claude::parse(&content).attach_with(|| format!("path={}", session_path.display()))?;
         let session = claude_session.into_session(session_path);
         if session.workspace.is_dir() && keep_session(&session) {
             sessions.push(session);

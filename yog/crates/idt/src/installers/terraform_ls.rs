@@ -4,9 +4,12 @@ use rootcause::prelude::ResultExt;
 use ytil_sys::Arch;
 use ytil_sys::Os;
 use ytil_sys::SysInfo;
+use ytil_sys::file;
 
+use crate::downloaders::http;
 use crate::downloaders::http::deflate::ChecksumSource;
 use crate::downloaders::http::deflate::HttpDeflateOption;
+use crate::downloaders::http::github;
 use crate::installers::Installer;
 use crate::installers::SystemDependent;
 
@@ -39,7 +42,7 @@ impl Installer for TerraformLs<'_> {
         let (arch, os) = self.target_arch_and_os();
 
         let repo = format!("hashicorp/{}", self.bin_name());
-        let latest_release_tag = crate::downloaders::http::github::get_latest_release_tag(&repo)?;
+        let latest_release_tag = github::get_latest_release_tag(&repo)?;
         let latest_release = latest_release_tag
             .get(1..)
             .ok_or_else(|| rootcause::report!("error trimming 'v' prefix from release tag"))
@@ -51,7 +54,7 @@ impl Installer for TerraformLs<'_> {
             self.bin_name()
         );
 
-        let target = crate::downloaders::http::run(
+        let target = http::run(
             &format!(
                 "https://releases.hashicorp.com/{0}/{latest_release}/{filename}",
                 self.bin_name()
@@ -66,7 +69,7 @@ impl Installer for TerraformLs<'_> {
             }),
         )?;
 
-        ytil_sys::file::chmod_x(target)?;
+        file::chmod_x(target)?;
 
         Ok(())
     }

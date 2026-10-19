@@ -2,6 +2,7 @@ use std::path::Path;
 use std::process::Command;
 use std::str::FromStr;
 
+use rootcause::Report;
 use rootcause::prelude::ResultExt;
 
 use crate::cargo_metadata::Metadata;
@@ -40,7 +41,7 @@ impl CmdKind {
 }
 
 impl FromStr for CmdKind {
-    type Err = rootcause::Report;
+    type Err = Report;
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         match value {

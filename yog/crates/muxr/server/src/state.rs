@@ -1,13 +1,13 @@
-pub use self::pane::Pane;
-pub use self::pane::PaneAttentionState;
-pub use self::pane::PaneState;
-pub use self::pane::PaneTree;
-pub use self::pane::PaneTreeRightPane;
-pub use self::session::PaneMetadataSync;
-pub use self::session::PaneSnapshotFields;
-pub use self::session::SessionLayout;
-pub use self::session::SessionMetadata;
-pub use self::tab::Tab;
+pub use crate::state::pane::Pane;
+pub use crate::state::pane::PaneAttentionState;
+pub use crate::state::pane::PaneState;
+pub use crate::state::pane::PaneTree;
+pub use crate::state::pane::PaneTreeRightPane;
+pub use crate::state::session::PaneMetadataSync;
+pub use crate::state::session::PaneSnapshotFields;
+pub use crate::state::session::SessionLayout;
+pub use crate::state::session::SessionMetadata;
+pub use crate::state::tab::Tab;
 mod pane;
 
 pub mod persisted;
@@ -17,5 +17,5 @@ pub const VERSION: u16 = 4;
 
 #[cfg(test)]
 pub mod test_helpers {
-    pub use super::session::test_helpers::*;
+    pub use crate::state::session::test_helpers::*;
 }

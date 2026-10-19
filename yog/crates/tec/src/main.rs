@@ -5,15 +5,20 @@
 
 use std::ops::Deref;
 use std::path::Path;
+use std::process;
 use std::process::Command;
 use std::process::Output;
+use std::thread;
 use std::time::Duration;
 use std::time::Instant;
 
 use owo_colors::OwoColorize;
 use ytil_cmd::CmdError;
 use ytil_cmd::CmdExt;
+use ytil_git::repo;
+use ytil_sys::cli;
 use ytil_sys::cli::Args;
+use ytil_sys::dir;
 
 /// File suffixes considered Rust-related for conditional lint gating.
 const RUST_EXTENSIONS: &[&str] = &[".rs", "Cargo.toml"];
@@ -209,18 +214,18 @@ enum LintScope {
 /// Run workspace lint suite concurrently (check or fix modes).
 #[ytil_sys::main]
 fn main() -> rootcause::Result<()> {
-    let args = ytil_sys::cli::get();
+    let args = cli::get();
     if args.has_help() {
         println!(include_str!("../help.txt"));
         return Ok(());
     }
     let fix_mode = args.iter().any(|s| matches!(s.as_str(), "--fix" | "fix"));
-    let workspace_root = ytil_sys::dir::get_workspace_root()?;
+    let workspace_root = dir::get_workspace_root()?;
 
     let ctx = if args.iter().any(|s| s == "--all") {
         LintScope::Full
     } else {
-        let repo = ytil_git::repo::discover(&workspace_root)?;
+        let repo = repo::discover(&workspace_root)?;
         LintScope::Changed(
             repo.statuses(None)?
                 .iter()
@@ -250,7 +255,7 @@ fn main() -> rootcause::Result<()> {
         .map(|(lint_name, lint_builder)| {
             (
                 lint_name,
-                std::thread::spawn({
+                thread::spawn({
                     let workspace_root = workspace_root.clone();
                     let ctx = ctx.clone();
                     move || run_and_report(lint_name, &workspace_root, lint_builder(&ctx))
@@ -278,7 +283,7 @@ fn main() -> rootcause::Result<()> {
     println!(); // Cosmetic spacing.
 
     if errors_count > 0 {
-        std::process::exit(1);
+        process::exit(1);
     }
 
     Ok(())

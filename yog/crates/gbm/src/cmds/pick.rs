@@ -8,6 +8,7 @@ use std::path::Path;
 use owo_colors::OwoColorize;
 use rootcause::prelude::ResultExt;
 use ytil_git::branch::Branch;
+use ytil_git::repo;
 
 pub fn run() -> rootcause::Result<()> {
     let Some(branch) = select_branch_with_current_first()? else {
@@ -19,7 +20,7 @@ pub fn run() -> rootcause::Result<()> {
 }
 
 fn select_branch_with_current_first() -> rootcause::Result<Option<Branch>> {
-    let repo = ytil_git::repo::discover(Path::new(".")).context("error discovering repo for branch selection")?;
+    let repo = repo::discover(Path::new(".")).context("error discovering repo for branch selection")?;
     let branches = prioritize_current_branch_first(
         ytil_git::branch::get_all_no_redundant(&repo)?,
         ytil_git::branch::get_current()?.as_str(),

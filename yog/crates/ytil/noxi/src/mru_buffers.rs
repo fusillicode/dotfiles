@@ -2,7 +2,9 @@
 
 use std::str::FromStr;
 
+use nvim_oxi::api;
 use nvim_oxi::api::Buffer;
+use rootcause::Report;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
 
@@ -36,7 +38,7 @@ impl MruBuffer {
 /// - Extracting the unlisted flag fails.
 /// - Extracting the name fails.
 impl FromStr for MruBuffer {
-    type Err = rootcause::Report;
+    type Err = Report;
 
     fn from_str(mru_buffer_line: &str) -> Result<Self, Self::Err> {
         let mru_buffer_line = mru_buffer_line.trim();
@@ -132,7 +134,7 @@ impl<T: AsRef<str>> From<T> for BufferKind {
 /// then parses it into a vector of [`MruBuffer`]. Errors during execution or parsing
 /// are notified to the user and result in [`None`] being returned.
 pub fn get() -> Option<Vec<MruBuffer>> {
-    let Ok(mru_buffers_output) = nvim_oxi::api::call_function::<_, String>("execute", ("ls t",))
+    let Ok(mru_buffers_output) = api::call_function::<_, String>("execute", ("ls t",))
         .inspect_err(|err| crate::notify::error(format!("error getting mru buffers | error={err:?}")))
     else {
         return None;

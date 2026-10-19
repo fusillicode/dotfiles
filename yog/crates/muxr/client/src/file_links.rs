@@ -1,4 +1,6 @@
 use std::collections::HashSet;
+use std::env;
+use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -27,11 +29,11 @@ impl FileLink {
 
     fn resolve_with_existence(&self, cwd: &str) -> Option<ResolvedFileLink> {
         let raw_path = self.path.to_str()?;
-        let path = self::resolve_path(raw_path, cwd)?;
-        let existence = self::file_link_existence(&path);
+        let path = crate::file_links::resolve_path(raw_path, cwd)?;
+        let existence = crate::file_links::file_link_existence(&path);
         // A bare word is ambiguous in TUI prose. Require it to name an existing file or directory when it has no
         // extension, while allowing extension-bearing names so links to files that are about to be created still work.
-        if self::is_bare_name(raw_path)
+        if crate::file_links::is_bare_name(raw_path)
             && matches!(existence, FileLinkExistence::Missing)
             && Path::new(raw_path).extension().is_none()
         {
@@ -104,32 +106,32 @@ struct FileLinkExtraction {
 impl FileLinkExtraction {
     fn resolve_unquoted(&self, cwd: &str) -> Option<FileLink> {
         if !self.raw.chars().any(char::is_whitespace) {
-            return self::resolve_first_file_link(self::file_link_candidates(&self.raw_reference), cwd, self.wrap);
+            return resolve_first_file_link(file_link_candidates(&self.raw_reference), cwd, self.wrap);
         }
 
-        let boundaries = self::whitespace_boundaries(&self.raw);
+        let boundaries = whitespace_boundaries(&self.raw);
 
         let clicked_word_start = boundaries
             .partition_point(|boundary| *boundary <= self.clicked_index)
             .saturating_sub(1);
         let clicked_word_end = clicked_word_start.saturating_add(1);
         if let Some(resolved) =
-            self::resolve_anchored_unquoted_reference(self, cwd, &boundaries, clicked_word_start, clicked_word_end)
+            resolve_anchored_unquoted_reference(self, cwd, &boundaries, clicked_word_start, clicked_word_end)
         {
             return Some(resolved);
         }
-        if let Some(resolved) = self::resolve_bare_unquoted_reference(self, cwd, &boundaries) {
+        if let Some(resolved) = resolve_bare_unquoted_reference(self, cwd, &boundaries) {
             return Some(resolved);
         }
 
-        if self.raw.starts_with('[') && self.raw.contains("](") && self::markdown_target(&self.raw).is_none() {
+        if self.raw.starts_with('[') && self.raw.contains("](") && markdown_target(&self.raw).is_none() {
             return None;
         }
         self.resolve_single(cwd)
     }
 
     fn resolve_single(&self, cwd: &str) -> Option<FileLink> {
-        let resolved = self::resolve_first_file_link(self::file_link_candidates(&self.raw_reference), cwd, self.wrap)?;
+        let resolved = resolve_first_file_link(file_link_candidates(&self.raw_reference), cwd, self.wrap)?;
         if matches!(self.explicitness, FileLinkExplicitness::Implicit)
             && matches!(self::file_link_existence(&resolved.path), FileLinkExistence::Missing)
         {
@@ -171,7 +173,7 @@ impl FrameBuffer {
     #[cfg(test)]
     fn file_link_at(&self, region: &PaneRegionSnapshot, position: ClientMousePosition) -> Option<FileLink> {
         self.at_with_reference_mode(region, position, FileLinkReferenceMode::Delimited)
-            .and_then(|extraction| self::file_link_from_reference(&extraction.raw))
+            .and_then(|extraction| crate::file_links::file_link_from_reference(&extraction.raw))
     }
 
     fn at_with_reference_mode(
@@ -184,14 +186,14 @@ impl FrameBuffer {
             return None;
         }
 
-        let position = self::reference_position_for_click(self, region, position)?;
-        let clicked = self::cell_text(self.cell(position.row, position.col))?;
-        if !self::is_reference_text(clicked) {
+        let position = crate::file_links::reference_position_for_click(self, region, position)?;
+        let clicked = crate::file_links::cell_text(self.cell(position.row, position.col))?;
+        if !crate::file_links::is_reference_text(clicked) {
             return None;
         }
 
-        let left = self::collect_left(self, region, position, mode);
-        let right = self::collect_right(self, region, position, mode);
+        let left = crate::file_links::collect_left(self, region, position, mode);
+        let right = crate::file_links::collect_right(self, region, position, mode);
         let wrap = left.wrap.join(right.wrap);
         let mut raw = left.chars.iter().rev().fold(String::new(), |mut raw, text| {
             raw.push_str(text);
@@ -208,19 +210,19 @@ impl FrameBuffer {
             || raw_start.starts_with('\'')
             || raw_start.starts_with('`')
             || raw.contains("\\ ")
-            || (raw_start.starts_with('[') && self::markdown_target(raw_start).is_some())
+            || (raw_start.starts_with('[') && crate::file_links::markdown_target(raw_start).is_some())
         {
             FileLinkExplicitness::Explicit
         } else {
             FileLinkExplicitness::Implicit
         };
-        let (trimmed, trim_start) = self::trim_reference(&raw);
+        let (trimmed, trim_start) = crate::file_links::trim_reference(&raw);
         let trimmed_end = trim_start.checked_add(trimmed.len())?;
         if !(trim_start..trimmed_end).contains(&clicked_index) {
             return None;
         }
 
-        self::file_link_from_reference(trimmed)?;
+        crate::file_links::file_link_from_reference(trimmed)?;
         let raw_reference = raw.get(trim_start..)?.to_owned();
         Some(FileLinkExtraction {
             raw: raw_reference.clone(),
@@ -262,7 +264,7 @@ fn resolve_anchored_unquoted_reference(
         let Some(word) = extraction.raw.get(start..word_end).map(str::trim) else {
             continue;
         };
-        if !self::is_path_anchor_word(word) {
+        if !is_path_anchor_word(word) {
             continue;
         }
         for end_index in clicked_word_end..boundaries.len() {
@@ -272,7 +274,7 @@ fn resolve_anchored_unquoted_reference(
             let Some(candidate_raw) = extraction.raw.get(start..end).map(str::trim) else {
                 continue;
             };
-            for candidate in self::file_link_candidates(candidate_raw) {
+            for candidate in file_link_candidates(candidate_raw) {
                 if !seen_candidates.insert(candidate.clone()) {
                     continue;
                 }
@@ -299,7 +301,7 @@ fn resolve_bare_unquoted_reference(
     cwd: &str,
     boundaries: &[usize],
 ) -> Option<FileLink> {
-    let entries = std::fs::read_dir(cwd).ok()?;
+    let entries = fs::read_dir(cwd).ok()?;
     let mut seen_candidates = HashSet::new();
     let mut longest_existing = None;
     for entry in entries.flatten() {
@@ -312,7 +314,7 @@ fn resolve_bare_unquoted_reference(
             };
             if extraction.clicked_index < match_start
                 || extraction.clicked_index >= match_end
-                || !self::is_bare_name_match(&extraction.raw, match_start, match_end)
+                || !is_bare_name_match(&extraction.raw, match_start, match_end)
             {
                 continue;
             }
@@ -329,7 +331,7 @@ fn resolve_bare_unquoted_reference(
             let Some(candidate_raw) = extraction.raw.get(start..end).map(str::trim) else {
                 continue;
             };
-            for candidate in self::file_link_candidates(candidate_raw) {
+            for candidate in file_link_candidates(candidate_raw) {
                 if !seen_candidates.insert(candidate.clone()) {
                     continue;
                 }
@@ -352,7 +354,7 @@ fn resolve_bare_unquoted_reference(
 }
 
 fn is_path_anchor_word(raw: &str) -> bool {
-    let path = self::trim_reference(raw).0;
+    let path = trim_reference(raw).0;
     !path.starts_with("http://")
         && !path.starts_with("https://")
         && !path.starts_with("file://")
@@ -404,20 +406,11 @@ fn resolve_first_file_link(candidates: Vec<FileLink>, cwd: &str, wrap: FileLinkW
     }
 }
 
-fn file_link_from_reference(raw: &str) -> Option<FileLink> {
-    let (path, line, column) = self::parse_reference(raw)?;
-    Some(FileLink {
-        path: PathBuf::from(self::unescape_path(path)),
-        line,
-        column,
-    })
-}
-
 fn file_link_candidates(raw: &str) -> Vec<FileLink> {
     let mut candidates = Vec::new();
     let mut add = |path: &str, line: Option<u32>, column: Option<u32>| {
         let candidate = FileLink {
-            path: PathBuf::from(self::unescape_path(path)),
+            path: PathBuf::from(unescape_path(path)),
             line,
             column,
         };
@@ -426,7 +419,7 @@ fn file_link_candidates(raw: &str) -> Vec<FileLink> {
         }
     };
 
-    if let Some(path) = self::raw_path_for_resolution(raw)
+    if let Some(path) = raw_path_for_resolution(raw)
         && !path.is_empty()
         && !path.starts_with("http://")
         && !path.starts_with("https://")
@@ -434,15 +427,24 @@ fn file_link_candidates(raw: &str) -> Vec<FileLink> {
     {
         add(path, None, None);
     }
-    if let Some((path, line, column)) = self::parse_reference_preserving_path_punctuation(raw) {
+    if let Some((path, line, column)) = parse_reference_preserving_path_punctuation(raw) {
         add(path, line, column);
     }
-    if let Some(link) = self::file_link_from_reference(raw)
+    if let Some(link) = file_link_from_reference(raw)
         && !candidates.contains(&link)
     {
         candidates.push(link);
     }
     candidates
+}
+
+fn file_link_from_reference(raw: &str) -> Option<FileLink> {
+    let (path, line, column) = parse_reference(raw)?;
+    Some(FileLink {
+        path: PathBuf::from(unescape_path(path)),
+        line,
+        column,
+    })
 }
 
 fn collect_left(
@@ -453,52 +455,52 @@ fn collect_left(
 ) -> ReferenceParts {
     let mut chars = Vec::new();
     let mut wrap = FileLinkWrap::SingleRow;
-    let quoted_delimiter = self::quoted_reference_delimiter(frame_buffer, region, position);
+    let quoted_delimiter = quoted_reference_delimiter(frame_buffer, region, position);
     let inside_quote = quoted_delimiter.is_some();
     let origin_row = position.row;
-    let mut current = self::previous_reference_position(frame_buffer, region, position);
+    let mut current = previous_reference_position(frame_buffer, region, position);
     while let Some(position) = current {
         if position.row != origin_row
-            && self::row_wrap(region, position.row.saturating_sub(1)) == Some(RowWrap::EndsWithSoftWrap)
+            && row_wrap(region, position.row.saturating_sub(1)) == Some(RowWrap::EndsWithSoftWrap)
         {
             wrap = FileLinkWrap::SoftWrapped;
         }
-        let Some(text) = self::cell_text(frame_buffer.cell(position.row, position.col)) else {
+        let Some(text) = cell_text(frame_buffer.cell(position.row, position.col)) else {
             break;
         };
-        if self::is_whitespace_text(text) {
-            if self::is_continuation_row_prefix(frame_buffer, region, position) {
+        if is_whitespace_text(text) {
+            if is_continuation_row_prefix(frame_buffer, region, position) {
                 wrap = FileLinkWrap::SoftWrapped;
-                current = self::previous_row_end(region, position.row);
+                current = previous_row_end(region, position.row);
                 continue;
             }
-            if self::is_soft_wrap_row_suffix(frame_buffer, region, position) {
+            if is_soft_wrap_row_suffix(frame_buffer, region, position) {
                 wrap = FileLinkWrap::SoftWrapped;
-                current = self::previous_reference_position(frame_buffer, region, position);
+                current = previous_reference_position(frame_buffer, region, position);
                 continue;
             }
             if matches!(mode, FileLinkReferenceMode::UnquotedSpaces)
-                && !self::row_prefix_is_whitespace(frame_buffer, region, position)
+                && !row_prefix_is_whitespace(frame_buffer, region, position)
             {
                 chars.push(text.to_owned());
-                current = self::previous_reference_position(frame_buffer, region, position);
+                current = previous_reference_position(frame_buffer, region, position);
                 continue;
             }
-            if inside_quote || self::is_escaped_space(frame_buffer, region, position) {
+            if inside_quote || is_escaped_space(frame_buffer, region, position) {
                 chars.push(text.to_owned());
-                current = self::previous_reference_position(frame_buffer, region, position);
+                current = previous_reference_position(frame_buffer, region, position);
                 continue;
             }
             break;
         }
-        if !self::is_reference_text(text) {
+        if !is_reference_text(text) {
             break;
         }
         chars.push(text.to_owned());
-        if inside_quote && self::quote_text_matches(text, quoted_delimiter) {
+        if inside_quote && quote_text_matches(text, quoted_delimiter) {
             break;
         }
-        current = self::previous_reference_position(frame_buffer, region, position);
+        current = previous_reference_position(frame_buffer, region, position);
     }
     ReferenceParts { chars, wrap }
 }
@@ -511,29 +513,29 @@ fn collect_right(
 ) -> ReferenceParts {
     let mut chars = Vec::new();
     let mut wrap = FileLinkWrap::SingleRow;
-    let quoted_delimiter = self::quoted_reference_delimiter(frame_buffer, region, position);
+    let quoted_delimiter = quoted_reference_delimiter(frame_buffer, region, position);
     let mut inside_quote = quoted_delimiter.is_some();
     let origin_row = position.row;
-    let mut current = self::next_reference_position(frame_buffer, region, position);
+    let mut current = next_reference_position(frame_buffer, region, position);
     let mut skip_continuation_prefix = current.is_some_and(|next| next.row != position.row);
     while let Some(position) = current {
         if position.row != origin_row
-            && self::row_wrap(region, position.row.saturating_sub(1)) == Some(RowWrap::EndsWithSoftWrap)
+            && row_wrap(region, position.row.saturating_sub(1)) == Some(RowWrap::EndsWithSoftWrap)
         {
             wrap = FileLinkWrap::SoftWrapped;
         }
-        let Some(text) = self::cell_text(frame_buffer.cell(position.row, position.col)) else {
+        let Some(text) = cell_text(frame_buffer.cell(position.row, position.col)) else {
             break;
         };
-        if self::is_whitespace_text(text) {
-            if skip_continuation_prefix && self::row_prefix_is_whitespace(frame_buffer, region, position) {
+        if is_whitespace_text(text) {
+            if skip_continuation_prefix && row_prefix_is_whitespace(frame_buffer, region, position) {
                 wrap = FileLinkWrap::SoftWrapped;
-                let next = self::next_reference_position(frame_buffer, region, position);
+                let next = next_reference_position(frame_buffer, region, position);
                 skip_continuation_prefix = next.is_some_and(|next| next.row != position.row);
                 current = next;
                 continue;
             }
-            if self::is_soft_wrap_row_suffix(frame_buffer, region, position) {
+            if is_soft_wrap_row_suffix(frame_buffer, region, position) {
                 wrap = FileLinkWrap::SoftWrapped;
                 let Some(next_row) = position.row.checked_add(1) else {
                     break;
@@ -546,17 +548,17 @@ fn collect_right(
                 continue;
             }
             if matches!(mode, FileLinkReferenceMode::UnquotedSpaces)
-                && !self::row_suffix_is_whitespace(frame_buffer, region, position)
+                && !row_suffix_is_whitespace(frame_buffer, region, position)
             {
                 chars.push(text.to_owned());
-                let next = self::next_reference_position(frame_buffer, region, position);
+                let next = next_reference_position(frame_buffer, region, position);
                 skip_continuation_prefix = next.is_some_and(|next| next.row != position.row);
                 current = next;
                 continue;
             }
-            if inside_quote || self::is_escaped_space(frame_buffer, region, position) {
+            if inside_quote || is_escaped_space(frame_buffer, region, position) {
                 chars.push(text.to_owned());
-                let next = self::next_reference_position(frame_buffer, region, position);
+                let next = next_reference_position(frame_buffer, region, position);
                 skip_continuation_prefix = next.is_some_and(|next| next.row != position.row);
                 current = next;
                 continue;
@@ -564,14 +566,14 @@ fn collect_right(
             break;
         }
         skip_continuation_prefix = false;
-        if !self::is_reference_text(text) {
+        if !is_reference_text(text) {
             break;
         }
         chars.push(text.to_owned());
-        if inside_quote && self::quote_text_matches(text, quoted_delimiter) {
+        if inside_quote && quote_text_matches(text, quoted_delimiter) {
             inside_quote = false;
         }
-        let next = self::next_reference_position(frame_buffer, region, position);
+        let next = next_reference_position(frame_buffer, region, position);
         if let Some(next) = next
             && next.row != position.row
         {
@@ -587,13 +589,13 @@ fn previous_reference_position(
     region: &PaneRegionSnapshot,
     position: ClientMousePosition,
 ) -> Option<ClientMousePosition> {
-    let mut position = self::previous_position(region, position);
+    let mut position = previous_position(region, position);
     while let Some(current) = position
         && frame_buffer
             .cell(current.row, current.col)
             .is_some_and(|cell| cell.width() == RenderCellWidth::WideContinuation)
     {
-        position = self::previous_position(region, current);
+        position = previous_position(region, current);
     }
     position
 }
@@ -606,11 +608,11 @@ fn previous_position(region: &PaneRegionSnapshot, position: ClientMousePosition)
         });
     }
     if position.row <= region.row()
-        || self::row_wrap(region, position.row.saturating_sub(1)) != Some(RowWrap::EndsWithSoftWrap)
+        || row_wrap(region, position.row.saturating_sub(1)) != Some(RowWrap::EndsWithSoftWrap)
     {
         return None;
     }
-    self::previous_row_end(region, position.row)
+    previous_row_end(region, position.row)
 }
 
 fn next_reference_position(
@@ -618,13 +620,13 @@ fn next_reference_position(
     region: &PaneRegionSnapshot,
     position: ClientMousePosition,
 ) -> Option<ClientMousePosition> {
-    let mut position = self::next_position(region, position);
+    let mut position = next_position(region, position);
     while let Some(current) = position
         && frame_buffer
             .cell(current.row, current.col)
             .is_some_and(|cell| cell.width() == RenderCellWidth::WideContinuation)
     {
-        position = self::next_position(region, current);
+        position = next_position(region, current);
     }
     position
 }
@@ -638,7 +640,7 @@ fn next_position(region: &PaneRegionSnapshot, position: ClientMousePosition) -> 
         });
     }
     if position.row >= region.row().checked_add(region.rows())?.saturating_sub(1)
-        || self::row_wrap(region, position.row) != Some(RowWrap::EndsWithSoftWrap)
+        || row_wrap(region, position.row) != Some(RowWrap::EndsWithSoftWrap)
     {
         return None;
     }
@@ -657,7 +659,7 @@ fn reference_position_for_click(
         .cell(position.row, position.col)
         .is_some_and(|cell| cell.width() == RenderCellWidth::WideContinuation)
     {
-        let previous = self::previous_position(region, position)?;
+        let previous = previous_position(region, position)?;
         return frame_buffer
             .cell(previous.row, previous.col)
             .is_some_and(|cell| cell.width() == RenderCellWidth::Wide)
@@ -685,8 +687,8 @@ fn is_continuation_row_prefix(
     position: ClientMousePosition,
 ) -> bool {
     position.row > region.row()
-        && self::row_wrap(region, position.row.saturating_sub(1)) == Some(RowWrap::EndsWithSoftWrap)
-        && self::row_prefix_is_whitespace(frame_buffer, region, position)
+        && row_wrap(region, position.row.saturating_sub(1)) == Some(RowWrap::EndsWithSoftWrap)
+        && row_prefix_is_whitespace(frame_buffer, region, position)
 }
 
 fn is_soft_wrap_row_suffix(
@@ -694,10 +696,10 @@ fn is_soft_wrap_row_suffix(
     region: &PaneRegionSnapshot,
     position: ClientMousePosition,
 ) -> bool {
-    self::row_wrap(region, position.row) == Some(RowWrap::EndsWithSoftWrap)
+    row_wrap(region, position.row) == Some(RowWrap::EndsWithSoftWrap)
         && position.col >= region.col()
         && position.col < region.col().saturating_add(region.cols())
-        && self::row_suffix_is_whitespace(frame_buffer, region, position)
+        && row_suffix_is_whitespace(frame_buffer, region, position)
 }
 
 fn row_prefix_is_whitespace(
@@ -706,7 +708,7 @@ fn row_prefix_is_whitespace(
     position: ClientMousePosition,
 ) -> bool {
     (region.col()..=position.col)
-        .all(|col| self::cell_text(frame_buffer.cell(position.row, col)).is_some_and(self::is_whitespace_text))
+        .all(|col| cell_text(frame_buffer.cell(position.row, col)).is_some_and(crate::file_links::is_whitespace_text))
 }
 
 fn row_suffix_is_whitespace(
@@ -722,22 +724,22 @@ fn row_suffix_is_whitespace(
         return false;
     };
     (position.col..=last_col)
-        .all(|col| self::cell_text(frame_buffer.cell(position.row, col)).is_some_and(self::is_whitespace_text))
+        .all(|col| cell_text(frame_buffer.cell(position.row, col)).is_some_and(crate::file_links::is_whitespace_text))
 }
 
 fn parse_reference(raw: &str) -> Option<(&str, Option<u32>, Option<u32>)> {
-    let (raw, _) = self::trim_reference(raw);
-    let raw = self::markdown_target(raw).unwrap_or(raw);
-    let (raw, _) = self::trim_reference(raw);
+    let (raw, _) = trim_reference(raw);
+    let raw = markdown_target(raw).unwrap_or(raw);
+    let (raw, _) = trim_reference(raw);
     let mut path = raw;
     let mut line = None;
     let mut column = None;
 
     if let Some((before_column, raw_column)) = raw.rsplit_once(':')
-        && let Some(parsed_column) = self::positive_number(raw_column)
+        && let Some(parsed_column) = positive_number(raw_column)
     {
         if let Some((before_line, raw_line)) = before_column.rsplit_once(':')
-            && let Some(parsed_line) = self::positive_number(raw_line)
+            && let Some(parsed_line) = positive_number(raw_line)
         {
             path = before_line;
             line = Some(parsed_line);
@@ -748,7 +750,7 @@ fn parse_reference(raw: &str) -> Option<(&str, Option<u32>, Option<u32>)> {
         }
     }
 
-    path = self::trim_reference(path).0;
+    path = trim_reference(path).0;
 
     if path.is_empty() || path.starts_with("http://") || path.starts_with("https://") || path.starts_with("file://") {
         return None;
@@ -758,18 +760,18 @@ fn parse_reference(raw: &str) -> Option<(&str, Option<u32>, Option<u32>)> {
 }
 
 fn parse_reference_preserving_path_punctuation(raw: &str) -> Option<(&str, Option<u32>, Option<u32>)> {
-    let (_, start) = self::trim_reference(raw);
+    let (_, start) = trim_reference(raw);
     let raw = raw.get(start..)?;
-    let raw = self::markdown_target(raw).unwrap_or(raw);
+    let raw = markdown_target(raw).unwrap_or(raw);
     let mut path = raw;
     let mut line = None;
     let mut column = None;
 
     if let Some((before_column, raw_column)) = raw.rsplit_once(':')
-        && let Some(parsed_column) = self::positive_number(self::trim_location_punctuation(raw_column))
+        && let Some(parsed_column) = positive_number(trim_location_punctuation(raw_column))
     {
         if let Some((before_line, raw_line)) = before_column.rsplit_once(':')
-            && let Some(parsed_line) = self::positive_number(self::trim_location_punctuation(raw_line))
+            && let Some(parsed_line) = positive_number(trim_location_punctuation(raw_line))
         {
             path = before_line;
             line = Some(parsed_line);
@@ -787,9 +789,9 @@ fn parse_reference_preserving_path_punctuation(raw: &str) -> Option<(&str, Optio
 }
 
 fn raw_path_for_resolution(raw: &str) -> Option<&str> {
-    let (_, start) = self::trim_reference(raw);
+    let (_, start) = trim_reference(raw);
     let raw = raw.get(start..)?;
-    let path = self::markdown_target(raw).unwrap_or(raw);
+    let path = markdown_target(raw).unwrap_or(raw);
     (!path.is_empty()).then_some(path)
 }
 
@@ -839,8 +841,8 @@ fn markdown_target(raw: &str) -> Option<&str> {
 }
 
 fn resolve_path(path: &str, cwd: &str) -> Option<PathBuf> {
-    let home = std::env::var_os("HOME").map(PathBuf::from);
-    self::resolve_path_with_home(path, cwd, home.as_deref())
+    let home = env::var_os("HOME").map(PathBuf::from);
+    resolve_path_with_home(path, cwd, home.as_deref())
 }
 
 fn resolve_path_with_home(path: &str, cwd: &str, home: Option<&Path>) -> Option<PathBuf> {
@@ -895,26 +897,26 @@ fn quoted_reference_delimiter(
     position: ClientMousePosition,
 ) -> Option<char> {
     let mut positions = Vec::new();
-    let mut current = self::previous_reference_position(frame_buffer, region, position);
+    let mut current = previous_reference_position(frame_buffer, region, position);
     while let Some(current_position) = current {
         positions.push(current_position);
-        current = self::previous_reference_position(frame_buffer, region, current_position);
+        current = previous_reference_position(frame_buffer, region, current_position);
     }
     positions.reverse();
 
     let mut delimiter = None;
     let mut backslashes = 0_usize;
     for position in positions {
-        let Some(text) = self::cell_text(frame_buffer.cell(position.row, position.col)) else {
+        let Some(text) = cell_text(frame_buffer.cell(position.row, position.col)) else {
             continue;
         };
         if text == "\\" {
             backslashes = backslashes.saturating_add(1);
             continue;
         }
-        if let Some(quote) = self::quote_char(text)
+        if let Some(quote) = quote_char(text)
             && backslashes.is_multiple_of(2)
-            && !self::is_word_internal_quote(frame_buffer, region, position)
+            && !is_word_internal_quote(frame_buffer, region, position)
         {
             if delimiter == Some(quote) {
                 delimiter = None;
@@ -944,11 +946,11 @@ fn is_word_internal_quote(
     region: &PaneRegionSnapshot,
     position: ClientMousePosition,
 ) -> bool {
-    let previous = self::previous_reference_position(frame_buffer, region, position)
-        .and_then(|position| self::cell_text(frame_buffer.cell(position.row, position.col)));
-    let next = self::next_reference_position(frame_buffer, region, position)
-        .and_then(|position| self::cell_text(frame_buffer.cell(position.row, position.col)));
-    previous.is_some_and(self::is_word_text) && next.is_some_and(self::is_word_text)
+    let previous = previous_reference_position(frame_buffer, region, position)
+        .and_then(|position| cell_text(frame_buffer.cell(position.row, position.col)));
+    let next = next_reference_position(frame_buffer, region, position)
+        .and_then(|position| cell_text(frame_buffer.cell(position.row, position.col)));
+    previous.is_some_and(crate::file_links::is_word_text) && next.is_some_and(crate::file_links::is_word_text)
 }
 
 fn is_word_text(text: &str) -> bool {
@@ -957,13 +959,13 @@ fn is_word_text(text: &str) -> bool {
 
 fn is_escaped_space(frame_buffer: &FrameBuffer, region: &PaneRegionSnapshot, position: ClientMousePosition) -> bool {
     let mut backslashes: usize = 0;
-    let mut current = self::previous_reference_position(frame_buffer, region, position);
+    let mut current = previous_reference_position(frame_buffer, region, position);
     while let Some(position) = current {
-        if self::cell_text(frame_buffer.cell(position.row, position.col)) != Some("\\") {
+        if cell_text(frame_buffer.cell(position.row, position.col)) != Some("\\") {
             break;
         }
         backslashes = backslashes.saturating_add(1);
-        current = self::previous_reference_position(frame_buffer, region, position);
+        current = previous_reference_position(frame_buffer, region, position);
     }
     backslashes % 2 == 1
 }
@@ -999,7 +1001,7 @@ mod tests {
 
     #[test]
     fn test_at_when_soft_wrap_has_continuation_indentation_returns_complete_reference() -> rootcause::Result<()> {
-        let frame_buffer = self::frame_buffer(&["/tmp/foo", "  :42:7 "])?;
+        let frame_buffer = frame_buffer(&["/tmp/foo", "  :42:7 "])?;
         let region = PaneRegionSnapshot::new(PaneId::new(1)?, 0, 0, 8, 2, PaneMouseMode::None, 0)?
             .with_wrapped_rows(vec![RowWrap::EndsWithSoftWrap, RowWrap::EndsBeforeSoftWrap])?;
 
@@ -1022,7 +1024,7 @@ mod tests {
             .path()
             .to_str()
             .ok_or_else(|| rootcause::report!("temporary test directory is not UTF-8"))?;
-        let frame_buffer = self::frame_buffer(&["first", "second.rs"])?;
+        let frame_buffer = frame_buffer(&["first", "second.rs"])?;
         let region = PaneRegionSnapshot::new(PaneId::new(1)?, 0, 0, 10, 2, PaneMouseMode::None, 0)?
             .with_wrapped_rows(vec![RowWrap::EndsWithSoftWrap, RowWrap::EndsBeforeSoftWrap])?;
 
@@ -1042,7 +1044,7 @@ mod tests {
             .path()
             .to_str()
             .ok_or_else(|| rootcause::report!("temporary test directory is not UTF-8"))?;
-        let frame_buffer = self::frame_buffer(&["nested/first", "  second.rs"])?;
+        let frame_buffer = frame_buffer(&["nested/first", "  second.rs"])?;
         let region = PaneRegionSnapshot::new(PaneId::new(1)?, 0, 0, 12, 2, PaneMouseMode::None, 0)?
             .with_wrapped_rows(vec![RowWrap::EndsWithSoftWrap, RowWrap::EndsBeforeSoftWrap])?;
 
@@ -1061,7 +1063,7 @@ mod tests {
 
     #[test]
     fn test_at_when_hard_row_boundary_ends_reference() -> rootcause::Result<()> {
-        let frame_buffer = self::frame_buffer(&["/tmp/foo", ":42:7  "])?;
+        let frame_buffer = frame_buffer(&["/tmp/foo", ":42:7  "])?;
         let region = PaneRegionSnapshot::new(PaneId::new(1)?, 0, 0, 8, 2, PaneMouseMode::None, 0)?;
 
         let link = frame_buffer.file_link_at(&region, ClientMousePosition { row: 0, col: 7 });
@@ -1091,7 +1093,7 @@ mod tests {
 
     #[test]
     fn test_at_when_unicode_path_is_supplied_returns_reference() -> rootcause::Result<()> {
-        let frame_buffer = self::frame_buffer(&["/tmp/über.rs"])?;
+        let frame_buffer = frame_buffer(&["/tmp/über.rs"])?;
         let region = PaneRegionSnapshot::new(PaneId::new(1)?, 0, 0, 12, 1, PaneMouseMode::None, 0)?;
 
         let link = frame_buffer.file_link_at(&region, ClientMousePosition { row: 0, col: 5 });
@@ -1121,7 +1123,7 @@ mod tests {
             RenderCell::narrow("r", style),
             RenderCell::narrow("s", style),
         ];
-        let frame_buffer = self::frame_buffer_from_cells(cells)?;
+        let frame_buffer = frame_buffer_from_cells(cells)?;
         let region = PaneRegionSnapshot::new(PaneId::new(1)?, 0, 0, 10, 1, PaneMouseMode::None, 0)?;
 
         let link = frame_buffer.file_link_at(&region, ClientMousePosition { row: 0, col: 6 });
@@ -1139,7 +1141,7 @@ mod tests {
     #[test]
     fn test_at_when_markdown_link_is_clicked_returns_target_reference() -> rootcause::Result<()> {
         let text = "[src/foo.rs](src/foo.rs)";
-        let frame_buffer = self::frame_buffer(&[text])?;
+        let frame_buffer = frame_buffer(&[text])?;
         let region = PaneRegionSnapshot::new(
             PaneId::new(1)?,
             0,
@@ -1179,7 +1181,7 @@ mod tests {
             RenderCell::narrow("r", style),
             RenderCell::narrow("s", style),
         ];
-        let frame_buffer = self::frame_buffer_from_cells(cells)?;
+        let frame_buffer = frame_buffer_from_cells(cells)?;
         let region = PaneRegionSnapshot::new(PaneId::new(1)?, 0, 0, 12, 1, PaneMouseMode::None, 0)?;
 
         let link = frame_buffer.file_link_at(&region, ClientMousePosition { row: 0, col: 8 });
@@ -1197,7 +1199,7 @@ mod tests {
     #[test]
     fn test_at_when_quoted_path_contains_spaces_returns_reference() -> rootcause::Result<()> {
         let text = r#""/tmp/a file.rs":42"#;
-        let frame_buffer = self::frame_buffer(&[text])?;
+        let frame_buffer = frame_buffer(&[text])?;
         let region = PaneRegionSnapshot::new(
             PaneId::new(1)?,
             0,
@@ -1222,7 +1224,7 @@ mod tests {
 
     #[test]
     fn test_at_when_quoted_path_soft_wrap_has_indentation_returns_trimmed_reference() -> rootcause::Result<()> {
-        let frame_buffer = self::frame_buffer(&[r#""/tmp/a"#, "   file.rs\":42"])?;
+        let frame_buffer = frame_buffer(&[r#""/tmp/a"#, "   file.rs\":42"])?;
         let region = PaneRegionSnapshot::new(PaneId::new(1)?, 0, 0, 14, 2, PaneMouseMode::None, 0)?
             .with_wrapped_rows(vec![RowWrap::EndsWithSoftWrap, RowWrap::EndsBeforeSoftWrap])?;
 
@@ -1241,7 +1243,7 @@ mod tests {
     #[test]
     fn test_at_when_escaped_path_contains_spaces_returns_reference() -> rootcause::Result<()> {
         let text = r"/tmp/a\ file.rs";
-        let frame_buffer = self::frame_buffer(&[text])?;
+        let frame_buffer = frame_buffer(&[text])?;
         let region = PaneRegionSnapshot::new(PaneId::new(1)?, 0, 0, 15, 1, PaneMouseMode::None, 0)?;
 
         let link = frame_buffer.file_link_at(&region, ClientMousePosition { row: 0, col: 8 });
@@ -1259,7 +1261,7 @@ mod tests {
     #[test]
     fn test_at_when_click_is_between_quoted_references_does_not_join_them() -> rootcause::Result<()> {
         let text = r#""foo" text "bar.rs""#;
-        let frame_buffer = self::frame_buffer(&[text])?;
+        let frame_buffer = frame_buffer(&[text])?;
         let region = PaneRegionSnapshot::new(
             PaneId::new(1)?,
             0,
@@ -1291,7 +1293,7 @@ mod tests {
             .to_str()
             .ok_or_else(|| rootcause::report!("temporary test directory is not UTF-8"))?;
         let text = "Open a file.rs now";
-        let frame_buffer = self::frame_buffer(&[text])?;
+        let frame_buffer = frame_buffer(&[text])?;
         let region = PaneRegionSnapshot::new(
             PaneId::new(1)?,
             0,
@@ -1332,7 +1334,7 @@ mod tests {
             .to_str()
             .ok_or_else(|| rootcause::report!("temporary test directory is not UTF-8"))?;
         let text = "name:with-colon!";
-        let frame_buffer = self::frame_buffer(&[text])?;
+        let frame_buffer = frame_buffer(&[text])?;
         let region = PaneRegionSnapshot::new(PaneId::new(1)?, 0, 0, 16, 1, PaneMouseMode::None, 0)?;
 
         let link = frame_buffer.file_link_at_resolved(&region, ClientMousePosition { row: 0, col: 6 }, cwd);
@@ -1359,7 +1361,7 @@ mod tests {
             .path()
             .to_str()
             .ok_or_else(|| rootcause::report!("temporary directory is not UTF-8"))?;
-        let frame_buffer = self::frame_buffer(&[text])?;
+        let frame_buffer = frame_buffer(&[text])?;
         let region = PaneRegionSnapshot::new(
             PaneId::new(1)?,
             0,
@@ -1390,7 +1392,7 @@ mod tests {
             .to_str()
             .ok_or_else(|| rootcause::report!("temporary directory is not UTF-8"))?;
         let text = "report:2026";
-        let frame_buffer = self::frame_buffer(&[text])?;
+        let frame_buffer = frame_buffer(&[text])?;
         let region = PaneRegionSnapshot::new(PaneId::new(1)?, 0, 0, 11, 1, PaneMouseMode::None, 0)?;
 
         assert_that!(
@@ -1415,7 +1417,7 @@ mod tests {
             .to_str()
             .ok_or_else(|| rootcause::report!("temporary test directory is not UTF-8"))?;
         let text = format!("{} (line 1)", path.display());
-        let frame_buffer = self::frame_buffer(&[&text])?;
+        let frame_buffer = frame_buffer(&[&text])?;
         let region = PaneRegionSnapshot::new(
             PaneId::new(1)?,
             0,
@@ -1458,7 +1460,7 @@ mod tests {
             .to_str()
             .ok_or_else(|| rootcause::report!("temporary test directory is not UTF-8"))?;
         let text = format!("Open {}", path.display());
-        let frame_buffer = self::frame_buffer(&[&text])?;
+        let frame_buffer = frame_buffer(&[&text])?;
         let region = PaneRegionSnapshot::new(
             PaneId::new(1)?,
             0,
@@ -1509,7 +1511,7 @@ mod tests {
             .strip_prefix(directory.path())
             .map_err(|error| rootcause::report!("failed to make test path relative: {error}"))?;
         let text = format!("Open {} now", relative_path.display());
-        let frame_buffer = self::frame_buffer(&[&text])?;
+        let frame_buffer = frame_buffer(&[&text])?;
         let region = PaneRegionSnapshot::new(
             PaneId::new(1)?,
             0,
@@ -1554,7 +1556,7 @@ mod tests {
             .to_str()
             .ok_or_else(|| rootcause::report!("temporary test directory is not UTF-8"))?;
         let text = format!("Open {} now", path.display());
-        let frame_buffer = self::frame_buffer(&[&text])?;
+        let frame_buffer = frame_buffer(&[&text])?;
         let region = PaneRegionSnapshot::new(
             PaneId::new(1)?,
             0,
@@ -1598,7 +1600,7 @@ mod tests {
             .to_str()
             .ok_or_else(|| rootcause::report!("temporary test directory is not UTF-8"))?;
         let text = format!("`{}`", path.display());
-        let frame_buffer = self::frame_buffer(&[&text])?;
+        let frame_buffer = frame_buffer(&[&text])?;
         let region = PaneRegionSnapshot::new(
             PaneId::new(1)?,
             0,
@@ -1641,7 +1643,7 @@ mod tests {
             .to_str()
             .ok_or_else(|| rootcause::report!("temporary test directory is not UTF-8"))?;
         let text = "new file.rs (not yet created)";
-        let frame_buffer = self::frame_buffer(&[text])?;
+        let frame_buffer = frame_buffer(&[text])?;
         let region = PaneRegionSnapshot::new(
             PaneId::new(1)?,
             0,
@@ -1668,7 +1670,7 @@ mod tests {
             .to_str()
             .ok_or_else(|| rootcause::report!("temporary test directory is not UTF-8"))?;
         let text = format!("[file]({}) description", path.display());
-        let frame_buffer = self::frame_buffer(&[&text])?;
+        let frame_buffer = frame_buffer(&[&text])?;
         let region = PaneRegionSnapshot::new(
             PaneId::new(1)?,
             0,
@@ -1794,13 +1796,13 @@ mod tests {
                 RenderRowSpan::new(u16::try_from(row)?, 0, cells)
             })
             .collect::<rootcause::Result<Vec<_>>>()?;
-        self::frame_buffer_from_rows(size, rows)
+        frame_buffer_from_rows(size, rows)
     }
 
     fn frame_buffer_from_cells(cells: Vec<RenderCell>) -> rootcause::Result<FrameBuffer> {
         let size = TerminalSize::new(u16::try_from(cells.len())?, 1)?;
         let rows = vec![RenderRowSpan::new(0, 0, cells)?];
-        self::frame_buffer_from_rows(size, rows)
+        frame_buffer_from_rows(size, rows)
     }
 
     fn frame_buffer_from_rows(size: TerminalSize, rows: Vec<RenderRowSpan>) -> rootcause::Result<FrameBuffer> {

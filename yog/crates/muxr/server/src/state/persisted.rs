@@ -94,7 +94,7 @@ mod tests {
     #[test]
     fn test_layout_metadata_when_nested_panes_exist_round_trips_tree() -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
-        let (session, paths) = self::session_paths(tempdir.path(), "work")?;
+        let (session, paths) = session_paths(tempdir.path(), "work")?;
         fs::create_dir_all(&paths.root)?;
         let mut layout = SessionLayout::initial(&session, state_test_helpers::metadata("sh", 1))?;
 
@@ -109,10 +109,10 @@ mod tests {
             PaneSplitAxis::Horizontal,
         )?;
         state_test_helpers::force_balanced_test_split_ratio(&mut layout)?;
-        self::write_metadata(&paths, &layout)?;
+        crate::state::persisted::tests::write_metadata(&paths, &layout)?;
 
-        let loaded =
-            self::load_metadata(&paths, &session)?.ok_or_else(|| report!("expected muxr layout metadata to load"))?;
+        let loaded = crate::state::persisted::tests::load_metadata(&paths, &session)?
+            .ok_or_else(|| report!("expected muxr layout metadata to load"))?;
 
         assert_that!(loaded.active_pane_id()?.to_string(), eq("pane-3"));
         assert_that!(
@@ -129,7 +129,7 @@ mod tests {
     #[test]
     fn test_layout_metadata_when_resized_panes_exist_round_trips_split_ratio() -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
-        let (session, paths) = self::session_paths(tempdir.path(), "work")?;
+        let (session, paths) = session_paths(tempdir.path(), "work")?;
         fs::create_dir_all(&paths.root)?;
         let mut layout = SessionLayout::initial(&session, state_test_helpers::metadata("sh", 1))?;
 
@@ -143,10 +143,10 @@ mod tests {
             layout.resize_active_pane(MuxrConfig::new()?.layout, PaneResizeDirection::Left)?,
             eq(crate::pane::resize::PaneResizeChange::Changed)
         );
-        self::write_metadata(&paths, &layout)?;
+        crate::state::persisted::tests::write_metadata(&paths, &layout)?;
 
-        let loaded =
-            self::load_metadata(&paths, &session)?.ok_or_else(|| report!("expected muxr layout metadata to load"))?;
+        let loaded = crate::state::persisted::tests::load_metadata(&paths, &session)?
+            .ok_or_else(|| report!("expected muxr layout metadata to load"))?;
 
         assert_that!(
             state_test_helpers::layout_active_tab_pane_regions(&loaded, &TerminalSize::new(80, 24)?)?,

@@ -10,6 +10,10 @@ use convert_case::Case;
 use convert_case::Casing;
 use nvim_oxi::Dictionary;
 use rootcause::Report;
+use ytil_noxi::buffer;
+use ytil_noxi::notify;
+use ytil_noxi::vim_ui_select;
+use ytil_noxi::visual_selection;
 
 /// Namespaced dictionary of case conversion helpers.
 ///
@@ -39,7 +43,7 @@ pub fn dict() -> Dictionary {
 /// # Notes
 /// Blockwise selections are treated as a contiguous span (not a rectangle).
 fn convert_selection(_: ()) {
-    let Some(selection) = ytil_noxi::visual_selection::get(()) else {
+    let Some(selection) = visual_selection::get(()) else {
         return;
     };
 
@@ -52,18 +56,18 @@ fn convert_selection(_: ()) {
                 .iter()
                 .map(|line| line.as_str().to_case(*case))
                 .collect::<Vec<_>>();
-            ytil_noxi::buffer::replace_text_and_notify_if_error(&selection, converted_lines);
+            buffer::replace_text_and_notify_if_error(&selection, converted_lines);
             Ok::<(), Report>(())
         });
     };
 
-    if let Err(err) = ytil_noxi::vim_ui_select::open(
+    if let Err(err) = vim_ui_select::open(
         cases.iter().map(DisplayableCase),
         &[("prompt", "Convert selection to case ")],
         callback,
         None,
     ) {
-        ytil_noxi::notify::error(format!("error converting selection to case | error={err:#?}"));
+        notify::error(format!("error converting selection to case | error={err:#?}"));
     }
 }
 

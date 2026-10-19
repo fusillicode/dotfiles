@@ -2,12 +2,14 @@ use muxr_core::PaneId;
 use rootcause::report;
 
 use crate::client::session::ClientSessionState;
+use crate::pane::fullscreen;
 use crate::pane::runtime::PaneRuntimes;
 use crate::pty::PtyExitStatus;
 use crate::server::ServerConfig;
 use crate::state::PaneTree;
 use crate::state::SessionLayout;
 use crate::state::Tab;
+use crate::state::persisted;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ClosePaneClientOutcome {
@@ -189,8 +191,8 @@ impl PaneTree {
 
 pub fn handle_close_pane_cmd_client(state: &mut ClientSessionState<'_>) -> rootcause::Result<ClosePaneClientOutcome> {
     let previous_pane = state.layout.active_pane_id()?;
-    crate::pane::fullscreen::clear_active_tab_for_layout_mutation(state);
-    match self::handle_close_pane_cmd(state.config, state.layout, state.runtimes)? {
+    fullscreen::clear_active_tab_for_layout_mutation(state);
+    match handle_close_pane_cmd(state.config, state.layout, state.runtimes)? {
         ClosePaneOutcome::Final { pane_id } => Ok(ClosePaneClientOutcome::Final { pane_id }),
         ClosePaneOutcome::Removed { pane_id } => Ok(ClosePaneClientOutcome::Removed { pane_id, previous_pane }),
     }
@@ -215,7 +217,7 @@ fn handle_close_pane_cmd(
         ClosePaneOutcome::Final { pane_id } | ClosePaneOutcome::Removed { pane_id } => *pane_id,
     };
     runtimes.remove(pane_id);
-    crate::state::persisted::write_metadata(&config.paths, layout)?;
+    persisted::write_metadata(&config.paths, layout)?;
     Ok(outcome)
 }
 
@@ -349,7 +351,7 @@ mod tests {
             thread::sleep(Duration::from_millis(10));
         }
 
-        let outcome = self::handle_close_pane_cmd(&config, &mut layout, &mut runtimes)?;
+        let outcome = crate::pane::close::tests::handle_close_pane_cmd(&config, &mut layout, &mut runtimes)?;
 
         assert_that!(outcome, eq(ClosePaneOutcome::Final { pane_id }));
         let persisted = crate::state::persisted::load_metadata(&config.paths, &config.session)?

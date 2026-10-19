@@ -6,6 +6,7 @@ use std::ops::Deref;
 use std::str::FromStr;
 
 use owo_colors::OwoColorize;
+use rootcause::Report;
 use rootcause::prelude::ResultExt;
 use strum::EnumIter;
 use ytil_gh::RepoViewField;
@@ -224,7 +225,7 @@ impl Op {
     }
 
     /// Emit a structured error report for a failed operation.
-    fn report_error(&self, pr: &PullRequest, error: &rootcause::Report) {
+    fn report_error(&self, pr: &PullRequest, error: &Report) {
         let msg = match self {
             Self::Approve => "approving",
             Self::Merge => "merging",

@@ -3,10 +3,11 @@ use std::path::Path;
 use owo_colors::OwoColorize;
 use rootcause::report;
 use ytil_agents::agent::session::SessionKey;
+use ytil_agents::agent::session_deletion;
 use ytil_agents::agent::session_deletion::DeletionOutcome;
 use ytil_agents::agent::session_deletion::DeletionTarget;
 
-use super::list::RenderableSession;
+use crate::cmds::sessions::list::RenderableSession;
 
 pub(super) fn delete_selected_sessions(selected: &[RenderableSession], home_dir: &Path) -> rootcause::Result<()> {
     let targets = selected
@@ -18,7 +19,7 @@ pub(super) fn delete_selected_sessions(selected: &[RenderableSession], home_dir:
             ))
         })
         .collect::<rootcause::Result<Vec<_>>>()?;
-    let report = ytil_agents::agent::session_deletion::delete_session_targets(home_dir, &targets);
+    let report = session_deletion::delete_session_targets(home_dir, &targets);
     let mut failures = Vec::new();
 
     // Outcomes are 1:1 with `selected` / `targets` order; pair by index so duplicate
@@ -75,8 +76,8 @@ mod tests {
     use ytil_agents::agent::session::Session;
     use ytil_agents::agent::session::SessionKey;
 
-    use super::super::list::RenderableSession;
     use super::*;
+    use crate::cmds::sessions::list::RenderableSession;
 
     #[test]
     fn test_delete_selected_sessions_when_id_is_empty_returns_error_before_deletion() {

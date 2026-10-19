@@ -17,6 +17,7 @@ use crate::state::PaneTree;
 use crate::state::SessionLayout;
 use crate::state::SessionMetadata;
 use crate::state::Tab;
+use crate::state::persisted;
 
 pub struct SessionStartSeed {
     pub layout: SessionLayout,
@@ -25,7 +26,7 @@ pub struct SessionStartSeed {
 
 impl SessionStartSeed {
     pub fn load(config: &ServerConfig, metadata: SessionMetadata) -> rootcause::Result<Self> {
-        let persisted_layout = crate::state::persisted::load_metadata(&config.paths, &config.session)?;
+        let persisted_layout = persisted::load_metadata(&config.paths, &config.session)?;
         match (persisted_layout, config.external_layout.as_deref()) {
             (Some(_), Some(layout_path)) => Err(report!("muxr external layout can only seed a new session")
                 .attach(format!("layout={}", layout_path.display()))
@@ -35,7 +36,7 @@ impl SessionStartSeed {
                 startup_cmds: Vec::new(),
             }),
             (None, Some(layout_path)) => {
-                let external_layout = self::load_external_layout(layout_path)?;
+                let external_layout = load_external_layout(layout_path)?;
                 Self::from_external_layout(
                     &config.session,
                     &external_layout,
@@ -61,8 +62,8 @@ impl SessionStartSeed {
         let mut tabs = Vec::new();
         let mut startup_cmds = Vec::new();
         for (tab_index, external_tab) in external_layout.tabs().iter().enumerate() {
-            let tab_id = TabId::new(self::layout_id(tab_index, "tab")?)?;
-            let pane_id = PaneId::new(self::layout_id(tab_index, "pane")?)?;
+            let tab_id = TabId::new(layout_id(tab_index, "tab")?)?;
+            let pane_id = PaneId::new(layout_id(tab_index, "pane")?)?;
             let external_pane = external_tab.panes().first().ok_or_else(|| {
                 report!("muxr external layout tab has no panes").attach(format!("tab_index={tab_index}"))
             })?;
@@ -71,7 +72,7 @@ impl SessionStartSeed {
                     .attach(format!("tab_index={tab_index}")));
             }
 
-            let pane_cmd = self::pane_startup_cmd(external_pane, default_shell_cmd)?;
+            let pane_cmd = pane_startup_cmd(external_pane, default_shell_cmd)?;
             if external_pane.cmd().is_some() {
                 startup_cmds.push((pane_id, pane_cmd.clone()));
             }

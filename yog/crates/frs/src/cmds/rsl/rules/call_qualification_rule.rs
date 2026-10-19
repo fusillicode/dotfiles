@@ -15,23 +15,23 @@ use std::ops::Range;
 
 use proc_macro2::Span;
 
-use super::Rule;
-use super::common;
-use super::common::ImportEdits;
-use super::common::ImportError;
-use super::common::fn_call_analysis::CallAnalysis;
-use super::common::fn_path_resolution::CallTarget;
-use super::common::fn_path_resolution::ModuleAccess;
-use super::common::import_resolution;
-use super::common::module_idx;
-use super::common::module_idx::ModuleIdx;
-use super::common::module_idx::ModuleScope;
-use super::common::module_idx::ScopeInfo;
-use super::common::path_resolution;
 use crate::cmds::rsl::analysis::FixBlockReason;
 use crate::cmds::rsl::analysis::RuleChange;
 use crate::cmds::rsl::analysis::RulePlan;
 use crate::cmds::rsl::engine::FileContext;
+use crate::cmds::rsl::rules::Rule;
+use crate::cmds::rsl::rules::common;
+use crate::cmds::rsl::rules::common::ImportEdits;
+use crate::cmds::rsl::rules::common::ImportError;
+use crate::cmds::rsl::rules::common::fn_call_analysis::CallAnalysis;
+use crate::cmds::rsl::rules::common::fn_path_resolution::CallTarget;
+use crate::cmds::rsl::rules::common::fn_path_resolution::ModuleAccess;
+use crate::cmds::rsl::rules::common::import_resolution;
+use crate::cmds::rsl::rules::common::module_idx;
+use crate::cmds::rsl::rules::common::module_idx::ModuleIdx;
+use crate::cmds::rsl::rules::common::module_idx::ModuleScope;
+use crate::cmds::rsl::rules::common::module_idx::ScopeInfo;
+use crate::cmds::rsl::rules::common::path_resolution;
 use crate::cmds::rsl::source::SourceEditor;
 
 pub(super) struct CallQualificationRule;

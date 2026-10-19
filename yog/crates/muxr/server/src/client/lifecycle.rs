@@ -7,6 +7,7 @@ use crate::render_state::OutputFreshness;
 use crate::session::delete::DeleteSessionRequest;
 use crate::session::delete::DeleteSessions;
 use crate::session::tracing::ClientEventSendFailure;
+use crate::session::tracing::ack;
 
 pub fn client_should_exit(
     output_freshness: impl IntoIterator<Item = OutputFreshness>,
@@ -38,7 +39,7 @@ pub fn client_should_exit(
 
 pub fn record_detach_ack_send_failure(reason: Option<ClientEventSendFailure>) {
     if let Some(reason) = reason {
-        crate::session::tracing::ack::detach_failed(reason);
+        ack::detach_failed(reason);
     }
 }
 

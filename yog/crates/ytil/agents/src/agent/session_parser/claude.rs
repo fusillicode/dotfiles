@@ -330,7 +330,7 @@ impl<'de> Deserialize<'de> for ClaudeUserText {
         D: serde::Deserializer<'de>,
     {
         let text = String::deserialize(deserializer)?;
-        Ok(self::ClaudeCmdInvocation::parse(&text)
+        Ok(crate::agent::session_parser::claude::ClaudeCmdInvocation::parse(&text)
             .map(Self::Cmd)
             .unwrap_or(Self::Plain(text)))
     }

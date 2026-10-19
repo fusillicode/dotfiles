@@ -41,7 +41,7 @@ pub enum DiagnosticSeverity {
 
 impl DiagnosticSeverity {
     /// Number of declared severity variants.
-    pub const VARIANT_COUNT: usize = <Self as strum::EnumCount>::COUNT;
+    pub const VARIANT_COUNT: usize = <Self as EnumCount>::COUNT;
 
     /// Returns the canonical LSP severity number (1-4, or 0 for Other).
     pub const fn to_number(self) -> u8 {

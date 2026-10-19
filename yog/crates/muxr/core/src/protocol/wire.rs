@@ -4,32 +4,34 @@ use std::collections::HashSet;
 use bytes::Bytes;
 use bytes::BytesMut;
 use compact_str::CompactString;
+use rkyv::Archived;
 use rkyv::util::AlignedVec;
+use rootcause::Report;
 use rootcause::report;
 use serde::Serialize;
 
-use super::AttachAccepted;
-use super::AttachRequest;
-use super::ClientKey;
-use super::ClientMouseEvent;
-use super::ClientMousePosition;
-use super::LayoutSnapshot;
-use super::PaneRegionsSnapshot;
-use super::PaneScrollDirection;
-use super::PaneScrollLineMove;
-use super::RenderBaseline;
-use super::RenderCell;
-use super::RenderCellWidth;
-use super::RenderCursor;
-use super::RenderDiff;
-use super::RenderHyperlink;
-use super::RenderRowSpan;
-use super::RenderStyle;
-use super::RenderUpdate;
-use super::TabId;
-use super::TerminalSize;
-use super::pane_render::RenderHyperlinkPresence;
 use crate::SessionName;
+use crate::protocol::AttachAccepted;
+use crate::protocol::AttachRequest;
+use crate::protocol::ClientKey;
+use crate::protocol::ClientMouseEvent;
+use crate::protocol::ClientMousePosition;
+use crate::protocol::LayoutSnapshot;
+use crate::protocol::PaneRegionsSnapshot;
+use crate::protocol::PaneScrollDirection;
+use crate::protocol::PaneScrollLineMove;
+use crate::protocol::RenderBaseline;
+use crate::protocol::RenderCell;
+use crate::protocol::RenderCellWidth;
+use crate::protocol::RenderCursor;
+use crate::protocol::RenderDiff;
+use crate::protocol::RenderHyperlink;
+use crate::protocol::RenderRowSpan;
+use crate::protocol::RenderStyle;
+use crate::protocol::RenderUpdate;
+use crate::protocol::TabId;
+use crate::protocol::TerminalSize;
+use crate::protocol::pane_render::RenderHyperlinkPresence;
 
 /// Owned muxr protocol frame bytes.
 ///
@@ -71,7 +73,7 @@ impl From<&[u8]> for ProtocolFrame {
 }
 
 impl TryFrom<&ClientRequest> for ProtocolFrame {
-    type Error = rootcause::Report;
+    type Error = Report;
 
     fn try_from(request: &ClientRequest) -> Result<Self, Self::Error> {
         let payload = rkyv::to_bytes::<rkyv::rancor::Error>(request)
@@ -81,11 +83,11 @@ impl TryFrom<&ClientRequest> for ProtocolFrame {
 }
 
 impl TryFrom<&ServerEvent> for ProtocolFrame {
-    type Error = rootcause::Report;
+    type Error = Report;
 
     fn try_from(event: &ServerEvent) -> Result<Self, Self::Error> {
         if let ServerEvent::Render(update) = event
-            && self::render_update_hyperlink_presence(update) == RenderHyperlinkPresence::Present
+            && render_update_hyperlink_presence(update) == RenderHyperlinkPresence::Present
         {
             let wire_update = HyperlinkTableRenderUpdate::from_domain(update)?;
             let payload = rkyv::to_bytes::<rkyv::rancor::Error>(&wire_update)
@@ -151,7 +153,7 @@ pub enum ClientRequest {
     Key(ClientKey),
     Mouse(ClientMouseEvent),
     OpenFile {
-        pane_id: super::PaneId,
+        pane_id: crate::protocol::PaneId,
         path: String,
         line: Option<u32>,
         column: Option<u32>,
@@ -197,8 +199,8 @@ pub fn encode_client_request(request: &ClientRequest) -> rootcause::Result<Proto
 /// - The frame is empty or not a valid client request frame.
 /// - The decoded request cannot be deserialized into valid domain values.
 pub fn decode_client_request(line: &[u8]) -> rootcause::Result<ClientRequest> {
-    let payload = self::decode_domain_payload(line)?;
-    let archived = rkyv::access::<rkyv::Archived<ClientRequest>, rkyv::rancor::Error>(&payload)
+    let payload = decode_domain_payload(line)?;
+    let archived = rkyv::access::<Archived<ClientRequest>, rkyv::rancor::Error>(&payload)
         .map_err(|error| report!("failed to validate muxr protocol frame").attach(format!("{error:?}")))?;
     rkyv::deserialize::<ClientRequest, rkyv::rancor::Error>(archived)
         .map_err(|error| report!("failed to deserialize muxr protocol frame").attach(format!("{error:?}")))
@@ -218,17 +220,17 @@ pub fn encode_server_event(event: &ServerEvent) -> rootcause::Result<ProtocolFra
 /// - The frame is empty or not a valid server event frame.
 /// - The decoded event cannot be deserialized into valid domain values.
 pub fn decode_server_event(line: &[u8]) -> rootcause::Result<ServerEvent> {
-    let (kind, payload) = self::protocol_payload(line)?;
-    let payload = self::align_protocol_payload(payload);
+    let (kind, payload) = protocol_payload(line)?;
+    let payload = align_protocol_payload(payload);
     match kind {
         ProtocolFrameKind::Domain => {
-            let archived = rkyv::access::<rkyv::Archived<ServerEvent>, rkyv::rancor::Error>(&payload)
+            let archived = rkyv::access::<Archived<ServerEvent>, rkyv::rancor::Error>(&payload)
                 .map_err(|error| report!("failed to validate muxr protocol frame").attach(format!("{error:?}")))?;
             rkyv::deserialize::<ServerEvent, rkyv::rancor::Error>(archived)
                 .map_err(|error| report!("failed to deserialize muxr protocol frame").attach(format!("{error:?}")))
         }
         ProtocolFrameKind::HyperlinkTableRender => {
-            let archived = rkyv::access::<rkyv::Archived<HyperlinkTableRenderUpdate>, rkyv::rancor::Error>(&payload)
+            let archived = rkyv::access::<Archived<HyperlinkTableRenderUpdate>, rkyv::rancor::Error>(&payload)
                 .map_err(|error| report!("failed to validate muxr protocol frame").attach(format!("{error:?}")))?;
             let update = rkyv::deserialize::<HyperlinkTableRenderUpdate, rkyv::rancor::Error>(archived)
                 .map_err(|error| report!("failed to deserialize muxr protocol frame").attach(format!("{error:?}")))?
@@ -246,7 +248,7 @@ enum ProtocolFrameKind {
 }
 
 impl TryFrom<u8> for ProtocolFrameKind {
-    type Error = rootcause::Report;
+    type Error = Report;
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
@@ -504,13 +506,13 @@ enum HyperlinkReference {
 }
 
 fn decode_domain_payload(frame: &[u8]) -> rootcause::Result<AlignedVec> {
-    let (kind, payload) = self::protocol_payload(frame)?;
+    let (kind, payload) = protocol_payload(frame)?;
     if kind != ProtocolFrameKind::Domain {
         return Err(report!("invalid muxr protocol frame kind")
             .attach("expected=domain")
             .attach(format!("actual={kind:?}")));
     }
-    Ok(self::align_protocol_payload(payload))
+    Ok(align_protocol_payload(payload))
 }
 
 fn protocol_payload(frame: &[u8]) -> rootcause::Result<(ProtocolFrameKind, &[u8])> {
@@ -543,29 +545,29 @@ mod tests {
     use rstest::rstest;
     use test_that::prelude::*;
 
-    use super::super::keyboard_input::ClientKeyCode;
-    use super::super::keyboard_input::ClientKeyModifiers;
-    use super::super::pane_layout::PaneId;
-    use super::super::pane_layout::PaneMouseMode;
-    use super::super::pane_layout::PaneRegionSnapshot;
-    use super::super::pane_layout::PaneRegionsSnapshot;
-    use super::super::pane_layout::PaneSnapshot;
-    use super::super::pane_layout::TabSnapshot;
-    use super::super::pane_layout::test_helpers as pane_layout_test_helpers;
-    use super::super::pane_mouse::ClientMouseEventPhase;
-    use super::super::pane_render::RenderBaseline;
-    use super::super::pane_render::RenderCell;
-    use super::super::pane_render::RenderCursor;
-    use super::super::pane_render::RenderCursorShape;
-    use super::super::pane_render::RenderCursorVisibility;
-    use super::super::pane_render::RenderDiff;
-    use super::super::pane_render::RenderRowSpan;
-    use super::super::pane_render::RenderStyle;
-    use super::super::pane_render::test_helpers as pane_render_test_helpers;
-    use super::super::session_attach::AttachRequest;
-    use super::super::terminal::TerminalSize;
-    use super::super::tracked_process::TrackedProcessState;
     use super::*;
+    use crate::protocol::keyboard_input::ClientKeyCode;
+    use crate::protocol::keyboard_input::ClientKeyModifiers;
+    use crate::protocol::pane_layout::PaneId;
+    use crate::protocol::pane_layout::PaneMouseMode;
+    use crate::protocol::pane_layout::PaneRegionSnapshot;
+    use crate::protocol::pane_layout::PaneRegionsSnapshot;
+    use crate::protocol::pane_layout::PaneSnapshot;
+    use crate::protocol::pane_layout::TabSnapshot;
+    use crate::protocol::pane_layout::test_helpers as pane_layout_test_helpers;
+    use crate::protocol::pane_mouse::ClientMouseEventPhase;
+    use crate::protocol::pane_render::RenderBaseline;
+    use crate::protocol::pane_render::RenderCell;
+    use crate::protocol::pane_render::RenderCursor;
+    use crate::protocol::pane_render::RenderCursorShape;
+    use crate::protocol::pane_render::RenderCursorVisibility;
+    use crate::protocol::pane_render::RenderDiff;
+    use crate::protocol::pane_render::RenderRowSpan;
+    use crate::protocol::pane_render::RenderStyle;
+    use crate::protocol::pane_render::test_helpers as pane_render_test_helpers;
+    use crate::protocol::session_attach::AttachRequest;
+    use crate::protocol::terminal::TerminalSize;
+    use crate::protocol::tracked_process::TrackedProcessState;
 
     #[test]
     fn test_protocol_frame_from_when_payload_is_raw_prepends_domain_kind() {
@@ -643,7 +645,7 @@ mod tests {
 
     #[test]
     fn test_server_event_codec_when_render_update_is_invalid_returns_error() -> rootcause::Result<()> {
-        let event = self::invalid_render_event()?;
+        let event = invalid_render_event()?;
         let encoded = encode_server_event(&event)?;
 
         assert_that!(decode_server_event(encoded.as_bytes()), err(anything()));
@@ -662,7 +664,7 @@ mod tests {
                     vec![self::pane_snapshot(1, "shell")?],
                 )?],
             ),
-            pane_regions: self::pane_regions_snapshot()?,
+            pane_regions: pane_regions_snapshot()?,
         });
         let encoded = encode_server_event(&event)?;
 
@@ -748,8 +750,8 @@ mod tests {
         #[case] hyperlinks: Vec<&str>,
         #[case] hyperlink_ids: Vec<u32>,
     ) -> rootcause::Result<()> {
-        let wire_update = self::raw_hyperlink_table_render_update(hyperlinks, hyperlink_ids)?;
-        let encoded = self::encode_hyperlink_table_render_update(&wire_update)?;
+        let wire_update = raw_hyperlink_table_render_update(hyperlinks, hyperlink_ids)?;
+        let encoded = encode_hyperlink_table_render_update(&wire_update)?;
 
         assert_that!(decode_server_event(encoded.as_bytes()), err(anything()));
         Ok(())
@@ -760,7 +762,7 @@ mod tests {
     -> rootcause::Result<()> {
         let uri = "https://example.com/muxr/performance/reference";
         let cells = (0..320)
-            .map(|_| self::render_cell("x").with_hyperlink_uri(uri))
+            .map(|_| render_cell("x").with_hyperlink_uri(uri))
             .collect::<rootcause::Result<Vec<_>>>()?;
         let event = ServerEvent::Render(RenderUpdate::Baseline(RenderBaseline::new(
             1,
@@ -786,14 +788,14 @@ mod tests {
     fn client_attach_request() -> rootcause::Result<AttachRequest> {
         Ok(AttachRequest {
             session: "work".parse()?,
-            terminal_size: self::terminal_size(80, 24)?,
+            terminal_size: terminal_size(80, 24)?,
         })
     }
 
     fn attach_accepted() -> rootcause::Result<AttachAccepted> {
         Ok(AttachAccepted {
-            layout: self::layout_snapshot()?,
-            pane_regions: self::pane_regions_snapshot()?,
+            layout: layout_snapshot()?,
+            pane_regions: pane_regions_snapshot()?,
         })
     }
 
@@ -867,7 +869,7 @@ mod tests {
     fn render_baseline() -> rootcause::Result<RenderBaseline> {
         RenderBaseline::new(
             1,
-            self::terminal_size(4, 2)?,
+            terminal_size(4, 2)?,
             RenderCursor {
                 row: 1,
                 col: 2,
@@ -902,7 +904,7 @@ mod tests {
     fn linked_render_baseline() -> rootcause::Result<RenderBaseline> {
         RenderBaseline::new(
             1,
-            self::terminal_size(4, 2)?,
+            terminal_size(4, 2)?,
             RenderCursor {
                 row: 1,
                 col: 2,
@@ -938,7 +940,7 @@ mod tests {
         RenderDiff::new(
             1,
             2,
-            self::terminal_size(4, 2)?,
+            terminal_size(4, 2)?,
             RenderCursor {
                 row: 1,
                 col: 3,
@@ -958,7 +960,7 @@ mod tests {
             pane_render_test_helpers::raw_render_diff(
                 1,
                 2,
-                self::terminal_size(4, 2)?,
+                terminal_size(4, 2)?,
                 RenderCursor {
                     row: 0,
                     col: 0,

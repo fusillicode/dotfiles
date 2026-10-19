@@ -1,9 +1,9 @@
 use serde::Serialize;
 
-use super::LayoutSnapshot;
-use super::PaneRegionsSnapshot;
-use super::TerminalSize;
 use crate::SessionName;
+use crate::protocol::LayoutSnapshot;
+use crate::protocol::PaneRegionsSnapshot;
+use crate::protocol::TerminalSize;
 
 #[derive(rkyv::Archive, Clone, Debug, rkyv::Deserialize, Eq, PartialEq, Serialize, rkyv::Serialize)]
 pub struct AttachRequest {

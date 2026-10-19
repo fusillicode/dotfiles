@@ -47,14 +47,16 @@ use syn::token::Comma;
 use syn::visit;
 use syn::visit::Visit;
 
-use super::fn_path_resolution::CallTarget;
-use super::fn_path_resolution::FnCallSuggestion;
-use super::fn_path_resolution::ModuleAccess;
-use super::import_edits::ImportError;
-use super::import_resolution::use_bindings;
-use super::module_idx::ModuleIdx;
-use super::module_idx::ModuleScope;
-use super::module_idx::ScopeInfo;
+use crate::cmds::rsl::rules::common;
+use crate::cmds::rsl::rules::common::fn_path_resolution::CallTarget;
+use crate::cmds::rsl::rules::common::fn_path_resolution::FnCallSuggestion;
+use crate::cmds::rsl::rules::common::fn_path_resolution::ModuleAccess;
+use crate::cmds::rsl::rules::common::import_edits::ImportError;
+use crate::cmds::rsl::rules::common::import_resolution;
+use crate::cmds::rsl::rules::common::module_idx;
+use crate::cmds::rsl::rules::common::module_idx::ModuleIdx;
+use crate::cmds::rsl::rules::common::module_idx::ModuleScope;
+use crate::cmds::rsl::rules::common::module_idx::ScopeInfo;
 
 pub fn analyze_calls<'ast>(scope: &ModuleScope<'ast>, idx: &ModuleIdx<'ast>) -> CallAnalysis<'ast> {
     let items = scope.items;
@@ -243,7 +245,7 @@ impl Bindings {
             }
             return;
         }
-        if let Some(name) = super::module_idx::item_name(item) {
+        if let Some(name) = module_idx::item_name(item) {
             if matches!(item, Item::Fn(_) | Item::Const(_) | Item::Static(_)) {
                 self.values.insert(name);
                 return;
@@ -261,10 +263,10 @@ impl Bindings {
 
     fn add_import(&mut self, item: &Item, current_module: &[String]) {
         if let Item::Use(import) = item {
-            let imported = use_bindings(&import.tree, current_module);
+            let imported = import_resolution::use_bindings(&import.tree, current_module);
             self.unknown |= imported.unknown;
             for binding in imported.bindings {
-                let kind = if super::has_conditional_attributes(&import.attrs) {
+                let kind = if common::has_conditional_attributes(&import.attrs) {
                     TypeBinding::Declaration
                 } else {
                     TypeBinding::Import(binding.path)
@@ -365,7 +367,7 @@ impl<'ast> FnCallVisitor<'ast, '_> {
     }
 
     fn record_macro_tokens(&mut self, tokens: TokenStream) {
-        for name in super::token_names(tokens) {
+        for name in common::token_names(tokens) {
             self.references.tokens.insert(name.clone());
             self.record_free_type_name(name);
         }
@@ -393,7 +395,7 @@ impl<'ast> FnCallVisitor<'ast, '_> {
 impl<'ast> Visit<'ast> for FnCallVisitor<'ast, '_> {
     fn visit_item(&mut self, item: &'ast Item) {
         let outer = self.conditional;
-        self.conditional |= super::contains_conditional_code(item);
+        self.conditional |= common::contains_conditional_code(item);
         visit::visit_item(self, item);
         self.conditional = outer;
     }
@@ -440,7 +442,7 @@ impl<'ast> Visit<'ast> for FnCallVisitor<'ast, '_> {
             self.visit_attribute(attribute);
         }
 
-        let imported = use_bindings(&import.tree, &[]);
+        let imported = import_resolution::use_bindings(&import.tree, &[]);
         // Import paths can themselves be captured, even when the import defines
         // a same-spelled local binding.
         for path in imported
@@ -619,7 +621,7 @@ impl<'ast> Visit<'ast> for FnCallVisitor<'ast, '_> {
             // Child imports may re-export a private name without calling it.
             for item in items {
                 if let Item::Use(import) = item {
-                    let bindings = use_bindings(&import.tree, &[]);
+                    let bindings = import_resolution::use_bindings(&import.tree, &[]);
                     for binding in bindings.bindings {
                         if binding
                             .source_path

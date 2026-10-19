@@ -6,19 +6,29 @@ use muxr_core::PaneId;
 use muxr_core::ServerError;
 use muxr_core::ServerEvent;
 
+use crate::client::lifecycle;
+use crate::client::session;
 use crate::client::session::ClientSessionState;
 use crate::client::timers::ClientTimers;
 use crate::keyboard_input::ClientCmd;
 use crate::keyboard_input::KeyResolution;
 use crate::keyboard_input::TabCmd;
+use crate::pane::close;
 use crate::pane::close::ClosePaneClientOutcome;
+use crate::pane::focus;
 use crate::pane::focus::PaneFocusClientOutcome;
 use crate::pane::focus::PaneFocusRender;
+use crate::pane::fullscreen;
+use crate::pane::input;
 use crate::pane::input::PaneInputOutcome;
+use crate::pane::mouse;
 use crate::pane::mouse::PaneMouseClientOutcome;
+use crate::pane::resize;
 use crate::pane::resize::PaneResizeClientOutcome;
 use crate::pane::resize::PaneResizeRender;
+use crate::pane::scroll;
 use crate::pane::scroll::PaneScrollLineRequestOutcome;
+use crate::pane::split;
 use crate::pane::split::PaneSplitClientOutcome;
 use crate::pane::tracked_process::TrackedProcessChanges;
 use crate::pane::tracked_process::TrackedProcessClientChange;
@@ -27,9 +37,12 @@ use crate::render_state::ClientSessionFlow;
 use crate::render_state::PaneInputRenderPriority;
 use crate::render_state::PaneRenderDeadlineSync;
 use crate::scrollback_editor::ScrollbackEditorOpenClientOutcome;
+use crate::session::delete;
 use crate::session::runtime::SessionClientMessage;
+use crate::tab::create;
 use crate::tab::create::TabCreateClientOutcome;
 use crate::tab::focus::TabFocusClientOutcome;
+use crate::tab::r#move;
 
 pub async fn handle_client_message(
     message: SessionClientMessage,
@@ -42,7 +55,7 @@ pub async fn handle_client_message(
     match message {
         SessionClientMessage::ClientDisconnected => Ok(ClientSessionFlow::Disconnect),
         SessionClientMessage::Request(request) => {
-            self::handle_client_request(request, event_writer, state, timers, heartbeat, render_dmg).await
+            handle_client_request(request, event_writer, state, timers, heartbeat, render_dmg).await
         }
     }
 }
@@ -56,34 +69,30 @@ async fn handle_client_request(
     render_dmg: &mut ClientRenderDmg,
 ) -> rootcause::Result<ClientSessionFlow> {
     match request {
-        ClientRequest::Detach => self::send_detached_event(event_writer, state, timers).await,
+        ClientRequest::Detach => send_detached_event(event_writer, state, timers).await,
         ClientRequest::DeleteSession => {
-            crate::session::delete::handle_client_delete(
-                event_writer,
-                state.delete_sessions,
-                state.config.client_write_timeout,
-            )
-            .await?;
+            delete::handle_client_delete(event_writer, state.delete_sessions, state.config.client_write_timeout)
+                .await?;
             Ok(ClientSessionFlow::Disconnect)
         }
         ClientRequest::Input(bytes) => {
-            let outcome = crate::pane::input::handle_client_input(&bytes, state)?;
-            self::apply_pane_input_outcome(outcome, event_writer, state, timers, render_dmg).await
+            let outcome = input::handle_client_input(&bytes, state)?;
+            apply_pane_input_outcome(outcome, event_writer, state, timers, render_dmg).await
         }
         ClientRequest::Paste(bytes) => {
-            let outcome = crate::pane::input::handle_client_paste(&bytes, state)?;
-            self::apply_pane_input_outcome(outcome, event_writer, state, timers, render_dmg).await
+            let outcome = input::handle_client_paste(&bytes, state)?;
+            apply_pane_input_outcome(outcome, event_writer, state, timers, render_dmg).await
         }
-        ClientRequest::Key(key) => self::handle_key_request(key, event_writer, state, timers, render_dmg).await,
+        ClientRequest::Key(key) => handle_key_request(key, event_writer, state, timers, render_dmg).await,
         ClientRequest::OpenFile {
             pane_id,
             path,
             line,
             column,
-        } => self::handle_open_file_request(pane_id, &path, line, column, event_writer, state, timers).await,
+        } => handle_open_file_request(pane_id, &path, line, column, event_writer, state, timers).await,
         ClientRequest::Mouse(event) => {
-            self::apply_pane_mouse_outcome(
-                crate::pane::mouse::handle_mouse_event_client_request(event, state)?,
+            apply_pane_mouse_outcome(
+                mouse::handle_mouse_event_client_request(event, state)?,
                 event_writer,
                 state,
                 timers,
@@ -92,8 +101,8 @@ async fn handle_client_request(
             .await
         }
         ClientRequest::ScrollPaneLineAt { position, direction } => {
-            self::apply_pane_scroll_line_outcome(
-                crate::pane::scroll::handle_scroll_pane_line_client_request(position, direction, state)?,
+            apply_pane_scroll_line_outcome(
+                scroll::handle_scroll_pane_line_client_request(position, direction, state)?,
                 event_writer,
                 state,
                 timers,
@@ -102,8 +111,8 @@ async fn handle_client_request(
             .await
         }
         ClientRequest::FocusPaneAt(position) => {
-            self::apply_pane_focus_outcome(
-                crate::pane::focus::handle_focus_pane_at_client_request(position, state)?,
+            apply_pane_focus_outcome(
+                focus::handle_focus_pane_at_client_request(position, state)?,
                 event_writer,
                 state,
                 timers,
@@ -111,7 +120,7 @@ async fn handle_client_request(
             .await
         }
         ClientRequest::FocusTab(tab_id) => {
-            self::apply_tab_focus_outcome(
+            apply_tab_focus_outcome(
                 crate::tab::focus::handle_focus_tab_client_request(tab_id, state)?,
                 event_writer,
                 state,
@@ -169,7 +178,7 @@ async fn handle_open_file_request(
         state.open_file_pane_route(source_pane_id)?
     };
     if fullscreen_visible {
-        crate::pane::fullscreen::clear_active_tab_for_layout_mutation(state);
+        fullscreen::clear_active_tab_for_layout_mutation(state);
     }
 
     match route {
@@ -183,22 +192,22 @@ async fn handle_open_file_request(
             state
                 .runtimes
                 .handle(editor_pane_id)?
-                .write_input(&self::nvim_edit_input(path, line, column))?;
+                .write_input(&nvim_edit_input(path, line, column))?;
             return Ok(ClientSessionFlow::Continue);
         }
         crate::client::session::OpenFilePaneRoute::NewRightSplit => {}
     }
 
     state.focus_pane_for_open_file(source_pane_id, timers)?;
-    let split = crate::pane::split::handle_split_pane_cmd_client(crate::pane::split::PaneSplitAxis::Vertical, state)?;
+    let split = split::handle_split_pane_cmd_client(crate::pane::split::PaneSplitAxis::Vertical, state)?;
     let new_pane_id = split.new_pane_id;
-    if self::apply_pane_split_outcome(split, event_writer, state, timers).await? == ClientSessionFlow::Disconnect {
+    if apply_pane_split_outcome(split, event_writer, state, timers).await? == ClientSessionFlow::Disconnect {
         return Ok(ClientSessionFlow::Disconnect);
     }
     state
         .runtimes
         .handle(new_pane_id)?
-        .write_input(self::nvim_shell_command(path, line, column).as_bytes())?;
+        .write_input(nvim_shell_command(path, line, column).as_bytes())?;
     Ok(ClientSessionFlow::Continue)
 }
 
@@ -227,10 +236,10 @@ fn nvim_shell_command(path: &str, line: Option<u32>, column: Option<u32>) -> Str
     let mut command = String::from("nvim");
     if !location.is_empty() {
         command.push(' ');
-        command.push_str(&self::shell_quote(&location));
+        command.push_str(&shell_quote(&location));
     }
     command.push_str(" -- ");
-    command.push_str(&self::shell_quote(path));
+    command.push_str(&shell_quote(path));
     command.push('\n');
     command
 }
@@ -262,10 +271,9 @@ async fn apply_pane_input_outcome(
     timers: &mut ClientTimers,
     render_dmg: &mut ClientRenderDmg,
 ) -> rootcause::Result<ClientSessionFlow> {
-    self::apply_pane_input_timers(&outcome, timers, render_dmg)?;
+    apply_pane_input_timers(&outcome, timers, render_dmg)?;
     if let Some(tracked_process_change) = outcome.tracked_process_change
-        && self::apply_tracked_process_client_change(tracked_process_change, event_writer, state, timers, render_dmg)
-            .await?
+        && apply_tracked_process_client_change(tracked_process_change, event_writer, state, timers, render_dmg).await?
             == ClientSessionFlow::Disconnect
     {
         return Ok(ClientSessionFlow::Disconnect);
@@ -323,13 +331,12 @@ async fn apply_pane_mouse_outcome(
         timers.sync_render_deadline(render_dmg)?;
     }
     if let Some(tracked_process_change) = tracked_process_change
-        && self::apply_tracked_process_client_change(tracked_process_change, event_writer, state, timers, render_dmg)
-            .await?
+        && apply_tracked_process_client_change(tracked_process_change, event_writer, state, timers, render_dmg).await?
             == ClientSessionFlow::Disconnect
     {
         return Ok(ClientSessionFlow::Disconnect);
     }
-    self::apply_pane_focus_outcome(focus, event_writer, state, timers).await
+    apply_pane_focus_outcome(focus, event_writer, state, timers).await
 }
 
 async fn apply_tracked_process_client_change(
@@ -340,7 +347,7 @@ async fn apply_tracked_process_client_change(
     render_dmg: &mut ClientRenderDmg,
 ) -> rootcause::Result<ClientSessionFlow> {
     let changes = tracked_process_change.changes();
-    if self::tracked_process_change_deadline_sync(changes, timers) == PaneRenderDeadlineSync::Sync {
+    if tracked_process_change_deadline_sync(changes, timers) == PaneRenderDeadlineSync::Sync {
         timers.sync_tracked_process_quiet_deadline_for_layout(&state.pane_tracked_processes, state.layout)?;
     }
     if changes.state_change() == crate::pane::tracked_process::TrackedProcessStateChange::Unchanged {
@@ -405,8 +412,8 @@ async fn send_detached_event(
     state: &mut ClientSessionState<'_>,
     timers: &mut ClientTimers,
 ) -> rootcause::Result<ClientSessionFlow> {
-    self::restore_scrollback_editor_without_render(state, timers)?;
-    crate::client::lifecycle::record_detach_ack_send_failure(
+    restore_scrollback_editor_without_render(state, timers)?;
+    lifecycle::record_detach_ack_send_failure(
         crate::event_writer::send_lifecycle_event_failure(
             event_writer,
             &ServerEvent::Detached,
@@ -427,11 +434,11 @@ async fn handle_key_request(
     match crate::keyboard_input::resolve_key(&state.config.user_config.keybindings, state.input_mode, &key) {
         KeyResolution::Cmd { cmd, next_mode } => {
             state.input_mode = next_mode;
-            self::handle_cmd_request(cmd, event_writer, state, timers).await
+            handle_cmd_request(cmd, event_writer, state, timers).await
         }
         KeyResolution::Raw => {
-            self::apply_pane_input_outcome(
-                crate::pane::input::handle_client_key(&key, state)?,
+            apply_pane_input_outcome(
+                input::handle_client_key(&key, state)?,
                 event_writer,
                 state,
                 timers,
@@ -462,18 +469,18 @@ async fn handle_cmd_request(
         crate::scrollback_editor::ScrollbackEditorCmdAction::Restore => {
             let previous_pane = state.layout.active_pane_id()?;
             crate::scrollback_editor::write_focus_lost_if_live(state.scrollback_editor.as_ref(), state.runtimes)?;
-            self::restore_scrollback_editor_without_render(state, timers)?;
-            crate::pane::focus::write_active_pane_focus_events(previous_pane, state)?;
+            restore_scrollback_editor_without_render(state, timers)?;
+            focus::write_active_pane_focus_events(previous_pane, state)?;
             timers.sync_tracked_process_quiet_deadline_for_layout(&state.pane_tracked_processes, state.layout)?;
             return crate::screen_render::resize_panes_and_render(event_writer, state).await;
         }
         crate::scrollback_editor::ScrollbackEditorCmdAction::Run(cmd) => cmd,
     };
     match cmd {
-        ClientCmd::Tab(cmd) => self::handle_tab_cmd_request(cmd, event_writer, state, timers).await,
+        ClientCmd::Tab(cmd) => handle_tab_cmd_request(cmd, event_writer, state, timers).await,
         ClientCmd::SplitPane(split_axis) => {
-            self::apply_pane_split_outcome(
-                crate::pane::split::handle_split_pane_cmd_client(split_axis, state)?,
+            apply_pane_split_outcome(
+                split::handle_split_pane_cmd_client(split_axis, state)?,
                 event_writer,
                 state,
                 timers,
@@ -481,24 +488,18 @@ async fn handle_cmd_request(
             .await
         }
         ClientCmd::ClosePane => {
-            self::apply_pane_close_outcome(
-                crate::pane::close::handle_close_pane_cmd_client(state)?,
-                event_writer,
-                state,
-                timers,
-            )
-            .await
+            apply_pane_close_outcome(close::handle_close_pane_cmd_client(state)?, event_writer, state, timers).await
         }
         ClientCmd::ResizePane(direction) => {
-            self::apply_pane_resize_outcome(
-                crate::pane::resize::handle_resize_pane_cmd_client(direction, state)?,
+            apply_pane_resize_outcome(
+                resize::handle_resize_pane_cmd_client(direction, state)?,
                 event_writer,
                 state,
             )
             .await
         }
         ClientCmd::OpenScrollbackEditor => {
-            self::apply_scrollback_editor_open_outcome(
+            apply_scrollback_editor_open_outcome(
                 crate::scrollback_editor::handle_open_client_request(
                     state.config.user_config.scrollback.dump_style,
                     state,
@@ -510,8 +511,8 @@ async fn handle_cmd_request(
             .await
         }
         ClientCmd::FocusPane(direction) => {
-            self::apply_pane_focus_outcome(
-                crate::pane::focus::handle_focus_pane_cmd_client(direction, state)?,
+            apply_pane_focus_outcome(
+                focus::handle_focus_pane_cmd_client(direction, state)?,
                 event_writer,
                 state,
                 timers,
@@ -519,23 +520,13 @@ async fn handle_cmd_request(
             .await
         }
         ClientCmd::EnterResizeMode => {
-            self::apply_pane_resize_outcome(
-                crate::pane::resize::handle_enter_resize_mode_cmd_client(state),
-                event_writer,
-                state,
-            )
-            .await
+            apply_pane_resize_outcome(resize::handle_enter_resize_mode_cmd_client(state), event_writer, state).await
         }
         ClientCmd::ExitMode => {
-            self::apply_pane_resize_outcome(
-                crate::pane::resize::handle_exit_resize_mode_cmd_client(),
-                event_writer,
-                state,
-            )
-            .await
+            apply_pane_resize_outcome(resize::handle_exit_resize_mode_cmd_client(), event_writer, state).await
         }
         ClientCmd::TogglePaneFullscreen => {
-            crate::pane::fullscreen::handle_toggle_active_pane_cmd_client(state)?;
+            fullscreen::handle_toggle_active_pane_cmd_client(state)?;
             // Zero-field outcomes are intentionally avoided: fullscreen exposes no shell data, and always redraws.
             crate::screen_render::resize_panes_and_render(event_writer, state).await
         }
@@ -547,7 +538,7 @@ fn restore_scrollback_editor_without_render(
     timers: &mut ClientTimers,
 ) -> rootcause::Result<()> {
     if let Some(editor_pane_id) = crate::scrollback_editor::restore_without_render(state)?.editor_pane_id {
-        crate::client::session::remove_pane_from_client_state(state, timers, editor_pane_id)?;
+        session::remove_pane_from_client_state(state, timers, editor_pane_id)?;
     }
     Ok(())
 }
@@ -565,12 +556,12 @@ async fn apply_scrollback_editor_open_outcome(
             editor_pane_id,
             previous_pane,
         } => {
-            if let Err(error) = crate::client::session::attach_pane_sink_to_state(state, editor_pane_id) {
+            if let Err(error) = session::attach_pane_sink_to_state(state, editor_pane_id) {
                 crate::scrollback_editor::rollback_open_client_request(state, editor)?;
                 return Err(error);
             }
             state.scrollback_editor = Some(editor);
-            crate::pane::focus::write_active_pane_focus_events(previous_pane, state)?;
+            focus::write_active_pane_focus_events(previous_pane, state)?;
             timers.sync_tracked_process_quiet_deadline_for_layout(&state.pane_tracked_processes, state.layout)?;
             crate::screen_render::resize_panes_and_render(event_writer, state).await
         }
@@ -587,8 +578,8 @@ async fn apply_pane_split_outcome(
         new_pane_id,
         previous_pane,
     } = outcome;
-    crate::client::session::attach_pane_sink_to_state(state, new_pane_id)?;
-    crate::pane::focus::write_active_pane_focus_events(previous_pane, state)?;
+    session::attach_pane_sink_to_state(state, new_pane_id)?;
+    focus::write_active_pane_focus_events(previous_pane, state)?;
     timers.sync_tracked_process_quiet_deadline_for_layout(&state.pane_tracked_processes, state.layout)?;
     crate::screen_render::resize_panes_and_render(event_writer, state).await
 }
@@ -603,13 +594,13 @@ async fn apply_pane_close_outcome(
     // timers. pane_close reports which pane disappeared; this layer owns the attached-client resources.
     match outcome {
         ClosePaneClientOutcome::Final { pane_id } => {
-            crate::client::session::remove_pane_from_client_state(state, timers, pane_id)?;
-            self::send_detached_event(event_writer, state, timers).await
+            session::remove_pane_from_client_state(state, timers, pane_id)?;
+            send_detached_event(event_writer, state, timers).await
         }
         ClosePaneClientOutcome::Removed { pane_id, previous_pane } => {
-            crate::client::session::remove_pane_from_client_state(state, timers, pane_id)?;
-            crate::pane::focus::write_active_pane_focus_events(previous_pane, state)?;
-            crate::client::session::acknowledge_active_tracked_process(state)?;
+            session::remove_pane_from_client_state(state, timers, pane_id)?;
+            focus::write_active_pane_focus_events(previous_pane, state)?;
+            session::acknowledge_active_tracked_process(state)?;
             timers.sync_tracked_process_quiet_deadline_for_layout(&state.pane_tracked_processes, state.layout)?;
             crate::screen_render::resize_panes_and_render(event_writer, state).await
         }
@@ -641,8 +632,8 @@ async fn handle_tab_cmd_request(
     // Tab moves only reorder and redraw. Create/focus carry pane ids for sinks, focus events, and timer sync.
     match cmd {
         TabCmd::Create => {
-            self::apply_tab_create_outcome(
-                crate::tab::create::handle_create_tab_cmd_client(state)?,
+            apply_tab_create_outcome(
+                create::handle_create_tab_cmd_client(state)?,
                 event_writer,
                 state,
                 timers,
@@ -650,7 +641,7 @@ async fn handle_tab_cmd_request(
             .await
         }
         TabCmd::FocusAt(tab_index) => {
-            self::apply_tab_focus_outcome(
+            apply_tab_focus_outcome(
                 crate::tab::focus::handle_focus_tab_at_index_cmd_client(tab_index, state)?,
                 event_writer,
                 state,
@@ -659,7 +650,7 @@ async fn handle_tab_cmd_request(
             .await
         }
         TabCmd::FocusPrevious => {
-            self::apply_tab_focus_outcome(
+            apply_tab_focus_outcome(
                 crate::tab::focus::handle_focus_previous_tab_cmd_client(state)?,
                 event_writer,
                 state,
@@ -668,7 +659,7 @@ async fn handle_tab_cmd_request(
             .await
         }
         TabCmd::FocusNext => {
-            self::apply_tab_focus_outcome(
+            apply_tab_focus_outcome(
                 crate::tab::focus::handle_focus_next_tab_cmd_client(state)?,
                 event_writer,
                 state,
@@ -677,11 +668,11 @@ async fn handle_tab_cmd_request(
             .await
         }
         TabCmd::MovePrevious => {
-            crate::tab::r#move::handle_move_active_tab_previous_cmd_client(state)?;
+            r#move::handle_move_active_tab_previous_cmd_client(state)?;
             crate::screen_render::resize_panes_and_render(event_writer, state).await
         }
         TabCmd::MoveNext => {
-            crate::tab::r#move::handle_move_active_tab_next_cmd_client(state)?;
+            r#move::handle_move_active_tab_next_cmd_client(state)?;
             crate::screen_render::resize_panes_and_render(event_writer, state).await
         }
     }
@@ -697,8 +688,8 @@ async fn apply_tab_create_outcome(
         new_pane_id,
         previous_pane,
     } = outcome;
-    crate::client::session::attach_pane_sink_to_state(state, new_pane_id)?;
-    crate::pane::focus::write_active_pane_focus_events(previous_pane, state)?;
+    session::attach_pane_sink_to_state(state, new_pane_id)?;
+    focus::write_active_pane_focus_events(previous_pane, state)?;
     timers.sync_tracked_process_quiet_deadline_for_layout(&state.pane_tracked_processes, state.layout)?;
     crate::screen_render::resize_panes_and_render(event_writer, state).await
 }
@@ -711,7 +702,7 @@ async fn apply_tab_focus_outcome(
 ) -> rootcause::Result<ClientSessionFlow> {
     match outcome {
         TabFocusClientOutcome::Render { previous_pane } => {
-            crate::pane::focus::write_active_pane_focus_events(previous_pane, state)?;
+            focus::write_active_pane_focus_events(previous_pane, state)?;
             timers.sync_tracked_process_quiet_deadline_for_layout(&state.pane_tracked_processes, state.layout)?;
             crate::screen_render::resize_panes_and_render(event_writer, state).await
         }
@@ -744,7 +735,7 @@ mod tests {
         let tempdir = tempfile::tempdir()?;
         let config = crate::server::test_helpers::server_config(tempdir.path(), "work")?;
         let mut timers = ClientTimers::new(&config)?;
-        let mut layout = self::layout(&config)?;
+        let mut layout = layout(&config)?;
         let pane_id = PaneId::new(1)?;
         let other_pane_id = PaneId::new(2)?;
         layout.active_tab_mut()?.focus_pane(pane_id)?;
@@ -753,14 +744,14 @@ mod tests {
         pane_tracked_processes.observe_pane_cmd(
             config.user_config.as_ref(),
             pane_id,
-            &self::fg_tracked_process("claude"),
+            &fg_tracked_process("claude"),
             then,
         );
         pane_tracked_processes.record_user_interaction(
             &layout,
             pane_id,
             TrackedProcessUserInteraction::MayEcho,
-            self::instant_after(then, Duration::from_secs(2))?,
+            instant_after(then, Duration::from_secs(2))?,
         )?;
 
         timers.sync_tracked_process_quiet_deadline_for_layout(&pane_tracked_processes, &layout)?;
@@ -809,7 +800,7 @@ mod tests {
     -> rootcause::Result<()> {
         let tempdir = tempfile::tempdir()?;
         let config = crate::server::test_helpers::server_config(tempdir.path(), "work")?;
-        let mut layout = self::layout(&config)?;
+        let mut layout = layout(&config)?;
         let pane_id = PaneId::new(1)?;
         layout.active_tab_mut()?.focus_pane(pane_id)?;
         let mut pane_tracked_processes = PaneTrackedProcesses::default();
@@ -817,14 +808,14 @@ mod tests {
         pane_tracked_processes.observe_pane_cmd(
             config.user_config.as_ref(),
             pane_id,
-            &self::fg_tracked_process("claude"),
+            &fg_tracked_process("claude"),
             then,
         );
         let changes = pane_tracked_processes.record_user_interaction(
             &layout,
             pane_id,
             TrackedProcessUserInteraction::MayEcho,
-            self::instant_after(then, Duration::from_secs(2))?,
+            instant_after(then, Duration::from_secs(2))?,
         )?;
         let mut timers = ClientTimers::new(&config)?;
 
@@ -919,12 +910,8 @@ mod tests {
     }
 
     fn layout(config: &crate::server::ServerConfig) -> rootcause::Result<SessionLayout> {
-        let mut layout = SessionLayout::initial(&config.session, self::metadata("sh", 1))?;
-        layout.split_active_pane(
-            config.user_config.layout,
-            self::metadata("sh", 2),
-            PaneSplitAxis::Vertical,
-        )?;
+        let mut layout = SessionLayout::initial(&config.session, metadata("sh", 1))?;
+        layout.split_active_pane(config.user_config.layout, metadata("sh", 2), PaneSplitAxis::Vertical)?;
         Ok(layout)
     }
 

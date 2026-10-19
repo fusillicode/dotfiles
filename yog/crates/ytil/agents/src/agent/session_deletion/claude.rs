@@ -1,10 +1,13 @@
+use std::fs;
 use std::path::Path;
 
 use rootcause::prelude::ResultExt;
 use rootcause::report;
 
-use super::DeletionPlan;
 use crate::agent::session::SessionKey;
+use crate::agent::session_deletion::DeletionPlan;
+use crate::agent::session_loader;
+use crate::agent::session_parser::claude;
 
 pub(super) fn build_deletion_plan(
     root: &Path,
@@ -15,11 +18,8 @@ pub(super) fn build_deletion_plan(
         return plan_for_selected_path(root, key, selected_path);
     }
 
-    let paths = crate::agent::session_loader::find_session_paths(
-        root,
-        |entry| claude_session_path(&entry.path(), key.id()),
-        |_| false,
-    )?;
+    let paths =
+        session_loader::find_session_paths(root, |entry| claude_session_path(&entry.path(), key.id()), |_| false)?;
     let [path] = paths.as_slice() else {
         return Err(
             rootcause::report!("selected Claude session was not found uniquely in the session store")
@@ -50,10 +50,10 @@ fn plan_for_selected_path(root: &Path, key: &SessionKey, selected_path: &Path) -
             .attach(format!("session_id={}", key.id())));
     }
 
-    let content = std::fs::read_to_string(&selected_path)
+    let content = fs::read_to_string(&selected_path)
         .context("failed to read selected Claude session file")
         .attach_with(|| format!("path={}", selected_path.display()))?;
-    let session = crate::agent::session_parser::claude::parse(&content)
+    let session = claude::parse(&content)
         .context("failed to parse selected Claude session file")
         .attach_with(|| format!("path={}", selected_path.display()))?;
     if session.id != key.id() {

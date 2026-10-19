@@ -9,6 +9,8 @@ use nvim_oxi::Dictionary;
 use nvim_oxi::api::Buffer;
 use strum::IntoEnumIterator;
 use ytil_noxi::buffer::BufferExt;
+use ytil_noxi::notify;
+use ytil_noxi::vim_ui_select;
 
 /// [`Dictionary`] of random string generation helpers powered by [`fkr`].
 ///
@@ -43,7 +45,7 @@ fn insert_string(_: ()) {
         }
     };
 
-    if let Err(err) = ytil_noxi::vim_ui_select::open(opts, &[("prompt", "Select option: ")], callback, None) {
-        ytil_noxi::notify::error(format!("error generating fkr value | error={err:#?}"));
+    if let Err(err) = vim_ui_select::open(opts, &[("prompt", "Select option: ")], callback, None) {
+        notify::error(format!("error generating fkr value | error={err:#?}"));
     }
 }

@@ -1,13 +1,14 @@
-use super::*;
+use crate::terminal::tests::*;
 
 #[test]
 fn test_terminal_state_scroll_when_output_exceeds_viewport_shows_history() -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&TerminalSize::new(8, 2)?);
+    let mut terminal = crate::terminal::tests::scrollback::terminal_state(&TerminalSize::new(8, 2)?);
 
     let _ = terminal.process(b"one\ntwo\nthree");
 
     test_that::assert_that!(terminal.scroll(PaneScrollDirection::Up), eq(TerminalScrollMove::Moved));
-    let rendered = self::snapshot_text(&terminal.render_snapshot(TerminalSnapshotScope::Full)?);
+    let rendered =
+        crate::terminal::tests::scrollback::snapshot_text(&terminal.render_snapshot(TerminalSnapshotScope::Full)?);
     test_that::assert_that!(rendered, contains_substring("one"));
     Ok(())
 }
@@ -28,7 +29,8 @@ fn test_terminal_state_scroll_when_large_normal_output_finishes_shows_capped_his
         terminal.scroll_one_line(PaneScrollDirection::Up),
         eq(TerminalScrollMove::Moved)
     );
-    let rendered = self::snapshot_text(&terminal.render_snapshot(TerminalSnapshotScope::Full)?);
+    let rendered =
+        crate::terminal::tests::scrollback::snapshot_text(&terminal.render_snapshot(TerminalSnapshotScope::Full)?);
 
     test_that::assert_that!(rendered, contains_substring("row-16"));
     Ok(())
@@ -36,7 +38,7 @@ fn test_terminal_state_scroll_when_large_normal_output_finishes_shows_capped_his
 
 #[test]
 fn test_terminal_state_scroll_when_layout_pane_grows_before_output_captures_full_history() -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&TerminalSize::new(8, 2)?);
+    let mut terminal = crate::terminal::tests::scrollback::terminal_state(&TerminalSize::new(8, 2)?);
     terminal.resize(&TerminalSize::new(8, 4)?);
     let mut output = String::new();
     for row in 0..20 {
@@ -47,7 +49,8 @@ fn test_terminal_state_scroll_when_layout_pane_grows_before_output_captures_full
     for _ in 0..20 {
         let _movement = terminal.scroll_one_line(PaneScrollDirection::Up);
     }
-    let rendered = self::snapshot_text(&terminal.render_snapshot(TerminalSnapshotScope::Full)?);
+    let rendered =
+        crate::terminal::tests::scrollback::snapshot_text(&terminal.render_snapshot(TerminalSnapshotScope::Full)?);
 
     test_that::assert_that!(rendered, contains_substring("row-00"));
     test_that::assert_that!(rendered, contains_substring("row-03"));
@@ -56,17 +59,17 @@ fn test_terminal_state_scroll_when_layout_pane_grows_before_output_captures_full
 
 #[test]
 fn test_terminal_state_scroll_when_output_wraps_preserves_all_visual_rows() -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&TerminalSize::new(8, 4)?);
+    let mut terminal = crate::terminal::tests::scrollback::terminal_state(&TerminalSize::new(8, 4)?);
 
     let _ = terminal.process(b"before\r\n");
     let _ = terminal.process(b"|abcdefghij|\r\n|klmnopqrst|\r\npsql> ");
 
     let mut rendered = Vec::new();
-    rendered.push(self::snapshot_text(
+    rendered.push(crate::terminal::tests::scrollback::snapshot_text(
         &terminal.render_snapshot(TerminalSnapshotScope::Full)?,
     ));
     while terminal.scroll_one_line(PaneScrollDirection::Up) == TerminalScrollMove::Moved {
-        rendered.push(self::snapshot_text(
+        rendered.push(crate::terminal::tests::scrollback::snapshot_text(
             &terminal.render_snapshot(TerminalSnapshotScope::Full)?,
         ));
     }
@@ -82,7 +85,7 @@ fn test_terminal_state_scroll_when_output_wraps_preserves_all_visual_rows() -> r
 #[test]
 fn test_terminal_state_scroll_when_bottom_right_cell_is_filled_waits_for_next_printable_to_scroll()
 -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&TerminalSize::new(4, 2)?);
+    let mut terminal = crate::terminal::tests::scrollback::terminal_state(&TerminalSize::new(4, 2)?);
 
     let _ = terminal.process(b"top\r\nabc");
     let _ = terminal.process(b"d");
@@ -98,14 +101,15 @@ fn test_terminal_state_scroll_when_bottom_right_cell_is_filled_waits_for_next_pr
         terminal.scroll_one_line(PaneScrollDirection::Up),
         eq(TerminalScrollMove::Moved)
     );
-    let rendered = self::snapshot_text(&terminal.render_snapshot(TerminalSnapshotScope::Full)?);
+    let rendered =
+        crate::terminal::tests::scrollback::snapshot_text(&terminal.render_snapshot(TerminalSnapshotScope::Full)?);
     test_that::assert_that!(rendered, contains_substring("top"));
     Ok(())
 }
 
 #[test]
 fn test_terminal_state_scroll_when_wide_printable_wraps_preserves_scrolled_row() -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&TerminalSize::new(4, 2)?);
+    let mut terminal = crate::terminal::tests::scrollback::terminal_state(&TerminalSize::new(4, 2)?);
 
     let _ = terminal.process(b"top\r\nabc");
     let _ = terminal.process("字".as_bytes());
@@ -114,7 +118,8 @@ fn test_terminal_state_scroll_when_wide_printable_wraps_preserves_scrolled_row()
         terminal.scroll_one_line(PaneScrollDirection::Up),
         eq(TerminalScrollMove::Moved)
     );
-    let rendered = self::snapshot_text(&terminal.render_snapshot(TerminalSnapshotScope::Full)?);
+    let rendered =
+        crate::terminal::tests::scrollback::snapshot_text(&terminal.render_snapshot(TerminalSnapshotScope::Full)?);
     test_that::assert_that!(rendered, contains_substring("top"));
     Ok(())
 }
@@ -122,7 +127,7 @@ fn test_terminal_state_scroll_when_wide_printable_wraps_preserves_scrolled_row()
 #[test]
 fn test_terminal_state_scroll_when_alternate_screen_sets_partial_region_preserves_normal_scrollback()
 -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&TerminalSize::new(8, 3)?);
+    let mut terminal = crate::terminal::tests::scrollback::terminal_state(&TerminalSize::new(8, 3)?);
 
     let _ = terminal.process(b"\x1b[?1049h\x1b[2;3r\x1b[r\x1b[?1049l");
     let _ = terminal.process(b"one\r\ntwo\r\nthree\r\nfour");
@@ -131,7 +136,8 @@ fn test_terminal_state_scroll_when_alternate_screen_sets_partial_region_preserve
         terminal.scroll_one_line(PaneScrollDirection::Up),
         eq(TerminalScrollMove::Moved)
     );
-    let rendered = self::snapshot_text(&terminal.render_snapshot(TerminalSnapshotScope::Full)?);
+    let rendered =
+        crate::terminal::tests::scrollback::snapshot_text(&terminal.render_snapshot(TerminalSnapshotScope::Full)?);
     test_that::assert_that!(rendered, contains_substring("one"));
     Ok(())
 }
@@ -139,13 +145,13 @@ fn test_terminal_state_scroll_when_alternate_screen_sets_partial_region_preserve
 #[test]
 fn test_terminal_state_scrollback_dump_when_partial_history_precedes_normal_output_keeps_chronology()
 -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&TerminalSize::new(16, 3)?);
+    let mut terminal = crate::terminal::tests::scrollback::terminal_state(&TerminalSize::new(16, 3)?);
 
     let _ = terminal.process(b"partial-old\r\npartial-live");
     let _ = terminal.process(b"\x1b[1;2r\x1b[2;1H\x1b[S\x1b[r");
     let _ = terminal.process(b"\x1b[3;1Hnormal-new-1\r\nnormal-new-2\r\nnormal-new-3\r\n");
 
-    let dump = String::from_utf8(self::test_scrollback_dump(
+    let dump = String::from_utf8(crate::terminal::tests::scrollback::test_scrollback_dump(
         &mut terminal,
         ScrollbackDumpStyle::PlainText,
     ))?;
@@ -163,7 +169,7 @@ fn test_terminal_state_scrollback_dump_when_partial_history_precedes_normal_outp
 #[test]
 fn test_terminal_state_scrollback_dump_when_output_exceeds_viewport_returns_history_and_live_rows()
 -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&TerminalSize::new(8, 2)?);
+    let mut terminal = crate::terminal::tests::scrollback::terminal_state(&TerminalSize::new(8, 2)?);
 
     let _ = terminal.process(b"one\r\ntwo\r\nthree");
 
@@ -180,12 +186,12 @@ fn test_terminal_state_scrollback_dump_when_output_exceeds_viewport_returns_hist
 #[test]
 fn test_terminal_state_scrollback_dump_when_alternate_screen_is_active_includes_normal_history() -> rootcause::Result<()>
 {
-    let mut terminal = self::terminal_state(&TerminalSize::new(8, 2)?);
+    let mut terminal = crate::terminal::tests::scrollback::terminal_state(&TerminalSize::new(8, 2)?);
     let _output = terminal.process(b"one\r\ntwo\r\nthree\x1b[?1049halt");
     let before = terminal.render_snapshot(TerminalSnapshotScope::Full)?;
     let mode_before = terminal.application_mode();
 
-    let dump = String::from_utf8(self::test_scrollback_dump(
+    let dump = String::from_utf8(crate::terminal::tests::scrollback::test_scrollback_dump(
         &mut terminal,
         ScrollbackDumpStyle::PlainText,
     ))?;
@@ -199,12 +205,12 @@ fn test_terminal_state_scrollback_dump_when_alternate_screen_is_active_includes_
 
 #[test]
 fn test_terminal_state_scrollback_dump_when_viewport_is_scrolled_preserves_viewport() -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&TerminalSize::new(8, 2)?);
+    let mut terminal = crate::terminal::tests::scrollback::terminal_state(&TerminalSize::new(8, 2)?);
     let _ = terminal.process(b"one\r\ntwo\r\nthree");
     test_that::assert_that!(terminal.scroll(PaneScrollDirection::Up), eq(TerminalScrollMove::Moved));
     let before = terminal.render_snapshot(TerminalSnapshotScope::Full)?;
 
-    let _dump = self::test_scrollback_dump(&mut terminal, ScrollbackDumpStyle::PlainText);
+    let _dump = crate::terminal::tests::scrollback::test_scrollback_dump(&mut terminal, ScrollbackDumpStyle::PlainText);
     let after = terminal.render_snapshot(TerminalSnapshotScope::Full)?;
 
     test_that::assert_that!(after, eq(before));
@@ -214,7 +220,7 @@ fn test_terminal_state_scrollback_dump_when_viewport_is_scrolled_preserves_viewp
 #[test]
 fn test_terminal_state_scrollback_dump_when_top_partial_scroll_region_moves_rows_includes_captured_rows()
 -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&TerminalSize::new(8, 4)?);
+    let mut terminal = crate::terminal::tests::scrollback::terminal_state(&TerminalSize::new(8, 4)?);
 
     let _ = terminal.process(b"\x1b[1;1Hone\x1b[2;1Htwo\x1b[3;1Hthree\x1b[4;1Hprompt");
     let _ = terminal.process(b"\x1b[1;3r\x1b[2S\x1b[r");
@@ -231,7 +237,7 @@ fn test_terminal_state_scrollback_dump_when_top_partial_scroll_region_moves_rows
 
 #[test]
 fn test_terminal_state_scrollback_dump_when_ansi_style_requested_preserves_rendered_style() -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&TerminalSize::new(8, 2)?);
+    let mut terminal = crate::terminal::tests::scrollback::terminal_state(&TerminalSize::new(8, 2)?);
 
     let _ = terminal.process(b"\x1b[31mred\x1b[0m");
 
@@ -244,13 +250,14 @@ fn test_terminal_state_scrollback_dump_when_ansi_style_requested_preserves_rende
 
 #[test]
 fn test_terminal_state_scroll_to_bottom_when_scrolled_shows_live_viewport() -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&TerminalSize::new(8, 2)?);
+    let mut terminal = crate::terminal::tests::scrollback::terminal_state(&TerminalSize::new(8, 2)?);
 
     let _ = terminal.process(b"one\ntwo\nthree");
     test_that::assert_that!(terminal.scroll(PaneScrollDirection::Up), eq(TerminalScrollMove::Moved));
 
     test_that::assert_that!(terminal.scroll_to_bottom(), eq(TerminalScrollMove::Moved));
-    let rendered = self::snapshot_text(&terminal.render_snapshot(TerminalSnapshotScope::Full)?);
+    let rendered =
+        crate::terminal::tests::scrollback::snapshot_text(&terminal.render_snapshot(TerminalSnapshotScope::Full)?);
 
     test_that::assert_that!(rendered, contains_substring("three"));
     test_that::assert_that!(terminal.scroll_to_bottom(), eq(TerminalScrollMove::Unchanged));
@@ -259,13 +266,14 @@ fn test_terminal_state_scroll_to_bottom_when_scrolled_shows_live_viewport() -> r
 
 #[test]
 fn test_terminal_state_scroll_when_top_partial_scroll_region_moves_rows_preserves_history() -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&TerminalSize::new(8, 4)?);
+    let mut terminal = crate::terminal::tests::scrollback::terminal_state(&TerminalSize::new(8, 4)?);
 
     let _ = terminal.process(b"\x1b[1;1Hone\x1b[2;1Htwo\x1b[3;1Hthree\x1b[4;1Hprompt");
     let _ = terminal.process(b"\x1b[1;3r\x1b[2S\x1b[r");
 
     test_that::assert_that!(terminal.scroll(PaneScrollDirection::Up), eq(TerminalScrollMove::Moved));
-    let rendered = self::snapshot_text(&terminal.render_snapshot(TerminalSnapshotScope::Full)?);
+    let rendered =
+        crate::terminal::tests::scrollback::snapshot_text(&terminal.render_snapshot(TerminalSnapshotScope::Full)?);
 
     test_that::assert_that!(rendered, contains_substring("one"));
     test_that::assert_that!(rendered, contains_substring("two"));
@@ -294,14 +302,15 @@ fn test_terminal_state_when_partial_rows_exceed_configured_limit_keeps_recent_ro
 
 #[test]
 fn test_terminal_state_scroll_when_partial_scroll_sequence_is_split_preserves_history() -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&TerminalSize::new(8, 4)?);
+    let mut terminal = crate::terminal::tests::scrollback::terminal_state(&TerminalSize::new(8, 4)?);
 
     let _ = terminal.process(b"\x1b[1;1Hone\x1b[2;1Htwo\x1b[3;1Hthree\x1b[4;1Hprompt");
     let _ = terminal.process(b"\x1b[1;3r\x1b[");
     let _ = terminal.process(b"2S\x1b[r");
 
     test_that::assert_that!(terminal.scroll(PaneScrollDirection::Up), eq(TerminalScrollMove::Moved));
-    let rendered = self::snapshot_text(&terminal.render_snapshot(TerminalSnapshotScope::Full)?);
+    let rendered =
+        crate::terminal::tests::scrollback::snapshot_text(&terminal.render_snapshot(TerminalSnapshotScope::Full)?);
 
     test_that::assert_that!(rendered, contains_substring("one"));
     test_that::assert_that!(rendered, contains_substring("two"));
@@ -311,7 +320,7 @@ fn test_terminal_state_scroll_when_partial_scroll_sequence_is_split_preserves_hi
 #[test]
 fn test_terminal_state_scroll_when_top_partial_scroll_region_linefeed_moves_rows_prefers_captured_history()
 -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&TerminalSize::new(8, 4)?);
+    let mut terminal = crate::terminal::tests::scrollback::terminal_state(&TerminalSize::new(8, 4)?);
 
     let _ = terminal.process(b"old-0\nold-1\nold-2\nold-3\nold-4\n");
     let _ = terminal.process(b"\x1b[1;1Hcod-0\x1b[2;1Hcod-1\x1b[3;1Hcod-2\x1b[4;1Hprompt");
@@ -321,7 +330,8 @@ fn test_terminal_state_scroll_when_top_partial_scroll_region_linefeed_moves_rows
         terminal.scroll_one_line(PaneScrollDirection::Up),
         eq(TerminalScrollMove::Moved)
     );
-    let rendered = self::snapshot_text(&terminal.render_snapshot(TerminalSnapshotScope::Full)?);
+    let rendered =
+        crate::terminal::tests::scrollback::snapshot_text(&terminal.render_snapshot(TerminalSnapshotScope::Full)?);
 
     test_that::assert_that!(rendered, contains_substring("cod-0"));
     test_that::assert_that!(rendered, not(contains_substring("old-")));
@@ -331,7 +341,7 @@ fn test_terminal_state_scroll_when_top_partial_scroll_region_linefeed_moves_rows
 #[test]
 fn test_terminal_state_scroll_when_alternate_screen_linefeed_moves_rows_does_not_capture_history()
 -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&TerminalSize::new(8, 4)?);
+    let mut terminal = crate::terminal::tests::scrollback::terminal_state(&TerminalSize::new(8, 4)?);
 
     let _ = terminal.process(b"\x1b[?1049h\x1b[1;1Hone\x1b[2;1Htwo\x1b[3;1Hthree\x1b[4;1Hprompt");
     let _ = terminal.process(b"\x1b[1;3r\x1b[3;1H\n\x1b[r");
@@ -346,13 +356,14 @@ fn test_terminal_state_scroll_when_alternate_screen_linefeed_moves_rows_does_not
 #[test]
 fn test_terminal_state_scroll_when_top_partial_scroll_region_delete_lines_moves_rows_preserves_history()
 -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&TerminalSize::new(8, 4)?);
+    let mut terminal = crate::terminal::tests::scrollback::terminal_state(&TerminalSize::new(8, 4)?);
 
     let _ = terminal.process(b"\x1b[1;1Hone\x1b[2;1Htwo\x1b[3;1Hthree\x1b[4;1Hprompt");
     let _ = terminal.process(b"\x1b[1;3r\x1b[1;1H\x1b[2M\x1b[r");
 
     test_that::assert_that!(terminal.scroll(PaneScrollDirection::Up), eq(TerminalScrollMove::Moved));
-    let rendered = self::snapshot_text(&terminal.render_snapshot(TerminalSnapshotScope::Full)?);
+    let rendered =
+        crate::terminal::tests::scrollback::snapshot_text(&terminal.render_snapshot(TerminalSnapshotScope::Full)?);
 
     test_that::assert_that!(rendered, contains_substring("one"));
     test_that::assert_that!(rendered, contains_substring("two"));
@@ -362,13 +373,14 @@ fn test_terminal_state_scroll_when_top_partial_scroll_region_delete_lines_moves_
 #[test]
 fn test_terminal_state_scroll_when_full_scroll_region_delete_lines_moves_rows_preserves_history()
 -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&TerminalSize::new(8, 4)?);
+    let mut terminal = crate::terminal::tests::scrollback::terminal_state(&TerminalSize::new(8, 4)?);
 
     let _ = terminal.process(b"\x1b[1;1Hone\x1b[2;1Htwo\x1b[3;1Hthree\x1b[4;1Hprompt");
     let _ = terminal.process(b"\x1b[1;4r\x1b[1;1H\x1b[2M\x1b[r");
 
     test_that::assert_that!(terminal.scroll(PaneScrollDirection::Up), eq(TerminalScrollMove::Moved));
-    let rendered = self::snapshot_text(&terminal.render_snapshot(TerminalSnapshotScope::Full)?);
+    let rendered =
+        crate::terminal::tests::scrollback::snapshot_text(&terminal.render_snapshot(TerminalSnapshotScope::Full)?);
 
     test_that::assert_that!(rendered, contains_substring("one"));
     test_that::assert_that!(rendered, contains_substring("two"));
@@ -378,7 +390,7 @@ fn test_terminal_state_scroll_when_full_scroll_region_delete_lines_moves_rows_pr
 #[test]
 fn test_terminal_state_scroll_when_mid_partial_scroll_region_delete_lines_moves_rows_does_not_capture_history()
 -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&TerminalSize::new(8, 4)?);
+    let mut terminal = crate::terminal::tests::scrollback::terminal_state(&TerminalSize::new(8, 4)?);
 
     let _ = terminal.process(b"\x1b[1;1Hone\x1b[2;1Htwo\x1b[3;1Hthree\x1b[4;1Hprompt");
     let _ = terminal.process(b"\x1b[1;3r\x1b[2;1H\x1b[2M\x1b[r");
@@ -393,7 +405,7 @@ fn test_terminal_state_scroll_when_mid_partial_scroll_region_delete_lines_moves_
 #[test]
 fn test_terminal_state_scroll_when_alternate_screen_delete_lines_moves_rows_does_not_capture_history()
 -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&TerminalSize::new(8, 4)?);
+    let mut terminal = crate::terminal::tests::scrollback::terminal_state(&TerminalSize::new(8, 4)?);
 
     let _ = terminal.process(b"\x1b[?1049h\x1b[1;1Hone\x1b[2;1Htwo\x1b[3;1Hthree\x1b[4;1Hprompt");
     let _ = terminal.process(b"\x1b[1;4r\x1b[1;1H\x1b[2M\x1b[r");
@@ -408,7 +420,7 @@ fn test_terminal_state_scroll_when_alternate_screen_delete_lines_moves_rows_does
 #[test]
 fn test_terminal_state_scroll_when_alternate_screen_partial_scroll_region_moves_rows_does_not_capture_history()
 -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&TerminalSize::new(8, 4)?);
+    let mut terminal = crate::terminal::tests::scrollback::terminal_state(&TerminalSize::new(8, 4)?);
 
     let _ = terminal.process(b"\x1b[?1049h\x1b[1;1Hone\x1b[2;1Htwo\x1b[3;1Hthree\x1b[4;1Hprompt");
     let _ = terminal.process(b"\x1b[1;3r\x1b[2S\x1b[r");
@@ -423,7 +435,7 @@ fn test_terminal_state_scroll_when_alternate_screen_partial_scroll_region_moves_
 #[test]
 fn test_terminal_state_scroll_when_alternate_screen_full_scroll_region_moves_rows_does_not_capture_history()
 -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&TerminalSize::new(8, 4)?);
+    let mut terminal = crate::terminal::tests::scrollback::terminal_state(&TerminalSize::new(8, 4)?);
 
     let _ = terminal.process(b"\x1b[?1049h\x1b[1;1Hone\x1b[2;1Htwo\x1b[3;1Hthree\x1b[4;1Hprompt");
     let _ = terminal.process(b"\x1b[1;4r\x1b[2S\x1b[r");
@@ -438,14 +450,15 @@ fn test_terminal_state_scroll_when_alternate_screen_full_scroll_region_moves_row
 #[test]
 fn test_terminal_state_scroll_when_normal_screen_full_scroll_region_moves_rows_preserves_history()
 -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&TerminalSize::new(8, 4)?);
+    let mut terminal = crate::terminal::tests::scrollback::terminal_state(&TerminalSize::new(8, 4)?);
 
     let _ = terminal.process(b"\x1b[1;1Hone\x1b[2;1Htwo\x1b[3;1Hthree\x1b[4;1Hprompt");
     let _ = terminal.process(b"\x1b[1;4r\x1b[2S\x1b[r");
 
     test_that::assert_that!(terminal.rio.terminal().grid.history_size(), eq(2));
     test_that::assert_that!(terminal.scroll(PaneScrollDirection::Up), eq(TerminalScrollMove::Moved));
-    let rendered = self::snapshot_text(&terminal.render_snapshot(TerminalSnapshotScope::Full)?);
+    let rendered =
+        crate::terminal::tests::scrollback::snapshot_text(&terminal.render_snapshot(TerminalSnapshotScope::Full)?);
 
     test_that::assert_that!(rendered, contains_substring("one"));
     test_that::assert_that!(rendered, contains_substring("two"));
@@ -454,12 +467,13 @@ fn test_terminal_state_scroll_when_normal_screen_full_scroll_region_moves_rows_p
 
 #[test]
 fn test_terminal_state_visible_top_row_when_scrolled_tracks_current_viewport() -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&TerminalSize::new(8, 2)?);
+    let mut terminal = crate::terminal::tests::scrollback::terminal_state(&TerminalSize::new(8, 2)?);
 
     let _ = terminal.process(b"one\ntwo\nthree");
     let bottom_top_row = terminal.visible_top_row()?;
     test_that::assert_that!(terminal.scroll(PaneScrollDirection::Up), eq(TerminalScrollMove::Moved));
-    let scrolled_snapshot = self::snapshot_text(&terminal.render_snapshot(TerminalSnapshotScope::Full)?);
+    let scrolled_snapshot =
+        crate::terminal::tests::scrollback::snapshot_text(&terminal.render_snapshot(TerminalSnapshotScope::Full)?);
 
     let scrolled_top_row = terminal.visible_top_row()?;
 
@@ -473,7 +487,7 @@ fn test_terminal_state_visible_top_row_when_scrolled_tracks_current_viewport() -
 
 #[test]
 fn test_terminal_state_visible_row_wraps_when_live_row_wraps_reports_flag() -> rootcause::Result<()> {
-    let mut terminal = self::terminal_state(&TerminalSize::new(4, 2)?);
+    let mut terminal = crate::terminal::tests::scrollback::terminal_state(&TerminalSize::new(4, 2)?);
 
     let _ = terminal.process(b"abcdx");
 

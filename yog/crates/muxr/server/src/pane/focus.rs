@@ -6,12 +6,14 @@ use muxr_core::TerminalSize;
 use rootcause::report;
 
 use crate::client::session::ClientSessionState;
+use crate::pane::fullscreen;
 use crate::pane::layout::PaneRegion;
 use crate::pane::runtime::PaneRuntimes;
 use crate::pane::tracked_process::PaneTrackedProcesses;
 use crate::server::ServerConfig;
 use crate::state::SessionLayout;
 use crate::state::Tab;
+use crate::state::persisted;
 use crate::terminal::TerminalFocusEvent;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -138,7 +140,7 @@ pub fn handle_focus_pane_at_client_request(
         return Ok(PaneFocusClientOutcome::Unchanged);
     }
     let previous_pane = state.layout.active_pane_id()?;
-    if self::handle_focus_pane_at_request_with_tracked_process_ack(
+    if handle_focus_pane_at_request_with_tracked_process_ack(
         position,
         state.config,
         state.layout,
@@ -150,7 +152,7 @@ pub fn handle_focus_pane_at_client_request(
     {
         return Ok(PaneFocusClientOutcome::Unchanged);
     }
-    self::write_active_pane_focus_events(previous_pane, state)?;
+    write_active_pane_focus_events(previous_pane, state)?;
     Ok(PaneFocusClientOutcome::Focused {
         render: PaneFocusRender::SendLayoutAndRenderDiff,
     })
@@ -161,7 +163,7 @@ pub fn handle_focus_pane_cmd_client(
     state: &mut ClientSessionState<'_>,
 ) -> rootcause::Result<PaneFocusClientOutcome> {
     let previous_pane = state.layout.active_pane_id()?;
-    if self::handle_focus_pane_cmd_with_tracked_process_ack(
+    if handle_focus_pane_cmd_with_tracked_process_ack(
         direction,
         state.config,
         state.layout,
@@ -173,8 +175,8 @@ pub fn handle_focus_pane_cmd_client(
     {
         return Ok(PaneFocusClientOutcome::Unchanged);
     }
-    self::write_active_pane_focus_events(previous_pane, state)?;
-    let render = if crate::pane::fullscreen::clear_active_tab_for_layout_mutation(state)
+    write_active_pane_focus_events(previous_pane, state)?;
+    let render = if fullscreen::clear_active_tab_for_layout_mutation(state)
         == crate::pane::fullscreen::PaneFullscreenChange::Cleared
     {
         PaneFocusRender::ResizePanesAndRender
@@ -186,7 +188,7 @@ pub fn handle_focus_pane_cmd_client(
 
 pub fn write_active_pane_focus_events(previous_pane: PaneId, state: &ClientSessionState<'_>) -> rootcause::Result<()> {
     let next_pane = state.layout.active_pane_id()?;
-    self::write_pane_focus_transition(previous_pane, next_pane, state.runtimes)
+    write_pane_focus_transition(previous_pane, next_pane, state.runtimes)
 }
 
 fn handle_focus_pane_cmd_with_tracked_process_ack(
@@ -198,7 +200,7 @@ fn handle_focus_pane_cmd_with_tracked_process_ack(
     terminal_size: &TerminalSize,
     now: Instant,
 ) -> rootcause::Result<PaneFocusChange> {
-    let focus_change = self::handle_focus_pane_cmd(direction, config, layout, terminal_size)?;
+    let focus_change = handle_focus_pane_cmd(direction, config, layout, terminal_size)?;
     if focus_change == PaneFocusChange::Changed {
         let _acknowledged = pane_tracked_processes.acknowledge_active_pane_attention(
             config.user_config.as_ref(),
@@ -218,7 +220,7 @@ fn handle_focus_pane_cmd(
 ) -> rootcause::Result<PaneFocusChange> {
     let focus_change = layout.focus_pane_direction(terminal_size, direction)?;
     if focus_change == PaneFocusChange::Changed {
-        crate::state::persisted::write_metadata(&config.paths, layout)?;
+        persisted::write_metadata(&config.paths, layout)?;
     }
     Ok(focus_change)
 }
@@ -232,7 +234,7 @@ fn handle_focus_pane_at_request_with_tracked_process_ack(
     terminal_size: &TerminalSize,
     now: Instant,
 ) -> rootcause::Result<PaneFocusChange> {
-    let focus_change = self::handle_focus_pane_at_request(position, config, layout, terminal_size)?;
+    let focus_change = handle_focus_pane_at_request(position, config, layout, terminal_size)?;
     if focus_change == PaneFocusChange::Changed {
         let _acknowledged = pane_tracked_processes.acknowledge_active_pane_attention(
             config.user_config.as_ref(),
@@ -252,7 +254,7 @@ fn handle_focus_pane_at_request(
 ) -> rootcause::Result<PaneFocusChange> {
     let focus_change = layout.focus_pane_at(terminal_size, position)?;
     if focus_change == PaneFocusChange::Changed {
-        crate::state::persisted::write_metadata(&config.paths, layout)?;
+        persisted::write_metadata(&config.paths, layout)?;
     }
     Ok(focus_change)
 }
@@ -264,7 +266,7 @@ fn write_pane_focus_transition(
 ) -> rootcause::Result<()> {
     // Focus reporting is a pane-application opt-in (`CSI ? 1004 h`). Close/reap may remove the old pane runtime
     // before the new pane receives focus, so skip missing runtimes while still notifying the surviving side.
-    for (pane_id, event) in self::pane_focus_events_for_live_panes(previous_pane, next_pane, &runtimes.pane_ids()) {
+    for (pane_id, event) in pane_focus_events_for_live_panes(previous_pane, next_pane, &runtimes.pane_ids()) {
         runtimes.handle(pane_id)?.write_focus_event(event)?;
     }
     Ok(())

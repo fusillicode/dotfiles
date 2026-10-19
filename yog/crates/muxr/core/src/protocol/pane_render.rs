@@ -1,12 +1,16 @@
 use std::sync::Arc;
 
 use compact_str::CompactString;
+use rkyv::Place;
+use rkyv::primitive::ArchivedU64;
+use rkyv::string::ArchivedString;
+use rkyv::string::StringResolver;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
 use serde::Deserialize;
 use serde::Serialize;
 
-use super::TerminalSize;
+use crate::protocol::TerminalSize;
 
 #[derive(rkyv::Archive, Clone, Debug, rkyv::Deserialize, Eq, PartialEq, Serialize, rkyv::Serialize)]
 pub enum RenderUpdate {
@@ -130,7 +134,7 @@ where
         let rows = rkyv::Deserialize::<Vec<RenderRowSpan>, D>::deserialize(&self.rows, deserializer)?;
         let seq = rkyv::Deserialize::<u64, D>::deserialize(&self.seq, deserializer)?;
         let size = rkyv::Deserialize::<TerminalSize, D>::deserialize(&self.size, deserializer)?;
-        RenderBaseline::new(seq, size, cursor, rows).map_err(super::rkyv_deserialize_error::<D::Error>)
+        RenderBaseline::new(seq, size, cursor, rows).map_err(crate::protocol::rkyv_deserialize_error::<D::Error>)
     }
 }
 
@@ -249,7 +253,7 @@ where
         let rows = rkyv::Deserialize::<Vec<RenderRowSpan>, D>::deserialize(&self.rows, deserializer)?;
         let seq = rkyv::Deserialize::<u64, D>::deserialize(&self.seq, deserializer)?;
         let size = rkyv::Deserialize::<TerminalSize, D>::deserialize(&self.size, deserializer)?;
-        RenderDiff::new(base_seq, seq, size, cursor, rows).map_err(super::rkyv_deserialize_error::<D::Error>)
+        RenderDiff::new(base_seq, seq, size, cursor, rows).map_err(crate::protocol::rkyv_deserialize_error::<D::Error>)
     }
 }
 
@@ -406,7 +410,7 @@ impl RenderRowSpan {
                         continue;
                     }
                     RenderCellWidth::Narrow | RenderCellWidth::Wide => {
-                        return Err(self::invalid_wide_cell_sequence(
+                        return Err(invalid_wide_cell_sequence(
                             "wide cell must be followed by a wide continuation",
                             index,
                         ));
@@ -420,7 +424,7 @@ impl RenderRowSpan {
                     wide_cell_index = Some(index);
                 }
                 RenderCellWidth::WideContinuation => {
-                    return Err(self::invalid_wide_cell_sequence(
+                    return Err(invalid_wide_cell_sequence(
                         "wide continuation must follow a wide cell",
                         index,
                     ));
@@ -429,7 +433,7 @@ impl RenderRowSpan {
         }
 
         if let Some(index) = wide_cell_index {
-            return Err(self::invalid_wide_cell_sequence(
+            return Err(invalid_wide_cell_sequence(
                 "wide cell must be followed by a wide continuation",
                 index,
             ));
@@ -448,18 +452,18 @@ where
         let cells = rkyv::Deserialize::<Vec<RenderCell>, D>::deserialize(&self.cells, deserializer)?;
         let col = rkyv::Deserialize::<u16, D>::deserialize(&self.col, deserializer)?;
         let row = rkyv::Deserialize::<u16, D>::deserialize(&self.row, deserializer)?;
-        RenderRowSpan::new(row, col, cells).map_err(super::rkyv_deserialize_error::<D::Error>)
+        RenderRowSpan::new(row, col, cells).map_err(crate::protocol::rkyv_deserialize_error::<D::Error>)
     }
 }
 
-impl<D> rkyv::Deserialize<SharedRenderUri, D> for rkyv::string::ArchivedString
+impl<D> rkyv::Deserialize<SharedRenderUri, D> for ArchivedString
 where
     D: rkyv::rancor::Fallible + ?Sized,
     D::Error: rkyv::rancor::Source,
 {
     fn deserialize(&self, deserializer: &mut D) -> Result<SharedRenderUri, D::Error> {
         let raw = rkyv::Deserialize::<String, D>::deserialize(self, deserializer)?;
-        SharedRenderUri::try_new(raw).map_err(super::rkyv_deserialize_error::<D::Error>)
+        SharedRenderUri::try_new(raw).map_err(crate::protocol::rkyv_deserialize_error::<D::Error>)
     }
 }
 
@@ -629,7 +633,7 @@ where
             }
             RenderCellWidth::WideContinuation => {
                 if !text.is_empty() {
-                    return Err(super::rkyv_deserialize_error::<D::Error>(
+                    return Err(crate::protocol::rkyv_deserialize_error::<D::Error>(
                         "wide continuation cells must not carry text",
                     ));
                 }
@@ -763,10 +767,10 @@ fn invalid_wide_cell_sequence(reason: &'static str, index: usize) -> rootcause::
 struct RenderSequence(u64);
 
 impl rkyv::Archive for RenderSequence {
-    type Archived = rkyv::primitive::ArchivedU64;
+    type Archived = ArchivedU64;
     type Resolver = ();
 
-    fn resolve(&self, resolver: Self::Resolver, out: rkyv::Place<Self::Archived>) {
+    fn resolve(&self, resolver: Self::Resolver, out: Place<Self::Archived>) {
         rkyv::Archive::resolve(&self.into_inner(), resolver, out);
     }
 }
@@ -800,11 +804,11 @@ impl SharedRenderUri {
 }
 
 impl rkyv::Archive for SharedRenderUri {
-    type Archived = rkyv::string::ArchivedString;
-    type Resolver = rkyv::string::StringResolver;
+    type Archived = ArchivedString;
+    type Resolver = StringResolver;
 
-    fn resolve(&self, resolver: Self::Resolver, out: rkyv::Place<Self::Archived>) {
-        rkyv::string::ArchivedString::resolve_from_str(self.as_ref(), resolver, out);
+    fn resolve(&self, resolver: Self::Resolver, out: Place<Self::Archived>) {
+        ArchivedString::resolve_from_str(self.as_ref(), resolver, out);
     }
 }
 
@@ -815,13 +819,13 @@ where
     str: rkyv::SerializeUnsized<S>,
 {
     fn serialize(&self, serializer: &mut S) -> Result<Self::Resolver, S::Error> {
-        rkyv::string::ArchivedString::serialize_from_str(self.as_ref(), serializer)
+        ArchivedString::serialize_from_str(self.as_ref(), serializer)
     }
 }
 
 #[cfg(test)]
 pub mod test_helpers {
-    use super::*;
+    use crate::protocol::pane_render::*;
 
     pub fn raw_render_diff(
         base_seq: u64,
@@ -874,7 +878,7 @@ mod tests {
 
     #[test]
     fn test_render_cell_with_hyperlink_uri_when_uri_is_valid_sets_metadata() -> rootcause::Result<()> {
-        let cell = self::render_cell("x").with_hyperlink_uri("https://example.com")?;
+        let cell = render_cell("x").with_hyperlink_uri("https://example.com")?;
 
         assert_that!(
             cell.hyperlink().map(RenderHyperlink::uri),
@@ -1143,7 +1147,7 @@ mod tests {
 
     fn render_rows(cols: u16, rows: u16) -> Vec<RenderRowSpan> {
         (0..rows)
-            .map(|row| self::raw_render_row_span(row, 0, self::render_cells(cols)))
+            .map(|row| raw_render_row_span(row, 0, render_cells(cols)))
             .collect()
     }
 
@@ -1152,7 +1156,7 @@ mod tests {
     }
 
     fn render_cells(cols: u16) -> Vec<RenderCell> {
-        (0..cols).map(|_| self::render_cell(" ")).collect()
+        (0..cols).map(|_| render_cell(" ")).collect()
     }
 
     fn render_cell(text: &str) -> RenderCell {

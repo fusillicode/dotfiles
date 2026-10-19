@@ -1,5 +1,6 @@
 //! Provides functions for Neovim window operations.
 
+use nvim_oxi::Dictionary;
 use nvim_oxi::api;
 use nvim_oxi::api::Buffer;
 use nvim_oxi::api::Window;
@@ -70,7 +71,7 @@ pub fn find_focusable_float(allowed_filetypes: &[&str]) -> Option<Window> {
             continue;
         }
 
-        let is_focusable = api::call_function::<_, nvim_oxi::Dictionary>("nvim_win_get_config", (win.clone(),))
+        let is_focusable = api::call_function::<_, Dictionary>("nvim_win_get_config", (win.clone(),))
             .ok()
             .and_then(|cfg| cfg.get("focusable").cloned())
             .and_then(|obj| bool::from_object(obj).ok())
@@ -97,7 +98,7 @@ pub fn find_focusable_float(allowed_filetypes: &[&str]) -> Option<Window> {
 }
 
 pub fn is_floating(window: &Window) -> bool {
-    api::call_function::<_, nvim_oxi::Dictionary>("nvim_win_get_config", (window.clone(),))
+    api::call_function::<_, Dictionary>("nvim_win_get_config", (window.clone(),))
         .ok()
         .and_then(|cfg| cfg.get("relative").cloned())
         .and_then(|obj| String::from_object(obj).ok())
