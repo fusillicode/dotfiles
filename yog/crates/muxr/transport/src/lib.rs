@@ -2,6 +2,7 @@ use std::io;
 use std::io::IoSlice;
 use std::path::Path;
 use std::pin::Pin;
+use std::sync::Arc;
 use std::task::Context;
 use std::task::Poll;
 
@@ -12,11 +13,8 @@ use interprocess::local_socket::GenericFilePath;
 use interprocess::local_socket::ListenerOptions;
 use interprocess::local_socket::ToFsName as _;
 use interprocess::local_socket::tokio::Listener;
-use interprocess::local_socket::tokio::RecvHalf;
-use interprocess::local_socket::tokio::SendHalf;
 use interprocess::local_socket::tokio::Stream;
 use interprocess::local_socket::traits::tokio::Listener as _;
-use interprocess::local_socket::traits::tokio::Stream as _;
 use muxr_core::ClientRequest;
 use muxr_core::ServerEvent;
 use muxr_core::SocketPath;
@@ -25,14 +23,15 @@ use rootcause::report;
 use tokio::io::AsyncRead;
 use tokio::io::AsyncWrite;
 use tokio::io::AsyncWriteExt;
+use tokio::io::ReadBuf;
 use tokio_util::codec::FramedRead;
 use tokio_util::codec::LengthDelimitedCodec;
 
 const FRAME_HEADER_LENGTH: usize = size_of::<u32>();
 const MAX_FRAME_LENGTH: usize = 8 * 1024 * 1024;
 
-type FrameReader = FramedRead<RecvHalf, LengthDelimitedCodec>;
-type LocalFrameWriter = FrameWriter<LocalSocketWriter>;
+type FrameReader = FramedRead<LocalSocket, LengthDelimitedCodec>;
+type LocalFrameWriter = FrameWriter<LocalSocket>;
 
 pub struct ClientConnection {
     reader: ClientEventReader,
@@ -223,10 +222,11 @@ impl ServerListener {
 }
 
 fn frame_socket(stream: Stream) -> (LocalFrameWriter, FrameReader) {
-    let (reader, writer) = stream.split();
+    let stream = Arc::new(stream);
+
     (
-        FrameWriter::new(LocalSocketWriter(writer)),
-        FramedRead::new(reader, frame_codec()),
+        FrameWriter::new(LocalSocket(Arc::clone(&stream))),
+        FramedRead::new(LocalSocket(stream), frame_codec()),
     )
 }
 
@@ -394,11 +394,17 @@ impl PendingFrame {
     }
 }
 
-struct LocalSocketWriter(SendHalf);
+struct LocalSocket(Arc<Stream>);
 
-impl AsyncWrite for LocalSocketWriter {
+impl AsyncRead for LocalSocket {
+    fn poll_read(self: Pin<&mut Self>, cx: &mut Context<'_>, buffer: &mut ReadBuf<'_>) -> Poll<io::Result<()>> {
+        Pin::new(&mut self.0.as_ref()).poll_read(cx, buffer)
+    }
+}
+
+impl AsyncWrite for LocalSocket {
     fn poll_write(self: Pin<&mut Self>, cx: &mut Context<'_>, buffer: &[u8]) -> Poll<io::Result<usize>> {
-        Pin::new(&mut self.get_mut().0).poll_write(cx, buffer)
+        Pin::new(&mut self.0.as_ref()).poll_write(cx, buffer)
     }
 
     fn poll_write_vectored(
@@ -406,29 +412,30 @@ impl AsyncWrite for LocalSocketWriter {
         cx: &mut Context<'_>,
         buffers: &[IoSlice<'_>],
     ) -> Poll<io::Result<usize>> {
-        match &mut self.get_mut().0 {
+        // Stream's AsyncWrite implementation does not forward vectored writes.
+        match self.0.as_ref() {
             #[cfg(windows)]
-            SendHalf::NamedPipe(writer) => Pin::new(writer).poll_write_vectored(cx, buffers),
+            Stream::NamedPipe(writer) => Pin::new(&mut &*writer).poll_write_vectored(cx, buffers),
             #[cfg(unix)]
-            SendHalf::UdSocket(writer) => Pin::new(writer).poll_write_vectored(cx, buffers),
+            Stream::UdSocket(writer) => Pin::new(&mut &*writer).poll_write_vectored(cx, buffers),
         }
     }
 
     fn is_write_vectored(&self) -> bool {
-        match &self.0 {
+        match self.0.as_ref() {
             #[cfg(windows)]
-            SendHalf::NamedPipe(writer) => writer.is_write_vectored(),
+            Stream::NamedPipe(writer) => writer.is_write_vectored(),
             #[cfg(unix)]
-            SendHalf::UdSocket(writer) => writer.is_write_vectored(),
+            Stream::UdSocket(writer) => writer.is_write_vectored(),
         }
     }
 
     fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-        Pin::new(&mut self.get_mut().0).poll_flush(cx)
+        Pin::new(&mut self.0.as_ref()).poll_flush(cx)
     }
 
     fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-        Pin::new(&mut self.get_mut().0).poll_shutdown(cx)
+        Pin::new(&mut self.0.as_ref()).poll_shutdown(cx)
     }
 }
 
@@ -437,6 +444,8 @@ mod tests {
     use std::future::Future as _;
     use std::path::Path;
 
+    use interprocess::local_socket::GenericNamespaced;
+    use interprocess::local_socket::ToNsName as _;
     use muxr_core::AttachAccepted;
     use muxr_core::ClientKey;
     use muxr_core::ClientKeyCode;
@@ -451,6 +460,43 @@ mod tests {
     use test_that::prelude::*;
 
     use super::*;
+
+    #[test]
+    fn test_transport_when_local_connection_is_split_keeps_remaining_halves_usable() -> rootcause::Result<()> {
+        let runtime = tokio::runtime::Runtime::new().context("failed to build muxr transport test runtime")?;
+
+        runtime.block_on(async {
+            tokio::time::timeout(std::time::Duration::from_secs(5), async {
+                let name = format!("muxr-transport-test-{}", std::process::id()).to_ns_name::<GenericNamespaced>()?;
+                let listener = ListenerOptions::new().name(name.borrow()).create_tokio()?;
+                let options = ConnectOptions::new().name(name);
+                let (client, server) = tokio::try_join!(options.connect_tokio(), listener.accept())?;
+                let (mut client_reader, mut client_writer) = ClientConnection::from_stream(client).split();
+                let (mut server_reader, mut server_writer) = ServerConnection::from_stream(server).split();
+
+                client_writer.send_request(&ClientRequest::Ping).await?;
+                let request = server_reader.recv_request().await?;
+
+                test_that::assert_that!(request, eq(Some(ClientRequest::Ping)));
+
+                drop(client_writer);
+                drop(server_reader);
+
+                server_writer.send_event(&ServerEvent::Pong).await?;
+                let event = client_reader.recv_event().await?;
+
+                test_that::assert_that!(event, eq(Some(ServerEvent::Pong)));
+
+                drop(server_writer);
+
+                let event = client_reader.recv_event().await?;
+
+                test_that::assert_that!(event, eq(None));
+                Ok::<_, rootcause::Report>(())
+            })
+            .await?
+        })
+    }
 
     #[rstest]
     #[case::ping(ClientRequest::Ping)]
