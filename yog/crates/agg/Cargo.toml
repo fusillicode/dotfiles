@@ -14,12 +14,9 @@ categories = ["command-line-utilities", "development-tools"]
 jiff = { workspace = true }
 owo-colors = { workspace = true }
 rootcause = { workspace = true }
-rusqlite = { version = "0.40", features = ["bundled"] }
+rusqlite = { version = "0.41", features = ["bundled"] }
 serde = { workspace = true }
-serde-saphyr = { version = "2.0", default-features = false, features = [
-  "deserialize",
-  "serialize",
-] }
+serde-saphyr = { version = "2.0", default-features = false, features = ["deserialize", "serialize"] }
 serde_json = { workspace = true }
 strum = { workspace = true }
 tiktoken = { version = "4.1.2" }

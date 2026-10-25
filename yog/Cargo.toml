@@ -72,7 +72,7 @@ nutype = { version = "0.8", features = ["serde"] }
 nvim-oxi = { path = "../third_party/nvim-oxi", features = ["neovim-nightly", "mlua"] }
 owo-colors = { version = "4" }
 rootcause = { version = "0.13" }
-rstest = { version = "0.27" }
+rstest = { version = "0.28" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0" }
 strum = { version = "0.28", features = ["derive"] }
