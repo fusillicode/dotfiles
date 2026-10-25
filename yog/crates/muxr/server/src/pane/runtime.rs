@@ -1,7 +1,7 @@
-use std::collections::BTreeMap;
 use std::io::Write;
 use std::sync::Arc;
 
+use bbtree::unsync::BBTreeMap;
 use muxr_config::ScrollbackDumpStyle;
 use muxr_core::PaneId;
 use muxr_core::TerminalSize;
@@ -41,7 +41,7 @@ impl SyncedTerminalTitles {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PaneRuntimeMetadata {
-    panes: BTreeMap<PaneId, PaneRuntimeMetadataEntry>,
+    panes: BBTreeMap<PaneId, PaneRuntimeMetadataEntry>,
 }
 
 impl PaneRuntimeMetadata {
@@ -50,7 +50,7 @@ impl PaneRuntimeMetadata {
         startup_cmd_labels: Vec<(PaneId, Option<String>)>,
         tracked_processes: &PaneTrackedProcessSnapshot,
     ) -> Self {
-        let mut panes = BTreeMap::<PaneId, PaneRuntimeMetadataEntry>::new();
+        let mut panes = BBTreeMap::<PaneId, PaneRuntimeMetadataEntry>::new();
         for (pane_id, terminal_title) in terminal_titles {
             panes.entry(pane_id).or_default().terminal_title = terminal_title;
         }

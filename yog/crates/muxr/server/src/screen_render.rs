@@ -1,6 +1,6 @@
-use std::collections::BTreeMap;
 use std::time::Instant;
 
+use bbtree::unsync::BBTreeMap;
 use muxr_core::ClientMousePosition;
 use muxr_core::LayoutSnapshot;
 use muxr_core::PaneId;
@@ -412,7 +412,7 @@ fn render_input(
         .regions()
         .iter()
         .map(|region| runtimes.handle(region.id).map(|handle| (region.id, handle)))
-        .collect::<rootcause::Result<BTreeMap<_, _>>>()?;
+        .collect::<rootcause::Result<BBTreeMap<_, _>>>()?;
     Ok(RenderInput::new(
         render_worker.next_generation()?,
         pane_render,

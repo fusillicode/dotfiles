@@ -1,8 +1,8 @@
-use std::collections::BTreeMap;
-use std::collections::BTreeSet;
 use std::time::Duration;
 use std::time::Instant;
 
+use bbtree::unsync::BBTreeMap;
+use bbtree::unsync::BBTreeSet;
 use muxr_core::ClientMousePosition;
 use muxr_core::ClientRequest;
 use muxr_core::PaneId;
@@ -324,7 +324,7 @@ pub struct SelectionState {
     // Copy text is cached by stable content row so viewport scrolling moves the highlight without dropping rows that
     // have already passed off-screen during a drag selection. The final joined string is built lazily on copy so drag
     // updates do not rebuild the full selected text every mouse packet.
-    cached_rows: BTreeMap<u64, CachedSelectionRow>,
+    cached_rows: BBTreeMap<u64, CachedSelectionRow>,
     drag: Option<SelectionDrag>,
     selected: Option<SelectionRange>,
 }
@@ -598,7 +598,7 @@ pub fn copy_to_clipboard(text: &str) -> rootcause::Result<()> {
 }
 
 pub fn changed_selection_rows(previous: Option<&SelectionRange>, next: Option<&SelectionRange>) -> Vec<u16> {
-    let mut rows = BTreeSet::new();
+    let mut rows = BBTreeSet::new();
     for selection in [previous, next].into_iter().flatten() {
         if let Some((start_row, end_row)) = selection.row_bounds() {
             for row in start_row..=end_row {
@@ -779,7 +779,10 @@ impl SelectedRowText {
     }
 }
 
-fn selected_inline_text(cached_rows: &BTreeMap<u64, CachedSelectionRow>, selection: &SelectionRange) -> Option<String> {
+fn selected_inline_text(
+    cached_rows: &BBTreeMap<u64, CachedSelectionRow>,
+    selection: &SelectionRange,
+) -> Option<String> {
     let bounds = selection.bounds();
     let mut inlined = String::new();
     // Terminal wrap metadata is the only reliable boundary signal: full-width hard lines and soft-wrapped lines can
@@ -871,7 +874,7 @@ fn click_target(
     })
 }
 
-fn selected_text(cached_rows: &BTreeMap<u64, CachedSelectionRow>, selection: &SelectionRange) -> Option<String> {
+fn selected_text(cached_rows: &BBTreeMap<u64, CachedSelectionRow>, selection: &SelectionRange) -> Option<String> {
     let bounds = selection.bounds();
     let mut lines = Vec::new();
     for content_row in bounds.start.row..=bounds.end.row {
@@ -896,7 +899,7 @@ fn selected_text(cached_rows: &BTreeMap<u64, CachedSelectionRow>, selection: &Se
 }
 
 fn cache_visible_selected_rows(
-    cached_rows: &mut BTreeMap<u64, CachedSelectionRow>,
+    cached_rows: &mut BBTreeMap<u64, CachedSelectionRow>,
     frame_buffer: &FrameBuffer,
     selection: &SelectionRange,
 ) -> rootcause::Result<()> {

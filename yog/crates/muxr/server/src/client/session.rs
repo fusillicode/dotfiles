@@ -1,8 +1,8 @@
-use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::time::Instant;
 
+use bbtree::unsync::BBTreeSet;
 use kanal::Receiver;
 use kanal::Sender;
 use muxr_core::AttachAccepted;
@@ -304,7 +304,7 @@ pub async fn handle_reaped_panes(
                 [] => {}
                 [pane_id] => state.sink_guards.retain(|sink| sink.pane_id != *pane_id),
                 pane_ids => {
-                    let pane_ids: BTreeSet<_> = pane_ids.iter().copied().collect();
+                    let pane_ids: BBTreeSet<_> = pane_ids.iter().copied().collect();
                     state.sink_guards.retain(|sink| !pane_ids.contains(&sink.pane_id));
                 }
             }

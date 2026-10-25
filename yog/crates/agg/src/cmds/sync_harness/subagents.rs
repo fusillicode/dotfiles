@@ -32,16 +32,20 @@
 //! Overwrite different generated regular files; leave identical files
 //! unchanged. Preserve conflicting symlinks and dirs as conflicts.
 
-use std::collections::BTreeMap;
-use std::collections::BTreeSet;
+use std::fmt::Formatter;
 use std::fs;
 use std::io::ErrorKind;
 use std::path::Path;
 use std::path::PathBuf;
 
+use bbtree::unsync::BBTreeMap;
+use bbtree::unsync::BBTreeSet;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
 use serde::Deserialize;
+use serde::Deserializer;
+use serde::de::MapAccess;
+use serde::de::Visitor;
 use serde_json::Map;
 use serde_json::Value;
 use ytil_agents::agent::Agent as Vendor;
@@ -51,7 +55,7 @@ use crate::cmds::sync_harness::common::SyncOutcome;
 
 pub(super) fn sync_subagents(src_dir: &Path, home: &Path, vendors: &[Vendor]) -> Vec<SyncOutcome> {
     let (subagent_files, mut outcomes) = collect_subagent_files(src_dir);
-    let mut subagent_names = BTreeSet::new();
+    let mut subagent_names = BBTreeSet::new();
 
     for subagent_file in subagent_files {
         let result = prepare_subagent_files(&subagent_file, home, vendors, &mut subagent_names)
@@ -138,7 +142,7 @@ fn prepare_subagent_files(
     path: &Path,
     home: &Path,
     vendors: &[Vendor],
-    subagent_names: &mut BTreeSet<String>,
+    subagent_names: &mut BBTreeSet<String>,
 ) -> rootcause::Result<Vec<VendorSubagentFile>> {
     let contents = fs::read_to_string(path).attach("cannot read subagent")?;
     let generic_subagent = GenericSubagent::parse(&contents).attach("invalid subagent definition")?;
@@ -166,15 +170,45 @@ fn prepare_subagent_files(
 struct SubagentFrontmatter {
     name: String,
     description: String,
-    #[serde(default)]
-    vendors: BTreeMap<String, Map<String, Value>>,
+    #[serde(default, deserialize_with = "deserialize_vendors")]
+    vendors: BBTreeMap<String, Map<String, Value>>,
+}
+
+fn deserialize_vendors<'de, D>(deserializer: D) -> Result<BBTreeMap<String, Map<String, Value>>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    struct VendorsVisitor;
+
+    impl<'de> Visitor<'de> for VendorsVisitor {
+        type Value = BBTreeMap<String, Map<String, Value>>;
+
+        fn expecting(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
+            formatter.write_str("a map")
+        }
+
+        fn visit_map<A>(self, mut access: A) -> Result<Self::Value, A::Error>
+        where
+            A: MapAccess<'de>,
+        {
+            let mut vendors = BBTreeMap::new();
+
+            while let Some((vendor, settings)) = access.next_entry()? {
+                vendors.insert(vendor, settings);
+            }
+
+            Ok(vendors)
+        }
+    }
+
+    deserializer.deserialize_map(VendorsVisitor)
 }
 
 struct GenericSubagent {
     name: String,
     description: String,
     instructions: String,
-    vendors: BTreeMap<Vendor, Map<String, Value>>,
+    vendors: BBTreeMap<Vendor, Map<String, Value>>,
 }
 
 impl GenericSubagent {
@@ -225,7 +259,7 @@ impl GenericSubagent {
             return Err(report!("subagent description and instructions must not be empty"));
         }
 
-        let mut vendors = BTreeMap::new();
+        let mut vendors = BBTreeMap::new();
 
         for (name, settings) in frontmatter.vendors {
             let vendor = Vendor::from_name(&name)?;
@@ -307,5 +341,55 @@ const fn reserved_fields_for_vendor(vendor: Vendor) -> &'static [&'static str] {
     match vendor {
         Vendor::Opencode => &["mode"],
         Vendor::Claude | Vendor::Codex | Vendor::Cursor | Vendor::Gemini => &[],
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::Deserializer;
+    use test_that::prelude::*;
+
+    use super::*;
+
+    #[rstest::rstest]
+    #[case::empty("{}", &[])]
+    #[case::unordered(
+        r#"{"gemini":{"model":"second"},"claude":{"model":"first"}}"#,
+        &[("claude", "first"), ("gemini", "second")]
+    )]
+    #[case::duplicate(
+        r#"{"claude":{"model":"old"},"claude":{"model":"new"}}"#,
+        &[("claude", "new")]
+    )]
+    fn test_deserialize_vendors_when_map_is_valid_preserves_sorted_entries_and_last_values(
+        #[case] json: &str,
+        #[case] expected: &[(&str, &str)],
+    ) {
+        let mut deserializer = Deserializer::from_str(json);
+        let expected_entries = expected
+            .iter()
+            .map(|(name, model)| {
+                (
+                    (*name).to_owned(),
+                    Map::from_iter([("model".to_owned(), Value::String((*model).to_owned()))]),
+                )
+            })
+            .collect::<Vec<_>>();
+
+        let vendors = deserialize_vendors(&mut deserializer).expect("valid vendor settings");
+
+        assert_eq!(vendors.into_iter().collect::<Vec<_>>(), expected_entries);
+    }
+
+    #[rstest::rstest]
+    #[case::sequence("[]")]
+    #[case::null("null")]
+    #[case::non_map_settings(r#"{"claude":42}"#)]
+    fn test_deserialize_vendors_when_map_is_invalid_rejects_it(#[case] json: &str) {
+        let mut deserializer = Deserializer::from_str(json);
+
+        let actual = deserialize_vendors(&mut deserializer);
+
+        assert_that!(actual, err(anything()));
     }
 }

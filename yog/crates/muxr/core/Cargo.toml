@@ -11,6 +11,7 @@ keywords = ["muxr", "terminal", "multiplexer", "session", "protocol"]
 categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
+bbtree = { workspace = true }
 bytes = { workspace = true }
 compact_str = { version = "0.10", features = ["rkyv", "serde"] }
 nutype = { workspace = true }

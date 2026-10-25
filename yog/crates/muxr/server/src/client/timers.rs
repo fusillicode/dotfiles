@@ -1,11 +1,11 @@
-use std::collections::BTreeMap;
-use std::collections::BTreeSet;
-use std::collections::btree_map::Entry;
 use std::mem;
 use std::pin::Pin;
 use std::time::Duration;
 use std::time::Instant;
 
+use bbtree::unsync::BBTreeMap;
+use bbtree::unsync::BBTreeSet;
+use bbtree::unsync::bbtree_map::Entry;
 use muxr_core::PaneId;
 use rootcause::report;
 use tokio::time;
@@ -27,9 +27,9 @@ const TRACKED_PROCESS_QUIET_SETTLE_DELAY: Duration = Duration::from_millis(10);
 
 pub struct ClientTimers {
     pub cmd_handoff_sample: Pin<Box<Sleep>>,
-    cmd_handoff_sample_panes: BTreeSet<PaneId>,
+    cmd_handoff_sample_panes: BBTreeSet<PaneId>,
     pub(crate) output_activity_sample: Pin<Box<Sleep>>,
-    output_activity_sample_panes: BTreeMap<PaneId, tokio::time::Instant>,
+    output_activity_sample_panes: BBTreeMap<PaneId, tokio::time::Instant>,
     interactive_render_until: Option<tokio::time::Instant>,
     last_render_at: Option<tokio::time::Instant>,
     render_deadline: Option<tokio::time::Instant>,
@@ -47,9 +47,9 @@ impl ClientTimers {
 
         Ok(Self {
             cmd_handoff_sample: Box::pin(time::sleep_until(disabled_sleep_deadline()?)),
-            cmd_handoff_sample_panes: BTreeSet::new(),
+            cmd_handoff_sample_panes: BBTreeSet::new(),
             output_activity_sample: Box::pin(time::sleep_until(disabled_sleep_deadline()?)),
-            output_activity_sample_panes: BTreeMap::new(),
+            output_activity_sample_panes: BBTreeMap::new(),
             interactive_render_until: None,
             last_render_at: None,
             render_deadline: None,
