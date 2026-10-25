@@ -8,6 +8,7 @@ use crate::cmds::tok::Opts;
 
 pub mod codex;
 pub mod sessions;
+pub mod sync_harness;
 pub mod tok;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -16,6 +17,7 @@ pub enum Help {
     Sessions,
     SessionsList,
     Codex,
+    SyncHarness,
     Tok,
 }
 
@@ -25,6 +27,7 @@ impl Help {
             Some("sessions") if args.get(1).is_some_and(|arg| arg == "list") => Self::SessionsList,
             Some("sessions") => Self::Sessions,
             Some("codex") => Self::Codex,
+            Some("sync-harness") => Self::SyncHarness,
             Some("tok") => Self::Tok,
             _ => Self::Root,
         }
@@ -36,6 +39,7 @@ impl Help {
             Self::Sessions => include_str!("../help/sessions/help.txt"),
             Self::SessionsList => include_str!("../help/sessions/list/help.txt"),
             Self::Codex => include_str!("../help/codex/help.txt"),
+            Self::SyncHarness => include_str!("../help/sync-harness/help.txt"),
             Self::Tok => include_str!("../help/tok/help.txt"),
         }
     }
@@ -47,6 +51,7 @@ pub enum Cmd {
     SessionsList,
     SessionsListJson(Vec<String>),
     CodexCompact,
+    SyncHarness(sync_harness::Opts),
     Tok(Opts),
 }
 
@@ -95,6 +100,7 @@ impl TryFrom<Arguments> for Cmd {
         match command.as_str() {
             "sessions" => Self::parse_sessions(args),
             "codex" => Self::parse_codex(args),
+            "sync-harness" => Ok(Self::SyncHarness(sync_harness::Opts::try_from(args.finish())?)),
             "tok" => Ok(Self::Tok(Opts::try_from(args.finish())?)),
             _ => Err(report!("unsupported agg command")),
         }
@@ -108,6 +114,7 @@ fn strings(args: Vec<OsString>) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use test_that::prelude::*;
+    use ytil_agents::agent::Agent;
 
     use super::*;
     use crate::cmds::tok::Input;
@@ -117,6 +124,7 @@ mod tests {
     #[case::sessions_list(&["sessions", "list"], Cmd::SessionsList)]
     #[case::codex_compact(&["codex", "--compact"], Cmd::CodexCompact)]
     #[case::help(&["sessions", "--help"], Cmd::Help(Help::Sessions))]
+    #[case::sync_harness_help(&["sync-harness", "--help"], Cmd::Help(Help::SyncHarness))]
     #[case::tok_file(&["tok", "prompt.txt"], Cmd::Tok(Opts {
         encoding: "o200k_base".to_owned(),
         input: Input::File(std::path::PathBuf::from("prompt.txt")),
@@ -154,10 +162,52 @@ mod tests {
     }
 
     #[rstest::rstest]
+    #[case::single("codex", vec![Agent::Codex])]
+    #[case::all("claude,codex,cursor,gemini,opencode", vec![
+        Agent::Claude,
+        Agent::Codex,
+        Agent::Cursor,
+        Agent::Gemini,
+        Agent::Opencode,
+    ])]
+    fn test_sync_harness_when_vendors_are_supported_parses_arguments(
+        #[case] vendors: &str,
+        #[case] expected: Vec<Agent>,
+    ) {
+        let args = ["sync-harness", "ai config", vendors];
+
+        let actual = parse(&args);
+
+        assert_that!(
+            actual,
+            ok(eq(Cmd::SyncHarness(sync_harness::Opts {
+                src_dir: std::path::PathBuf::from("ai config"),
+                vendors: expected,
+            })))
+        );
+    }
+
+    #[rstest::rstest]
+    #[case::missing_all(&["sync-harness"])]
+    #[case::missing_vendors(&["sync-harness", "config"])]
+    #[case::extra_argument(&["sync-harness", "config", "codex", "claude"])]
+    #[case::empty_source(&["sync-harness", "", "codex"])]
+    #[case::empty_vendors(&["sync-harness", "config", ""])]
+    #[case::unknown_vendor(&["sync-harness", "config", "codex,unknown"])]
+    #[case::empty_vendor(&["sync-harness", "config", "codex,,claude"])]
+    #[case::trailing_comma(&["sync-harness", "config", "codex,"])]
+    fn test_sync_harness_when_arguments_are_invalid_rejects_command(#[case] args: &[&str]) {
+        let actual = parse(args);
+
+        assert_that!(actual, err(anything()));
+    }
+
+    #[rstest::rstest]
     #[case::root(&["--help"], Help::Root)]
     #[case::sessions(&["sessions", "--help"], Help::Sessions)]
     #[case::sessions_list(&["sessions", "list", "--help"], Help::SessionsList)]
     #[case::codex(&["codex", "--help"], Help::Codex)]
+    #[case::sync_harness(&["sync-harness", "--help"], Help::SyncHarness)]
     #[case::tok(&["tok", "--help"], Help::Tok)]
     fn test_help_when_command_path_varies_selects_the_deepest_command(#[case] args: &[&str], #[case] expected: Help) {
         let raw = args.iter().map(OsString::from).collect::<Vec<_>>();

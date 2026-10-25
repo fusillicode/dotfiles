@@ -1,0 +1,5 @@
+---
+source: crates/agg/src/cmds/sync_harness.rs
+expression: "fs::read_to_string(home.join(\".claude/CLAUDE.md\")).expect(\"local instructions\")"
+---
+local instructions

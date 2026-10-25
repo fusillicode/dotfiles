@@ -1,0 +1,21 @@
+---
+source: crates/agg/src/cmds/sync_harness.rs
+assertion_line: 974
+expression: codex
+---
+approval_policy = "never"
+description = "Read code"
+developer_instructions = """
+Read code.
+"""
+model_provider = "custom"
+name = "reader"
+sandbox_mode = "read-only"
+
+[mcp_servers.logs]
+enabled = true
+url = "https://example.com/mcp"
+
+[[skills.config]]
+enabled = false
+path = "/skills/review/SKILL.md"

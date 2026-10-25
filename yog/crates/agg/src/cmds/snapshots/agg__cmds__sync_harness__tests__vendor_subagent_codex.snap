@@ -1,0 +1,16 @@
+---
+source: crates/agg/src/cmds/sync_harness.rs
+expression: contents
+---
+description = "Reviews: changes"
+developer_instructions = """
+
+Review changes, including `quotes` and "escapes".
+---
+Keep this body delimiter.
+"""
+model = "gpt-6"
+name = "reviewer"
+
+[features]
+shell_tool = false

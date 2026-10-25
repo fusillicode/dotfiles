@@ -1,0 +1,12 @@
+---
+source: crates/agg/src/cmds/sync_harness.rs
+expression: codex
+---
+description = """
+Read code.
+Report findings."""
+developer_instructions = """
+\r
+Read café paths: C:\\code\\"quoted".\r
+"""
+name = "code_reader"

@@ -1,3 +1,4 @@
+use std::io;
 use std::path::PathBuf;
 
 use rootcause::report;
@@ -13,6 +14,12 @@ fn main() -> rootcause::Result<()> {
         Cmd::SessionsList => cmds::sessions::list::run(&home_dir()?)?,
         Cmd::SessionsListJson(args) => cmds::sessions::list::run_json(&args, &home_dir()?)?,
         Cmd::CodexCompact => cmds::codex::compact::run()?,
+        Cmd::SyncHarness(options) => cmds::sync_harness::run(
+            &options,
+            &home_dir()?,
+            &mut io::stdout().lock(),
+            &mut io::stderr().lock(),
+        )?,
         Cmd::Tok(options) => cmds::tok::run(&options)?,
     }
     Ok(())

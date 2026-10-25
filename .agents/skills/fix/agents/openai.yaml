@@ -1,0 +1,4 @@
+interface:
+  display_name: "Fix Audit Findings"
+  short_description: "Repair current audit findings one at a time."
+  default_prompt: "$fix all"

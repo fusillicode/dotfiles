@@ -1,0 +1,4 @@
+interface:
+  display_name: "Check Change Request Comments"
+  short_description: "Assess unresolved change request comments"
+  default_prompt: "Use $check-comments to deeply assess these unresolved review comments and recommend durable solutions."

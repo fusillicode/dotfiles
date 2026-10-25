@@ -1,0 +1,10 @@
+---
+source: crates/agg/src/cmds/sync_harness.rs
+expression: "normalize_error(&warnings, dir.path())"
+---
+[1m[33mwarning:[39m[0m subagent skipped
+
+ ● vendor settings cannot replace shared subagent fields
+ ├ vendor=opencode field=mode
+ ├ invalid subagent definition
+ ╰ cannot sync subagent | path=[ROOT]/source/subagents/input.md

@@ -1,0 +1,13 @@
+---
+source: crates/agg/src/cmds/sync_harness.rs
+expression: contents
+---
+---
+description: "Reviews: changes"
+name: reviewer
+readonly: true
+---
+
+Review changes, including `quotes` and "escapes".
+---
+Keep this body delimiter.

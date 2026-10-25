@@ -1,0 +1,4 @@
+interface:
+  display_name: "Safe Rebase"
+  short_description: "Preview or perform a protected rebase"
+  default_prompt: "Use $rebase to preview a rebase of my current branch."
