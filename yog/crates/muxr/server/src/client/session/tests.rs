@@ -1099,20 +1099,16 @@ async fn test_run_client_session_when_batch_limit_precedes_queued_output_at_quie
     let (mut client_reader, mut client_writer) = client_connection.split();
     let (mut request_reader, event_writer) = server_connection.split();
     let mut event_writer = render_worker.attach_writer(event_writer, config.client_write_timeout)?;
-    client_writer.send_request(&ClientRequest::Detach).await?;
+    client_writer.send_request(&ClientRequest::Ping).await?;
     let delete_sessions = DeleteSessions::default();
     let (pty_event_sender, _pty_event_receiver) = crate::client::session::tests::pty_event_channel();
     let (async_pty_sender, mut async_pty_receiver) = tokio::sync::mpsc::channel(PANE_OUTPUT_EVENT_CHANNEL_LIMIT);
-    for _ in 0..QUIET_OUTPUT_DRAIN_BATCH_LIMIT {
+    for _ in 0..=QUIET_OUTPUT_DRAIN_BATCH_LIMIT {
         async_pty_sender
             .send(SessionPaneOutputMessage::PaneExited)
             .await
             .map_err(|error| rootcause::report!("failed to queue muxr test pty event").attach(format!("{error}")))?;
     }
-    async_pty_sender
-        .send(SessionPaneOutputMessage::PaneExited)
-        .await
-        .map_err(|error| rootcause::report!("failed to queue muxr test pty event").attach(format!("{error}")))?;
     async_pty_sender
         .send(SessionPaneOutputMessage::PaneOutputReady)
         .await
@@ -1140,7 +1136,13 @@ async fn test_run_client_session_when_batch_limit_precedes_queued_output_at_quie
         &mut async_pty_receiver,
         ClientSessionSelectBias::Output,
     );
-    let client = async { recv_until_detached(&mut client_reader).await };
+    let client = async {
+        // A full batch yields to requests. Keep the session alive through that turn so the next drain can consume
+        // PaneOutputReady before detach, regardless of when the socket request becomes ready.
+        recv_until_pong_rejecting_sidebar_state(&mut client_reader, pane_id, TrackedProcessState::Seen).await?;
+        client_writer.send_request(&ClientRequest::Detach).await?;
+        recv_until_detached(&mut client_reader).await
+    };
 
     let (session_result, client_result) = tokio::join!(session, client);
 
