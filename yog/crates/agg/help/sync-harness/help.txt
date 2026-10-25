@@ -1,0 +1,11 @@
+agg sync-harness - Sync shared AI configuration to selected vendors.
+
+USAGE:
+    agg sync-harness <src_dir> <vendor,vendor,...>
+
+ARGUMENTS:
+    src_dir            Source dir containing AGENTS.md, skills/, and subagents/.
+    vendor,vendor,...  Comma-separated vendor names: claude, codex, cursor, gemini, opencode.
+
+EXAMPLE:
+    agg sync-harness /path/to/ai-config codex,claude,cursor

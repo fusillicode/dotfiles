@@ -1,0 +1,9 @@
+---
+source: crates/agg/src/cmds/sync_harness.rs
+expression: "normalize_error(&warnings, dir.path())"
+---
+[1m[33mwarning:[39m[0m subagent skipped
+
+ ● unsupported unit type
+ ├ cannot generate vendor subagent file | vendor=codex
+ ╰ cannot sync subagent | path=[ROOT]/source/subagents/input.md

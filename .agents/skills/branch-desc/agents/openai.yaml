@@ -1,0 +1,4 @@
+interface:
+  display_name: "Branch Description"
+  short_description: "Refresh a change request description tersely and accurately"
+  default_prompt: "Use $branch-desc to reconcile this branch’s open change request description with its published changes."

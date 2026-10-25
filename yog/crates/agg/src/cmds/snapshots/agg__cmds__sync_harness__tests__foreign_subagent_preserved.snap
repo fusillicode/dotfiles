@@ -1,0 +1,5 @@
+---
+source: crates/agg/src/cmds/sync_harness.rs
+expression: "fs::read_to_string(foreign.join(\"reviewer.md\")).expect(\"foreign agent\")"
+---
+Original

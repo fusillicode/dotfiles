@@ -1,0 +1,4 @@
+interface:
+  display_name: "Publish Change Request"
+  short_description: "Verify, publish, and open a change request"
+  default_prompt: "Use $publish to publish my current branch as a draft change request."

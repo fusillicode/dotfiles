@@ -1,0 +1,4 @@
+interface:
+  display_name: "Evidence-Grounded Explain"
+  short_description: "Explain systems from verified evidence"
+  default_prompt: "Use $explain to build a concise, evidence-grounded mental model of this system."

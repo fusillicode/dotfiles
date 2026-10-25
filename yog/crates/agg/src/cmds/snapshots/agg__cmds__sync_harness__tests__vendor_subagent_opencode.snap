@@ -1,0 +1,14 @@
+---
+source: crates/agg/src/cmds/sync_harness.rs
+expression: contents
+---
+---
+description: "Reviews: changes"
+mode: subagent
+permission:
+  edit: deny
+---
+
+Review changes, including `quotes` and "escapes".
+---
+Keep this body delimiter.

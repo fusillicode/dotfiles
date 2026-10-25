@@ -1,0 +1,15 @@
+---
+source: crates/agg/src/cmds/sync_harness.rs
+expression: "normalize_error(&warnings, dir.path())"
+---
+[1m[33mwarning:[39m[0m subagent skipped
+
+ ● error: line 3 column 1: unknown field `model`, expected one of name, description, vendors
+ │  --> <input>:3:1
+ │   |
+ │ 1 | name: reviewer
+ │ 2 | description: Review
+ │ 3 | model: sonnet
+ │   | ^ unknown field `model`, expected one of name, description, vendors
+ ├ invalid subagent definition
+ ╰ cannot sync subagent | path=[ROOT]/source/subagents/input.md

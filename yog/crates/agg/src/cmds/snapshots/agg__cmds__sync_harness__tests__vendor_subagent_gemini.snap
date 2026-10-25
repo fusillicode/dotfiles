@@ -1,0 +1,14 @@
+---
+source: crates/agg/src/cmds/sync_harness.rs
+expression: contents
+---
+---
+description: "Reviews: changes"
+max_turns: 5
+name: reviewer
+temperature: 0.2
+---
+
+Review changes, including `quotes` and "escapes".
+---
+Keep this body delimiter.

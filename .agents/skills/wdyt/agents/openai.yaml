@@ -1,0 +1,4 @@
+interface:
+  display_name: "Wdyt"
+  short_description: "Pressure-test ideas with explicit edit gates"
+  default_prompt: "Use $wdyt to pressure-test this while keeping edits gated."

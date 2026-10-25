@@ -1,0 +1,5 @@
+---
+source: crates/agg/src/cmds/sync_harness.rs
+expression: claude
+---
+"---\ndescription: |-\n  Read code.\n  Report findings.\nname: code_reader\n---\n\r\nRead café paths: C:\\code\\\"quoted\".\r\n"

@@ -1,0 +1,13 @@
+---
+source: crates/agg/src/cmds/sync_harness.rs
+expression: "normalize_output(&rule, dir.path())"
+---
+---
+description: "Personal defaults mirrored from [ROOT]/other/source/AGENTS.md; source is authoritative."
+alwaysApply: true
+---
+
+Use Cursor's native skill and subagent invocation syntax for the operations named in the source instructions.
+Resolve relative instruction paths from `[ROOT]/other/source`.
+
+other source instructions

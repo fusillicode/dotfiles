@@ -1,0 +1,4 @@
+interface:
+  display_name: "Commit Message"
+  short_description: "Generate a repository-consistent commit message"
+  default_prompt: "Use $commit-msg to generate only a copy-ready commit message for my current changes."

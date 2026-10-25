@@ -1,0 +1,17 @@
+---
+source: crates/agg/src/cmds/sync_harness.rs
+expression: actual
+---
+Table(
+    {
+        "description": String(
+            "Read code.\nReport findings.",
+        ),
+        "developer_instructions": String(
+            "\r\nRead café paths: C:\\code\\\"quoted\".\r\n",
+        ),
+        "name": String(
+            "code_reader",
+        ),
+    },
+)

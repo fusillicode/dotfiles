@@ -1,0 +1,4 @@
+interface:
+  display_name: "Change Request Review"
+  short_description: "Review a change request with stable findings"
+  default_prompt: "Use $review to review this change request."

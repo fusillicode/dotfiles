@@ -1,0 +1,13 @@
+---
+source: crates/agg/src/cmds/sync_harness.rs
+expression: "normalize_error(&warnings, dir.path())"
+---
+[1m[33mwarning:[39m[0m subagent skipped
+
+ ● error: line 1 column 1: missing field `name`
+ │  --> <input>:1:1
+ │   |
+ │ 1 | description: Review
+ │   | ^ missing field `name`
+ ├ invalid subagent definition
+ ╰ cannot sync subagent | path=[ROOT]/source/subagents/input.md

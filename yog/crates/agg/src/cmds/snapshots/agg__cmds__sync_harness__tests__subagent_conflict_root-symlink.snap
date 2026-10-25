@@ -1,0 +1,5 @@
+---
+source: crates/agg/src/cmds/sync_harness.rs
+expression: "normalize_output(&warnings, dir.path())"
+---
+[1m[33mwarning:[39m[0m [ROOT]/home/.claude/agents already exists; subagent skipped

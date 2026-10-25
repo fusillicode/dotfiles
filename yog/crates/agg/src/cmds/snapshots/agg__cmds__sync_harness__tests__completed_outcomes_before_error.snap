@@ -1,0 +1,8 @@
+---
+source: crates/agg/src/cmds/sync_harness.rs
+assertion_line: 957
+expression: "normalize_output(&stdout, dir.path())"
+---
+[1m[32mlinked[39m[0m [ROOT]/home/.codex/AGENTS.md -> [ROOT]/source/AGENTS.md
+[1m[32mlinked[39m[0m [ROOT]/home/.codex/skills/_shared -> [ROOT]/source/skills/_shared
+[1m[32mlinked[39m[0m [ROOT]/home/.codex/skills/review -> [ROOT]/source/skills/review

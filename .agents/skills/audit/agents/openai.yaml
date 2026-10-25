@@ -1,0 +1,4 @@
+interface:
+  display_name: "Change Audit"
+  short_description: "Audit local changes with evidence-first findings"
+  default_prompt: "Use $audit to perform an evidence-first audit of my current local changes."

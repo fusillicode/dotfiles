@@ -1,0 +1,4 @@
+interface:
+  display_name: "Production Diagnosis"
+  short_description: "Diagnose incidents from read-only evidence"
+  default_prompt: "Use $diag to diagnose this production failure from the available evidence."
