@@ -1,5 +1,4 @@
-use std::collections::BTreeMap;
-
+use bbtree::unsync::BBTreeMap;
 use muxr_core::PaneId;
 use muxr_core::TabId;
 use muxr_core::TerminalSize;
@@ -12,7 +11,7 @@ use crate::state::SessionLayout;
 pub struct PaneFullscreen {
     // Fullscreen is attached-client render state keyed by tab: it changes the visible pane layout
     // and PTY size without mutating the persisted split tree.
-    panes: BTreeMap<TabId, PaneId>,
+    panes: BBTreeMap<TabId, PaneId>,
 }
 
 impl PaneFullscreen {

@@ -1,4 +1,3 @@
-use std::collections::BTreeMap;
 use std::collections::VecDeque;
 use std::fmt::Formatter;
 use std::sync::Arc;
@@ -6,6 +5,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
+use bbtree::unsync::BBTreeMap;
 use muxr_core::PaneId;
 use muxr_core::PaneRegionSnapshot;
 use muxr_core::PaneRegionsSnapshot;
@@ -50,7 +50,7 @@ pub struct RenderInput {
     generation: u64,
     pane_layout: Arc<PaneLayout>,
     pane_render: PaneRenderConfig,
-    pane_handles: BTreeMap<PaneId, PtyHandle>,
+    pane_handles: BBTreeMap<PaneId, PtyHandle>,
     size: TerminalSize,
 }
 
@@ -64,7 +64,7 @@ impl RenderInput {
         pane_render: PaneRenderConfig,
         active_pane: PaneId,
         pane_layout: PaneLayout,
-        pane_handles: BTreeMap<PaneId, PtyHandle>,
+        pane_handles: BBTreeMap<PaneId, PtyHandle>,
         size: TerminalSize,
         attention_panes: Vec<PaneId>,
         damage: ClientRenderDmg,
@@ -637,8 +637,7 @@ impl WorkerCommandFailure {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeMap;
-
+    use bbtree::unsync::BBTreeMap;
     use muxr_config::MuxrConfig;
     use muxr_core::PaneId;
     use muxr_core::SessionName;
@@ -787,7 +786,7 @@ mod tests {
             },
             PaneId::new(1)?,
             PaneLayout::default(),
-            BTreeMap::new(),
+            BBTreeMap::new(),
             TerminalSize::new(1, 1)?,
             Vec::new(),
             ClientRenderDmg::Full,

@@ -2,13 +2,13 @@
 
 use std::borrow::Cow;
 use std::cmp::Reverse;
-use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::iter;
 use std::mem;
 
+use bbtree::unsync::BBTreeSet;
 use proc_macro2::TokenStream;
 use syn::Attribute;
 use syn::ImplItem;
@@ -359,7 +359,7 @@ impl BlockPrecedenceGraph {
                 .copied()
         };
 
-        let mut ready_blocks: BTreeSet<_> = incoming_edge_counts
+        let mut ready_blocks: BBTreeSet<_> = incoming_edge_counts
             .iter()
             .enumerate()
             .filter(|(_, count)| **count == 0)

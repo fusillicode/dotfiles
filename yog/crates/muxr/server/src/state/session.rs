@@ -1,5 +1,4 @@
-use std::collections::BTreeMap;
-
+use bbtree::unsync::BBTreeMap;
 use muxr_core::LayoutSnapshot;
 use muxr_core::PaneId;
 use muxr_core::SessionName;
@@ -23,7 +22,7 @@ const INITIAL_TAB_TITLE: &str = "default";
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct PaneSnapshotFields {
-    panes: BTreeMap<PaneId, PaneSnapshotFieldsEntry>,
+    panes: BBTreeMap<PaneId, PaneSnapshotFieldsEntry>,
 }
 
 impl PaneSnapshotFields {

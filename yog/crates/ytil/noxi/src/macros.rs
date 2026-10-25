@@ -17,7 +17,7 @@ macro_rules! dict {
         ::nvim_oxi::Dictionary::default()
     }};
     ( $( $key:tt : $value:expr ),+ $(,)? ) => {{
-        let mut map = ::std::collections::BTreeMap::new();
+        let mut map = $crate::BBTreeMap::new();
         $(
             let k: ::std::borrow::Cow<'static, str> = $crate::__dict_key_to_cow!($key);
             let v: ::nvim_oxi::Object = ::nvim_oxi::Object::from($value);

@@ -12,6 +12,7 @@ categories = ["command-line-utilities", "development-tools"]
 include = ["src/**/*", "help.txt", "help/**/*"]
 
 [dependencies]
+bbtree = { workspace = true }
 git2 = { workspace = true }
 lazy-regex = { workspace = true }
 nutype = { workspace = true }

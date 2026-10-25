@@ -1,5 +1,4 @@
-use std::collections::BTreeMap;
-
+use bbtree::unsync::BBTreeMap;
 use muxr_config::CellStyle;
 use muxr_config::PaneAttentionConfig;
 use muxr_config::PaneBorderStyles;
@@ -240,8 +239,8 @@ fn compose_border_cells(
     active_pane: Option<&PaneId>,
     attention_panes: &[PaneId],
     border_mode: BorderRenderMode,
-) -> rootcause::Result<BTreeMap<(u16, u16), BorderCell>> {
-    let mut cells = BTreeMap::new();
+) -> rootcause::Result<BBTreeMap<(u16, u16), BorderCell>> {
+    let mut cells = BBTreeMap::new();
     for border in borders {
         match border.axis() {
             PaneBorderAxis::Horizontal => {
@@ -273,7 +272,7 @@ fn compose_border_cells(
 }
 
 fn add_border_cell(
-    cells: &mut BTreeMap<(u16, u16), BorderCell>,
+    cells: &mut BBTreeMap<(u16, u16), BorderCell>,
     row: u16,
     col: u16,
     axis: PaneBorderAxis,
@@ -291,7 +290,7 @@ fn add_border_cell(
         });
 }
 
-fn add_adjacent_border_junctions(cells: &mut BTreeMap<(u16, u16), BorderCell>) {
+fn add_adjacent_border_junctions(cells: &mut BBTreeMap<(u16, u16), BorderCell>) {
     // Nested splits place child borders next to parent borders, not always on the same cell; compose those
     // neighbor edges so the rendered frame uses connected junction glyphs instead of detached line segments.
     let base_cells = cells.clone();
@@ -332,7 +331,7 @@ fn add_adjacent_border_junctions(cells: &mut BTreeMap<(u16, u16), BorderCell>) {
 }
 
 fn merge_border_edge(
-    cells: &mut BTreeMap<(u16, u16), BorderCell>,
+    cells: &mut BBTreeMap<(u16, u16), BorderCell>,
     position: (u16, u16),
     edge: BorderCellEdge,
     visual: BorderVisual,
@@ -1235,11 +1234,7 @@ mod tests {
             .collect()
     }
 
-    fn border_cell_at(
-        cells: &std::collections::BTreeMap<(u16, u16), BorderCell>,
-        row: u16,
-        col: u16,
-    ) -> rootcause::Result<&BorderCell> {
+    fn border_cell_at(cells: &BBTreeMap<(u16, u16), BorderCell>, row: u16, col: u16) -> rootcause::Result<&BorderCell> {
         cells
             .get(&(row, col))
             .ok_or_else(|| report!("expected border cell").attach(format!("row={row} col={col}")))

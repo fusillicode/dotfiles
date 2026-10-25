@@ -1,5 +1,4 @@
-use std::collections::BTreeMap;
-
+use bbtree::unsync::BBTreeMap;
 use muxr_core::ClientKey;
 use muxr_core::ClientKeyCode;
 use muxr_core::ClientKeyModifiers;
@@ -796,7 +795,7 @@ enum ResizeAction {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct Keymap<Action> {
-    bindings: BTreeMap<KeyChord, Action>,
+    bindings: BBTreeMap<KeyChord, Action>,
 }
 
 impl<Action> Keymap<Action> {
@@ -804,7 +803,7 @@ impl<Action> Keymap<Action> {
         let bindings = bindings
             .into_iter()
             .map(|(chord, action)| Ok((chord.compile()?, action)))
-            .collect::<rootcause::Result<BTreeMap<_, _>>>()?;
+            .collect::<rootcause::Result<BBTreeMap<_, _>>>()?;
         Ok(Self { bindings })
     }
 }

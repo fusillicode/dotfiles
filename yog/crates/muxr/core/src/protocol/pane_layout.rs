@@ -1,7 +1,7 @@
-use std::collections::BTreeSet;
 use std::fmt;
 use std::num::NonZeroU32;
 
+use bbtree::unsync::BBTreeSet;
 use fmt::Formatter;
 use nutype::nutype;
 use rkyv::Archived;
@@ -210,8 +210,8 @@ impl LayoutSnapshot {
                 .attach(format!("active_tab={}", self.active_tab)));
         }
 
-        let mut seen_tab_ids = BTreeSet::new();
-        let mut seen_pane_ids = BTreeSet::new();
+        let mut seen_tab_ids = BBTreeSet::new();
+        let mut seen_pane_ids = BBTreeSet::new();
         for tab in &self.tabs {
             tab.validate()?;
             if !seen_tab_ids.insert(tab.id) {
@@ -310,7 +310,7 @@ impl TabSnapshot {
                 .attach(format!("active_pane={}", self.active_pane)));
         }
 
-        let mut seen_pane_ids = BTreeSet::new();
+        let mut seen_pane_ids = BBTreeSet::new();
         for pane in &self.panes {
             if !seen_pane_ids.insert(pane.id) {
                 return Err(report!("invalid muxr tab snapshot")
@@ -594,7 +594,7 @@ impl PaneRegionsSnapshot {
             return Err(report!("invalid muxr pane regions snapshot").attach("reason=regions must not be empty"));
         }
 
-        let mut seen_pane_ids = BTreeSet::new();
+        let mut seen_pane_ids = BBTreeSet::new();
         for region in &self.regions {
             region.validate()?;
             if !seen_pane_ids.insert(region.id) {

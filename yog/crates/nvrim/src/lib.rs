@@ -7,6 +7,9 @@
 //! - a table of related functions / data (e.g. `diagnostics`, `statusline`, `cli`)
 //! - or a standalone function / value.
 
+// Keep the exported dict! macro independent of the caller's dependencies.
+#[doc(hidden)]
+pub use bbtree::unsync::BBTreeMap;
 use ytil_noxi::Dictionary;
 
 #[macro_use]

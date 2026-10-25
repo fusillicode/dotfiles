@@ -1,7 +1,7 @@
-use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::time::Instant;
 
+use bbtree::unsync::BBTreeMap;
 use muxr_config::MuxrConfig;
 use muxr_config::TrackedProcess;
 use muxr_core::PaneId;
@@ -51,7 +51,7 @@ impl PaneTrackedProcessSnapshotEntry {
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct PaneTrackedProcessSnapshot {
-    panes: BTreeMap<PaneId, PaneTrackedProcessSnapshotEntry>,
+    panes: BBTreeMap<PaneId, PaneTrackedProcessSnapshotEntry>,
 }
 
 impl PaneTrackedProcessSnapshot {
@@ -318,7 +318,7 @@ impl PaneTrackedProcesses {
         if self.by_pane.is_empty() {
             return PaneTrackedProcessSnapshot::default();
         }
-        let mut panes = BTreeMap::new();
+        let mut panes = BBTreeMap::new();
         layout.for_each_pane_id(|pane_id| {
             let Some(pane_tracked_process) = self.by_pane.get(&pane_id) else {
                 return;

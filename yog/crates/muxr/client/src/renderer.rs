@@ -1,6 +1,6 @@
-use std::collections::BTreeSet;
 use std::time::Instant;
 
+use bbtree::unsync::BBTreeSet;
 use muxr_config::MuxrConfig;
 use muxr_config::SelectionStyle;
 use muxr_config::TabBarConfig;
@@ -468,7 +468,7 @@ impl ClientRenderer {
         }
         let rows = rows
             .into_iter()
-            .collect::<BTreeSet<_>>()
+            .collect::<BBTreeSet<_>>()
             .into_iter()
             .collect::<Vec<_>>();
         if rows.is_empty() {

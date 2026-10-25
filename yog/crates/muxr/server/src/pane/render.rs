@@ -1,9 +1,9 @@
-use std::collections::BTreeMap;
 use std::iter::Peekable;
 use std::mem;
 use std::sync::Arc;
 use std::vec::IntoIter;
 
+use bbtree::unsync::BBTreeMap;
 use muxr_config::PaneAttentionConfig;
 use muxr_config::PaneBorderStyles;
 use muxr_config::PaneDimConfig;
@@ -271,7 +271,7 @@ impl RenderComposer {
         attention_panes: &[PaneId],
         snapshot: &mut impl FnMut(PaneId, TerminalSnapshotScope) -> rootcause::Result<PtyRenderSnapshot>,
     ) -> rootcause::Result<CompositeFrame> {
-        let mut pane_snapshots = BTreeMap::new();
+        let mut pane_snapshots = BBTreeMap::new();
         for region in pane_layout.regions() {
             pane_snapshots.insert(region.id, snapshot(region.id, TerminalSnapshotScope::Full)?);
         }
@@ -289,7 +289,7 @@ impl RenderComposer {
         pane_render: PaneRenderConfig,
         active_pane: PaneId,
         pane_layout: Arc<PaneLayout>,
-        pane_snapshots: BTreeMap<PaneId, PtyRenderSnapshot>,
+        pane_snapshots: BBTreeMap<PaneId, PtyRenderSnapshot>,
         size: &TerminalSize,
         attention_panes: &[PaneId],
     ) -> rootcause::Result<CompositeFrame> {
@@ -375,7 +375,7 @@ struct CompositeFrame {
     cursor: RenderCursor,
     pane_layout: Arc<PaneLayout>,
     pane_render: PaneRenderConfig,
-    pane_snapshots: BTreeMap<PaneId, PtyRenderSnapshot>,
+    pane_snapshots: BBTreeMap<PaneId, PtyRenderSnapshot>,
     rows: Vec<Vec<RenderCell>>,
     scratch_rows: Vec<Vec<RenderCell>>,
     seq: u64,
@@ -606,7 +606,7 @@ fn empty_render_rows(size: &TerminalSize) -> Vec<Vec<RenderCell>> {
 fn composite_cursor(
     active_pane: PaneId,
     pane_layout: &PaneLayout,
-    pane_snapshots: &BTreeMap<PaneId, PtyRenderSnapshot>,
+    pane_snapshots: &BBTreeMap<PaneId, PtyRenderSnapshot>,
 ) -> rootcause::Result<RenderCursor> {
     let hidden = RenderCursor {
         row: 0,
@@ -817,7 +817,7 @@ mod tests {
             cursor: cursor.clone(),
             pane_layout: Arc::new(PaneLayout::default()),
             pane_render,
-            pane_snapshots: BTreeMap::new(),
+            pane_snapshots: BBTreeMap::new(),
             rows: rows.clone(),
             scratch_rows: Vec::new(),
             seq: 1,
@@ -829,7 +829,7 @@ mod tests {
             cursor,
             pane_layout: Arc::new(PaneLayout::default()),
             pane_render,
-            pane_snapshots: BTreeMap::new(),
+            pane_snapshots: BBTreeMap::new(),
             rows,
             scratch_rows: Vec::new(),
             seq: 0,

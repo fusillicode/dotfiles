@@ -1,5 +1,8 @@
 //! Aggregated Nvim extension submodules.
 
+// Keep the exported dict! macro independent of the caller's dependencies.
+#[doc(hidden)]
+pub use bbtree::unsync::BBTreeMap;
 // Selective re-exports of nvim_oxi types used by downstream crates (e.g. nvrim).
 // Avoids `pub use nvim_oxi::*` which would make every upstream breaking change silently propagate.
 pub use nvim_oxi::Dictionary;

@@ -1,10 +1,10 @@
 //! Import requests reserve their names before any references are shortened.
 
-use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fmt::Write;
 
+use bbtree::unsync::BBTreeSet;
 use syn::Attribute;
 use syn::Block;
 use syn::ConstParam;
@@ -82,7 +82,7 @@ pub(in crate::cmds::rsl::rules) struct ImportEdits {
     bindings: HashMap<String, String>,
     reserved: LocalNames,
     unknown: bool,
-    additions: BTreeSet<String>,
+    additions: BBTreeSet<String>,
     capture_names: HashSet<String>,
 }
 
@@ -100,7 +100,7 @@ impl ImportEdits {
                 .collect(),
             reserved,
             unknown: info.unknown_imports,
-            additions: BTreeSet::new(),
+            additions: BBTreeSet::new(),
             capture_names: HashSet::new(),
         }
     }
@@ -124,7 +124,7 @@ impl ImportEdits {
                 unknown: false,
             },
             unknown: info.unknown_imports,
-            additions: BTreeSet::new(),
+            additions: BBTreeSet::new(),
             capture_names: analysis.free_type_names.clone(),
         }
     }

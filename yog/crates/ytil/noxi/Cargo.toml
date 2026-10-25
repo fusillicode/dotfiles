@@ -15,6 +15,7 @@ mockall = ["dep:mockall"]
 testing = []
 
 [dependencies]
+bbtree = { workspace = true }
 mockall = { version = "0.15", optional = true }
 nvim-oxi = { workspace = true }
 rootcause = { workspace = true }
