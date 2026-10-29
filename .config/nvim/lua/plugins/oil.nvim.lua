@@ -3,7 +3,7 @@ local style_opts = require('nvrim').style_opts
 local plugin_keymaps = keymaps.oil
 
 return {
-  'https://forge.barrettruth.com/barrettruth/canola.nvim',
+  'stevearc/oil.nvim',
   keys = plugin_keymaps(),
   config = function()
     local plugin = require('oil')
