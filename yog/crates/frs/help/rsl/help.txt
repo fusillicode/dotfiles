@@ -1,14 +1,17 @@
-Rewrite or inspect explicitly supplied Rust files using personal source preferences.
+Rewrite or inspect Rust files using personal source preferences.
 
 Usage:
   frs rsl [--mode write|report] [--verbose] [--rules ID[,ID...]]... [--] FILE...
+  frs rsl --unstaged [--mode write|report] [--verbose] [--rules ID[,ID...]]...
 
 Arguments:
-  FILE                     Rust source file to inspect or rewrite. Supply at least one file.
+  FILE                     Rust source file to inspect or rewrite. Required unless --unstaged is supplied.
 
 Options:
   --mode write|report      Write safe fixes, or report without changing files (default: write).
   --verbose                Print findings for changes that were not applied.
+  --unstaged               Select unstaged and untracked Rust files from the enclosing Git repository.
+                           Cannot be combined with FILE arguments.
   --rules ID[,ID...]       Run only these rules. Supply comma-separated rule IDs.
                            May be repeated to select more rules.
   --help                   Show this help text.
@@ -19,8 +22,14 @@ Write mode updates the supplied files in place. Findings are silent unless --ver
 With --verbose, write mode reports remaining findings at their final locations.
 Report mode leaves files unchanged. Add --verbose to show available changes and reasons other changes cannot be made.
 Each report identifies the file, line, column, and rule. Skipped changes include a reason and guidance.
-Only the supplied files are changed. Run your Rust formatter afterward if needed.
+Only the selected files are changed. Run your Rust formatter afterward if needed.
 Path anchoring discovers modules from Cargo targets. Unknown or conflicting module locations are reported without changes.
+
+--unstaged scans the whole enclosing repository, even when invoked from a subdirectory.
+It selects existing regular .rs files with unstaged changes, including files in untracked directories.
+Staged-only, deleted, ignored, conflicted, and symbolic-link files are skipped.
+Partially staged files are rewritten in full, including existing user changes; the Git index is unchanged.
+No matching files is a silent success. Outside a Git working tree, --unstaged fails.
 
 Rules:
   path-anchoring           Replace self:: and super:: references with paths starting at crate:: when possible.
@@ -35,6 +44,7 @@ Exit status:
 
 Examples:
   frs rsl src/main.rs src/lib.rs
+  frs rsl --unstaged
   frs rsl --mode report --verbose src/main.rs
   frs rsl --rules item-ordering,path-anchoring src/main.rs
   frs rsl -- -example.rs

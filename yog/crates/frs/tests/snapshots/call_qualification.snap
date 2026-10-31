@@ -1,5 +1,5 @@
 ---
-source: crates/frs/tests/rsl.rs
+source: crates/frs/tests/rsl_rewrite.rs
 expression: "&rewritten"
 ---
 //! Source rewrites and conservative skips for call-qualification.

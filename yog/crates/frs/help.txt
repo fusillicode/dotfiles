@@ -2,11 +2,12 @@ Rust maintenance commands
 
 Usage:
   frs repo fix [--clean] [--jobs N] DIRECTORY
-  frs rsl [--mode write|report] [--rules ID[,ID...]]... [--] FILE...
+  frs rsl [--mode write|report] [--verbose] [--rules ID[,ID...]]... [--] FILE...
+  frs rsl --unstaged [--mode write|report] [--verbose] [--rules ID[,ID...]]...
 
 Commands:
   repo fix  Configure Rust workspace build directories and remove quarantine metadata.
-  rsl       Rewrite or inspect Rust source preferences in supplied files and inline modules.
+  rsl       Rewrite or inspect Rust source preferences in explicit or Git-selected files and inline modules.
 
 Run `frs repo fix --help` for command details.
 Run `frs rsl --help` for command details.

@@ -1,13 +1,13 @@
 //! The `frs rsl` command and its command-line interface.
 
 use std::ffi::OsString;
-use std::path::PathBuf;
 use std::str::FromStr;
 
 use rootcause::Report;
 use rootcause::report;
 use ytil_sys::pico_args::Arguments;
 
+use crate::cmds::rsl::input_files::InputFiles;
 pub use crate::cmds::rsl::output::RslOutput;
 use crate::cmds::rsl::rules::SelectedRules;
 
@@ -15,6 +15,7 @@ mod analysis;
 mod ast;
 mod crate_roots;
 mod engine;
+mod input_files;
 mod mod_resolution;
 mod output;
 mod rules;
@@ -26,7 +27,7 @@ mod source;
 ///
 /// # Errors
 ///
-/// Returns an error when arguments are invalid or a file cannot be read, parsed, or written.
+/// Returns an error when arguments or Git selection are invalid, or a file cannot be read, parsed, or written.
 pub fn run(mut cli_args: Arguments) -> rootcause::Result<RslOutput> {
     if cli_args.contains("--help") {
         print!("{}", crate::cmds::Help::Rsl.text());
@@ -41,7 +42,12 @@ pub fn run(mut cli_args: Arguments) -> rootcause::Result<RslOutput> {
         }
     };
 
-    let reports = crate::cmds::rsl::engine::process_paths(&opts.paths, &opts.rules, opts.mode)?;
+    let paths = opts.files.resolve()?;
+    if paths.is_empty() {
+        return Ok(RslOutput::default());
+    }
+
+    let reports = crate::cmds::rsl::engine::process_paths(&paths, &opts.rules, opts.mode)?;
 
     if opts.verbose {
         Ok(RslOutput { reports })
@@ -72,7 +78,7 @@ impl FromStr for Mode {
 }
 
 struct RslOpts {
-    paths: Vec<PathBuf>,
+    files: InputFiles,
     rules: SelectedRules,
     mode: Mode,
     verbose: bool,
@@ -99,6 +105,7 @@ impl TryFrom<Vec<OsString>> for RslOpts {
         let mut cli_args = Arguments::from_vec(before_separator);
         let mode = cli_args.opt_value_from_str("--mode")?.unwrap_or_default();
         let verbose = cli_args.contains("--verbose");
+        let unstaged = cli_args.contains("--unstaged");
         let mut rule_ids = Vec::new();
 
         while let Some(rule_list) = cli_args.opt_value_from_str::<_, String>("--rules")? {
@@ -113,12 +120,15 @@ impl TryFrom<Vec<OsString>> for RslOpts {
         }
         paths.extend(after_separator);
 
-        if paths.is_empty() {
-            return Err(report!("expected one or more Rust source files"));
-        }
+        let files = match (unstaged, paths.is_empty()) {
+            (true, true) => InputFiles::Unstaged,
+            (false, false) => InputFiles::Explicit(paths.into_iter().map(Into::into).collect()),
+            (true, false) => return Err(report!("--unstaged cannot be combined with file paths")),
+            (false, true) => return Err(report!("expected one or more Rust source files or --unstaged")),
+        };
 
         Ok(Self {
-            paths: paths.into_iter().map(PathBuf::from).collect(),
+            files,
             rules,
             mode,
             verbose,
