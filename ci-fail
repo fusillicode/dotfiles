@@ -1,0 +1,252 @@
+2026-10-31T13:20:02.1565541Z [31;1m [0m [31;1mstdout[0m [31;1m───[0m
+2026-10-31T13:20:02.1565735Z
+2026-10-31T13:20:02.1565824Z     running 1 test
+2026-10-31T13:20:02.1566288Z     test client::session::tests::tracked_process::test_handle_pane_output_message_when_completion_is_repainted_allows_quiet::case_2 ... FAILED
+2026-10-31T13:20:02.1566703Z
+2026-10-31T13:20:02.1566784Z     failures:
+2026-10-31T13:20:02.1566880Z
+2026-10-31T13:20:02.1566953Z     failures:
+2026-10-31T13:20:02.1567353Z         client::session::tests::tracked_process::test_handle_pane_output_message_when_completion_is_repainted_allows_quiet::case_2
+2026-10-31T13:20:02.1567732Z
+2026-10-31T13:20:02.1567956Z     test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 712 filtered out; finished in 0.01s
+2026-10-31T13:20:02.1568417Z     [0m
+2026-10-31T13:20:02.1568640Z [31;1m [0m [31;1mstderr[0m [31;1m───[0m
+2026-10-31T13:20:02.1568807Z
+2026-10-31T13:20:02.1569595Z     [0m[31;1mthread 'client::session::tests::tracked_process::test_handle_pane_output_message_when_completion_is_repainted_allows_quiet::case_2' (7323) panicked at crates/muxr/server/src/client/session/tests/tracked_process.rs:363:5:[0m
+2026-10-31T13:20:02.1570279Z
+2026-10-31T13:20:02.1570448Z     Value of: fixture.runtimes.handle(fixture.pane_id)?.live_tail_text(12)
+2026-10-31T13:20:02.1571779Z     Expected: is equal to TerminalTextTail { text: "                                                                                                                                                                                                                                                                                                                                  Worked for 16m 15s • 14:18                                    ", lines: [0..32, 32..64, 64..96, 96..128, 128..160, 160..192, 192..224, 224..256, 256..288, 288..320, 320..354, 354..386] }
+2026-10-31T13:20:02.1572689Z     Actual: TerminalTextTail {
+2026-10-31T13:20:02.1573270Z         text: "                                                                                                                                                                                                                                                                                                                                                                                                ",
+2026-10-31T13:20:02.1574098Z         lines: [
+2026-10-31T13:20:02.1574268Z             0..32,
+2026-10-31T13:20:02.1574443Z             32..64,
+2026-10-31T13:20:02.1574609Z             64..96,
+2026-10-31T13:20:02.1574779Z             96..128,
+2026-10-31T13:20:02.1574955Z             128..160,
+2026-10-31T13:20:02.1575129Z             160..192,
+2026-10-31T13:20:02.1575307Z             192..224,
+2026-10-31T13:20:02.1575477Z             224..256,
+2026-10-31T13:20:02.1575649Z             256..288,
+2026-10-31T13:20:02.1575819Z             288..320,
+2026-10-31T13:20:02.1576105Z             320..352,
+2026-10-31T13:20:02.1576275Z             352..384,
+2026-10-31T13:20:02.1576450Z         ],
+2026-10-31T13:20:02.1576603Z     },
+2026-10-31T13:20:02.1577750Z       which isn't equal to TerminalTextTail { text: "                                                                                                                                                                                                                                                                                                                                  Worked for 16m 15s • 14:18                                    ", lines: [0..32, 32..64, 64..96, 96..128, 128..160, 160..192, 192..224, 224..256, 256..288, 288..320, 320..354, 354..386] }
+2026-10-31T13:20:02.1578646Z       Difference(-actual / +expected):
+2026-10-31T13:20:02.1578880Z        TerminalTextTail {
+2026-10-31T13:20:02.1579548Z       -    text: "                                                                                                                                                                                                                                                                                                                                                                                                ",
+2026-10-31T13:20:02.1580711Z       +    text: "                                                                                                                                                                                                                                                                                                                                  Worked for 16m 15s • 14:18                                    ",
+2026-10-31T13:20:02.1581289Z            lines: [
+2026-10-31T13:20:02.1581459Z                0..32,
+2026-10-31T13:20:02.1581652Z        <---- 7 common lines omitted ---->
+2026-10-31T13:20:02.1581878Z                256..288,
+2026-10-31T13:20:02.1582061Z                288..320,
+2026-10-31T13:20:02.1582260Z       -        320..352,
+2026-10-31T13:20:02.1582440Z       +        320..354,
+2026-10-31T13:20:02.1582627Z       -        352..384,
+2026-10-31T13:20:02.1582808Z       +        354..386,
+2026-10-31T13:20:02.1582993Z            ],
+2026-10-31T13:20:02.1583155Z        }
+2026-10-31T13:20:02.1583412Z       at crates/muxr/server/src/client/session/tests/tracked_process.rs:363:5
+2026-10-31T13:20:02.1583800Z
+2026-10-31T13:20:02.1584051Z     note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace[0m
+2026-10-31T13:20:02.1584325Z
+2026-10-31T13:20:02.1585012Z [31;1m  TRY 2 FAIL[0m [   0.016s] ( 863/2231) [35;1mmuxr-server[0m [36mclient::session::tests::tracked_process::test_prompt_submit_when_old_completion_remains_waits_for_fresh_completion[0m[36m::[0m[34;1mcase_1[0m
+2026-10-31T13:20:02.1585714Z [31;1m [0m [31;1mstdout[0m [31;1m───[0m
+2026-10-31T13:20:02.1585875Z
+2026-10-31T13:20:02.1585945Z     running 1 test
+2026-10-31T13:20:02.1586398Z     test client::session::tests::tracked_process::test_prompt_submit_when_old_completion_remains_waits_for_fresh_completion::case_1 ... FAILED
+2026-10-31T13:20:02.1586821Z
+2026-10-31T13:20:02.1586896Z     failures:
+2026-10-31T13:20:02.1586996Z
+2026-10-31T13:20:02.1587063Z     failures:
+2026-10-31T13:20:02.1587466Z         client::session::tests::tracked_process::test_prompt_submit_when_old_completion_remains_waits_for_fresh_completion::case_1
+2026-10-31T13:20:02.1587851Z
+2026-10-31T13:20:02.1588080Z     test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 712 filtered out; finished in 0.01s
+2026-10-31T13:20:02.1588459Z     [0m
+2026-10-31T13:20:02.1588698Z [31;1m [0m [31;1mstderr[0m [31;1m───[0m
+2026-10-31T13:20:02.1588864Z
+2026-10-31T13:20:02.1589564Z     [0m[31;1mthread 'client::session::tests::tracked_process::test_prompt_submit_when_old_completion_remains_waits_for_fresh_completion::case_1' (7345) panicked at crates/muxr/server/src/client/session/tests.rs:1904:5:[0m
+2026-10-31T13:20:02.1590182Z
+2026-10-31T13:20:02.1590481Z     Value of: state.pane_tracked_processes.mark_quiet_deadlines(state.layout, completed)?
+2026-10-31T13:20:02.1590846Z     Expected: is equal to Seen
+2026-10-31T13:20:02.1591068Z     Actual: Unchanged,
+2026-10-31T13:20:02.1591264Z       which isn't equal to Seen
+2026-10-31T13:20:02.1591525Z       at crates/muxr/server/src/client/session/tests.rs:1904:5
+2026-10-31T13:20:02.1591729Z
+2026-10-31T13:20:02.1591970Z     note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace[0m
+2026-10-31T13:20:02.1592230Z
+2026-10-31T13:20:02.1592990Z [31;1m  TRY 2 FAIL[0m [   0.016s] ( 865/2231) [35;1mmuxr-server[0m [36mclient::session::tests::tracked_process::test_record_cached_visible_activity_when_screen_status_varies_extends_only_unconfirmed_completion[0m[36m::[0m[34;1mcase_1[0m
+2026-10-31T13:20:02.1593955Z [31;1m [0m [31;1mstdout[0m [31;1m───[0m
+2026-10-31T13:20:02.1594155Z
+2026-10-31T13:20:02.1594225Z     running 1 test
+2026-10-31T13:20:02.1594839Z     test client::session::tests::tracked_process::test_record_cached_visible_activity_when_screen_status_varies_extends_only_unconfirmed_completion::case_1 ... FAILED
+2026-10-31T13:20:02.1595320Z
+2026-10-31T13:20:02.1595393Z     failures:
+2026-10-31T13:20:02.1595494Z
+2026-10-31T13:20:02.1595561Z     failures:
+2026-10-31T13:20:02.1596030Z         client::session::tests::tracked_process::test_record_cached_visible_activity_when_screen_status_varies_extends_only_unconfirmed_completion::case_1
+2026-10-31T13:20:02.1596467Z
+2026-10-31T13:20:02.1596692Z     test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 712 filtered out; finished in 0.01s
+2026-10-31T13:20:02.1597070Z     [0m
+2026-10-31T13:20:02.1597291Z [31;1m [0m [31;1mstderr[0m [31;1m───[0m
+2026-10-31T13:20:02.1597449Z
+2026-10-31T13:20:02.1598280Z     [0m[31;1mthread 'client::session::tests::tracked_process::test_record_cached_visible_activity_when_screen_status_varies_extends_only_unconfirmed_completion::case_1' (7389) panicked at crates/muxr/server/src/client/session/tests/tracked_process.rs:457:5:[0m
+2026-10-31T13:20:02.1599019Z
+2026-10-31T13:20:02.1599155Z     Value of: processes.next_quiet_deadline(&fixture.layout)?
+2026-10-31T13:20:02.1599522Z     Expected: is equal to Some(Instant { tv_sec: 174, tv_nsec: 901917944 })
+2026-10-31T13:20:02.1599875Z     Actual: Some(Instant { tv_sec: 175, tv_nsec: 901917944 }),
+2026-10-31T13:20:02.1600221Z       which isn't equal to Some(Instant { tv_sec: 174, tv_nsec: 901917944 })
+2026-10-31T13:20:02.1600536Z       Difference(-actual / +expected):
+2026-10-31T13:20:02.1600761Z        Some(
+2026-10-31T13:20:02.1600926Z            Instant {
+2026-10-31T13:20:02.1601108Z       -        tv_sec: 175,
+2026-10-31T13:20:02.1616255Z       +        tv_sec: 174,
+2026-10-31T13:20:02.1616482Z                tv_nsec: 901917944,
+2026-10-31T13:20:02.1616694Z            },
+2026-10-31T13:20:02.1616858Z        )
+2026-10-31T13:20:02.1617122Z       at crates/muxr/server/src/client/session/tests/tracked_process.rs:457:5
+2026-10-31T13:20:02.1617377Z
+2026-10-31T13:20:02.1617661Z     note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace[0m
+2026-10-31T13:20:02.1617920Z
+2026-10-31T13:20:02.1618621Z [31;1m  TRY 2 FAIL[0m [   0.016s] ( 873/2231) [35;1mmuxr-server[0m [36mclient::session::tests::tracked_process::test_tracked_process_screen_when_completion_is_latest_allows_due_attention[0m[36m::[0m[34;1mcase_3[0m
+2026-10-31T13:20:02.1619335Z [31;1m [0m [31;1mstdout[0m [31;1m───[0m
+2026-10-31T13:20:02.1619506Z
+2026-10-31T13:20:02.1619586Z     running 1 test
+2026-10-31T13:20:02.1620039Z     test client::session::tests::tracked_process::test_tracked_process_screen_when_completion_is_latest_allows_due_attention::case_3 ... FAILED
+2026-10-31T13:20:02.1620458Z
+2026-10-31T13:20:02.1620527Z     failures:
+2026-10-31T13:20:02.1620629Z
+2026-10-31T13:20:02.1620696Z     failures:
+2026-10-31T13:20:02.1621110Z         client::session::tests::tracked_process::test_tracked_process_screen_when_completion_is_latest_allows_due_attention::case_3
+2026-10-31T13:20:02.1621602Z
+2026-10-31T13:20:02.1621837Z     test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 712 filtered out; finished in 0.01s
+2026-10-31T13:20:02.1622219Z     [0m
+2026-10-31T13:20:02.1622439Z [31;1m [0m [31;1mstderr[0m [31;1m───[0m
+2026-10-31T13:20:02.1622595Z
+2026-10-31T13:20:02.1623343Z     [0m[31;1mthread 'client::session::tests::tracked_process::test_tracked_process_screen_when_completion_is_latest_allows_due_attention::case_3' (7499) panicked at crates/muxr/server/src/client/session/tests/tracked_process.rs:536:5:[0m
+2026-10-31T13:20:02.1624411Z
+2026-10-31T13:20:02.1624573Z     Value of: processes.mark_quiet_deadlines(&fixture.layout, deadline)?
+2026-10-31T13:20:02.1624941Z     Expected: is equal to Unseen { pane_ids: [PaneId(1)] }
+2026-10-31T13:20:02.1625212Z     Actual: Unchanged,
+2026-10-31T13:20:02.1625452Z       which isn't equal to Unseen { pane_ids: [PaneId(1)] }
+2026-10-31T13:20:02.1625811Z       at crates/muxr/server/src/client/session/tests/tracked_process.rs:536:5
+2026-10-31T13:20:02.1626070Z
+2026-10-31T13:20:02.1626403Z     note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace[0m
+2026-10-31T13:20:02.1626662Z
+2026-10-31T13:20:02.1627412Z [31;1m  TRY 2 FAIL[0m [   0.021s] ( 874/2231) [35;1mmuxr-server[0m [36mclient::session::tests::tracked_process::test_tracked_process_screen_when_config_overrides_patterns_and_trimming_drives_busy_and_attention[0m[36m::[0m[34;1mcase_1[0m
+2026-10-31T13:20:02.1628180Z [31;1m [0m [31;1mstdout[0m [31;1m───[0m
+2026-10-31T13:20:02.1628343Z
+2026-10-31T13:20:02.1628422Z     running 1 test
+2026-10-31T13:20:02.1628934Z     test client::session::tests::tracked_process::test_tracked_process_screen_when_config_overrides_patterns_and_trimming_drives_busy_and_attention::case_1 ... FAILED
+2026-10-31T13:20:02.1629419Z
+2026-10-31T13:20:02.1629486Z     failures:
+2026-10-31T13:20:02.1629589Z
+2026-10-31T13:20:02.1629663Z     failures:
+2026-10-31T13:20:02.1630134Z         client::session::tests::tracked_process::test_tracked_process_screen_when_config_overrides_patterns_and_trimming_drives_busy_and_attention::case_1
+2026-10-31T13:20:02.1630583Z
+2026-10-31T13:20:02.1630803Z     test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 712 filtered out; finished in 0.02s
+2026-10-31T13:20:02.1631181Z     [0m
+2026-10-31T13:20:02.1631399Z [31;1m [0m [31;1mstderr[0m [31;1m───[0m
+2026-10-31T13:20:02.1631552Z
+2026-10-31T13:20:02.1632375Z     [0m[31;1mthread 'client::session::tests::tracked_process::test_tracked_process_screen_when_config_overrides_patterns_and_trimming_drives_busy_and_attention::case_1' (7521) panicked at crates/muxr/server/src/client/session/tests/tracked_process.rs:767:5:[0m
+2026-10-31T13:20:02.1633091Z
+2026-10-31T13:20:02.1633294Z     Value of: self::tracked_process_snapshot_state(&processes.snapshot(&fixture.layout),
+2026-10-31T13:20:02.1633755Z     fixture.pane_id)?
+2026-10-31T13:20:02.1633960Z     Expected: is equal to Seen
+2026-10-31T13:20:02.1634165Z     Actual: Unseen,
+2026-10-31T13:20:02.1634358Z       which isn't equal to Seen
+2026-10-31T13:20:02.1634674Z       at crates/muxr/server/src/client/session/tests/tracked_process.rs:767:5
+2026-10-31T13:20:02.1634916Z
+2026-10-31T13:20:02.1635162Z     note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace[0m
+2026-10-31T13:20:02.1635426Z
+2026-10-31T13:20:02.1636160Z [31;1m  TRY 2 FAIL[0m [   0.020s] ( 875/2231) [35;1mmuxr-server[0m [36mclient::session::tests::tracked_process::test_tracked_process_screen_when_config_overrides_patterns_and_trimming_drives_busy_and_attention[0m[36m::[0m[34;1mcase_2[0m
+2026-10-31T13:20:02.1636985Z [31;1m [0m [31;1mstdout[0m [31;1m───[0m
+2026-10-31T13:20:02.1637141Z
+2026-10-31T13:20:02.1637218Z     running 1 test
+2026-10-31T13:20:02.1637725Z     test client::session::tests::tracked_process::test_tracked_process_screen_when_config_overrides_patterns_and_trimming_drives_busy_and_attention::case_2 ... FAILED
+2026-10-31T13:20:02.1638204Z
+2026-10-31T13:20:02.1638372Z     failures:
+2026-10-31T13:20:02.1638467Z
+2026-10-31T13:20:02.1638541Z     failures:
+2026-10-31T13:20:02.1639006Z         client::session::tests::tracked_process::test_tracked_process_screen_when_config_overrides_patterns_and_trimming_drives_busy_and_attention::case_2
+2026-10-31T13:20:02.1639455Z
+2026-10-31T13:20:02.1639681Z     test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 712 filtered out; finished in 0.01s
+2026-10-31T13:20:02.1640063Z     [0m
+2026-10-31T13:20:02.1640275Z [31;1m [0m [31;1mstderr[0m [31;1m───[0m
+2026-10-31T13:20:02.1640433Z
+2026-10-31T13:20:02.1641237Z     [0m[31;1mthread 'client::session::tests::tracked_process::test_tracked_process_screen_when_config_overrides_patterns_and_trimming_drives_busy_and_attention::case_2' (7543) panicked at crates/muxr/server/src/client/session/tests/tracked_process.rs:767:5:[0m
+2026-10-31T13:20:02.1641954Z
+2026-10-31T13:20:02.1642154Z     Value of: self::tracked_process_snapshot_state(&processes.snapshot(&fixture.layout),
+2026-10-31T13:20:02.1642506Z     fixture.pane_id)?
+2026-10-31T13:20:02.1642790Z     Expected: is equal to Seen
+2026-10-31T13:20:02.1643002Z     Actual: Busy,
+2026-10-31T13:20:02.1643184Z       which isn't equal to Seen
+2026-10-31T13:20:02.1643581Z       at crates/muxr/server/src/client/session/tests/tracked_process.rs:767:5
+2026-10-31T13:20:02.1643831Z
+2026-10-31T13:20:02.1644065Z     note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace[0m
+2026-10-31T13:20:02.1644327Z
+2026-10-31T13:20:02.1644993Z [31;1m  TRY 2 FAIL[0m [   0.017s] ( 877/2231) [35;1mmuxr-server[0m [36mclient::session::tests::tracked_process::test_tracked_process_screen_when_pane_is_settled_rearms_only_for_working[0m[36m::[0m[34;1mcase_1[0m
+2026-10-31T13:20:02.1645686Z [31;1m [0m [31;1mstdout[0m [31;1m───[0m
+2026-10-31T13:20:02.1645846Z
+2026-10-31T13:20:02.1645916Z     running 1 test
+2026-10-31T13:20:02.1646358Z     test client::session::tests::tracked_process::test_tracked_process_screen_when_pane_is_settled_rearms_only_for_working::case_1 ... FAILED
+2026-10-31T13:20:02.1646771Z
+2026-10-31T13:20:02.1646854Z     failures:
+2026-10-31T13:20:02.1646953Z
+2026-10-31T13:20:02.1647020Z     failures:
+2026-10-31T13:20:02.1647411Z         client::session::tests::tracked_process::test_tracked_process_screen_when_pane_is_settled_rearms_only_for_working::case_1
+2026-10-31T13:20:02.1647787Z
+2026-10-31T13:20:02.1648012Z     test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 712 filtered out; finished in 0.01s
+2026-10-31T13:20:02.1648392Z     [0m
+2026-10-31T13:20:02.1648604Z [31;1m [0m [31;1mstderr[0m [31;1m───[0m
+2026-10-31T13:20:02.1648767Z
+2026-10-31T13:20:02.1649501Z     [0m[31;1mthread 'client::session::tests::tracked_process::test_tracked_process_screen_when_pane_is_settled_rearms_only_for_working::case_1' (7576) panicked at crates/muxr/server/src/client/session/tests/tracked_process.rs:669:5:[0m
+2026-10-31T13:20:02.1650138Z
+2026-10-31T13:20:02.1650337Z     Value of: self::tracked_process_snapshot_state(&processes.snapshot(&fixture.layout),
+2026-10-31T13:20:02.1650689Z     fixture.pane_id)?
+2026-10-31T13:20:02.1650896Z     Expected: is equal to Busy
+2026-10-31T13:20:02.1651101Z     Actual: Unseen,
+2026-10-31T13:20:02.1651285Z       which isn't equal to Busy
+2026-10-31T13:20:02.1651579Z       at crates/muxr/server/src/client/session/tests/tracked_process.rs:669:5
+2026-10-31T13:20:02.1651826Z
+2026-10-31T13:20:02.1652067Z     note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace[0m
+2026-10-31T13:20:02.1652326Z
+2026-10-31T13:20:02.1652987Z [31;1m  TRY 2 FAIL[0m [   0.017s] ( 878/2231) [35;1mmuxr-server[0m [36mclient::session::tests::tracked_process::test_tracked_process_screen_when_pane_is_settled_rearms_only_for_working[0m[36m::[0m[34;1mcase_2[0m
+2026-10-31T13:20:02.1654015Z [31;1m [0m [31;1mstdout[0m [31;1m───[0m
+2026-10-31T13:20:02.1654177Z
+2026-10-31T13:20:02.1654252Z     running 1 test
+2026-10-31T13:20:02.1654688Z     test client::session::tests::tracked_process::test_tracked_process_screen_when_pane_is_settled_rearms_only_for_working::case_2 ... FAILED
+2026-10-31T13:20:02.1655191Z
+2026-10-31T13:20:02.1655261Z     failures:
+2026-10-31T13:20:02.1655361Z
+2026-10-31T13:20:02.1655427Z     failures:
+2026-10-31T13:20:02.1655824Z         client::session::tests::tracked_process::test_tracked_process_screen_when_pane_is_settled_rearms_only_for_working::case_2
+2026-10-31T13:20:02.1656193Z
+2026-10-31T13:20:02.1656422Z     test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 712 filtered out; finished in 0.01s
+2026-10-31T13:20:02.1656796Z     [0m
+2026-10-31T13:20:02.1657010Z [31;1m [0m [31;1mstderr[0m [31;1m───[0m
+2026-10-31T13:20:02.1657166Z
+2026-10-31T13:20:02.1657889Z     [0m[31;1mthread 'client::session::tests::tracked_process::test_tracked_process_screen_when_pane_is_settled_rearms_only_for_working::case_2' (7598) panicked at crates/muxr/server/src/client/session/tests/tracked_process.rs:669:5:[0m
+2026-10-31T13:20:02.1658544Z
+2026-10-31T13:20:02.1658826Z     Value of: self::tracked_process_snapshot_state(&processes.snapshot(&fixture.layout),
+2026-10-31T13:20:02.1659182Z     fixture.pane_id)?
+2026-10-31T13:20:02.1659378Z     Expected: is equal to Busy
+2026-10-31T13:20:02.1659585Z     Actual: Seen,
+2026-10-31T13:20:02.1659772Z       which isn't equal to Busy
+2026-10-31T13:20:02.1660070Z       at crates/muxr/server/src/client/session/tests/tracked_process.rs:669:5
+2026-10-31T13:20:02.1660317Z
+2026-10-31T13:20:02.1660559Z     note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace[0m
+2026-10-31T13:20:02.1660817Z
+2026-10-31T13:20:02.1708096Z [31;1merror[0m: test run failed
+2026-10-31T13:20:02.1731873Z error: process didn't exit successfully: `/home/runner/.rustup/toolchains/nightly-2026-08-30-x86_64-unknown-linux-gnu/bin/cargo nextest run --manifest-path /home/runner/work/dotfiles/dotfiles/yog/Cargo.toml --target-dir /home/runner/work/dotfiles/dotfiles/yog/target/coverage/llvm-cov-target --workspace --all-features --profile ci` (exit status: 100)
+2026-10-31T13:20:02.1734670Z [1m[31m
+2026-10-31T13:20:02.1734887Z  ● "command failed"
+2026-10-31T13:20:02.1735115Z  ├ crates/evoke/src/cmds/ci.rs:165
+2026-10-31T13:20:02.1736193Z  ├ "command=cd \"/home/runner/work/dotfiles/dotfiles/yog\" && CARGO_TARGET_DIR=\"target/coverage\" RUSTFLAGS=\"--remap-path-prefix=/home/runner/work/dotfiles/dotfiles/=\" \"cargo\" \"llvm-cov\" \"nextest\" \"--profile\" \"ci\" \"--workspace\" \"--all-features\" \"--lcov\" \"--output-path\" \"lcov.info\""
+2026-10-31T13:20:02.1736871Z  │
+2026-10-31T13:20:02.1737016Z  ● ExitStatusError(unix_wait_status(25600))
+2026-10-31T13:20:02.1737203Z  ╰ crates/evoke/src/cmds/ci.rs:165
+2026-10-31T13:20:02.1737354Z [39m[0m
