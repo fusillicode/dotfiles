@@ -5,7 +5,6 @@ use std::io::Cursor;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use regex::escape;
 use rootcause::report;
 use skim::CaseMatching;
 use skim::MatchEngine;
@@ -327,7 +326,8 @@ impl LiteralSearchEngineFactory {
 
 impl MatchEngineFactory for LiteralSearchEngineFactory {
     fn create_engine_with_case(&self, query: &str, _case: CaseMatching) -> Box<dyn MatchEngine> {
-        self.inner.create_engine_with_case(&escape(query), CaseMatching::Ignore)
+        self.inner
+            .create_engine_with_case(&regex::escape(query), CaseMatching::Ignore)
     }
 }
 
@@ -605,23 +605,6 @@ mod tests {
         assert_eq!(actual.is_some(), expected);
     }
 
-    fn raw_engine(query: &str) -> Box<dyn MatchEngine> {
-        let factory = LiteralSearchEngineFactory::new(&mut base_skim_options());
-        let factory = SearchCorpusEngineFactory::new(Rc::new(factory));
-
-        factory.create_engine_with_case(query, CaseMatching::Respect)
-    }
-
-    fn raw_item(files: Vec<String>) -> IndexedSkimItem {
-        IndexedSkimItem {
-            output: "0".to_owned(),
-            display_item: Arc::new("display-only".to_owned()),
-            visible_text: "display-only".to_owned(),
-            preview_text: Some("preview-only".to_owned()),
-            search_corpus: SearchCorpus::RawFiles(files.into()),
-        }
-    }
-
     #[rstest::rstest]
     #[case("display-only", true)]
     #[case("hidden", true)]
@@ -680,12 +663,31 @@ mod tests {
             display_item: Arc::new("visible value next".to_owned()),
             visible_text: "visible value next".to_owned(),
             preview_text: None,
-            search_corpus: super::SearchCorpus::VisiblePrefix("visible value next hidden value".to_owned()),
+            search_corpus: crate::interactive::SearchCorpus::VisiblePrefix(
+                "visible value next hidden value".to_owned(),
+            ),
         };
 
         assert_that!(
             super::clip_match_range(MatchRange::Chars(vec![20, 21]), &item),
             matches_pattern!(MatchRange::Chars(is_empty()))
         );
+    }
+
+    fn raw_engine(query: &str) -> Box<dyn MatchEngine> {
+        let factory = LiteralSearchEngineFactory::new(&mut base_skim_options());
+        let factory = SearchCorpusEngineFactory::new(Rc::new(factory));
+
+        factory.create_engine_with_case(query, CaseMatching::Respect)
+    }
+
+    fn raw_item(files: Vec<String>) -> IndexedSkimItem {
+        IndexedSkimItem {
+            output: "0".to_owned(),
+            display_item: Arc::new("display-only".to_owned()),
+            visible_text: "display-only".to_owned(),
+            preview_text: Some("preview-only".to_owned()),
+            search_corpus: SearchCorpus::RawFiles(files.into()),
+        }
     }
 }

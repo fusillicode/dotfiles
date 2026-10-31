@@ -1,4 +1,4 @@
-//! Generate vendor-specific subagent files from the generic subagents in `<src_dir>/subagents/`.
+//! Generate agent-specific subagent files from the generic subagents in `<src_dir>/subagents/`.
 //!
 //! Read the `.md` files in that dir. Each file has YAML `name`, `description`,
 //! optional `vendors` settings, and the subagent instructions after the YAML:
@@ -17,13 +17,13 @@
 //! Names start with `a-z` or `0-9` and contain only `a-z`, `0-9`, `-`, or `_`.
 //! The description and instructions cannot be blank.
 //!
-//! Use only the settings for the supplied vendor. Generate TOML for Codex and
-//! Markdown with YAML for the other vendors. Codex uses `developer_instructions`
+//! Use only the settings for the supplied agent. Generate TOML for Codex and
+//! Markdown with YAML for the other agents. Codex uses `developer_instructions`
 //! for the instructions. `OpenCode` uses the filename for the subagent name and
-//! requires `mode: subagent`. Vendor settings cannot replace the shared fields.
+//! requires `mode: subagent`. Agent settings cannot replace the shared fields.
 //!
 //! Write `agents/<name>.toml` under Codex's config dir and `agents/<name>.md`
-//! under the other vendors' config dirs.
+//! under the other agents' config dirs.
 //!
 //! Generate each subagent independently. A file error prints a warning and does not
 //! stop other subagents.
@@ -48,19 +48,19 @@ use serde::de::MapAccess;
 use serde::de::Visitor;
 use serde_json::Map;
 use serde_json::Value;
-use ytil_agents::agent::Agent as Vendor;
+use ytil_agents::agent::Agent;
 
 use crate::cmds::sync_harness::common;
 use crate::cmds::sync_harness::common::SyncOutcome;
 
-pub(super) fn sync_subagents(src_dir: &Path, home: &Path, vendors: &[Vendor]) -> Vec<SyncOutcome> {
+pub(super) fn sync_subagents(src_dir: &Path, home: &Path, agents: &[Agent]) -> Vec<SyncOutcome> {
     let (subagent_files, mut outcomes) = collect_subagent_files(src_dir);
     let mut subagent_names = BBTreeSet::new();
 
     for subagent_file in subagent_files {
-        let result = prepare_subagent_files(&subagent_file, home, vendors, &mut subagent_names)
+        let result = prepare_subagent_files(&subagent_file, home, agents, &mut subagent_names)
             .attach_with(|| format!("cannot sync subagent | path={}", subagent_file.display()));
-        let vendor_subagent_files = match result {
+        let agent_subagent_files = match result {
             Ok(files) => files,
             Err(error) => {
                 outcomes.push(SyncOutcome::SubagentSkipped { error });
@@ -68,7 +68,7 @@ pub(super) fn sync_subagents(src_dir: &Path, home: &Path, vendors: &[Vendor]) ->
             }
         };
 
-        for file in vendor_subagent_files {
+        for file in agent_subagent_files {
             let result = file
                 .write_file()
                 .attach_with(|| format!("cannot sync subagent | path={}", subagent_file.display()));
@@ -85,12 +85,12 @@ pub(super) fn sync_subagents(src_dir: &Path, home: &Path, vendors: &[Vendor]) ->
     outcomes
 }
 
-struct VendorSubagentFile {
+struct AgentSubagentFile {
     destination: PathBuf,
     contents: String,
 }
 
-impl VendorSubagentFile {
+impl AgentSubagentFile {
     fn write_file(&self) -> rootcause::Result<SyncOutcome> {
         let dir = self
             .destination
@@ -141,9 +141,9 @@ fn collect_subagent_files(src_dir: &Path) -> (Vec<PathBuf>, Vec<SyncOutcome>) {
 fn prepare_subagent_files(
     path: &Path,
     home: &Path,
-    vendors: &[Vendor],
+    agents: &[Agent],
     subagent_names: &mut BBTreeSet<String>,
-) -> rootcause::Result<Vec<VendorSubagentFile>> {
+) -> rootcause::Result<Vec<AgentSubagentFile>> {
     let contents = fs::read_to_string(path).attach("cannot read subagent")?;
     let generic_subagent = GenericSubagent::parse(&contents).attach("invalid subagent definition")?;
 
@@ -151,18 +151,18 @@ fn prepare_subagent_files(
         return Err(report!("duplicate subagent name").attach(format!("name={}", generic_subagent.name)));
     }
 
-    let mut vendor_subagent_files = Vec::new();
+    let mut agent_subagent_files = Vec::new();
 
-    for vendor in vendors {
-        let vendor_subagent_file = generic_subagent
-            .generate_for_vendor(*vendor, home)
-            .attach_with(|| format!("cannot generate vendor subagent file | vendor={}", vendor.name()))?;
-        vendor_subagent_files.push(vendor_subagent_file);
+    for agent in agents {
+        let agent_subagent_file = generic_subagent
+            .generate_for_agent(*agent, home)
+            .attach_with(|| format!("cannot generate vendor subagent file | vendor={}", agent.name()))?;
+        agent_subagent_files.push(agent_subagent_file);
     }
 
     subagent_names.insert(generic_subagent.name);
 
-    Ok(vendor_subagent_files)
+    Ok(agent_subagent_files)
 }
 
 #[derive(Deserialize)]
@@ -170,17 +170,17 @@ fn prepare_subagent_files(
 struct SubagentFrontmatter {
     name: String,
     description: String,
-    #[serde(default, deserialize_with = "deserialize_vendors")]
-    vendors: BBTreeMap<String, Map<String, Value>>,
+    #[serde(default, rename = "vendors", deserialize_with = "deserialize_agents")]
+    agents: BBTreeMap<String, Map<String, Value>>,
 }
 
-fn deserialize_vendors<'de, D>(deserializer: D) -> Result<BBTreeMap<String, Map<String, Value>>, D::Error>
+fn deserialize_agents<'de, D>(deserializer: D) -> Result<BBTreeMap<String, Map<String, Value>>, D::Error>
 where
     D: Deserializer<'de>,
 {
-    struct VendorsVisitor;
+    struct AgentsVisitor;
 
-    impl<'de> Visitor<'de> for VendorsVisitor {
+    impl<'de> Visitor<'de> for AgentsVisitor {
         type Value = BBTreeMap<String, Map<String, Value>>;
 
         fn expecting(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
@@ -191,24 +191,24 @@ where
         where
             A: MapAccess<'de>,
         {
-            let mut vendors = BBTreeMap::new();
+            let mut agents = BBTreeMap::new();
 
-            while let Some((vendor, settings)) = access.next_entry()? {
-                vendors.insert(vendor, settings);
+            while let Some((agent, settings)) = access.next_entry()? {
+                agents.insert(agent, settings);
             }
 
-            Ok(vendors)
+            Ok(agents)
         }
     }
 
-    deserializer.deserialize_map(VendorsVisitor)
+    deserializer.deserialize_map(AgentsVisitor)
 }
 
 struct GenericSubagent {
     name: String,
     description: String,
     instructions: String,
-    vendors: BBTreeMap<Vendor, Map<String, Value>>,
+    agents: BBTreeMap<Agent, Map<String, Value>>,
 }
 
 impl GenericSubagent {
@@ -259,37 +259,37 @@ impl GenericSubagent {
             return Err(report!("subagent description and instructions must not be empty"));
         }
 
-        let mut vendors = BBTreeMap::new();
+        let mut agents = BBTreeMap::new();
 
-        for (name, settings) in frontmatter.vendors {
-            let vendor = Vendor::from_name(&name)?;
-            validate_vendor_settings(vendor, &settings)?;
-            vendors.insert(vendor, settings);
+        for (name, settings) in frontmatter.agents {
+            let agent = Agent::from_name(&name)?;
+            validate_agent_settings(agent, &settings)?;
+            agents.insert(agent, settings);
         }
 
         Ok(Self {
             name: frontmatter.name,
             description: frontmatter.description,
             instructions,
-            vendors,
+            agents,
         })
     }
 
-    fn generate_for_vendor(&self, vendor: Vendor, home: &Path) -> rootcause::Result<VendorSubagentFile> {
-        let (extension, contents) = self.generate_vendor_contents(vendor)?;
-        let root = common::vendor_config_dir(home, vendor);
+    fn generate_for_agent(&self, agent: Agent, home: &Path) -> rootcause::Result<AgentSubagentFile> {
+        let (extension, contents) = self.generate_agent_contents(agent)?;
+        let root = common::agent_config_dir(home, agent);
 
-        Ok(VendorSubagentFile {
+        Ok(AgentSubagentFile {
             destination: root.join("agents").join(format!("{}.{extension}", self.name)),
             contents,
         })
     }
 
-    fn generate_vendor_contents(&self, vendor: Vendor) -> rootcause::Result<(&'static str, String)> {
-        let mut settings = self.vendor_settings(vendor);
+    fn generate_agent_contents(&self, agent: Agent) -> rootcause::Result<(&'static str, String)> {
+        let mut settings = self.agent_settings(agent);
 
-        match vendor {
-            Vendor::Codex => {
+        match agent {
+            Agent::Codex => {
                 settings.insert(
                     "developer_instructions".to_owned(),
                     Value::String(self.instructions.clone()),
@@ -297,7 +297,7 @@ impl GenericSubagent {
 
                 Ok(("toml", toml::to_string_pretty(&settings)?))
             }
-            Vendor::Claude | Vendor::Cursor | Vendor::Gemini | Vendor::Opencode => {
+            Agent::Claude | Agent::Cursor | Agent::Gemini | Agent::Opencode => {
                 let yaml = serde_saphyr::to_string(&settings)?;
 
                 Ok(("md", format!("---\n{yaml}---\n{}", self.instructions)))
@@ -305,15 +305,15 @@ impl GenericSubagent {
         }
     }
 
-    fn vendor_settings(&self, vendor: Vendor) -> Map<String, Value> {
-        let mut settings = self.vendors.get(&vendor).cloned().unwrap_or_default();
+    fn agent_settings(&self, agent: Agent) -> Map<String, Value> {
+        let mut settings = self.agents.get(&agent).cloned().unwrap_or_default();
         settings.insert("description".to_owned(), Value::String(self.description.clone()));
 
-        match vendor {
-            Vendor::Opencode => {
+        match agent {
+            Agent::Opencode => {
                 settings.insert("mode".to_owned(), Value::String("subagent".to_owned()));
             }
-            Vendor::Claude | Vendor::Codex | Vendor::Cursor | Vendor::Gemini => {
+            Agent::Claude | Agent::Codex | Agent::Cursor | Agent::Gemini => {
                 settings.insert("name".to_owned(), Value::String(self.name.clone()));
             }
         }
@@ -322,25 +322,25 @@ impl GenericSubagent {
     }
 }
 
-fn validate_vendor_settings(vendor: Vendor, settings: &Map<String, Value>) -> rootcause::Result<()> {
+fn validate_agent_settings(agent: Agent, settings: &Map<String, Value>) -> rootcause::Result<()> {
     for key in settings.keys() {
         if matches!(
             key.as_str(),
             "name" | "description" | "developer_instructions" | "vendors"
-        ) || reserved_fields_for_vendor(vendor).contains(&key.as_str())
+        ) || reserved_fields_for_agent(agent).contains(&key.as_str())
         {
             return Err(report!("vendor settings cannot replace shared subagent fields")
-                .attach(format!("vendor={} field={key}", vendor.name())));
+                .attach(format!("vendor={} field={key}", agent.name())));
         }
     }
 
     Ok(())
 }
 
-const fn reserved_fields_for_vendor(vendor: Vendor) -> &'static [&'static str] {
-    match vendor {
-        Vendor::Opencode => &["mode"],
-        Vendor::Claude | Vendor::Codex | Vendor::Cursor | Vendor::Gemini => &[],
+const fn reserved_fields_for_agent(agent: Agent) -> &'static [&'static str] {
+    match agent {
+        Agent::Opencode => &["mode"],
+        Agent::Claude | Agent::Codex | Agent::Cursor | Agent::Gemini => &[],
     }
 }
 
@@ -361,7 +361,7 @@ mod tests {
         r#"{"claude":{"model":"old"},"claude":{"model":"new"}}"#,
         &[("claude", "new")]
     )]
-    fn test_deserialize_vendors_when_map_is_valid_preserves_sorted_entries_and_last_values(
+    fn test_deserialize_agents_when_map_is_valid_preserves_sorted_entries_and_last_values(
         #[case] json: &str,
         #[case] expected: &[(&str, &str)],
     ) {
@@ -376,19 +376,19 @@ mod tests {
             })
             .collect::<Vec<_>>();
 
-        let vendors = deserialize_vendors(&mut deserializer).expect("valid vendor settings");
+        let agents = deserialize_agents(&mut deserializer).expect("valid vendor settings");
 
-        assert_eq!(vendors.into_iter().collect::<Vec<_>>(), expected_entries);
+        assert_eq!(agents.into_iter().collect::<Vec<_>>(), expected_entries);
     }
 
     #[rstest::rstest]
     #[case::sequence("[]")]
     #[case::null("null")]
     #[case::non_map_settings(r#"{"claude":42}"#)]
-    fn test_deserialize_vendors_when_map_is_invalid_rejects_it(#[case] json: &str) {
+    fn test_deserialize_agents_when_map_is_invalid_rejects_it(#[case] json: &str) {
         let mut deserializer = Deserializer::from_str(json);
 
-        let actual = deserialize_vendors(&mut deserializer);
+        let actual = deserialize_agents(&mut deserializer);
 
         assert_that!(actual, err(anything()));
     }

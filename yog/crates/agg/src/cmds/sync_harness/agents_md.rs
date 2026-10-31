@@ -1,4 +1,4 @@
-//! Link `AGENTS.md` from the supplied source dir to vendor default locations under home:
+//! Link `AGENTS.md` from the supplied source dir to agent default locations under home:
 //!
 //! - `~/.codex/AGENTS.md`
 //! - `~/.claude/CLAUDE.md`
@@ -18,7 +18,7 @@ use std::path::PathBuf;
 
 use rootcause::prelude::ResultExt;
 use rootcause::report;
-use ytil_agents::agent::Agent as Vendor;
+use ytil_agents::agent::Agent;
 
 use crate::cmds::sync_harness::common;
 use crate::cmds::sync_harness::common::SyncOutcome;
@@ -39,8 +39,8 @@ impl AgentsMd {
         }
     }
 
-    pub(super) fn sync_for_vendor(&self, vendor: Vendor, home: &Path) -> rootcause::Result<SyncOutcome> {
-        match target_for_vendor(vendor, home) {
+    pub(super) fn sync_for_agent(&self, agent: Agent, home: &Path) -> rootcause::Result<SyncOutcome> {
+        match target_for_agent(agent, home) {
             AgentsMdTarget::Symlink(destination) => common::create_symlink(&self.path, &destination),
             AgentsMdTarget::CursorRule(destination) => write_cursor_rule(&self.path, &destination),
         }
@@ -52,14 +52,14 @@ enum AgentsMdTarget {
     CursorRule(PathBuf),
 }
 
-fn target_for_vendor(vendor: Vendor, home: &Path) -> AgentsMdTarget {
-    let config_dir = common::vendor_config_dir(home, vendor);
+fn target_for_agent(agent: Agent, home: &Path) -> AgentsMdTarget {
+    let config_dir = common::agent_config_dir(home, agent);
 
-    match vendor {
-        Vendor::Claude => AgentsMdTarget::Symlink(config_dir.join("CLAUDE.md")),
-        Vendor::Codex | Vendor::Opencode => AgentsMdTarget::Symlink(config_dir.join("AGENTS.md")),
-        Vendor::Gemini => AgentsMdTarget::Symlink(config_dir.join("GEMINI.md")),
-        Vendor::Cursor => AgentsMdTarget::CursorRule(config_dir.join("rules/agents.mdc")),
+    match agent {
+        Agent::Claude => AgentsMdTarget::Symlink(config_dir.join("CLAUDE.md")),
+        Agent::Codex | Agent::Opencode => AgentsMdTarget::Symlink(config_dir.join("AGENTS.md")),
+        Agent::Gemini => AgentsMdTarget::Symlink(config_dir.join("GEMINI.md")),
+        Agent::Cursor => AgentsMdTarget::CursorRule(config_dir.join("rules/agents.mdc")),
     }
 }
 

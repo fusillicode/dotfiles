@@ -1,17 +1,15 @@
 Rewrite or inspect Rust files using personal source preferences.
 
 Usage:
-  frs rsl [--mode write|report] [--verbose] [--rules ID[,ID...]]... [--] FILE...
-  frs rsl --unstaged [--mode write|report] [--verbose] [--rules ID[,ID...]]...
+  frs rsl [--mode write|report] [--verbose] [--rules ID[,ID...]]... [--] [FILE...]
 
 Arguments:
-  FILE                     Rust source file to inspect or rewrite. Required unless --unstaged is supplied.
+  FILE                     Rust source file to inspect or rewrite. May be repeated.
+                           With no files, select staged, unstaged, and untracked Rust files from Git.
 
 Options:
   --mode write|report      Write safe fixes, or report without changing files (default: write).
   --verbose                Print findings for changes that were not applied.
-  --unstaged               Select unstaged and untracked Rust files from the enclosing Git repository.
-                           Cannot be combined with FILE arguments.
   --rules ID[,ID...]       Run only these rules. Supply comma-separated rule IDs.
                            May be repeated to select more rules.
   --help                   Show this help text.
@@ -25,11 +23,13 @@ Each report identifies the file, line, column, and rule. Skipped changes include
 Only the selected files are changed. Run your Rust formatter afterward if needed.
 Path anchoring discovers modules from Cargo targets. Unknown or conflicting module locations are reported without changes.
 
---unstaged scans the whole enclosing repository, even when invoked from a subdirectory.
-It selects existing regular .rs files with unstaged changes, including files in untracked directories.
-Staged-only, deleted, ignored, conflicted, and symbolic-link files are skipped.
-Partially staged files are rewritten in full, including existing user changes; the Git index is unchanged.
-No matching files is a silent success. Outside a Git working tree, --unstaged fails.
+With no file paths, rsl reads Git status for the whole enclosing repository, even when invoked from a subdirectory.
+It selects existing regular .rs files with uncommitted changes: staged, unstaged, and untracked.
+Files in untracked directories are included. Unchanged, deleted, ignored, conflicted, and symbolic-link files are skipped.
+Selected working files are rewritten in full, including existing user changes; the Git index is unchanged.
+Rewrites to staged files remain unstaged until explicitly added to the index.
+No matching files is a silent success. With no file paths outside a Git working tree, rsl fails.
+Every supplied path is literal, including a file named git; only those files are selected.
 
 Rules:
   path-anchoring           Replace self:: and super:: references with paths starting at crate:: when possible.
@@ -43,8 +43,8 @@ Exit status:
   Nonzero                  Invalid arguments or a file could not be read, parsed, or written.
 
 Examples:
+  frs rsl
   frs rsl src/main.rs src/lib.rs
-  frs rsl --unstaged
   frs rsl --mode report --verbose src/main.rs
   frs rsl --rules item-ordering,path-anchoring src/main.rs
   frs rsl -- -example.rs

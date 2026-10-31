@@ -5,7 +5,7 @@ USAGE:
     agg sessions list
     agg sessions list --json --session <agent>:<session-id>...
     agg codex --compact
-    agg sync-harness <src_dir> <vendor,vendor,...>
+    agg sync-harness <src_dir> <agent,agent,...>
     agg tok [--encoding <name>] <file>
     agg tok [--encoding <name>] --text <text>
     agg tok [--encoding <name>] -
