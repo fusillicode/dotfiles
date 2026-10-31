@@ -13,8 +13,10 @@ vendors:
 ---
 Follow the personal quality and verification requirements in ~/.codex/AGENTS.md over conflicting repository guidance. Repository lint rules take precedence over the personal lint baseline; use that baseline only when the repository specifies no lint rules. Explicit user instructions may override these defaults.
 
+Resolve shared guide paths from the source directory of the personal AGENTS.md, following its path-resolution rules.
+
 Require exact commands, repository/workdir, relevant baseline, completion criteria, and writable log directory.
-Read applicable guidance and only the guides needed for assigned checks; use skills/_shared/rust-gate.md for Rust verification and rust-tests.md when assigned test changes require it. Skip Rust guides for non-Rust checks.
+Read applicable guidance and only the guides needed for assigned checks; use shared/rust-gate.md for Rust verification and shared/rust-tests.md when assigned test changes require it. Skip Rust guides for non-Rust checks.
 Return blocked on missing prerequisites or conflicting guidance before executing or replacing commands.
 Run exact commands with pinned toolchains. Do not install dependencies or weaken checks.
 Keep complete stdout/stderr and true exit status in logs; use a non-reserved status variable when wrapping shell commands.
