@@ -1,21 +1,23 @@
 Rewrite or inspect explicitly supplied Rust files using personal source preferences.
 
 Usage:
-  frs rsl [--mode write|report] [--rules ID[,ID...]]... [--] FILE...
+  frs rsl [--mode write|report] [--verbose] [--rules ID[,ID...]]... [--] FILE...
 
 Arguments:
   FILE                     Rust source file to inspect or rewrite. Supply at least one file.
 
 Options:
   --mode write|report      Write safe fixes, or report without changing files (default: write).
+  --verbose                Print findings for changes that were not applied.
   --rules ID[,ID...]       Run only these rules. Supply comma-separated rule IDs.
                            May be repeated to select more rules.
   --help                   Show this help text.
   --                       Treat remaining arguments as file paths.
 
 All rules run unless a selection is supplied via --rules. Unknown or empty rule IDs are rejected.
-Write mode updates the supplied files in place, then reports remaining findings at their final locations.
-Report mode leaves files unchanged and shows available changes and reasons other changes cannot be made.
+Write mode updates the supplied files in place. Findings are silent unless --verbose is supplied.
+With --verbose, write mode reports remaining findings at their final locations.
+Report mode leaves files unchanged. Add --verbose to show available changes and reasons other changes cannot be made.
 Each report identifies the file, line, column, and rule. Skipped changes include a reason and guidance.
 Only the supplied files are changed. Run your Rust formatter afterward if needed.
 Path anchoring discovers modules from Cargo targets. Unknown or conflicting module locations are reported without changes.
@@ -33,6 +35,6 @@ Exit status:
 
 Examples:
   frs rsl src/main.rs src/lib.rs
-  frs rsl --mode report src/main.rs
+  frs rsl --mode report --verbose src/main.rs
   frs rsl --rules item-ordering,path-anchoring src/main.rs
   frs rsl -- -example.rs

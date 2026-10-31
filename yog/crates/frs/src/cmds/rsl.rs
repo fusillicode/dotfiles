@@ -22,7 +22,7 @@ mod source;
 
 /// Runs `frs rsl`.
 ///
-/// Writes safe fixes and reports remaining findings, or reports without changing files.
+/// Writes safe fixes, or inspects without changing files. Reports findings with `--verbose`.
 ///
 /// # Errors
 ///
@@ -43,7 +43,11 @@ pub fn run(mut cli_args: Arguments) -> rootcause::Result<RslOutput> {
 
     let reports = crate::cmds::rsl::engine::process_paths(&opts.paths, &opts.rules, opts.mode)?;
 
-    Ok(RslOutput { reports })
+    if opts.verbose {
+        Ok(RslOutput { reports })
+    } else {
+        Ok(RslOutput::default())
+    }
 }
 
 #[derive(Clone, Copy, Default)]
@@ -71,6 +75,7 @@ struct RslOpts {
     paths: Vec<PathBuf>,
     rules: SelectedRules,
     mode: Mode,
+    verbose: bool,
 }
 
 impl TryFrom<Vec<OsString>> for RslOpts {
@@ -93,6 +98,7 @@ impl TryFrom<Vec<OsString>> for RslOpts {
 
         let mut cli_args = Arguments::from_vec(before_separator);
         let mode = cli_args.opt_value_from_str("--mode")?.unwrap_or_default();
+        let verbose = cli_args.contains("--verbose");
         let mut rule_ids = Vec::new();
 
         while let Some(rule_list) = cli_args.opt_value_from_str::<_, String>("--rules")? {
@@ -115,6 +121,7 @@ impl TryFrom<Vec<OsString>> for RslOpts {
             paths: paths.into_iter().map(PathBuf::from).collect(),
             rules,
             mode,
+            verbose,
         })
     }
 }

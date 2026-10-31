@@ -84,7 +84,7 @@ mod tests {
         let original = fs::read(&path).unwrap();
 
         let output = Command::new(env!("CARGO_BIN_EXE_frs"))
-            .args(["rsl", "--mode", "report", "--rules", rule])
+            .args(["rsl", "--mode", "report", "--verbose", "--rules", rule])
             .arg(&path)
             .output()
             .unwrap();
@@ -132,7 +132,9 @@ mod tests {
         fs::write(&path, original).unwrap();
 
         let mut command = Command::new(env!("CARGO_BIN_EXE_frs"));
-        command.args(["rsl", "--rules", "path-anchoring"]).arg(&path);
+        command
+            .args(["rsl", "--verbose", "--rules", "path-anchoring"])
+            .arg(&path);
 
         let report = command.args(["--mode", "report"]).output().unwrap();
 
@@ -239,7 +241,7 @@ mod tests {
         let modified = fs::metadata(&path).unwrap().modified().unwrap();
 
         let output = Command::new(env!("CARGO_BIN_EXE_frs"))
-            .args(["rsl", "--mode", "report", "--rules", "item-qualification"])
+            .args(["rsl", "--mode", "report", "--verbose", "--rules", "item-qualification"])
             .arg(&path)
             .output()
             .unwrap();
@@ -259,8 +261,58 @@ mod tests {
     }
 
     #[rstest::rstest]
-    #[case::default(&[])]
-    #[case::explicit(&["--mode", "write"])]
+    #[case::default(&[], true)]
+    #[case::write(&["--mode", "write"], true)]
+    #[case::report(&["--mode", "report"], false)]
+    fn test_rsl_when_not_verbose_suppresses_findings_without_changing_the_mode(
+        #[case] options: &[&str],
+        #[case] writes: bool,
+    ) {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("input.rs");
+        let original = "fn run(_: std::path::PathBuf) { let _ = super::read(); }\n";
+        fs::write(&path, original).unwrap();
+
+        let output = Command::new(env!("CARGO_BIN_EXE_frs"))
+            .arg("rsl")
+            .args(options)
+            .arg(&path)
+            .output()
+            .unwrap();
+
+        assert!(output.status.success(), "{output:?}");
+        assert_eq!(output.stdout, Vec::<u8>::new());
+        assert_eq!(output.stderr, Vec::<u8>::new());
+        let expected = if writes {
+            "use std::path::PathBuf;\nfn run(_: PathBuf) { let _ = super::read(); }\n"
+        } else {
+            original
+        };
+        assert_eq!(fs::read_to_string(&path).unwrap(), expected);
+    }
+
+    #[test]
+    fn test_rsl_when_not_verbose_still_reports_parse_errors() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("input.rs");
+        let original = "fn broken(\n";
+        fs::write(&path, original).unwrap();
+
+        let output = Command::new(env!("CARGO_BIN_EXE_frs"))
+            .arg("rsl")
+            .arg(&path)
+            .output()
+            .unwrap();
+
+        assert!(!output.status.success(), "{output:?}");
+        assert_eq!(output.stdout, Vec::<u8>::new());
+        assert!(!output.stderr.is_empty(), "{output:?}");
+        assert_eq!(fs::read_to_string(&path).unwrap(), original);
+    }
+
+    #[rstest::rstest]
+    #[case::default(&["--verbose"])]
+    #[case::explicit(&["--mode", "write", "--verbose"])]
     fn test_rsl_when_writing_reports_only_findings_at_final_locations(#[case] options: &[&str]) {
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("input.rs");
@@ -294,7 +346,7 @@ mod tests {
         );
 
         let report = Command::new(env!("CARGO_BIN_EXE_frs"))
-            .args(["rsl", "--mode", "report"])
+            .args(["rsl", "--mode", "report", "--verbose"])
             .arg(&path)
             .output()
             .unwrap();
@@ -438,7 +490,7 @@ mod tests {
         fs::write(&path, source).unwrap();
 
         let output = Command::new(env!("CARGO_BIN_EXE_frs"))
-            .args(["rsl", "--mode", "report", "--rules", rule])
+            .args(["rsl", "--mode", "report", "--verbose", "--rules", rule])
             .arg(&path)
             .output()
             .unwrap();
@@ -464,6 +516,7 @@ mod tests {
                 "rsl",
                 "--mode",
                 "report",
+                "--verbose",
                 "--rules",
                 "import-aliasing,call-qualification",
             ])
