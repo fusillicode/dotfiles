@@ -5,6 +5,10 @@ Usage:
   agg sessions list --json --session <agent>:<session-id>...
 
 Without --json, open an interactive picker to resume or delete sessions.
+Complete session JSON files are loaded once when the picker opens, without a text cap.
+Search is case-insensitive and literal, including tool output and unknown fields.
+Summaries are display-only; only file contents are matched.
+JSON escapes remain literal in searches.
 
 Options:
   --json                 Print selected sessions as JSON instead of opening the picker.

@@ -15,12 +15,18 @@ use skim::prelude::SkimItemReaderOption;
 const PREVIEW_SEPARATOR_WIDTH: usize = 1;
 
 #[derive(Debug)]
+pub enum SearchCorpus {
+    VisiblePrefix(String),
+    RawFiles(Arc<[String]>),
+}
+
+#[derive(Debug)]
 pub struct IndexedSkimItem {
     pub output: String,
     pub display_item: Arc<dyn SkimItem>,
     pub visible_text: String,
     pub preview_text: Option<String>,
-    pub search_corpus: String,
+    pub search_corpus: SearchCorpus,
 }
 
 impl SkimItem for IndexedSkimItem {
@@ -186,7 +192,7 @@ mod tests {
             display_item,
             visible_text: "visible value next".to_owned(),
             preview_text: Some("\u{1b}[1mformatted preview\u{1b}[0m".to_owned()),
-            search_corpus: match_text,
+            search_corpus: SearchCorpus::VisiblePrefix(match_text),
         };
 
         assert_that!(item.output(), eq("3"));
@@ -223,7 +229,7 @@ mod tests {
             display_item: Arc::new("visible".to_owned()),
             visible_text: "visible".to_owned(),
             preview_text: Some("\u{1b}[31mabcdefghijklmnopq\u{1b}[0m".to_owned()),
-            search_corpus: "visible".to_owned(),
+            search_corpus: SearchCorpus::VisiblePrefix("visible".to_owned()),
         };
 
         assert_that!(

@@ -1,12 +1,14 @@
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
+use std::fs;
 #[cfg(unix)]
 use std::os::unix::process::CommandExt;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
 use std::process::Stdio;
+use std::sync::Arc;
 
 use jiff::Timestamp;
 use owo_colors::OwoColorize;
@@ -33,16 +35,18 @@ pub fn run(home_dir: &Path) -> rootcause::Result<()> {
     }
 
     let renderable_sessions = RenderableSession::from_sessions(sessions, home_dir);
-    let Some(selected) = ytil_tui::minimal_multi_select_with_preview(
-        renderable_sessions,
-        ToString::to_string,
-        RenderableSession::preview,
-        |session| session.session.search_text.clone(),
+    let searchable_sessions = SearchableSession::preload(renderable_sessions)?;
+    let Some(selected) = ytil_tui::minimal_multi_select_with_raw_search(
+        searchable_sessions,
+        |entry| entry.renderable.to_string(),
+        |entry| entry.renderable.preview(),
+        |entry| Arc::clone(&entry.contents),
     )?
     else {
         println!("No sessions selected");
         return Ok(());
     };
+    let selected: Vec<_> = selected.into_iter().map(|entry| entry.renderable).collect();
 
     let Some(op) = ytil_tui::minimal_select::<Op>(Op::iter().collect())? else {
         println!("No action selected");
@@ -76,6 +80,7 @@ pub fn run_json(args: &[String], home_dir: &Path) -> rootcause::Result<()> {
     Ok(())
 }
 
+#[cfg_attr(test, derive(Debug, Eq, PartialEq))]
 pub(super) struct RenderableSession {
     pub(super) session: Session,
     branch: Option<String>,
@@ -211,6 +216,44 @@ impl Display for RenderableSession {
                 created_label.blue()
             )
         }
+    }
+}
+
+#[cfg_attr(test, derive(Debug, Eq, PartialEq))]
+struct SearchableSession {
+    renderable: RenderableSession,
+    contents: Arc<[String]>,
+}
+
+impl SearchableSession {
+    fn preload(sessions: Vec<RenderableSession>) -> rootcause::Result<Vec<Self>> {
+        sessions
+            .into_iter()
+            .map(|renderable| {
+                let path = &renderable.session.path;
+                let paths = if renderable.session.agent == Agent::Cursor {
+                    [path.join("meta.json"), path.join("prompt_history.json")]
+                        .into_iter()
+                        .filter(|path| path.is_file())
+                        .collect()
+                } else {
+                    vec![path.clone()]
+                };
+                let contents = paths
+                    .into_iter()
+                    .map(|path| -> rootcause::Result<String> {
+                        Ok(fs::read_to_string(&path)
+                            .context("failed to preload session file for search")
+                            .attach_with(|| format!("path={}", path.display()))?)
+                    })
+                    .collect::<rootcause::Result<Vec<_>>>()?;
+
+                Ok(Self {
+                    renderable,
+                    contents: contents.into(),
+                })
+            })
+            .collect()
     }
 }
 
@@ -377,6 +420,90 @@ mod tests {
     use test_that::prelude::*;
 
     use super::*;
+
+    #[test]
+    fn test_preload_when_file_has_unindexed_fields_preserves_complete_raw_snapshot() {
+        let dir = tempdir().expect("tempdir should be created");
+        let path = dir.path().join("session.jsonl");
+        let raw = format!(
+            r#"{{"unknown_tool_output":"{}late-token  café\n"}}"#,
+            "x".repeat(300_000)
+        );
+        fs::write(&path, &raw).expect("raw file should be written");
+        let session = preload_fixture(Agent::Codex, path.clone(), dir.path());
+
+        let actual = SearchableSession::preload(vec![session]).expect("complete file should preload");
+        fs::write(&path, "changed after preload").expect("source file should change");
+
+        assert_eq!(
+            actual,
+            vec![SearchableSession {
+                renderable: preload_fixture(Agent::Codex, path, dir.path()),
+                contents: vec![raw].into(),
+            }]
+        );
+    }
+
+    #[rstest::rstest]
+    #[case(false)]
+    #[case(true)]
+    fn test_preload_when_cursor_uses_sidecar_files_keeps_available_files_separate(#[case] has_history: bool) {
+        let dir = tempdir().expect("tempdir should be created");
+        let path = dir.path().join("cursor-session");
+        fs::create_dir(&path).expect("session directory should be created");
+        let metadata = r#"{"unknown":"metadata token"}"#.to_owned();
+        let history = r#"["history token"]"#.to_owned();
+        fs::write(path.join("meta.json"), &metadata).expect("metadata should be written");
+        let mut contents = vec![metadata];
+        if has_history {
+            fs::write(path.join("prompt_history.json"), &history).expect("history should be written");
+            contents.push(history);
+        }
+        let session = preload_fixture(Agent::Cursor, path.clone(), dir.path());
+
+        let actual = SearchableSession::preload(vec![session]).expect("sidecars should preload");
+
+        assert_eq!(
+            actual,
+            vec![SearchableSession {
+                renderable: preload_fixture(Agent::Cursor, path, dir.path()),
+                contents: contents.into(),
+            }]
+        );
+    }
+
+    #[rstest::rstest]
+    #[case::missing(None)]
+    #[case::invalid_utf8(Some(b"\xff".as_slice()))]
+    fn test_preload_when_file_cannot_be_loaded_returns_path_diagnostic(#[case] bytes: Option<&[u8]>) {
+        let dir = tempdir().expect("tempdir should be created");
+        let path = dir.path().join("unreadable-session.jsonl");
+        if let Some(bytes) = bytes {
+            fs::write(&path, bytes).expect("invalid text file should be written");
+        }
+        let session = preload_fixture(Agent::Codex, path, dir.path());
+
+        let error = SearchableSession::preload(vec![session]).expect_err("loading errors must propagate");
+
+        assert_eq!(
+            error.format_current_context().to_string(),
+            "failed to preload session file for search"
+        );
+        assert!(format!("{error:?}").contains("unreadable-session.jsonl"));
+    }
+
+    fn preload_fixture(agent: Agent, path: PathBuf, home: &Path) -> RenderableSession {
+        let session = Session::new(
+            agent,
+            "session-id".to_owned(),
+            home.join("workspace"),
+            path,
+            Some("summary-only".to_owned()),
+            Timestamp::from_second(1).expect("valid timestamp"),
+        );
+
+        RenderableSession::for_test(session, home.to_path_buf())
+    }
 
     #[test]
     fn test_search_corpus_matches_agg_visible_plus_hidden_filtering() {
