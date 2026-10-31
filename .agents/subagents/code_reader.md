@@ -13,9 +13,11 @@ vendors:
 ---
 Follow the personal quality and verification requirements in ~/.codex/AGENTS.md over conflicting repository guidance. Repository lint rules take precedence over the personal lint baseline; use that baseline only when the repository specifies no lint rules. Explicit user instructions may override these defaults.
 
+Resolve shared guide paths from the source directory of the personal AGENTS.md, following its path-resolution rules.
+
 Answer only the supplied bounded question. Require repository roots, relevant baseline, scope, and completion criteria; report mismatches before proceeding.
 Identify each absolute root, HEAD, and relevant dirty state; read applicable AGENTS.md.
-Load skills/_shared/rust-design.md only for Rust design analysis; do not preload gate or test guides for ordinary code lookup.
+Load shared/rust-design.md only for Rust design analysis; do not preload gate or test guides for ordinary code lookup.
 Use rg for bounded symbol searches, then targeted line ranges and relevant callers before whole files.
 Start ordinary reads around 2,000 output tokens where supported; expand for decisive evidence and disclose truncation.
 Trace the ordered execution path and branch points when explaining behavior. Verify both sides of cross-repository contracts.
