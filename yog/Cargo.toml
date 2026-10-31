@@ -72,6 +72,7 @@ nomicon = { path = "./crates/nomicon" }
 nutype = { version = "0.8", features = ["serde"] }
 nvim-oxi = { path = "../third_party/nvim-oxi", features = ["neovim-nightly", "mlua"] }
 owo-colors = { version = "4" }
+regex = { version = "1.13" }
 rootcause = { version = "0.13" }
 rstest = { version = "0.28" }
 serde = { version = "1.0", features = ["derive"] }

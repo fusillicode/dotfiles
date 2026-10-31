@@ -5,6 +5,7 @@ use std::io::Cursor;
 use std::rc::Rc;
 use std::sync::Arc;
 
+use regex::escape;
 use rootcause::report;
 use skim::CaseMatching;
 use skim::MatchEngine;
@@ -17,12 +18,14 @@ use skim::SkimItemReceiver;
 use skim::SkimOutput;
 use skim::options::SkimOptions;
 use skim::prelude;
+use skim::prelude::Action;
 use skim::prelude::SkimItemReader;
 use skim::prelude::SkimItemReaderOption;
 use tokio::task;
 
 use crate::preview;
 use crate::preview::IndexedSkimItem;
+use crate::preview::SearchCorpus;
 
 /// Provides a minimal interactive multi-select prompt.
 ///
@@ -40,7 +43,13 @@ where
     D: FnMut(&T) -> String,
     S: FnMut(&T) -> String,
 {
-    minimal_multi_select_internal(items, display_text, |_| None, false, search_text)
+    minimal_multi_select_internal(
+        items,
+        display_text,
+        |_| None,
+        false,
+        SelectionSearch::<_, fn(&T) -> Arc<[String]>>::Text(search_text),
+    )
 }
 
 /// Provides an interactive multi-select prompt with a preview for each item.
@@ -61,7 +70,41 @@ where
     P: FnMut(&T) -> String,
     S: FnMut(&T) -> String,
 {
-    minimal_multi_select_internal(items, display_text, |item| Some(preview_text(item)), true, search_text)
+    minimal_multi_select_internal(
+        items,
+        display_text,
+        |item| Some(preview_text(item)),
+        true,
+        SelectionSearch::<_, fn(&T) -> Arc<[String]>>::Text(search_text),
+    )
+}
+
+/// Provides a preview picker that searches complete preloaded file contents.
+///
+/// Matching uses case-insensitive literal substrings of `search_files` only.
+/// File texts are neither normalized nor truncated. Visible labels are display-only.
+/// Shared file contents avoid copying the corpus when creating picker rows.
+///
+/// # Errors
+/// Returns an error if Skim cannot initialize or run.
+pub fn minimal_multi_select_with_raw_search<T, D, P, S>(
+    items: Vec<T>,
+    display_text: D,
+    mut preview_text: P,
+    search_files: S,
+) -> rootcause::Result<Option<Vec<T>>>
+where
+    D: FnMut(&T) -> String,
+    P: FnMut(&T) -> String,
+    S: FnMut(&T) -> Arc<[String]>,
+{
+    minimal_multi_select_internal(
+        items,
+        display_text,
+        |item| Some(preview_text(item)),
+        true,
+        SelectionSearch::<fn(&T) -> String, _>::Raw(search_files),
+    )
 }
 
 /// Minimal interactive single-select returning [`Option::None`] if `items` is empty or the user cancels.
@@ -169,17 +212,18 @@ where
     )?))
 }
 
-fn minimal_multi_select_internal<T, D, P, S>(
+fn minimal_multi_select_internal<T, D, P, S, R>(
     items: Vec<T>,
     mut display_text: D,
     mut preview_text: P,
     has_preview: bool,
-    mut search_text: S,
+    mut search: SelectionSearch<S, R>,
 ) -> rootcause::Result<Option<Vec<T>>>
 where
     D: FnMut(&T) -> String,
     P: FnMut(&T) -> Option<String>,
     S: FnMut(&T) -> String,
+    R: FnMut(&T) -> Arc<[String]>,
 {
     if items.is_empty() {
         return Ok(None);
@@ -194,11 +238,17 @@ where
         .map(|(index, item)| {
             let display_item = Arc::clone(display_items.get(index)?);
             let visible_match_text = display_item.text().into_owned();
-            let hidden_search = normalize(&search_text(item));
-            let search_corpus = if hidden_search.is_empty() || hidden_search == visible_match_text {
-                visible_match_text.clone()
-            } else {
-                format!("{visible_match_text} {hidden_search}")
+            let search_corpus = match &mut search {
+                SelectionSearch::Text(search_text) => {
+                    let hidden_search = normalize(&search_text(item));
+                    let text = if hidden_search.is_empty() || hidden_search == visible_match_text {
+                        visible_match_text.clone()
+                    } else {
+                        format!("{visible_match_text} {hidden_search}")
+                    };
+                    SearchCorpus::VisiblePrefix(text)
+                }
+                SelectionSearch::Raw(search_files) => SearchCorpus::RawFiles(search_files(item)),
             };
 
             Some(Arc::new(IndexedSkimItem {
@@ -218,8 +268,12 @@ where
         .map_err(|e| report!("failed to queue skim items").attach(e.to_string()))?;
     drop(tx_items);
 
-    let options = select_options(true, has_preview);
-    let output = run_skim_with_matcher(options, rx_items)?;
+    let mut options = select_options(true, has_preview);
+    let engine_factory: Rc<dyn MatchEngineFactory> = match search {
+        SelectionSearch::Text(_) => skim::matcher::Matcher::create_engine_factory_with_builder(&options).0,
+        SelectionSearch::Raw(_) => Rc::new(LiteralSearchEngineFactory::new(&mut options)),
+    };
+    let output = run_skim_with_matcher(options, rx_items, engine_factory)?;
 
     if output.is_abort || output.selected_items.is_empty() {
         return Ok(None);
@@ -243,6 +297,37 @@ where
         Ok(None)
     } else {
         Ok(Some(selected))
+    }
+}
+
+enum SelectionSearch<S, R> {
+    Text(S),
+    Raw(R),
+}
+
+struct LiteralSearchEngineFactory {
+    inner: Rc<dyn MatchEngineFactory>,
+}
+
+impl LiteralSearchEngineFactory {
+    fn new(options: &mut SkimOptions) -> Self {
+        // This bypasses Skim's extended query operators. Escaping happens when
+        // creating each query engine, preserving literal spaces and punctuation.
+        options.regex = true;
+        options.case = CaseMatching::Ignore;
+        // Rotating modes rebuilds Skim's matcher and would discard raw-file filtering.
+        for actions in options.keymap.values_mut() {
+            actions.retain(|action| !matches!(action, Action::RotateMode));
+        }
+        let (inner, _) = skim::matcher::Matcher::create_engine_factory_with_builder(options);
+
+        Self { inner }
+    }
+}
+
+impl MatchEngineFactory for LiteralSearchEngineFactory {
+    fn create_engine_with_case(&self, query: &str, _case: CaseMatching) -> Box<dyn MatchEngine> {
+        self.inner.create_engine_with_case(&escape(query), CaseMatching::Ignore)
     }
 }
 
@@ -280,8 +365,17 @@ impl MatchEngine for SearchCorpusEngine {
             return self.inner.match_item(item);
         };
 
-        let mut result = self.inner.match_item(&item.search_corpus)?;
-        result.matched_range = clip_match_range(result.matched_range, item);
+        let mut result = match &item.search_corpus {
+            SearchCorpus::VisiblePrefix(text) => {
+                let mut result = self.inner.match_item(text)?;
+                result.matched_range = clip_match_range(result.matched_range, item);
+                return Some(result);
+            }
+            SearchCorpus::RawFiles(files) if files.is_empty() => self.inner.match_item(&String::new())?,
+            SearchCorpus::RawFiles(files) => files.iter().find_map(|text| self.inner.match_item(text))?,
+        };
+        // Raw-file offsets do not refer to characters in the visible summary.
+        result.matched_range = MatchRange::Chars(Vec::new());
         Some(result)
     }
 }
@@ -311,8 +405,12 @@ fn clip_match_range(match_range: MatchRange, item: &preview::IndexedSkimItem) ->
     }
 }
 
-fn run_skim_with_matcher(options: SkimOptions, source: SkimItemReceiver) -> rootcause::Result<SkimOutput> {
-    let (engine_factory, rank_builder) = skim::matcher::Matcher::create_engine_factory_with_builder(&options);
+fn run_skim_with_matcher(
+    options: SkimOptions,
+    source: SkimItemReceiver,
+    engine_factory: Rc<dyn MatchEngineFactory>,
+) -> rootcause::Result<SkimOutput> {
+    let (_, rank_builder) = skim::matcher::Matcher::create_engine_factory_with_builder(&options);
     let matcher = skim::matcher::Matcher::builder(Rc::new(SearchCorpusEngineFactory::new(engine_factory)))
         .case(options.case)
         .rank_builder(rank_builder)
@@ -419,6 +517,130 @@ mod tests {
     use skim::prelude::Action;
     use test_that::prelude::*;
 
+    use super::*;
+
+    #[test]
+    fn test_raw_search_options_when_configured_preserve_matcher_without_changing_legacy_modes() {
+        let mut raw_options = select_options(true, true);
+        let legacy_options = select_options(true, true);
+
+        let _factory = LiteralSearchEngineFactory::new(&mut raw_options);
+
+        let raw_rotates = raw_options
+            .keymap
+            .values()
+            .flatten()
+            .any(|action| matches!(action, Action::RotateMode));
+        let legacy_rotates = legacy_options
+            .keymap
+            .values()
+            .flatten()
+            .any(|action| matches!(action, Action::RotateMode));
+        assert_eq!((raw_rotates, legacy_rotates), (false, true));
+    }
+
+    #[rstest::rstest]
+    #[case("late-token", true)]
+    #[case("needle.[*]", true)]
+    #[case("needle.any", false)]
+    #[case("!literal", true)]
+    #[case("!absent", false)]
+    #[case("^caret", true)]
+    #[case("^absent", false)]
+    #[case("dollar$", true)]
+    #[case("'quote", true)]
+    #[case("a  b", true)]
+    #[case("a b", false)]
+    #[case(r"\n", true)]
+    #[case("\n", false)]
+    #[case("café", true)]
+    #[case("display-only", false)]
+    #[case("preview-only", false)]
+    #[case("", true)]
+    fn test_raw_file_matching_when_query_has_literal_text_matches_only_raw_contents(
+        #[case] query: &str,
+        #[case] expected: bool,
+    ) {
+        let text = format!(
+            r#"{{"tool_output":"Needle.[*] !literal ^caret dollar$ 'quote a  b CAFÉ \n {}late-token"}}"#,
+            "x".repeat(300_000),
+        );
+        let item = raw_item(vec![text]);
+        let engine = raw_engine(query);
+
+        let actual = engine.match_item(&item);
+
+        assert_eq!(actual.is_some(), expected);
+        if let Some(result) = actual {
+            // Skim owns ranking; raw offsets must never highlight summary characters.
+            assert!(matches!(result.matched_range, MatchRange::Chars(indices) if indices.is_empty()));
+        }
+    }
+
+    #[rstest::rstest]
+    #[case("beta", true)]
+    #[case("alpha\nbeta", false)]
+    #[case("alphabeta", false)]
+    fn test_raw_file_matching_when_session_has_multiple_files_preserves_file_boundaries(
+        #[case] query: &str,
+        #[case] expected: bool,
+    ) {
+        let item = raw_item(vec!["alpha".to_owned(), "beta".to_owned()]);
+        let engine = raw_engine(query);
+
+        let actual = engine.match_item(&item);
+
+        assert_eq!(actual.is_some(), expected);
+    }
+
+    #[rstest::rstest]
+    #[case("", true)]
+    #[case("display-only", false)]
+    fn test_raw_file_matching_when_corpus_is_empty_uses_only_query_text(#[case] query: &str, #[case] expected: bool) {
+        let item = raw_item(Vec::new());
+        let engine = raw_engine(query);
+
+        let actual = engine.match_item(&item);
+
+        assert_eq!(actual.is_some(), expected);
+    }
+
+    fn raw_engine(query: &str) -> Box<dyn MatchEngine> {
+        let factory = LiteralSearchEngineFactory::new(&mut base_skim_options());
+        let factory = SearchCorpusEngineFactory::new(Rc::new(factory));
+
+        factory.create_engine_with_case(query, CaseMatching::Respect)
+    }
+
+    fn raw_item(files: Vec<String>) -> IndexedSkimItem {
+        IndexedSkimItem {
+            output: "0".to_owned(),
+            display_item: Arc::new("display-only".to_owned()),
+            visible_text: "display-only".to_owned(),
+            preview_text: Some("preview-only".to_owned()),
+            search_corpus: SearchCorpus::RawFiles(files.into()),
+        }
+    }
+
+    #[rstest::rstest]
+    #[case("display-only", true)]
+    #[case("hidden", true)]
+    #[case("preview-only", false)]
+    fn test_legacy_matching_when_visible_prefix_is_used_preserves_visible_and_hidden_search(
+        #[case] query: &str,
+        #[case] expected: bool,
+    ) {
+        let mut item = raw_item(Vec::new());
+        item.search_corpus = SearchCorpus::VisiblePrefix("display-only hidden".to_owned());
+        let (factory, _) = skim::matcher::Matcher::create_engine_factory_with_builder(&base_skim_options());
+        let factory = SearchCorpusEngineFactory::new(factory);
+        let engine = factory.create_engine_with_case(query, CaseMatching::Ignore);
+
+        let actual = engine.match_item(&item);
+
+        assert_eq!(actual.is_some(), expected);
+    }
+
     #[test]
     fn test_require_single_returns_only_item() {
         let selected = vec![1];
@@ -458,7 +680,7 @@ mod tests {
             display_item: Arc::new("visible value next".to_owned()),
             visible_text: "visible value next".to_owned(),
             preview_text: None,
-            search_corpus: "visible value next hidden value".to_owned(),
+            search_corpus: super::SearchCorpus::VisiblePrefix("visible value next hidden value".to_owned()),
         };
 
         assert_that!(
