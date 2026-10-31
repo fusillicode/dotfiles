@@ -2351,7 +2351,12 @@ fn tracked_cat_runtime_fixture() -> rootcause::Result<TrackedCatRuntimeFixture> 
         &config,
         &SessionStartSeed {
             layout: layout.clone(),
-            startup_cmds: vec![(pane_id, ShellCmd::with_args("/bin/cat", Vec::<String>::new())?)],
+            // Wait for cat below so echo is disabled before any fixture input is sent. Otherwise the PTY echo
+            // can satisfy a snapshot wait before cat's duplicate output scrolls that status out of view.
+            startup_cmds: vec![(
+                pane_id,
+                ShellCmd::with_args("/bin/sh", ["-c", "stty -echo && exec /bin/cat"])?,
+            )],
         },
         &terminal_size,
         Arc::new(tokio::sync::Notify::new()),
