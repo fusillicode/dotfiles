@@ -1,10 +1,10 @@
-//! Shared code for symlinks, generated files, vendor default locations, and sync outcomes.
+//! Shared code for symlinks, generated files, agent default locations, and sync outcomes.
 //!
 //! Matching symlinks need no changes. Warn and continue for conflicting symlinks,
 //! files, or dirs.
 //!
 //! Identical generated files need no changes. Overwrite different generated regular
-//! files. Create missing dirs needed by the supplied vendors.
+//! files. Create missing dirs needed by the supplied agents.
 
 use std::fs;
 use std::fs::Metadata;
@@ -16,7 +16,7 @@ use std::path::PathBuf;
 use rootcause::Report;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
-use ytil_agents::agent::Agent as Vendor;
+use ytil_agents::agent::Agent;
 
 #[derive(Debug)]
 pub(super) enum SyncOutcome {
@@ -39,8 +39,8 @@ pub(super) enum SyncOutcome {
     },
 }
 
-pub(super) fn vendor_config_dir(home: &Path, vendor: Vendor) -> PathBuf {
-    home.join(vendor.root_path().iter().collect::<PathBuf>())
+pub(super) fn agent_config_dir(home: &Path, agent: Agent) -> PathBuf {
+    home.join(agent.root_path().iter().collect::<PathBuf>())
 }
 
 /// Create or reuse a real dir; return an outcome when linking must stop here.

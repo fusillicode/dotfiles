@@ -1,4 +1,4 @@
-//! Select explicit inputs or unstaged Rust files from the enclosing Git worktree.
+//! Select explicit inputs or uncommitted Rust files from the enclosing Git worktree.
 
 use std::fs;
 use std::io::ErrorKind;
@@ -13,23 +13,23 @@ use rootcause::report;
 
 pub(super) enum InputFiles {
     Explicit(Vec<PathBuf>),
-    Unstaged,
+    Git,
 }
 
 impl InputFiles {
     pub(super) fn resolve(self) -> rootcause::Result<Vec<PathBuf>> {
         match self {
             Self::Explicit(paths) => Ok(paths),
-            Self::Unstaged => unstaged_paths(),
+            Self::Git => git_paths(),
         }
     }
 }
 
-fn unstaged_paths() -> rootcause::Result<Vec<PathBuf>> {
-    let repository = Repository::discover(".").context("could not discover Git repository for --unstaged")?;
+fn git_paths() -> rootcause::Result<Vec<PathBuf>> {
+    let repository = Repository::discover(".").context("could not discover Git repository")?;
     let root = repository
         .workdir()
-        .ok_or_else(|| report!("--unstaged requires a Git working tree"))?;
+        .ok_or_else(|| report!("Git selection requires a working tree"))?;
     let mut options = StatusOptions::new();
     options
         .include_untracked(true)
@@ -38,18 +38,17 @@ fn unstaged_paths() -> rootcause::Result<Vec<PathBuf>> {
         .update_index(false);
     let statuses = repository
         .statuses(Some(&mut options))
-        .context("could not read Git status for --unstaged")?;
+        .context("could not read Git status")?;
     let mut paths = Vec::new();
 
     for entry in &statuses {
         let status = entry.status();
-        if status.contains(Status::CONFLICTED)
-            || !status.intersects(Status::WT_NEW | Status::WT_MODIFIED | Status::WT_RENAMED | Status::WT_TYPECHANGE)
-        {
+        if status.contains(Status::CONFLICTED) {
             continue;
         }
 
-        let Some(delta) = entry.index_to_workdir() else {
+        // Prefer the working-tree destination after renames; staged-only changes have no working-tree delta.
+        let Some(delta) = entry.index_to_workdir().or_else(|| entry.head_to_index()) else {
             continue;
         };
         let file = delta.new_file();
@@ -75,7 +74,7 @@ fn is_regular_file(path: &Path) -> rootcause::Result<bool> {
     match fs::symlink_metadata(path) {
         Ok(metadata) => Ok(metadata.file_type().is_file()),
         Err(error) if error.kind() == ErrorKind::NotFound => Ok(false),
-        Err(error) => Err(report!("could not inspect unstaged Rust file")
+        Err(error) => Err(report!("could not inspect Git-selected Rust file")
             .attach(format!("path={}", path.display()))
             .attach(error)),
     }

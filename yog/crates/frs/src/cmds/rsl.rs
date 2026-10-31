@@ -105,7 +105,6 @@ impl TryFrom<Vec<OsString>> for RslOpts {
         let mut cli_args = Arguments::from_vec(before_separator);
         let mode = cli_args.opt_value_from_str("--mode")?.unwrap_or_default();
         let verbose = cli_args.contains("--verbose");
-        let unstaged = cli_args.contains("--unstaged");
         let mut rule_ids = Vec::new();
 
         while let Some(rule_list) = cli_args.opt_value_from_str::<_, String>("--rules")? {
@@ -120,11 +119,10 @@ impl TryFrom<Vec<OsString>> for RslOpts {
         }
         paths.extend(after_separator);
 
-        let files = match (unstaged, paths.is_empty()) {
-            (true, true) => InputFiles::Unstaged,
-            (false, false) => InputFiles::Explicit(paths.into_iter().map(Into::into).collect()),
-            (true, false) => return Err(report!("--unstaged cannot be combined with file paths")),
-            (false, true) => return Err(report!("expected one or more Rust source files or --unstaged")),
+        let files = if paths.is_empty() {
+            InputFiles::Git
+        } else {
+            InputFiles::Explicit(paths.into_iter().map(Into::into).collect())
         };
 
         Ok(Self {

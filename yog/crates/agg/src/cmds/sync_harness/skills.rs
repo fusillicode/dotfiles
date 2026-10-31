@@ -1,14 +1,14 @@
-//! Link skills from `<src_dir>/skills/` one by one to vendor default locations.
+//! Link skills from `<src_dir>/skills/` one by one to agent default locations.
 //!
 //! Include shared dirs such as `_shared`; skip files stored beside the skill dirs.
 //!
-//! Link each skill to `<vendor-config-dir>/skills/<skill-name>`.
+//! Link each skill to `<agent-config-dir>/skills/<skill-name>`.
 //! For Codex, this is `~/.codex/skills/<skill-name>`.
 //!
-//! Link into existing vendor skills dirs. Keep matching symlinks. Warn and continue
+//! Link into existing agent skills dirs. Keep matching symlinks. Warn and continue
 //! for conflicting symlinks, files, or dirs.
 //!
-//! A symlink from the vendor skills dir to the source skills dir is already linked
+//! A symlink from the agent skills dir to the source skills dir is already linked
 //! and needs no changes.
 
 use std::fs;
@@ -18,7 +18,7 @@ use std::path::PathBuf;
 
 use rootcause::prelude::ResultExt;
 use rootcause::report;
-use ytil_agents::agent::Agent as Vendor;
+use ytil_agents::agent::Agent;
 
 use crate::cmds::sync_harness::common;
 use crate::cmds::sync_harness::common::SyncOutcome;
@@ -38,12 +38,12 @@ impl SrcSkills {
         })
     }
 
-    pub(super) fn link_for_vendor(&self, vendor: Vendor, home: &Path) -> Vec<rootcause::Result<SyncOutcome>> {
+    pub(super) fn link_for_agent(&self, agent: Agent, home: &Path) -> Vec<rootcause::Result<SyncOutcome>> {
         if self.skill_dirs.is_empty() {
             return Vec::new();
         }
 
-        let destination_dir = common::vendor_config_dir(home, vendor).join("skills");
+        let destination_dir = common::agent_config_dir(home, agent).join("skills");
         match common::prepare_dir(&destination_dir, "skills", Some(&self.src_dir)) {
             Ok(None) => {}
             Ok(Some(outcome)) => return vec![Ok(outcome)],

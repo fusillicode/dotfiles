@@ -492,19 +492,6 @@ mod tests {
         assert!(format!("{error:?}").contains("unreadable-session.jsonl"));
     }
 
-    fn preload_fixture(agent: Agent, path: PathBuf, home: &Path) -> RenderableSession {
-        let session = Session::new(
-            agent,
-            "session-id".to_owned(),
-            home.join("workspace"),
-            path,
-            Some("summary-only".to_owned()),
-            Timestamp::from_second(1).expect("valid timestamp"),
-        );
-
-        RenderableSession::for_test(session, home.to_path_buf())
-    }
-
     #[test]
     fn test_search_corpus_matches_agg_visible_plus_hidden_filtering() {
         let display = "cx  ~/repo   branch   session name  09/05/2026-10:00";
@@ -600,6 +587,19 @@ mod tests {
                 SessionKey::new(Agent::Codex, "target").expect("test value should be valid")
             ]))
         );
+    }
+
+    fn preload_fixture(agent: Agent, path: PathBuf, home: &Path) -> RenderableSession {
+        let session = Session::new(
+            agent,
+            "session-id".to_owned(),
+            home.join("workspace"),
+            path,
+            Some("summary-only".to_owned()),
+            Timestamp::from_second(1).expect("valid timestamp"),
+        );
+
+        RenderableSession::for_test(session, home.to_path_buf())
     }
 
     fn assert_renderable_session_agg_listing(renderable: &RenderableSession) {

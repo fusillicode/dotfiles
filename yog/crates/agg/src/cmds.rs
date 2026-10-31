@@ -170,11 +170,11 @@ mod tests {
         Agent::Gemini,
         Agent::Opencode,
     ])]
-    fn test_sync_harness_when_vendors_are_supported_parses_arguments(
-        #[case] vendors: &str,
+    fn test_sync_harness_when_agents_are_supported_parses_arguments(
+        #[case] agents: &str,
         #[case] expected: Vec<Agent>,
     ) {
-        let args = ["sync-harness", "ai config", vendors];
+        let args = ["sync-harness", "ai config", agents];
 
         let actual = parse(&args);
 
@@ -182,19 +182,19 @@ mod tests {
             actual,
             ok(eq(Cmd::SyncHarness(sync_harness::Opts {
                 src_dir: std::path::PathBuf::from("ai config"),
-                vendors: expected,
+                agents: expected,
             })))
         );
     }
 
     #[rstest::rstest]
     #[case::missing_all(&["sync-harness"])]
-    #[case::missing_vendors(&["sync-harness", "config"])]
+    #[case::missing_agents(&["sync-harness", "config"])]
     #[case::extra_argument(&["sync-harness", "config", "codex", "claude"])]
     #[case::empty_source(&["sync-harness", "", "codex"])]
-    #[case::empty_vendors(&["sync-harness", "config", ""])]
-    #[case::unknown_vendor(&["sync-harness", "config", "codex,unknown"])]
-    #[case::empty_vendor(&["sync-harness", "config", "codex,,claude"])]
+    #[case::empty_agents(&["sync-harness", "config", ""])]
+    #[case::unknown_agent(&["sync-harness", "config", "codex,unknown"])]
+    #[case::empty_agent(&["sync-harness", "config", "codex,,claude"])]
     #[case::trailing_comma(&["sync-harness", "config", "codex,"])]
     fn test_sync_harness_when_arguments_are_invalid_rejects_command(#[case] args: &[&str]) {
         let actual = parse(args);

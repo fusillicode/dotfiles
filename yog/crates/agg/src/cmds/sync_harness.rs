@@ -1,7 +1,7 @@
-//! Sync `AGENTS.md`, skills, and subagents from the supplied `src_dir` to the supplied vendors.
+//! Sync `AGENTS.md`, skills, and subagents from the supplied `src_dir` to the supplied agents.
 //!
-//! Link `AGENTS.md` and skills to vendor default locations, with skills linked one
-//! by one. Generate vendor-specific subagent files from the generic subagent files.
+//! Link `AGENTS.md` and skills to agent default locations, with skills linked one
+//! by one. Generate agent-specific subagent files from the generic subagent files.
 //!
 //! Missing source files or dirs are skipped. An error in a subagent file prints a
 //! warning and does not stop the other subagent files.
@@ -15,7 +15,7 @@ use std::path::PathBuf;
 use rootcause::Report;
 use rootcause::prelude::ResultExt;
 use rootcause::report;
-use ytil_agents::agent::Agent as Vendor;
+use ytil_agents::agent::Agent;
 
 use crate::cmds::sync_harness::agents_md::AgentsMd;
 use crate::cmds::sync_harness::skills::SrcSkills;
@@ -30,16 +30,16 @@ mod subagents;
 #[derive(Debug, Eq, PartialEq)]
 pub struct Opts {
     pub src_dir: PathBuf,
-    pub vendors: Vec<Vendor>,
+    pub agents: Vec<Agent>,
 }
 
 impl TryFrom<Vec<OsString>> for Opts {
     type Error = Report;
 
     fn try_from(args: Vec<OsString>) -> Result<Self, Self::Error> {
-        let [src_dir, vendors] = args.as_slice() else {
+        let [src_dir, agents] = args.as_slice() else {
             return Err(report!(
-                "agg sync-harness requires a source dir and a comma-separated vendor list"
+                "agg sync-harness requires a source dir and a comma-separated agent list"
             ));
         };
 
@@ -47,16 +47,16 @@ impl TryFrom<Vec<OsString>> for Opts {
             return Err(report!("agg sync-harness requires a non-empty source dir"));
         }
 
-        let vendors = vendors
+        let agents = agents
             .to_str()
-            .ok_or_else(|| report!("agg sync-harness vendor list must be valid UTF-8"))?
+            .ok_or_else(|| report!("agg sync-harness agent list must be valid UTF-8"))?
             .split(',')
-            .map(Vendor::from_name)
+            .map(Agent::from_name)
             .collect::<Result<Vec<_>, _>>()?;
 
         Ok(Self {
             src_dir: PathBuf::from(src_dir),
-            vendors,
+            agents,
         })
     }
 }
@@ -75,18 +75,18 @@ pub fn run(options: &Opts, home: &Path, stdout: &mut impl Write, stderr: &mut im
     let agents_md = AgentsMd::read_from(&src_dir)?;
     let src_skills = SrcSkills::read_from(&src_dir.join("skills"))?;
 
-    for vendor in &options.vendors {
+    for agent in &options.agents {
         if let Some(agents_md) = &agents_md {
-            let outcome = agents_md.sync_for_vendor(*vendor, home)?;
+            let outcome = agents_md.sync_for_agent(*agent, home)?;
             output::write(&[outcome], stdout, stderr)?;
         }
 
-        for outcome in src_skills.link_for_vendor(*vendor, home) {
+        for outcome in src_skills.link_for_agent(*agent, home) {
             output::write(&[outcome?], stdout, stderr)?;
         }
     }
 
-    let outcomes = subagents::sync_subagents(&src_dir.join("subagents"), home, &options.vendors);
+    let outcomes = subagents::sync_subagents(&src_dir.join("subagents"), home, &options.agents);
     output::write(&outcomes, stdout, stderr)?;
 
     Ok(())
@@ -128,12 +128,12 @@ Keep this body delimiter.
 "#;
 
     #[rstest::rstest]
-    #[case::codex(Vendor::Codex, ".codex/AGENTS.md", ".codex/skills")]
-    #[case::claude(Vendor::Claude, ".claude/CLAUDE.md", ".claude/skills")]
-    #[case::gemini(Vendor::Gemini, ".gemini/GEMINI.md", ".gemini/skills")]
-    #[case::opencode(Vendor::Opencode, ".config/opencode/AGENTS.md", ".config/opencode/skills")]
-    fn test_run_when_vendor_is_selected_links_agents_md_and_skills_one_by_one(
-        #[case] vendor: Vendor,
+    #[case::codex(Agent::Codex, ".codex/AGENTS.md", ".codex/skills")]
+    #[case::claude(Agent::Claude, ".claude/CLAUDE.md", ".claude/skills")]
+    #[case::gemini(Agent::Gemini, ".gemini/GEMINI.md", ".gemini/skills")]
+    #[case::opencode(Agent::Opencode, ".config/opencode/AGENTS.md", ".config/opencode/skills")]
+    fn test_run_when_agent_is_selected_links_agents_md_and_skills_one_by_one(
+        #[case] agent: Agent,
         #[case] agents_md: &str,
         #[case] skills: &str,
     ) {
@@ -142,7 +142,7 @@ Keep this body delimiter.
         let home = dir.path().join("home");
         let options = Opts {
             src_dir: src_dir.clone(),
-            vendors: vec![vendor],
+            agents: vec![agent],
         };
         let mut warnings = Vec::new();
 
@@ -162,13 +162,13 @@ Keep this body delimiter.
     }
 
     #[test]
-    fn test_run_when_multiple_vendors_are_selected_links_each_vendor() {
+    fn test_run_when_multiple_agents_are_selected_links_each_agent() {
         let dir = tempfile::tempdir().expect("test directory");
         let src_dir = create_src_dir(dir.path());
         let home = dir.path().join("home");
         let options = Opts {
             src_dir: src_dir.clone(),
-            vendors: vec![Vendor::Claude, Vendor::Gemini],
+            agents: vec![Agent::Claude, Agent::Gemini],
         };
 
         run(&options, &home, &mut Vec::new(), &mut Vec::new()).expect("sync configuration");
@@ -187,7 +187,7 @@ Keep this body delimiter.
         let home = dir.path().join("home");
         let options = Opts {
             src_dir: src_dir.clone(),
-            vendors: vec![Vendor::Cursor],
+            agents: vec![Agent::Cursor],
         };
         let mut warnings = Vec::new();
 
@@ -206,7 +206,7 @@ Keep this body delimiter.
         let home = dir.path().join("home");
         let options = Opts {
             src_dir: src_dir.clone(),
-            vendors: vec![Vendor::Cursor],
+            agents: vec![Agent::Cursor],
         };
         run(&options, &home, &mut Vec::new(), &mut Vec::new()).expect("initial cursor rule");
         let destination = home.join(".cursor/rules/agents.mdc");
@@ -242,7 +242,7 @@ Keep this body delimiter.
         let metadata = fs::symlink_metadata(&destination).expect("existing metadata");
         let options = Opts {
             src_dir: src_dir.clone(),
-            vendors: vec![Vendor::Cursor, Vendor::Claude],
+            agents: vec![Agent::Cursor, Agent::Claude],
         };
         let mut warnings = Vec::new();
 
@@ -273,7 +273,7 @@ Keep this body delimiter.
         fs::write(&destination, "manually maintained rule").expect("existing rule");
         let options = Opts {
             src_dir,
-            vendors: vec![Vendor::Cursor],
+            agents: vec![Agent::Cursor],
         };
         let mut warnings = Vec::new();
 
@@ -291,7 +291,7 @@ Keep this body delimiter.
         let home = dir.path().join("home");
         let mut options = Opts {
             src_dir,
-            vendors: vec![Vendor::Cursor],
+            agents: vec![Agent::Cursor],
         };
         run(&options, &home, &mut Vec::new(), &mut Vec::new()).expect("initial cursor rule");
         let destination = home.join(".cursor/rules/agents.mdc");
@@ -315,7 +315,7 @@ Keep this body delimiter.
         let home = dir.path().join("home");
         let options = Opts {
             src_dir: src_dir.clone(),
-            vendors: vec![Vendor::Claude],
+            agents: vec![Agent::Claude],
         };
         run(&options, &home, &mut Vec::new(), &mut Vec::new()).expect("initial sync");
         let mut warnings = Vec::new();
@@ -334,7 +334,7 @@ Keep this body delimiter.
         let home = dir.path().join("home");
         let options = Opts {
             src_dir: src_dir.clone(),
-            vendors: vec![Vendor::Claude],
+            agents: vec![Agent::Claude],
         };
 
         run(&options, &home, &mut Vec::new(), &mut Vec::new()).expect("sync relative source");
@@ -362,7 +362,7 @@ Keep this body delimiter.
         let home = dir.path().join("home");
         let options = Opts {
             src_dir,
-            vendors: vec![Vendor::Claude],
+            agents: vec![Agent::Claude],
         };
 
         run(&options, &home, &mut Vec::new(), &mut Vec::new()).expect("sync AGENTS.md or skills");
@@ -388,7 +388,7 @@ Keep this body delimiter.
         symlink(&target, home.join(".claude/skills/review")).expect("conflicting skill");
         let options = Opts {
             src_dir: src_dir.clone(),
-            vendors: vec![Vendor::Claude, Vendor::Gemini],
+            agents: vec![Agent::Claude, Agent::Gemini],
         };
         let mut warnings = Vec::new();
 
@@ -424,7 +424,7 @@ Keep this body delimiter.
         fs::write(home.join(".claude/skills/review/local.txt"), "local skill").expect("existing skill content");
         let options = Opts {
             src_dir: src_dir.clone(),
-            vendors: vec![Vendor::Claude],
+            agents: vec![Agent::Claude],
         };
         let mut warnings = Vec::new();
 
@@ -454,7 +454,7 @@ Keep this body delimiter.
         symlink(&other, home.join(".claude/skills")).expect("conflicting skills root");
         let options = Opts {
             src_dir: src_dir.clone(),
-            vendors: vec![Vendor::Claude, Vendor::Gemini],
+            agents: vec![Agent::Claude, Agent::Gemini],
         };
         let mut warnings = Vec::new();
 
@@ -481,7 +481,7 @@ Keep this body delimiter.
         symlink("../../source/skills", home.join(".claude/skills")).expect("matching skills root link");
         let options = Opts {
             src_dir: src_dir.clone(),
-            vendors: vec![Vendor::Claude],
+            agents: vec![Agent::Claude],
         };
         let mut warnings = Vec::new();
 
@@ -496,14 +496,14 @@ Keep this body delimiter.
     }
 
     #[test]
-    fn test_run_when_src_dir_is_empty_creates_no_vendor_files() {
+    fn test_run_when_src_dir_is_empty_creates_no_agent_files() {
         let dir = tempfile::tempdir().expect("test directory");
         let src_dir = dir.path().join("source");
         fs::create_dir(&src_dir).expect("empty source");
         let home = dir.path().join("home");
         let options = Opts {
             src_dir,
-            vendors: vec![Vendor::Claude],
+            agents: vec![Agent::Claude],
         };
 
         run(&options, &home, &mut Vec::new(), &mut Vec::new()).expect("empty configuration");
@@ -538,7 +538,7 @@ Keep this body delimiter.
         let home = dir.path().join("home");
         let options = Opts {
             src_dir,
-            vendors: vec![Vendor::Claude],
+            agents: vec![Agent::Claude],
         };
 
         let actual = run(&options, &home, &mut Vec::new(), &mut Vec::new());
@@ -548,12 +548,12 @@ Keep this body delimiter.
     }
 
     #[rstest::rstest]
-    #[case::codex(Vendor::Codex, ".codex/agents/reviewer.toml")]
-    #[case::claude(Vendor::Claude, ".claude/agents/reviewer.md")]
-    #[case::cursor(Vendor::Cursor, ".cursor/agents/reviewer.md")]
-    #[case::gemini(Vendor::Gemini, ".gemini/agents/reviewer.md")]
-    #[case::opencode(Vendor::Opencode, ".config/opencode/agents/reviewer.md")]
-    fn test_run_when_vendor_is_selected_generates_vendor_subagent_file(#[case] vendor: Vendor, #[case] relative: &str) {
+    #[case::codex(Agent::Codex, ".codex/agents/reviewer.toml")]
+    #[case::claude(Agent::Claude, ".claude/agents/reviewer.md")]
+    #[case::cursor(Agent::Cursor, ".cursor/agents/reviewer.md")]
+    #[case::gemini(Agent::Gemini, ".gemini/agents/reviewer.md")]
+    #[case::opencode(Agent::Opencode, ".config/opencode/agents/reviewer.md")]
+    fn test_run_when_agent_is_selected_generates_agent_subagent_file(#[case] agent: Agent, #[case] relative: &str) {
         let dir = tempfile::tempdir().expect("test directory");
         let src_dir = create_subagent_src_dir(dir.path(), GENERIC_SUBAGENT);
         fs::write(src_dir.join("AGENTS.md"), "Personal instructions\n").expect("instructions");
@@ -562,7 +562,7 @@ Keep this body delimiter.
         let home = dir.path().join("home");
         let options = Opts {
             src_dir,
-            vendors: vec![vendor],
+            agents: vec![agent],
         };
         let mut warnings = Vec::new();
 
@@ -572,7 +572,7 @@ Keep this body delimiter.
         assert!(fs::symlink_metadata(&destination).expect("subagent metadata").is_file());
         let contents = fs::read_to_string(destination).expect("generated subagent");
 
-        if vendor == Vendor::Codex {
+        if agent == Agent::Codex {
             let _: toml::Value = toml::from_str(&contents).expect("valid TOML");
         } else {
             let (yaml, _) = contents
@@ -583,9 +583,9 @@ Keep this body delimiter.
             let _: Value = serde_saphyr::from_str(yaml).expect("valid YAML");
         }
 
-        insta::assert_snapshot!(format!("vendor_subagent_{}", vendor.name()), contents);
+        insta::assert_snapshot!(format!("vendor_subagent_{}", agent.name()), contents);
 
-        let root = common::vendor_config_dir(&home, vendor);
+        let root = common::agent_config_dir(&home, agent);
         let skills = root.join("skills");
         assert!(
             fs::symlink_metadata(skills.join("review"))
@@ -596,7 +596,7 @@ Keep this body delimiter.
     }
 
     #[test]
-    fn test_run_when_multiple_vendors_are_selected_generates_only_selected_formats() {
+    fn test_run_when_multiple_agents_are_selected_generates_only_selected_formats() {
         let dir = tempfile::tempdir().expect("test directory");
         let src_dir = create_subagent_src_dir(
             dir.path(),
@@ -605,7 +605,7 @@ Keep this body delimiter.
         let home = dir.path().join("home");
         let options = Opts {
             src_dir,
-            vendors: vec![Vendor::Claude, Vendor::Codex],
+            agents: vec![Agent::Claude, Agent::Codex],
         };
 
         run(&options, &home, &mut Vec::new(), &mut Vec::new()).expect("sync selected vendors");
@@ -624,7 +624,7 @@ Keep this body delimiter.
         let home = dir.path().join("home");
         let options = Opts {
             src_dir: src_dir.clone(),
-            vendors: vec![Vendor::Claude],
+            agents: vec![Agent::Claude],
         };
         fs::create_dir_all(home.join(".claude/agents")).expect("subagent directory");
         fs::write(home.join(".claude/agents/reviewer.md"), "Manual content").expect("old output");
@@ -702,7 +702,7 @@ Keep this body delimiter.
         }
         let options = Opts {
             src_dir,
-            vendors: vec![Vendor::Claude, Vendor::Gemini],
+            agents: vec![Agent::Claude, Agent::Gemini],
         };
         let mut warnings = Vec::new();
 
@@ -743,7 +743,7 @@ Keep this body delimiter.
         "unknown_top_level",
         "---\nname: reviewer\ndescription: Review\nmodel: sonnet\n---\nPrompt"
     )]
-    #[case::unknown_vendor(
+    #[case::unknown_agent(
         "unknown_vendor",
         "---\nname: reviewer\ndescription: Review\nvendors:\n  typo: {}\n---\nPrompt"
     )]
@@ -768,7 +768,7 @@ Keep this body delimiter.
         let home = dir.path().join("home");
         let options = Opts {
             src_dir,
-            vendors: vec![Vendor::Claude, Vendor::Codex],
+            agents: vec![Agent::Claude, Agent::Codex],
         };
 
         let mut warnings = Vec::new();
@@ -803,7 +803,7 @@ Keep this body delimiter.
         let home = dir.path().join("home");
         let options = Opts {
             src_dir,
-            vendors: vec![Vendor::Claude, Vendor::Codex],
+            agents: vec![Agent::Claude, Agent::Codex],
         };
 
         let mut warnings = Vec::new();
@@ -820,7 +820,7 @@ Keep this body delimiter.
     }
 
     #[test]
-    fn test_run_when_subagents_dir_has_no_subagent_files_creates_no_vendor_files() {
+    fn test_run_when_subagents_dir_has_no_subagent_files_creates_no_agent_files() {
         let dir = tempfile::tempdir().expect("test directory");
         let src_dir = dir.path().join("source");
         fs::create_dir_all(src_dir.join("subagents/nested")).expect("nested directory");
@@ -828,7 +828,7 @@ Keep this body delimiter.
         let home = dir.path().join("home");
         let options = Opts {
             src_dir,
-            vendors: vec![Vendor::Claude],
+            agents: vec![Agent::Claude],
         };
 
         run(&options, &home, &mut Vec::new(), &mut Vec::new()).expect("empty subagent set");
@@ -846,7 +846,7 @@ Keep this body delimiter.
         let home = dir.path().join("home");
         let options = Opts {
             src_dir,
-            vendors: vec![Vendor::Codex, Vendor::Claude],
+            agents: vec![Agent::Codex, Agent::Claude],
         };
 
         run(&options, &home, &mut Vec::new(), &mut Vec::new()).expect("sync CRLF definition");
@@ -872,7 +872,7 @@ Keep this body delimiter.
         let home = dir.path().join("home");
         let options = Opts {
             src_dir,
-            vendors: vec![Vendor::Opencode],
+            agents: vec![Agent::Opencode],
         };
 
         run(&options, &home, &mut Vec::new(), &mut Vec::new()).expect("sync multiple definitions");
@@ -892,7 +892,7 @@ Keep this body delimiter.
         let home = dir.path().join("home");
         let options = Opts {
             src_dir,
-            vendors: vec![Vendor::Claude, Vendor::Codex],
+            agents: vec![Agent::Claude, Agent::Codex],
         };
         let mut warnings = Vec::new();
 
@@ -913,7 +913,7 @@ Keep this body delimiter.
         let home = dir.path().join("home");
         let options = Opts {
             src_dir,
-            vendors: vec![Vendor::Codex, Vendor::Claude, Vendor::Cursor],
+            agents: vec![Agent::Codex, Agent::Claude, Agent::Cursor],
         };
         if already_synced {
             run(&options, &home, &mut Vec::new(), &mut Vec::new()).expect("initial sync");
@@ -932,7 +932,7 @@ Keep this body delimiter.
     }
 
     #[test]
-    fn test_run_when_later_vendor_fails_preserves_completed_outcomes() {
+    fn test_run_when_later_agent_fails_preserves_completed_outcomes() {
         let dir = tempfile::tempdir().expect("test dir");
         let src_dir = create_src_dir(dir.path());
         let home = dir.path().join("home");
@@ -940,7 +940,7 @@ Keep this body delimiter.
         fs::write(home.join(".claude"), "blocks vendor dir").expect("blocked vendor dir");
         let options = Opts {
             src_dir,
-            vendors: vec![Vendor::Codex, Vendor::Claude],
+            agents: vec![Agent::Codex, Agent::Claude],
         };
         let mut stdout = Vec::new();
         let mut stderr = Vec::new();
@@ -963,7 +963,7 @@ Keep this body delimiter.
         let home = dir.path().join("home");
         let options = Opts {
             src_dir,
-            vendors: vec![Vendor::Codex, Vendor::Claude],
+            agents: vec![Agent::Codex, Agent::Claude],
         };
         let mut warnings = Vec::new();
 
