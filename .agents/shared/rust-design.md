@@ -4,11 +4,11 @@ Load for Rust source, documentation comments, Cargo manifests/lockfiles, build s
 
 ## Authority
 
-Public APIs and the requested compatibility boundary override this gate. Without explicit authority, DO NOT change a public API, wire format, schema, storage model, dependency, architecture boundary, security property, or money path. Internal improvements MUST stay small and compatible. These are design decisions, not bans: keep current code when contract, clarity, or compatibility requires it; record why.
+Public APIs and the requested compatibility boundary override this gate. Internal improvements MUST stay small and compatible. These are design decisions, not bans: keep current code when contract, clarity, or compatibility requires it; record why.
 
 ## Before editing
 
-Scan affected code for nine categories:
+Scan affected code for eight categories:
 
 - domain types and invariants;
 - repeated domain literals, separated from protocol, SQL, serialization, and fixture values;
@@ -17,8 +17,7 @@ Scan affected code for nine categories:
 - correlated parameters and coupled `Option` or boolean fields;
 - one-use forwarding wrappers;
 - validation that should yield a validated type;
-- internal states, intermediate values, or transitions that permit invalid combinations;
-- redundant type paths or aliases.
+- internal states, intermediate values, or transitions that permit invalid combinations.
 
 Review all categories. Record only new or changed candidates in session: location → owner/invariant → decision, with reasons for kept candidates. Report files require explicit requests.
 
@@ -38,19 +37,11 @@ Use `From` for a complete infallible conversion and `TryFrom` for fallible valid
 
 ### Related values and wrappers
 
-Bundle values that must be valid together in a validated struct, enum variant, newtype, or typestate. Replace a behavior-switching boolean with a named enum or type. Do not add a one-use wrapper that only forwards, renames, or returns one expression. Keep an abstraction only when it adds a qualifying benefit: an invariant, misuse prevention, ownership clarity, domain behavior, an API or trait boundary, reuse, or independent testing.
+Use a primitive or plain struct by default. Bundle values that must be valid together in a validated struct, enum variant, newtype, or typestate. Replace a behavior-switching boolean with a named enum or type. Do not add a one-use wrapper that only forwards, renames, or returns one expression. Add or keep an abstraction only when it adds a qualifying benefit: an invariant, misuse prevention, ownership clarity, domain behavior, an API or trait boundary, reuse, or independent testing. Never add an abstraction only to satisfy this gate.
 
 ### Invalid states
 
 MUST make invalid states unrepresentable wherever a type can enforce them: public and module APIs, internal functions and methods, intermediate values, state transitions, and stored representations. Validate once at the earliest trusted boundary, then pass the validated type through every internal seam. Do not pass loosely related primitives or independent `Option` or boolean fields when they permit illegal combinations. Do not reparse or rematch the original request downstream.
-
-### Abstraction level
-
-Use a primitive or plain struct by default. Add a newtype, wrapper, method, or enum only when it provides a qualifying benefit. Never add an abstraction only to satisfy this gate.
-
-### Type paths and aliases
-
-Use short imported names. Qualify only for in-scope same-name clashes. Never qualify for style or add an alias only to shorten a path. For clashes, count references in the containing scope, excluding import declarations; MUST import the more-used type. Alias the other at 2+ uses, else qualify it. Ties use the shorter path, then lexical order.
 
 ## Final design review
 
@@ -62,6 +53,5 @@ After semantic edits and again after formatting, inspect the final diff. Classif
 - **Wrappers:** Each adds a qualifying benefit.
 - **Related values:** Coupled values use one validated representation.
 - **Invalid states:** No known illegal combination crosses an internal seam.
-- **Type paths and aliases:** Apply the clash rule above.
 
 For new or changed `keep with reason` or `out of scope`, give reason and exact location in session. Test changed behavior and new invariants at the narrowest stable seam. Use `rust-gate.md` for toolchain, formatting, Cargo, and lint; `rust-tests.md` for test changes.
