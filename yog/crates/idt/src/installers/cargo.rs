@@ -15,6 +15,88 @@ use ytil_sys::rustup::RequestedRustToolchain;
 use crate::installers;
 use crate::installers::Installer;
 
+/// Construct the declared Cargo and Git tool inventory.
+pub fn tools_installers<'a>(cargo_bin_dir: &'a Path, bin_dir: &'a Path) -> Vec<Box<dyn Installer + 'a>> {
+    vec![
+        Box::new(
+            Cargo::new(cargo_bin_dir, bin_dir, "cargo-auditable", &["cargo-auditable"])
+                .with_cargo_subcommand("auditable"),
+        ),
+        Box::new(Cargo::new(
+            cargo_bin_dir,
+            bin_dir,
+            "cargo-audit",
+            &["cargo-audit", "--features", "fix"],
+        )),
+        Box::new(Cargo::new(cargo_bin_dir, bin_dir, "cargo-diet", &["cargo-diet"]).with_cargo_subcommand("diet")),
+        Box::new(Cargo::new(cargo_bin_dir, bin_dir, "cargo-machete", &["cargo-machete"])),
+        Box::new(Cargo::new(cargo_bin_dir, bin_dir, "cargo-make", &["cargo-make"]).with_cargo_subcommand("make")),
+        Box::new(Cargo::new(cargo_bin_dir, bin_dir, "cargo-sort", &["cargo-sort"])),
+        Box::new(
+            Cargo::new(cargo_bin_dir, bin_dir, "cargo-sort-derives", &["cargo-sort-derives"])
+                .with_cargo_subcommand("sort-derives"),
+        ),
+        Box::new(Cargo::new(cargo_bin_dir, bin_dir, "ccase", &["ccase"])),
+        Box::new(Cargo::new(cargo_bin_dir, bin_dir, "fd", &["fd-find"])),
+        Box::new(Cargo::new(cargo_bin_dir, bin_dir, "jnv", &["jnv"])),
+        Box::new(Cargo::new(cargo_bin_dir, bin_dir, "mise", &["mise"])),
+        Box::new(Cargo::new(cargo_bin_dir, bin_dir, "pv", &["pv"]).with_health_check_args(&["--help"])),
+        Box::new(Cargo::new(cargo_bin_dir, bin_dir, "qj", &["qj"])),
+        Box::new(Cargo::new(cargo_bin_dir, bin_dir, "rg", &["ripgrep"])),
+        Box::new(Cargo::new(cargo_bin_dir, bin_dir, "sd", &["sd"])),
+        Box::new(Cargo::new(cargo_bin_dir, bin_dir, "sqlx", &["sqlx-cli"])),
+        Box::new(Cargo::new(cargo_bin_dir, bin_dir, "sqruff", &["sqruff"])),
+        Box::new(Cargo::new(cargo_bin_dir, bin_dir, "tree-sitter", &["tree-sitter-cli"])),
+        Box::new(Cargo::new(cargo_bin_dir, bin_dir, "typos", &["typos-cli"])),
+        Box::new(Cargo::new(
+            cargo_bin_dir,
+            bin_dir,
+            "typos-lsp",
+            &["typos-lsp", "--locked"],
+        )),
+        // Let's just use typos for now
+        // Box::new(Cargo::new(cargo_bin_dir, bin_dir, "harper-ls", &["harper-ls"])),
+        Box::new(Cargo::new(
+            cargo_bin_dir,
+            bin_dir,
+            "taplo",
+            &["taplo-cli", "--all-features"],
+        )),
+        Box::new(
+            Cargo::new(
+                cargo_bin_dir,
+                bin_dir,
+                "rust-analyzer",
+                &[
+                    "--git",
+                    "https://github.com/rust-lang/rust-analyzer.git",
+                    "--branch",
+                    "master",
+                    "--locked",
+                    "rust-analyzer",
+                ],
+            )
+            .with_toolchain(RequestedRustToolchain::Nightly(None)),
+        ),
+        Box::new(Cargo::new(
+            cargo_bin_dir,
+            bin_dir,
+            "cargo-nextest",
+            &["cargo-nextest", "--locked"],
+        )),
+        Box::new(
+            Cargo::new(cargo_bin_dir, bin_dir, "cargo-llvm-cov", &["cargo-llvm-cov"]).with_cargo_subcommand("llvm-cov"),
+        ),
+        Box::new(Cargo::new(
+            cargo_bin_dir,
+            bin_dir,
+            "rtk",
+            &["--git", "https://github.com/rtk-ai/rtk", "--branch", "master", "rtk"],
+        )),
+        Box::new(Cargo::new(cargo_bin_dir, bin_dir, "kache", &["kache"])),
+    ]
+}
+
 /// Install a declared Cargo or Git tool from Cargo's configured install root.
 ///
 /// Cargo's `--root` always appends `bin`, so using a private root would impose a `bin_dir` naming constraint.
@@ -91,10 +173,6 @@ impl<'a> Cargo<'a> {
 impl Installer for Cargo<'_> {
     fn bin_name(&self) -> &'static str {
         self.bin_name
-    }
-
-    fn should_verify_checksum(&self) -> bool {
-        false
     }
 
     fn install(&self) -> rootcause::Result<()> {
