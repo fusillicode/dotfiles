@@ -18,12 +18,10 @@ use rootcause::prelude::ResultExt;
 use rootcause::report;
 use ytil_sys::SysInfo;
 use ytil_sys::cli::Args;
-use ytil_sys::rustup::RequestedRustToolchain;
 
 use crate::installers::Installer;
 use crate::installers::alacritty::Alacritty;
 use crate::installers::bash_language_server::BashLanguageServer;
-use crate::installers::cargo::Cargo;
 use crate::installers::commitlint::Commitlint;
 use crate::installers::deno::Deno;
 use crate::installers::docker_langserver::DockerLangServer;
@@ -41,11 +39,9 @@ use crate::installers::rio::Rio;
 use crate::installers::ruff_lsp::RuffLsp;
 use crate::installers::shellcheck::Shellcheck;
 use crate::installers::sql_language_server::SqlLanguageServer;
-use crate::installers::sqruff::Sqruff;
 use crate::installers::starship::Starship;
 use crate::installers::terraform_ls::TerraformLs;
 use crate::installers::typescript_language_server::TypescriptLanguageServer;
-use crate::installers::typos_lsp::TyposLsp;
 use crate::installers::vscode_langservers::VsCodeLangServers;
 use crate::installers::yaml_language_server::YamlLanguageServer;
 use crate::installers::zellij::Zellij;
@@ -94,9 +90,9 @@ fn main() -> rootcause::Result<()> {
 
     let cargo_bin_dir = crate::installers::cargo::bin_dir()?;
     let parallel_installers = parallel_installers(dev_tools_path, bin_path, &sys_info);
-    let managed_cargo_installers = managed_cargo_installers(&cargo_bin_dir, bin_path);
+    let cargo_tools_installers = crate::installers::cargo::tools_installers(&cargo_bin_dir, bin_path);
     let (selected_parallel_installers, selected_cargo_installers, unknown_bin_names) =
-        select_installers(&supplied_bin_names, &parallel_installers, &managed_cargo_installers);
+        select_installers(&supplied_bin_names, &parallel_installers, &cargo_tools_installers);
 
     if !unknown_bin_names.is_empty() {
         eprintln!(
@@ -149,90 +145,13 @@ fn parallel_installers<'a>(
         Box::new(Rio { dev_tools_dir, bin_dir }),
         Box::new(RuffLsp { dev_tools_dir, bin_dir }),
         Box::new(Shellcheck { bin_dir, sys_info }),
-        Box::new(Sqruff { bin_dir, sys_info }),
         Box::new(SqlLanguageServer { dev_tools_dir, bin_dir }),
         Box::new(Starship { dev_tools_dir, bin_dir }),
         Box::new(TerraformLs { bin_dir, sys_info }),
         Box::new(TypescriptLanguageServer { dev_tools_dir, bin_dir }),
-        Box::new(TyposLsp { bin_dir, sys_info }),
         Box::new(VsCodeLangServers { dev_tools_dir, bin_dir }),
         Box::new(YamlLanguageServer { dev_tools_dir, bin_dir }),
         Box::new(Zellij { dev_tools_dir, bin_dir }),
-    ]
-}
-
-/// Construct the declared Cargo and Git tool inventory.
-fn managed_cargo_installers<'a>(cargo_bin_dir: &'a Path, bin_dir: &'a Path) -> Vec<Box<dyn Installer + 'a>> {
-    vec![
-        Box::new(
-            Cargo::new(cargo_bin_dir, bin_dir, "cargo-auditable", &["cargo-auditable"])
-                .with_cargo_subcommand("auditable"),
-        ),
-        Box::new(Cargo::new(
-            cargo_bin_dir,
-            bin_dir,
-            "cargo-audit",
-            &["cargo-audit", "--features", "fix"],
-        )),
-        Box::new(Cargo::new(cargo_bin_dir, bin_dir, "cargo-diet", &["cargo-diet"]).with_cargo_subcommand("diet")),
-        Box::new(Cargo::new(cargo_bin_dir, bin_dir, "cargo-machete", &["cargo-machete"])),
-        Box::new(Cargo::new(cargo_bin_dir, bin_dir, "cargo-make", &["cargo-make"]).with_cargo_subcommand("make")),
-        Box::new(Cargo::new(cargo_bin_dir, bin_dir, "cargo-sort", &["cargo-sort"])),
-        Box::new(
-            Cargo::new(cargo_bin_dir, bin_dir, "cargo-sort-derives", &["cargo-sort-derives"])
-                .with_cargo_subcommand("sort-derives"),
-        ),
-        Box::new(Cargo::new(cargo_bin_dir, bin_dir, "ccase", &["ccase"])),
-        Box::new(Cargo::new(cargo_bin_dir, bin_dir, "fd", &["fd-find"])),
-        Box::new(Cargo::new(cargo_bin_dir, bin_dir, "jnv", &["jnv"])),
-        Box::new(Cargo::new(cargo_bin_dir, bin_dir, "mise", &["mise"])),
-        Box::new(Cargo::new(cargo_bin_dir, bin_dir, "pv", &["pv"]).with_health_check_args(&["--help"])),
-        Box::new(Cargo::new(cargo_bin_dir, bin_dir, "qj", &["qj"])),
-        Box::new(Cargo::new(cargo_bin_dir, bin_dir, "rg", &["ripgrep"])),
-        Box::new(Cargo::new(cargo_bin_dir, bin_dir, "sd", &["sd"])),
-        Box::new(Cargo::new(cargo_bin_dir, bin_dir, "sqlx", &["sqlx-cli"])),
-        Box::new(Cargo::new(cargo_bin_dir, bin_dir, "tree-sitter", &["tree-sitter-cli"])),
-        Box::new(Cargo::new(cargo_bin_dir, bin_dir, "typos", &["typos-cli"])),
-        // Let's just use typos for now
-        // Box::new(Cargo::new(cargo_bin_dir, bin_dir, "harper-ls", &["harper-ls"])),
-        Box::new(Cargo::new(
-            cargo_bin_dir,
-            bin_dir,
-            "taplo",
-            &["taplo-cli", "--all-features"],
-        )),
-        Box::new(
-            Cargo::new(
-                cargo_bin_dir,
-                bin_dir,
-                "rust-analyzer",
-                &[
-                    "--git",
-                    "https://github.com/rust-lang/rust-analyzer.git",
-                    "--branch",
-                    "master",
-                    "--locked",
-                    "rust-analyzer",
-                ],
-            )
-            .with_toolchain(RequestedRustToolchain::Nightly(None)),
-        ),
-        Box::new(Cargo::new(
-            cargo_bin_dir,
-            bin_dir,
-            "cargo-nextest",
-            &["cargo-nextest", "--locked"],
-        )),
-        Box::new(
-            Cargo::new(cargo_bin_dir, bin_dir, "cargo-llvm-cov", &["cargo-llvm-cov"]).with_cargo_subcommand("llvm-cov"),
-        ),
-        Box::new(Cargo::new(
-            cargo_bin_dir,
-            bin_dir,
-            "rtk",
-            &["--git", "https://github.com/rtk-ai/rtk", "--branch", "master", "rtk"],
-        )),
-        Box::new(Cargo::new(cargo_bin_dir, bin_dir, "kache", &["kache"])),
     ]
 }
 

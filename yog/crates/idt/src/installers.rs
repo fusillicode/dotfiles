@@ -31,11 +31,9 @@ pub mod rio;
 pub mod ruff_lsp;
 pub mod shellcheck;
 pub mod sql_language_server;
-pub mod sqruff;
 pub mod starship;
 pub mod terraform_ls;
 pub mod typescript_language_server;
-pub mod typos_lsp;
 pub mod vscode_langservers;
 pub mod yaml_language_server;
 pub mod zellij;
@@ -126,7 +124,9 @@ pub trait Installer: Sync + Send {
         Some(&["--version"])
     }
 
-    /// Whether the download is checksum-verified. Defaults to `true`.
+    /// Whether to use checksum-verified success colors. Defaults to `true`.
+    ///
+    /// Cargo-managed installs also use these colors, including Git sources.
     ///
     /// Override to return `false` for curl-based installers whose releases do not publish checksums.
     fn should_verify_checksum(&self) -> bool {
