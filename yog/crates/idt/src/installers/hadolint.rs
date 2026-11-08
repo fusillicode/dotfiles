@@ -41,7 +41,7 @@ impl Installer for Hadolint<'_> {
 
         let filename = format!("{0}-{os}-{arch}", self.bin_name());
         let checksums_url = format!(
-            "https://github.com/{0}/{0}/releases/latest/download/{filename}.sha256",
+            "https://github.com/{0}/{0}/releases/latest/download/checksum.sha256",
             self.bin_name()
         );
 
