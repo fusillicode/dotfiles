@@ -6,7 +6,6 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::iter;
-use std::mem;
 
 use bbtree::unsync::BBTreeSet;
 use proc_macro2::TokenStream;
@@ -73,13 +72,7 @@ pub(super) fn compute_required_item_order(items: &[OrderingItem<'_>]) -> Result<
         }
     };
 
-    let constraints: Vec<_> = mem::take(&mut blocks.constraints)
-        .into_iter()
-        .chain(precedence_graph.constraints)
-        .collect();
-
-    let required_item_order = blocks.expand_block_order_to_item_order(&required_block_order);
-    ItemOrder::new(items, required_item_order, &constraints)
+    blocks.into_item_order(items, &required_block_order, precedence_graph.constraints)
 }
 
 struct AtomicItemBlocks {
@@ -109,13 +102,21 @@ impl AtomicItemBlocks {
         self.members.sort_by_key(|block| block.iter().min().copied());
     }
 
-    fn expand_block_order_to_item_order(&self, block_order: &[usize]) -> Vec<usize> {
-        block_order
+    fn into_item_order(
+        self,
+        items: &[OrderingItem<'_>],
+        block_order: &[usize],
+        precedence_constraints: Vec<ItemOrderingConstraint>,
+    ) -> Result<ItemOrder, String> {
+        let constraints: Vec<_> = self.constraints.into_iter().chain(precedence_constraints).collect();
+        let required_item_order = block_order
             .iter()
             .filter_map(|&block_index| self.members.get(block_index))
             .flatten()
             .copied()
-            .collect()
+            .collect();
+
+        ItemOrder::new(items, required_item_order, &constraints)
     }
 }
 

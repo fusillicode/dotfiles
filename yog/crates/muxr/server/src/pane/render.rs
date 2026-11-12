@@ -224,6 +224,7 @@ impl RenderComposer {
                 frame.attention_panes.clone(),
                 Arc::clone(&frame.pane_layout),
                 frame.pane_render,
+                // Move snapshots into the next frame without cloning; keep the old rows and sequence for diffing.
                 mem::take(&mut frame.pane_snapshots),
                 frame.size.clone(),
             )

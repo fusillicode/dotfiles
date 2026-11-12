@@ -45,6 +45,7 @@ impl ClientRenderDmg {
             (Self::Panes(current), Self::Panes(incoming)) => extend_unique(current, incoming),
             (Self::Panes(current), Self::RegionChanged(incoming)) => {
                 extend_unique(current, incoming);
+                // Move the pane list into the new variant, preserving any heap allocation instead of cloning it.
                 *self = Self::RegionChanged(mem::take(current));
             }
             (Self::RegionChanged(current), Self::Panes(incoming) | Self::RegionChanged(incoming)) => {

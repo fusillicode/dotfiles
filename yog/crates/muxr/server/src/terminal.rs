@@ -241,6 +241,7 @@ impl TerminalState {
     }
 
     pub fn take_title_changes(&mut self) -> Vec<Option<String>> {
+        // Return the existing queue allocation and reset it; collecting a drain would allocate another buffer.
         std::mem::take(&mut self.title_changes)
     }
 

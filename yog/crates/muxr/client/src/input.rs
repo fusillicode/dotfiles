@@ -83,6 +83,7 @@ impl InputDecoder {
     }
 
     fn push_byte(&mut self, byte: u8, input: &mut Vec<u8>, decoded: &mut Vec<DecodedInput>) {
+        // Own the pending buffer without cloning it; completed sequences leave None, while incomplete ones restore it.
         match std::mem::take(&mut self.pending) {
             PendingInput::None => {
                 if byte == ESC {
@@ -265,6 +266,7 @@ impl KittyKeyModifiers {
 
 fn finalize_pending_input(decoder: &mut InputDecoder, input: &mut Vec<u8>, events: &mut Vec<DecodedInput>) {
     loop {
+        // Consume the buffer without cloning and reset to None before ambiguous input re-enters the decoder.
         match mem::take(&mut decoder.pending) {
             PendingInput::None => return,
             PendingInput::EscapeSequence(bytes) if bytes.as_slice() == [ESC] => {
@@ -550,6 +552,7 @@ fn push_input(decoded: &mut Vec<DecodedInput>, input: &mut Vec<u8>) {
         return;
     }
 
+    // Give the event the existing allocation and leave an empty buffer for the next input batch.
     decoded.push(DecodedInput::Input(mem::take(input)));
 }
 

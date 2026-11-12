@@ -614,6 +614,7 @@ impl PtyState {
 
     fn take_title_changes(&self) -> Vec<Option<String>> {
         let mut title_changes = self.title_changes.lock();
+        // Transfer the queue allocation and reset it under the lock, without copying or collecting while locked.
         std::mem::take(&mut *title_changes)
     }
 

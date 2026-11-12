@@ -1,5 +1,3 @@
-use std::mem;
-
 use crate::client::timers::QuietDeadline;
 
 // Quiet that becomes ready on a loop boundary is deferred long enough to drain queued PTY output before clearing Busy.
@@ -18,8 +16,10 @@ impl QuietTurn {
         }
     }
 
-    pub(super) fn take_ready(&mut self, quiet_deadline: QuietDeadline) -> Self {
-        let ready = mem::take(self);
+    pub(super) const fn take_ready(&mut self, quiet_deadline: QuietDeadline) -> Self {
+        let ready = *self;
+        *self = Self::Idle;
+
         if matches!(quiet_deadline, QuietDeadline::Elapsed) {
             ready
         } else {
