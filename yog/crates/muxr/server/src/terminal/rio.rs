@@ -49,6 +49,7 @@ pub(super) struct Listener {
 
 impl Listener {
     fn take_events(&self) -> Events {
+        // Move both event buffers and reset the cursor flag under one lock, without cloning or collecting events.
         mem::take(&mut *self.events.lock())
     }
 }

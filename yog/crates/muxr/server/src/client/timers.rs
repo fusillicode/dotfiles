@@ -78,6 +78,7 @@ impl ClientTimers {
     }
 
     pub fn take_cmd_handoff_sample_panes(&mut self) -> rootcause::Result<Vec<PaneId>> {
+        // Consume the whole set and reset it in one move; repeated removals would add tree operations.
         let pane_ids = mem::take(&mut self.cmd_handoff_sample_panes).into_iter().collect();
         // `tokio::time::Sleep` stays ready after it fires. Disable the one-shot immediately after consuming it so
         // the attached-client select loop cannot hot-spin and starve PTY rendering after a prompt submit.

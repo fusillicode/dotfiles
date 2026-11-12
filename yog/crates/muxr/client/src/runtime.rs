@@ -754,6 +754,7 @@ fn send_pending_input(
     {
         return ClientInputSend::Closed;
     }
+    // Transfer the existing allocation to the request and reset the pending buffer without copying its bytes.
     if request_sender
         .blocking_send(ClientRequest::Input(mem::take(pending_input)))
         .is_err()
