@@ -103,6 +103,7 @@ impl EventListener for Listener {
             | RioEvent::CurrentDirectoryChanged(_)
             | RioEvent::SyncWindowTitle
             | RioEvent::ProgressReport(_)
+            | RioEvent::ProgramStatus(_)
             | RioEvent::Bell(_)
             | RioEvent::DesktopNotification { .. }
             | RioEvent::Exit
