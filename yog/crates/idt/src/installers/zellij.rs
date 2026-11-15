@@ -3,8 +3,8 @@ use std::path::Path;
 use rootcause::prelude::ResultExt;
 use ytil_sys::file;
 
-use crate::Installer;
-use crate::installers::InstallOutcome;
+use crate::installer::InstallOutcome;
+use crate::installer::Installer;
 
 pub struct Zellij<'a> {
     pub dev_tools_dir: &'a Path,
@@ -47,6 +47,6 @@ impl Installer for Zellij<'_> {
         file::ln_sf(&target, &self.bin_dir.join(self.bin_name()))?;
         file::chmod_x(&target)?;
 
-        Ok(InstallOutcome::NoArtifact)
+        Ok(InstallOutcome::ChecksumNotNeeded)
     }
 }

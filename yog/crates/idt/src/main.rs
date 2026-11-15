@@ -19,7 +19,7 @@ use rootcause::report;
 use ytil_sys::SysInfo;
 use ytil_sys::cli::Args;
 
-use crate::installers::Installer;
+use crate::installer::Installer;
 use crate::installers::alacritty::Alacritty;
 use crate::installers::bash_language_server::BashLanguageServer;
 use crate::installers::commitlint::Commitlint;
@@ -47,6 +47,7 @@ use crate::installers::yaml_language_server::YamlLanguageServer;
 use crate::installers::zellij::Zellij;
 
 mod downloaders;
+mod installer;
 mod installers;
 
 /// Install language servers, linters, formatters, and developer helpers concurrently.

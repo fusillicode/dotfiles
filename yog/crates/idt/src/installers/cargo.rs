@@ -12,9 +12,9 @@ use ytil_sys::file;
 use ytil_sys::rustup;
 use ytil_sys::rustup::RequestedRustToolchain;
 
-use crate::installers;
-use crate::installers::InstallOutcome;
-use crate::installers::Installer;
+use crate::installer::InstallOutcome;
+use crate::installer::Installer;
+use crate::installer::health_check;
 
 /// Construct the declared Cargo and Git tool inventory.
 pub fn tools_installers<'a>(cargo_bin_dir: &'a Path, bin_dir: &'a Path) -> Vec<Box<dyn Installer + 'a>> {
@@ -195,12 +195,12 @@ impl Installer for Cargo<'_> {
         file::ln_sf(&cargo_binary, &self.bin_dir.join(self.bin_name()))?;
         file::chmod_x(cargo_binary)?;
 
-        Ok(InstallOutcome::NoArtifact)
+        Ok(InstallOutcome::ChecksumNotNeeded)
     }
 
     fn health_check(&self) -> Option<rootcause::Result<String>> {
         let command = self.health_check_command();
-        Some(installers::run_health_check(command))
+        Some(health_check::run_cmd(command))
     }
 }
 

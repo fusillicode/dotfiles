@@ -2,8 +2,8 @@ use std::path::Path;
 
 use rootcause::prelude::ResultExt;
 
-use crate::installers::InstallOutcome;
-use crate::installers::Installer;
+use crate::installer::InstallOutcome;
+use crate::installer::Installer;
 
 pub struct Rio<'a> {
     pub dev_tools_dir: &'a Path,
@@ -47,7 +47,7 @@ impl Installer for Rio<'_> {
 
         crate::installers::install_macos_app(&app, self.bin_dir, self.bin_name())?;
 
-        Ok(InstallOutcome::NoArtifact)
+        Ok(InstallOutcome::ChecksumNotNeeded)
     }
 
     fn health_check_args(&self) -> Option<&[&str]> {

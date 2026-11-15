@@ -5,24 +5,22 @@ use deflate::ChecksumSource;
 use deflate::HttpDeflateOption;
 use rootcause::prelude::ResultExt;
 
+use crate::downloaders::checksum;
+use crate::downloaders::checksum::ChecksumOutcome;
+
 pub mod deflate;
 pub mod github;
 
-/// A processed artifact and the verification performed before processing it.
+/// A processed artifact and the checksum outcome produced by its download.
 pub struct DownloadedArtifact {
     pub path: PathBuf,
-    verification: ChecksumVerification,
+    checksum: ChecksumOutcome,
 }
 
 impl DownloadedArtifact {
-    pub const fn checksum_verified(&self) -> bool {
-        matches!(self.verification, ChecksumVerification::Verified)
+    pub const fn checksum(&self) -> ChecksumOutcome {
+        self.checksum
     }
-}
-
-enum ChecksumVerification {
-    Verified,
-    Unverified,
 }
 
 /// Downloads a file from the given URL with the specified [`HttpDeflateOption`].
@@ -57,17 +55,10 @@ pub fn run(
         .attach_with(|| format!("url={url}"))?;
 
     // Phase 2: Checksum verification (only when a source is provided).
-    let verification = if let Some(source) = checksum {
-        let expected = crate::downloaders::checksum::download_and_find_checksum(source.checksums_url, source.filename)?;
-        crate::downloaders::checksum::verify(&tmp_file, &expected)?;
-
-        ChecksumVerification::Verified
-    } else {
-        ChecksumVerification::Unverified
-    };
+    let checksum = checksum::check_download(&tmp_file, checksum)?;
 
     // Phase 3: Process the downloaded file according to the option.
     let path = deflate_opt.process(&tmp_file)?;
 
-    Ok(DownloadedArtifact { path, verification })
+    Ok(DownloadedArtifact { path, checksum })
 }

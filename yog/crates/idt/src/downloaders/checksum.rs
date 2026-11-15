@@ -2,10 +2,57 @@ use std::fmt::Write;
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
+use std::time::Duration;
+use std::time::Instant;
 
 use rootcause::prelude::ResultExt;
 use rootcause::report;
 use sha2::Digest;
+
+use crate::downloaders::http::deflate::ChecksumSource;
+
+/// The checksum work actually performed during installation.
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(test, derive(Eq, PartialEq))]
+pub enum ChecksumOutcome {
+    NotNeeded,
+    Unavailable,
+    Passed { duration: Duration },
+}
+
+impl ChecksumOutcome {
+    pub const fn status(&self) -> &'static str {
+        match self {
+            Self::NotNeeded => "not-needed",
+            Self::Unavailable => "unavailable",
+            Self::Passed { .. } => "passed",
+        }
+    }
+
+    pub const fn duration(&self) -> Option<Duration> {
+        match self {
+            Self::Passed { duration } => Some(*duration),
+            Self::NotNeeded | Self::Unavailable => None,
+        }
+    }
+}
+
+/// Verifies a downloaded artifact when a checksum source is available and records the outcome.
+///
+/// # Errors
+/// Returns checksum retrieval, parsing, or verification errors.
+pub fn check_download(path: &Path, source: Option<&ChecksumSource>) -> rootcause::Result<ChecksumOutcome> {
+    let Some(source) = source else {
+        return Ok(ChecksumOutcome::Unavailable);
+    };
+    let start = Instant::now();
+    let expected = download_and_find_checksum(source.checksums_url, source.filename)?;
+    verify(path, &expected)?;
+
+    Ok(ChecksumOutcome::Passed {
+        duration: start.elapsed(),
+    })
+}
 
 /// Computes the Sha256 hex digest of the file at `path`.
 ///
