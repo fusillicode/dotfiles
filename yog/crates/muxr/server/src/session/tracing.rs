@@ -116,7 +116,7 @@ fn install_panic_hook() {
 }
 
 fn current_server_log_timestamp() -> rootcause::Result<ServerLogTimestamp> {
-    jiff::Zoned::now()
+    jiff::ZonedDateTime::now()
         .strftime(SERVER_LOG_TIMESTAMP_FORMAT)
         .to_string()
         .parse()

@@ -2,9 +2,9 @@ use std::path::Path;
 
 use ytil_sys::file;
 
-use crate::Installer;
 use crate::downloaders::npm;
-use crate::installers::InstallOutcome;
+use crate::installer::InstallOutcome;
+use crate::installer::Installer;
 
 pub struct VsCodeLangServers<'a> {
     pub dev_tools_dir: &'a Path,
@@ -22,7 +22,7 @@ impl Installer for VsCodeLangServers<'_> {
         file::ln_sf_files_in_dir(target_dir, (&self.bin_dir).into())?;
         file::chmod_x_files_in_dir(self.bin_dir)?;
 
-        Ok(InstallOutcome::NoArtifact)
+        Ok(InstallOutcome::ChecksumNotNeeded)
     }
 
     // NOTE: skip because it's a shitshow...

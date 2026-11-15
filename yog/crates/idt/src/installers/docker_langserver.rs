@@ -1,7 +1,7 @@
 use std::path::Path;
 
-use crate::Installer;
-use crate::installers::InstallOutcome;
+use crate::installer::InstallOutcome;
+use crate::installer::Installer;
 
 pub struct DockerLangServer<'a> {
     pub dev_tools_dir: &'a Path,

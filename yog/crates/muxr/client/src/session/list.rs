@@ -7,7 +7,7 @@ use std::time::SystemTime;
 
 use crossterm::style::Stylize;
 use fmt::Formatter;
-use jiff::Zoned;
+use jiff::ZonedDateTime;
 use muxr_core::ClientRequest;
 use muxr_core::ServerEvent;
 use muxr_core::SessionName;
@@ -181,7 +181,7 @@ fn created_at_text(created_at: Option<SystemTime>) -> String {
     created_at.map_or_else(
         || "unknown".to_owned(),
         |created_at| {
-            Zoned::try_from(created_at).map_or_else(
+            ZonedDateTime::try_from(created_at).map_or_else(
                 |_| "unknown".to_owned(),
                 |created_at| created_at.strftime("%d-%m-%Y %H:%M:%S").to_string(),
             )

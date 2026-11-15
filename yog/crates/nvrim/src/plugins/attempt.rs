@@ -7,7 +7,7 @@ use std::fs::ReadDir;
 use std::path::Path;
 use std::path::PathBuf;
 
-use jiff::Zoned;
+use jiff::ZonedDateTime;
 use nvim_oxi::Dictionary;
 use rootcause::report;
 use ytil_noxi::buffer;
@@ -84,8 +84,8 @@ impl Scratch {
     /// Generates the destination file path for the scratch.
     ///
     /// The path is constructed as `{dest_dir}/{base_name}-{timestamp}.{extension}` where timestamp is a provided
-    /// [`Zoned`] date time.
-    pub fn dest_file_path(&self, dest_dir: &Path, date_time: &Zoned) -> PathBuf {
+    /// [`ZonedDateTime`] date time.
+    pub fn dest_file_path(&self, dest_dir: &Path, date_time: &ZonedDateTime) -> PathBuf {
         dest_dir.join(format!(
             "{}-{}.{}",
             self.base_name,
@@ -131,7 +131,7 @@ fn create_scratch_file(_: ()) {
             let Some(scratch): Option<&Scratch> = scratches.get(choice_idx) else {
                 return;
             };
-            let dest = scratch.dest_file_path(&dest_dir, &Zoned::now());
+            let dest = scratch.dest_file_path(&dest_dir, &ZonedDateTime::now());
             if let Err(err) = fs::copy(&scratch.path, &dest) {
                 notify::error(format!(
                     "cannot copy file | from={} to={} error={err:#?}",
@@ -172,7 +172,7 @@ fn get_scratches_dir_content() -> rootcause::Result<ReadDir> {
 
 #[cfg(test)]
 mod tests {
-    use jiff::Zoned;
+    use jiff::ZonedDateTime;
     use rstest::rstest;
     use tempfile::TempDir;
     use test_that::prelude::*;
@@ -267,7 +267,7 @@ mod tests {
             path: PathBuf::from("/some/path/test.txt"),
         };
 
-        let date_time = Zoned::now()
+        let date_time = ZonedDateTime::now()
             .with()
             .year(2023)
             .month(1)

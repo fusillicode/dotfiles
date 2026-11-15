@@ -8,9 +8,9 @@ use ytil_sys::file;
 use crate::downloaders::http;
 use crate::downloaders::http::deflate::HttpDeflateOption;
 use crate::downloaders::http::github;
-use crate::installers::InstallOutcome;
-use crate::installers::Installer;
-use crate::installers::SystemDependent;
+use crate::installer::InstallOutcome;
+use crate::installer::Installer;
+use crate::installer::SystemDependent;
 
 pub struct HelmLs<'a> {
     pub bin_dir: &'a Path,

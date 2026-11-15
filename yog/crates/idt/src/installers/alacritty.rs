@@ -4,8 +4,8 @@ use std::path::Path;
 
 use rootcause::prelude::ResultExt;
 
-use crate::installers::InstallOutcome;
-use crate::installers::Installer;
+use crate::installer::InstallOutcome;
+use crate::installer::Installer;
 
 pub struct Alacritty<'a> {
     pub dev_tools_dir: &'a Path,
@@ -75,7 +75,7 @@ impl Installer for Alacritty<'_> {
                 .attach_with(|| format!("dst={}", dst.display()))?;
         }
 
-        Ok(InstallOutcome::NoArtifact)
+        Ok(InstallOutcome::ChecksumNotNeeded)
     }
 
     fn health_check_args(&self) -> Option<&[&str]> {
