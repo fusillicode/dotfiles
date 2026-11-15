@@ -8,6 +8,7 @@ use ytil_sys::file;
 use crate::downloaders::http;
 use crate::downloaders::http::deflate::HttpDeflateOption;
 use crate::downloaders::http::github;
+use crate::installers::InstallOutcome;
 use crate::installers::Installer;
 use crate::installers::SystemDependent;
 
@@ -36,12 +37,12 @@ impl Installer for HelmLs<'_> {
         "helm_ls"
     }
 
-    fn install(&self) -> rootcause::Result<()> {
+    fn install(&self) -> rootcause::Result<InstallOutcome> {
         let (arch, os) = self.target_arch_and_os();
         let repo = "mrjosh/helm-ls";
         let latest_release = github::get_latest_release_tag(repo)?;
 
-        let target = http::run(
+        let download = http::run(
             &format!(
                 "https://github.com/{repo}/releases/download/{latest_release}/{}_{os}_{arch}",
                 self.bin_name()
@@ -52,16 +53,12 @@ impl Installer for HelmLs<'_> {
             None,
         )?;
 
-        file::chmod_x(&target)?;
+        file::chmod_x(&download.path)?;
 
-        Ok(())
+        Ok(InstallOutcome::Downloaded(download))
     }
 
     fn health_check_args(&self) -> Option<&[&str]> {
         Some(&["version"])
-    }
-
-    fn should_verify_checksum(&self) -> bool {
-        false
     }
 }

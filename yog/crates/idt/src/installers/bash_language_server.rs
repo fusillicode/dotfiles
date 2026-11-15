@@ -1,6 +1,7 @@
 use std::path::Path;
 
 use crate::Installer;
+use crate::installers::InstallOutcome;
 
 pub struct BashLanguageServer<'a> {
     pub dev_tools_dir: &'a Path,
@@ -12,7 +13,7 @@ impl Installer for BashLanguageServer<'_> {
         "bash-language-server"
     }
 
-    fn install(&self) -> rootcause::Result<()> {
+    fn install(&self) -> rootcause::Result<InstallOutcome> {
         crate::installers::install_npm_tool(
             self.dev_tools_dir,
             self.bin_dir,

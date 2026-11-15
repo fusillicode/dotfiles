@@ -10,6 +10,7 @@ use crate::downloaders::http;
 use crate::downloaders::http::deflate::ChecksumSource;
 use crate::downloaders::http::deflate::HttpDeflateOption;
 use crate::downloaders::http::github;
+use crate::installers::InstallOutcome;
 use crate::installers::Installer;
 use crate::installers::SystemDependent;
 
@@ -38,7 +39,7 @@ impl Installer for TerraformLs<'_> {
         "terraform-ls"
     }
 
-    fn install(&self) -> rootcause::Result<()> {
+    fn install(&self) -> rootcause::Result<InstallOutcome> {
         let (arch, os) = self.target_arch_and_os();
 
         let repo = format!("hashicorp/{}", self.bin_name());
@@ -54,7 +55,7 @@ impl Installer for TerraformLs<'_> {
             self.bin_name()
         );
 
-        let target = http::run(
+        let download = http::run(
             &format!(
                 "https://releases.hashicorp.com/{0}/{latest_release}/{filename}",
                 self.bin_name()
@@ -69,8 +70,8 @@ impl Installer for TerraformLs<'_> {
             }),
         )?;
 
-        file::chmod_x(target)?;
+        file::chmod_x(&download.path)?;
 
-        Ok(())
+        Ok(InstallOutcome::Downloaded(download))
     }
 }

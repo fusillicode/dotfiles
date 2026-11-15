@@ -6,6 +6,7 @@ use ytil_cmd::CmdExt;
 use ytil_sys::file;
 
 use crate::Installer;
+use crate::installers::InstallOutcome;
 
 pub struct Starship<'a> {
     pub dev_tools_dir: &'a Path,
@@ -17,7 +18,7 @@ impl Installer for Starship<'_> {
         "starship"
     }
 
-    fn install(&self) -> rootcause::Result<()> {
+    fn install(&self) -> rootcause::Result<InstallOutcome> {
         let source_dir = self.dev_tools_dir.join(self.bin_name()).join("source");
         let cargo_target = self.dev_tools_dir.join("cargo-target");
 
@@ -48,7 +49,7 @@ impl Installer for Starship<'_> {
         file::ln_sf(&target, &self.bin_dir.join(self.bin_name()))?;
         file::chmod_x(&target)?;
 
-        Ok(())
+        Ok(InstallOutcome::NoArtifact)
     }
 
     fn health_check(&self) -> Option<rootcause::Result<String>> {
@@ -61,9 +62,5 @@ impl Installer for Starship<'_> {
             .map(|output| String::from_utf8_lossy(&output.stdout).into_owned())
             .map_err(From::from);
         Some(res)
-    }
-
-    fn should_verify_checksum(&self) -> bool {
-        false
     }
 }

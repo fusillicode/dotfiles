@@ -4,6 +4,7 @@ use ytil_sys::file;
 
 use crate::Installer;
 use crate::downloaders::npm;
+use crate::installers::InstallOutcome;
 
 pub struct VsCodeLangServers<'a> {
     pub dev_tools_dir: &'a Path,
@@ -15,13 +16,13 @@ impl Installer for VsCodeLangServers<'_> {
         "vscode-langservers-extracted"
     }
 
-    fn install(&self) -> rootcause::Result<()> {
+    fn install(&self) -> rootcause::Result<InstallOutcome> {
         let target_dir = npm::run(self.dev_tools_dir, self.bin_name(), &[self.bin_name()])?;
 
         file::ln_sf_files_in_dir(target_dir, (&self.bin_dir).into())?;
         file::chmod_x_files_in_dir(self.bin_dir)?;
 
-        Ok(())
+        Ok(InstallOutcome::NoArtifact)
     }
 
     // NOTE: skip because it's a shitshow...

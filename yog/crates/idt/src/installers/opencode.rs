@@ -8,6 +8,7 @@ use ytil_sys::file;
 use crate::downloaders::http;
 use crate::downloaders::http::deflate::HttpDeflateOption;
 use crate::downloaders::http::github;
+use crate::installers::InstallOutcome;
 use crate::installers::Installer;
 use crate::installers::SystemDependent;
 
@@ -36,11 +37,7 @@ impl Installer for Opencode<'_> {
         "opencode"
     }
 
-    fn should_verify_checksum(&self) -> bool {
-        false
-    }
-
-    fn install(&self) -> rootcause::Result<()> {
+    fn install(&self) -> rootcause::Result<InstallOutcome> {
         let repo = format!("anomalyco/{}", self.bin_name());
         let latest_release = github::get_latest_release_tag(&repo)?;
 
@@ -63,14 +60,14 @@ impl Installer for Opencode<'_> {
             ),
         };
 
-        let target = http::run(
+        let download = http::run(
             &format!("https://github.com/{repo}/releases/download/{latest_release}/{filename}"),
             &deflate_option,
             None,
         )?;
 
-        file::chmod_x(target)?;
+        file::chmod_x(&download.path)?;
 
-        Ok(())
+        Ok(InstallOutcome::Downloaded(download))
     }
 }

@@ -2,6 +2,7 @@ use std::path::Path;
 
 use rootcause::prelude::ResultExt;
 
+use crate::installers::InstallOutcome;
 use crate::installers::Installer;
 
 pub struct Rio<'a> {
@@ -16,7 +17,7 @@ impl Installer for Rio<'_> {
 
     /// Builds Rio from source, symlinks the binary into `bin_dir`, and
     /// copies `Rio.app` into `/Applications` (atomic swap).
-    fn install(&self) -> rootcause::Result<()> {
+    fn install(&self) -> rootcause::Result<InstallOutcome> {
         let source_dir = self.dev_tools_dir.join(self.bin_name()).join("source");
 
         ytil_cmd::silent_cmd("sh")
@@ -46,14 +47,10 @@ impl Installer for Rio<'_> {
 
         crate::installers::install_macos_app(&app, self.bin_dir, self.bin_name())?;
 
-        Ok(())
+        Ok(InstallOutcome::NoArtifact)
     }
 
     fn health_check_args(&self) -> Option<&[&str]> {
         Some(&["--version"])
-    }
-
-    fn should_verify_checksum(&self) -> bool {
-        false
     }
 }
