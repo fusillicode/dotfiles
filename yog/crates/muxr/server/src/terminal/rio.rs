@@ -105,6 +105,7 @@ impl EventListener for Listener {
             | RioEvent::ProgressReport(_)
             | RioEvent::ProgramStatus(_)
             | RioEvent::Bell(_)
+            | RioEvent::CommandFinished { .. }
             | RioEvent::DesktopNotification { .. }
             | RioEvent::Exit
             | RioEvent::Quit
