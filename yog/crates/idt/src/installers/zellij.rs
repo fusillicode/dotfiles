@@ -4,6 +4,7 @@ use rootcause::prelude::ResultExt;
 use ytil_sys::file;
 
 use crate::Installer;
+use crate::installers::InstallOutcome;
 
 pub struct Zellij<'a> {
     pub dev_tools_dir: &'a Path,
@@ -15,7 +16,7 @@ impl Installer for Zellij<'_> {
         "zellij"
     }
 
-    fn install(&self) -> rootcause::Result<()> {
+    fn install(&self) -> rootcause::Result<InstallOutcome> {
         let source_dir = self.dev_tools_dir.join(self.bin_name()).join("source");
         let cargo_target = self.dev_tools_dir.join("cargo-target");
 
@@ -46,10 +47,6 @@ impl Installer for Zellij<'_> {
         file::ln_sf(&target, &self.bin_dir.join(self.bin_name()))?;
         file::chmod_x(&target)?;
 
-        Ok(())
-    }
-
-    fn should_verify_checksum(&self) -> bool {
-        false
+        Ok(InstallOutcome::NoArtifact)
     }
 }

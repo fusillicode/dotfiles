@@ -13,6 +13,7 @@ use ytil_sys::rustup;
 use ytil_sys::rustup::RequestedRustToolchain;
 
 use crate::installers;
+use crate::installers::InstallOutcome;
 use crate::installers::Installer;
 
 /// Construct the declared Cargo and Git tool inventory.
@@ -175,7 +176,7 @@ impl Installer for Cargo<'_> {
         self.bin_name
     }
 
-    fn install(&self) -> rootcause::Result<()> {
+    fn install(&self) -> rootcause::Result<InstallOutcome> {
         let mut command = self.install_command()?;
 
         command
@@ -194,7 +195,7 @@ impl Installer for Cargo<'_> {
         file::ln_sf(&cargo_binary, &self.bin_dir.join(self.bin_name()))?;
         file::chmod_x(cargo_binary)?;
 
-        Ok(())
+        Ok(InstallOutcome::NoArtifact)
     }
 
     fn health_check(&self) -> Option<rootcause::Result<String>> {

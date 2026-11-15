@@ -4,6 +4,7 @@ use ytil_sys::file;
 
 use crate::Installer;
 use crate::downloaders::pip;
+use crate::installers::InstallOutcome;
 
 pub struct RuffLsp<'a> {
     pub dev_tools_dir: &'a Path,
@@ -15,13 +16,13 @@ impl Installer for RuffLsp<'_> {
         "ruff-lsp"
     }
 
-    fn install(&self) -> rootcause::Result<()> {
+    fn install(&self) -> rootcause::Result<InstallOutcome> {
         let target_dir = pip::run(self.dev_tools_dir, self.bin_name(), &[self.bin_name()])?;
 
         let target = target_dir.join(self.bin_name());
         file::ln_sf(&target, &self.bin_dir.join(self.bin_name()))?;
         file::chmod_x(target)?;
 
-        Ok(())
+        Ok(InstallOutcome::NoArtifact)
     }
 }

@@ -8,6 +8,7 @@ use ytil_sys::file;
 use crate::downloaders::http;
 use crate::downloaders::http::deflate::HttpDeflateOption;
 use crate::downloaders::http::github;
+use crate::installers::InstallOutcome;
 use crate::installers::Installer;
 use crate::installers::SystemDependent;
 
@@ -37,16 +38,12 @@ impl Installer for Marksman<'_> {
         "marksman"
     }
 
-    fn should_verify_checksum(&self) -> bool {
-        false
-    }
-
-    fn install(&self) -> rootcause::Result<()> {
+    fn install(&self) -> rootcause::Result<InstallOutcome> {
         let (arch, os) = self.target_arch_and_os();
         let repo = format!("artempyanykh/{}", self.bin_name());
         let latest_release = github::get_latest_release_tag(&repo)?;
 
-        let target = http::run(
+        let download = http::run(
             &format!(
                 "https://github.com/{repo}/releases/download/{latest_release}/{0}-{os}{arch}",
                 self.bin_name()
@@ -57,8 +54,8 @@ impl Installer for Marksman<'_> {
             None,
         )?;
 
-        file::chmod_x(&target)?;
+        file::chmod_x(&download.path)?;
 
-        Ok(())
+        Ok(InstallOutcome::Downloaded(download))
     }
 }

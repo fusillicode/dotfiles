@@ -9,6 +9,7 @@ use crate::downloaders::http;
 use crate::downloaders::http::deflate::ChecksumSource;
 use crate::downloaders::http::deflate::HttpDeflateOption;
 use crate::downloaders::http::github;
+use crate::installers::InstallOutcome;
 use crate::installers::Installer;
 use crate::installers::SystemDependent;
 
@@ -37,7 +38,7 @@ impl Installer for Deno<'_> {
         "deno"
     }
 
-    fn install(&self) -> rootcause::Result<()> {
+    fn install(&self) -> rootcause::Result<InstallOutcome> {
         let repo = format!("{0}land/{0}", self.bin_name());
         let latest_release = github::get_latest_release_tag(&repo)?;
 
@@ -47,7 +48,7 @@ impl Installer for Deno<'_> {
         let checksums_url =
             format!("https://github.com/{repo}/releases/download/{latest_release}/{filename}.sha256sum");
 
-        let target = http::run(
+        let download = http::run(
             &format!("https://github.com/{repo}/releases/download/{latest_release}/{filename}"),
             &HttpDeflateOption::ExtractZip {
                 dest_dir: self.bin_dir,
@@ -59,8 +60,8 @@ impl Installer for Deno<'_> {
             }),
         )?;
 
-        file::chmod_x(&target)?;
+        file::chmod_x(&download.path)?;
 
-        Ok(())
+        Ok(InstallOutcome::Downloaded(download))
     }
 }

@@ -8,6 +8,7 @@ use ytil_sys::file;
 use crate::downloaders::http;
 use crate::downloaders::http::deflate::ChecksumSource;
 use crate::downloaders::http::deflate::HttpDeflateOption;
+use crate::installers::InstallOutcome;
 use crate::installers::Installer;
 use crate::installers::SystemDependent;
 
@@ -36,7 +37,7 @@ impl Installer for Hadolint<'_> {
         "hadolint"
     }
 
-    fn install(&self) -> rootcause::Result<()> {
+    fn install(&self) -> rootcause::Result<InstallOutcome> {
         let (arch, os) = self.target_arch_and_os();
 
         let filename = format!("{0}-{os}-{arch}", self.bin_name());
@@ -45,7 +46,7 @@ impl Installer for Hadolint<'_> {
             self.bin_name()
         );
 
-        let target = http::run(
+        let download = http::run(
             &format!(
                 "https://github.com/{0}/{0}/releases/latest/download/{filename}",
                 self.bin_name()
@@ -59,9 +60,9 @@ impl Installer for Hadolint<'_> {
             }),
         )?;
 
-        file::chmod_x(&target)?;
+        file::chmod_x(&download.path)?;
 
-        Ok(())
+        Ok(InstallOutcome::Downloaded(download))
     }
 
     fn health_check_args(&self) -> Option<&[&str]> {

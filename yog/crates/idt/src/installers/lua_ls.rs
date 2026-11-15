@@ -9,6 +9,7 @@ use ytil_sys::file;
 use crate::downloaders::http;
 use crate::downloaders::http::deflate::HttpDeflateOption;
 use crate::downloaders::http::github;
+use crate::installers::InstallOutcome;
 use crate::installers::Installer;
 use crate::installers::SystemDependent;
 
@@ -37,7 +38,7 @@ impl Installer for LuaLanguageServer<'_> {
         "lua-language-server"
     }
 
-    fn install(&self) -> rootcause::Result<()> {
+    fn install(&self) -> rootcause::Result<InstallOutcome> {
         let (arch, os) = self.target_arch_and_os();
 
         // No `bin` link as it requires some local stuff so, leave the garbage in `dev-tools` and configure the LSP to
@@ -47,7 +48,7 @@ impl Installer for LuaLanguageServer<'_> {
         let latest_release = github::get_latest_release_tag(&repo)?;
         fs::create_dir_all(&dev_tools_repo_dir)?;
 
-        let target_dir = http::run(
+        let download = http::run(
             &format!(
                 "https://github.com/{repo}/releases/download/{latest_release}/{}-{latest_release}-{os}-{arch}.tar.gz",
                 self.bin_name()
@@ -59,17 +60,13 @@ impl Installer for LuaLanguageServer<'_> {
             None,
         )?;
 
-        file::chmod_x(target_dir.join("bin").join(self.bin_name()))?;
+        file::chmod_x(download.path.join("bin").join(self.bin_name()))?;
 
-        Ok(())
+        Ok(InstallOutcome::Downloaded(download))
     }
 
     // NOTE: skip because it's a shitshow...
     fn health_check_args(&self) -> Option<&[&str]> {
         None
-    }
-
-    fn should_verify_checksum(&self) -> bool {
-        false
     }
 }

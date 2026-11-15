@@ -4,6 +4,7 @@ use rootcause::prelude::ResultExt;
 use ytil_sys::file;
 
 use crate::Installer;
+use crate::installers::InstallOutcome;
 
 pub struct Nvim<'a> {
     pub dev_tools_dir: &'a Path,
@@ -15,7 +16,7 @@ impl Installer for Nvim<'_> {
         "nvim"
     }
 
-    fn install(&self) -> rootcause::Result<()> {
+    fn install(&self) -> rootcause::Result<InstallOutcome> {
         // Compiling from sources because I can checkout specific refs in case of broken nightly builds.
         // Moreover...it's pretty badass 😎
         let nvim_source_dir = self.dev_tools_dir.join(self.bin_name()).join("source");
@@ -50,7 +51,7 @@ impl Installer for Nvim<'_> {
         file::ln_sf(&target, &self.bin_dir.join(self.bin_name()))?;
         file::chmod_x(&target)?;
 
-        Ok(())
+        Ok(InstallOutcome::NoArtifact)
     }
 
     fn health_check_args(&self) -> Option<&[&str]> {
