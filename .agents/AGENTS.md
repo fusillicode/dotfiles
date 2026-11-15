@@ -3,6 +3,7 @@
 ## Scope and safety
 
 - Follow the current request; newer explicit instructions override older guidance. Preserve unrelated non-format changes.
+- Keep Cargo target and intermediate build directories separate per Git worktree. Before the first build, check overrides and symlinks for shared paths. Use kache for cache reuse.
 - Ask before changing a public API, wire format, schema, storage model, dependency, architecture boundary, security property, or money path outside the user-authorized scope. Authorization must cover the affected boundary; a general request to fix or improve code is insufficient.
 - Git commits, pushes, history rewrites, branch deletion, and destructive actions require explicit authority for the exact operation and target. Never use plain `git push --force`; use an exact-object-ID `--force-with-lease` only for an authorized history rewrite.
 - Resolve exact external identifiers and re-fetch relevant external state before mutation. Never map numbered instructions to issues, comments, or threads from memory after their state may change.
