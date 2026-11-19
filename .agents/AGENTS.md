@@ -30,6 +30,7 @@ Read and apply each guide at its trigger. Linked files are not automatically loa
 Only the parent delegates. Workers must not spawn agents. Keep cheap sequential work inline. Delegate complete, bounded packages to the exact available role:
 
 - Review discussion collection: the advertised discussion collector role.
+- Remote CI run or job evidence: `ci_collector` when available. Pass the exact run or job reference and keep diagnosis in the parent.
 - Substantial bounded exploration or useful independent parallel work: `code_reader`.
 - Logs, metrics, or tracing evidence: `telemetrist`.
 - Long-running or multi-command focused verification: `check_runner`.
