@@ -30,15 +30,15 @@ pub(super) struct PaneTrackedProcessLifecycle {
 
 impl PaneTrackedProcessLifecycle {
     pub(super) const fn new(tracked_process: TrackedProcess, now: Instant) -> Self {
-        let (status, pending_work_start) = match screen::busy_start(&tracked_process) {
-            BusyStart::Activity => (PaneTrackedProcessStatus::Busy, PendingTrackedWorkStart::None),
-            BusyStart::Screen => (PaneTrackedProcessStatus::Seen, PendingTrackedWorkStart::Pending),
+        let status = match screen::busy_start(&tracked_process) {
+            BusyStart::Activity => PaneTrackedProcessStatus::Busy,
+            BusyStart::WorkingBanner => PaneTrackedProcessStatus::Seen,
         };
         Self {
             completion_before_work: None,
             last_focused_user_interaction: None,
             last_tracked_activity: now,
-            pending_work_start,
+            pending_work_start: PendingTrackedWorkStart::None,
             recent_user_interaction: None,
             status,
             tracked_process,
@@ -84,11 +84,8 @@ impl PaneTrackedProcessLifecycle {
             }
             TrackedProcessUserInteraction::StartsTrackedProcessWork => {
                 self.recent_user_interaction = None;
-                if screen::busy_start(&self.tracked_process) == BusyStart::Screen {
+                if self.busy_start() == BusyStart::WorkingBanner {
                     // Enter may be an empty prompt or another editor action. Only a Working row starts green.
-                    if !self.has_quiet_deadline() {
-                        self.pending_work_start = PendingTrackedWorkStart::Pending;
-                    }
                     return if focused_deadline_extended {
                         TrackedProcessChanges::deadline_only()
                     } else {
@@ -118,7 +115,7 @@ impl PaneTrackedProcessLifecycle {
                 self.last_tracked_activity = now;
                 TrackedProcessChanges::for_activity(self.mark_visible_activity())
             }
-            ScreenObservation::NeedsAttention(_) if self.screen_allows_quiet(observation) => {
+            ScreenObservation::NeedsAttention(completion) if self.accept_completion(completion) => {
                 let pending = self.pending_work_start;
                 self.pending_work_start = PendingTrackedWorkStart::None;
                 if !self.has_quiet_deadline() && pending == PendingTrackedWorkStart::Pending {
@@ -134,10 +131,15 @@ impl PaneTrackedProcessLifecycle {
     }
 
     pub(super) fn record_visible_activity(&mut self, now: Instant) -> TrackedProcessChanges {
-        if screen::busy_start(&self.tracked_process) == BusyStart::Screen
-            && self.status != PaneTrackedProcessStatus::Busy
-        {
-            return TrackedProcessChanges::default();
+        if self.busy_start() == BusyStart::WorkingBanner {
+            // Render damage can include an identical repaint. While green, we accept that signal because Codex
+            // can hide Working while streaming. We expect a finished, idle Codex pane to go quiet. If repeated
+            // identical repaints keep it green after completion, investigate what is triggering them in Codex.
+            return if self.has_quiet_deadline() {
+                self.extend_quiet_deadline(now)
+            } else {
+                TrackedProcessChanges::default()
+            };
         }
         self.discard_stale_user_interaction(now);
         if self.recent_user_interaction.is_some() {
@@ -216,9 +218,12 @@ impl PaneTrackedProcessLifecycle {
         self.tracked_process.screen_observation.as_ref()
     }
 
+    pub(super) const fn busy_start(&self) -> BusyStart {
+        screen::busy_start(&self.tracked_process)
+    }
+
     pub(super) const fn completion_capture_patterns(&self) -> Option<&ScreenObservationConfig> {
-        if matches!(screen::busy_start(&self.tracked_process), BusyStart::Screen) && self.has_quiet_deadline() {
-            // An editor action during work or completion must not invalidate the completion we are waiting for.
+        if matches!(self.busy_start(), BusyStart::WorkingBanner) {
             return None;
         }
         self.screen_observation()
@@ -236,21 +241,27 @@ impl PaneTrackedProcessLifecycle {
 
     pub(super) fn guard_quiet_deadline(
         &mut self,
-        observation: ScreenObservation<'_>,
+        observation: Option<ScreenObservation<'_>>,
         now: Instant,
     ) -> TrackedProcessChanges {
-        if matches!(observation, ScreenObservation::Cancelled) {
-            return self.cancel_work();
+        match observation {
+            Some(ScreenObservation::Cancelled) => self.cancel_work(),
+            Some(ScreenObservation::Busy) => self.record_screen_activity(ScreenObservation::Busy, now),
+            Some(ScreenObservation::Unknown) if self.busy_start() == BusyStart::WorkingBanner => {
+                TrackedProcessChanges::default()
+            }
+            Some(ScreenObservation::NeedsAttention(completion)) if self.accept_completion(completion) => {
+                TrackedProcessChanges::default()
+            }
+            Some(ScreenObservation::NeedsAttention(_) | ScreenObservation::Unknown) | None => {
+                self.extend_quiet_deadline(now)
+            }
         }
-        let mut changes = TrackedProcessChanges::default();
-        if matches!(observation, ScreenObservation::Busy) {
-            changes.merge(self.record_screen_activity(observation, now));
-        }
-        if !self.screen_allows_quiet(observation) {
-            self.last_tracked_activity = now;
-            changes.merge(TrackedProcessChanges::deadline_only());
-        }
-        changes
+    }
+
+    const fn extend_quiet_deadline(&mut self, now: Instant) -> TrackedProcessChanges {
+        self.last_tracked_activity = now;
+        TrackedProcessChanges::deadline_only()
     }
 
     fn cancel_work(&mut self) -> TrackedProcessChanges {
@@ -267,22 +278,12 @@ impl PaneTrackedProcessLifecycle {
         }
     }
 
-    fn screen_allows_quiet(&mut self, observation: ScreenObservation<'_>) -> bool {
-        match observation {
-            ScreenObservation::Busy => {
-                self.completion_before_work = None;
-                false
-            }
-            ScreenObservation::NeedsAttention(completion) => {
-                if self.completion_before_work.as_deref() == Some(completion) {
-                    return false;
-                }
-                self.completion_before_work = None;
-                true
-            }
-            // Partial redraws must not make the previous turn's completion fresh again.
-            ScreenObservation::Cancelled | ScreenObservation::Unknown => false,
+    fn accept_completion(&mut self, completion: &str) -> bool {
+        if self.completion_before_work.as_deref() == Some(completion) {
+            return false;
         }
+        self.completion_before_work = None;
+        true
     }
 
     fn quiet_activity_at(&self, focus_state: TrackedProcessPaneFocus) -> Instant {
@@ -346,7 +347,7 @@ pub(super) enum TrackedProcessAttentionNeed {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum PaneTrackedProcessStatus {
     Busy,
-    // A completion was observed without a Working row. Wait for the quiet threshold without showing green.
+    // The footer-based path can settle a pending submission without showing green.
     Settling,
     Seen,
     Unseen,

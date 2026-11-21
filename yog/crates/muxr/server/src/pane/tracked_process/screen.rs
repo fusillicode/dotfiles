@@ -18,12 +18,13 @@ pub(super) enum ScreenObservation<'a> {
 #[derive(Clone, Copy, Eq, PartialEq)]
 pub(super) enum BusyStart {
     Activity,
-    Screen,
+    WorkingBanner,
 }
 
 pub(super) fn observe<'a>(
     patterns: &ScreenObservationConfig,
     spans: impl DoubleEndedIterator<Item = impl Iterator<Item = &'a str>>,
+    busy_start: BusyStart,
 ) -> ScreenObservation<'a> {
     // Status rows from earlier turns can remain visible. The lowest recognized row takes precedence.
     for mut span in spans.rev() {
@@ -37,18 +38,17 @@ pub(super) fn observe<'a>(
         if patterns.matches_busy(status) {
             return ScreenObservation::Busy;
         }
-        if patterns.matches_needs_attention(status) {
+        if busy_start == BusyStart::Activity && patterns.matches_needs_attention(status) {
             // Keep the full normalized status, even when a configured regex matches only part of it.
             return ScreenObservation::NeedsAttention(status);
         }
     }
-    // An absent busy row alone is not confirmation that the agent finished.
     ScreenObservation::Unknown
 }
 
 pub(super) const fn busy_start(process: &TrackedProcess) -> BusyStart {
     match (&process.screen_observation, process.id) {
-        (Some(_), TrackedProcessId::Codex) => BusyStart::Screen,
+        (Some(_), TrackedProcessId::Codex) => BusyStart::WorkingBanner,
         (None, _)
         | (
             Some(_),
@@ -147,14 +147,17 @@ mod tests {
                 Regex::clone(lazy_regex::regex!(r"\ARUN(?:NING)?\z")),
                 Regex::clone(lazy_regex::regex!(r"\ATHINK(?:ING)?\z")),
             ])?,
-            needs_attention: ObservationPatterns::try_new(vec![
+            needs_attention: Some(ObservationPatterns::try_new(vec![
                 Regex::clone(lazy_regex::regex!(r"\ADONE\b")),
                 Regex::clone(lazy_regex::regex!(r"\AFINISHED\b")),
-            ])?,
+            ])?),
             cancelled: None,
             trim_chars: &['#'],
         };
-        test_that::assert_that!(observe(&patterns, text_line_spans(text)), eq(expected));
+        test_that::assert_that!(
+            observe(&patterns, text_line_spans(text), BusyStart::Activity),
+            eq(expected)
+        );
         Ok(())
     }
 
@@ -169,22 +172,16 @@ mod tests {
 
     #[rstest::rstest]
     #[case("Working (6m 35s • ctrl+x to interrupt)", ScreenObservation::Busy)]
-    #[case(
-        "Worked for 22m 38s • 11:37",
-        ScreenObservation::NeedsAttention("Worked for 22m 38s • 11:37")
-    )]
+    #[case("Worked for 22m 38s • 11:37", ScreenObservation::Unknown)]
     #[case(
         "Working (6m 35s • ctrl+x to interrupt)\nWorked for 22m 38s • 11:37",
-        ScreenObservation::NeedsAttention("Worked for 22m 38s • 11:37")
+        ScreenObservation::Busy
     )]
     #[case(
         "Worked for 22m 38s • 11:37\nWorking (6m 35s • ctrl+x to interrupt)",
         ScreenObservation::Busy
     )]
-    #[case(
-        "Worked for 22m 38s • 11:37\n\n› next prompt",
-        ScreenObservation::NeedsAttention("Worked for 22m 38s • 11:37")
-    )]
+    #[case("Worked for 22m 38s • 11:37\n\n› next prompt", ScreenObservation::Unknown)]
     #[case("no recognized status", ScreenObservation::Unknown)]
     #[case(
         "■ Conversation interrupted - use /feedback if something went wrong",
@@ -216,30 +213,23 @@ mod tests {
     )]
     #[case(
         "■ Conversation interrupted - use\n/feedback if something went wrong\nWorked for 1s • 14:18",
-        ScreenObservation::NeedsAttention("Worked for 1s • 14:18")
+        ScreenObservation::Cancelled
     )]
     fn test_observe_when_status_rows_coexist_uses_last_recognized_row(
         #[case] text: &str,
         #[case] expected: ScreenObservation<'_>,
     ) {
         let patterns = patterns(TrackedProcessId::Codex).unwrap();
-        assert_eq!(observe(&patterns, text_line_spans(text)), expected);
+        assert_eq!(
+            observe(&patterns, text_line_spans(text), BusyStart::WorkingBanner),
+            expected
+        );
     }
 
     #[rstest::rstest]
-    #[case(
-        80,
-        true,
-        "Worked for 16m 15s • 14:18",
-        ScreenObservation::NeedsAttention("Worked for 16m 15s • 14:18")
-    )]
+    #[case(80, true, "Worked for 16m 15s • 14:18", ScreenObservation::Unknown)]
     #[case(80, true, "Working (6m 35s • ctrl+x to interrupt)", ScreenObservation::Busy)]
-    #[case(
-        20,
-        false,
-        "Worked for 16m 15s • 14:18",
-        ScreenObservation::NeedsAttention("Worked for 16m 15s • 14:18")
-    )]
+    #[case(20, false, "Worked for 16m 15s • 14:18", ScreenObservation::Unknown)]
     #[case(20, false, "Working (6m 35s • ctrl+x to interrupt)", ScreenObservation::Busy)]
     #[case(
         80,
@@ -269,7 +259,8 @@ mod tests {
         test_that::assert_that!(
             observe(
                 &patterns,
-                terminal.live_tail_text(SCREEN_TAIL_ROWS).candidate_line_spans()
+                terminal.live_tail_text(SCREEN_TAIL_ROWS).candidate_line_spans(),
+                BusyStart::WorkingBanner,
             ),
             eq(expected)
         );
@@ -287,7 +278,8 @@ mod tests {
         test_that::assert_that!(
             observe(
                 &patterns,
-                terminal.live_tail_text(SCREEN_TAIL_ROWS).candidate_line_spans()
+                terminal.live_tail_text(SCREEN_TAIL_ROWS).candidate_line_spans(),
+                BusyStart::WorkingBanner,
             ),
             eq(ScreenObservation::Cancelled)
         );
@@ -318,7 +310,8 @@ mod tests {
         test_that::assert_that!(
             observe(
                 &patterns,
-                terminal.live_tail_text(SCREEN_TAIL_ROWS).candidate_line_spans()
+                terminal.live_tail_text(SCREEN_TAIL_ROWS).candidate_line_spans(),
+                BusyStart::WorkingBanner,
             ),
             eq(ScreenObservation::Cancelled)
         );
@@ -343,7 +336,8 @@ mod tests {
         test_that::assert_that!(
             observe(
                 &patterns,
-                terminal.live_tail_text(SCREEN_TAIL_ROWS).candidate_line_spans()
+                terminal.live_tail_text(SCREEN_TAIL_ROWS).candidate_line_spans(),
+                BusyStart::WorkingBanner,
             ),
             eq(expected)
         );
@@ -371,7 +365,8 @@ mod tests {
         test_that::assert_that!(
             observe(
                 &patterns,
-                terminal.live_tail_text(SCREEN_TAIL_ROWS).candidate_line_spans()
+                terminal.live_tail_text(SCREEN_TAIL_ROWS).candidate_line_spans(),
+                BusyStart::WorkingBanner,
             ),
             eq(expected)
         );
@@ -383,7 +378,10 @@ mod tests {
         let mut patterns = patterns(TrackedProcessId::Codex).unwrap();
         patterns.cancelled = None;
         let text = "■ Conversation interrupted - use\n/feedback if something went wrong";
-        assert_eq!(observe(&patterns, text_line_spans(text)), ScreenObservation::Unknown);
+        assert_eq!(
+            observe(&patterns, text_line_spans(text), BusyStart::WorkingBanner),
+            ScreenObservation::Unknown
+        );
     }
 
     fn patterns(agent: TrackedProcessId) -> Option<ScreenObservationConfig> {

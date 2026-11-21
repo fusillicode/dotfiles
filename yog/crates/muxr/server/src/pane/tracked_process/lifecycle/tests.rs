@@ -6,7 +6,6 @@ use crate::pane::tracked_process::tests::tracked_process;
 
 #[rstest::rstest]
 #[case(PaneTrackedProcessStatus::Busy)]
-#[case(PaneTrackedProcessStatus::Settling)]
 #[case(PaneTrackedProcessStatus::Unseen)]
 #[case(PaneTrackedProcessStatus::Seen)]
 fn test_codex_when_cancelled_clears_work_and_does_not_rearm_on_repaint(
@@ -30,7 +29,7 @@ fn test_codex_when_cancelled_clears_work_and_does_not_rearm_on_repaint(
         eq(TrackedProcessChanges::default())
     );
     test_that::assert_that!(
-        lifecycle.guard_quiet_deadline(ScreenObservation::Cancelled, now),
+        lifecycle.guard_quiet_deadline(Some(ScreenObservation::Cancelled), now),
         eq(TrackedProcessChanges::default())
     );
     lifecycle.record_screen_activity(ScreenObservation::Busy, now);
@@ -72,7 +71,6 @@ fn test_lifecycle_when_discovered_or_entered_uses_agent_busy_start_policy(
 #[rstest::rstest]
 #[case(PaneTrackedProcessStatus::Seen)]
 #[case(PaneTrackedProcessStatus::Unseen)]
-#[case(PaneTrackedProcessStatus::Settling)]
 fn test_codex_when_working_arrives_without_enter_starts_busy_despite_local_echo(
     #[case] status: PaneTrackedProcessStatus,
 ) -> rootcause::Result<()> {
@@ -103,81 +101,45 @@ fn test_codex_when_working_arrives_without_enter_starts_busy_despite_local_echo(
 }
 
 #[test]
-fn test_codex_when_new_completion_follows_ignored_enter_raises_attention_without_green() -> rootcause::Result<()> {
+fn test_activity_started_process_when_old_completion_reappears_defers_quiet() -> rootcause::Result<()> {
     let now = Instant::now();
-    let mut lifecycle = PaneTrackedProcessLifecycle::new(
-        crate::pane::tracked_process::lifecycle::tests::tracked_process("codex")?,
-        now,
-    );
-    lifecycle.completion_before_work = Some("Worked for 1s • 14:18".to_owned());
-    for observation in [
-        ScreenObservation::Unknown,
-        ScreenObservation::NeedsAttention("Worked for 1s • 14:18"),
-    ] {
-        test_that::assert_that!(
-            lifecycle.record_screen_activity(observation, now),
-            eq(TrackedProcessChanges::default())
-        );
-    }
-    test_that::assert_that!(lifecycle.state(), eq(TrackedProcessState::Seen));
-    test_that::assert_that!(lifecycle.quiet_deadline(TrackedProcessPaneFocus::Unfocused)?, eq(None));
-    let completed = ScreenObservation::NeedsAttention("Worked for 2s • 14:19");
-    lifecycle.record_screen_activity(completed, now);
-    test_that::assert_that!(lifecycle.state(), eq(TrackedProcessState::Seen));
-    let due = crate::pane::tracked_process::lifecycle::tests::instant_after(now, Duration::from_secs(3))?;
+    let mut lifecycle = PaneTrackedProcessLifecycle::new(tracked_process("cursor-agent")?, now);
+    let old_completion = ScreenObservation::NeedsAttention("TASK DONE turn 1");
+    lifecycle.capture_completion_before_work(old_completion);
+    let due = instant_after(now, Duration::from_secs(3))?;
+
     test_that::assert_that!(
-        lifecycle.record_screen_activity(completed, due),
+        lifecycle.guard_quiet_deadline(Some(old_completion), due),
+        eq(TrackedProcessChanges::deadline_only())
+    );
+    let retry = instant_after(due, Duration::from_secs(3))?;
+    test_that::assert_that!(
+        lifecycle.guard_quiet_deadline(Some(ScreenObservation::NeedsAttention("TASK DONE turn 2")), retry),
         eq(TrackedProcessChanges::default())
     );
-    test_that::assert_that!(
-        lifecycle.quiet_deadline(TrackedProcessPaneFocus::Unfocused)?,
-        eq(Some(due))
-    );
-    lifecycle.mark_quiet_if_due(due, TrackedProcessPaneFocus::Unfocused);
+    lifecycle.mark_quiet_if_due(retry, TrackedProcessPaneFocus::Unfocused);
+
     test_that::assert_that!(lifecycle.state(), eq(TrackedProcessState::Unseen));
-    test_that::assert_that!(
-        lifecycle.record_screen_activity(completed, due),
-        eq(TrackedProcessChanges::default())
-    );
-    test_that::assert_that!(lifecycle.quiet_deadline(TrackedProcessPaneFocus::Unfocused)?, eq(None));
     Ok(())
 }
 
 #[test]
-fn test_screen_allows_quiet_when_previous_completion_returns_requires_working_or_new_completion()
--> rootcause::Result<()> {
-    let mut lifecycle = PaneTrackedProcessLifecycle::new(
-        crate::pane::tracked_process::lifecycle::tests::tracked_process("codex")?,
-        Instant::now(),
+fn test_codex_when_working_disappears_during_local_echo_extends_quiet_on_damage() -> rootcause::Result<()> {
+    let now = Instant::now();
+    let mut lifecycle = PaneTrackedProcessLifecycle::new(tracked_process("codex")?, now);
+    lifecycle.record_screen_activity(ScreenObservation::Busy, now);
+    lifecycle.record_user_interaction(
+        TrackedProcessUserInteraction::MayEcho,
+        now,
+        TrackedProcessPaneFocus::Focused,
     );
-    let process = crate::pane::tracked_process::lifecycle::tests::tracked_process("codex")?;
-    let patterns = process
-        .screen_observation
-        .as_ref()
-        .ok_or_else(|| rootcause::report!("missing Codex patterns"))?;
-    let completed = "Worked for 1s • 14:18";
-    lifecycle.completion_before_work = Some(completed.to_owned());
+    let output = instant_after(now, Duration::from_millis(100))?;
+
+    lifecycle.record_screen_activity(ScreenObservation::Unknown, output);
+
     test_that::assert_that!(
-        lifecycle.screen_allows_quiet(screen::observe(patterns, screen::text_line_spans("partial redraw"))),
-        eq(false)
-    );
-    test_that::assert_that!(
-        lifecycle.screen_allows_quiet(screen::observe(
-            patterns,
-            screen::text_line_spans("── Worked for 1s • 14:18 ───")
-        )),
-        eq(false)
-    );
-    test_that::assert_that!(
-        lifecycle.screen_allows_quiet(screen::observe(
-            patterns,
-            screen::text_line_spans("Working (0s • esc to interrupt)")
-        )),
-        eq(false)
-    );
-    test_that::assert_that!(
-        lifecycle.screen_allows_quiet(screen::observe(patterns, screen::text_line_spans(completed))),
-        eq(true)
+        lifecycle.quiet_deadline(TrackedProcessPaneFocus::Unfocused)?,
+        eq(Some(instant_after(output, Duration::from_secs(3))?))
     );
     Ok(())
 }

@@ -791,6 +791,9 @@ async fn test_run_client_session_when_request_arrives_near_quiet_deadline_handle
     let completed = format!("{}Worked for 22m 38s • 11:37\n", "\n".repeat(24));
     runtimes.handle(pane_id)?.write_input(completed.as_bytes())?;
     wait_for_runtime_snapshot_contains(&runtimes, pane_id, "Worked for 22m 38s • 11:37")?;
+    // This test begins after the output turn has already handled the final frame.
+    let damage = runtimes.take_screen_dirty_panes();
+    pane_tracked_processes.record_cached_visible_activity(&runtimes, &damage, then)?;
     let (layout_snapshot, mut render_worker) = crate::screen_render::initial_client_render(
         &config,
         &mut layout,
@@ -1826,7 +1829,7 @@ async fn assert_focused_may_echo_request_precedes_quiet_deadline_extends_busy(
     Ok(())
 }
 
-fn assert_ignored_enter_preserves_completion(
+fn assert_codex_waits_for_working_after_enter(
     state: &mut ClientSessionState<'_>,
     pane_id: PaneId,
     initial_state: TrackedProcessState,
@@ -1836,9 +1839,13 @@ fn assert_ignored_enter_preserves_completion(
         self::tracked_process_snapshot_state(&state.pane_tracked_processes.snapshot(state.layout), pane_id)?,
         eq(initial_state)
     );
+    let output = format!("{}Worked for 2s • 14:19\n", "\n".repeat(24));
+    state.runtimes.handle(pane_id)?.write_input(output.as_bytes())?;
+    wait_for_runtime_snapshot_contains(state.runtimes, pane_id, "Worked for 2s • 14:19")?;
+    let damage = state.runtimes.take_screen_dirty_panes();
     state
         .pane_tracked_processes
-        .record_cached_visible_activity(state.runtimes, &[pane_id], due)?;
+        .record_cached_visible_activity(state.runtimes, &damage, due)?;
     let later = instant_after(due, Duration::from_secs(30))?;
     state.pane_tracked_processes.guard_quiet_deadlines(
         &state.config.user_config,
@@ -1862,100 +1869,6 @@ fn assert_ignored_enter_preserves_completion(
     test_that::assert_that!(
         state.pane_tracked_processes.next_quiet_deadline(state.layout)?,
         eq(None)
-    );
-    Ok(())
-}
-
-fn assert_submission_waits_for_fresh_completion(
-    state: &mut ClientSessionState<'_>,
-    pane_id: PaneId,
-) -> rootcause::Result<()> {
-    let retry = Instant::now();
-    test_that::assert_that!(
-        state.pane_tracked_processes.next_quiet_deadline(state.layout)?,
-        eq(None)
-    );
-    // Repainting the pre-submission footer must not start green or arm attention.
-    state
-        .pane_tracked_processes
-        .record_cached_visible_activity(state.runtimes, &[pane_id], retry)?;
-    test_that::assert_that!(
-        state.pane_tracked_processes.next_quiet_deadline(state.layout)?,
-        eq(None)
-    );
-    test_that::assert_that!(
-        self::tracked_process_snapshot_state(&state.pane_tracked_processes.snapshot(state.layout), pane_id)?,
-        eq(TrackedProcessState::Seen)
-    );
-    // A new completion is sufficient even when Working was never sampled.
-    let output = format!("{}Worked for 2s • 14:19\n", "\n".repeat(24));
-    state.runtimes.handle(pane_id)?.write_input(output.as_bytes())?;
-    wait_for_runtime_snapshot_contains(state.runtimes, pane_id, "Worked for 2s • 14:19")?;
-    state
-        .pane_tracked_processes
-        .record_cached_visible_activity(state.runtimes, &[pane_id], retry)?;
-    let completed = instant_after(retry, Duration::from_secs(3))?;
-    state.pane_tracked_processes.guard_quiet_deadlines(
-        &state.config.user_config,
-        state.layout,
-        state.runtimes,
-        completed,
-    )?;
-    test_that::assert_that!(
-        state
-            .pane_tracked_processes
-            .mark_quiet_deadlines(state.layout, completed)?,
-        eq(TrackedProcessAttention::Seen)
-    );
-    Ok(())
-}
-
-async fn assert_repainted_completion_settles(
-    state: &mut ClientSessionState<'_>,
-    event_writer: &mut impl ServerEventSink,
-    timers: &mut ClientTimers,
-    pane_id: PaneId,
-    expected_state: TrackedProcessState,
-) -> rootcause::Result<()> {
-    let mut render_dmg = ClientRenderDmg::Clean;
-    test_that::assert_that!(
-        crate::pty_output::handle_pane_output_message(
-            Some(SessionPaneOutputMessage::PaneOutputReady),
-            event_writer,
-            state,
-            timers,
-            &mut render_dmg,
-        )
-        .await?,
-        eq(ClientSessionFlow::Continue)
-    );
-    test_that::assert_that!(timers.tracked_process_quiet_deadline(), eq(QuietDeadline::Elapsed));
-    let mut heartbeat_started_at = None;
-    test_that::assert_that!(
-        self::handle_session_runtime_timer_message(
-            SessionRuntimeTimerMessage::TrackedProcessQuietDeadlineReached,
-            event_writer,
-            state,
-            timers,
-            &mut heartbeat_started_at,
-            &mut render_dmg,
-        )
-        .await?,
-        eq(ClientSessionFlow::Continue)
-    );
-    test_that::assert_that!(
-        self::tracked_process_snapshot_state(&state.pane_tracked_processes.snapshot(state.layout), pane_id)?,
-        eq(expected_state)
-    );
-    let redraw = format!("{}idle redraw\n", "\n".repeat(24));
-    state.runtimes.handle(pane_id)?.write_input(redraw.as_bytes())?;
-    wait_for_runtime_snapshot_contains(state.runtimes, pane_id, "idle redraw")?;
-    state
-        .pane_tracked_processes
-        .record_cached_visible_activity(state.runtimes, &[pane_id], Instant::now())?;
-    test_that::assert_that!(
-        self::tracked_process_snapshot_state(&state.pane_tracked_processes.snapshot(state.layout), pane_id)?,
-        eq(expected_state)
     );
     Ok(())
 }

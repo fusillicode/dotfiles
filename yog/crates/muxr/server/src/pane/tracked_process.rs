@@ -15,7 +15,7 @@ use crate::pane::runtime::PaneRuntimes;
 use crate::pane::tracked_process::lifecycle::PaneTrackedProcessLifecycle;
 use crate::pane::tracked_process::lifecycle::TrackedProcessAttentionNeed;
 use crate::pane::tracked_process::lifecycle::TrackedProcessPaneFocus;
-use crate::pane::tracked_process::screen::ScreenObservation;
+use crate::pane::tracked_process::screen::BusyStart;
 use crate::pty::PtyHandle;
 use crate::state::SessionLayout;
 use crate::terminal::TerminalTextTail;
@@ -397,7 +397,8 @@ impl PaneTrackedProcesses {
             let activity = match lifecycle.screen_observation() {
                 Some(patterns) => {
                     let text = runtimes.handle(*pane_id)?.live_tail_text(screen::SCREEN_TAIL_ROWS);
-                    lifecycle.record_screen_activity(screen::observe(patterns, text.candidate_line_spans()), now)
+                    let observation = screen::observe(patterns, text.candidate_line_spans(), lifecycle.busy_start());
+                    lifecycle.record_screen_activity(observation, now)
                 }
                 None => lifecycle.record_visible_activity(now),
             };
@@ -406,8 +407,7 @@ impl PaneTrackedProcesses {
         Ok(changes)
     }
 
-    /// Check the live screen immediately before quiet transitions. For confirmed agents with screen checks, require
-    /// completion before red-dot activation, or cancellation for immediate clearing; otherwise the timer retries later.
+    /// Check foreground identity and the live screen before a quiet transition.
     pub(crate) fn guard_quiet_deadlines(
         &mut self,
         config: &MuxrConfig,
@@ -425,7 +425,13 @@ impl PaneTrackedProcesses {
                     &observation,
                 ))
             },
-            |pane_id| Ok(runtimes.handle(pane_id)?.live_tail_text(screen::SCREEN_TAIL_ROWS)),
+            |pane_id, busy_start| {
+                let handle = runtimes.handle(pane_id)?;
+                Ok(match busy_start {
+                    BusyStart::Activity => Some(handle.live_tail_text(screen::SCREEN_TAIL_ROWS)),
+                    BusyStart::WorkingBanner => handle.live_tail_text_if_clean(screen::SCREEN_TAIL_ROWS),
+                })
+            },
         )
     }
 
@@ -446,7 +452,7 @@ impl PaneTrackedProcesses {
         };
         // Capture before writing input: the PTY reader can observe the next turn immediately after submission.
         let text = handle.live_tail_text(screen::SCREEN_TAIL_ROWS);
-        let observation = screen::observe(patterns, text.candidate_line_spans());
+        let observation = screen::observe(patterns, text.candidate_line_spans(), BusyStart::Activity);
         lifecycle.capture_completion_before_work(observation);
     }
 
@@ -566,7 +572,7 @@ impl PaneTrackedProcesses {
         layout: &SessionLayout,
         now: Instant,
         mut observe_cmd: impl FnMut(PaneId) -> rootcause::Result<TrackedProcessCmdObservation<'a>>,
-        mut read_screen: impl FnMut(PaneId) -> rootcause::Result<TerminalTextTail>,
+        mut read_screen: impl FnMut(PaneId, BusyStart) -> rootcause::Result<Option<TerminalTextTail>>,
     ) -> rootcause::Result<TrackedProcessChanges> {
         let focused_pane = layout.active_pane_id()?;
         let mut changes = TrackedProcessChanges::default();
@@ -599,19 +605,17 @@ impl PaneTrackedProcesses {
                 continue;
             };
 
-            let guarded = if matches!(observation, TrackedProcessCmdObservation::Tracked(_)) {
-                let text = read_screen(pane_id)?;
-                let screen = lifecycle
-                    .screen_observation()
-                    .map_or(ScreenObservation::Unknown, |patterns| {
-                        screen::observe(patterns, text.candidate_line_spans())
-                    });
-                lifecycle.guard_quiet_deadline(screen, now)
+            let screen = if matches!(observation, TrackedProcessCmdObservation::Tracked(_)) {
+                read_screen(pane_id, lifecycle.busy_start())?
             } else {
-                // Unknown identity retains the lifecycle and defers its quiet transition.
-                lifecycle.guard_quiet_deadline(ScreenObservation::Unknown, now)
+                None
             };
-            changes.merge(guarded);
+            // A missing sample means unconfirmed identity or pending screen damage. Retry at the next deadline.
+            let observation = screen
+                .as_ref()
+                .zip(lifecycle.screen_observation())
+                .map(|(text, patterns)| screen::observe(patterns, text.candidate_line_spans(), lifecycle.busy_start()));
+            changes.merge(lifecycle.guard_quiet_deadline(observation, now));
         }
 
         Ok(changes)
