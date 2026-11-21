@@ -8,6 +8,7 @@ use test_that::prelude::*;
 use crate::pane::cmd::PaneCmd;
 use crate::pane::cmd::PaneCmdUnknownReason;
 use crate::pane::split::PaneSplitAxis;
+use crate::pane::tracked_process::screen::ScreenObservation;
 use crate::pane::tracked_process::*;
 use crate::state::SessionMetadata;
 use crate::terminal::TerminalState;
@@ -641,7 +642,7 @@ fn test_guard_quiet_deadlines_when_identity_is_unknown_keeps_busy_until_confirme
             &layout,
             due,
             |_| Ok(TrackedProcessCmdObservation::Unknown),
-            |_| Err(rootcause::report!("unconfirmed identity must not read stale screen")),
+            |_, _| Err(rootcause::report!("unconfirmed identity must not read stale screen")),
         )?,
         eq(TrackedProcessChanges::deadline_only())
     );
@@ -655,7 +656,7 @@ fn test_guard_quiet_deadlines_when_identity_is_unknown_keeps_busy_until_confirme
         &layout,
         retry,
         |_| Ok(TrackedProcessCmdObservation::Tracked(&process)),
-        |_| screen_tail("Working (1s • esc to interrupt)"),
+        |_, _| screen_tail("Working (1s • esc to interrupt)").map(Some),
     )?;
     test_that::assert_that!(
         processes.mark_quiet_deadlines(&layout, retry)?,
@@ -666,7 +667,7 @@ fn test_guard_quiet_deadlines_when_identity_is_unknown_keeps_busy_until_confirme
         &layout,
         completed,
         |_| Ok(TrackedProcessCmdObservation::Tracked(&process)),
-        |_| screen_tail("Worked for 2s • 14:19"),
+        |_, _| screen_tail("Something.").map(Some),
     )?;
     let expected = if focused {
         TrackedProcessAttention::Seen
@@ -710,7 +711,7 @@ fn test_guard_quiet_deadlines_when_cancellation_splits_words_clears_work(
             &layout,
             due,
             |_| Ok(TrackedProcessCmdObservation::Tracked(&process)),
-            |_| Ok(terminal.live_tail_text(screen::SCREEN_TAIL_ROWS)),
+            |_, _| Ok(Some(terminal.live_tail_text(screen::SCREEN_TAIL_ROWS))),
         )?,
         eq(TrackedProcessChanges::state_and_deadline())
     );

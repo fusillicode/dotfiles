@@ -392,6 +392,15 @@ impl PtyHandle {
     pub(crate) fn live_tail_text(&self, row_limit: usize) -> TerminalTextTail {
         self.state.terminal.lock().live_tail_text(row_limit)
     }
+
+    pub(crate) fn live_tail_text_if_clean(&self, row_limit: usize) -> Option<TerminalTextTail> {
+        // The reader marks damage under this lock before sending the wakeup. Leave it for the output handler.
+        let terminal = self.state.terminal.lock();
+        if self.state.screen_dirty.load(Ordering::Acquire) {
+            return None;
+        }
+        Some(terminal.live_tail_text(row_limit))
+    }
 }
 
 /// Pane render data captured under one terminal-state lock.

@@ -43,9 +43,7 @@ impl TrackedProcessConfig {
                         busy: ObservationPatterns::try_new(vec![Regex::clone(lazy_regex::regex!(
                             r"\AWorking \(\s*(?:[0-9]+h(?:\s+[0-9]+m)?(?:\s+[0-9]+s)?|[0-9]+m(?:\s+[0-9]+s)?|[0-9]+s)\s*•\s*\S+ to interrupt\s*\)\z"
                         ))])?,
-                        needs_attention: ObservationPatterns::try_new(vec![Regex::clone(lazy_regex::regex!(
-                            r"\AWorked for \s*(?:[0-9]+h(?:\s+[0-9]+m)?(?:\s+[0-9]+s)?|[0-9]+m(?:\s+[0-9]+s)?|[0-9]+s)\s*•\s*(?:[01][0-9]|2[0-3]):[0-5][0-9]\z"
-                        ))])?,
+                        needs_attention: None,
                         cancelled: Some(ObservationPatterns::try_new(vec![Regex::clone(lazy_regex::regex!(
                             r"\A■\s+Conversation interrupted - use /feedback if something went wrong\z"
                         ))])?),
@@ -110,7 +108,8 @@ impl TrackedProcess {
 #[derive(Clone, Debug)]
 pub struct ScreenObservationConfig {
     pub busy: ObservationPatterns,
-    pub needs_attention: ObservationPatterns,
+    /// Completion patterns for processes that use a footer to signal completion.
+    pub needs_attention: Option<ObservationPatterns>,
     /// Cancellation patterns clear the indicator immediately. `None` disables cancellation recognition.
     pub cancelled: Option<ObservationPatterns>,
     /// Additional edge decorations to trim; whitespace is always trimmed.
@@ -137,7 +136,9 @@ impl ScreenObservationConfig {
 
     /// Match a normalized status against the configured attention patterns.
     pub fn matches_needs_attention(&self, status: &str) -> bool {
-        self.needs_attention.iter().any(|pattern| pattern.is_match(status))
+        self.needs_attention
+            .as_ref()
+            .is_some_and(|patterns| patterns.iter().any(|pattern| pattern.is_match(status)))
     }
 }
 
@@ -226,7 +227,7 @@ mod tests {
     ) -> rootcause::Result<()> {
         let screen = ScreenObservationConfig {
             busy: ObservationPatterns::try_new(vec![Regex::clone(lazy_regex::regex!(r"\Astatus\s+active\z"))])?,
-            needs_attention: ObservationPatterns::try_new(vec![Regex::clone(lazy_regex::regex!(r"\Adone[0-9]+\z"))])?,
+            needs_attention: None,
             cancelled: None,
             trim_chars,
         };
@@ -239,7 +240,9 @@ mod tests {
     -> rootcause::Result<()> {
         let screen = ScreenObservationConfig {
             busy: ObservationPatterns::try_new(vec![Regex::clone(lazy_regex::regex!(r"\Awork(?:ing)?\z"i))])?,
-            needs_attention: ObservationPatterns::try_new(vec![Regex::clone(lazy_regex::regex!(r"\Adone[0-9]+\z"))])?,
+            needs_attention: Some(ObservationPatterns::try_new(vec![Regex::clone(lazy_regex::regex!(
+                r"\Adone[0-9]+\z"
+            ))])?),
             cancelled: None,
             trim_chars: &[],
         };
@@ -271,35 +274,6 @@ mod tests {
     fn test_codex_busy_when_status_is_valid_matches_pattern(#[case] text: &str) {
         let screen = codex_screen_observation();
         assert!(screen.matches_busy(screen.normalize_line(text)));
-    }
-
-    #[rstest::rstest]
-    #[case("Worked for 22m 38s • 11:37", "Worked for 22m 38s • 11:37")]
-    #[case("── Worked for 0s • 00:01 ───", "Worked for 0s • 00:01")]
-    #[case("Worked for 1h 2m 3s • 23:59", "Worked for 1h 2m 3s • 23:59")]
-    #[case("\t── Worked for   22m\t38s  •\t11:37 ── ", "Worked for   22m\t38s  •\t11:37")]
-    fn test_codex_needs_attention_when_completion_is_valid_matches_normalized_status(
-        #[case] text: &str,
-        #[case] expected: &str,
-    ) {
-        let screen = codex_screen_observation();
-        let status = screen.normalize_line(text);
-        assert_eq!(status, expected);
-        assert!(screen.matches_needs_attention(status));
-        assert!(!screen.matches_busy(status));
-    }
-
-    #[rstest::rstest]
-    #[case("Working (6m 35s • ctrl+x to interrupt)")]
-    #[case("› Worked for 22m 38s • 11:37")]
-    #[case("example: Worked for 22m 38s • 11:37")]
-    #[case("Worked for 1s • 24:00")]
-    #[case("Worked for 1s • 12:60")]
-    #[case("Worked for 1s • 12:30 quoted text")]
-    #[case("Worked for • 12:30")]
-    fn test_codex_needs_attention_when_text_is_not_a_completion_rejects_pattern(#[case] text: &str) {
-        let screen = codex_screen_observation();
-        assert!(!screen.matches_needs_attention(screen.normalize_line(text)));
     }
 
     #[rstest::rstest]
