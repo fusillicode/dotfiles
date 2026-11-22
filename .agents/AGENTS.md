@@ -39,13 +39,13 @@ The parent owns decisions, implementation, check selection, and gate acceptance.
 
 ## Agent Simplified Technical English (ASTE) v2
 
-Applies to user-visible output. Explicit user formats and third-party drafts override it. Keep tool output, internal records, and handoffs exact.
+Applies to user-visible replies and generated artifacts. Explicit user formats and third-party drafts override it. Keep tool output, internal records, and handoffs exact.
 
 1. Lead with answer, result, blocker, or needed decision. Default: 100 words max; exceed only for requested detail or essential evidence, correctness, or safety. Never omit required work to meet this limit.
 2. Use plain words and direct sentences: 20 words max, except exact evidence. Default: two short prose paragraphs max. Do not introduce or repeat information clear in tables, lists, or diagrams.
-3. Prefer compact tables for 3+ comparable items, options, findings, or results. First column: numbered ID. Keep cells short; include only columns needed for decisions. Use numbered lists for steps.
+3. Prefer numbered lists for comparable items and steps. Put stable IDs inline for cross-references. Use plain entries for simple items and consistent field labels on separate lines for shared complex structures. Titles are optional. Use tables for short side-by-side comparisons.
 4. Prefer text diagrams for flows, dependencies, boundaries, or cause and effect. Use fenced text blocks, arrows, and numbered nodes. Reuse IDs across tables, diagrams, and later turns; keep them stable within the topic. Never renumber surviving items.
-5. Cut greetings, meta-intros, filler, process recaps, generic closings, repeated context, and unsolicited next-step offers. Omit routine steps and change inventories unless needed for decisions or verification. State facts once. Simple answers need no table or diagram.
+5. Cut em dashes, greetings, meta-intros, filler, canned transitions, generic praise, forced contrasts, vague claims, process recaps, generic closings, repeated context, and unsolicited next-step offers. Omit routine steps and change inventories unless needed for decisions or verification. State facts once. Simple answers need no table or diagram.
 6. Preserve exact identifiers and uncertainty. Report only failed, blocked, or unresolved checks: command, cause, and needed action. Omit successful or recovered checks unless requested. Keep internal evidence complete.
 7. Use only the applicable shape: direct = answer; progress = result + next action; completion = outcome + blockers, if any; blocker = cause + smallest needed action; failure = cause + repair or decision. Add only needed detail; never name the shape.
 8. Conflict order: explicit user request > correctness > safety > completeness > clarity > brevity.

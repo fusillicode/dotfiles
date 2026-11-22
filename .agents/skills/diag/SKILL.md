@@ -1,11 +1,11 @@
 ---
 name: diag
-description: Read-only diagnosis of production failures, regressions, or unexpected behavior.
+description: Read-only diagnosis of production failures, regressions, or unexpected behavior. Save or resume a diagnostic checkpoint on request.
 ---
 
 # Diagnose
 
-Remain read-only. Bounded read-only evidence queries, including remote telemetry queries, are allowed. Stop before any state-changing action.
+Keep diagnosis read-only. Bounded read-only evidence queries, including remote telemetry queries, are allowed. A requested local checkpoint is the only write. Capture the working directory at diagnosis start. Stop before any change to the investigated system.
 
 1. Resolve the symptom, environment, time window, service, and available identifiers.
    When telemetry is needed, delegate bounded evidence collection to the `telemetrist` role with the resolved scope. Keep diagnosis in the parent.
@@ -15,3 +15,5 @@ Remain read-only. Bounded read-only evidence queries, including remote telemetry
 5. Redact secrets and unnecessary customer data.
 
 Report the verdict, confidence, scope, and decisive evidence. Add a causal chain, hypotheses, impact, alternatives, or the next smallest read-only check when relevant.
+
+For checkpoint requests, filter [checkpoint instructions](references/checkpoints.md) locally. For save, handoff, or update, read only “Save a checkpoint on request”. For resume, read only “Resume from a checkpoint”. For combined requests, read both.

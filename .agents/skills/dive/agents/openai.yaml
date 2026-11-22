@@ -1,0 +1,4 @@
+interface:
+  display_name: "Dive"
+  short_description: "Pressure-test ideas in a Markdown-backed interview"
+  default_prompt: "Use $dive to pressure-test this one question at a time and write the result in Markdown."

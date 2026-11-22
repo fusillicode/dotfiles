@@ -1,4 +1,0 @@
-interface:
-  display_name: "Session Handoff"
-  short_description: "Persist a concise cross-session continuation"
-  default_prompt: "Use $handoff to preserve this work for a future session."
