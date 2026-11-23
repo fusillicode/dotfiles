@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Order delivery - Payload comparison</title>
+  <style>
+    :root { color-scheme: dark; background: #000; color: #fff; }
+    html { scrollbar-gutter: stable; }
+    body { text-align: left; }
+    main:has(> .controls-trigger) > header { padding-inline-end: 6rem; }
+    .controls-trigger {
+      position: fixed;
+      top: 0.5rem;
+      right: 0.5rem;
+      z-index: 1;
+    }
+    #diagram-controls {
+      position: fixed;
+      inset: 2.5rem 0.5rem auto auto;
+      margin: 0;
+      padding: 0.5rem;
+      box-sizing: border-box;
+      max-width: min(24rem, calc(100% - 1rem));
+      max-height: calc(100% - 3rem);
+      overflow: auto;
+      overflow-wrap: anywhere;
+      border: 1px solid #aaa;
+      background: #000;
+      color: #fff;
+    }
+    .disclosure-controls { display: flex; flex-wrap: wrap; gap: 0.25rem; }
+    .disclosure-controls + .options { margin-block-start: 0.5rem; }
+    details { margin-block: 0.5rem; }
+    summary { cursor: pointer; }
+    pre { white-space: pre; }
+    [hidden] { display: none !important; }
+    .options label { display: block; margin-block: 0.25rem; cursor: pointer; }
+    .payload-comparison {
+      display: grid;
+      grid-auto-flow: column;
+      grid-auto-columns: max-content;
+      grid-column: var(--start) / -1;
+      margin-inline-start: calc(var(--lane) / 2);
+      margin-block-start: 0.35rem;
+      min-width: 0;
+      gap: 1rem;
+      position: relative;
+      background: #000;
+      overflow-x: auto;
+    }
+    .payload-comparison pre { margin-block: 0.25rem 0.5rem; }
+    .payload-current { color: #fff; }
+    .sequence {
+      --lane: 18rem;
+      --tracks: repeat(var(--actors), var(--lane)) minmax(0, 1fr);
+      overflow-x: auto;
+    }
+    .participants, .timeline {
+      min-width: calc(var(--actors) * var(--lane) + 2rem);
+    }
+    .participants, .exchange, .message > summary, .payload-row {
+      display: grid;
+      grid-template-columns: var(--tracks);
+    }
+    .participants > b {
+      justify-self: center;
+      padding: 0.2rem 0.5rem;
+      border: 1px solid #aaa;
+      overflow-wrap: anywhere;
+    }
+    .timeline { position: relative; isolation: isolate; padding-block: 0.5rem; }
+    .timeline::before {
+      content: "";
+      position: absolute;
+      inset-block: 0;
+      inset-inline-start: 0;
+      width: calc(var(--actors) * var(--lane));
+      z-index: -1;
+      pointer-events: none;
+      background-image:
+        repeating-linear-gradient(transparent 0 5px, #000 5px 9px),
+        linear-gradient(to right, transparent calc(50% - 0.5px),
+          #888 calc(50% - 0.5px) calc(50% + 0.5px), transparent calc(50% + 0.5px));
+      background-size: auto, var(--lane) 100%;
+    }
+    .exchange { --inset: calc(50% / var(--span)); }
+    .exchange > .option-guard {
+      grid-column: var(--columns);
+      margin-inline-start: calc(var(--lane) / 2);
+    }
+    .message {
+      grid-column: var(--columns);
+      min-width: 0;
+      margin-block: 0.5rem 0.35rem;
+      margin-inline: var(--inset);
+      overflow-wrap: anywhere;
+    }
+    details.message { grid-column: 1 / -1; margin-inline: 0; }
+    .message > summary { list-style: none; }
+    .message > summary::-webkit-details-marker { display: none; }
+    .message-caption {
+      grid-column: var(--columns);
+      margin-inline: var(--inset);
+      position: relative;
+      min-width: 0;
+    }
+    .message-caption::before {
+      content: "▸";
+      position: absolute;
+      inset-inline-end: 100%;
+      padding-inline-end: 0.25rem;
+    }
+    .message[open] .message-caption::before { content: "▾"; }
+    .message > span:first-child, .message-caption > span:first-child { background: #000; }
+    .arrow {
+      position: relative;
+      display: block;
+      border-top: 1px solid currentColor;
+    }
+    .arrow::after {
+      content: "";
+      position: absolute;
+      top: 0;
+      right: 0;
+      width: 0.55rem;
+      height: 0.55rem;
+      background: currentColor;
+      transform: translateY(-50%);
+      clip-path: polygon(0 0, 100% 50%, 0 100%, 0 80%, 60% 50%, 0 20%);
+    }
+    .call .arrow::after { clip-path: polygon(0 0, 100% 50%, 0 100%); }
+    .reply .arrow { border-top-style: dashed; }
+    .reverse .arrow::after {
+      right: auto;
+      left: 0;
+      transform: translateY(-50%) scaleX(-1);
+    }
+    .self { --inset: 0px; }
+    .self :is(.message:not(details), .message-caption) { margin-inline-start: calc(var(--lane) / 2); }
+    .self .arrow {
+      box-sizing: border-box;
+      width: min(3rem, 100%);
+      height: 1rem;
+      border-right: 1px solid currentColor;
+      border-bottom: 1px solid currentColor;
+    }
+    .self .reply .arrow { border-style: dashed; }
+    .self .arrow::after {
+      top: auto;
+      right: auto;
+      bottom: -1px;
+      left: 0;
+      transform: translateY(50%) scaleX(-1);
+    }
+    .added:not(.message), .message.added > :is(summary, span) { color: #79de8a; }
+    .removed:not(.message), .message.removed > :is(summary, span) { color: #ff8585; }
+    .changed:not(.message), .message.changed > :is(summary, span) { color: #7db3ff; }
+    .message.removed > span:first-child,
+    .message.removed .message-caption > span:first-child { text-decoration: line-through; }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Order delivery - Payload comparison</h1>
+    </header>
+    <button type="button" class="controls-trigger" popovertarget="diagram-controls">Controls</button>
+    <div id="diagram-controls" popover="auto" role="group" aria-label="Diagram controls">
+      <div class="disclosure-controls">
+        <button type="button" data-disclose="open">Expand all</button>
+        <button type="button" data-disclose="close">Collapse all</button>
+      </div>
+      <div class="options" role="group" aria-label="Options">
+        <label><input type="checkbox" data-option="queued"> a. queued: Queues delivery after submission.</label>
+        <label><input type="checkbox" data-option="priority"> b. priority</label>
+      </div>
+    </div>
+    <ol>
+      <li>Current uses synchronous delivery.</li>
+    </ol>
+    <div class="sequence" style="--actors: 2" role="group" aria-label="Order delivery sequence">
+      <div class="participants"><b>Client</b><b>Gateway</b></div>
+      <div class="timeline">
+        <div class="exchange" style="--columns: 1 / 3; --span: 2; --start: 1">
+          <details class="message call">
+            <summary aria-label="Client calls Gateway to submit order">
+              <span class="message-caption">
+                <span>Submit order</span><span class="arrow" aria-hidden="true"></span>
+              </span>
+            </summary>
+            <div class="payload-row">
+              <div class="payload-comparison" tabindex="0" role="group" aria-label="Submit order payloads">
+                <div class="payload-current">
+                  <div>Current</div>
+                  <pre><code>{
+  "id": 42,
+  "mode": "sync",
+  "legacy": true
+}</code></pre>
+                </div>
+                <div class="option-panel" data-options="queued" hidden>
+                  <div>a. queued</div>
+                  <pre><code>{
+  "id": 42,
+  "mode": <span class="changed">"async"</span>,
+  <del class="removed">"legacy": true</del>
+}</code></pre>
+                </div>
+                <div class="option-panel" data-options="priority" hidden>
+                  <div>b. priority</div>
+                  <pre><code>{
+  "id": 42,
+  "mode": "sync",
+  "legacy": true,
+  <span class="added">"priority": 2</span>
+}</code></pre>
+                </div>
+              </div>
+            </div>
+          </details>
+        </div>
+        <div class="exchange" style="--columns: 1 / 3; --span: 2">
+          <div class="message reply reverse" role="img" aria-label="Gateway replies to Client with an order receipt">
+            <span>Return order receipt</span><span class="arrow" aria-hidden="true"></span>
+          </div>
+        </div>
+        <div class="exchange" data-options="queued" hidden style="--columns: 1 / 3; --span: 2">
+          <div class="option-guard">[a. queued]</div>
+          <div class="message reply reverse removed" role="img" aria-label="Queued option omits the order receipt">
+            <span>Return order receipt</span><span class="arrow" aria-hidden="true"></span>
+          </div>
+        </div>
+        <div class="exchange self" data-options="queued" hidden style="--columns: 2 / 3; --span: 1; --start: 2">
+          <div class="option-guard">[a. queued]</div>
+          <details class="message call added">
+            <summary aria-label="Gateway calls itself to process the queued order">
+              <span class="message-caption">
+                <span>Process queued order</span><span class="arrow" aria-hidden="true"></span>
+              </span>
+            </summary>
+            <div class="payload-row">
+              <div class="payload-comparison" tabindex="0" role="group" aria-label="Queued order payload">
+                <div class="option-panel" data-options="queued" hidden>
+                  <div>a. queued</div>
+                  <pre><code class="added">{
+  "id": 42
+}</code></pre>
+                </div>
+              </div>
+            </div>
+          </details>
+        </div>
+      </div>
+    </div>
+  </main>
+  <script>
+    const options = Array.from(document.querySelectorAll("[data-option]"));
+    const optionBlocks = document.querySelectorAll("[data-options]");
+
+    function updateOptions() {
+      const selected = new Set(options.filter(option => option.checked).map(option => option.dataset.option));
+      for (const block of optionBlocks) {
+        block.hidden = !block.dataset.options.split(/\s+/).some(key => selected.has(key));
+      }
+    }
+
+    function preserveReadingPosition(update) {
+      if (window.scrollY === 0) {
+        update();
+        return;
+      }
+
+      const readingLine = Math.min(80, window.innerHeight / 5);
+      const landmarks = Array.from(document.querySelectorAll("main h1, main h2, main h3, .sequence .exchange"))
+        .map(element => ({ element, before: element.getBoundingClientRect() }))
+        .filter(({ before }) => before.height > 0);
+      const current = landmarks.findIndex(({ before }) => before.bottom > readingLine);
+
+      update();
+
+      if (current < 0) return;
+      const candidates = landmarks.slice(current).concat(landmarks.slice(0, current).reverse());
+      for (const candidate of candidates) {
+        const after = candidate.element.getBoundingClientRect();
+        if (!after.height) continue;
+
+        const top = candidate === landmarks[current] && candidate.before.top + after.height > readingLine
+          ? candidate.before.top
+          : readingLine;
+        window.scrollBy(0, after.top - top);
+        break;
+      }
+    }
+
+    for (const option of options) {
+      option.addEventListener("change", () => preserveReadingPosition(updateOptions));
+    }
+    updateOptions();
+
+    for (const button of document.querySelectorAll("[data-disclose]")) {
+      button.addEventListener("click", () => preserveReadingPosition(() => {
+        for (const section of document.querySelectorAll("details")) {
+          section.open = button.dataset.disclose === "open";
+        }
+      }));
+    }
+  </script>
+</body>
+</html>

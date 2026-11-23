@@ -1,0 +1,10 @@
+# Comparison diffs
+
+- Resolve ambiguity before coloring. Use the named baseline as Current, with its exact white payload left of checked option panes. Keep historical examples out of Current unless named as baseline.
+- Omit the Current pane when its interaction or payload is absent. Omit its arrow only when the interaction is absent. Color newly added payloads entirely green in both cases. Label unknown payloads unavailable and partial examples partial. Color only supported differences.
+- Each checkbox reveals an independent comparison. Display checked panes side by side in the same order as their lettered checkbox slugs. Reuse those slugs in pane headings.
+- Use green additions, red strikethrough removals, and blue changes. Show full JSON envelopes and match key order where possible. Keep unchanged siblings white and struck fields at their original nesting. Copied diffs include struck text. Ignore incidental fixture values in shape comparisons.
+- Match array entries by verified identity, or by position when it defines identity. Show unmatched entries inline as red strikethrough removals or green additions.
+- Mark verified moves and renames blue at their destination. Add old paths as tooltips when useful. Color new wrapper keys green and each child by its own status. Treat unverified mappings as additions and removals. Label missing examples.
+- Gate option panes and option-specific exchanges with `data-options`. Space-separated keys match any checked option. Keep Current arrows white, including shared exchanges with payload-only changes. For flow changes, place a guarded variant at the corresponding point. Color its unprefixed label and arrow by status. Strike removed labels and color payloads separately.
+- Split incompatible flows into guarded `alt` operands. Gate each option-specific operand with `data-options`. If all operands are gated, give the enclosing frame their combined keys. Guard standalone option-specific exchanges too. Show lettered slugs in guards, such as `[a. queued]`, even when payloads are collapsed.
