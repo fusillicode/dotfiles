@@ -45,7 +45,8 @@ impl TrackedProcessConfig {
                         ))])?,
                         needs_attention: None,
                         cancelled: Some(ObservationPatterns::try_new(vec![Regex::clone(lazy_regex::regex!(
-                            r"\A■\s+Conversation interrupted - use /feedback if something went wrong\z"
+                            // Explicit literal semantics also let the server match hard-wrapped fragments directly.
+                            r"(?u-ix)\A■\s+Conversation interrupted - use /feedback if something went wrong\z"
                         ))])?),
                         trim_chars: &['─', '━', '•', '·', '⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'],
                     }),

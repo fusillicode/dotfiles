@@ -17,6 +17,7 @@ use rio_vt::ansi::CursorShape;
 use rio_vt::config::colors::AnsiColor;
 use rio_vt::config::colors::NamedColor;
 use rio_vt::crosswords::Crosswords;
+use rio_vt::crosswords::Mode;
 use rio_vt::crosswords::grid::Grid;
 use rio_vt::crosswords::grid::row::Row;
 use rio_vt::crosswords::pos::Column;
@@ -33,6 +34,7 @@ use rootcause::prelude::ResultExt;
 use smallvec::SmallVec;
 
 use crate::terminal::CursorShapeSource;
+use crate::terminal::TerminalScreenMode;
 use crate::terminal::TerminalSnapshot;
 use crate::terminal::TerminalSnapshotScope;
 use crate::terminal::TerminalTextTail;
@@ -100,24 +102,32 @@ pub(super) fn visible_line<U: EventListener>(terminal: &Crosswords<U>, row: usiz
 }
 
 pub(super) fn live_tail_text<U: EventListener>(terminal: &Crosswords<U>, row_limit: usize) -> TerminalTextTail {
-    let mut tail = TerminalTextTail::default();
-    let mut hyperlink_cache = HashMap::new();
     let first_row = terminal.screen_lines().saturating_sub(row_limit);
+    let mut tail = TerminalTextTail {
+        screen_mode: if terminal.mode().contains(Mode::ALT_SCREEN) {
+            TerminalScreenMode::Alternate
+        } else {
+            TerminalScreenMode::Normal
+        },
+        ..TerminalTextTail::default()
+    };
     let mut logical_line_start = 0;
 
     for row in first_row..terminal.screen_lines() {
         // Direct live-grid coordinates deliberately ignore display_offset().
         let line = Line(i32::try_from(row).unwrap_or(i32::MAX));
-        let cells = render_row(&terminal.grid, line, terminal.columns(), &mut hyperlink_cache);
         let start = tail.text.len();
-        for cell in cells {
-            tail.text.push_str(cell.text());
+        let grid_row = &terminal.grid[line];
+        for (col, square) in grid_row.inner.iter().take(terminal.columns()).enumerate() {
+            with_cell_text(&terminal.grid, line, Column(col), *square, |text| {
+                tail.text.push_str(text);
+            });
         }
+        let padding = terminal.columns().saturating_sub(grid_row.inner.len());
+        tail.text.extend(std::iter::repeat_n(' ', padding));
         let end = tail.text.len();
         tail.lines.push(start..end);
-        if row_wrap(&terminal.grid[line]) != RowWrap::EndsWithSoftWrap
-            || row.saturating_add(1) == terminal.screen_lines()
-        {
+        if row_wrap(grid_row) != RowWrap::EndsWithSoftWrap || row.saturating_add(1) == terminal.screen_lines() {
             // Cursor painting can leave an earlier WRAPLINE flag intact. Keep each physical start as well as
             // the joined logical line, borrowing all candidates from one text buffer.
             for range in tail.lines.iter_mut().skip(logical_line_start) {
@@ -183,23 +193,7 @@ fn render_cell(
     let style = render_style(grid, square);
     let width = square.wide();
 
-    let mut cell = match width {
-        Wide::Spacer => RenderCell::wide_continuation(style),
-        Wide::Wide | Wide::LeadingSpacer | Wide::Narrow if square.is_bg_only() => render_text_cell(width, " ", style),
-        Wide::Wide | Wide::LeadingSpacer | Wide::Narrow if square.has_grapheme() => {
-            let text = square_text(grid, line, col);
-            render_text_cell(
-                width,
-                std::str::from_utf8(text.as_slice()).map_or(" ", |text| text),
-                style,
-            )
-        }
-        Wide::Wide | Wide::LeadingSpacer | Wide::Narrow => {
-            let character = normalized_render_character(square.c());
-            let mut encoded = [0_u8; char::MAX_LEN_UTF8];
-            render_text_cell(width, character.encode_utf8(&mut encoded), style)
-        }
-    };
+    let mut cell = with_cell_text(grid, line, col, square, |text| render_text_cell(width, text, style));
 
     if square.content_tag() == ContentTag::Codepoint {
         let hyperlink = square.extras_id().and_then(|id| {
@@ -229,8 +223,20 @@ fn render_text_cell(width: Wide, text: &str, style: RenderStyle) -> RenderCell {
     }
 }
 
-fn square_text(grid: &Grid<Square>, line: Line, col: Column) -> SmallVec<[u8; RENDER_CELL_TEXT_INLINE_BYTES]> {
-    let mut text = SmallVec::new();
+// Status sampling reads the same text as rendering, without allocating RenderCells or resolving styles and hyperlinks.
+fn with_cell_text<T>(grid: &Grid<Square>, line: Line, col: Column, square: Square, read: impl FnOnce(&str) -> T) -> T {
+    if square.wide() == Wide::Spacer {
+        return read("");
+    }
+    if square.is_bg_only() {
+        return read(" ");
+    }
+    if !square.has_grapheme() {
+        let character = normalized_render_character(square.c());
+        return read(character.encode_utf8(&mut [0; char::MAX_LEN_UTF8]));
+    }
+
+    let mut text = SmallVec::<[u8; RENDER_CELL_TEXT_INLINE_BYTES]>::new();
     for character in grid.cell_text(Pos::new(line, col)) {
         let character = normalized_render_character(character);
         let mut encoded = [0_u8; char::MAX_LEN_UTF8];
@@ -239,7 +245,7 @@ fn square_text(grid: &Grid<Square>, line: Line, col: Column) -> SmallVec<[u8; RE
     if text.is_empty() {
         text.push(b' ');
     }
-    text
+    read(std::str::from_utf8(&text).unwrap_or(" "))
 }
 
 const fn normalized_render_character(character: char) -> char {

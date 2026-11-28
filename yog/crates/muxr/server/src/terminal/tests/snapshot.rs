@@ -94,6 +94,38 @@ fn test_terminal_state_live_tail_when_alternate_screen_is_active_reads_active_gr
 }
 
 #[test]
+fn test_terminal_state_when_title_follows_unrendered_output_preserves_pending_rows() -> rootcause::Result<()> {
+    let mut terminal = terminal_state(&TerminalSize::new(20, 3)?);
+    let _baseline = terminal.render_snapshot(TerminalSnapshotScope::Full)?;
+    let _output = terminal.process(b"first row");
+
+    let title = terminal.process(b"\x1b]2;new title\x07");
+    let next_output = terminal.process(b"\r\nsecond row");
+    let snapshot = terminal.render_snapshot(TerminalSnapshotScope::ChangedRows)?;
+
+    test_that::assert_that!(title.screen_dmg(), eq(TerminalScreenDmg::Clean));
+    test_that::assert_that!(next_output.screen_dmg(), eq(TerminalScreenDmg::Dirty));
+    test_that::assert_that!(snapshot.rows().len(), eq(2));
+    Ok(())
+}
+
+#[test]
+fn test_terminal_state_when_title_follows_resize_preserves_full_redraw() -> rootcause::Result<()> {
+    let size = TerminalSize::new(20, 3)?;
+    let mut terminal = terminal_state(&size);
+    let _baseline = terminal.render_snapshot(TerminalSnapshotScope::Full)?;
+    terminal.resize(&TerminalSize::new(24, 3)?);
+    terminal.resize(&size);
+
+    let title = terminal.process(b"\x1b]2;new title\x07");
+    let snapshot = terminal.render_snapshot(TerminalSnapshotScope::ChangedRows)?;
+
+    test_that::assert_that!(title.screen_dmg(), eq(TerminalScreenDmg::Clean));
+    test_that::assert_that!(snapshot.scope, eq(TerminalSnapshotScope::Full));
+    Ok(())
+}
+
+#[test]
 fn test_terminal_state_when_completion_is_repainted_reports_damage_without_screen_changes() -> rootcause::Result<()> {
     let mut terminal = crate::terminal::tests::snapshot::terminal_state(&TerminalSize::new(80, 3)?);
     let repaint = "\x1b[2;1H  Worked for 16m 15s • 14:18";

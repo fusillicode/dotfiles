@@ -1,4 +1,5 @@
 use std::ops::Range;
+use std::time::Instant;
 
 use muxr_config::ScrollbackConfig;
 use muxr_config::ScrollbackDumpStyle;
@@ -116,6 +117,8 @@ impl TerminalSnapshot {
 #[derive(Default)]
 #[cfg_attr(test, derive(Debug, Eq, PartialEq))]
 pub struct TerminalTextTail {
+    pub(crate) dmg: Option<ScreenDmg>,
+    pub(crate) screen_mode: TerminalScreenMode,
     text: String,
     lines: Vec<Range<usize>>,
 }
@@ -145,7 +148,15 @@ impl TerminalTextTail {
     }
 }
 
+/// Screen text and its dmg stamp are sampled under the same PTY lock.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ScreenDmg {
+    pub(crate) generation: u64,
+    pub(crate) arrived_at: Instant,
+}
+
 pub struct TerminalState {
+    dmg: Option<ScreenDmg>,
     input_filter: RioInputFilter,
     control_parser: ControlParser,
     cursor_shape_source: CursorShapeSource,
@@ -158,6 +169,7 @@ pub struct TerminalState {
 impl TerminalState {
     pub fn with_scrollback(size: &TerminalSize, scrollback: ScrollbackConfig) -> Self {
         Self {
+            dmg: None,
             input_filter: RioInputFilter::default(),
             control_parser: ControlParser::default(),
             cursor_shape_source: CursorShapeSource::Default,
@@ -174,6 +186,14 @@ impl TerminalState {
                 replies: TerminalReplies::default(),
             };
         }
+
+        let arrived_at = Instant::now();
+        // Measure this write independently. Grid rows keep their dirty flags until rendered.
+        // A pending full redraw also invalidates the previous viewport snapshot.
+        if self.rio.terminal().is_fully_damaged() {
+            self.rendered_viewport = None;
+        }
+        self.rio.terminal_mut().reset_damage();
 
         let cursor_before = self.rio.terminal().cursor_shape;
         let blinking_before = self.rio.terminal().blinking_cursor;
@@ -216,20 +236,31 @@ impl TerminalState {
             }
         }
 
-        let cursor_changed = terminal_control.cursor != CursorControl::Unchanged
+        let cursor_changed = cursor_visibility_before != terminal.cursor().is_visible()
+            || terminal_control.cursor != CursorControl::Unchanged
             || cursor_values_changed
             || events.cursor_change == crate::terminal::rio::CursorChange::Changed;
 
-        let metadata_changed = cursor_visibility_before != terminal.cursor().is_visible()
-            || mouse_protocol_before != self.mouse_protocol();
-
-        if self.rio.terminal().peek_damage_event().is_some() {
+        if terminal.peek_damage_event().is_some() || cursor_changed {
+            // Idle Codex restores its cursor on focus gain and loss. Rio marks the cursor row dirty even at the same
+            // position.
+            if control::is_cursor_redraw(bytes) {
+                return TerminalProcessOutcome::MetadataDirty { replies };
+            }
+            self.dmg = Some(ScreenDmg {
+                generation: self.dmg.map_or(1, |dmg| dmg.generation.wrapping_add(1)),
+                arrived_at,
+            });
             TerminalProcessOutcome::ScreenDirty { replies }
-        } else if cursor_changed || metadata_changed {
+        } else if mouse_protocol_before != self.mouse_protocol() {
             TerminalProcessOutcome::MetadataDirty { replies }
         } else {
             TerminalProcessOutcome::Clean { replies }
         }
+    }
+
+    pub(crate) const fn latest_dmg(&self) -> Option<ScreenDmg> {
+        self.dmg
     }
 
     pub fn resize(&mut self, size: &TerminalSize) {
@@ -377,7 +408,10 @@ impl TerminalState {
 
     /// Read the bottom live rows without moving the viewport or consuming render damage.
     pub(crate) fn live_tail_text(&self, row_limit: usize) -> TerminalTextTail {
-        render::live_tail_text(self.rio.terminal(), row_limit)
+        TerminalTextTail {
+            dmg: self.dmg,
+            ..render::live_tail_text(self.rio.terminal(), row_limit)
+        }
     }
 
     fn scroll_lines(&mut self, direction: PaneScrollDirection, lines: usize) -> TerminalScrollMove {
@@ -545,9 +579,10 @@ impl From<u16> for TerminalKeyboardProtocol {
 }
 
 /// Terminal screen buffer selected by the pane application.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum TerminalScreenMode {
     Alternate,
+    #[default]
     Normal,
 }
 

@@ -5,6 +5,44 @@ use crate::pane::tracked_process::tests::instant_after;
 use crate::pane::tracked_process::tests::tracked_process;
 
 #[rstest::rstest]
+#[case(50, TrackedProcessState::Seen)]
+#[case(501, TrackedProcessState::Busy)]
+fn test_codex_when_output_and_next_key_echo_share_a_wakeup_preserves_preinput_activity(
+    #[case] millis: u64,
+    #[case] expected: TrackedProcessState,
+) -> rootcause::Result<()> {
+    use crate::pane::tracked_process::PreparedPaneInput;
+    use crate::terminal::TerminalState;
+    let mut terminal = TerminalState::with_scrollback(
+        &muxr_core::TerminalSize::new(80, 12)?,
+        muxr_config::MuxrConfig::new()?.scrollback,
+    );
+    let edit = Instant::now();
+    let mut lifecycle = PaneTrackedProcessLifecycle::new(tracked_process("codex")?, edit);
+    let interaction = TrackedProcessUserInteraction::MayEcho;
+    let focus = TrackedProcessPaneFocus::Focused;
+    lifecycle.record_user_interaction(interaction, edit, focus);
+    let _ = terminal.process(b"output before next key");
+    let mut preceding = terminal.live_tail_text(screen::SCREEN_TAIL_ROWS);
+    preceding.dmg.as_mut().unwrap().arrived_at = instant_after(edit, Duration::from_millis(millis))?;
+    let next = instant_after(edit, Duration::from_millis(600))?;
+
+    PreparedPaneInput {
+        at: next,
+        preceding_output: Some(preceding),
+    }
+    .record(&mut lifecycle, interaction, focus);
+    let _ = terminal.process(b"x");
+    let mut echo = terminal.live_tail_text(screen::SCREEN_TAIL_ROWS);
+    echo.dmg.as_mut().unwrap().arrived_at = next;
+    let delivered = instant_after(next, Duration::from_millis(600))?;
+    lifecycle.record_screen_sample(&echo, ScreenSampleSource::TerminalDmg, delivered);
+
+    test_that::assert_that!(lifecycle.state(), eq(expected));
+    Ok(())
+}
+
+#[rstest::rstest]
 #[case(PaneTrackedProcessStatus::Busy)]
 #[case(PaneTrackedProcessStatus::Unseen)]
 #[case(PaneTrackedProcessStatus::Seen)]
@@ -25,7 +63,7 @@ fn test_codex_when_cancelled_clears_work_and_does_not_rearm_on_repaint(
     test_that::assert_that!(lifecycle.pending_work_start, eq(PendingTrackedWorkStart::None));
     test_that::assert_that!(lifecycle.completion_before_work, eq(None));
     test_that::assert_that!(
-        lifecycle.record_screen_activity(ScreenObservation::Unknown, now),
+        lifecycle.record_screen_activity(ScreenObservation::Cancelled, now),
         eq(TrackedProcessChanges::default())
     );
     test_that::assert_that!(
@@ -33,6 +71,31 @@ fn test_codex_when_cancelled_clears_work_and_does_not_rearm_on_repaint(
         eq(TrackedProcessChanges::default())
     );
     lifecycle.record_screen_activity(ScreenObservation::Busy, now);
+    test_that::assert_that!(lifecycle.state(), eq(TrackedProcessState::Busy));
+    Ok(())
+}
+
+#[rstest::rstest]
+#[case(false)]
+#[case(true)]
+fn test_codex_when_interrupted_during_input_echo_keeps_original_suppression_window(
+    #[case] working_banner: bool,
+) -> rootcause::Result<()> {
+    let edit = Instant::now();
+    let mut lifecycle = PaneTrackedProcessLifecycle::new(tracked_process("codex")?, edit);
+    lifecycle.record_user_interaction(
+        TrackedProcessUserInteraction::MayEcho,
+        edit,
+        TrackedProcessPaneFocus::Focused,
+    );
+    if working_banner {
+        lifecycle.record_screen_activity(ScreenObservation::Busy, edit);
+    }
+    lifecycle.record_screen_activity(ScreenObservation::Cancelled, edit);
+
+    lifecycle.record_visible_activity(instant_after(edit, Duration::from_millis(100))?);
+    test_that::assert_that!(lifecycle.state(), eq(TrackedProcessState::Seen));
+    lifecycle.record_visible_activity(instant_after(edit, Duration::from_millis(501))?);
     test_that::assert_that!(lifecycle.state(), eq(TrackedProcessState::Busy));
     Ok(())
 }
@@ -124,7 +187,7 @@ fn test_activity_started_process_when_old_completion_reappears_defers_quiet() ->
 }
 
 #[test]
-fn test_codex_when_working_disappears_during_local_echo_extends_quiet_on_damage() -> rootcause::Result<()> {
+fn test_codex_when_working_disappears_during_local_echo_preserves_quiet_deadline() -> rootcause::Result<()> {
     let now = Instant::now();
     let mut lifecycle = PaneTrackedProcessLifecycle::new(tracked_process("codex")?, now);
     lifecycle.record_screen_activity(ScreenObservation::Busy, now);
@@ -139,8 +202,29 @@ fn test_codex_when_working_disappears_during_local_echo_extends_quiet_on_damage(
 
     test_that::assert_that!(
         lifecycle.quiet_deadline(TrackedProcessPaneFocus::Unfocused)?,
-        eq(Some(instant_after(output, Duration::from_secs(3))?))
+        eq(Some(instant_after(now, Duration::from_secs(3))?))
     );
+    Ok(())
+}
+
+#[test]
+fn test_codex_when_prompt_edits_continue_suppresses_dmg_until_last_echo_window_expires() -> rootcause::Result<()> {
+    let now = Instant::now();
+    let mut lifecycle = PaneTrackedProcessLifecycle::new(tracked_process("codex")?, now);
+    for edit_at in [now, instant_after(now, Duration::from_millis(400))?] {
+        lifecycle.record_user_interaction(
+            TrackedProcessUserInteraction::MayEcho,
+            edit_at,
+            TrackedProcessPaneFocus::Focused,
+        );
+    }
+
+    lifecycle.record_visible_activity(instant_after(now, Duration::from_millis(700))?);
+    test_that::assert_that!(lifecycle.state(), eq(TrackedProcessState::Seen));
+    test_that::assert_that!(lifecycle.quiet_deadline(TrackedProcessPaneFocus::Focused)?, eq(None));
+
+    lifecycle.record_visible_activity(instant_after(now, Duration::from_millis(901))?);
+    test_that::assert_that!(lifecycle.state(), eq(TrackedProcessState::Busy));
     Ok(())
 }
 

@@ -6,6 +6,7 @@ use std::sync::atomic::Ordering;
 use std::thread;
 #[cfg(test)]
 use std::time::Duration;
+use std::time::Instant;
 
 use kanal::SendError;
 use kanal::Sender;
@@ -41,6 +42,7 @@ use crate::terminal::TerminalApplicationMode;
 use crate::terminal::TerminalCursorKeyMode;
 use crate::terminal::TerminalFocusEvent;
 use crate::terminal::TerminalMouseProtocol;
+use crate::terminal::TerminalProcessOutcome;
 use crate::terminal::TerminalReplies;
 use crate::terminal::TerminalScrollMove;
 use crate::terminal::TerminalSnapshot;
@@ -389,14 +391,34 @@ impl PtyHandle {
             .context("failed to write muxr scrollback dump")?)
     }
 
+    pub(crate) fn pending_screen_before_input(
+        &self,
+        row_limit: usize,
+        last_sampled: Option<u64>,
+    ) -> (Instant, Option<TerminalTextTail>) {
+        let terminal = self.state.terminal.lock();
+        let input_at = Instant::now();
+        let unread = self.state.has_pending_visible_output()
+            && terminal
+                .latest_dmg()
+                .is_some_and(|dmg| Some(dmg.generation) != last_sampled);
+        let preceding_output = unread.then(|| terminal.live_tail_text(row_limit));
+        drop(terminal);
+        (input_at, preceding_output)
+    }
+
     pub(crate) fn live_tail_text(&self, row_limit: usize) -> TerminalTextTail {
         self.state.terminal.lock().live_tail_text(row_limit)
+    }
+
+    pub(crate) fn take_visible_output(&self) -> bool {
+        self.state.visible_output_pending.swap(false, Ordering::AcqRel)
     }
 
     pub(crate) fn live_tail_text_if_clean(&self, row_limit: usize) -> Option<TerminalTextTail> {
         // The reader marks damage under this lock before sending the wakeup. Leave it for the output handler.
         let terminal = self.state.terminal.lock();
-        if self.state.screen_dirty.load(Ordering::Acquire) {
+        if self.state.has_pending_visible_output() {
             return None;
         }
         Some(terminal.live_tail_text(row_limit))
@@ -514,6 +536,7 @@ struct PtyState {
     screen_dirty: AtomicBool,
     terminal: Mutex<TerminalState>,
     title_changes: Mutex<Vec<Option<String>>>,
+    visible_output_pending: AtomicBool,
 }
 
 impl PtyState {
@@ -528,6 +551,7 @@ impl PtyState {
             screen_dirty: AtomicBool::new(false),
             terminal: Mutex::new(TerminalState::with_scrollback(size, scrollback)),
             title_changes: Mutex::new(Vec::new()),
+            visible_output_pending: AtomicBool::new(false),
         }
     }
 
@@ -544,7 +568,10 @@ impl PtyState {
         let output_current = Arc::new(AtomicBool::new(true));
         self.title_changes.lock().clear();
         // Attach sends a fresh baseline; discard dirty state accumulated before the client could observe output events.
+        let terminal = self.terminal.lock();
         self.screen_dirty.store(false, Ordering::Release);
+        self.visible_output_pending.store(false, Ordering::Release);
+        drop(terminal);
         *self.active_sink.lock() = Some(ActivePtySink {
             output_current: Arc::clone(&output_current),
             output_wakeup_pending,
@@ -561,6 +588,10 @@ impl PtyState {
         let terminal_replies = {
             let mut terminal = self.terminal.lock();
             let process_outcome = terminal.process(bytes);
+            // A later protocol-only repaint must not overwrite pending work output.
+            if matches!(process_outcome, TerminalProcessOutcome::ScreenDirty { .. }) {
+                self.visible_output_pending.store(true, Ordering::Release);
+            }
             if process_outcome.screen_dmg() == crate::terminal::TerminalScreenDmg::Dirty {
                 // Output events are coalesced, so the visible-screen dirty bit must be sticky until the server consumes
                 // it.
@@ -625,6 +656,10 @@ impl PtyState {
         let mut title_changes = self.title_changes.lock();
         // Transfer the queue allocation and reset it under the lock, without copying or collecting while locked.
         std::mem::take(&mut *title_changes)
+    }
+
+    fn has_pending_visible_output(&self) -> bool {
+        self.screen_dirty.load(Ordering::Acquire) && self.visible_output_pending.load(Ordering::Acquire)
     }
 
     fn take_screen_dirty(&self) -> PtyScreenDmg {
@@ -1406,6 +1441,7 @@ mod tests {
                 MuxrConfig::new().unwrap().scrollback,
             )),
             title_changes: Mutex::new(Vec::new()),
+            visible_output_pending: AtomicBool::new(false),
         }
     }
 

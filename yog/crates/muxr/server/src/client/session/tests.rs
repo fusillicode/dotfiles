@@ -792,8 +792,8 @@ async fn test_run_client_session_when_request_arrives_near_quiet_deadline_handle
     runtimes.handle(pane_id)?.write_input(completed.as_bytes())?;
     wait_for_runtime_snapshot_contains(&runtimes, pane_id, "Worked for 22m 38s • 11:37")?;
     // This test begins after the output turn has already handled the final frame.
-    let damage = runtimes.take_screen_dirty_panes();
-    pane_tracked_processes.record_cached_visible_activity(&runtimes, &damage, then)?;
+    let dmg = runtimes.take_screen_dirty_panes();
+    pane_tracked_processes.record_screen_dmg(&runtimes, &dmg, then)?;
     let (layout_snapshot, mut render_worker) = crate::screen_render::initial_client_render(
         &config,
         &mut layout,
@@ -1606,6 +1606,10 @@ struct TrackedCatRuntimeFixture {
 }
 
 impl TrackedCatRuntimeFixture {
+    fn tracked_state(&self, processes: &PaneTrackedProcesses) -> rootcause::Result<TrackedProcessState> {
+        tracked_process_snapshot_state(&processes.snapshot(&self.layout), self.pane_id)
+    }
+
     fn write_screen_text(&self, text: &str) -> rootcause::Result<()> {
         // Move old output beyond the observed tail before writing the requested status rows.
         let output = format!("{}{text}\n", "\n".repeat(24));
@@ -1829,11 +1833,11 @@ async fn assert_focused_may_echo_request_precedes_quiet_deadline_extends_busy(
     Ok(())
 }
 
-fn assert_codex_waits_for_working_after_enter(
+fn assert_codex_enter_echo(
     state: &mut ClientSessionState<'_>,
     pane_id: PaneId,
     initial_state: TrackedProcessState,
-    due: Instant,
+    delivered_at: Instant,
 ) -> rootcause::Result<()> {
     test_that::assert_that!(
         self::tracked_process_snapshot_state(&state.pane_tracked_processes.snapshot(state.layout), pane_id)?,
@@ -1842,11 +1846,11 @@ fn assert_codex_waits_for_working_after_enter(
     let output = format!("{}Worked for 2s • 14:19\n", "\n".repeat(24));
     state.runtimes.handle(pane_id)?.write_input(output.as_bytes())?;
     wait_for_runtime_snapshot_contains(state.runtimes, pane_id, "Worked for 2s • 14:19")?;
-    let damage = state.runtimes.take_screen_dirty_panes();
+    let dmg = state.runtimes.take_screen_dirty_panes();
     state
         .pane_tracked_processes
-        .record_cached_visible_activity(state.runtimes, &damage, due)?;
-    let later = instant_after(due, Duration::from_secs(30))?;
+        .record_screen_dmg(state.runtimes, &dmg, delivered_at)?;
+    let later = instant_after(delivered_at, Duration::from_secs(30))?;
     state.pane_tracked_processes.guard_quiet_deadlines(
         &state.config.user_config,
         state.layout,

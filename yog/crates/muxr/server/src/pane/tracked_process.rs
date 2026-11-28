@@ -169,6 +169,36 @@ pub struct PaneTrackedProcesses {
     by_pane: HashMap<PaneId, PaneTrackedProcessLifecycle>,
 }
 
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum ScreenSampleSource {
+    ProcessDiscovery,
+    TerminalDmg,
+}
+
+/// Capture pending output and the input boundary under one PTY lock. Commit both only for input actually sent.
+pub(super) struct PreparedPaneInput {
+    at: Instant,
+    preceding_output: Option<TerminalTextTail>,
+}
+
+impl PreparedPaneInput {
+    fn record(
+        self,
+        lifecycle: &mut PaneTrackedProcessLifecycle,
+        interaction: TrackedProcessUserInteraction,
+        focus: TrackedProcessPaneFocus,
+    ) -> TrackedProcessChanges {
+        let mut changes = self
+            .preceding_output
+            .as_ref()
+            .map_or_else(TrackedProcessChanges::default, |text| {
+                lifecycle.record_screen_sample(text, ScreenSampleSource::TerminalDmg, self.at)
+            });
+        changes.merge(lifecycle.record_user_interaction(interaction, self.at, focus));
+        changes
+    }
+}
+
 impl PaneTrackedProcesses {
     pub fn observe_all_runtime_pane_cmds(
         &mut self,
@@ -262,7 +292,6 @@ impl PaneTrackedProcesses {
     ) -> rootcause::Result<TrackedProcessAttention> {
         // Pane removal owns pruning. Quiet sweeps use the supplied layout only for focus/visibility transitions because
         // attached-client-local layouts, such as scrollback editor mode, can temporarily hide real panes.
-        self.discard_stale_user_interactions(now);
         self.mark_quiet_tracked_processes(layout, now)
     }
 
@@ -342,6 +371,7 @@ impl PaneTrackedProcesses {
         }
     }
 
+    #[cfg(test)]
     pub fn record_user_interaction(
         &mut self,
         layout: &SessionLayout,
@@ -349,26 +379,34 @@ impl PaneTrackedProcesses {
         interaction: TrackedProcessUserInteraction,
         now: Instant,
     ) -> rootcause::Result<TrackedProcessChanges> {
-        if let Some(lifecycle) = self.by_pane.get_mut(&pane_id) {
-            let focus_state = if pane_id == layout.active_pane_id()? {
-                TrackedProcessPaneFocus::Focused
-            } else {
-                TrackedProcessPaneFocus::Unfocused
-            };
-            return Ok(lifecycle.record_user_interaction(interaction, now, focus_state));
-        }
-        Ok(TrackedProcessChanges::default())
+        let input = PreparedPaneInput {
+            at: now,
+            preceding_output: None,
+        };
+        Ok(self
+            .record_client_user_interaction(layout, pane_id, interaction, input)?
+            .map_or_else(TrackedProcessChanges::default, TrackedProcessClientChange::changes))
     }
 
-    pub fn record_client_user_interaction(
+    pub(super) fn record_client_user_interaction(
         &mut self,
         layout: &SessionLayout,
         pane_id: PaneId,
         interaction: TrackedProcessUserInteraction,
-        now: Instant,
+        input: PreparedPaneInput,
     ) -> rootcause::Result<Option<TrackedProcessClientChange>> {
-        let changes = self.record_user_interaction(layout, pane_id, interaction, now)?;
-        Ok(TrackedProcessClientChange::from_changes(pane_id, changes))
+        let Some(lifecycle) = self.by_pane.get_mut(&pane_id) else {
+            return Ok(None);
+        };
+        let focus = if pane_id == layout.active_pane_id()? {
+            TrackedProcessPaneFocus::Focused
+        } else {
+            TrackedProcessPaneFocus::Unfocused
+        };
+        Ok(TrackedProcessClientChange::from_changes(
+            pane_id,
+            input.record(lifecycle, interaction, focus),
+        ))
     }
 
     pub fn acknowledge_attention(&mut self, pane_id: PaneId) -> TrackedProcessChanges {
@@ -383,7 +421,7 @@ impl PaneTrackedProcesses {
         }
     }
 
-    pub(crate) fn record_cached_visible_activity(
+    pub(crate) fn record_screen_dmg(
         &mut self,
         runtimes: &PaneRuntimes,
         pane_ids: &[PaneId],
@@ -391,20 +429,36 @@ impl PaneTrackedProcesses {
     ) -> rootcause::Result<TrackedProcessChanges> {
         let mut changes = TrackedProcessChanges::default();
         for pane_id in pane_ids {
-            let Some(lifecycle) = self.by_pane.get_mut(pane_id) else {
-                continue;
-            };
-            let activity = match lifecycle.screen_observation() {
-                Some(patterns) => {
-                    let text = runtimes.handle(*pane_id)?.live_tail_text(screen::SCREEN_TAIL_ROWS);
-                    let observation = screen::observe(patterns, text.candidate_line_spans(), lifecycle.busy_start());
-                    lifecycle.record_screen_activity(observation, now)
-                }
-                None => lifecycle.record_visible_activity(now),
-            };
-            changes.merge(activity);
+            changes.merge(self.sample_pane_screen(runtimes, *pane_id, ScreenSampleSource::TerminalDmg, now)?);
         }
         Ok(changes)
+    }
+
+    fn sample_pane_screen(
+        &mut self,
+        runtimes: &PaneRuntimes,
+        pane_id: PaneId,
+        source: ScreenSampleSource,
+        now: Instant,
+    ) -> rootcause::Result<TrackedProcessChanges> {
+        let handle = runtimes.handle(pane_id)?;
+        // Drain visible activity even before discovery, so a later metadata-only update cannot replay old output.
+        let protocol_only = source == ScreenSampleSource::TerminalDmg && !handle.take_visible_output();
+        let Some(lifecycle) = self.by_pane.get_mut(&pane_id) else {
+            return Ok(TrackedProcessChanges::default());
+        };
+        if protocol_only && lifecycle.busy_start() == BusyStart::ScreenOutput {
+            return Ok(TrackedProcessChanges::default());
+        }
+        if lifecycle.screen_observation().is_some() {
+            let text = handle.live_tail_text(screen::SCREEN_TAIL_ROWS);
+            return Ok(lifecycle.record_screen_sample(&text, source, now));
+        }
+
+        Ok(match source {
+            ScreenSampleSource::TerminalDmg => lifecycle.record_visible_activity(now),
+            ScreenSampleSource::ProcessDiscovery => TrackedProcessChanges::default(),
+        })
     }
 
     /// Check foreground identity and the live screen before a quiet transition.
@@ -429,31 +483,36 @@ impl PaneTrackedProcesses {
                 let handle = runtimes.handle(pane_id)?;
                 Ok(match busy_start {
                     BusyStart::Activity => Some(handle.live_tail_text(screen::SCREEN_TAIL_ROWS)),
-                    BusyStart::WorkingBanner => handle.live_tail_text_if_clean(screen::SCREEN_TAIL_ROWS),
+                    BusyStart::ScreenOutput => handle.live_tail_text_if_clean(screen::SCREEN_TAIL_ROWS),
                 })
             },
         )
     }
 
-    pub(in crate::pane) fn capture_completion_before_input(
+    pub(in crate::pane) fn prepare_for_input(
         &mut self,
         pane_id: PaneId,
         interaction: TrackedProcessUserInteraction,
         handle: &PtyHandle,
-    ) {
-        if interaction != TrackedProcessUserInteraction::StartsTrackedProcessWork {
-            return;
+    ) -> PreparedPaneInput {
+        if let Some(lifecycle) = self.by_pane.get_mut(&pane_id) {
+            if lifecycle.busy_start() == BusyStart::ScreenOutput {
+                let (at, preceding_output) =
+                    handle.pending_screen_before_input(screen::SCREEN_TAIL_ROWS, lifecycle.last_sampled_dmg());
+                return PreparedPaneInput { at, preceding_output };
+            }
+            if interaction == TrackedProcessUserInteraction::StartsTrackedProcessWork
+                && lifecycle.captures_completion_before_work()
+            {
+                let text = handle.live_tail_text(screen::SCREEN_TAIL_ROWS);
+                let observation = lifecycle.observe_screen(&text);
+                lifecycle.capture_completion_before_work(observation);
+            }
         }
-        let Some(lifecycle) = self.by_pane.get_mut(&pane_id) else {
-            return;
-        };
-        let Some(patterns) = lifecycle.completion_capture_patterns() else {
-            return;
-        };
-        // Capture before writing input: the PTY reader can observe the next turn immediately after submission.
-        let text = handle.live_tail_text(screen::SCREEN_TAIL_ROWS);
-        let observation = screen::observe(patterns, text.candidate_line_spans(), BusyStart::Activity);
-        lifecycle.capture_completion_before_work(observation);
+        PreparedPaneInput {
+            at: Instant::now(),
+            preceding_output: None,
+        }
     }
 
     // Active-pane input resolves the focused pane handle in the same turn before calling this.
@@ -462,10 +521,10 @@ impl PaneTrackedProcesses {
         &mut self,
         pane_id: PaneId,
         interaction: TrackedProcessUserInteraction,
-        now: Instant,
+        input: PreparedPaneInput,
     ) -> Option<TrackedProcessClientChange> {
         let lifecycle = self.by_pane.get_mut(&pane_id)?;
-        let changes = lifecycle.record_user_interaction(interaction, now, TrackedProcessPaneFocus::Focused);
+        let changes = input.record(lifecycle, interaction, TrackedProcessPaneFocus::Focused);
         TrackedProcessClientChange::from_changes(pane_id, changes)
     }
 
@@ -562,7 +621,7 @@ impl PaneTrackedProcesses {
         let mut changes = self.observe_pane_cmd(config, pane_id, &observation, now);
         if changes.state_change() == TrackedProcessStateChange::Changed {
             // Discovery can follow the last dirty frame, including on attach or focus. Seed from the current screen.
-            changes.merge(self.record_cached_visible_activity(runtimes, &[pane_id], now)?);
+            changes.merge(self.sample_pane_screen(runtimes, pane_id, ScreenSampleSource::ProcessDiscovery, now)?);
         }
         Ok(changes)
     }
@@ -611,10 +670,7 @@ impl PaneTrackedProcesses {
                 None
             };
             // A missing sample means unconfirmed identity or pending screen damage. Retry at the next deadline.
-            let observation = screen
-                .as_ref()
-                .zip(lifecycle.screen_observation())
-                .map(|(text, patterns)| screen::observe(patterns, text.candidate_line_spans(), lifecycle.busy_start()));
+            let observation = screen.as_ref().map(|text| lifecycle.observe_screen(text));
             changes.merge(lifecycle.guard_quiet_deadline(observation, now));
         }
 
@@ -626,12 +682,6 @@ impl PaneTrackedProcesses {
             TrackedProcessAttentionNeed::None,
             PaneTrackedProcessLifecycle::attention_need,
         )
-    }
-
-    fn discard_stale_user_interactions(&mut self, now: Instant) {
-        for pane_tracked_process in self.by_pane.values_mut() {
-            pane_tracked_process.discard_stale_user_interaction(now);
-        }
     }
 }
 

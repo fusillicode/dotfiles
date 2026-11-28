@@ -5,25 +5,32 @@ use muxr_config::ScreenObservationConfig;
 use muxr_config::TrackedProcess;
 use muxr_core::TrackedProcessState;
 
+use crate::pane::tracked_process::ScreenSampleSource;
 use crate::pane::tracked_process::TrackedProcessChanges;
 use crate::pane::tracked_process::TrackedProcessStateChange;
 use crate::pane::tracked_process::TrackedProcessUserInteraction;
 use crate::pane::tracked_process::screen;
 use crate::pane::tracked_process::screen::BusyStart;
 use crate::pane::tracked_process::screen::ScreenObservation;
+use crate::pane::tracked_process::screen::ScreenObserver;
+use crate::terminal::TerminalTextTail;
 
 #[cfg(test)]
 mod tests;
 
+// Each Codex keystroke restarts this window so prompt edits alone leave an idle pane neutral.
+// A short reply can therefore appear without turning the dot green. A recognized Working banner bypasses the window.
 const USER_INPUT_VISIBLE_ACTIVITY_SUPPRESSION: Duration = Duration::from_millis(500);
 
 #[derive(Debug)]
 pub(super) struct PaneTrackedProcessLifecycle {
     completion_before_work: Option<String>,
     last_focused_user_interaction: Option<Instant>,
+    last_sampled_dmg: Option<u64>,
     last_tracked_activity: Instant,
     pending_work_start: PendingTrackedWorkStart,
     recent_user_interaction: Option<Instant>,
+    screen_observer: ScreenObserver,
     status: PaneTrackedProcessStatus,
     tracked_process: TrackedProcess,
 }
@@ -32,14 +39,16 @@ impl PaneTrackedProcessLifecycle {
     pub(super) const fn new(tracked_process: TrackedProcess, now: Instant) -> Self {
         let status = match screen::busy_start(&tracked_process) {
             BusyStart::Activity => PaneTrackedProcessStatus::Busy,
-            BusyStart::WorkingBanner => PaneTrackedProcessStatus::Seen,
+            BusyStart::ScreenOutput => PaneTrackedProcessStatus::Seen,
         };
         Self {
             completion_before_work: None,
             last_focused_user_interaction: None,
+            last_sampled_dmg: None,
             last_tracked_activity: now,
             pending_work_start: PendingTrackedWorkStart::None,
             recent_user_interaction: None,
+            screen_observer: ScreenObserver::new(),
             status,
             tracked_process,
         }
@@ -73,31 +82,20 @@ impl PaneTrackedProcessLifecycle {
         if focus_state == TrackedProcessPaneFocus::Focused {
             self.last_focused_user_interaction = Some(now);
         }
-        match interaction {
-            TrackedProcessUserInteraction::MayEcho => {
-                self.recent_user_interaction = Some(now);
-                if focused_deadline_extended {
-                    TrackedProcessChanges::deadline_only()
-                } else {
-                    TrackedProcessChanges::default()
-                }
-            }
-            TrackedProcessUserInteraction::StartsTrackedProcessWork => {
-                self.recent_user_interaction = None;
-                if self.busy_start() == BusyStart::WorkingBanner {
-                    // Enter may be an empty prompt or another editor action. Only a Working row starts green.
-                    return if focused_deadline_extended {
-                        TrackedProcessChanges::deadline_only()
-                    } else {
-                        TrackedProcessChanges::default()
-                    };
-                }
-                // Prompt submit starts tracked work even before output and anchors its quiet deadline.
-                self.pending_work_start = PendingTrackedWorkStart::Pending;
-                self.last_tracked_activity = now;
-                TrackedProcessChanges::for_activity(self.mark_visible_activity())
-            }
+        // For Codex, Enter can redraw an empty prompt just like any other edit.
+        if interaction == TrackedProcessUserInteraction::MayEcho || self.busy_start() == BusyStart::ScreenOutput {
+            self.recent_user_interaction = Some(now);
+            return if focused_deadline_extended {
+                TrackedProcessChanges::deadline_only()
+            } else {
+                TrackedProcessChanges::default()
+            };
         }
+
+        self.recent_user_interaction = None;
+        self.pending_work_start = PendingTrackedWorkStart::Pending;
+        self.last_tracked_activity = now;
+        TrackedProcessChanges::for_activity(self.mark_visible_activity())
     }
 
     pub(super) fn record_screen_activity(
@@ -109,9 +107,7 @@ impl PaneTrackedProcessLifecycle {
             ScreenObservation::Cancelled => self.cancel_work(),
             ScreenObservation::Busy => {
                 // Positive work evidence takes precedence over local-echo suppression and needs no Enter event.
-                self.completion_before_work = None;
-                self.pending_work_start = PendingTrackedWorkStart::None;
-                self.recent_user_interaction = None;
+                self.clear_pending_work_start();
                 self.last_tracked_activity = now;
                 TrackedProcessChanges::for_activity(self.mark_visible_activity())
             }
@@ -131,31 +127,24 @@ impl PaneTrackedProcessLifecycle {
     }
 
     pub(super) fn record_visible_activity(&mut self, now: Instant) -> TrackedProcessChanges {
-        if self.busy_start() == BusyStart::WorkingBanner {
-            // Render damage can include an identical repaint. While green, we accept that signal because Codex
-            // can hide Working while streaming. We expect a finished, idle Codex pane to go quiet. If repeated
-            // identical repaints keep it green after completion, investigate what is triggering them in Codex.
-            return if self.has_quiet_deadline() {
-                self.extend_quiet_deadline(now)
-            } else {
-                TrackedProcessChanges::default()
-            };
-        }
-        self.discard_stale_user_interaction(now);
-        if self.recent_user_interaction.is_some() {
-            // User typing and mouse gestures can redraw through the PTY. Those bytes still render, but they are not
-            // tracked-process work and must not flip attention back to Busy. Keep suppression for the short window;
-            // prompt submit clears it explicitly with `StartsTrackedProcessWork`.
+        self.mark_output_activity(now, now)
+    }
+
+    fn mark_output_activity(&mut self, arrived_at: Instant, processed_at: Instant) -> TrackedProcessChanges {
+        if self.input_may_echo_at(arrived_at) {
+            // Typing and mouse gestures can cause the application to repaint.
             return TrackedProcessChanges::default();
         }
-        if self.status != PaneTrackedProcessStatus::Busy && self.pending_work_start == PendingTrackedWorkStart::None {
-            // Some terminal apps can repaint idle UI while unfocused. After startup/work has been acknowledged, only
-            // a prompt submit is allowed to re-arm tracked-process attention from visible output.
+        if self.busy_start() == BusyStart::Activity
+            && self.status != PaneTrackedProcessStatus::Busy
+            && self.pending_work_start == PendingTrackedWorkStart::None
+        {
+            // Submit-driven agents can repaint idle UI. Codex can resume streaming without a banner or a submit.
             return TrackedProcessChanges::default();
         }
 
         self.pending_work_start = PendingTrackedWorkStart::None;
-        self.last_tracked_activity = now;
+        self.last_tracked_activity = processed_at;
         TrackedProcessChanges::for_activity(self.mark_visible_activity())
     }
 
@@ -191,13 +180,14 @@ impl PaneTrackedProcessLifecycle {
         TrackedProcessStateChange::Changed
     }
 
-    pub(super) fn discard_stale_user_interaction(&mut self, now: Instant) {
-        let Some(last_activity) = self.recent_user_interaction else {
-            return;
-        };
-        if now.saturating_duration_since(last_activity) > USER_INPUT_VISIBLE_ACTIVITY_SUPPRESSION {
-            self.recent_user_interaction = None;
-        }
+    fn input_may_echo_at(&self, arrived_at: Instant) -> bool {
+        self.recent_user_interaction
+            .and_then(|input| arrived_at.checked_duration_since(input))
+            .is_some_and(|elapsed| elapsed <= USER_INPUT_VISIBLE_ACTIVITY_SUPPRESSION)
+    }
+
+    pub(super) const fn last_sampled_dmg(&self) -> Option<u64> {
+        self.last_sampled_dmg
     }
 
     pub(super) fn quiet_deadline(&self, focus_state: TrackedProcessPaneFocus) -> rootcause::Result<Option<Instant>> {
@@ -218,15 +208,54 @@ impl PaneTrackedProcessLifecycle {
         self.tracked_process.screen_observation.as_ref()
     }
 
+    pub(super) fn record_screen_sample(
+        &mut self,
+        text: &TerminalTextTail,
+        source: ScreenSampleSource,
+        now: Instant,
+    ) -> TrackedProcessChanges {
+        let codex_dmg = text.dmg.filter(|_| self.busy_start() == BusyStart::ScreenOutput);
+        if source == ScreenSampleSource::TerminalDmg
+            && codex_dmg.is_some_and(|dmg| self.last_sampled_dmg == Some(dmg.generation))
+        {
+            return TrackedProcessChanges::default();
+        }
+        let observation = self.observe_screen(text);
+        if !matches!(observation, ScreenObservation::Unknown) {
+            return self.record_screen_activity(observation, now);
+        }
+        if source == ScreenSampleSource::ProcessDiscovery {
+            return TrackedProcessChanges::default();
+        }
+        if let Some(dmg) = codex_dmg {
+            self.last_sampled_dmg = Some(dmg.generation);
+            return self.mark_output_activity(dmg.arrived_at, now);
+        }
+        self.record_visible_activity(now)
+    }
+
+    pub(super) fn observe_screen<'a>(&mut self, text: &'a TerminalTextTail) -> ScreenObservation<'a> {
+        let Some(patterns) = self.tracked_process.screen_observation.as_ref() else {
+            return ScreenObservation::Unknown;
+        };
+        let observation = self.screen_observer.observe(
+            patterns,
+            text.candidate_line_spans(),
+            self.busy_start(),
+            text.screen_mode,
+        );
+        if !matches!(observation, ScreenObservation::Unknown) {
+            self.last_sampled_dmg = text.dmg.map(|dmg| dmg.generation);
+        }
+        observation
+    }
+
     pub(super) const fn busy_start(&self) -> BusyStart {
         screen::busy_start(&self.tracked_process)
     }
 
-    pub(super) const fn completion_capture_patterns(&self) -> Option<&ScreenObservationConfig> {
-        if matches!(self.busy_start(), BusyStart::WorkingBanner) {
-            return None;
-        }
-        self.screen_observation()
+    pub(super) const fn captures_completion_before_work(&self) -> bool {
+        matches!(self.busy_start(), BusyStart::Activity) && self.screen_observation().is_some()
     }
 
     pub(super) fn capture_completion_before_work(&mut self, observation: ScreenObservation<'_>) {
@@ -247,7 +276,7 @@ impl PaneTrackedProcessLifecycle {
         match observation {
             Some(ScreenObservation::Cancelled) => self.cancel_work(),
             Some(ScreenObservation::Busy) => self.record_screen_activity(ScreenObservation::Busy, now),
-            Some(ScreenObservation::Unknown) if self.busy_start() == BusyStart::WorkingBanner => {
+            Some(ScreenObservation::Unknown) if self.busy_start() == BusyStart::ScreenOutput => {
                 TrackedProcessChanges::default()
             }
             Some(ScreenObservation::NeedsAttention(completion)) if self.accept_completion(completion) => {
@@ -267,14 +296,21 @@ impl PaneTrackedProcessLifecycle {
     fn cancel_work(&mut self) -> TrackedProcessChanges {
         let changed = self.status != PaneTrackedProcessStatus::Seen;
         self.status = PaneTrackedProcessStatus::Seen;
-        self.pending_work_start = PendingTrackedWorkStart::None;
-        self.completion_before_work = None;
-        self.recent_user_interaction = None;
+        self.clear_pending_work_start();
         self.last_focused_user_interaction = None;
         if changed {
             TrackedProcessChanges::state_and_deadline()
         } else {
             TrackedProcessChanges::default()
+        }
+    }
+
+    fn clear_pending_work_start(&mut self) {
+        self.pending_work_start = PendingTrackedWorkStart::None;
+        self.completion_before_work = None;
+        // Codex prompt echo can arrive after a status change. Its window still belongs to the last input.
+        if matches!(self.busy_start(), BusyStart::Activity) {
+            self.recent_user_interaction = None;
         }
     }
 

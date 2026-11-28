@@ -2,6 +2,20 @@ use smallvec::SmallVec;
 
 const OSC_CURSOR_SHAPE_PREFIX: &[u8] = b"CursorShape=";
 
+// RioInputFilter delivers complete CSI sequences. Keep mixed writes, including text after a cursor move, as output.
+pub(super) fn is_cursor_redraw(bytes: &[u8]) -> bool {
+    let Some(commands) = bytes.strip_prefix(b"\x1b") else {
+        return false;
+    };
+    commands.split(|byte| *byte == 0x1b).all(|command| match command {
+        b"[?25h" | b"[?25l" => true,
+        [b'[', params @ .., b'A'..=b'H' | b'd' | b'f' | b'm'] => params
+            .iter()
+            .all(|byte| byte.is_ascii_digit() || matches!(byte, b';' | b':')),
+        _ => false,
+    })
+}
+
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(super) enum CursorControl {
     #[default]

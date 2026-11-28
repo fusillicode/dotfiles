@@ -4,6 +4,8 @@ use muxr_config::ScreenObservationConfig;
 use muxr_config::TrackedProcess;
 use muxr_config::TrackedProcessId;
 
+use crate::terminal::TerminalScreenMode;
+
 pub(super) const SCREEN_TAIL_ROWS: usize = 12;
 
 #[derive(Clone, Copy)]
@@ -18,37 +20,74 @@ pub(super) enum ScreenObservation<'a> {
 #[derive(Clone, Copy, Eq, PartialEq)]
 pub(super) enum BusyStart {
     Activity,
-    WorkingBanner,
+    ScreenOutput,
 }
 
-pub(super) fn observe<'a>(
-    patterns: &ScreenObservationConfig,
-    spans: impl DoubleEndedIterator<Item = impl Iterator<Item = &'a str>>,
-    busy_start: BusyStart,
-) -> ScreenObservation<'a> {
-    // Status rows from earlier turns can remain visible. The lowest recognized row takes precedence.
-    for mut span in spans.rev() {
-        let Some(line) = span.next() else {
-            continue;
-        };
-        if matches_cancellation(patterns, line, span) {
-            return ScreenObservation::Cancelled;
-        }
-        let status = patterns.normalize_line(line);
-        if patterns.matches_busy(status) {
-            return ScreenObservation::Busy;
-        }
-        if busy_start == BusyStart::Activity && patterns.matches_needs_attention(status) {
-            // Keep the full normalized status, even when a configured regex matches only part of it.
-            return ScreenObservation::NeedsAttention(status);
+#[derive(Debug)]
+pub(super) struct ScreenObserver {
+    primary_interruptions: usize,
+    alternate_interruptions: usize,
+}
+
+impl ScreenObserver {
+    pub(super) const fn new() -> Self {
+        Self {
+            primary_interruptions: 0,
+            alternate_interruptions: 0,
         }
     }
-    ScreenObservation::Unknown
+
+    pub(super) fn observe<'a>(
+        &mut self,
+        patterns: &ScreenObservationConfig,
+        spans: impl DoubleEndedIterator<Item = impl Iterator<Item = &'a str>>,
+        busy_start: BusyStart,
+        mode: TerminalScreenMode,
+    ) -> ScreenObservation<'a> {
+        let literal = cancellation_literal(patterns);
+        let mut lowest = ScreenObservation::Unknown;
+        let mut interruptions = 0_usize;
+        for mut span in spans.rev() {
+            let Some(line) = span.next() else { continue };
+            if matches_cancellation(patterns, literal, line, span) {
+                interruptions = interruptions.saturating_add(1);
+                if matches!(lowest, ScreenObservation::Unknown) {
+                    lowest = ScreenObservation::Cancelled;
+                }
+            } else if matches!(lowest, ScreenObservation::Unknown) {
+                let status = patterns.normalize_line(line);
+                if patterns.matches_busy(status) {
+                    lowest = ScreenObservation::Busy;
+                } else if busy_start == BusyStart::Activity && patterns.matches_needs_attention(status) {
+                    lowest = ScreenObservation::NeedsAttention(status);
+                }
+            }
+            if busy_start == BusyStart::Activity && !matches!(lowest, ScreenObservation::Unknown) {
+                return lowest;
+            }
+        }
+
+        if busy_start == BusyStart::ScreenOutput {
+            let previous = match mode {
+                TerminalScreenMode::Normal => &mut self.primary_interruptions,
+                TerminalScreenMode::Alternate => &mut self.alternate_interruptions,
+            };
+            // A banner can persist across replies. Counting only the bottom 12 rows keeps sampling cheap.
+            // A resize or redraw can bring an old banner back into the tail and briefly clear the green dot.
+            // The next reply update outside the input-echo window restores it.
+            let new_interruption = interruptions > *previous;
+            *previous = interruptions;
+            if matches!(lowest, ScreenObservation::Cancelled) && !new_interruption {
+                return ScreenObservation::Unknown;
+            }
+        }
+        lowest
+    }
 }
 
 pub(super) const fn busy_start(process: &TrackedProcess) -> BusyStart {
     match (&process.screen_observation, process.id) {
-        (Some(_), TrackedProcessId::Codex) => BusyStart::WorkingBanner,
+        (Some(_), TrackedProcessId::Codex) => BusyStart::ScreenOutput,
         (None, _)
         | (
             Some(_),
@@ -58,15 +97,71 @@ pub(super) const fn busy_start(process: &TrackedProcess) -> BusyStart {
 }
 
 #[cfg(test)]
-pub(super) fn text_line_spans(text: &str) -> impl DoubleEndedIterator<Item = impl Iterator<Item = &str>> {
+fn text_line_spans(text: &str) -> impl DoubleEndedIterator<Item = impl Iterator<Item = &str>> {
     (0..text.lines().count()).map(move |index| text.lines().skip(index))
+}
+
+/// Only specialize an anchored, case-sensitive literal after the interruption glyph.
+fn cancellation_literal(patterns: &ScreenObservationConfig) -> Option<&str> {
+    let [pattern] = patterns.cancelled.as_ref()?.as_ref().as_slice() else {
+        return None;
+    };
+    let literal = pattern.as_str().strip_prefix(r"(?u-ix)\A■\s+")?.strip_suffix(r"\z")?;
+    let is_literal = literal
+        .bytes()
+        .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b' ' | b'-' | b'/'));
+    (is_literal && !literal.is_empty() && !literal.starts_with(' ')).then_some(literal)
+}
+
+fn matches_wrapped_literal<'a>(
+    patterns: &ScreenObservationConfig,
+    literal: &str,
+    line: &'a str,
+    continuations: impl Iterator<Item = &'a str>,
+) -> bool {
+    let Some(first) = patterns.normalize_line(line).strip_prefix('■') else {
+        return false;
+    };
+    if !first.is_empty() && !first.starts_with(char::is_whitespace) {
+        return false;
+    }
+    let first = first.trim_start();
+    let Some(mut remaining) = literal.strip_prefix(first) else {
+        return false;
+    };
+    let mut padded = !first.is_empty() && line.ends_with(char::is_whitespace);
+    for row in continuations.take(SCREEN_TAIL_ROWS - 1) {
+        if remaining.is_empty() {
+            return true;
+        }
+        let fragment = patterns.normalize_line(row);
+        if fragment.is_empty() {
+            return false;
+        }
+        // A hard wrap splits at a space or inside a word. The literal determines which join can match.
+        if let Some(rest) = remaining.strip_prefix(' ') {
+            remaining = rest;
+        } else if padded {
+            return false;
+        }
+        let Some(rest) = remaining.strip_prefix(fragment) else {
+            return false;
+        };
+        remaining = rest;
+        padded = row.ends_with(char::is_whitespace);
+    }
+    remaining.is_empty()
 }
 
 fn matches_cancellation<'a>(
     patterns: &ScreenObservationConfig,
+    literal: Option<&str>,
     line: &'a str,
     continuations: impl Iterator<Item = &'a str>,
 ) -> bool {
+    if let Some(literal) = literal {
+        return matches_wrapped_literal(patterns, literal, line, continuations);
+    }
     if patterns.cancelled.is_none() {
         return false;
     }
@@ -127,6 +222,75 @@ mod tests {
     use super::*;
     use crate::terminal::TerminalState;
 
+    #[test]
+    fn test_observer_when_working_hides_an_old_interruption_recognizes_only_a_new_interruption() {
+        let patterns = patterns(TrackedProcessId::Codex).unwrap();
+        let mut observer = ScreenObserver::new();
+        let mut sample = |text: &str| {
+            matches!(
+                observer.observe(
+                    &patterns,
+                    text_line_spans(text),
+                    BusyStart::ScreenOutput,
+                    TerminalScreenMode::Normal
+                ),
+                ScreenObservation::Cancelled
+            )
+        };
+        let interrupted = "■ Conversation interrupted - use /feedback if something went wrong";
+        let working = format!("{interrupted}\nWorking (1s • esc to interrupt)");
+
+        assert!(!sample(&working));
+        assert!(!sample(interrupted));
+        assert!(!sample("reply"));
+        assert!(sample(interrupted));
+    }
+
+    #[rstest::rstest]
+    #[case::insert_row(false)]
+    #[case::rewrite_frame(true)]
+    fn test_observer_when_banner_moves_or_returns_keeps_work_until_an_additional_interruption(
+        #[case] rewrite: bool,
+    ) -> rootcause::Result<()> {
+        let size = TerminalSize::new(80, 12)?;
+        let mut terminal = TerminalState::with_scrollback(&size, MuxrConfig::new()?.scrollback);
+        let patterns = patterns(TrackedProcessId::Codex).ok_or_else(|| rootcause::report!("missing Codex patterns"))?;
+        let mut observer = ScreenObserver::new();
+        let interrupted = "■ Conversation interrupted - use /feedback if something went wrong";
+        let observe = |observer: &mut ScreenObserver, terminal: &TerminalState| {
+            let tail = terminal.live_tail_text(SCREEN_TAIL_ROWS);
+            matches!(
+                observer.observe(
+                    &patterns,
+                    tail.candidate_line_spans(),
+                    BusyStart::ScreenOutput,
+                    tail.screen_mode
+                ),
+                ScreenObservation::Cancelled
+            )
+        };
+        let _ = terminal.process(format!("one\r\ntwo\r\n{interrupted}\r\nreply").as_bytes());
+        test_that::assert_that!(observe(&mut observer, &terminal), eq(true));
+
+        if rewrite {
+            let _ = terminal.process(
+                format!("\x1b[2;1H\x1b[2Kmore\r\n\x1b[2Ktwo\r\n\x1b[2K{interrupted}\r\n\x1b[2Kreply\x1b[2;5H")
+                    .as_bytes(),
+            );
+        } else {
+            let _ = terminal.process(b"\x1b[2;1H\x1b[Lmore");
+        }
+        test_that::assert_that!(observe(&mut observer, &terminal), eq(false));
+        let _ = terminal.process(b"\x1b[?1049hviewer");
+        test_that::assert_that!(observe(&mut observer, &terminal), eq(false));
+        let _ = terminal.process(b"\x1b[?1049l");
+        test_that::assert_that!(observe(&mut observer, &terminal), eq(false));
+
+        let _ = terminal.process(format!("\x1b[7;1H{interrupted}").as_bytes());
+        test_that::assert_that!(observe(&mut observer, &terminal), eq(true));
+        Ok(())
+    }
+
     #[rstest::rstest]
     #[case("RUNNING", ScreenObservation::Busy)]
     #[case("THINKING", ScreenObservation::Busy)]
@@ -155,7 +319,12 @@ mod tests {
             trim_chars: &['#'],
         };
         test_that::assert_that!(
-            observe(&patterns, text_line_spans(text), BusyStart::Activity),
+            ScreenObserver::new().observe(
+                &patterns,
+                text_line_spans(text),
+                BusyStart::Activity,
+                TerminalScreenMode::Normal
+            ),
             eq(expected)
         );
         Ok(())
@@ -221,7 +390,12 @@ mod tests {
     ) {
         let patterns = patterns(TrackedProcessId::Codex).unwrap();
         assert_eq!(
-            observe(&patterns, text_line_spans(text), BusyStart::WorkingBanner),
+            ScreenObserver::new().observe(
+                &patterns,
+                text_line_spans(text),
+                BusyStart::ScreenOutput,
+                TerminalScreenMode::Normal
+            ),
             expected
         );
     }
@@ -257,10 +431,11 @@ mod tests {
         let _output = terminal.process(format!("  {status}").as_bytes());
         let patterns = patterns(TrackedProcessId::Codex).ok_or_else(|| rootcause::report!("missing Codex patterns"))?;
         test_that::assert_that!(
-            observe(
+            ScreenObserver::new().observe(
                 &patterns,
                 terminal.live_tail_text(SCREEN_TAIL_ROWS).candidate_line_spans(),
-                BusyStart::WorkingBanner,
+                BusyStart::ScreenOutput,
+                TerminalScreenMode::Normal,
             ),
             eq(expected)
         );
@@ -276,10 +451,11 @@ mod tests {
         let _output = terminal.process(output.as_bytes());
         let patterns = patterns(TrackedProcessId::Codex).ok_or_else(|| rootcause::report!("missing Codex patterns"))?;
         test_that::assert_that!(
-            observe(
+            ScreenObserver::new().observe(
                 &patterns,
                 terminal.live_tail_text(SCREEN_TAIL_ROWS).candidate_line_spans(),
-                BusyStart::WorkingBanner,
+                BusyStart::ScreenOutput,
+                TerminalScreenMode::Normal,
             ),
             eq(ScreenObservation::Cancelled)
         );
@@ -308,10 +484,11 @@ mod tests {
         let _output = terminal.process(output.as_bytes());
         let patterns = patterns(TrackedProcessId::Codex).ok_or_else(|| rootcause::report!("missing Codex patterns"))?;
         test_that::assert_that!(
-            observe(
+            ScreenObserver::new().observe(
                 &patterns,
                 terminal.live_tail_text(SCREEN_TAIL_ROWS).candidate_line_spans(),
-                BusyStart::WorkingBanner,
+                BusyStart::ScreenOutput,
+                TerminalScreenMode::Normal,
             ),
             eq(ScreenObservation::Cancelled)
         );
@@ -331,13 +508,14 @@ mod tests {
         let mut patterns =
             patterns(TrackedProcessId::Codex).ok_or_else(|| rootcause::report!("missing Codex patterns"))?;
         patterns.cancelled = Some(ObservationPatterns::try_new(vec![Regex::clone(lazy_regex::regex!(
-            r"\ACANCEL(?:LED|ED)\z"
+            r"\A■\s+STOP\z|\ACANCEL(?:LED|ED)\z"
         ))])?);
         test_that::assert_that!(
-            observe(
+            ScreenObserver::new().observe(
                 &patterns,
                 terminal.live_tail_text(SCREEN_TAIL_ROWS).candidate_line_spans(),
-                BusyStart::WorkingBanner,
+                BusyStart::ScreenOutput,
+                TerminalScreenMode::Normal,
             ),
             eq(expected)
         );
@@ -363,14 +541,39 @@ mod tests {
         let _output = terminal.process(format!("\x1b[{row};1H{message}").as_bytes());
         let patterns = patterns(TrackedProcessId::Codex).ok_or_else(|| rootcause::report!("missing Codex patterns"))?;
         test_that::assert_that!(
-            observe(
+            ScreenObserver::new().observe(
                 &patterns,
                 terminal.live_tail_text(SCREEN_TAIL_ROWS).candidate_line_spans(),
-                BusyStart::WorkingBanner,
+                BusyStart::ScreenOutput,
+                TerminalScreenMode::Normal,
             ),
             eq(expected)
         );
         Ok(())
+    }
+
+    #[rstest::rstest]
+    #[case("ordinary output")]
+    #[case("■ unrelated error")]
+    fn test_observe_when_working_follows_full_width_output_skips_cancellation_continuations(#[case] first_row: &str) {
+        let patterns = patterns(TrackedProcessId::Codex).unwrap();
+        let joined_rows = std::cell::Cell::new(false);
+        let mut rows = ["ordinary output"; SCREEN_TAIL_ROWS];
+        rows[0] = first_row;
+        rows[SCREEN_TAIL_ROWS - 1] = "Working (1s • esc to interrupt)";
+        let spans = rows.iter().enumerate().map(|(index, &line)| {
+            let continuations = rows
+                .iter()
+                .skip(index.saturating_add(1))
+                .copied()
+                .inspect(|_| joined_rows.set(true));
+            iter::once(line).chain(continuations)
+        });
+        assert_eq!(
+            ScreenObserver::new().observe(&patterns, spans, BusyStart::ScreenOutput, TerminalScreenMode::Normal),
+            ScreenObservation::Busy
+        );
+        assert!(!joined_rows.get());
     }
 
     #[test]
@@ -379,7 +582,12 @@ mod tests {
         patterns.cancelled = None;
         let text = "■ Conversation interrupted - use\n/feedback if something went wrong";
         assert_eq!(
-            observe(&patterns, text_line_spans(text), BusyStart::WorkingBanner),
+            ScreenObserver::new().observe(
+                &patterns,
+                text_line_spans(text),
+                BusyStart::ScreenOutput,
+                TerminalScreenMode::Normal
+            ),
             ScreenObservation::Unknown
         );
     }

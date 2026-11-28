@@ -1,5 +1,3 @@
-use std::time::Instant;
-
 use muxr_core::ClientMouseEvent;
 use muxr_core::ClientMouseEventPhase;
 use muxr_core::ClientMousePosition;
@@ -57,6 +55,11 @@ pub fn handle_mouse_event_client_request(
             } else {
                 PaneFocusClientOutcome::Unchanged
             };
+            let prepared_input = state.pane_tracked_processes.prepare_for_input(
+                *region.id(),
+                TrackedProcessUserInteraction::MayEcho,
+                &handle,
+            );
             let viewport_move = match handle.write_mouse_event(event, &region, protocol)? {
                 PtyMouseWrite::Ignored => {
                     return Ok(PaneMouseClientOutcome {
@@ -71,7 +74,7 @@ pub fn handle_mouse_event_client_request(
                 state.layout,
                 *region.id(),
                 TrackedProcessUserInteraction::MayEcho,
-                Instant::now(),
+                prepared_input,
             )?;
             Ok(PaneMouseClientOutcome {
                 focus,
@@ -90,12 +93,17 @@ pub fn handle_mouse_event_client_request(
             cursor_key_mode,
             direction,
         } => {
+            let prepared_input = state.pane_tracked_processes.prepare_for_input(
+                *region.id(),
+                TrackedProcessUserInteraction::MayEcho,
+                &handle,
+            );
             let viewport_move = handle.write_faux_scroll_input(direction, cursor_key_mode)?;
             let tracked_process_change = state.pane_tracked_processes.record_client_user_interaction(
                 state.layout,
                 *region.id(),
                 TrackedProcessUserInteraction::MayEcho,
-                Instant::now(),
+                prepared_input,
             )?;
             Ok(PaneMouseClientOutcome {
                 focus: PaneFocusClientOutcome::Unchanged,
