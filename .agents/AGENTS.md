@@ -3,6 +3,9 @@
 ## Scope and safety
 
 - Follow the current request; newer explicit instructions override older guidance. Preserve unrelated non-format changes.
+- Name new standalone deliverables `[<ticket-key>_]YYYYMMDD-HHMM_<kind>_<slug>.<ext>` using local creation time. Use the producing skill's unqualified name as `<kind>`, or the artifact type for direct requests (e.g. `plan`). Use the task's ticket key from the request or session context in both patterns.
+- Name new sibling worktree directories `<repo>-<ticket-key>`, or `<repo>-<slug>` without a key.
+- Use exclusive creation for new deliverables. Honor explicit paths and ask for another if occupied. On a default collision, append `-2`, `-3`, and so on to the file stem or directory name and retry. Treat dangling symlinks as occupied.
 - Keep Cargo target and intermediate build directories separate per Git worktree. Before the first build, check overrides and symlinks for shared paths. Use kache for cache reuse.
 - Ask before changing a public API, wire format, schema, storage model, dependency, architecture boundary, security property, or money path outside the user-authorized scope. Authorization must cover the affected boundary; a general request to fix or improve code is insufficient.
 - Git commits, pushes, history rewrites, branch deletion, and destructive actions require explicit authority for the exact operation and target. Never use plain `git push --force`; use an exact-object-ID `--force-with-lease` only for an authorized history rewrite.
@@ -22,34 +25,20 @@ Read and apply each guide at its trigger. Linked files are not automatically loa
 | Before repo edits | [Repo work](shared/repo-work.md) |
 | Before delegating | [Delegation](shared/delegation.md) |
 | Before Rust planning or edits | [Rust design](shared/rust-design.md); complete its inventory and post-edit review |
-| Before reporting Rust completion, committing, or pushing | [Rust gate](shared/rust-gate.md) |
+| Before completing, committing, or pushing Rust changes | [Rust gate](shared/rust-gate.md) |
 | When Rust tests change | [Rust tests](shared/rust-tests.md) |
 
 ## Delegation
 
-Only the parent delegates. Workers must not spawn agents. Keep cheap sequential work inline. Delegate complete, bounded packages to the exact available role:
-
-- Review discussion collection: the advertised discussion collector role.
-- Remote CI run or job evidence: `ci_collector` when available. Pass the exact run or job reference and keep diagnosis in the parent.
-- Substantial bounded exploration or useful independent parallel work: `code_reader`.
-- Logs, metrics, or tracing evidence: `telemetrist`.
-- Long-running or multi-command focused verification: `check_runner`.
-
-The parent owns decisions, implementation, check selection, and gate acceptance.
+Only the parent delegates and owns decisions, implementation, diagnosis, check selection, and gate acceptance. Keep cheap sequential work inline. Read the delegation guide to route substantial exploration, remote evidence, and long or multi-command checks.
 
 ## Agent Simplified Technical English (ASTE) v2
 
-Applies to user-visible replies and generated artifacts. Explicit user formats and third-party drafts override it. Keep tool output, internal records, and handoffs exact.
+Apply to replies and artifacts. Honor requested formats and third-party drafts. Keep tool output, internal evidence, and handoffs exact.
 
-1. Lead with answer, result, blocker, or needed decision. Default: 100 words max; exceed only for requested detail or essential evidence, correctness, or safety. Never omit required work to meet this limit.
-2. Use plain words and direct sentences: 20 words max, except exact evidence. Default: two short prose paragraphs max. Do not introduce or repeat information clear in tables, lists, or diagrams.
-3. Prefer numbered lists for comparable items and steps. Put stable IDs inline for cross-references. Use plain entries for simple items and consistent field labels on separate lines for shared complex structures. Titles are optional. Use tables for short side-by-side comparisons.
-4. Prefer text diagrams for flows, dependencies, boundaries, or cause and effect. Use fenced text blocks, arrows, and numbered nodes. Reuse IDs across tables, diagrams, and later turns; keep them stable within the topic. Never renumber surviving items.
-5. Cut em dashes, greetings, meta-intros, filler, canned transitions, generic praise, forced contrasts, vague claims, process recaps, generic closings, repeated context, and unsolicited next-step offers. Omit routine steps and change inventories unless needed for decisions or verification. State facts once. Simple answers need no table or diagram.
-6. Preserve exact identifiers and uncertainty. Report only failed, blocked, or unresolved checks: command, cause, and needed action. Omit successful or recovered checks unless requested. Keep internal evidence complete.
-7. Use only the applicable shape: direct = answer; progress = result + next action; completion = outcome + blockers, if any; blocker = cause + smallest needed action; failure = cause + repair or decision. Add only needed detail; never name the shape.
-8. Conflict order: explicit user request > correctness > safety > completeness > clarity > brevity.
-
-Finish required implementation before reporting completion; inspect final diff and focused checks first. If blocked, name the exact dependency and smallest needed action.
-
-Before sending, silently cut sentences lacking an answer, evidence, decision, risk, blocker, or necessary next action.
+- Lead with the answer, result, blocker, or decision. Default to 100 words, two short paragraphs, and 20 words per sentence. Expand for requested or essential detail.
+- Use plain, direct sentences. Cut greetings, filler, em dashes, forced contrasts, repeated facts, routine steps, and unsolicited follow-ups.
+- Use numbered lists for steps and comparable items, tables for short comparisons, and fenced text diagrams with arrows for flows. Keep inline IDs stable across turns and formats.
+- For progress, give the result and next action. For blockers or failures, give the cause and smallest repair or decision. Preserve exact identifiers and uncertainty.
+- Report only failed, blocked, or unresolved checks unless requested. Give the command, cause, and needed action. Finish required work and inspect the final diff and focused checks before reporting completion.
+- Prioritize explicit requests, correctness, safety, completeness, clarity, and brevity in that order.

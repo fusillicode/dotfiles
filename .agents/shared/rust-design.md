@@ -45,7 +45,7 @@ MUST make invalid states unrepresentable wherever a type can enforce them: publi
 
 ## Final design review
 
-After semantic edits and again after formatting, inspect the final diff. Classify each candidate as `fix`, `keep with reason`, or `out of scope`:
+After semantic edits, classify each candidate as `fix`, `keep with reason`, or `out of scope`. Confirm these decisions during the repo-work final diff review after formatting:
 
 - **Literals:** One owner per domain value; context-sensitive values stay local.
 - **Ownership:** The type owning data or an invariant owns its behavior; orchestration stays free.

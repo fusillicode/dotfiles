@@ -10,7 +10,7 @@ Review is read-only. Preserve stable `R#` identifiers and concise output.
 ## Method
 
 1. Resolve the exact URL, source SHA, target SHA, merge base, and current discussions. When an available discussion-collection role supports the resolved host, delegate collection to that role in all-discussions mode; otherwise collect in the parent. Reuse that snapshot in step 8. Keep review judgments in the parent.
-2. Use an isolated worktree when the current checkout is dirty or on another task.
+2. Use the repo-work guide to create a sibling Git worktree when the current checkout is dirty or on another task.
 3. Read repository guidance, changed files, and directly affected artifacts. Start with relevant regions; read full files or callers, tests, configuration, and contracts when behavior or contract context requires it.
 4. Map the changed behavior before looking for findings.
 5. Trace changed behavior through affected callers, branches, variants, configuration, tests, and success, error, fallback, retry, cancellation, and compatibility paths.

@@ -6,7 +6,7 @@ Apply this guide before repo edits. Paths to personal guides are relative to the
 
 1. Verify the repo, working directory, status, branch, and base.
 2. Read applicable repo `AGENTS.md` files and relevant contributor, task-runner, and toolchain guidance. Do not preload unrelated documents.
-3. If a dedicated worktree is requested, create a new sibling worktree for this task. Verify its branch and base before editing. Ask if an unspecified base could materially change the result.
+3. Use the starting Git worktree. Check `list_threads` when available. If another agent is working there or the user requests isolation, create a sibling worktree. Resolve its base first and ask if materially ambiguous. Pass the exact path and base explicitly. Use `git worktree add` if the creation tool lacks either option. Verify the path and `HEAD` before editing.
 4. Prefer a small behavior test before implementation when a stable test seam exists.
 
 ## Write readable code

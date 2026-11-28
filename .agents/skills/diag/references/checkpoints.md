@@ -2,9 +2,7 @@
 
 ## Save a checkpoint on request
 
-Write one compact Markdown file when the user asks to save or hand off the diagnosis. Use their requested path. Otherwise, use `diag-<incident-slug>.md` in the parent of the working directory captured at the start.
-
-For a new checkpoint, create the file exclusively. If the default name is occupied, try `-2`, `-3`, and so on. If the requested path already exists, including as a dangling symlink, leave it intact and ask for another path.
+When asked to save or hand off the diagnosis, create one compact Markdown file. Default to the parent of the starting working directory.
 
 For an explicit update, verify that the exact file is a regular checkpoint for the same incident before writing to it. If that check fails, leave it intact and ask for a path for a new checkpoint.
 

@@ -8,14 +8,14 @@
     :root { color-scheme: dark; background: #000; color: #fff; }
     html { scrollbar-gutter: stable; }
     body { text-align: left; }
-    main:has(> .controls-trigger) > header { padding-inline-end: 6rem; }
+    main:has(> .controls-trigger) > .diagram-header { padding-inline-end: 6rem; }
     .controls-trigger {
       position: fixed;
       top: 0.5rem;
       right: 0.5rem;
       z-index: 1;
     }
-    #diagram-controls {
+    .diagram-controls {
       position: fixed;
       inset: 2.5rem 0.5rem auto auto;
       margin: 0;
@@ -33,7 +33,6 @@
     .disclosure-controls + .options { margin-block-start: 0.5rem; }
     details { margin-block: 0.5rem; }
     summary { cursor: pointer; }
-    pre { white-space: pre; }
     [hidden] { display: none !important; }
     .options label { display: block; margin-block: 0.25rem; cursor: pointer; }
     .payload-comparison {
@@ -49,7 +48,11 @@
       background: #000;
       overflow-x: auto;
     }
-    .payload-comparison pre { margin-block: 0.25rem 0.5rem; }
+    .json-payload {
+      margin-block: 0.25rem 0.5rem;
+      background: #1a1a1a;
+      white-space: pre;
+    }
     .payload-current { color: #fff; }
     .sequence {
       --lane: 18rem;
@@ -63,7 +66,7 @@
       display: grid;
       grid-template-columns: var(--tracks);
     }
-    .participants > b {
+    .participant {
       justify-self: center;
       padding: 0.2rem 0.5rem;
       border: 1px solid #aaa;
@@ -112,7 +115,7 @@
       padding-inline-end: 0.25rem;
     }
     .message[open] .message-caption::before { content: "▾"; }
-    .message > span:first-child, .message-caption > span:first-child { background: #000; }
+    .message-label { background: #000; }
     .arrow {
       position: relative;
       display: block;
@@ -153,20 +156,19 @@
       left: 0;
       transform: translateY(50%) scaleX(-1);
     }
-    .added:not(.message), .message.added > :is(summary, span) { color: #79de8a; }
-    .removed:not(.message), .message.removed > :is(summary, span) { color: #ff8585; }
-    .changed:not(.message), .message.changed > :is(summary, span) { color: #7db3ff; }
-    .message.removed > span:first-child,
-    .message.removed .message-caption > span:first-child { text-decoration: line-through; }
+    .diff-added:not(.message), .message.diff-added > :is(summary, span) { color: #79de8a; }
+    .diff-removed:not(.message), .message.diff-removed > :is(summary, span) { color: #ff8585; }
+    .diff-changed:not(.message), .message.diff-changed > :is(summary, span) { color: #7db3ff; }
+    .message.diff-removed .message-label { text-decoration: line-through; }
   </style>
 </head>
 <body>
   <main>
-    <header>
+    <header class="diagram-header">
       <h1>Order delivery - Payload comparison</h1>
     </header>
     <button type="button" class="controls-trigger" popovertarget="diagram-controls">Controls</button>
-    <div id="diagram-controls" popover="auto" role="group" aria-label="Diagram controls">
+    <div id="diagram-controls" class="diagram-controls" popover="auto" role="group" aria-label="Diagram controls">
       <div class="disclosure-controls">
         <button type="button" data-disclose="open">Expand all</button>
         <button type="button" data-disclose="close">Collapse all</button>
@@ -180,20 +182,20 @@
       <li>Current uses synchronous delivery.</li>
     </ol>
     <div class="sequence" style="--actors: 2" role="group" aria-label="Order delivery sequence">
-      <div class="participants"><b>Client</b><b>Gateway</b></div>
+      <div class="participants"><b class="participant">Client</b><b class="participant">Gateway</b></div>
       <div class="timeline">
         <div class="exchange" style="--columns: 1 / 3; --span: 2; --start: 1">
           <details class="message call">
             <summary aria-label="Client calls Gateway to submit order">
               <span class="message-caption">
-                <span>Submit order</span><span class="arrow" aria-hidden="true"></span>
+                <span class="message-label">Submit order</span><span class="arrow" aria-hidden="true"></span>
               </span>
             </summary>
             <div class="payload-row">
               <div class="payload-comparison" tabindex="0" role="group" aria-label="Submit order payloads">
                 <div class="payload-current">
                   <div>Current</div>
-                  <pre><code>{
+                  <pre class="json-payload"><code>{
   "id": 42,
   "mode": "sync",
   "legacy": true
@@ -201,19 +203,19 @@
                 </div>
                 <div class="option-panel" data-options="queued" hidden>
                   <div>a. queued</div>
-                  <pre><code>{
+                  <pre class="json-payload"><code>{
   "id": 42,
-  "mode": <span class="changed">"async"</span>,
-  <del class="removed">"legacy": true</del>
+  "mode": <span class="diff-changed">"async"</span>,
+  <del class="diff-removed">"legacy": true</del>
 }</code></pre>
                 </div>
                 <div class="option-panel" data-options="priority" hidden>
                   <div>b. priority</div>
-                  <pre><code>{
+                  <pre class="json-payload"><code>{
   "id": 42,
   "mode": "sync",
   "legacy": true,
-  <span class="added">"priority": 2</span>
+  <span class="diff-added">"priority": 2</span>
 }</code></pre>
                 </div>
               </div>
@@ -222,28 +224,28 @@
         </div>
         <div class="exchange" style="--columns: 1 / 3; --span: 2">
           <div class="message reply reverse" role="img" aria-label="Gateway replies to Client with an order receipt">
-            <span>Return order receipt</span><span class="arrow" aria-hidden="true"></span>
+            <span class="message-label">Return order receipt</span><span class="arrow" aria-hidden="true"></span>
           </div>
         </div>
         <div class="exchange" data-options="queued" hidden style="--columns: 1 / 3; --span: 2">
           <div class="option-guard">[a. queued]</div>
-          <div class="message reply reverse removed" role="img" aria-label="Queued option omits the order receipt">
-            <span>Return order receipt</span><span class="arrow" aria-hidden="true"></span>
+          <div class="message reply reverse diff-removed" role="img" aria-label="Queued option omits the order receipt">
+            <span class="message-label">Return order receipt</span><span class="arrow" aria-hidden="true"></span>
           </div>
         </div>
         <div class="exchange self" data-options="queued" hidden style="--columns: 2 / 3; --span: 1; --start: 2">
           <div class="option-guard">[a. queued]</div>
-          <details class="message call added">
+          <details class="message call diff-added">
             <summary aria-label="Gateway calls itself to process the queued order">
               <span class="message-caption">
-                <span>Process queued order</span><span class="arrow" aria-hidden="true"></span>
+                <span class="message-label">Process queued order</span><span class="arrow" aria-hidden="true"></span>
               </span>
             </summary>
             <div class="payload-row">
               <div class="payload-comparison" tabindex="0" role="group" aria-label="Queued order payload">
                 <div class="option-panel" data-options="queued" hidden>
                   <div>a. queued</div>
-                  <pre><code class="added">{
+                  <pre class="json-payload"><code class="diff-added">{
   "id": 42
 }</code></pre>
                 </div>

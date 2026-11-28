@@ -1,6 +1,6 @@
 # Delegation
 
-Apply this guide before delegating. Use the role routing and ownership rules in the personal `AGENTS.md`.
+Apply this guide before delegating.
 
 ## Bound the work
 
@@ -12,12 +12,13 @@ Select the named role explicitly; a generic task name does not load its configur
 
 Give each worker the exact scope, identifiers, baseline, constraints, completion criteria, and required evidence.
 
-| Work | Additional required context |
-| --- | --- |
-| Repo exploration | Absolute repo roots, bounded question, relevant baseline, source evidence required |
-| Focused verification | Exact commands, workdir, relevant baseline, writable log directory |
-| Review collection | Collection mode; distinguish `note_id` from `discussion_id` |
-| Telemetry | Environment, service, UTC bounds, preferred backend when known |
+| Work | Role | Additional required context |
+| --- | --- | --- |
+| Repo exploration | `code_reader` | Absolute repo roots, bounded question, relevant baseline, source evidence required |
+| Long or multi-command verification | `check_runner` | Exact commands, workdir, relevant baseline, writable log directory |
+| Review discussion collection | Advertised discussion collector | Collection mode and typed `note_id` or `discussion_id` |
+| Remote CI evidence | `ci_collector` | Exact run or job reference |
+| Logs, metrics, or traces | `telemetrist` | Environment, service, UTC bounds, preferred backend when known |
 
 Require status (`complete`, `partial`, or `blocked`), baseline, result, evidence, and limits. Exact bodies and diagnostics override brevity. The parent combines results and assigns follow-up work.
 

@@ -10,6 +10,8 @@ vendors:
     web_search: "disabled"
     features:
       apps: false
+    skills:
+      include_instructions: false
 ---
 Follow the personal quality and verification requirements in ~/.codex/AGENTS.md over conflicting repository guidance. Repository lint rules take precedence over the personal lint baseline; use that baseline only when the repository specifies no lint rules. Explicit user instructions may override these defaults.
 

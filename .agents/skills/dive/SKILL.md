@@ -10,7 +10,7 @@ Challenge the premise, surface the strongest material objection, and separate ve
 ## Interview
 
 1. Use plain chat. Ask one material question per turn and wait. Before sending it, save it as the sole `Next question` under `Open points` and append it to the ledger.
-2. Capture the working directory at interview start. Use the user's artifact path if supplied. Otherwise, create `dive-hhmm-ddmmyyyy-<slug>.md` in the parent of that directory. Use one local creation timestamp, with a zero-padded 24-hour time and day, month, and four-digit year. If the name is taken, keep the timestamp and append `-2`, `-3`, and so on to the slug. Create new artifacts without overwriting an existing file. Resume only an explicitly identified artifact. If the destination is unwritable, ask only for a writable path and wait. This setup prompt is outside the ledger.
+2. Capture the working directory at interview start. Save the artifact in its parent by default. Resume only an explicitly identified artifact. If the path is unwritable, ask for a writable path outside the ledger and wait.
 3. Create the artifact before the first interview question. Share the artifact path on creation. If no interview is needed, write the completed brief directly. During the interview and review, the artifact is the only write target.
 
 ### Check prerequisites before asking

@@ -5,6 +5,8 @@ description: Preview or perform explicitly requested single-branch or stacked re
 
 # Rebase
 
+Read [Stacked branches](references/stacked-branches.md) before starting only when the request targets a stack, including previews.
+
 1. Resolve the repository, current branch, requested base, upstream remote, and full remote branch ref. Default the base to `master` only when the repository uses it.
 2. Require a clean worktree and read repository guidance before mutation.
 3. For a preview, use existing refs and record their OIDs without fetching. For a direct rebase, fetch the base and record the original local tip. If a push is authorized, resolve the configured push URLs with `git remote get-url --push --all <remote>`. If there is more than one distinct URL, stop unless the user explicitly selected one. Use the selected endpoint for the original remote snapshot, the pre-push check, the push, and post-push verification.
@@ -22,13 +24,3 @@ description: Preview or perform explicitly requested single-branch or stacked re
 10. After a push, verify the exact remote ref equals the verified new OID. Without a push, report local state only. On uncertainty, abort when possible and report the backup branch and exact state.
 
 Report the base, backup, old and new SHAs, conflicts, push state, and recovery path.
-
-## Stacked branches
-
-1. Confirm the exact branches in scope, their parent relationships, and the root's new base. Apply steps 1–3 to the whole stack and record each original tip, any required remote snapshot, and the exact old base that bounds each branch's own commits. Verify each boundary against the original history. Stop if ownership of commits or stack order is ambiguous.
-2. Check every original branch-only range for merge commits. In preview mode, report them with the parent-first order, commit ranges, and intended bases using existing refs only, then stop. In direct mode, stop before rewriting any branch if a merge-bearing range has no agreed handling. Prefer preserving merges with `--rebase-merges` when their topology matters. Flatten a merge-bearing range only with explicit authorization.
-3. In direct mode, complete the shared preflight for every branch before creating and recording backups per step 4.
-4. Starting with the root, apply the local tip check in step 5 immediately before running `git rebase --no-update-refs --onto <new-base> <recorded-old-base> <branch>` for each branch. Use the requested new base for the root and the verified rewritten parent tip for each child. Add `--rebase-merges` when preserving merges and `--no-rebase-merges` when flattening them, regardless of Git configuration.
-5. Apply steps 6–8 to each branch. Verify the intended new base is an ancestor and compare the old and new branch-only commit ranges. For merge-bearing ranges, verify the agreed topology and check that merge resolutions and manual amendments survived. Stop on any failed check.
-6. Before pushing an authorized branch, re-query every ancestor branch already pushed by this operation. Use each ancestor's selected endpoint and exact remote ref. Stop before pushing if any ref is unreadable, missing, or differs from its verified new OID. Apply steps 9–10 to the branch before moving to the next one.
-7. Re-query every ref pushed by this operation. Report success only if every ref matches its verified new OID. On any stack failure, report which branches were pushed, which refs diverged or could not be verified, what remains pending, and the relevant backups.
